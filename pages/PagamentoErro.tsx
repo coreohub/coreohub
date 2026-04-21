@@ -1,10 +1,8 @@
 import React from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { XCircle, RefreshCw, ArrowLeft } from 'lucide-react';
 
 const PagamentoErro = () => {
-  const [searchParams] = useSearchParams();
-  const registrationId = searchParams.get('registration_id');
   const navigate = useNavigate();
 
   return (
@@ -38,14 +36,12 @@ const PagamentoErro = () => {
         </div>
 
         <div className="space-y-3">
-          {registrationId && (
-            <button
-              onClick={() => navigate(`/festival/checkout?registration_id=${registrationId}`, { replace: true })}
-              className="w-full flex items-center justify-center gap-2 py-4 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20"
-            >
-              <RefreshCw size={16} /> Tentar Novamente
-            </button>
-          )}
+          <button
+            onClick={() => navigate('/pagamento')}
+            className="w-full flex items-center justify-center gap-2 py-4 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20"
+          >
+            <RefreshCw size={16} /> Tentar Novamente
+          </button>
           <button
             onClick={() => navigate('/minhas-coreografias')}
             className="w-full flex items-center justify-center gap-2 py-3 border border-slate-200 dark:border-white/10 text-slate-500 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-slate-100 dark:hover:bg-white/5 transition-all"

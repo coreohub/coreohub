@@ -1,10 +1,8 @@
 import React from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Clock, RefreshCw, Home } from 'lucide-react';
 
 const PagamentoPendente = () => {
-  const [searchParams] = useSearchParams();
-  const registrationId = searchParams.get('registration_id');
   const navigate = useNavigate();
 
   return (
@@ -38,7 +36,7 @@ const PagamentoPendente = () => {
 
         <div className="space-y-3">
           <button
-            onClick={() => navigate('/minhas-coreografias')}
+            onClick={() => navigate('/pagamento')}
             className="w-full flex items-center justify-center gap-2 py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all"
           >
             <RefreshCw size={16} /> Verificar Status

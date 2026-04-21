@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import {
   CreditCard, Loader2, AlertCircle, CheckCircle2,
   Music2, ArrowRight, Clapperboard, ExternalLink,
-  RefreshCw, ShieldCheck,
+  RefreshCw, ShieldCheck, Receipt,
 } from 'lucide-react';
 
 const SUPABASE_URL  = 'https://ghpltzzijlvykiytwslu.supabase.co';
@@ -16,6 +16,7 @@ interface Coreografia {
   event_id?: string;
   event_nome?: string;
   modalidade?: string;
+  tipo_apresentacao?: string;
   categoria_nome?: string;
   estilo_nome?: string;
   status: string;
@@ -24,18 +25,55 @@ interface Coreografia {
   mod_fee?: number;
 }
 
+interface EventModality {
+  name?: string;
+  fee?: number;
+  base_fee?: number;
+  is_active?: boolean;
+}
+
 const fmtCurrency = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+/**
+ * Calcula o valor de uma coreografia tentando várias fontes em ordem:
+ * 1. coreo.mod_fee (explícito)
+ * 2. events.modalities_config casando pelo nome da modalidade
+ * 3. Primeira modalidade ativa do evento (fallback)
+ */
+const calcularValor = (
+  coreo: Coreografia,
+  modalidades: EventModality[]
+): number => {
+  if (coreo.mod_fee && coreo.mod_fee > 0) return coreo.mod_fee;
+
+  const nome = (coreo.tipo_apresentacao ?? coreo.modalidade ?? '').toLowerCase();
+  if (nome) {
+    const m = modalidades.find(x => x.name?.toLowerCase() === nome);
+    const v = m?.fee ?? m?.base_fee;
+    if (v && v > 0) return Number(v);
+  }
+
+  const primeira = modalidades.find(x => x.is_active !== false);
+  const v = primeira?.fee ?? primeira?.base_fee;
+  return v && v > 0 ? Number(v) : 0;
+};
+
 const PagamentoInscrito = () => {
   const navigate = useNavigate();
-  const [coreografias, setCoreografias] = useState<Coreografia[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [error, setError]               = useState<string | null>(null);
-  const [paying, setPaying]             = useState<string | null>(null); // coreo id being paid
-  const [payError, setPayError]         = useState<string | null>(null);
+  const [coreografias, setCoreografias]   = useState<Coreografia[]>([]);
+  const [modalidades, setModalidades]     = useState<EventModality[]>([]);
+  const [loading, setLoading]             = useState(true);
+  const [error, setError]                 = useState<string | null>(null);
+  const [paying, setPaying]               = useState<string | null>(null); // id da coreo clicada
+  const [payError, setPayError]           = useState<{ id: string; message: string } | null>(null);
+  const [justApproved, setJustApproved]   = useState<string | null>(null); // para animação quando webhook aprovar
 
-  const PAYMENT_STATUSES = new Set(['RASCUNHO', 'PRONTA', 'PRONTO', 'AGUARDANDO_PAGAMENTO']);
+  // Status que exigem pagamento (coreografia aguardando checkout)
+  const PAYMENT_STATUSES = useMemo(
+    () => new Set(['RASCUNHO', 'PRONTA', 'PRONTO', 'AGUARDANDO_PAGAMENTO']),
+    []
+  );
 
   const fetchCoreografias = useCallback(async () => {
     setLoading(true);
@@ -44,38 +82,86 @@ const PagamentoInscrito = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { navigate('/login'); return; }
 
-      // Busca coreografias pendentes e o primeiro evento disponível
+      // Busca coreografias + primeiro evento disponível (com modalities_config).
       const [coreoRes, eventRes] = await Promise.all([
         supabase.from('coreografias').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('events').select('id').order('created_at').limit(1).single(),
+        supabase.from('events').select('id, modalities_config').order('created_at').limit(1).single(),
       ]);
 
       if (coreoRes.error) throw coreoRes.error;
 
       const firstEventId = eventRes.data?.id ?? null;
+      const eventModalities: EventModality[] = (eventRes.data as any)?.modalities_config ?? [];
+      setModalidades(eventModalities);
 
-      // Para coreografias sem event_id, tenta usar o primeiro evento disponível
       const enriched = (coreoRes.data || []).map(c => ({
         ...c,
         event_id: c.event_id ?? firstEventId,
       }));
 
       setCoreografias(
-        enriched.filter(c => PAYMENT_STATUSES.has(c.status) && c.status !== 'PAGO')
+        enriched.filter(c =>
+          // Ainda não pagou (status_pagamento != APROVADO) E está em status de pagamento
+          c.status_pagamento !== 'APROVADO' &&
+          PAYMENT_STATUSES.has(c.status) &&
+          c.status !== 'PAGO'
+        )
       );
     } catch (e: any) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigate]);
+  }, [navigate, PAYMENT_STATUSES]);
 
   useEffect(() => { fetchCoreografias(); }, [fetchCoreografias]);
 
+  // Realtime: escuta mudanças na tabela coreografias para o usuário atual
+  // Quando o webhook aprovar um pagamento, a linha é atualizada e aqui refletimos.
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const setupRealtime = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      channel = supabase
+        .channel('pagamento-inscrito-' + user.id)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'coreografias',
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            const novo = payload.new as Coreografia;
+            // Se virou APROVADO, anima e depois remove da lista
+            if (novo.status_pagamento === 'APROVADO') {
+              setJustApproved(novo.id);
+              setTimeout(() => {
+                setCoreografias(prev => prev.filter(c => c.id !== novo.id));
+                setJustApproved(null);
+              }, 2500);
+            } else {
+              // Outras mudanças: atualiza a linha in-place
+              setCoreografias(prev => prev.map(c => c.id === novo.id ? { ...c, ...novo } : c));
+            }
+          }
+        )
+        .subscribe();
+    };
+
+    setupRealtime();
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, []);
+
   const handlePay = async (coreo: Coreografia) => {
     if (!coreo.event_id) {
-      setPayError('Esta coreografia não está vinculada a um evento. Edite-a em Minhas Coreografias.');
+      setPayError({ id: coreo.id, message: 'Esta coreografia não está vinculada a um evento. Edite-a em Minhas Coreografias.' });
       return;
     }
     setPaying(coreo.id);
@@ -103,22 +189,39 @@ const PagamentoInscrito = () => {
       window.location.href = paymentUrl;
 
     } catch (err: any) {
-      setPayError(err.message || 'Erro ao processar pagamento.');
+      setPayError({ id: coreo.id, message: err.message || 'Erro ao processar pagamento.' });
       setPaying(null);
     }
   };
+
+  // Total e contagem para exibir no header
+  const totalPendente = useMemo(
+    () => coreografias.reduce((sum, c) => sum + calcularValor(c, modalidades), 0),
+    [coreografias, modalidades]
+  );
 
   return (
     <div className="max-w-2xl mx-auto space-y-5">
 
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-black uppercase tracking-tighter italic text-slate-900 dark:text-white">
-          Efetue o <span className="text-[#ff0068]">Pagamento</span>
-        </h1>
-        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">
-          Confirme sua vaga — pague suas inscrições pendentes
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black uppercase tracking-tighter italic text-slate-900 dark:text-white">
+            Efetue o <span className="text-[#ff0068]">Pagamento</span>
+          </h1>
+          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">
+            Confirme sua vaga — pague suas inscrições pendentes
+          </p>
+        </div>
+        {!loading && coreografias.length > 0 && (
+          <div className="text-right bg-[#ff0068]/10 border border-[#ff0068]/20 rounded-2xl px-4 py-2.5 shrink-0">
+            <p className="text-[8px] font-black uppercase tracking-widest text-[#ff0068]/80">Total</p>
+            <p className="text-lg font-black tracking-tighter text-[#ff0068]">{fmtCurrency(totalPendente)}</p>
+            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+              {coreografias.length} {coreografias.length === 1 ? 'pendente' : 'pendentes'}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Info banner */}
@@ -137,13 +240,6 @@ const PagamentoInscrito = () => {
           <button onClick={fetchCoreografias} className="ml-auto">
             <RefreshCw size={13} />
           </button>
-        </div>
-      )}
-
-      {/* Pay error */}
-      {payError && (
-        <div className="flex items-center gap-2 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl text-amber-700 dark:text-amber-400 text-sm">
-          <AlertCircle size={14} /> {payError}
         </div>
       )}
 
@@ -175,36 +271,61 @@ const PagamentoInscrito = () => {
       ) : (
         <div className="space-y-3">
           {coreografias.map(coreo => {
-            const fee = coreo.mod_fee ?? 0;
-            const isPaying = paying === coreo.id;
+            const fee = calcularValor(coreo, modalidades);
+            const isPaying   = paying === coreo.id;
+            const isApproved = justApproved === coreo.id;
+            const rowError   = payError?.id === coreo.id ? payError.message : null;
 
             return (
               <div
                 key={coreo.id}
-                className="p-5 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/8 rounded-2xl space-y-4"
+                className={`p-5 bg-white dark:bg-white/[0.03] border rounded-2xl space-y-4 transition-all duration-500 ${
+                  isApproved
+                    ? 'border-emerald-500/60 bg-emerald-50 dark:bg-emerald-500/10 shadow-lg shadow-emerald-500/20 scale-[1.01]'
+                    : isPaying
+                      ? 'border-[#ff0068]/40 shadow-lg shadow-[#ff0068]/10'
+                      : 'border-slate-200 dark:border-white/8'
+                }`}
               >
+                {/* Badge de status no topo, se APROVADO recente */}
+                {isApproved && (
+                  <div className="flex items-center justify-center gap-2 py-2 bg-emerald-500/15 border border-emerald-500/30 rounded-xl text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest animate-pulse">
+                    <CheckCircle2 size={14} /> Pagamento Aprovado!
+                  </div>
+                )}
+
                 {/* Info da coreografia */}
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#ff0068]/10 flex items-center justify-center shrink-0">
-                    <Clapperboard size={16} className="text-[#ff0068]" />
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    isApproved ? 'bg-emerald-500/20' : 'bg-[#ff0068]/10'
+                  }`}>
+                    <Clapperboard size={16} className={isApproved ? 'text-emerald-500' : 'text-[#ff0068]'} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-black uppercase tracking-tight text-slate-900 dark:text-white truncate">
                       {coreo.nome}
                     </p>
                     <p className="text-[9px] font-bold text-slate-400 mt-0.5">
-                      {[coreo.event_nome, coreo.modalidade, coreo.categoria_nome, coreo.estilo_nome]
+                      {[coreo.event_nome, coreo.tipo_apresentacao || coreo.modalidade, coreo.categoria_nome, coreo.estilo_nome]
                         .filter(Boolean).join(' · ')}
                     </p>
-                    {/* Trilha */}
-                    <div className={`inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest
-                      ${coreo.trilha_url
-                        ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                        : 'bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                      }`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${coreo.trilha_url ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
-                      {coreo.trilha_url ? 'Trilha enviada' : 'Trilha pendente'}
+                    {/* Badges */}
+                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                      {/* Trilha */}
+                      <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest
+                        ${coreo.trilha_url
+                          ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                          : 'bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${coreo.trilha_url ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
+                        {coreo.trilha_url ? 'Trilha enviada' : 'Trilha pendente'}
+                      </div>
+                      {/* Status pagamento */}
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        Aguardando pagamento
+                      </div>
                     </div>
                   </div>
 
@@ -217,6 +338,14 @@ const PagamentoInscrito = () => {
                     }
                   </div>
                 </div>
+
+                {/* Erro específico desta linha */}
+                {rowError && (
+                  <div className="flex items-start gap-2 p-3 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-xl">
+                    <AlertCircle size={14} className="text-rose-500 shrink-0 mt-0.5" />
+                    <p className="text-[10px] font-bold text-rose-700 dark:text-rose-400 leading-relaxed">{rowError}</p>
+                  </div>
+                )}
 
                 {/* Aviso sem trilha */}
                 {!coreo.trilha_url && (
@@ -233,13 +362,19 @@ const PagamentoInscrito = () => {
                   </div>
                 )}
 
-                {/* Botão pagar */}
+                {/* Botão pagar — só a linha clicada mostra loading; as outras continuam disponíveis */}
                 <button
                   onClick={() => handlePay(coreo)}
-                  disabled={!!paying}
-                  className="w-full flex items-center justify-center gap-2 py-4 bg-[#ff0068] hover:bg-[#d4005a] disabled:opacity-50 text-white rounded-xl font-black text-[11px] uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 active:scale-[0.99] transition-all"
+                  disabled={isPaying || isApproved}
+                  className={`w-full flex items-center justify-center gap-2 py-4 text-white rounded-xl font-black text-[11px] uppercase tracking-widest shadow-lg active:scale-[0.99] transition-all ${
+                    isApproved
+                      ? 'bg-emerald-500 shadow-emerald-500/20 cursor-default'
+                      : 'bg-[#ff0068] hover:bg-[#d4005a] shadow-[#ff0068]/20 disabled:opacity-70 disabled:cursor-wait'
+                  }`}
                 >
-                  {isPaying ? (
+                  {isApproved ? (
+                    <><CheckCircle2 size={15} /> Pagamento Aprovado</>
+                  ) : isPaying ? (
                     <><Loader2 size={15} className="animate-spin" /> Gerando pagamento...</>
                   ) : (
                     <><CreditCard size={15} /> Efetuar Pagamento {fee > 0 ? `— ${fmtCurrency(fee)}` : ''} <ExternalLink size={13} /></>
@@ -253,10 +388,12 @@ const PagamentoInscrito = () => {
 
       {/* Footer info */}
       {!loading && coreografias.length > 0 && (
-        <p className="text-center text-[9px] text-slate-400 px-4 leading-relaxed">
-          Ao clicar em "Efetuar Pagamento", você será redirecionado para o Mercado Pago.
-          Sua inscrição é confirmada automaticamente após aprovação do pagamento.
-        </p>
+        <div className="flex items-center justify-center gap-2 pt-1">
+          <Receipt size={12} className="text-slate-400" />
+          <p className="text-center text-[9px] text-slate-400 leading-relaxed">
+            Cada coreografia é paga individualmente. Pagamento seguro via Mercado Pago.
+          </p>
+        </div>
       )}
 
       {/* Trilha pendente link */}
