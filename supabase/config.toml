@@ -424,9 +424,13 @@ entrypoint = "./functions/create-payment/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/create-payment/*.html" ]
 
+# Webhook do Mercado Pago: verify_jwt DEVE ser false — o MP não envia
+# header de Authorization, e isso fazia o Supabase rejeitar com 401
+# UNAUTHORIZED_NO_AUTH_HEADER antes do código rodar.
+# A autenticidade do evento é validada via API do MP com o access_token do produtor.
 [functions.mp-webhook]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/mp-webhook/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
