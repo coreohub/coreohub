@@ -5,145 +5,271 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Mapeamento dos status do Mercado Pago para o status interno da plataforma.
+// Mantemos "APROVADO" para casar com o valor que o create-payment já usa.
+const STATUS_MAP: Record<string, string> = {
+  approved:     'APROVADO',
+  pending:      'PENDENTE',
+  in_process:   'PENDENTE',
+  authorized:   'PENDENTE',
+  rejected:     'RECUSADO',
+  cancelled:    'CANCELADO',
+  refunded:     'ESTORNADO',
+  charged_back: 'ESTORNADO',
+}
+
+function calcularComissao(
+  valorBruto: number,
+  tipo: string,
+  percentual: number,
+  fixo: number
+): number {
+  switch (tipo) {
+    case 'percent':  return parseFloat((valorBruto * (percentual / 100)).toFixed(2))
+    case 'fixed':    return fixo
+    case 'combined': return parseFloat(((valorBruto * (percentual / 100)) + fixo).toFixed(2))
+    default:         return parseFloat((valorBruto * 0.10).toFixed(2))
+  }
+}
+
+/**
+ * Extrai o ID do pagamento do payload do MP.
+ * O MP envia em formatos diferentes dependendo do tipo de notificação:
+ *  1. Notification v1 (antiga IPN):     ?id=123&topic=payment          (query string)
+ *  2. Webhooks v2 (action-based):       { action: "payment.updated", data: { id: "123" } }
+ *  3. Notification legada (type-based): { type: "payment", data: { id: "123" } }
+ */
+function extrairPaymentId(url: URL, body: any): { id: string | null; kind: string } {
+  // Formato 1: query string
+  const topic = url.searchParams.get('topic') ?? url.searchParams.get('type')
+  const queryId = url.searchParams.get('id') ?? url.searchParams.get('data.id')
+  if (queryId && (topic === 'payment' || !topic)) {
+    return { id: queryId, kind: 'query' }
+  }
+
+  // Formato 2 e 3: body JSON
+  const action: string | undefined = body?.action
+  const type: string | undefined = body?.type
+  const dataId: string | undefined = body?.data?.id
+
+  const ehPagamento =
+    action?.startsWith('payment.') ||
+    type === 'payment' ||
+    topic === 'payment'
+
+  if (ehPagamento && dataId) {
+    return { id: String(dataId), kind: 'body' }
+  }
+
+  return { id: null, kind: 'unknown' }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  try {
-    const body = await req.json()
-    console.log('Webhook recebido do Mercado Pago:', JSON.stringify(body))
-
-    // O MP envia notificações de tipos diferentes; só nos interessa "payment"
-    if (body.type !== 'payment') {
-      return new Response(JSON.stringify({ status: 'ignored', reason: `type=${body.type}` }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-    }
-
-    const paymentId = body.data?.id
-    if (!paymentId) {
-      throw new Error('ID do pagamento não encontrado na notificação.')
-    }
-
-    // Para buscar os detalhes do pagamento, precisamos do access_token do marketplace
-    // O MP envia o collector.id na notificação para identificar de qual conta é o pagamento
-    const mpToken = Deno.env.get('MP_CLIENT_SECRET') // Access Token da sua conta marketplace
-
-    // 1. Buscar os detalhes do pagamento na API do Mercado Pago
-    const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-      headers: {
-        'Authorization': `Bearer ${mpToken}`,
-      }
+  // O MP pode retransmitir webhooks — sempre respondemos 200 para evitar flood.
+  const ok = (payload: Record<string, unknown>) =>
+    new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
 
-    const payment = await paymentResponse.json()
+  try {
+    const url = new URL(req.url)
 
-    if (!paymentResponse.ok) {
-      throw new Error(`Erro ao buscar pagamento no MP: ${payment.message}`)
+    // Body pode vir vazio (IPN antigo) — precisa ser tolerante.
+    let body: any = {}
+    try {
+      const raw = await req.text()
+      if (raw) body = JSON.parse(raw)
+    } catch {
+      body = {}
     }
 
-    console.log(`Pagamento ${paymentId} status: ${payment.status}`)
+    console.log('[mp-webhook] query:', Object.fromEntries(url.searchParams))
+    console.log('[mp-webhook] body:', JSON.stringify(body))
 
-    // 2. Extrair o registration_id do external_reference
-    const registrationId = payment.external_reference
-    if (!registrationId) {
-      throw new Error('external_reference não encontrado no pagamento.')
+    const { id: paymentId, kind } = extrairPaymentId(url, body)
+
+    if (!paymentId) {
+      console.log('[mp-webhook] notificação sem paymentId, ignorando')
+      return ok({ status: 'ignored', reason: 'no_payment_id' })
     }
+
+    console.log(`[mp-webhook] paymentId=${paymentId} (origem=${kind})`)
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SERVICE_ROLE_KEY') ?? ''
     )
 
-    // 3. Verificar idempotência: checar se já processamos este pagamento
-    const { data: existingCommission } = await supabase
+    // ─── 1. Idempotência: se já processamos este paymentId, encerra. ─────────
+    const { data: comissaoExistente } = await supabase
       .from('platform_commissions')
       .select('id')
       .eq('mp_payment_id', String(paymentId))
       .maybeSingle()
 
-    if (existingCommission) {
-      console.log(`Pagamento ${paymentId} já processado anteriormente. Ignorando.`)
-      return new Response(JSON.stringify({ status: 'already_processed' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+    if (comissaoExistente) {
+      console.log(`[mp-webhook] paymentId=${paymentId} já processado, ignorando`)
+      return ok({ status: 'already_processed' })
     }
 
-    // 4. Mapear status do MP para status interno
-    const statusMap: Record<string, string> = {
-      'approved':     'CONFIRMADO',
-      'pending':      'PENDENTE',
-      'in_process':   'PENDENTE',
-      'rejected':     'RECUSADO',
-      'cancelled':    'CANCELADO',
-      'refunded':     'ESTORNADO',
-      'charged_back': 'ESTORNADO',
-    }
-    const statusInterno = statusMap[payment.status] ?? 'PENDENTE'
+    // ─── 2. Descobrir o access_token do produtor ─────────────────────────────
+    // Precisamos consultar a API do MP para saber external_reference e status.
+    // O token correto é o do produtor que recebeu o pagamento.
+    // Como o MP não diz "qual produtor" na notificação (só manda o payment_id),
+    // tentamos 2 estratégias em ordem:
+    //   a) Para cada produtor com mp_access_token, tentamos consultar o pagamento
+    //      e o primeiro que autorizar é o dono do pagamento.
+    //   b) Se só há um produtor configurado, usa direto.
+    const { data: produtores, error: prodErr } = await supabase
+      .from('profiles')
+      .select('id, mp_access_token, mp_user_id')
+      .not('mp_access_token', 'is', null)
 
-    // 5. Atualizar o status da inscrição
-    const { error: updateError } = await supabase
-      .from('registrations')
+    if (prodErr || !produtores || produtores.length === 0) {
+      console.error('[mp-webhook] nenhum produtor com MP configurado')
+      return ok({ status: 'error', reason: 'no_producer' })
+    }
+
+    let payment: any = null
+    let tokenUsado: string | null = null
+    let produtorId: string | null = null
+
+    for (const p of produtores) {
+      if (!p.mp_access_token) continue
+      try {
+        const resp = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+          headers: { Authorization: `Bearer ${p.mp_access_token}` },
+        })
+        if (resp.ok) {
+          payment = await resp.json()
+          tokenUsado = p.mp_access_token
+          produtorId = p.id
+          console.log(`[mp-webhook] pagamento encontrado na conta do produtor ${p.id}`)
+          break
+        }
+      } catch (e) {
+        console.warn(`[mp-webhook] falha ao consultar com produtor ${p.id}:`, (e as Error).message)
+      }
+    }
+
+    if (!payment || !tokenUsado) {
+      console.error(`[mp-webhook] paymentId=${paymentId} não foi encontrado em nenhum produtor`)
+      return ok({ status: 'error', reason: 'payment_not_found' })
+    }
+
+    // ─── 3. Extrair dados do pagamento ───────────────────────────────────────
+    const registrationId: string | undefined = payment.external_reference
+    if (!registrationId) {
+      console.error('[mp-webhook] external_reference vazio')
+      return ok({ status: 'error', reason: 'no_external_reference' })
+    }
+
+    const statusInterno = STATUS_MAP[payment.status] ?? 'PENDENTE'
+    console.log(
+      `[mp-webhook] paymentId=${paymentId} mp_status=${payment.status} → ${statusInterno} | registration=${registrationId}`
+    )
+
+    // ─── 4. Atualizar a coreografia ──────────────────────────────────────────
+    const { error: updErr } = await supabase
+      .from('coreografias')
       .update({
         status_pagamento: statusInterno,
         payment_id: String(paymentId),
         payment_method: payment.payment_type_id ?? null,
-        ...(statusInterno === 'CONFIRMADO' ? { status: 'APROVADA' } : {}),
       })
       .eq('id', registrationId)
 
-    if (updateError) {
-      throw new Error(`Erro ao atualizar inscrição: ${updateError.message}`)
+    if (updErr) {
+      console.error('[mp-webhook] erro ao atualizar coreografia:', updErr.message)
+      // Segue o fluxo mesmo assim — pode ser que a tabela legada "registrations" ainda exista.
     }
 
-    // 6. Se aprovado, registrar a comissão da plataforma
-    if (payment.status === 'approved') {
-      const grossAmount = payment.transaction_amount ?? 0
-      const feeAmount = payment.marketplace_fee ?? 0
-      const netAmount = parseFloat((grossAmount - feeAmount).toFixed(2))
-
-      // Buscar o event_id e producer_id a partir da inscrição
-      const { data: registration } = await supabase
+    // Fallback: se a base antiga usava "registrations", atualiza também (não falha se a tabela não existir).
+    try {
+      await supabase
         .from('registrations')
+        .update({
+          status_pagamento: statusInterno,
+          payment_id: String(paymentId),
+          payment_method: payment.payment_type_id ?? null,
+          ...(statusInterno === 'APROVADO' ? { status: 'APROVADA' } : {}),
+        })
+        .eq('id', registrationId)
+    } catch (e) {
+      // Silencioso — tabela pode não existir.
+    }
+
+    // ─── 5. Se aprovado, registrar comissão da plataforma ───────────────────
+    if (payment.status === 'approved') {
+      const { data: coreo } = await supabase
+        .from('coreografias')
         .select('event_id, user_id')
         .eq('id', registrationId)
         .single()
 
-      if (registration) {
-        const { data: eventData } = await supabase
-          .from('events')
-          .select('created_by, commission_type')
-          .eq('id', registration.event_id)
-          .single()
+      const eventId = coreo?.event_id ?? null
 
-        await supabase
-          .from('platform_commissions')
-          .insert({
-            registration_id: registrationId,
-            event_id: registration.event_id,
-            producer_id: eventData?.created_by ?? null,
-            gross_amount: grossAmount,
-            commission_amount: feeAmount,
-            net_amount: netAmount,
-            mp_payment_id: String(paymentId),
-            commission_type: eventData?.commission_type ?? 'percent',
-          })
+      let eventData: any = null
+      if (eventId) {
+        const { data } = await supabase
+          .from('events')
+          .select('created_by, commission_type, commission_percent, commission_fixed')
+          .eq('id', eventId)
+          .single()
+        eventData = data
       }
 
-      console.log(`Pagamento APROVADO! Inscrição ${registrationId} confirmada. Comissão: R$${feeAmount}`)
+      const grossAmount = Number(payment.transaction_amount ?? 0)
+      // marketplace_fee vem do MP se o split estiver via OAuth; hoje está desligado
+      // então calculamos manualmente a partir do evento.
+      const feeAmount =
+        Number(payment.marketplace_fee ?? 0) ||
+        calcularComissao(
+          grossAmount,
+          eventData?.commission_type ?? 'percent',
+          Number(eventData?.commission_percent ?? 10),
+          Number(eventData?.commission_fixed ?? 0)
+        )
+      const netAmount = parseFloat((grossAmount - feeAmount).toFixed(2))
+
+      const { error: insErr } = await supabase
+        .from('platform_commissions')
+        .insert({
+          registration_id: registrationId,
+          event_id: eventId,
+          producer_id: eventData?.created_by ?? produtorId,
+          gross_amount: grossAmount,
+          commission_amount: feeAmount,
+          net_amount: netAmount,
+          mp_payment_id: String(paymentId),
+          commission_type: eventData?.commission_type ?? 'percent',
+        })
+
+      if (insErr) {
+        console.error('[mp-webhook] erro ao inserir comissão:', insErr.message)
+      } else {
+        console.log(
+          `[mp-webhook] APROVADO | bruto=R$${grossAmount} comissao=R$${feeAmount} liquido=R$${netAmount}`
+        )
+      }
     }
 
+    return ok({
+      status: 'ok',
+      payment_status: payment.status,
+      internal_status: statusInterno,
+      registration_id: registrationId,
+    })
+  } catch (error: any) {
+    console.error('[mp-webhook] erro inesperado:', error?.message ?? error)
+    // Sempre 200 para o MP não ficar reenviando eternamente.
     return new Response(
-      JSON.stringify({ status: 'ok', payment_status: payment.status, registration_id: registrationId }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-
-  } catch (error) {
-    console.error('Erro em mp-webhook:', error.message)
-    // Retornar 200 mesmo em erro para o MP não reenviar indefinidamente
-    return new Response(
-      JSON.stringify({ status: 'error', message: error.message }),
+      JSON.stringify({ status: 'error', message: error?.message ?? 'unknown' }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
