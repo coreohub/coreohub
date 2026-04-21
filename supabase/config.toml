@@ -438,3 +438,13 @@ entrypoint = "./functions/mp-webhook/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/mp-webhook/*.html" ]
+
+# Envio de emails transacionais (Resend). Chamado internamente pelo mp-webhook
+# via service_role; verify_jwt = true garante que só chamadas autenticadas
+# disparem emails (impede abuso anônimo da função).
+# Secrets: RESEND_API_KEY (obrigatório), EMAIL_FROM (opcional), FRONTEND_URL (opcional)
+[functions.send-email]
+enabled = true
+verify_jwt = true
+import_map = "./functions/send-email/deno.json"
+entrypoint = "./functions/send-email/index.ts"

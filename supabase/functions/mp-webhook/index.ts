@@ -33,6 +33,43 @@ function calcularComissao(
 }
 
 /**
+ * Dispara um email transacional chamando a Edge Function `send-email`.
+ * Nunca lança — logs em caso de falha, mas o webhook não deve quebrar
+ * só porque o Resend está fora do ar.
+ */
+async function dispararEmail(
+  type: 'payment_confirmed_registrant' | 'payment_confirmed_producer',
+  payload: Record<string, unknown>
+): Promise<void> {
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+    const serviceKey = Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+    if (!supabaseUrl || !serviceKey) {
+      console.warn('[mp-webhook] SUPABASE_URL/SERVICE_ROLE_KEY ausentes — pulando email')
+      return
+    }
+
+    const resp = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${serviceKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ type, payload }),
+    })
+
+    const data = await resp.json().catch(() => ({}))
+    if (!resp.ok) {
+      console.error(`[mp-webhook] send-email falhou (${resp.status}) type=${type}:`, data)
+    } else {
+      console.log(`[mp-webhook] email enviado type=${type} id=${data?.id ?? '?'}`)
+    }
+  } catch (e) {
+    console.error(`[mp-webhook] exception ao chamar send-email type=${type}:`, (e as Error).message)
+  }
+}
+
+/**
  * Extrai o ID do pagamento do payload do MP.
  * O MP envia em formatos diferentes dependendo do tipo de notificação:
  *  1. Notification v1 (antiga IPN):     ?id=123&topic=payment          (query string)
@@ -204,11 +241,11 @@ Deno.serve(async (req) => {
       // Silencioso — tabela pode não existir.
     }
 
-    // ─── 5. Se aprovado, registrar comissão da plataforma ───────────────────
+    // ─── 5. Se aprovado, registrar comissão da plataforma + emails ──────────
     if (payment.status === 'approved') {
       const { data: coreo } = await supabase
         .from('coreografias')
-        .select('event_id, user_id')
+        .select('event_id, user_id, nome, modalidade, tipo_apresentacao')
         .eq('id', registrationId)
         .single()
 
@@ -218,7 +255,7 @@ Deno.serve(async (req) => {
       if (eventId) {
         const { data } = await supabase
           .from('events')
-          .select('created_by, commission_type, commission_percent, commission_fixed')
+          .select('created_by, name, location, event_date, commission_type, commission_percent, commission_fixed')
           .eq('id', eventId)
           .single()
         eventData = data
@@ -256,6 +293,81 @@ Deno.serve(async (req) => {
         console.log(
           `[mp-webhook] APROVADO | bruto=R$${grossAmount} comissao=R$${feeAmount} liquido=R$${netAmount}`
         )
+      }
+
+      // ─── 6. Disparo de emails transacionais ────────────────────────────
+      // Falhas aqui são silenciosas — não quebram o webhook nem o MP retentará.
+      // O usuário sempre pode conferir o status em /minhas-coreografias.
+      try {
+        const [{ data: inscritoProfile }, produtorProfileRes] = await Promise.all([
+          coreo?.user_id
+            ? supabase
+                .from('profiles')
+                .select('full_name, email')
+                .eq('id', coreo.user_id)
+                .maybeSingle()
+            : Promise.resolve({ data: null } as any),
+          eventData?.created_by
+            ? supabase
+                .from('profiles')
+                .select('full_name, email')
+                .eq('id', eventData.created_by)
+                .maybeSingle()
+            : Promise.resolve({ data: null } as any),
+        ])
+
+        const produtorProfile: any = (produtorProfileRes as any)?.data ?? null
+        const appUrl = Deno.env.get('FRONTEND_URL') ?? 'https://dancepro.com'
+        const modalidade = coreo?.tipo_apresentacao ?? coreo?.modalidade ?? null
+        const eventoData = eventData?.event_date
+          ? new Date(eventData.event_date).toLocaleDateString('pt-BR', {
+              day: '2-digit', month: 'long', year: 'numeric',
+            })
+          : null
+
+        const emailJobs: Promise<void>[] = []
+
+        if (inscritoProfile?.email) {
+          emailJobs.push(
+            dispararEmail('payment_confirmed_registrant', {
+              inscritoNome: inscritoProfile.full_name,
+              inscritoEmail: inscritoProfile.email,
+              coreoNome: coreo?.nome,
+              modalidade,
+              eventoNome: eventData?.name,
+              eventoLocal: eventData?.location,
+              eventoData,
+              valorPago: grossAmount,
+              appUrl,
+            })
+          )
+        } else {
+          console.warn('[mp-webhook] inscrito sem email cadastrado, pulando notificação')
+        }
+
+        if (produtorProfile?.email) {
+          emailJobs.push(
+            dispararEmail('payment_confirmed_producer', {
+              produtorNome: produtorProfile.full_name,
+              produtorEmail: produtorProfile.email,
+              coreoNome: coreo?.nome,
+              modalidade,
+              inscritoNome: inscritoProfile?.full_name,
+              inscritoEmail: inscritoProfile?.email,
+              eventoNome: eventData?.name,
+              valorBruto: grossAmount,
+              comissao: feeAmount,
+              valorLiquido: netAmount,
+              appUrl,
+            })
+          )
+        } else {
+          console.warn('[mp-webhook] produtor sem email cadastrado, pulando notificação')
+        }
+
+        await Promise.all(emailJobs)
+      } catch (emailErr) {
+        console.error('[mp-webhook] falha no bloco de emails:', (emailErr as Error).message)
       }
     }
 
