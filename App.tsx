@@ -145,6 +145,15 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
+    // Timeout de segurança: se após 5s a autenticação ainda não resolveu, libera a UI.
+    // Evita que o app fique preso em loading quando a aba é suspensa/reativada pelo navegador.
+    const safetyTimeout = setTimeout(() => {
+      setLoading(prev => {
+        if (prev) console.warn('[auth] initAuth demorou mais de 5s — liberando UI');
+        return false;
+      });
+    }, 5000);
+
     const initAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -160,6 +169,7 @@ const App: React.FC = () => {
       } catch (err: any) {
         console.error('Auth error:', err);
       } finally {
+        clearTimeout(safetyTimeout);
         setLoading(false);
       }
     };
@@ -179,7 +189,21 @@ const App: React.FC = () => {
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Quando a aba volta a ficar visível, reavalia a sessão para reidratar o estado.
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        supabase.auth.getSession().then(({ data }) => {
+          setSession(data.session);
+        }).catch(err => console.error('[auth] refresh on visibility:', err));
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearTimeout(safetyTimeout);
+      subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   if (loading) {
