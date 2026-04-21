@@ -163,6 +163,7 @@ Deno.serve(async (req) => {
         failure: `${baseUrl}/pagamento/erro?registration_id=${registration_id}`,
         pending: `${baseUrl}/pagamento/pendente?registration_id=${registration_id}`,
       },
+      auto_return: 'approved',
       notification_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/mp-webhook`,
       external_reference: registration_id,
       metadata: {
