@@ -176,33 +176,33 @@ const App: React.FC = () => {
 
     initAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    // IMPORTANTE: não usar async/await direto neste callback.
+    // O Supabase mantém um lock interno de auth enquanto o callback roda; fazer await
+    // de outras queries do Supabase aqui causa DEADLOCK (login trava em "Autenticando...").
+    // Por isso adiamos o trabalho com setTimeout(..., 0).
+    // Ref: https://github.com/supabase/auth-js/issues/762
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session?.user) {
-        const userProfile = await getOrCreateProfile(session.user);
-        if (userProfile) {
-          setProfile(userProfile);
-          setActiveRole(userProfile.role);
-        }
+        setTimeout(async () => {
+          try {
+            const userProfile = await getOrCreateProfile(session.user);
+            if (userProfile) {
+              setProfile(userProfile);
+              setActiveRole(userProfile.role);
+            }
+          } catch (err) {
+            console.error('[auth] erro ao carregar perfil:', err);
+          }
+        }, 0);
       } else {
         setProfile(null);
       }
     });
 
-    // Quando a aba volta a ficar visível, reavalia a sessão para reidratar o estado.
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        supabase.auth.getSession().then(({ data }) => {
-          setSession(data.session);
-        }).catch(err => console.error('[auth] refresh on visibility:', err));
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-
     return () => {
       clearTimeout(safetyTimeout);
       subscription.unsubscribe();
-      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
 

@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Sparkles, Loader2, Mail, Lock, ArrowRight, ShieldCheck, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
-import { getOrCreateProfile } from '../services/profileService';
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -22,17 +21,17 @@ const Auth = () => {
   const passwordRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // IMPORTANTE: o callback de onAuthStateChange NÃO pode usar await de queries
+    // do Supabase (deadlock do lock interno de auth). O App.tsx já cuida de
+    // getOrCreateProfile — aqui só navegamos após o SIGNED_IN.
+    // Ref: https://github.com/supabase/auth-js/issues/762
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         setIsAuthenticating(true);
-        try {
-          await getOrCreateProfile(session.user);
+        // setTimeout(..., 0) garante que o navigate roda fora do lock de auth.
+        setTimeout(() => {
           navigate(redirectTo || '/dashboard');
-        } catch (err) {
-          console.error('Erro ao processar perfil:', err);
-          setError('Erro ao sincronizar seu perfil. Tente novamente.');
-          setIsAuthenticating(false);
-        }
+        }, 0);
       }
     });
 
