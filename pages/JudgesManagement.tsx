@@ -541,7 +541,7 @@ const JudgesManagement = () => {
                       <label className={labelCls}>Especialidade / Mini-Bio (máx. 2 linhas)</label>
                       <textarea
                         rows={2}
-                        placeholder="Ex: Especialista em Danças Urbanas, 26 anos de mercado, CEO da Usualdance."
+                        placeholder="Ex: Especialista em Danças Urbanas, 26 anos de mercado, coreógrafo premiado."
                         value={form.mini_bio}
                         onChange={e => setForm(f => ({ ...f, mini_bio: e.target.value }))}
                         className={`${inputCls} resize-none`}
@@ -556,7 +556,7 @@ const JudgesManagement = () => {
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-black text-sm">@</span>
                         <input
                           type="text"
-                          placeholder="usualdance"
+                          placeholder="seu.instagram"
                           value={form.instagram || ''}
                           onChange={e => setForm(f => ({ ...f, instagram: e.target.value.replace('@', '') }))}
                           className={`${inputCls} pl-9`}

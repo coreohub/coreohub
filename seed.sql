@@ -1,5 +1,5 @@
 -- ================================================================
--- DANCE PRO FESTIVAL — SEED DE DADOS CORRIGIDO v2
+-- COREOHUB — SEED DE DADOS CORRIGIDO v2
 -- Baseado nas colunas reais verificadas no banco
 -- Execute no SQL Editor do Supabase
 -- ================================================================
@@ -64,8 +64,8 @@ BEGIN
 -- ================================================================
 INSERT INTO profiles (id, full_name, email, role, mp_user_id, mp_access_token, mp_connected_at)
 VALUES
-  (v_admin_id,    'Super Admin Teste',      'admin@dancepro.com',    'USUALDANCE_ADMIN', NULL, NULL, NULL),
-  (v_producer_id, 'Carlos Produtor',        'produtor@dancepro.com', 'ORGANIZER', '2490934794', 'APP_USR-TEST-TOKEN', NOW())
+  (v_admin_id,    'Super Admin Teste',      'admin@coreohub.com',    'USUALDANCE_ADMIN', NULL, NULL, NULL),
+  (v_producer_id, 'Carlos Produtor',        'produtor@coreohub.com', 'ORGANIZER', '2490934794', 'APP_USR-TEST-TOKEN', NOW())
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO profiles (id, full_name, email, role)
@@ -97,11 +97,11 @@ INSERT INTO events (
 )
 VALUES (
   v_event_id,
-  'Dance Pro Festival 2026',
+  'CoreoHub Festival Demo 2026',
   'O maior festival de dança do estado! Competição em diversas modalidades com os melhores jurados do país.',
   '2026-07-10', '2026-07-12', '2026-07-10',
   'Teatro Municipal — Av. São João, 330 - Centro, São Paulo - SP',
-  'Dance Pro Festival 2026',
+  'CoreoHub Festival Demo 2026',
   v_producer_id,
   'BASE_10',
   'percent', 10.00, 0.00,
@@ -130,7 +130,7 @@ INSERT INTO configuracoes (
 VALUES (
   v_config_id,
   v_event_id,
-  'Dance Pro Festival 2026',
+  'CoreoHub Festival Demo 2026',
   'Teatro Municipal — São Paulo, SP',
   '2026-06-30',
   80.00,

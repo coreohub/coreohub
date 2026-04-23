@@ -242,7 +242,7 @@ const TIPOS_APRESENTACAO_OPTIONS = [
 type ScoreScale = 'BASE_10' | 'BASE_100';
 
 const DEFAULT_GENERAL = {
-  eventName: 'Usualdance Festival',
+  eventName: 'CoreoHub Festival',
   location: 'Concha Acústica',
   city: 'Votuporanga, SP',
   eventDate: '2026-07-11',
@@ -863,7 +863,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                 </div>
                 <div>
                   <label className={label}>Nome do Festival</label>
-                  <input type="text" value={general.eventName} onChange={e => setGeneral({ ...general, eventName: e.target.value })} placeholder="Ex: Usualdance Festival" className={input} />
+                  <input type="text" value={general.eventName} onChange={e => setGeneral({ ...general, eventName: e.target.value })} placeholder="Ex: CoreoHub Festival" className={input} />
                 </div>
                 <div>
                   <label className={label}>Local do Evento</label>

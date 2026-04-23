@@ -1,6 +1,16 @@
 import { supabase } from './supabase';
 import { Profile, UserRole } from '../types';
 
+// Emails com acesso de Super Admin. Emails legados (*@usualdance.*) permanecem
+// temporariamente para não bloquear acesso durante a transição para CoreoHub —
+// remover após confirmar migração completa da equipe.
+const ADMIN_EMAILS = [
+  'admin@coreohub.com',
+  'coreohub@gmail.com',
+  'admin@usualdance.com.br',
+  'usualdance@gmail.com',
+];
+
 export const getOrCreateProfile = async (user: any): Promise<Profile | null> => {
   if (!user) return null;
 
@@ -17,8 +27,7 @@ export const getOrCreateProfile = async (user: any): Promise<Profile | null> => 
     }
 
     if (existingProfile) {
-      const adminEmails = ['admin@usualdance.com.br', 'usualdance@gmail.com'];
-      if (user.email && adminEmails.includes(user.email) && existingProfile.role !== UserRole.USUALDANCE_ADMIN) {
+      if (user.email && ADMIN_EMAILS.includes(user.email) && existingProfile.role !== UserRole.USUALDANCE_ADMIN) {
         const { data: updatedProfile } = await supabase
           .from('profiles')
           .update({ role: UserRole.USUALDANCE_ADMIN })
@@ -30,8 +39,7 @@ export const getOrCreateProfile = async (user: any): Promise<Profile | null> => 
       return existingProfile as Profile;
     }
 
-    const adminEmails = ['admin@usualdance.com.br', 'usualdance@gmail.com'];
-    const isAdminEmail = user.email && adminEmails.includes(user.email);
+    const isAdminEmail = user.email && ADMIN_EMAILS.includes(user.email);
 
     const newProfile: any = {
       id: user.id,

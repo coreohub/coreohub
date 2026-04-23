@@ -383,7 +383,7 @@ const Schedule = () => {
       }
 
       const zipBlob = await zip.generateAsync({ type: 'blob' });
-      saveAs(zipBlob, 'Trilhas_Sonoras_DancePro.zip');
+      saveAs(zipBlob, 'Trilhas_Sonoras_CoreoHub.zip');
     } catch (err) {
       console.error('Erro ao gerar ZIP:', err);
     } finally {

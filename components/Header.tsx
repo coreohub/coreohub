@@ -49,7 +49,7 @@ const Header = ({ toggleSidebar, profile, theme, toggleTheme, activeRole, setAct
             <Music size={16} />
           </div>
           <span className="text-xs font-black uppercase tracking-tighter text-slate-900 dark:text-white hidden sm:block">
-            Dance Pró <span className="text-[#ff0068]">Festival</span>
+            Coreo<span className="text-[#ff0068]">Hub</span>
           </span>
         </div>
       </div>

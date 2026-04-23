@@ -55,7 +55,7 @@ function normalizeSubTypes(rawSubTypes) {
 }
 
 async function runMigration() {
-  console.log('\n🚀 Dance Pró Festival — Migração dos 3 Eixos\n');
+  console.log('\n🚀 CoreoHub — Migração dos 3 Eixos\n');
 
   /* ── 1. Tenta rodar DDL via Management API ───────────────────────────── */
   if (ACCESS_TOKEN) {

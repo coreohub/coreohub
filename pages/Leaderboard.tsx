@@ -142,7 +142,7 @@ const Leaderboard = () => {
             <div>
               <p className="text-[9px] font-black text-[#ff0068] uppercase tracking-[0.4em]">Ranking Oficial</p>
               <h1 className="text-2xl font-black uppercase tracking-tighter italic">
-                {eventName || 'Dance Pró Festival'}
+                {eventName || 'CoreoHub'}
               </h1>
             </div>
           </div>

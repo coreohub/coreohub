@@ -98,10 +98,10 @@ const Auth = () => {
           </motion.div>
 
           <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter uppercase italic leading-none">
-            Dance Pró <span className="text-[#ff0068]">Festival</span>
+            Coreo<span className="text-[#ff0068]">Hub</span>
           </h1>
           <p className="text-slate-400 dark:text-slate-500 font-black text-[10px] uppercase tracking-[0.4em] mt-4">
-            A Elite da Dança Digital
+            Gestão Inteligente para Festivais de Dança
           </p>
         </div>
 
@@ -207,7 +207,7 @@ const Auth = () => {
         <div className="mt-12 flex items-center justify-center gap-8 text-slate-400 dark:text-slate-800">
           <div className="flex items-center gap-2">
             <Sparkles size={14} />
-            <span className="text-[9px] font-black uppercase tracking-widest italic">Dance Pró Ecosystem</span>
+            <span className="text-[9px] font-black uppercase tracking-widest italic">CoreoHub Platform</span>
           </div>
           <div className="w-1 h-1 bg-slate-300 dark:bg-slate-900 rounded-full" />
           <span className="text-[9px] font-black uppercase tracking-widest">© 2026</span>

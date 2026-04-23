@@ -90,7 +90,7 @@ const PublicEventPage = () => {
           <div className="max-w-4xl">
             <div className="flex items-center gap-3 mb-4">
               <BrandIcon size={28} />
-              <span className="text-[10px] font-black text-[#ff0068] uppercase tracking-[0.4em]">Dance Pró Festival</span>
+              <span className="text-[10px] font-black text-[#ff0068] uppercase tracking-[0.4em]">CoreoHub</span>
             </div>
             <motion.h1
               initial={{ opacity: 0, y: 20 }}

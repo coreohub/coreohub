@@ -317,7 +317,7 @@ Deno.serve(async (req) => {
         ])
 
         const produtorProfile: any = (produtorProfileRes as any)?.data ?? null
-        const appUrl = Deno.env.get('FRONTEND_URL') ?? 'https://dancepro.com'
+        const appUrl = Deno.env.get('FRONTEND_URL') ?? 'https://coreohub.com'
         const modalidade = coreo?.tipo_apresentacao ?? coreo?.modalidade ?? null
         const eventoData = eventData?.event_date
           ? new Date(eventData.event_date).toLocaleDateString('pt-BR', {

@@ -183,7 +183,7 @@ const Sidebar = ({ isOpen, toggle, onLogout, activeRole, profile, videoSelection
             <div className="bg-[#ff0068] p-1.5 rounded-lg text-white shadow-[0_0_15px_rgba(255,0,104,0.3)]">
               <Music size={16} />
             </div>
-            <span className="tracking-tighter uppercase font-black text-base text-slate-900 dark:text-white">Dance Pro</span>
+            <span className="tracking-tighter uppercase font-black text-base text-slate-900 dark:text-white">Coreo<span className="text-[#ff0068]">Hub</span></span>
           </div>
 
           <nav className="flex-1 px-3 overflow-y-auto space-y-4 pb-4">

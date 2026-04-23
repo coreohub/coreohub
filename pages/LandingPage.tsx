@@ -20,8 +20,8 @@ const LandingPage = () => {
           </div>
           
           <h1 className="text-6xl md:text-8xl font-black tracking-tighter uppercase leading-[0.9] italic">
-            Dance Pró <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ff0068] to-[#e3ff0a]">Festival</span>
+            Coreo<br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ff0068] to-[#e3ff0a]">Hub</span>
           </h1>
           
           <p className="text-slate-400 text-lg md:text-xl font-medium max-w-2xl mx-auto leading-relaxed">

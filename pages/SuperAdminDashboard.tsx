@@ -76,7 +76,7 @@ const SuperAdminDashboard = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Total GMV Global" value={`R$ ${stats.totalGmv.toLocaleString()}`} sub="+12.5%" icon={DollarSign} color="bg-[#ff0068]" />
-        <StatCard title="Receita Usualdance" value={`R$ ${stats.totalRevenue.toLocaleString()}`} sub="SaaS Fee" icon={CreditCard} color="bg-[#ff0068]" />
+        <StatCard title="Receita CoreoHub" value={`R$ ${stats.totalRevenue.toLocaleString()}`} sub="SaaS Fee" icon={CreditCard} color="bg-[#ff0068]" />
         <StatCard title="Eventos Ativos" value={stats.activeEvents} sub="Growth" icon={Layers} color="bg-cyan-500" />
         <StatCard title="Total Usuários" value={stats.totalUsers} sub="Base" icon={Users} color="bg-[#e3ff0a]" />
       </div>

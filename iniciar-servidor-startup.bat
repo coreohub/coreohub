@@ -1,3 +1,3 @@
 @echo off
-cd /d "d:\Documentos\Dance Pro Festival"
-start "Dance Pro Festival" /min cmd /k "npm run dev -- --host"
+cd /d "d:\Documentos\CoreoHub"
+start "CoreoHub" /min cmd /k "npm run dev -- --host"

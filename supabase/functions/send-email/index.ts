@@ -9,8 +9,8 @@
  *
  * Secrets necessários (Dashboard Supabase → Edge Functions → Secrets):
  *   - RESEND_API_KEY  (obrigatório, gerado em https://resend.com/api-keys)
- *   - EMAIL_FROM      (opcional, default: "Dance Pro Festival <onboarding@resend.dev>")
- *   - FRONTEND_URL    (opcional, default: "https://dancepro.com")
+ *   - EMAIL_FROM      (opcional, default: "CoreoHub <onboarding@resend.dev>")
+ *   - FRONTEND_URL    (opcional, default: "https://coreohub.com")
  *
  * Uso:
  *   POST /functions/v1/send-email
@@ -70,7 +70,7 @@ function baseLayout(opts: {
       <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);">
         <tr>
           <td style="background:${BRAND_DARK};padding:28px 32px;">
-            <p style="margin:0;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:${BRAND_COLOR};font-weight:900;">Dance Pro Festival</p>
+            <p style="margin:0;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:${BRAND_COLOR};font-weight:900;">CoreoHub</p>
             <h1 style="margin:8px 0 0;font-size:22px;line-height:1.25;color:#ffffff;font-weight:900;letter-spacing:-.01em;">${escape(title)}</h1>
           </td>
         </tr>
@@ -91,7 +91,7 @@ function baseLayout(opts: {
           <td style="padding:20px 32px 28px;border-top:1px solid #e5e7eb;">
             <p style="margin:0;font-size:11px;line-height:1.6;color:#94a3b8;">
               ${footerNote ?? 'Este é um email automático. Em caso de dúvidas, responda esta mensagem.'}<br />
-              © ${new Date().getFullYear()} Dance Pro Festival. Todos os direitos reservados.
+              © ${new Date().getFullYear()} CoreoHub. Todos os direitos reservados.
             </p>
           </td>
         </tr>
@@ -147,14 +147,14 @@ function buildRegistrantConfirmation(p: RegistrantPayload) {
     </p>`
 
   return {
-    subject: `Inscrição confirmada — ${p.coreoNome ?? 'Dance Pro Festival'}`,
+    subject: `Inscrição confirmada — ${p.coreoNome ?? 'CoreoHub'}`,
     html: baseLayout({
-      preheader: `Seu pagamento foi aprovado. Inscrição garantida em ${p.eventoNome ?? 'Dance Pro Festival'}.`,
+      preheader: `Seu pagamento foi aprovado. Inscrição garantida em ${p.eventoNome ?? 'CoreoHub'}.`,
       title: 'Inscrição confirmada!',
       intro: `Olá ${escape(p.inscritoNome ?? 'bailarino(a)')}, recebemos seu pagamento e sua inscrição foi <strong>aprovada</strong>. Bora dançar!`,
       contentHtml,
       ctaLabel: 'Ver minhas inscrições',
-      ctaUrl: `${p.appUrl ?? 'https://dancepro.com'}/minhas-coreografias`,
+      ctaUrl: `${p.appUrl ?? 'https://coreohub.com'}/minhas-coreografias`,
     }),
   }
 }
@@ -191,14 +191,14 @@ function buildProducerNotification(p: ProducerPayload) {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>`
 
   return {
-    subject: `Nova inscrição paga — ${p.coreoNome ?? p.eventoNome ?? 'Dance Pro Festival'}`,
+    subject: `Nova inscrição paga — ${p.coreoNome ?? p.eventoNome ?? 'CoreoHub'}`,
     html: baseLayout({
       preheader: `Uma nova inscrição foi paga para ${p.eventoNome ?? 'seu evento'}.`,
       title: 'Nova inscrição paga',
       intro: `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, uma nova inscrição acabou de ser paga e liberada para o seu evento.`,
       contentHtml,
       ctaLabel: 'Abrir painel do produtor',
-      ctaUrl: `${p.appUrl ?? 'https://dancepro.com'}/producer-dashboard`,
+      ctaUrl: `${p.appUrl ?? 'https://coreohub.com'}/producer-dashboard`,
       footerNote: 'Você está recebendo este email por ser o produtor responsável pelo evento.',
     }),
   }
@@ -217,7 +217,7 @@ async function sendViaResend(params: {
     throw new Error('RESEND_API_KEY não configurado')
   }
 
-  const from = Deno.env.get('EMAIL_FROM') ?? 'Dance Pro Festival <onboarding@resend.dev>'
+  const from = Deno.env.get('EMAIL_FROM') ?? 'CoreoHub <onboarding@resend.dev>'
 
   const resp = await fetch('https://api.resend.com/emails', {
     method: 'POST',

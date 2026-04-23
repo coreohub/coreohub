@@ -34,7 +34,7 @@ const Ingressos = () => {
         <h1 className="text-3xl font-black uppercase tracking-tighter italic text-slate-900 dark:text-white">
           Garanta seu <span className="text-[#ff0068]">Ingresso</span>
         </h1>
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Acesso ao Festival Dance Pró</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Acesso ao Festival via CoreoHub</p>
       </div>
 
       <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-[2.5rem] p-8 lg:p-12 shadow-xl shadow-slate-200/50 dark:shadow-none relative overflow-hidden group">

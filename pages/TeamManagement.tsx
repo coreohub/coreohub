@@ -4,8 +4,8 @@ import { UserPlus, Shield, ShieldCheck, ShieldAlert, Mail, MoreHorizontal } from
 
 const TeamManagement = () => {
   const team = [
-    { id: '1', name: 'Ricardo Alencar', email: 'ricardo@usualdance.com', role: 'Proprietário', status: 'ativo' },
-    { id: '2', name: 'Fernanda Lima', email: 'fernanda@usualdance.com', role: 'Editor', status: 'ativo' },
+    { id: '1', name: 'Ricardo Alencar', email: 'ricardo@coreohub.com', role: 'Proprietário', status: 'ativo' },
+    { id: '2', name: 'Fernanda Lima', email: 'fernanda@coreohub.com', role: 'Editor', status: 'ativo' },
     { id: '3', name: 'Carlos Jota', email: 'carlos@eventos.com', role: 'Staff de Portaria', status: 'pendente' },
     { id: '4', name: 'Juliana Paes', email: 'ju@producao.com', role: 'Editor', status: 'ativo' },
   ];

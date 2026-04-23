@@ -444,7 +444,7 @@ const EquipeProdutor = () => {
                         className="w-full pl-10 pr-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50 transition-all"
                       />
                     </div>
-                    <p className="text-[9px] text-slate-400 ml-1">O membro precisa ter uma conta no Dance Pro Festival.</p>
+                    <p className="text-[9px] text-slate-400 ml-1">O membro precisa ter uma conta no CoreoHub.</p>
                   </div>
 
                   {/* Cargo */}

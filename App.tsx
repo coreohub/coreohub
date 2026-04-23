@@ -210,7 +210,7 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center gap-6">
         <div className="w-16 h-16 border-4 border-[#ff0068] border-t-transparent rounded-full animate-spin shadow-[0_0_30px_rgba(255,0,104,0.3)]" />
-        <h2 className="text-slate-900 dark:text-white text-xl font-black uppercase tracking-tighter italic">Dance Pró <span className="text-[#ff0068]">Festival</span></h2>
+        <h2 className="text-slate-900 dark:text-white text-xl font-black uppercase tracking-tighter italic">Coreo<span className="text-[#ff0068]">Hub</span></h2>
       </div>
     );
   }
