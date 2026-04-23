@@ -5,7 +5,7 @@ import { RegistrationLot } from "../types";
 
 export interface RegulationAnalysis {
   summary: string;
-  modalities: {
+  formacoes: {
     name: string;
     max_time: string;
     fee: number;
@@ -41,7 +41,7 @@ export interface RegulationExtract {
   stage_marking_time_seconds: number | null;
   registration_lots: RegistrationLot[];
   categories: { name: string; min_age: number; max_age: number }[];
-  modalities: { name: string; max_time: string; fee: number; format: 'RANKING' | 'PEDAGOGICAL' | 'GRADUATED' }[];
+  formacoes: { name: string; max_time: string; fee: number; format: 'RANKING' | 'PEDAGOGICAL' | 'GRADUATED' }[];
   criteria: { name: string; weight: number; description: string }[];
   prizes: { name: string; description: string }[];
   tiebreaker_rules: string | null;
@@ -100,7 +100,7 @@ const buildRegulationSchema = () => ({
           required: ['name', 'min_age', 'max_age'],
         },
       },
-      modalities: {
+      formacoes: {
         type: Type.ARRAY,
         items: {
           type: Type.OBJECT,
@@ -137,7 +137,7 @@ const buildRegulationSchema = () => ({
         },
       },
     },
-    required: ['summary', 'modalities', 'categories', 'criteria'],
+    required: ['summary', 'formacoes', 'categories', 'criteria'],
   },
 });
 
@@ -160,7 +160,7 @@ function parseRawExtract(raw: any): RegulationExtract {
     tiebreaker_rules: raw.tiebreaker_rules ?? null,
     registration_lots: raw.registration_lots ?? [],
     categories: raw.categories ?? [],
-    modalities: raw.modalities ?? [],
+    formacoes: raw.formacoes ?? [],
     criteria: raw.criteria ?? [],
     prizes: raw.prizes ?? [],
     summary: raw.summary ?? '',
@@ -176,7 +176,7 @@ function buildEmptyExtract(): RegulationExtract {
     age_tolerance_mode: null, age_tolerance_value: null,
     stage_entry_time_seconds: null, stage_marking_time_seconds: null,
     tiebreaker_rules: null, registration_lots: [],
-    categories: [], modalities: [], criteria: [], prizes: [], summary: '',
+    categories: [], formacoes: [], criteria: [], prizes: [], summary: '',
   };
 }
 
@@ -186,7 +186,7 @@ export async function analyzeRegulation(text: string): Promise<RegulationAnalysi
   const apiKey = getApiKey();
   if (!apiKey) {
     console.warn('GEMINI_API_KEY não definida. Análise de regulamento desativada.');
-    return { summary: '', modalities: [], categories: [], criteria: [] };
+    return { summary: '', formacoes: [], categories: [], criteria: [] };
   }
 
   const { GoogleGenAI } = await import('@google/genai');
@@ -201,7 +201,7 @@ export async function analyzeRegulation(text: string): Promise<RegulationAnalysi
     
     Extraia:
     1. Um resumo executivo de 3-4 frases.
-    2. Lista de modalidades (ex: Solo, Duo, Conjunto) com tempo máximo (formato MM:SS), taxa de inscrição e formato sugerido (RANKING para competitivo, PEDAGOGICAL para avaliado, GRADUATED para notas de corte).
+    2. Lista de formações (ex: Solo, Duo, Conjunto) com tempo máximo (formato MM:SS), taxa de inscrição e formato sugerido (RANKING para competitivo, PEDAGOGICAL para avaliado, GRADUATED para notas de corte).
     3. Lista de categorias de idade (ex: Infantil, Junior) com idades mínima e máxima.
     4. Critérios de julgamento com pesos sugeridos (totalizando 10.0 ou pesos individuais).
     `,
@@ -211,7 +211,7 @@ export async function analyzeRegulation(text: string): Promise<RegulationAnalysi
         type: Type.OBJECT,
         properties: {
           summary: { type: Type.STRING },
-          modalities: {
+          formacoes: {
             type: Type.ARRAY,
             items: {
               type: Type.OBJECT,
@@ -249,7 +249,7 @@ export async function analyzeRegulation(text: string): Promise<RegulationAnalysi
             },
           },
         },
-        required: ['summary', 'modalities', 'categories', 'criteria'],
+        required: ['summary', 'formacoes', 'categories', 'criteria'],
       },
     },
   });

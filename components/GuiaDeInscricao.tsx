@@ -148,7 +148,7 @@ const GuiaDeInscricao: React.FC<Props> = ({ profile, config }) => {
       Icon: Music2,
       title: 'Inscreva suas coreografias',
       subtitle: 'Solo, duo, trio ou grupo',
-      description: 'Escolha o evento, estilo de dança, categoria etária e modalidade. Adicione os integrantes do elenco já cadastrados. Você pode inscrever quantas coreografias quiser dentro do prazo.',
+      description: 'Escolha o evento, estilo de dança, categoria etária e formação. Adicione os integrantes do elenco já cadastrados. Você pode inscrever quantas coreografias quiser dentro do prazo.',
       ctaLabel: total > 0 ? `Coreografias (${total})` : 'Inscrever agora',
       ctaAction: () => navigate('/minhas-coreografias'),
       detail: (

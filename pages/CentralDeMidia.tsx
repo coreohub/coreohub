@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import { getAllGenres } from '../services/genreService';
+import { EventStyle } from '../types';
 import {
   Music2, Upload, Play, Pause, CheckCircle2,
-  Loader2, Lock, Calendar, Clapperboard, X,
+  Loader2, Lock, Calendar, Clapperboard,
   AlertTriangle, RefreshCw, Headphones, Trash2,
-  ShieldAlert, CreditCard, ArrowRight,
+  ShieldAlert, CreditCard, ArrowRight, Disc,
 } from 'lucide-react';
 
 /* ══════════════════════════════════════════════════════════════
@@ -14,14 +16,17 @@ import {
 interface Coreografia {
   id: string;
   nome: string;
+  event_id?: string;
   event_nome?: string;
   event_data?: string;
   estilo_nome?: string;
+  subgenero?: string;
   categoria_nome?: string;
-  modalidade?: string;
+  formacao?: string;
   status: string;
   trilha_url?: string;
   status_trilha?: string;
+  allow_shorter_track?: boolean;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -139,7 +144,7 @@ const AudioPlayer: React.FC<{ url: string }> = ({ url }) => {
 interface CardProps {
   coreo: Coreografia;
   userName: string;
-  onUploaded: (id: string, url: string) => void;
+  onUploaded: (id: string, url: string, durationSeconds: number) => void;
   onRemoved: (id: string) => void;
 }
 
@@ -153,6 +158,19 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
   const canUpload = UPLOAD_ALLOWED_STATUSES.includes(coreo.status);
   const hasAudio  = !!coreo.trilha_url;
   const st        = STATUS_CFG[coreo.status] || STATUS_CFG.RASCUNHO;
+
+  /** Reads the audio file duration in seconds using HTML5 Audio API */
+  const readAudioDuration = (file: File): Promise<number> =>
+    new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const audio = new Audio(url);
+      audio.addEventListener('loadedmetadata', () => {
+        const dur = isFinite(audio.duration) ? Math.round(audio.duration) : 0;
+        URL.revokeObjectURL(url);
+        resolve(dur);
+      });
+      audio.addEventListener('error', () => { URL.revokeObjectURL(url); resolve(0); });
+    });
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -174,6 +192,9 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
       setUploadErr('Formato não suportado. Envie um arquivo MP3, WAV ou M4A.');
       return;
     }
+
+    // Read audio duration
+    const durationSeconds = await readAudioDuration(file);
 
     // Build standardised filename: ID-NomeCoreografia-Escola.ext
     const safeNome  = slugify(coreo.nome);
@@ -197,15 +218,15 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
         .from('trilhas')
         .getPublicUrl(path);
 
-      // Persist URL and status on coreografias row
+      // Persist URL, duration and status on coreografias row
       const { error: dbErr } = await supabase
         .from('coreografias')
-        .update({ trilha_url: publicUrl, status_trilha: 'ENVIADA' })
+        .update({ trilha_url: publicUrl, status_trilha: 'ENVIADA', duracao_trilha_segundos: durationSeconds })
         .eq('id', coreo.id);
 
       if (dbErr) throw dbErr;
       setProgress(100);
-      onUploaded(coreo.id, publicUrl);
+      onUploaded(coreo.id, publicUrl, durationSeconds);
     } catch (err: any) {
       setUploadErr(err.message || 'Erro ao enviar o arquivo.');
     } finally {
@@ -289,6 +310,11 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
             {coreo.categoria_nome && (
               <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 text-[7px] font-black uppercase tracking-widest rounded-full">
                 {coreo.categoria_nome}
+              </span>
+            )}
+            {coreo.allow_shorter_track && (
+              <span className="flex items-center gap-1 px-2 py-0.5 bg-violet-100 dark:bg-violet-500/15 text-violet-600 dark:text-violet-400 text-[7px] font-black uppercase tracking-widest rounded-full" title="Balé de Repertório: duração mínima não exigida">
+                <Disc size={7} /> Repertório
               </span>
             )}
           </div>
@@ -391,6 +417,18 @@ const CentralDeMidia = () => {
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState<string | null>(null);
   const [tableReady,   setTableReady]   = useState(true);
+  const [allGenres,    setAllGenres]    = useState<EventStyle[]>([]);
+
+  /** Resolve allow_shorter_track for a coreografia based on its subgenero */
+  const resolveAllowShorterTrack = useCallback((coreo: any, genres: EventStyle[]): boolean => {
+    if (!coreo.subgenero) return false;
+    for (const genre of genres) {
+      for (const sub of genre.sub_types) {
+        if (sub.name === coreo.subgenero && sub.allow_shorter_track) return true;
+      }
+    }
+    return false;
+  }, []);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -413,7 +451,7 @@ const CentralDeMidia = () => {
 
       setTableReady(true);
 
-      const [coreoRes, profileRes] = await Promise.all([
+      const [coreoRes, profileRes, genres] = await Promise.all([
         supabase
           .from('coreografias')
           .select('*')
@@ -424,22 +462,28 @@ const CentralDeMidia = () => {
           .select('full_name')
           .eq('id', user.id)
           .single(),
+        getAllGenres().catch(() => [] as EventStyle[]),
       ]);
 
       if (coreoRes.error) throw coreoRes.error;
 
-      setCoreografias(coreoRes.data || []);
+      setAllGenres(genres);
+      const enriched = (coreoRes.data || []).map((c: any) => ({
+        ...c,
+        allow_shorter_track: resolveAllowShorterTrack(c, genres),
+      }));
+      setCoreografias(enriched);
       setUserName(profileRes.data?.full_name || user.email || 'Usuario');
     } catch (e: any) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [resolveAllowShorterTrack]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const handleUploaded = (id: string, url: string) => {
+  const handleUploaded = (id: string, url: string, _durationSeconds: number) => {
     setCoreografias(prev =>
       prev.map(c => c.id === id ? { ...c, trilha_url: url, status_trilha: 'ENVIADA' } : c)
     );

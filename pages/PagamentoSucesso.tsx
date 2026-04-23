@@ -5,7 +5,7 @@ import { supabase } from '../services/supabase';
 
 interface DetalheInscricao {
   nome: string;
-  modalidade?: string | null;
+  formacao?: string | null;
   tipo_apresentacao?: string | null;
   event_id?: string | null;
   eventName?: string | null;
@@ -27,7 +27,7 @@ const PagamentoSucesso = () => {
       if (registrationId) {
         const { data: coreo } = await supabase
           .from('coreografias')
-          .select('nome, modalidade, tipo_apresentacao, event_id')
+          .select('nome, formacao, tipo_apresentacao, event_id')
           .eq('id', registrationId)
           .single();
 
@@ -90,9 +90,9 @@ const PagamentoSucesso = () => {
               <div className="min-w-0">
                 <p className="text-[10px] text-slate-500">Coreografia</p>
                 <p className="font-black text-sm text-slate-900 dark:text-white truncate">{detalhe.nome}</p>
-                {(detalhe.tipo_apresentacao || detalhe.modalidade) && (
+                {(detalhe.tipo_apresentacao || detalhe.formacao) && (
                   <p className="text-[10px] text-slate-400 mt-0.5">
-                    {detalhe.tipo_apresentacao || detalhe.modalidade}
+                    {detalhe.tipo_apresentacao || detalhe.formacao}
                   </p>
                 )}
               </div>

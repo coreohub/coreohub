@@ -4,7 +4,7 @@ import { supabase } from '../services/supabase';
 import {
   DollarSign, Users, Music, AlertCircle, TrendingUp,
   Plus, Search, ArrowUpRight, CreditCard, Calendar,
-  UserCheck, Clock, CheckSquare, AlertTriangle, Loader2,
+  UserCheck, CheckSquare, AlertTriangle, Loader2, ChevronDown,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -72,7 +72,25 @@ const ProducerDashboard = () => {
   const [latestRegistrations, setLatestRegistrations] = useState<any[]>([]);
   const [filteredRegs, setFilteredRegs] = useState<any[]>([]);
 
+  /* ── Edition selector ── */
+  const [allEvents, setAllEvents] = useState<{ id: string; name: string; edition_year?: number; start_date?: string }[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+
   useEffect(() => {
+    supabase
+      .from('events')
+      .select('id,name,edition_year,start_date')
+      .order('start_date', { ascending: false })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setAllEvents(data);
+          setSelectedEventId(prev => prev ?? data[0].id);
+        }
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!selectedEventId) return;
     const fetchAll = async () => {
       setLoading(true);
       try {
@@ -83,11 +101,11 @@ const ProducerDashboard = () => {
           { data: judges },
           { data: checkins },
         ] = await Promise.all([
-          supabase.from('registrations').select('*'),
-          supabase.from('registrations').select('*').order('criado_em', { ascending: false }).limit(6),
+          supabase.from('registrations').select('*').eq('event_id', selectedEventId),
+          supabase.from('registrations').select('*').eq('event_id', selectedEventId).order('criado_em', { ascending: false }).limit(6),
           supabase.from('configuracoes').select('nome_evento,data_evento').eq('id', 1).single(),
           supabase.from('judges').select('id,is_active'),
-          supabase.from('registrations').select('id,check_in_status'),
+          supabase.from('registrations').select('id,check_in_status').eq('event_id', selectedEventId),
         ]);
 
         if (allRegs) {
@@ -115,7 +133,7 @@ const ProducerDashboard = () => {
       }
     };
     fetchAll();
-  }, []);
+  }, [selectedEventId]);
 
   useEffect(() => {
     if (!searchTerm) { setFilteredRegs(latestRegistrations); return; }
@@ -135,7 +153,7 @@ const ProducerDashboard = () => {
     <div className="space-y-8 pb-20 animate-in fade-in duration-700">
 
       {/* Header */}
-      <header className="flex justify-between items-center">
+      <header className="flex justify-between items-start gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <div className="w-1.5 h-1.5 bg-[#ff0068] rounded-full animate-pulse shadow-[0_0_8px_#ff0068]" />
@@ -153,12 +171,33 @@ const ProducerDashboard = () => {
             </p>
           )}
         </div>
-        <button
-          onClick={() => navigate('/account-settings')}
-          className="flex items-center gap-2 bg-[#ff0068] text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-[#ff0068]/20 group"
-        >
-          <Plus size={16} className="group-hover:rotate-90 transition-transform" /> Novo Evento
-        </button>
+
+        <div className="flex items-center gap-3 shrink-0">
+          {/* Edition selector */}
+          {allEvents.length > 0 && (
+            <div className="relative">
+              <select
+                value={selectedEventId ?? ''}
+                onChange={e => setSelectedEventId(e.target.value)}
+                className="appearance-none pl-4 pr-9 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 transition-all cursor-pointer"
+              >
+                {allEvents.map(ev => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.edition_year ? `${ev.edition_year} — ` : ''}{ev.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            </div>
+          )}
+
+          <button
+            onClick={() => navigate('/account-settings')}
+            className="flex items-center gap-2 bg-[#ff0068] text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-[#ff0068]/20 group"
+          >
+            <Plus size={16} className="group-hover:rotate-90 transition-transform" /> Novo Evento
+          </button>
+        </div>
       </header>
 
       {/* Metric cards */}

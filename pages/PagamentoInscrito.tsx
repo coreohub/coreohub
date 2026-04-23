@@ -15,7 +15,7 @@ interface Coreografia {
   nome: string;
   event_id?: string;
   event_nome?: string;
-  modalidade?: string;
+  formacao?: string;
   tipo_apresentacao?: string;
   categoria_nome?: string;
   estilo_nome?: string;
@@ -25,7 +25,7 @@ interface Coreografia {
   mod_fee?: number;
 }
 
-interface EventModality {
+interface EventFormacao {
   name?: string;
   fee?: number;
   base_fee?: number;
@@ -38,16 +38,16 @@ const fmtCurrency = (v: number) =>
 /**
  * Calcula o valor de uma coreografia tentando várias fontes em ordem:
  * 1. coreo.mod_fee (explícito)
- * 2. events.modalities_config casando pelo nome da modalidade
- * 3. Primeira modalidade ativa do evento (fallback)
+ * 2. events.formacoes_config casando pelo nome da formação
+ * 3. Primeira formação ativa do evento (fallback)
  */
 const calcularValor = (
   coreo: Coreografia,
-  modalidades: EventModality[]
+  modalidades: EventFormacao[]
 ): number => {
   if (coreo.mod_fee && coreo.mod_fee > 0) return coreo.mod_fee;
 
-  const nome = (coreo.tipo_apresentacao ?? coreo.modalidade ?? '').toLowerCase();
+  const nome = (coreo.tipo_apresentacao ?? coreo.formacao ?? '').toLowerCase();
   if (nome) {
     const m = modalidades.find(x => x.name?.toLowerCase() === nome);
     const v = m?.fee ?? m?.base_fee;
@@ -62,7 +62,7 @@ const calcularValor = (
 const PagamentoInscrito = () => {
   const navigate = useNavigate();
   const [coreografias, setCoreografias]   = useState<Coreografia[]>([]);
-  const [modalidades, setModalidades]     = useState<EventModality[]>([]);
+  const [modalidades, setModalidades]     = useState<EventFormacao[]>([]);
   const [loading, setLoading]             = useState(true);
   const [error, setError]                 = useState<string | null>(null);
   const [paying, setPaying]               = useState<string | null>(null); // id da coreo clicada
@@ -82,17 +82,16 @@ const PagamentoInscrito = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { navigate('/login'); return; }
 
-      // Busca coreografias + primeiro evento disponível (com modalities_config).
       const [coreoRes, eventRes] = await Promise.all([
         supabase.from('coreografias').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('events').select('id, modalities_config').order('created_at').limit(1).single(),
+        supabase.from('events').select('id, formacoes_config').order('created_at').limit(1).single(),
       ]);
 
       if (coreoRes.error) throw coreoRes.error;
 
       const firstEventId = eventRes.data?.id ?? null;
-      const eventModalities: EventModality[] = (eventRes.data as any)?.modalities_config ?? [];
-      setModalidades(eventModalities);
+      const eventFormacoes: EventFormacao[] = (eventRes.data as any)?.formacoes_config ?? [];
+      setModalidades(eventFormacoes);
 
       const enriched = (coreoRes.data || []).map(c => ({
         ...c,
@@ -306,7 +305,7 @@ const PagamentoInscrito = () => {
                       {coreo.nome}
                     </p>
                     <p className="text-[9px] font-bold text-slate-400 mt-0.5">
-                      {[coreo.event_nome, coreo.tipo_apresentacao || coreo.modalidade, coreo.categoria_nome, coreo.estilo_nome]
+                      {[coreo.event_nome, coreo.tipo_apresentacao || coreo.formacao, coreo.categoria_nome, coreo.estilo_nome]
                         .filter(Boolean).join(' · ')}
                     </p>
                     {/* Badges */}

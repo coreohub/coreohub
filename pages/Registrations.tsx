@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import {
   Search, Download, RefreshCw,
   Trash2, Pencil, AlertTriangle, X, DollarSign,
-  ShieldAlert, CheckCircle2, Clock, Users, Info,
+  ShieldAlert, CheckCircle2, Clock, Users, Info, ChevronDown,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -23,14 +23,34 @@ const Registrations = () => {
   const [eventDate, setEventDate] = useState('');
   const [triageAction, setTriageAction] = useState<{ reg: any; decision: 'APPROVE' | 'PENALIZE' | 'DISQUALIFY' } | null>(null);
 
+  /* Edition selector */
+  const [allEvents, setAllEvents] = useState<{ id: string; name: string; edition_year?: number }[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase
+      .from('events')
+      .select('id,name,edition_year,start_date')
+      .order('start_date', { ascending: false })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setAllEvents(data);
+          setSelectedEventId(prev => prev ?? data[0].id);
+        }
+      });
+  }, []);
+
   const fetchData = async () => {
     setIsLoading(true);
     try {
+      let regsQuery = supabase.from('registrations').select('*').order('criado_em', { ascending: false });
+      if (selectedEventId) regsQuery = regsQuery.eq('event_id', selectedEventId);
+
       const [
         { data, error },
         { data: cfg },
       ] = await Promise.all([
-        supabase.from('registrations').select('*').order('criado_em', { ascending: false }),
+        regsQuery,
         supabase.from('configuracoes').select('tolerancia,age_reference,age_reference_date,data_evento').eq('id', 1).single(),
       ]);
       if (error) throw error;
@@ -112,7 +132,7 @@ const Registrations = () => {
       .map(r => ({ ...r, _violation: checkViolation(r) }));
   }, [registrations, toleranceRule, ageRefMode, ageRefFixed, eventDate]); // eslint-disable-line
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [selectedEventId]); // eslint-disable-line
 
   useEffect(() => {
     let result = registrations;
@@ -146,12 +166,29 @@ const Registrations = () => {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-20">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-4">
         <div>
           <h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">Gestão de <span className="text-[#ff0068]">Inscrições</span></h1>
           <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Controle mestre do festival</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {/* Edition selector */}
+          {allEvents.length > 0 && (
+            <div className="relative">
+              <select
+                value={selectedEventId ?? ''}
+                onChange={e => setSelectedEventId(e.target.value)}
+                className="appearance-none pl-4 pr-9 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 transition-all cursor-pointer"
+              >
+                {allEvents.map(ev => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.edition_year ? `${ev.edition_year} — ` : ''}{ev.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            </div>
+          )}
           <button onClick={fetchData} className="p-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-400 hover:text-[#ff0068] transition-all">
             <RefreshCw size={20} className={isLoading ? 'animate-spin' : ''} />
           </button>

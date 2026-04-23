@@ -119,7 +119,8 @@ interface RegistrantPayload {
   inscritoNome?: string
   inscritoEmail: string
   coreoNome?: string
-  modalidade?: string
+  modalidade?: string  // kept for backward compat; prefer formacao
+  formacao?: string
   eventoNome?: string
   eventoLocal?: string
   eventoData?: string
@@ -130,7 +131,7 @@ interface RegistrantPayload {
 function buildRegistrantConfirmation(p: RegistrantPayload) {
   const linhas = [
     p.coreoNome ? infoRow('Coreografia', escape(p.coreoNome)) : '',
-    p.modalidade ? infoRow('Modalidade', escape(p.modalidade)) : '',
+    (p.formacao ?? p.modalidade) ? infoRow('Formação', escape(p.formacao ?? p.modalidade ?? '')) : '',
     p.eventoNome ? infoRow('Evento', escape(p.eventoNome)) : '',
     p.eventoData ? infoRow('Data', escape(p.eventoData)) : '',
     p.eventoLocal ? infoRow('Local', escape(p.eventoLocal)) : '',
@@ -163,7 +164,8 @@ interface ProducerPayload {
   produtorNome?: string
   produtorEmail: string
   coreoNome?: string
-  modalidade?: string
+  modalidade?: string  // kept for backward compat; prefer formacao
+  formacao?: string
   inscritoNome?: string
   inscritoEmail?: string
   eventoNome?: string
@@ -177,7 +179,7 @@ function buildProducerNotification(p: ProducerPayload) {
   const linhas = [
     p.eventoNome ? infoRow('Evento', escape(p.eventoNome)) : '',
     p.coreoNome ? infoRow('Coreografia', escape(p.coreoNome)) : '',
-    p.modalidade ? infoRow('Modalidade', escape(p.modalidade)) : '',
+    (p.formacao ?? p.modalidade) ? infoRow('Formação', escape(p.formacao ?? p.modalidade ?? '')) : '',
     p.inscritoNome ? infoRow('Inscrito', escape(p.inscritoNome)) : '',
     p.inscritoEmail ? infoRow('Email do inscrito', escape(p.inscritoEmail)) : '',
     typeof p.valorBruto === 'number' ? infoRow('Valor bruto', escape(money(p.valorBruto))) : '',

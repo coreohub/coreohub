@@ -29,7 +29,7 @@ interface Registration {
   trilha_url?: string;
   ordem_apresentacao?: number;
   elenco?: Dancer[];
-  modalidade?: string;
+  formacao?: string;
   estilo_danca?: string;
   categoria?: string;
   classificacao_final?: string;
@@ -197,9 +197,9 @@ const SortableRow: React.FC<SortableRowProps> = ({ reg, index, conflicts }) => {
           <span className="text-[9px] font-bold text-slate-500 dark:text-white/40 uppercase tracking-widest truncate">
             {reg.estudio}
           </span>
-          {reg.modalidade && (
+          {reg.formacao && (
             <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-white/50 rounded-full text-[8px] font-black uppercase tracking-wider">
-              {reg.modalidade}
+              {reg.formacao}
             </span>
           )}
           {reg.categoria && (
@@ -252,20 +252,43 @@ const Schedule = () => {
   const [savedMsg, setSavedMsg] = useState('');
   const [orderChanged, setOrderChanged] = useState(false);
 
+  /* Edition selector */
+  const [allEvents, setAllEvents] = useState<{ id: string; name: string; edition_year?: number }[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    supabase
+      .from('events')
+      .select('id,name,edition_year,start_date')
+      .order('start_date', { ascending: false })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setAllEvents(data);
+          setSelectedEventId(prev => prev ?? data[0].id);
+        } else {
+          fetchData(null);
+        }
+      });
+  }, []); // eslint-disable-line
 
-  const fetchData = async () => {
+  useEffect(() => {
+    if (selectedEventId !== undefined) fetchData(selectedEventId);
+  }, [selectedEventId]); // eslint-disable-line
+
+  const fetchData = async (eventId: string | null) => {
     setIsLoading(true);
     try {
-      const { data: regs } = await supabase
+      let regsQuery = supabase
         .from('registrations')
         .select('*')
         .eq('status', 'APROVADA')
         .order('ordem_apresentacao', { ascending: true });
+
+      if (eventId) regsQuery = regsQuery.eq('event_id', eventId);
+
+      const { data: regs } = await regsQuery;
 
       const { data: cfg } = await supabase
         .from('configuracoes')
@@ -365,7 +388,7 @@ const Schedule = () => {
         if (!reg.trilha_url) continue;
 
         const num = String(i + 1).padStart(3, '0');
-        const modality = sanitize(reg.modalidade || reg.estilo_danca || 'Coreografia');
+        const modality = sanitize(reg.formacao || reg.estilo_danca || 'Coreografia');
         const category = sanitize(reg.categoria || 'Geral');
         const studio = sanitize(reg.estudio || 'Estudio');
         const ext = reg.trilha_url.split('?')[0].split('.').pop() || 'mp3';
@@ -430,8 +453,26 @@ const Schedule = () => {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Edition selector */}
+          {allEvents.length > 0 && (
+            <div className="relative">
+              <select
+                value={selectedEventId ?? ''}
+                onChange={e => setSelectedEventId(e.target.value)}
+                className="appearance-none pl-3 pr-8 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 transition-all cursor-pointer"
+              >
+                {allEvents.map(ev => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.edition_year ? `${ev.edition_year} — ` : ''}{ev.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            </div>
+          )}
+
           <button
-            onClick={fetchData}
+            onClick={() => fetchData(selectedEventId)}
             disabled={isLoading}
             className="p-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-500 rounded-xl hover:text-[#ff0068] transition-all disabled:opacity-50"
             title="Atualizar"
@@ -677,7 +718,7 @@ const Schedule = () => {
               ZIP com {stats.withTrack} trilha{stats.withTrack !== 1 ? 's' : ''} pronto para download
             </p>
             <p className="text-[9px] text-indigo-500/70 dark:text-indigo-400/50 mt-0.5">
-              Os arquivos serão renomeados no padrão: 001_Modalidade_Categoria_Estudio.mp3 — na ordem atual do cronograma.
+              Os arquivos serão renomeados no padrão: 001_Formação_Categoria_Estudio.mp3 — na ordem atual do cronograma.
             </p>
           </div>
         </div>

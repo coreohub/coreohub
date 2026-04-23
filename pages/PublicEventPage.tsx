@@ -145,13 +145,13 @@ const PublicEventPage = () => {
         )}
 
         {/* Modalities */}
-        {event.modalities_config && event.modalities_config.length > 0 && (
+        {event.formacoes_config && event.formacoes_config.length > 0 && (
           <div className="space-y-4">
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-              <Music size={24} className="text-[#ff0068]" /> Modalidades
+              <Music size={24} className="text-[#ff0068]" /> Formações
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {event.modalities_config.map((mod: any, i: number) => (
+              {event.formacoes_config.map((mod: any, i: number) => (
                 <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-5 flex justify-between items-center">
                   <span className="font-black uppercase text-sm">{mod.name}</span>
                   <span className="text-[#ff0068] font-black text-sm">

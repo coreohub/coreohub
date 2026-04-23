@@ -28,6 +28,7 @@ const CreateEvent = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
+    edition_year: new Date().getFullYear(),
     start_date: '',
     end_date: '',
     address: '',
@@ -40,7 +41,7 @@ const CreateEvent = () => {
     age_reference_date: '',
     age_tolerance_mode: 'PERCENT' as 'PERCENT' | 'FIXED_COUNT',
     age_tolerance_value: 0,
-    modalities_config: [
+    formacoes_config: [
       { id: 'm1', name: 'Solo', min_members: 1, max_members: 1, fee: 0, slots_limit: 100, weight: 0, format: EventFormat.RANKING, categories: ['Infantil', 'Júnior', 'Adulto'] },
       { id: 'm2', name: 'Duo', min_members: 2, max_members: 2, fee: 0, slots_limit: 50, weight: 0, format: EventFormat.RANKING, categories: ['Infantil', 'Júnior', 'Adulto'] },
     ] as any[],
@@ -68,7 +69,7 @@ const CreateEvent = () => {
 
   const handleAddModality = () => {
     if (newModality.name.trim()) {
-      setFormData({ ...formData, modalities_config: [...formData.modalities_config, { ...newModality, id: Math.random().toString(36).substring(7) }] });
+      setFormData({ ...formData, formacoes_config: [...formData.formacoes_config, { ...newModality, id: Math.random().toString(36).substring(7) }] });
       setNewModality({ name: '', min_members: 1, max_members: 1, fee: 0, slots_limit: 0, weight: 0, format: EventFormat.RANKING, categories: [] });
     }
   };
@@ -95,7 +96,7 @@ const CreateEvent = () => {
       const analysis = await analyzeRegulation(formData.rules_text);
       setFormData(prev => ({
         ...prev,
-        modalities_config: [...prev.modalities_config, ...analysis.modalities.map(m => ({ ...m, id: Math.random().toString(36).substring(7) }))],
+        formacoes_config: [...prev.formacoes_config, ...analysis.formacoes.map(m => ({ ...m, id: Math.random().toString(36).substring(7) }))],
         categories_config: [...prev.categories_config, ...analysis.categories.map(c => ({ ...c, id: Math.random().toString(36).substring(7) }))],
       }));
     } catch (err) {
@@ -184,6 +185,10 @@ const CreateEvent = () => {
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Localização</label>
                   <input type="text" value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} className="w-full p-5 bg-slate-950 rounded-2xl border border-white/5 text-white font-bold outline-none" placeholder="Cidade, Teatro..." />
                 </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Ano da Edição</label>
+                  <input type="number" min={2020} max={2099} value={formData.edition_year} onChange={e => setFormData({ ...formData, edition_year: Number(e.target.value) })} className="w-full p-5 bg-slate-950 rounded-2xl border border-white/5 text-white font-bold outline-none focus:ring-2 focus:ring-[#ff0068] transition-all" placeholder="Ex: 2026" />
+                </div>
                 <div className="md:col-span-2 space-y-4">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Capa do Evento</label>
                   <div className="flex items-center gap-6">
@@ -227,19 +232,19 @@ const CreateEvent = () => {
                   </div>
                 </div>
                 <div className="space-y-4">
-                  <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Modalidades Ativas</h4>
+                  <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Formações Ativas</h4>
                   <div className="grid grid-cols-1 gap-3">
-                    {formData.modalities_config.map(mod => (
+                    {formData.formacoes_config.map(mod => (
                       <div key={mod.id} className="p-4 bg-slate-950 rounded-2xl border border-white/5 flex justify-between items-center group">
                         <div>
                           <span className="text-sm font-black text-white uppercase">{mod.name}</span>
                           <span className="ml-3 text-[10px] text-slate-500 font-bold uppercase tracking-widest">{mod.format}</span>
                         </div>
-                        <button onClick={() => setFormData({ ...formData, modalities_config: formData.modalities_config.filter(m => m.id !== mod.id) })} className="text-slate-700 hover:text-rose-500 transition-all"><Trash2 size={16} /></button>
+                        <button onClick={() => setFormData({ ...formData, formacoes_config: formData.formacoes_config.filter(m => m.id !== mod.id) })} className="text-slate-700 hover:text-rose-500 transition-all"><Trash2 size={16} /></button>
                       </div>
                     ))}
                     <div className="flex gap-2 mt-4">
-                      <input type="text" value={newModality.name} onChange={e => setNewModality({ ...newModality, name: e.target.value })} className="flex-1 p-4 bg-slate-950 rounded-2xl border border-white/5 text-white text-xs font-bold outline-none" placeholder="Nova Modalidade (Ex: Trio)" />
+                      <input type="text" value={newModality.name} onChange={e => setNewModality({ ...newModality, name: e.target.value })} className="flex-1 p-4 bg-slate-950 rounded-2xl border border-white/5 text-white text-xs font-bold outline-none" placeholder="Nova Formação (Ex: Trio)" />
                       <button onClick={handleAddModality} className="px-6 bg-[#e3ff0a] text-black rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">Adicionar</button>
                     </div>
                   </div>

@@ -606,7 +606,8 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
     subIndex?: number;
     tempName: string;
     tempFree: boolean;
-  }>({ open: false, mode: 'add-genre', tempName: '', tempFree: false });
+    tempShorterTrack: boolean;
+  }>({ open: false, mode: 'add-genre', tempName: '', tempFree: false, tempShorterTrack: false });
 
   const [flowConfig, setFlowConfig] = useState({
     tempo_entrada: 15,
@@ -775,7 +776,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
   const openAdd = () => {
     setModalMode('add');
     setEditingId(null);
-    setTempValue(activeTab === 'Formatos & Preços' ? { pricingType: 'FIXED', minMembers: 1 } : {});
+    setTempValue(activeTab === 'Formações' ? { pricingType: 'FIXED', minMembers: 1 } : {});
     setIsModalOpen(true);
   };
   const openEdit = (id: number | string, data: any) => {
@@ -785,17 +786,12 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
     setIsModalOpen(true);
   };
   const handleDelete = (id: number | string) => {
-    if (activeTab === 'Modalidades')       setStyles(styles.filter((_, i) => i !== id));
-    if (activeTab === 'Formatos & Preços') setFormats(formats.filter(f => f.id !== id));
+    if (activeTab === 'Formações')         setFormats(formats.filter(f => f.id !== id));
     if (activeTab === 'Categorias')        setCategories(categories.filter(c => c.id !== id));
     if (activeTab === 'Redirecionamentos') setLinks(links.filter((_: any, i: number) => i !== id));
   };
   const handleModalSubmit = () => {
-    if (activeTab === 'Modalidades') {
-      if (modalMode === 'add') setStyles([...styles, tempValue.name]);
-      else setStyles(styles.map((s, i) => i === editingId ? tempValue.name : s));
-    }
-    if (activeTab === 'Formatos & Preços') {
+    if (activeTab === 'Formações') {
       if (modalMode === 'add') setFormats([...formats, { ...tempValue, id: Date.now() }]);
       else setFormats(formats.map(f => f.id === editingId ? { ...tempValue, id: editingId } : f));
     }
@@ -943,7 +939,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                 </p>
               </div>
               <button
-                onClick={() => setGenreModal({ open: true, mode: 'add-genre', tempName: '', tempFree: false })}
+                onClick={() => setGenreModal({ open: true, mode: 'add-genre', tempName: '', tempFree: false, tempShorterTrack: false })}
                 className="flex items-center gap-2 bg-[#ff0068]/10 text-[#ff0068] border border-[#ff0068]/20 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0068] hover:text-white transition-all"
               >
                 <Plus size={14} /> Novo Gênero
@@ -1008,7 +1004,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                     </button>
 
                     <button
-                      onClick={() => setGenreModal({ open: true, mode: 'edit-genre', genre, tempName: genre.name, tempFree: false })}
+                      onClick={() => setGenreModal({ open: true, mode: 'edit-genre', genre, tempName: genre.name, tempFree: false, tempShorterTrack: false })}
                       className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all"
                     >
                       <Pencil size={14} />
@@ -1049,7 +1045,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                           <div className="flex items-center justify-between mb-3">
                             <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Modalidades</p>
                             <button
-                              onClick={() => setGenreModal({ open: true, mode: 'add-sub', genre, tempName: '', tempFree: false })}
+                              onClick={() => setGenreModal({ open: true, mode: 'add-sub', genre, tempName: '', tempFree: false, tempShorterTrack: false })}
                               className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-[#ff0068] hover:underline"
                             >
                               <Plus size={11} /> Adicionar
@@ -1086,8 +1082,14 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                                 {sub.is_categoria_livre ? 'Livre' : 'Com Idade'}
                               </button>
 
+                              {sub.allow_shorter_track && (
+                                <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-violet-500/10 text-violet-500 border border-violet-500/20" title="Duração mínima de trilha ignorada (Repertório)">
+                                  <Music2 size={10} /> Repertório
+                                </span>
+                              )}
+
                               <button
-                                onClick={() => setGenreModal({ open: true, mode: 'edit-sub', genre, subIndex: idx, tempName: sub.name, tempFree: sub.is_categoria_livre })}
+                                onClick={() => setGenreModal({ open: true, mode: 'edit-sub', genre, subIndex: idx, tempName: sub.name, tempFree: sub.is_categoria_livre, tempShorterTrack: sub.allow_shorter_track ?? false })}
                                 className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all"
                               >
                                 <Pencil size={12} />
@@ -2345,29 +2347,56 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
 
                 {/* Categoria Livre toggle — só para subgêneros */}
                 {(genreModal.mode === 'add-sub' || genreModal.mode === 'edit-sub') && (
-                  <button
-                    type="button"
-                    onClick={() => setGenreModal(m => ({ ...m, tempFree: !m.tempFree }))}
-                    className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                      genreModal.tempFree
-                        ? 'border-amber-500 bg-amber-500/5'
-                        : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
-                    }`}
-                  >
-                    <div className="text-left">
-                      <p className={`text-[11px] font-black uppercase tracking-widest ${genreModal.tempFree ? 'text-amber-500' : 'text-slate-900 dark:text-white'}`}>
-                        Categoria Livre
-                      </p>
-                      <p className="text-[10px] text-slate-500 mt-0.5">
-                        {genreModal.tempFree
-                          ? 'Sem restrição de idade — o Eixo Etário será pulado no checkout'
-                          : 'Participantes precisam estar dentro da faixa etária da categoria'}
-                      </p>
-                    </div>
-                    {genreModal.tempFree
-                      ? <ToggleRight size={22} className="text-amber-500 shrink-0" />
-                      : <ToggleLeft  size={22} className="text-slate-400 shrink-0" />}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setGenreModal(m => ({ ...m, tempFree: !m.tempFree }))}
+                      className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                        genreModal.tempFree
+                          ? 'border-amber-500 bg-amber-500/5'
+                          : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
+                      }`}
+                    >
+                      <div className="text-left">
+                        <p className={`text-[11px] font-black uppercase tracking-widest ${genreModal.tempFree ? 'text-amber-500' : 'text-slate-900 dark:text-white'}`}>
+                          Categoria Livre
+                        </p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">
+                          {genreModal.tempFree
+                            ? 'Sem restrição de idade — o Eixo Etário será pulado no checkout'
+                            : 'Participantes precisam estar dentro da faixa etária da categoria'}
+                        </p>
+                      </div>
+                      {genreModal.tempFree
+                        ? <ToggleRight size={22} className="text-amber-500 shrink-0" />
+                        : <ToggleLeft  size={22} className="text-slate-400 shrink-0" />}
+                    </button>
+
+                    {/* Trilha de Repertório toggle */}
+                    <button
+                      type="button"
+                      onClick={() => setGenreModal(m => ({ ...m, tempShorterTrack: !m.tempShorterTrack }))}
+                      className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                        genreModal.tempShorterTrack
+                          ? 'border-violet-500 bg-violet-500/5'
+                          : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
+                      }`}
+                    >
+                      <div className="text-left">
+                        <p className={`text-[11px] font-black uppercase tracking-widest ${genreModal.tempShorterTrack ? 'text-violet-500' : 'text-slate-900 dark:text-white'}`}>
+                          Trilha de Repertório
+                        </p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">
+                          {genreModal.tempShorterTrack
+                            ? 'Duração mínima ignorada — trilha original da obra é aceita em qualquer tamanho'
+                            : 'Valida duração mínima da trilha conforme regras da modalidade'}
+                        </p>
+                      </div>
+                      {genreModal.tempShorterTrack
+                        ? <ToggleRight size={22} className="text-violet-500 shrink-0" />
+                        : <ToggleLeft  size={22} className="text-slate-400 shrink-0" />}
+                    </button>
+                  </>
                 )}
               </div>
 
@@ -2394,10 +2423,10 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                         const updated = await updateGenre(genreModal.genre.id, { name });
                         setGenres(gs => gs.map(g => g.id === genreModal.genre!.id ? updated : g));
                       } else if (genreModal.mode === 'add-sub' && genreModal.genre) {
-                        const updated = await addSubgenre(genreModal.genre, { name, is_categoria_livre: genreModal.tempFree });
+                        const updated = await addSubgenre(genreModal.genre, { name, is_categoria_livre: genreModal.tempFree, allow_shorter_track: genreModal.tempShorterTrack });
                         setGenres(gs => gs.map(g => g.id === genreModal.genre!.id ? updated : g));
                       } else if (genreModal.mode === 'edit-sub' && genreModal.genre && genreModal.subIndex !== undefined) {
-                        const updated = await editSubgenre(genreModal.genre, genreModal.subIndex, { name, is_categoria_livre: genreModal.tempFree });
+                        const updated = await editSubgenre(genreModal.genre, genreModal.subIndex, { name, is_categoria_livre: genreModal.tempFree, allow_shorter_track: genreModal.tempShorterTrack });
                         setGenres(gs => gs.map(g => g.id === genreModal.genre!.id ? updated : g));
                       }
                       setGenreModal(m => ({ ...m, open: false }));

@@ -49,7 +49,7 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
     const fetchCoreografias = async () => {
       const { data } = await supabase
         .from('coreografias')
-        .select('id, nome, status, trilha_url, modalidade, categoria_nome, estilo_nome')
+        .select('id, nome, status, trilha_url, formacao, categoria_nome, estilo_nome')
         .eq('user_id', profile.id)
         .order('created_at', { ascending: false });
       if (data) setCoreografias(data);
@@ -278,7 +278,7 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
                         {coreo.nome}
                       </p>
                       <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest truncate">
-                        {[coreo.modalidade, coreo.categoria_nome, coreo.estilo_nome].filter(Boolean).join(' · ')}
+                        {[coreo.formacao, coreo.categoria_nome, coreo.estilo_nome].filter(Boolean).join(' · ')}
                       </p>
                     </div>
                   </div>

@@ -27,12 +27,12 @@ const Checkout = () => {
       const [{ data: reg }, { data: ev }] = await Promise.all([
         supabase
           .from('registrations')
-          .select('id, choreography_name, modality, category, dance_style, status_pagamento, payment_url, profiles(full_name, email)')
+          .select('id, choreography_name, formacao, category, dance_style, status_pagamento, payment_url, profiles(full_name, email)')
           .eq('id', registrationId)
           .single(),
         supabase
           .from('events')
-          .select('id, name, cover_url, modalities_config, created_by')
+          .select('id, name, cover_url, formacoes_config, created_by')
           .eq('id', eventId)
           .single(),
       ]);
@@ -48,9 +48,8 @@ const Checkout = () => {
       setRegistration(reg);
       setEvent(ev);
 
-      // Calcula o valor da modalidade
-      const modalities: any[] = ev.modalities_config ?? [];
-      const mod = modalities.find((m: any) => m.name === reg.modality);
+      const formacoes: any[] = ev.formacoes_config ?? [];
+      const mod = formacoes.find((m: any) => m.name === reg.formacao);
       setFee(mod?.fee ?? mod?.base_fee ?? 0);
 
       setLoading(false);
@@ -144,8 +143,8 @@ const Checkout = () => {
                 <Users size={14} />
               </div>
               <div>
-                <p className="text-[10px] text-slate-500 uppercase tracking-widest">Modalidade</p>
-                <p className="font-black text-sm text-slate-900 dark:text-white">{registration?.modality}</p>
+                <p className="text-[10px] text-slate-500 uppercase tracking-widest">Formação</p>
+                <p className="font-black text-sm text-slate-900 dark:text-white">{registration?.formacao}</p>
               </div>
             </div>
 

@@ -26,7 +26,7 @@ interface Categoria {
   max_age: number;
 }
 
-interface Modalidade {
+interface Formacao {
   name: string;
   min_members: number;
   max_members: number;
@@ -40,7 +40,7 @@ interface EventData {
   start_date?: string;
   location?: string;
   categories_config?: Categoria[];
-  modalities_config?: Modalidade[];
+  formacoes_config?: Formacao[];
 }
 
 interface Coreografia {
@@ -52,7 +52,7 @@ interface Coreografia {
   estilo_nome?: string;
   subgenero?: string;
   categoria_nome?: string;
-  modalidade?: string;
+  formacao?: string;
   bailarinos_ids: string[];
   status: string;
   created_at: string;
@@ -106,7 +106,7 @@ alter table coreografias
   add column if not exists event_id uuid,
   add column if not exists event_nome text default '',
   add column if not exists event_data date,
-  add column if not exists modalidade text default '';`;
+  add column if not exists formacao text default '';`;
 
 const EMPTY_FORM = {
   nome:              '',
@@ -118,14 +118,14 @@ const EMPTY_FORM = {
   categoria_nome:    '',
   cat_min_age:       0,
   cat_max_age:       99,
-  modalidade:        '',
+  formacao:          '',
   mod_min:           1,
   mod_max:           99,
   mod_fee:           0,
   bailarinos_ids:    [] as string[],
 };
 
-const STEP_LABELS = ['Evento & Nome', 'Estilo · Categoria · Modalidade', 'Elenco', 'Confirmação'];
+const STEP_LABELS = ['Evento & Nome', 'Estilo · Categoria · Formação', 'Elenco', 'Confirmação'];
 
 /* ══════════════════════════════════════════════════════════════
    COMPONENT
@@ -154,6 +154,9 @@ const MinhasCoreografias = () => {
 
   /* ── list actions ── */
   const [confirmDel,  setConfirmDel]  = useState<string | null>(null);
+
+  /* ── "Usar dados do ano anterior" ── */
+  const [showPrefillBanner, setShowPrefillBanner] = useState(false);
 
   /* ── age reference (loaded from global config) ── */
   const [ageRefMode,      setAgeRefMode]      = useState<'EVENT_DAY' | 'YEAR_END' | 'FIXED_DATE'>('EVENT_DAY');
@@ -196,7 +199,7 @@ const MinhasCoreografias = () => {
           start_date:        ev.start_date  || undefined,
           location:          ev.location    || undefined,
           categories_config: cfg?.categorias_predefinidas || [],
-          modalities_config: cfg?.formatos_precos         || [],
+          formacoes_config: cfg?.formatos_precos         || [],
         };
       });
 
@@ -210,7 +213,7 @@ const MinhasCoreografias = () => {
             start_date:       firstCfg.prazo_inscricao || undefined,
             location:         firstCfg.local_evento    || undefined,
             categories_config: firstCfg.categorias_predefinidas || [],
-            modalities_config: firstCfg.formatos_precos         || [],
+            formacoes_config: firstCfg.formatos_precos         || [],
           }];
         }
       }
@@ -261,8 +264,8 @@ const MinhasCoreografias = () => {
     [selectedEvent, globalCats]
   );
 
-  const modalidadesForEvent = useMemo(
-    () => selectedEvent?.modalities_config || [],
+  const formacoesForEvent = useMemo(
+    () => selectedEvent?.formacoes_config || [],
     [selectedEvent]
   );
 
@@ -322,16 +325,16 @@ const MinhasCoreografias = () => {
     if (s === 2) {
       if (!form.estilo_nome)  errs.estilo   = 'Selecione o estilo de dança';
       if (!form.categoria_nome) errs.categoria = 'Selecione a categoria';
-      if (!form.modalidade)   errs.modalidade = 'Selecione a modalidade';
+      if (!form.formacao)      errs.formacao = 'Selecione a formação';
     }
     if (s === 3) {
       const eligible = form.bailarinos_ids.filter(id =>
         isDancerEligible(elenco.find(b => b.id === id)!)
       );
       if (eligible.length < form.mod_min)
-        errs.bailarinos = `Esta modalidade requer no mínimo ${form.mod_min} bailarino(s) elegível(is)`;
+        errs.bailarinos = `Esta formação requer no mínimo ${form.mod_min} bailarino(s) elegível(is)`;
       if (form.bailarinos_ids.length > form.mod_max)
-        errs.bailarinos = `Esta modalidade permite no máximo ${form.mod_max === 99 ? '∞' : form.mod_max} bailarino(s)`;
+        errs.bailarinos = `Esta formação permite no máximo ${form.mod_max === 99 ? '∞' : form.mod_max} bailarino(s)`;
     }
     setFormErrors(errs);
     return Object.keys(errs).length === 0;
@@ -358,8 +361,7 @@ const MinhasCoreografias = () => {
         estilo_nome:    form.estilo_nome,
         subgenero:      form.subgenero,
         categoria_nome: form.categoria_nome,
-        modalidade:     form.modalidade,
-        formacao:       form.modalidade,
+        formacao:       form.formacao,
         mod_fee:        form.mod_fee || 0,
         bailarinos_ids: form.bailarinos_ids,
         status:         'AGUARDANDO_PAGAMENTO',
@@ -403,7 +405,7 @@ const MinhasCoreografias = () => {
     setEditingId(c.id);
     const allCats = allEvents.find(e => e.id === c.event_id)?.categories_config || globalCats;
     const cat = allCats.find(x => x.name === c.categoria_nome);
-    const mod = allEvents.find(e => e.id === c.event_id)?.modalities_config?.find(m => m.name === c.modalidade);
+    const mod = allEvents.find(e => e.id === c.event_id)?.formacoes_config?.find(m => m.name === c.formacao);
     setForm({
       nome:           c.nome,
       event_id:       c.event_id      || '',
@@ -414,7 +416,7 @@ const MinhasCoreografias = () => {
       categoria_nome: c.categoria_nome || '',
       cat_min_age:    cat?.min_age    ?? 0,
       cat_max_age:    cat?.max_age    ?? 99,
-      modalidade:     c.modalidade    || '',
+      formacao:       c.formacao       || '',
       mod_min:        mod?.min_members ?? 1,
       mod_max:        mod?.max_members ?? 99,
       mod_fee:        mod?.fee        ?? 0,
@@ -439,6 +441,40 @@ const MinhasCoreografias = () => {
         ? prev.bailarinos_ids.filter(x => x !== id)
         : [...prev.bailarinos_ids, id],
     }));
+  };
+
+  /**
+   * Finds the most recent coreografia from a different event to pre-fill the new form.
+   * Only shown when starting a new inscription (not editing).
+   */
+  const previousCoreografia = useMemo(() => {
+    if (editingId) return null;
+    // Filter for coreografias from other events that have style/modality data
+    const fromOtherEvents = coreografias.filter(
+      c => c.event_id !== form.event_id && (c.estilo_nome || c.formacao)
+    );
+    if (fromOtherEvents.length === 0) return null;
+    // Most recent = first in list (already ordered by created_at desc from fetchAll)
+    return fromOtherEvents[0];
+  }, [coreografias, form.event_id, editingId]);
+
+  const handlePrefillFromPrevious = () => {
+    if (!previousCoreografia) return;
+    const mod = formacoesForEvent.find(m => m.name === previousCoreografia.formacao);
+    setForm(prev => ({
+      ...prev,
+      estilo_nome:    previousCoreografia.estilo_nome   || prev.estilo_nome,
+      subgenero:      previousCoreografia.subgenero     || prev.subgenero,
+      formacao:       mod ? previousCoreografia.formacao! : prev.formacao,
+      mod_min:        mod?.min_members ?? prev.mod_min,
+      mod_max:        mod?.max_members ?? prev.mod_max,
+      mod_fee:        mod?.fee         ?? prev.mod_fee,
+      bailarinos_ids: (previousCoreografia.bailarinos_ids || []).filter(id =>
+        elenco.some(b => b.id === id)
+      ),
+    }));
+    setShowPrefillBanner(false);
+    setStep(2);
   };
 
   /* ══════════════════════════════════════════════════════════
@@ -569,8 +605,8 @@ const MinhasCoreografias = () => {
                       {c.categoria_nome && (
                         <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 text-[7px] font-black uppercase tracking-widest rounded-full">{c.categoria_nome}</span>
                       )}
-                      {c.modalidade && (
-                        <span className="px-2 py-0.5 bg-slate-100 dark:bg-white/5 text-slate-500 text-[7px] font-black uppercase tracking-widest rounded-full">{c.modalidade}</span>
+                      {c.formacao && (
+                        <span className="px-2 py-0.5 bg-slate-100 dark:bg-white/5 text-slate-500 text-[7px] font-black uppercase tracking-widest rounded-full">{c.formacao}</span>
                       )}
                     </div>
                     {c._bailarinos_nomes && c._bailarinos_nomes.length > 0 && (
@@ -689,7 +725,7 @@ const MinhasCoreografias = () => {
                                 categoria_nome: '',
                                 cat_min_age: 0,
                                 cat_max_age: 99,
-                                modalidade:  '',
+                                formacao:    '',
                                 mod_min: 1,
                                 mod_max: 99,
                                 mod_fee: 0,
@@ -731,11 +767,43 @@ const MinhasCoreografias = () => {
                     )}
                     {formErrors.event_id && <p className="text-[9px] text-rose-500 font-bold mt-1">{formErrors.event_id}</p>}
                   </div>
+
+                  {/* ── "Usar dados do ano anterior" banner ── */}
+                  {previousCoreografia && form.event_id && !editingId && (
+                    <div className="flex items-start gap-3 p-4 bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/25 rounded-xl">
+                      <div className="w-8 h-8 rounded-lg bg-violet-500/15 flex items-center justify-center shrink-0">
+                        <Clock size={14} className="text-violet-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-violet-700 dark:text-violet-400">
+                          Dados do ano anterior disponíveis
+                        </p>
+                        <p className="text-[9px] font-bold text-violet-600/70 dark:text-violet-400/70 mt-0.5">
+                          Pré-preencher estilo, subgênero, formação e elenco de{' '}
+                          <strong>{previousCoreografia.event_nome || 'edição anterior'}</strong>?
+                        </p>
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            onClick={handlePrefillFromPrevious}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all active:scale-95"
+                          >
+                            <CheckCircle size={10} /> Usar dados anteriores
+                          </button>
+                          <button
+                            onClick={() => setShowPrefillBanner(false)}
+                            className="px-3 py-1.5 text-violet-500 hover:text-violet-700 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all"
+                          >
+                            Ignorar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
 
               {/* ════════════════════════
-                  STEP 2: Estilo + Categoria + Modalidade
+                  STEP 2: Estilo + Categoria + Formação
               ════════════════════════ */}
               {step === 2 && (
                 <>
@@ -833,34 +901,34 @@ const MinhasCoreografias = () => {
                     {formErrors.categoria && <p className="text-[9px] text-rose-500 font-bold mt-1">{formErrors.categoria}</p>}
                   </div>
 
-                  {/* Modalidade */}
+                  {/* Formação */}
                   <div>
                     <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1.5 block">
-                      Modalidade *
+                      Formação *
                     </label>
-                    {modalidadesForEvent.length === 0 ? (
+                    {formacoesForEvent.length === 0 ? (
                       <div className="p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl text-[9px] text-amber-700 dark:text-amber-300 font-bold">
-                        Modalidades não configuradas para este evento. Configure em <strong>Configurações → Modalidades</strong>.
+                        Formações não configuradas para este evento. Configure em <strong>Configurações → Formações</strong>.
                       </div>
                     ) : (
                       <div className="grid grid-cols-2 gap-2">
-                        {modalidadesForEvent.map(mod => (
+                        {formacoesForEvent.map(mod => (
                           <button key={mod.name}
                             onClick={() => setForm(f => ({
                               ...f,
-                              modalidade: mod.name,
+                              formacao: mod.name,
                               mod_min: mod.min_members,
                               mod_max: mod.max_members,
                               mod_fee: mod.fee ?? 0,
                               bailarinos_ids: [],
                             }))}
                             className={`px-3 py-3 rounded-xl border text-left transition-all active:scale-95
-                              ${form.modalidade === mod.name
+                              ${form.formacao === mod.name
                                 ? 'bg-[#ff0068]/10 border-[#ff0068]'
                                 : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
                               }`}
                           >
-                            <p className={`font-black text-[10px] uppercase tracking-widest ${form.modalidade === mod.name ? 'text-[#ff0068]' : 'text-slate-600 dark:text-slate-300'}`}>
+                            <p className={`font-black text-[10px] uppercase tracking-widest ${form.formacao === mod.name ? 'text-[#ff0068]' : 'text-slate-600 dark:text-slate-300'}`}>
                               {mod.name}
                             </p>
                             <p className="text-[8px] text-slate-400 font-bold mt-0.5">
@@ -874,7 +942,7 @@ const MinhasCoreografias = () => {
                         ))}
                       </div>
                     )}
-                    {formErrors.modalidade && <p className="text-[9px] text-rose-500 font-bold mt-1">{formErrors.modalidade}</p>}
+                    {formErrors.formacao && <p className="text-[9px] text-rose-500 font-bold mt-1">{formErrors.formacao}</p>}
                   </div>
                 </>
               )}
@@ -889,7 +957,7 @@ const MinhasCoreografias = () => {
                     <Info size={12} className="text-slate-400 shrink-0 mt-0.5" />
                     <div className="text-[9px] font-bold text-slate-400 space-y-0.5">
                       <p>
-                        Modalidade <span className="text-slate-600 dark:text-slate-300">{form.modalidade}</span>:
+                        Formação <span className="text-slate-600 dark:text-slate-300">{form.formacao}</span>:
                         {' '}{form.mod_min === form.mod_max ? `exatamente ${form.mod_min}` : `${form.mod_min}–${form.mod_max === 99 ? '∞' : form.mod_max}`} bailarino(s).
                         {' '}Selecionados: <span className="text-[#ff0068] font-black">{form.bailarinos_ids.length}</span>
                       </p>
@@ -995,7 +1063,7 @@ const MinhasCoreografias = () => {
                     { label: 'Evento',        value: `${form.event_nome} · ${fmtDate(form.event_data)}` },
                     { label: 'Estilo',        value: [form.estilo_nome, form.subgenero].filter(Boolean).join(' › ') },
                     { label: 'Categoria',     value: `${form.categoria_nome} (${form.cat_min_age}–${form.cat_max_age} anos)` },
-                    { label: 'Modalidade',    value: form.modalidade },
+                    { label: 'Formação',       value: form.formacao },
                     { label: 'Bailarinos',    value: `${form.bailarinos_ids.length} selecionado(s)` },
                     ...(form.mod_fee > 0 ? [{ label: 'Valor da inscrição', value: fmtCurrency(form.mod_fee) }] : []),
                   ].map(({ label, value }) => (

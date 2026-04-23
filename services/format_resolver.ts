@@ -4,7 +4,7 @@ import { supabase } from './supabase';
 export interface FormatResolutionInput {
   style_id?: string;
   category_id?: string;
-  modality_id?: string;
+  formacao_id?: string;
   level_id?: string;
 }
 
@@ -37,7 +37,7 @@ export const resolveFormat = async (
       let score = 0;
       if (rule.style_id && rule.style_id === input.style_id) score += 8;
       if (rule.category_id && rule.category_id === input.category_id) score += 4;
-      if (rule.modality_id && rule.modality_id === input.modality_id) score += 2;
+      if (rule.formacao_id && rule.formacao_id === input.formacao_id) score += 2;
       if (rule.level_id && rule.level_id === input.level_id) score += 1;
       return { rule, score };
     });

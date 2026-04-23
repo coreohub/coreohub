@@ -20,7 +20,11 @@ function normalizeSubTypes(raw: any): Subgenre[] {
     .map((item: any) => {
       if (typeof item === 'string') return { name: item, is_categoria_livre: false };
       if (item && typeof item === 'object' && item.name) {
-        return { name: item.name, is_categoria_livre: item.is_categoria_livre ?? false };
+        return {
+          name: item.name,
+          is_categoria_livre: item.is_categoria_livre ?? false,
+          allow_shorter_track: item.allow_shorter_track ?? false,
+        };
       }
       return null;
     })
@@ -160,4 +164,25 @@ export function getSubgenresWithAgeRestriction(genre: EventStyle): Subgenre[] {
  */
 export function shouldSkipAgeAxis(subgenre: Subgenre): boolean {
   return subgenre.is_categoria_livre;
+}
+
+/**
+ * Dado um subgênero, retorna true se a validação de duração mínima da trilha deve ser ignorada.
+ * Usado para Balé de Repertório e similares.
+ */
+export function shouldSkipMinDurationCheck(subgenre: Subgenre): boolean {
+  return subgenre.allow_shorter_track === true;
+}
+
+/**
+ * Dado um nome de subgênero e a lista de estilos, retorna se aquele subgênero
+ * tem allow_shorter_track ativado.
+ */
+export function isRepertorioSubgenre(subgenreName: string, genres: import('../types').EventStyle[]): boolean {
+  for (const genre of genres) {
+    for (const sub of genre.sub_types) {
+      if (sub.name === subgenreName && sub.allow_shorter_track) return true;
+    }
+  }
+  return false;
 }

@@ -245,7 +245,7 @@ Deno.serve(async (req) => {
     if (payment.status === 'approved') {
       const { data: coreo } = await supabase
         .from('coreografias')
-        .select('event_id, user_id, nome, modalidade, tipo_apresentacao')
+        .select('event_id, user_id, nome, formacao, modalidade, tipo_apresentacao')
         .eq('id', registrationId)
         .single()
 
@@ -318,7 +318,7 @@ Deno.serve(async (req) => {
 
         const produtorProfile: any = (produtorProfileRes as any)?.data ?? null
         const appUrl = Deno.env.get('FRONTEND_URL') ?? 'https://coreohub.com'
-        const modalidade = coreo?.tipo_apresentacao ?? coreo?.modalidade ?? null
+        const modalidade = coreo?.tipo_apresentacao ?? coreo?.formacao ?? coreo?.modalidade ?? null
         const eventoData = eventData?.event_date
           ? new Date(eventData.event_date).toLocaleDateString('pt-BR', {
               day: '2-digit', month: 'long', year: 'numeric',

@@ -18,7 +18,7 @@ const NewRegistration = () => {
 
   const [form, setForm] = useState({
     choreography_name: '',
-    modality: '',
+    formacao: '',
     category: '',
     dance_style: '',
     num_participants: 1,
@@ -32,7 +32,7 @@ const NewRegistration = () => {
 
       const { data: ev, error: evErr } = await supabase
         .from('events')
-        .select('id, name, description, start_date, end_date, registration_deadline, modalities_config, categories_config, styles_config, cover_url')
+        .select('id, name, description, start_date, end_date, registration_deadline, formacoes_config, categories_config, styles_config, cover_url')
         .eq('id', eventId)
         .single();
 
@@ -43,19 +43,19 @@ const NewRegistration = () => {
     load();
   }, [eventId, navigate]);
 
-  const modalities: any[] = event?.modalities_config ?? [];
+  const formacoes: any[] = event?.formacoes_config ?? [];
   const categories: any[] = event?.categories_config ?? [];
   const styles: any[]     = event?.styles_config ?? [];
 
-  const selectedModality = modalities.find(m => m.name === form.modality);
-  const fee: number = selectedModality?.fee ?? selectedModality?.base_fee ?? 0;
+  const selectedFormacao = formacoes.find(m => m.name === form.formacao);
+  const fee: number = selectedFormacao?.fee ?? selectedFormacao?.base_fee ?? 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.choreography_name.trim()) { setError('Informe o nome da coreografia.'); return; }
-    if (!form.modality)  { setError('Selecione a modalidade.'); return; }
+    if (!form.formacao)  { setError('Selecione a formação.'); return; }
     if (!form.category)  { setError('Selecione a categoria.'); return; }
-    if (fee <= 0)        { setError('Esta modalidade não possui valor configurado. Contate o produtor.'); return; }
+    if (fee <= 0)        { setError('Esta formação não possui valor configurado. Contate o produtor.'); return; }
 
     setSubmitting(true);
     setError(null);
@@ -67,7 +67,7 @@ const NewRegistration = () => {
           event_id: eventId,
           user_id: userId,
           choreography_name: form.choreography_name.trim(),
-          modality: form.modality,
+          formacao: form.formacao,
           category: form.category,
           dance_style: form.dance_style || null,
           status: 'PENDENTE',
@@ -156,10 +156,10 @@ const NewRegistration = () => {
             </div>
 
             <div>
-              <label className={label}>Modalidade</label>
-              <select value={form.modality} onChange={e => setForm(f => ({ ...f, modality: e.target.value }))} className={input} required>
+              <label className={label}>Formação</label>
+              <select value={form.formacao} onChange={e => setForm(f => ({ ...f, formacao: e.target.value }))} className={input} required>
                 <option value="">Selecione...</option>
-                {modalities.filter(m => m.is_active !== false).map((m: any) => (
+                {formacoes.filter(m => m.is_active !== false).map((m: any) => (
                   <option key={m.id ?? m.name} value={m.name}>
                     {m.name} {(m.fee ?? m.base_fee) ? `— R$ ${(m.fee ?? m.base_fee).toFixed(2)}` : ''}
                   </option>
@@ -208,7 +208,7 @@ const NewRegistration = () => {
             <div className="bg-[#ff0068]/5 border border-[#ff0068]/20 rounded-2xl px-5 py-4 flex items-center justify-between">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-[#ff0068]">Valor da inscrição</p>
-                <p className="text-xs text-slate-500 mt-0.5">{form.modality}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{form.formacao}</p>
               </div>
               <p className="text-2xl font-black text-slate-900 dark:text-white">
                 R$ <span className="text-[#ff0068]">{fee.toFixed(2)}</span>
@@ -225,7 +225,7 @@ const NewRegistration = () => {
 
           <button
             type="submit"
-            disabled={submitting || !form.modality || !form.category}
+            disabled={submitting || !form.formacao || !form.category}
             className="w-full flex items-center justify-center gap-3 py-4 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-50 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20"
           >
             {submitting ? <Loader2 size={18} className="animate-spin" /> : <>Avançar para Pagamento <ChevronRight size={18} /></>}

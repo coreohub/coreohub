@@ -39,6 +39,8 @@ export interface Subgenre {
   name: string;
   /** Se true, o checkout NÃO cruza este subgênero com o Eixo Etário (categorias de idade) */
   is_categoria_livre: boolean;
+  /** Se true, a validação de duração mínima da trilha é ignorada (ex: Balé de Repertório) */
+  allow_shorter_track?: boolean;
 }
 
 /** Gênero (Eixo Técnico) — K-Pop, Ballet Clássico, Danças Urbanas… */
@@ -66,7 +68,7 @@ export interface EventCategory {
   is_active: boolean;
 }
 
-export interface EventModality {
+export interface EventFormacao {
   id: string;
   name: string;
   base_fee: number;
@@ -75,11 +77,14 @@ export interface EventModality {
   per_dancer?: boolean;
 }
 
+/** @deprecated Use EventFormacao */
+export type EventModality = EventFormacao;
+
 export interface EventFormatRule {
   id: string;
   style_id: string | null;
   category_id: string | null;
-  modality_id: string | null;
+  formacao_id: string | null;
   level_id: string | null;
   target_format: EventFormat;
 }
@@ -136,7 +141,9 @@ export interface Event {
   age_tolerance_mode?: AgeToleranceMode;
   age_tolerance_value?: number;
 
-  modalities_config?: any[]; // Array of { name, min_members, max_members, fee, format }
+  edition_year?: number;      // Ano/edição do festival (ex: 2026, 2027)
+
+  formacoes_config?: any[]; // Array of { name, min_members, max_members, fee, format }
   categories_config?: any[]; // Array of { name, min_age, max_age }
   styles_config?: any[]; // Array of { name, fee, slots_limit, weight }
   criteria_config?: any[]; // Array of { name, weight, fee, slots_limit }
@@ -165,13 +172,13 @@ export interface Event {
 export interface Registration {
   id: string;
   choreography_name: string;
-  modality: string;
+  formacao: string;
   category: string;
   audio_duration_seconds: number;
   applied_penalty: number;
   dance_style?: string;
   dance_style_id?: string;
-  modality_id?: string;
+  formacao_id?: string;
   level_id?: string;
   age_infraction_status?: 'none' | 'ignored_warning' | 'penalized';
   penalty_points?: number;

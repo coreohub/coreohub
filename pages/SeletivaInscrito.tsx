@@ -16,7 +16,7 @@ interface RegistrationWithVideo {
   nome_coreografia: string;
   estudio?: string;
   categoria?: string;
-  modalidade?: string;
+  formacao?: string;
   event_id?: string;
   event_nome?: string;
   video_url?: string | null;
@@ -60,7 +60,7 @@ const SeletivaInscrito: React.FC = () => {
       const { data, error } = await supabase
         .from('registrations')
         .select(`
-          id, nome_coreografia, estudio, categoria, modalidade, event_id,
+          id, nome_coreografia, estudio, categoria, formacao, event_id,
           video_url, video_status, video_feedback, video_submitted_at,
           video_fee_status,
           events(name, video_selection_enabled, video_selection_fee)
@@ -199,7 +199,7 @@ const SeletivaInscrito: React.FC = () => {
                     <div className="flex items-center gap-3 mt-1 flex-wrap">
                       {reg.event_nome && <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{reg.event_nome}</span>}
                       {reg.categoria && <span className="text-[9px] font-bold text-slate-400 uppercase">· {reg.categoria}</span>}
-                      {reg.modalidade && <span className="text-[9px] font-bold text-slate-400 uppercase">· {reg.modalidade}</span>}
+                      {reg.formacao && <span className="text-[9px] font-bold text-slate-400 uppercase">· {reg.formacao}</span>}
                     </div>
                     {reg.video_selection_fee != null && reg.video_selection_fee > 0 && (
                       <div className="mt-2 flex items-center gap-2">

@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
     // 2. Buscar dados do evento
     const { data: event, error: evError } = await supabase
       .from('events')
-      .select('id, name, created_by, commission_type, commission_percent, commission_fixed, modalities_config')
+      .select('id, name, created_by, commission_type, commission_percent, commission_fixed, formacoes_config')
       .eq('id', event_id)
       .single()
 
@@ -72,42 +72,42 @@ Deno.serve(async (req) => {
       .eq('event_id', event_id)
       .single()
 
-    // 4. Calcular o valor da inscrição pela modalidade
+    // 4. Calcular o valor da inscrição pela formação
     const formatos: any[] = config?.formatos_precos ?? []
-    const eventModalities: any[] = (event as any).modalities_config ?? []
-    const modalidadeNome: string = coreo.tipo_apresentacao ?? coreo.modalidade ?? ''
+    const eventFormacoes: any[] = (event as any).formacoes_config ?? []
+    const formacaoNome: string = coreo.tipo_apresentacao ?? coreo.formacao ?? coreo.modalidade ?? ''
 
     // Fonte 1: configuracoes.formatos_precos
-    const formatoEncontrado = modalidadeNome
-      ? formatos.find((f: any) => f.nome?.toLowerCase() === modalidadeNome.toLowerCase())
+    const formatoEncontrado = formacaoNome
+      ? formatos.find((f: any) => f.nome?.toLowerCase() === formacaoNome.toLowerCase())
       : undefined
 
-    // Fonte 2: events.modalities_config
-    const formatoDoEvento = modalidadeNome
-      ? eventModalities.find((m: any) => m.name?.toLowerCase() === modalidadeNome.toLowerCase())
+    // Fonte 2: events.formacoes_config
+    const formatoDoEvento = formacaoNome
+      ? eventFormacoes.find((m: any) => m.name?.toLowerCase() === formacaoNome.toLowerCase())
       : undefined
 
-    // Fonte 3: primeira modalidade ativa do evento (fallback para coreografias sem modalidade)
-    const primeiraModalidade = eventModalities.find((m: any) => m.is_active !== false)
+    // Fonte 3: primeira formação ativa do evento (fallback)
+    const primeiraFormacao = eventFormacoes.find((m: any) => m.is_active !== false)
 
-    // Prioridade: mod_fee → configuracoes → events.modalities_config → primeira modalidade → erro
+    // Prioridade: mod_fee → configuracoes → events.formacoes_config → primeira formação → erro
     const valorInscricao: number =
       (coreo.mod_fee && coreo.mod_fee > 0)
         ? coreo.mod_fee
         : formatoEncontrado?.preco
         ?? formatoDoEvento?.fee
         ?? formatoDoEvento?.base_fee
-        ?? primeiraModalidade?.fee
-        ?? primeiraModalidade?.base_fee
+        ?? primeiraFormacao?.fee
+        ?? primeiraFormacao?.base_fee
         ?? 0
 
-    const modalidadeUsada = modalidadeNome || primeiraModalidade?.name || 'padrão'
+    const formacaoUsada = formacaoNome || primeiraFormacao?.name || 'padrão'
 
-    console.log(`[create-payment] modalidade="${modalidadeUsada}" valor=${valorInscricao} (mod_fee=${coreo.mod_fee}, configuracoes=${formatoEncontrado?.preco}, eventModality=${formatoDoEvento?.fee ?? formatoDoEvento?.base_fee}, fallback=${primeiraModalidade?.fee ?? primeiraModalidade?.base_fee})`)
+    console.log(`[create-payment] formacao="${formacaoUsada}" valor=${valorInscricao} (mod_fee=${coreo.mod_fee}, configuracoes=${formatoEncontrado?.preco}, eventFormacao=${formatoDoEvento?.fee ?? formatoDoEvento?.base_fee}, fallback=${primeiraFormacao?.fee ?? primeiraFormacao?.base_fee})`)
 
     if (valorInscricao <= 0) {
       throw new Error(
-        `Valor não configurado para a modalidade "${modalidadeUsada}". ` +
+        `Valor não configurado para a formação "${formacaoUsada}". ` +
         `Configure os preços em Configurações do Evento.`
       )
     }
@@ -146,7 +146,7 @@ Deno.serve(async (req) => {
         {
           id: registration_id,
           title: `Inscrição - ${coreo.nome ?? 'Coreografia'}`,
-          description: `Evento: ${event.name} | Modalidade: ${modalidadeUsada}`,
+          description: `Evento: ${event.name} | Formação: ${formacaoUsada}`,
           quantity: 1,
           unit_price: valorInscricao,
           currency_id: 'BRL',

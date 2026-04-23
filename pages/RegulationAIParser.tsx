@@ -158,7 +158,7 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       if (edited.stage_marking_time_seconds) updates.stage_marking_time_seconds  = edited.stage_marking_time_seconds;
       if (edited.registration_lots?.length)  updates.registration_lots           = edited.registration_lots;
       if (edited.categories_config)          updates.categories_config           = edited.categories;
-      if (edited.modalities_config)          updates.modalities_config           = edited.modalities;
+      if (edited.formacoes)                  updates.formacoes_config            = edited.formacoes;
       if (edited.criteria_config)            updates.criteria_config             = edited.criteria;
       if (edited.tiebreaker_rules)           updates.tiebreaker_rules            = edited.tiebreaker_rules;
 
@@ -475,19 +475,19 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
             </section>
           )}
 
-          {/* ── Modalidades ── */}
-          {edited.modalities?.length > 0 && (
+          {/* ── Formações ── */}
+          {edited.formacoes?.length > 0 && (
             <section className="space-y-4">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2 border-b border-slate-100 dark:border-white/5 pb-3">
-                <Layers size={12} /> Modalidades ({edited.modalities.length})
+                <Layers size={12} /> Formações ({edited.formacoes.length})
               </h3>
               <div className="space-y-2">
-                {edited.modalities.map((mod, i) => (
+                {edited.formacoes.map((mod, i) => (
                   <div key={i} className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl items-center">
-                    <input className="bg-transparent text-sm font-black text-slate-900 dark:text-white focus:outline-none uppercase" value={mod.name} onChange={e => { const mods = [...edited.modalities]; mods[i] = { ...mods[i], name: e.target.value }; setField('modalities', mods); }} />
-                    <div className="flex items-center gap-1 text-[9px] text-slate-400"><Clock size={10} /><input type="text" className="w-16 bg-transparent focus:outline-none text-slate-900 dark:text-white text-xs" value={mod.max_time} onChange={e => { const mods = [...edited.modalities]; mods[i] = { ...mods[i], max_time: e.target.value }; setField('modalities', mods); }} placeholder="MM:SS" /></div>
-                    <div className="flex items-center gap-1 text-[9px] text-slate-400"><DollarSign size={10} /><input type="number" className="w-20 bg-transparent focus:outline-none text-slate-900 dark:text-white text-xs" value={mod.fee} onChange={e => { const mods = [...edited.modalities]; mods[i] = { ...mods[i], fee: parseFloat(e.target.value) || 0 }; setField('modalities', mods); }} /></div>
-                    <select className="bg-transparent text-[9px] font-black text-slate-500 focus:outline-none uppercase" value={mod.format} onChange={e => { const mods = [...edited.modalities]; mods[i] = { ...mods[i], format: e.target.value as any }; setField('modalities', mods); }}>
+                    <input className="bg-transparent text-sm font-black text-slate-900 dark:text-white focus:outline-none uppercase" value={mod.name} onChange={e => { const mods = [...edited.formacoes]; mods[i] = { ...mods[i], name: e.target.value }; setField('formacoes', mods); }} />
+                    <div className="flex items-center gap-1 text-[9px] text-slate-400"><Clock size={10} /><input type="text" className="w-16 bg-transparent focus:outline-none text-slate-900 dark:text-white text-xs" value={mod.max_time} onChange={e => { const mods = [...edited.formacoes]; mods[i] = { ...mods[i], max_time: e.target.value }; setField('formacoes', mods); }} placeholder="MM:SS" /></div>
+                    <div className="flex items-center gap-1 text-[9px] text-slate-400"><DollarSign size={10} /><input type="number" className="w-20 bg-transparent focus:outline-none text-slate-900 dark:text-white text-xs" value={mod.fee} onChange={e => { const mods = [...edited.formacoes]; mods[i] = { ...mods[i], fee: parseFloat(e.target.value) || 0 }; setField('formacoes', mods); }} /></div>
+                    <select className="bg-transparent text-[9px] font-black text-slate-500 focus:outline-none uppercase" value={mod.format} onChange={e => { const mods = [...edited.formacoes]; mods[i] = { ...mods[i], format: e.target.value as any }; setField('formacoes', mods); }}>
                       <option value="RANKING">Competitivo</option>
                       <option value="PEDAGOGICAL">Avaliado</option>
                       <option value="GRADUATED">Por Médias</option>
