@@ -92,9 +92,9 @@ const Auth = () => {
           <motion.div
             initial={{ scale: 0.8, rotate: -10 }}
             animate={{ scale: 1, rotate: 0 }}
-            className="inline-flex items-center justify-center w-16 h-16 bg-[#ff0068] rounded-2xl shadow-[0_0_30px_rgba(255,0,104,0.4)] mb-4"
+            className="inline-flex items-center justify-center mb-4"
           >
-            <Zap size={32} className="text-white fill-white" />
+            <img src="/coreohub-avatar.png" alt="CoreoHub" className="w-20 h-20 drop-shadow-[0_0_20px_rgba(255,0,104,0.5)]" />
           </motion.div>
 
           <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter uppercase italic leading-none">
