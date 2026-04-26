@@ -8,6 +8,18 @@ import {
   Monitor, Tablet, Smartphone,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import { useT, useLocale, setLocale } from '../hooks/useT';
+import type { JudgeDictKey } from '../i18n/judge-pt';
+
+/** Maps the canonical PT criterion name (used as score key in DB) to a dict key. */
+const DEFAULT_CRITERION_KEYS: Record<string, JudgeDictKey> = {
+  'Performance':  'criterion.performance',
+  'Criatividade': 'criterion.criatividade',
+  'Musicalidade': 'criterion.musicalidade',
+  'Técnica':      'criterion.tecnica',
+  'Figurino':     'criterion.figurino',
+  'Coreografia':  'criterion.coreografia',
+};
 
 /* ── Types ── */
 interface CriterionWithWeight { name: string; peso: number; displayName?: string; }
@@ -131,6 +143,28 @@ const scoreGrade = (v: string | number, scale: ScoreScale = 'BASE_10') => {
 
 /* ════════════════════════ COMPONENT ════════════════════════ */
 const JudgeTerminal = () => {
+  /* ── i18n ── */
+  const t      = useT();
+  const locale = useLocale();
+
+  /** Localized display name for a criterion: prefers explicit displayName,
+   * then maps known PT defaults to translations, else returns raw name. */
+  const criterionLabel = (c: CriterionWithWeight): string => {
+    if (c.displayName) return c.displayName;
+    const k = DEFAULT_CRITERION_KEYS[c.name];
+    return k ? t(k) : c.name;
+  };
+
+  /** Localized fallback judge names (DB has none → mock judge). */
+  const judgeDisplayName = (name?: string): string => {
+    if (name === 'Jurado (Demo)')    return t('judge.demoFallback');
+    if (name === 'Jurado (Offline)') return t('judge.offlineFallback');
+    return name ?? '';
+  };
+
+  /** BCP-47 tag for time/number formatting based on the active UI locale. */
+  const formatLocale = locale === 'en' ? 'en-US' : locale === 'es' ? 'es-ES' : 'pt-BR';
+
   /* ── Judge / session ── */
   const [judges, setJudges]                   = useState<any[]>([]);
   const [selectedJudge, setSelectedJudge]     = useState<any | null>(null);
@@ -336,12 +370,12 @@ const JudgeTerminal = () => {
 
       const duplicate = prevScores.find(s => Math.abs(s - avgScore) < 0.0005);
       if (duplicate !== undefined) {
-        setTieWarning(`Atenção: a média ${avgScore.toFixed(3)} já foi atribuída a outra apresentação em ${estiloName}. Use as casas decimais para diferenciar.`);
+        setTieWarning(t('tie.warning', { avg: avgScore.toFixed(3), style: estiloName }));
       } else {
         setTieWarning(null);
       }
     } catch { /* silent */ }
-  }, []);
+  }, [t]);
 
   /* ── realtime ── */
   useEffect(() => {
@@ -693,7 +727,7 @@ const JudgeTerminal = () => {
       setSubmittedAt(now);
 
     } catch (e: any) {
-      setSubmitError(e?.message || 'Erro ao salvar avaliação.');
+      setSubmitError(e?.message || t('errors.saveFailed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -794,7 +828,7 @@ const JudgeTerminal = () => {
     <div className="h-full flex items-center justify-center bg-white dark:bg-slate-950 rounded-3xl">
       <div className="text-center space-y-3">
         <Loader2 className="text-[#ff0068] animate-spin mx-auto" size={40} />
-        <p className="text-slate-400 font-black uppercase tracking-widest text-[10px]">Iniciando Terminal...</p>
+        <p className="text-slate-400 font-black uppercase tracking-widest text-[10px]">{t('loading.title')}</p>
       </div>
     </div>
   );
@@ -807,9 +841,9 @@ const JudgeTerminal = () => {
           <Smartphone size={32} className="text-[#ff0068] rotate-90" />
         </div>
         <div>
-          <h2 className="text-xl font-black uppercase tracking-tighter italic text-white">Gire o Dispositivo</h2>
+          <h2 className="text-xl font-black uppercase tracking-tighter italic text-white">{t('mobile.rotateTitle')}</h2>
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2 max-w-xs leading-relaxed">
-            O terminal de júri foi otimizado para uso na <span className="text-[#ff0068]">horizontal</span>. Gire o celular para continuar.
+            {t('mobile.rotateBodyPre')}<span className="text-[#ff0068]">{t('mobile.rotateBodyHighlight')}</span>{t('mobile.rotateBodyPost')}
           </p>
         </div>
         <div className="flex gap-2 mt-2">
@@ -828,11 +862,11 @@ const JudgeTerminal = () => {
   /* ════════════════════════════════ PIN OVERLAY ════════════════════════════════ */
   const displayPin   = pinLocked && !showPinSetup ? pinInput : newPinInput;
   const pinTitle     = showPinSetup
-    ? (newPinStep === 'first' ? 'Definir novo PIN' : 'Confirmar PIN')
-    : 'Terminal Bloqueado';
+    ? (newPinStep === 'first' ? t('pin.title.setupNew') : t('pin.title.setupConfirm'))
+    : t('pin.title.locked');
   const pinSubtitle  = showPinSetup
-    ? (newPinStep === 'first' ? 'Digite 4 dígitos para seu PIN' : 'Digite o PIN novamente para confirmar')
-    : 'Digite o PIN de 4 dígitos para desbloquear';
+    ? (newPinStep === 'first' ? t('pin.subtitle.setupNew') : t('pin.subtitle.setupConfirm'))
+    : t('pin.subtitle.locked');
 
   if (pinLocked || showPinSetup) {
     return (
@@ -848,7 +882,7 @@ const JudgeTerminal = () => {
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{pinSubtitle}</p>
           {selectedJudge && (
             <p className="text-[9px] text-slate-500 uppercase tracking-widest">
-              {selectedJudge.name}
+              {judgeDisplayName(selectedJudge.name)}
             </p>
           )}
         </div>
@@ -897,7 +931,7 @@ const JudgeTerminal = () => {
 
         {/* Hint */}
         {pinLocked && !showPinSetup && (
-          <p className="text-[8px] text-slate-600 uppercase tracking-widest">PIN padrão: 1234 · Altere no cabeçalho quando desbloqueado</p>
+          <p className="text-[8px] text-slate-600 uppercase tracking-widest">{t('pin.hint')}</p>
         )}
 
         {/* Cancel setup */}
@@ -906,7 +940,7 @@ const JudgeTerminal = () => {
             onClick={() => { setShowPinSetup(false); setNewPinInput(''); setNewPinStep('first'); setNewPinFirst(''); }}
             className="text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-colors"
           >
-            Cancelar
+            {t('common.cancel')}
           </button>
         )}
       </div>
@@ -942,8 +976,8 @@ const JudgeTerminal = () => {
                   <Star size={14} className="text-indigo-600 dark:text-indigo-400" />
                 </div>
                 <div>
-                  <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Como usar o terminal</p>
-                  <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Modo Demo — dados fictícios</p>
+                  <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white italic">{t('tutorial.title')}</p>
+                  <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{t('tutorial.subtitle')}</p>
                 </div>
               </div>
               <button
@@ -957,11 +991,11 @@ const JudgeTerminal = () => {
             {/* Steps */}
             <div className="px-5 py-4 space-y-2.5">
               {[
-                { n: '①', label: 'Toque em um quesito para selecioná-lo',       icon: ChevronRight },
-                { n: '②', label: 'Digite a nota no teclado numérico',            icon: Delete },
-                { n: '③', label: 'Preencha todos os quesitos da apresentação',   icon: Check },
-                { n: '④', label: 'Grave um áudio técnico avaliando a coreografia', icon: Mic },
-                { n: '⑤', label: 'Clique em Enviar Nota para registrar',         icon: ClipboardCheck },
+                { n: '①', label: t('tutorial.step1'), icon: ChevronRight },
+                { n: '②', label: t('tutorial.step2'), icon: Delete },
+                { n: '③', label: t('tutorial.step3'), icon: Check },
+                { n: '④', label: t('tutorial.step4'), icon: Mic },
+                { n: '⑤', label: t('tutorial.step5'), icon: ClipboardCheck },
               ].map(({ n, label, icon: Icon }) => (
                 <div key={n} className="flex items-start gap-3">
                   <span className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-black">{n}</span>
@@ -974,7 +1008,7 @@ const JudgeTerminal = () => {
 
               <div className="mt-1 px-3 py-2 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl">
                 <p className="text-[9px] font-bold text-amber-700 dark:text-amber-400">
-                  Nenhum dado é salvo no banco. Você pode praticar à vontade.
+                  {t('tutorial.note')}
                 </p>
               </div>
             </div>
@@ -985,7 +1019,7 @@ const JudgeTerminal = () => {
                 onClick={confirmDemo}
                 className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20"
               >
-                Entendi — Começar Prática
+                {t('tutorial.cta')}
               </button>
             </div>
           </div>
@@ -999,16 +1033,16 @@ const JudgeTerminal = () => {
         <div className="flex items-center gap-4 min-w-0">
           <div className="flex items-center gap-1.5 shrink-0">
             <div className={`w-2 h-2 rounded-full ${currentPerformance ? 'bg-rose-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`} />
-            <span className="text-[8px] font-black uppercase tracking-[0.3em] text-rose-500">AO VIVO</span>
+            <span className="text-[8px] font-black uppercase tracking-[0.3em] text-rose-500">{t('header.live')}</span>
           </div>
           <div className="min-w-0">
             <h2 className="text-base font-black uppercase tracking-tighter italic leading-none truncate text-slate-900 dark:text-white">
-              {currentPerformance?.nome_coreografia || 'Aguardando apresentação...'}
+              {currentPerformance?.nome_coreografia || t('header.waiting')}
             </h2>
             {currentPerformance && (
               <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate">
                 {currentPerformance.estudio} · {currentPerformance.estilo_danca} · {currentPerformance.categoria}
-                <span className="ml-2 text-[#ff0068]">· {activeCriteria.length} quesitos</span>
+                <span className="ml-2 text-[#ff0068]">· {t('header.criteriaCount', { count: activeCriteria.length })}</span>
                 {filteredSchedule.length > 0 && (
                   <span className="ml-2 text-slate-400 dark:text-slate-500">({currentIndex + 1}/{filteredSchedule.length})</span>
                 )}
@@ -1017,14 +1051,34 @@ const JudgeTerminal = () => {
           </div>
         </div>
 
-        {/* Actions: PIN lock + judge selector */}
+        {/* Actions: locale + PIN lock + judge selector */}
         <div className="flex items-center gap-2 shrink-0">
+
+          {/* Locale switcher */}
+          <div
+            className="flex items-center gap-0.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-0.5"
+            title={t('header.localeTooltip')}
+          >
+            {(['pt', 'en', 'es'] as const).map(loc => (
+              <button
+                key={loc}
+                onClick={() => { setLocale(loc); handleActivity(); }}
+                className={`px-2 py-1 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${
+                  locale === loc
+                    ? 'bg-[#ff0068] text-white shadow'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                }`}
+              >
+                {loc.toUpperCase()}
+              </button>
+            ))}
+          </div>
 
           {/* PIN setup button */}
           <button
             onClick={() => setShowPinSetup(true)}
             className="p-2 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 transition-all"
-            title="Definir PIN de bloqueio"
+            title={t('header.pinSetupTooltip')}
           >
             <Shield size={14} />
           </button>
@@ -1033,7 +1087,7 @@ const JudgeTerminal = () => {
           <button
             onClick={() => setPinLocked(true)}
             className="p-2 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 transition-all"
-            title="Bloquear terminal agora"
+            title={t('header.lockNowTooltip')}
           >
             <Lock size={14} />
           </button>
@@ -1048,7 +1102,7 @@ const JudgeTerminal = () => {
                 {selectedJudge?.name?.[0] || 'J'}
               </div>
               <div className="text-left hidden sm:block">
-                    <p className="text-[9px] font-black uppercase text-slate-900 dark:text-white leading-tight">{selectedJudge?.name}</p>
+                    <p className="text-[9px] font-black uppercase text-slate-900 dark:text-white leading-tight">{judgeDisplayName(selectedJudge?.name)}</p>
                     {selectedJudge?.competencias_generos?.length > 0 && (
                       <div className="flex gap-1 flex-wrap mt-0.5">
                         {selectedJudge.competencias_generos.slice(0, 3).map((g: string) => (
@@ -1063,7 +1117,7 @@ const JudgeTerminal = () => {
                         )}
                       </div>
                     )}
-                <p className="text-[7px] text-slate-400 uppercase tracking-widest">Jurado</p>
+                <p className="text-[7px] text-slate-400 uppercase tracking-widest">{t('header.judgeLabel')}</p>
               </div>
               <ChevronDown size={12} className="text-slate-400" />
             </button>
@@ -1081,9 +1135,9 @@ const JudgeTerminal = () => {
                       {j.name?.[0]}
                     </div>
                     <div>
-                      <p className="text-[10px] font-black uppercase text-slate-900 dark:text-white">{j.name}</p>
+                      <p className="text-[10px] font-black uppercase text-slate-900 dark:text-white">{judgeDisplayName(j.name)}</p>
                       {selectedJudge?.id === j.id && (
-                        <p className="text-[8px] text-[#ff0068] font-black uppercase tracking-widest">Ativo</p>
+                        <p className="text-[8px] text-[#ff0068] font-black uppercase tracking-widest">{t('header.judgeActive')}</p>
                       )}
                     </div>
                   </button>
@@ -1099,17 +1153,17 @@ const JudgeTerminal = () => {
         <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-2 bg-indigo-500 text-white text-[9px] font-black uppercase tracking-widest">
           <div className="flex items-center gap-2 min-w-0">
             <Star size={11} className="shrink-0" />
-            <span className="hidden sm:inline truncate">MODO DEMONSTRAÇÃO — dados fictícios, nenhum dado salvo no banco</span>
-            <span className="sm:hidden">MODO DEMO</span>
+            <span className="hidden sm:inline truncate">{t('demo.bannerLong')}</span>
+            <span className="sm:hidden">{t('demo.bannerShort')}</span>
           </div>
 
           {/* Device preview toggles */}
           <div className="flex items-center gap-1 shrink-0">
-            <span className="text-white/60 text-[7px] hidden md:inline mr-1">PREVIEW</span>
+            <span className="text-white/60 text-[7px] hidden md:inline mr-1">{t('demo.previewLabel')}</span>
             {([
-              { id: 'mobile',  Icon: Smartphone, label: 'Mobile' },
-              { id: 'tablet',  Icon: Tablet,     label: 'Tablet' },
-              { id: 'desktop', Icon: Monitor,    label: 'Desktop' },
+              { id: 'mobile',  Icon: Smartphone, label: t('demo.deviceMobile') },
+              { id: 'tablet',  Icon: Tablet,     label: t('demo.deviceTablet') },
+              { id: 'desktop', Icon: Monitor,    label: t('demo.deviceDesktop') },
             ] as const).map(({ id, Icon, label }) => (
               <button
                 key={id}
@@ -1130,7 +1184,7 @@ const JudgeTerminal = () => {
               onClick={() => { setSchedule([]); setCurrentIndex(0); setIsDemoMode(false); setPreviewDevice(null); }}
               className="flex items-center gap-1 px-2 py-0.5 bg-white/20 hover:bg-white/30 rounded-lg transition-all text-[8px]"
             >
-              Sair ×
+              {t('demo.exit')}
             </button>
           </div>
         </div>
@@ -1164,10 +1218,10 @@ const JudgeTerminal = () => {
               <Check size={36} className="text-emerald-500 dark:text-emerald-400" />
             </div>
             <h2 className="text-2xl font-black uppercase tracking-tighter italic text-emerald-600 dark:text-emerald-400">
-              Avaliações concluídas
+              {t('allDone.title')}
             </h2>
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              {filteredSchedule.length} apresentações avaliadas
+              {t('allDone.subtitle', { count: filteredSchedule.length })}
             </p>
           </div>
 
@@ -1177,11 +1231,11 @@ const JudgeTerminal = () => {
               <Music size={32} className="text-slate-400 dark:text-slate-600 animate-pulse" />
             </div>
             <div>
-              <h2 className="text-xl font-black uppercase tracking-tighter italic text-slate-500">Aguardando apresentação...</h2>
+              <h2 className="text-xl font-black uppercase tracking-tighter italic text-slate-500">{t('header.waiting')}</h2>
               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest max-w-xs mt-2">
                 {selectedJudge?.competencias_generos?.length > 0 && schedule.length > 0
-                  ? `Nenhuma apresentação dos gêneros deste jurado está na fila. Gêneros: ${selectedJudge.competencias_generos.join(', ')}.`
-                  : 'O cronograma ainda não foi carregado. Aguarde o produtor gerar a ordem.'
+                  ? t('empty.noMatchingGenres', { genres: selectedJudge.competencias_generos.join(', ') })
+                  : t('empty.noSchedule')
                 }
               </p>
             </div>
@@ -1189,7 +1243,7 @@ const JudgeTerminal = () => {
             {/* Demo mode separator */}
             <div className="flex items-center gap-3 w-full max-w-xs">
               <div className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
-              <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">ou</span>
+              <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">{t('empty.or')}</span>
               <div className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
             </div>
 
@@ -1199,17 +1253,17 @@ const JudgeTerminal = () => {
                 className="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 border border-indigo-200 dark:border-indigo-500/30 text-indigo-600 dark:text-indigo-400 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95"
               >
                 <Star size={14} />
-                Modo Demo — Testar Funcionalidades
+                {t('empty.demoCta')}
               </button>
 
               {/* Option D: inline step pills always visible below the button */}
               <div className="w-full space-y-1.5 pt-1">
                 {[
-                  { n: '①', label: 'Toque em um quesito para selecioná-lo' },
-                  { n: '②', label: 'Digite a nota no teclado numérico' },
-                  { n: '③', label: 'Preencha todos os quesitos' },
-                  { n: '④', label: 'Grave um áudio técnico da avaliação' },
-                  { n: '⑤', label: 'Clique em Enviar Nota' },
+                  { n: '①', label: t('empty.step1') },
+                  { n: '②', label: t('empty.step2') },
+                  { n: '③', label: t('empty.step3') },
+                  { n: '④', label: t('empty.step4') },
+                  { n: '⑤', label: t('empty.step5') },
                 ].map(({ n, label }) => (
                   <div key={n} className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/8 rounded-xl">
                     <span className="shrink-0 w-4 h-4 flex items-center justify-center text-[8px] font-black text-indigo-500 dark:text-indigo-400">{n}</span>
@@ -1217,7 +1271,7 @@ const JudgeTerminal = () => {
                   </div>
                 ))}
                 <p className="text-[8px] text-slate-300 dark:text-slate-600 text-center pt-0.5">
-                  Nenhum dado é salvo no banco
+                  {t('empty.demoNote')}
                 </p>
               </div>
             </div>
@@ -1230,7 +1284,7 @@ const JudgeTerminal = () => {
             <div className="flex items-center gap-2 px-3 py-1.5 bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/30 rounded-full">
               <Music size={12} className="text-violet-500" />
               <span className="text-[9px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-400">
-                Mostra Avaliada — sem pontuação
+                {t('avaliada.badge')}
               </span>
             </div>
 
@@ -1247,20 +1301,20 @@ const JudgeTerminal = () => {
             {/* Text feedback area */}
             <div className="w-full max-w-md space-y-2">
               <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                Observações técnicas escritas (opcional)
+                {t('avaliada.feedbackLabel')}
               </label>
               <textarea
                 value={feedbackText}
                 onChange={e => setFeedbackText(e.target.value)}
                 disabled={isSubmitted}
-                placeholder="Escreva suas observações técnicas para a coreografia..."
+                placeholder={t('avaliada.feedbackPlaceholder')}
                 rows={5}
                 className={`w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-violet-400/30 resize-none transition-all ${
                   isSubmitted ? 'opacity-60 cursor-not-allowed' : ''
                 }`}
               />
               <p className="text-[8px] text-slate-400 dark:text-slate-600">
-                O áudio técnico (microfone abaixo) é o principal canal de feedback neste modo.
+                {t('avaliada.audioNote')}
               </p>
             </div>
 
@@ -1269,14 +1323,14 @@ const JudgeTerminal = () => {
               <div className="w-full max-w-md flex flex-col items-center gap-3 p-5 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-3xl text-center">
                 <Check size={24} className="text-emerald-500" />
                 <div>
-                  <p className="text-sm font-black uppercase tracking-tight text-emerald-700 dark:text-emerald-400">Feedback Enviado</p>
-                  <p className="text-[9px] text-emerald-600 dark:text-emerald-500 mt-0.5">{submittedAt ? new Date(submittedAt).toLocaleTimeString('pt-BR') : ''}</p>
+                  <p className="text-sm font-black uppercase tracking-tight text-emerald-700 dark:text-emerald-400">{t('avaliada.feedbackSent')}</p>
+                  <p className="text-[9px] text-emerald-600 dark:text-emerald-500 mt-0.5">{submittedAt ? new Date(submittedAt).toLocaleTimeString(formatLocale) : ''}</p>
                 </div>
                 <button
                   onClick={handleAdvance}
                   className="w-full py-3 bg-[#ff0068] hover:bg-[#d4005a] active:scale-95 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all"
                 >
-                  Próxima Apresentação
+                  {t('submitted.next')}
                 </button>
               </div>
             )}
@@ -1292,7 +1346,7 @@ const JudgeTerminal = () => {
               {/* Sticky header: genre + weighted avg */}
               <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2.5 bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 shrink-0">Quesitos</span>
+                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 shrink-0">{t('criteria.label')}</span>
                   <span className="px-1.5 py-0.5 bg-[#ff0068]/10 text-[#ff0068] text-[7px] font-black uppercase tracking-widest rounded-full truncate">
                     {currentPerformance.estilo_danca}
                   </span>
@@ -1301,7 +1355,7 @@ const JudgeTerminal = () => {
                   <span className={`text-base font-black italic tabular-nums leading-none ${scoreGrade(calcWeightedAvg(), scoreScale)}`}>
                     {calcWeightedAvg()}
                   </span>
-                  <span className="text-[6px] text-slate-400 font-bold uppercase tracking-widest block">média</span>
+                  <span className="text-[6px] text-slate-400 font-bold uppercase tracking-widest block">{t('criteria.average')}</span>
                 </div>
               </div>
 
@@ -1340,7 +1394,7 @@ const JudgeTerminal = () => {
                           <div className="min-w-0 text-left">
                             <span className={`text-[11px] font-black uppercase tracking-widest truncate block leading-tight
                               ${isActive && !isSubmitted ? 'text-[#ff0068]' : val ? 'text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-400'}`}>
-                              {criterion.displayName || criterion.name}
+                              {criterionLabel(criterion)}
                             </span>
                             <span className="text-[7px] text-slate-400 font-bold">
                               ×{criterion.peso} · {totalPeso > 0 ? Math.round((criterion.peso / totalPeso) * 100) : 0}%
@@ -1359,7 +1413,7 @@ const JudgeTerminal = () => {
               {/* Nominations — conditional, only shown when there are visible awards */}
               {visibleAwards.length > 0 && (
                 <div className="px-2 pb-2 pt-1 border-t border-slate-100 dark:border-slate-800">
-                  <p className="text-[7px] font-black uppercase tracking-widest text-slate-400 px-1 mb-1.5">Indicações</p>
+                  <p className="text-[7px] font-black uppercase tracking-widest text-slate-400 px-1 mb-1.5">{t('criteria.nominationsLabel')}</p>
                   <div className={`grid gap-1.5 ${visibleAwards.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
                     {visibleAwards.map(award => {
                       const Icon      = resolveAwardIcon(award);
@@ -1398,12 +1452,12 @@ const JudgeTerminal = () => {
                     <ClipboardCheck size={36} className="text-emerald-500 dark:text-emerald-400" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-black uppercase tracking-tighter italic text-emerald-600 dark:text-emerald-400">Nota Enviada</h3>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mt-0.5">Campos bloqueados para edição</p>
+                    <h3 className="text-xl font-black uppercase tracking-tighter italic text-emerald-600 dark:text-emerald-400">{t('submitted.title')}</h3>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mt-0.5">{t('submitted.subtitle')}</p>
                   </div>
                   <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 space-y-3">
                     <div className="text-center">
-                      <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1">Média Ponderada Final</p>
+                      <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1">{t('submitted.weightedTitle')}</p>
                       <span className={`text-5xl font-black italic tabular-nums ${scoreGrade(calcWeightedAvg(), scoreScale)}`}>
                         {calcWeightedAvg()}
                       </span>
@@ -1411,7 +1465,7 @@ const JudgeTerminal = () => {
                     <div className="border-t border-slate-100 dark:border-slate-700 pt-3 space-y-1.5">
                       {activeCriteria.map(c => (
                         <div key={c.name} className="flex items-center justify-between text-[10px]">
-                          <span className="text-slate-500 dark:text-slate-400 font-bold">{c.displayName || c.name} <span className="text-slate-300 dark:text-slate-600">(×{c.peso})</span></span>
+                          <span className="text-slate-500 dark:text-slate-400 font-bold">{criterionLabel(c)} <span className="text-slate-300 dark:text-slate-600">(×{c.peso})</span></span>
                           <span className={`font-black tabular-nums ${scoreGrade(scores[c.name] || '0', scoreScale)}`}>
                             {scores[c.name] || '0'}
                           </span>
@@ -1438,7 +1492,12 @@ const JudgeTerminal = () => {
                     <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">
                       <Unlock size={10} className="text-slate-400 shrink-0" />
                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                        Submetido em {new Date(submittedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        {t('submitted.submittedAt', {
+                          time: new Date(submittedAt).toLocaleTimeString(
+                            formatLocale,
+                            { hour: '2-digit', minute: '2-digit', second: '2-digit' },
+                          ),
+                        })}
                       </p>
                     </div>
                   )}
@@ -1446,7 +1505,7 @@ const JudgeTerminal = () => {
                     onClick={handleAdvance}
                     className="w-full max-w-sm px-8 py-5 bg-[#ff0068] hover:bg-[#d4005a] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-[#ff0068]/20 active:scale-95 transition-all flex items-center justify-center gap-2"
                   >
-                    <ChevronRight size={18} /> Próxima Apresentação
+                    <ChevronRight size={18} /> {t('submitted.next')}
                   </button>
                 </div>
 
@@ -1457,7 +1516,7 @@ const JudgeTerminal = () => {
                   {/* Numpad header */}
                   <div className="flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Teclado</span>
+                      <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">{t('numpad.label')}</span>
                       <span className={`text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${
                         scoreScale === 'BASE_10'
                           ? 'bg-[#ff0068]/10 text-[#ff0068]'
@@ -1467,7 +1526,7 @@ const JudgeTerminal = () => {
                       </span>
                     </div>
                     <span className="text-[8px] font-black text-[#ff0068] uppercase tracking-widest truncate max-w-[50%]">
-                      ▶ {activeField}
+                      ▶ {activeField ? criterionLabel({ name: activeField, peso: 0 }) : ''}
                     </span>
                   </div>
 
@@ -1501,7 +1560,7 @@ const JudgeTerminal = () => {
                       <button
                         onClick={() => handleKey('.')}
                         className="bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 border border-amber-200 dark:border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl text-xl md:text-2xl font-black transition-all active:scale-95 flex items-center justify-center touch-manipulation"
-                        title="Vírgula decimal"
+                        title={t('numpad.decimalTooltip')}
                       >
                         ,
                       </button>
@@ -1544,7 +1603,7 @@ const JudgeTerminal = () => {
                           : 'bg-[#ff0068] hover:bg-[#d4005a] text-white shadow-lg shadow-[#ff0068]/20 active:scale-95'
                         }`}
                     >
-                      <ChevronRight size={15} /> Próximo Quesito
+                      <ChevronRight size={15} /> {t('numpad.nextField')}
                     </button>
                   )}
                 </div>
@@ -1583,10 +1642,10 @@ const JudgeTerminal = () => {
             </div>
             <div className="text-left min-w-0">
               <p className="text-[8px] font-black uppercase tracking-widest">
-                {isRecording ? 'Gravando Feedback' : 'Microfone em Espera'}
+                {isRecording ? t('mic.recording') : t('mic.idle')}
               </p>
               <p className="text-[9px] font-bold truncate text-slate-700 dark:text-slate-300">
-                {isRecording ? 'Áudio dos últimos 90s será salvo' : 'Clique para gravar áudio'}
+                {isRecording ? t('mic.recordingHint') : t('mic.idleHint')}
               </p>
             </div>
             {/* Onda sonora real via AnalyserNode */}
@@ -1616,12 +1675,12 @@ const JudgeTerminal = () => {
             >
               {isSubmitting
                 ? <Loader2 size={18} className="animate-spin" />
-                : <><Check size={18} /> {isAvaliada ? 'Enviar Feedback' : 'Enviar Nota'}</>
+                : <><Check size={18} /> {isAvaliada ? t('submit.feedback') : t('submit.score')}</>
               }
             </button>
           ) : (
             <div className="px-4 py-4 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest shrink-0">
-              <Check size={14} /> Nota Salva
+              <Check size={14} /> {t('submit.saved')}
             </div>
           )}
         </div>

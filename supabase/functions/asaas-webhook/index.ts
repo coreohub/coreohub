@@ -50,6 +50,19 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  // Validação do token Asaas (header asaas-access-token)
+  const expectedToken = Deno.env.get('ASAAS_WEBHOOK_TOKEN') ?? ''
+  if (expectedToken) {
+    const receivedToken = req.headers.get('asaas-access-token') ?? ''
+    if (receivedToken !== expectedToken) {
+      console.warn('[asaas-webhook] token inválido recebido')
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+  }
+
   const ok = (payload: Record<string, unknown>) =>
     new Response(JSON.stringify(payload), {
       status: 200,
