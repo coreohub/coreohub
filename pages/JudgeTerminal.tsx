@@ -143,9 +143,19 @@ const scoreGrade = (v: string | number, scale: ScoreScale = 'BASE_10') => {
 
 /* ════════════════════════ COMPONENT ════════════════════════ */
 const JudgeTerminal = () => {
-  /* ── i18n ── */
+  /* ── i18n ──
+   * O idioma é definido pelo produtor por jurado (campo `language` em `judges`).
+   * O jurado não escolhe — recebe o terminal já configurado. */
   const t      = useT();
   const locale = useLocale();
+
+  /** Mapeia BCP-47 (ex: "pt-BR", "en-US", "es-ES") para nosso union "pt"|"en"|"es". */
+  const mapJudgeLanguage = (lang?: string): 'pt' | 'en' | 'es' => {
+    const v = (lang ?? '').toLowerCase();
+    if (v.startsWith('en')) return 'en';
+    if (v.startsWith('es')) return 'es';
+    return 'pt';
+  };
 
   /** Localized display name for a criterion: prefers explicit displayName,
    * then maps known PT defaults to translations, else returns raw name. */
@@ -331,6 +341,13 @@ const JudgeTerminal = () => {
     setAudioLevels([0, 0, 0, 0, 0]);
     setTieWarning(null);
   }, [selectedJudge?.id]);
+
+  /* ── Aplica o idioma configurado pelo produtor para este jurado ── */
+  useEffect(() => {
+    if (selectedJudge?.language) {
+      setLocale(mapJudgeLanguage(selectedJudge.language));
+    }
+  }, [selectedJudge?.language]);
 
   /* ── Genre rules resolution ── */
   const resolveGenreCriteria = useCallback((estiloName: string, config: EvalConfig | null, genres: typeof genreList): CriterionWithWeight[] => {
@@ -1051,28 +1068,8 @@ const JudgeTerminal = () => {
           </div>
         </div>
 
-        {/* Actions: locale + PIN lock + judge selector */}
+        {/* Actions: PIN lock + judge selector */}
         <div className="flex items-center gap-2 shrink-0">
-
-          {/* Locale switcher */}
-          <div
-            className="flex items-center gap-0.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-0.5"
-            title={t('header.localeTooltip')}
-          >
-            {(['pt', 'en', 'es'] as const).map(loc => (
-              <button
-                key={loc}
-                onClick={() => { setLocale(loc); handleActivity(); }}
-                className={`px-2 py-1 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${
-                  locale === loc
-                    ? 'bg-[#ff0068] text-white shadow'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-                }`}
-              >
-                {loc.toUpperCase()}
-              </button>
-            ))}
-          </div>
 
           {/* PIN setup button */}
           <button

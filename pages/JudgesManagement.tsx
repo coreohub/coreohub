@@ -566,6 +566,20 @@ const JudgesManagement = () => {
                     </div>
 
                     <div>
+                      <label className={labelCls}>Idioma do Terminal</label>
+                      <select
+                        value={form.language || 'pt-BR'}
+                        onChange={e => setForm(f => ({ ...f, language: e.target.value }))}
+                        className={inputCls}
+                      >
+                        <option value="pt-BR">Português (Brasil)</option>
+                        <option value="en-US">English</option>
+                        <option value="es-ES">Español</option>
+                      </select>
+                      <p className="text-[9px] text-slate-400 ml-1 mt-1">Idioma exibido no Terminal de Jurados deste jurado</p>
+                    </div>
+
+                    <div>
                       <label className={labelCls}>Status</label>
                       <div className="flex gap-3">
                         {[
