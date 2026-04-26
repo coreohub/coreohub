@@ -1407,7 +1407,9 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                     </div>
                     <div>
                       <p className="font-black text-sm text-slate-900 dark:text-white uppercase">{c.name}</p>
-                      <p className="text-[10px] text-slate-500 uppercase tracking-widest">{c.min} – {c.max} anos</p>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-widest">
+                        {!c.max || c.max >= 99 ? `${c.min}+ anos` : `${c.min} – ${c.max} anos`}
+                      </p>
                     </div>
                   </div>
                   <ActBtns onEdit={() => openEdit(c.id, c)} onDelete={() => handleDelete(c.id)} />
@@ -2303,7 +2305,15 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
               </div>
               <div>
                 <label className={label}>Idade Máxima</label>
-                <input type="number" min={0} value={tempValue.max || ''} onChange={e => setTempValue((v: any) => ({ ...v, max: Number(e.target.value) }))} className={input} />
+                <input
+                  type="number"
+                  min={0}
+                  value={tempValue.max || ''}
+                  onChange={e => setTempValue((v: any) => ({ ...v, max: e.target.value === '' ? null : Number(e.target.value) }))}
+                  placeholder="Deixe em branco para sem limite"
+                  className={input}
+                />
+                <p className="text-[9px] text-slate-400 mt-1">Sem limite = "{tempValue.min || 0}+ anos"</p>
               </div>
             </div>
           </div>

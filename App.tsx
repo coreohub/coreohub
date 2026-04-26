@@ -65,6 +65,36 @@ const PageLoader = () => (
   </div>
 );
 
+interface PrivateRouteProps {
+  session: any;
+  profile: UserProfile | null;
+  activeRole: UserRole | null;
+  theme: 'light' | 'dark';
+  toggleTheme: () => void;
+  setActiveRole: (role: UserRole) => void;
+  videoSelectionEnabled: boolean;
+  children: React.ReactNode;
+}
+
+const PrivateRoute: React.FC<PrivateRouteProps> = ({
+  session, profile, activeRole, theme, toggleTheme, setActiveRole, videoSelectionEnabled, children,
+}) => {
+  if (!session) return <Navigate to="/login" replace />;
+  if (!profile || !activeRole) return null;
+  return (
+    <PrivateLayout
+      profile={profile}
+      theme={theme}
+      toggleTheme={toggleTheme}
+      activeRole={activeRole}
+      setActiveRole={setActiveRole}
+      videoSelectionEnabled={videoSelectionEnabled}
+    >
+      {children}
+    </PrivateLayout>
+  );
+};
+
 const PrivateLayout: React.FC<{
   profile: UserProfile,
   children: React.ReactNode,
@@ -217,22 +247,8 @@ const App: React.FC = () => {
     );
   }
 
-  const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
-    if (!session) return <Navigate to="/login" replace />;
-    if (!profile || !activeRole) return null;
-    return (
-      <PrivateLayout
-        profile={profile}
-        theme={theme}
-        toggleTheme={toggleTheme}
-        activeRole={activeRole}
-        setActiveRole={setActiveRole}
-        videoSelectionEnabled={config.video_selection_enabled ?? false}
-      >
-        {children}
-      </PrivateLayout>
-    );
-  };
+  const videoSelectionEnabled = config.video_selection_enabled ?? false;
+  const privateRouteProps = { session, profile, activeRole, theme, toggleTheme, setActiveRole, videoSelectionEnabled };
 
   return (
     <Router>
@@ -242,55 +258,55 @@ const App: React.FC = () => {
         <Route path="/register" element={<Auth />} />
         <Route path="/convite/:token" element={<Suspense fallback={<PageLoader />}><ProducerInviteLanding /></Suspense>} />
 
-        <Route path="/dashboard" element={<PrivateRoute><Dashboard profile={profile!} config={config} activeRole={activeRole!} /></PrivateRoute>} />
-        <Route path="/bailarinos" element={<PrivateRoute><Bailarinos /></PrivateRoute>} />
-        <Route path="/minhas-coreografias" element={<PrivateRoute><MinhasCoreografias /></PrivateRoute>} />
-        <Route path="/central-de-midia" element={<PrivateRoute><CentralDeMidia /></PrivateRoute>} />
-        <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
-        <Route path="/meus-resultados" element={<PrivateRoute><MyResults activeRole={activeRole!} /></PrivateRoute>} />
+        <Route path="/dashboard" element={<PrivateRoute {...privateRouteProps}><Dashboard profile={profile!} config={config} activeRole={activeRole!} /></PrivateRoute>} />
+        <Route path="/bailarinos" element={<PrivateRoute {...privateRouteProps}><Bailarinos /></PrivateRoute>} />
+        <Route path="/minhas-coreografias" element={<PrivateRoute {...privateRouteProps}><MinhasCoreografias /></PrivateRoute>} />
+        <Route path="/central-de-midia" element={<PrivateRoute {...privateRouteProps}><CentralDeMidia /></PrivateRoute>} />
+        <Route path="/profile" element={<PrivateRoute {...privateRouteProps}><Profile /></PrivateRoute>} />
+        <Route path="/meus-resultados" element={<PrivateRoute {...privateRouteProps}><MyResults activeRole={activeRole!} /></PrivateRoute>} />
 
-        <Route path="/qg-organizador" element={<PrivateRoute><ProducerDashboard /></PrivateRoute>} />
-        <Route path="/registrations" element={<PrivateRoute><Registrations /></PrivateRoute>} />
-        <Route path="/manage-schedule" element={<PrivateRoute><Schedule /></PrivateRoute>} />
-        <Route path="/apuracao" element={<PrivateRoute><ResultsPanel /></PrivateRoute>} />
-        <Route path="/equipe-jurados" element={<PrivateRoute><JudgesManagement /></PrivateRoute>} />
-        <Route path="/account-settings" element={<PrivateRoute><AccountSettings onSaveSuccess={fetchConfig} /></PrivateRoute>} />
+        <Route path="/qg-organizador" element={<PrivateRoute {...privateRouteProps}><ProducerDashboard /></PrivateRoute>} />
+        <Route path="/registrations" element={<PrivateRoute {...privateRouteProps}><Registrations /></PrivateRoute>} />
+        <Route path="/manage-schedule" element={<PrivateRoute {...privateRouteProps}><Schedule /></PrivateRoute>} />
+        <Route path="/apuracao" element={<PrivateRoute {...privateRouteProps}><ResultsPanel /></PrivateRoute>} />
+        <Route path="/equipe-jurados" element={<PrivateRoute {...privateRouteProps}><JudgesManagement /></PrivateRoute>} />
+        <Route path="/account-settings" element={<PrivateRoute {...privateRouteProps}><AccountSettings onSaveSuccess={fetchConfig} /></PrivateRoute>} />
 
-        <Route path="/judge-terminal" element={<PrivateRoute><JudgeTerminal /></PrivateRoute>} />
-        <Route path="/judge-practice" element={<PrivateRoute><JudgePractice /></PrivateRoute>} />
-        <Route path="/equipe-jurados-config" element={<PrivateRoute><JudgeManagement /></PrivateRoute>} />
+        <Route path="/judge-terminal" element={<PrivateRoute {...privateRouteProps}><JudgeTerminal /></PrivateRoute>} />
+        <Route path="/judge-practice" element={<PrivateRoute {...privateRouteProps}><JudgePractice /></PrivateRoute>} />
+        <Route path="/equipe-jurados-config" element={<PrivateRoute {...privateRouteProps}><JudgeManagement /></PrivateRoute>} />
 
-        <Route path="/check-in" element={<PrivateRoute><CheckIn /></PrivateRoute>} />
-        <Route path="/marcacao-palco" element={<PrivateRoute><StageMarker /></PrivateRoute>} />
-        <Route path="/minha-equipe" element={<PrivateRoute><EquipeProdutor /></PrivateRoute>} />
-        <Route path="/suporte-juri" element={<PrivateRoute><SuporteJuri /></PrivateRoute>} />
-        <Route path="/mesa-de-som" element={<PrivateRoute><MesaDeSom /></PrivateRoute>} />
-        <Route path="/ingressos" element={<PrivateRoute><Ingressos /></PrivateRoute>} />
-        <Route path="/live" element={<PrivateRoute><Live /></PrivateRoute>} />
+        <Route path="/check-in" element={<PrivateRoute {...privateRouteProps}><CheckIn /></PrivateRoute>} />
+        <Route path="/marcacao-palco" element={<PrivateRoute {...privateRouteProps}><StageMarker /></PrivateRoute>} />
+        <Route path="/minha-equipe" element={<PrivateRoute {...privateRouteProps}><EquipeProdutor /></PrivateRoute>} />
+        <Route path="/suporte-juri" element={<PrivateRoute {...privateRouteProps}><SuporteJuri /></PrivateRoute>} />
+        <Route path="/mesa-de-som" element={<PrivateRoute {...privateRouteProps}><MesaDeSom /></PrivateRoute>} />
+        <Route path="/ingressos" element={<PrivateRoute {...privateRouteProps}><Ingressos /></PrivateRoute>} />
+        <Route path="/live" element={<PrivateRoute {...privateRouteProps}><Live /></PrivateRoute>} />
 
-        <Route path="/seletiva-video"       element={<PrivateRoute><VideoSelection /></PrivateRoute>} />
-        <Route path="/minha-seletiva"       element={<PrivateRoute><SeletivaInscrito /></PrivateRoute>} />
-        <Route path="/importar-regulamento" element={<PrivateRoute><RegulationAIParser /></PrivateRoute>} />
+        <Route path="/seletiva-video"       element={<PrivateRoute {...privateRouteProps}><VideoSelection /></PrivateRoute>} />
+        <Route path="/minha-seletiva"       element={<PrivateRoute {...privateRouteProps}><SeletivaInscrito /></PrivateRoute>} />
+        <Route path="/importar-regulamento" element={<PrivateRoute {...privateRouteProps}><RegulationAIParser /></PrivateRoute>} />
 
-        <Route path="/criar-evento" element={<PrivateRoute><CreateEvent /></PrivateRoute>} />
-        <Route path="/event-config" element={<PrivateRoute><RegistrationGradeConfig /></PrivateRoute>} />
-        <Route path="/generate-narration" element={<PrivateRoute><AINarration /></PrivateRoute>} />
-        <Route path="/ai-analysis" element={<PrivateRoute><AIAnalysis /></PrivateRoute>} />
-        <Route path="/super-admin" element={<PrivateRoute><SuperAdminDashboard /></PrivateRoute>} />
-        <Route path="/certificados" element={<PrivateRoute><Certificates /></PrivateRoute>} />
-        <Route path="/trilhas" element={<PrivateRoute><TracksManagement /></PrivateRoute>} />
-        <Route path="/battle-config" element={<PrivateRoute><BattleConfig /></PrivateRoute>} />
-        <Route path="/battle-arena" element={<PrivateRoute><BattleArenaLive /></PrivateRoute>} />
+        <Route path="/criar-evento" element={<PrivateRoute {...privateRouteProps}><CreateEvent /></PrivateRoute>} />
+        <Route path="/event-config" element={<PrivateRoute {...privateRouteProps}><RegistrationGradeConfig /></PrivateRoute>} />
+        <Route path="/generate-narration" element={<PrivateRoute {...privateRouteProps}><AINarration /></PrivateRoute>} />
+        <Route path="/ai-analysis" element={<PrivateRoute {...privateRouteProps}><AIAnalysis /></PrivateRoute>} />
+        <Route path="/super-admin" element={<PrivateRoute {...privateRouteProps}><SuperAdminDashboard /></PrivateRoute>} />
+        <Route path="/certificados" element={<PrivateRoute {...privateRouteProps}><Certificates /></PrivateRoute>} />
+        <Route path="/trilhas" element={<PrivateRoute {...privateRouteProps}><TracksManagement /></PrivateRoute>} />
+        <Route path="/battle-config" element={<PrivateRoute {...privateRouteProps}><BattleConfig /></PrivateRoute>} />
+        <Route path="/battle-arena" element={<PrivateRoute {...privateRouteProps}><BattleArenaLive /></PrivateRoute>} />
 
         <Route path="/festivais" element={<Suspense fallback={<PageLoader />}><Festivais /></Suspense>} />
         <Route path="/evento/:idOrSlug" element={<Suspense fallback={<PageLoader />}><PublicEventPage /></Suspense>} />
         <Route path="/festival/:id" element={<FestivalShowcase />} />
-        <Route path="/festival/:id/register" element={<PrivateRoute><NewRegistration /></PrivateRoute>} />
-        <Route path="/festival/:id/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />
-        <Route path="/pagamento"             element={<PrivateRoute><PagamentoInscrito /></PrivateRoute>} />
-        <Route path="/pagamento/sucesso"     element={<PrivateRoute><PagamentoSucesso /></PrivateRoute>} />
-        <Route path="/pagamento/pendente"    element={<PrivateRoute><PagamentoPendente /></PrivateRoute>} />
-        <Route path="/pagamento/erro"        element={<PrivateRoute><PagamentoErro /></PrivateRoute>} />
+        <Route path="/festival/:id/register" element={<PrivateRoute {...privateRouteProps}><NewRegistration /></PrivateRoute>} />
+        <Route path="/festival/:id/checkout" element={<PrivateRoute {...privateRouteProps}><Checkout /></PrivateRoute>} />
+        <Route path="/pagamento"             element={<PrivateRoute {...privateRouteProps}><PagamentoInscrito /></PrivateRoute>} />
+        <Route path="/pagamento/sucesso"     element={<PrivateRoute {...privateRouteProps}><PagamentoSucesso /></PrivateRoute>} />
+        <Route path="/pagamento/pendente"    element={<PrivateRoute {...privateRouteProps}><PagamentoPendente /></PrivateRoute>} />
+        <Route path="/pagamento/erro"        element={<PrivateRoute {...privateRouteProps}><PagamentoErro /></PrivateRoute>} />
         <Route path="/festival/:id/leaderboard" element={<Leaderboard />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
