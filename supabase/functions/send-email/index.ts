@@ -247,10 +247,49 @@ async function sendViaResend(params: {
   return { id: data?.id as string | undefined }
 }
 
+// ─── Template: event_created_producer ───────────────────────────────────────
+
+interface EventCreatedPayload {
+  produtorNome?: string
+  produtorEmail: string
+  eventoNome?: string
+  eventoData?: string
+  eventoLocal?: string
+  appUrl?: string
+}
+
+function buildEventCreatedProducer(p: EventCreatedPayload) {
+  const linhas = [
+    p.eventoNome  ? infoRow('Nome do evento', escape(p.eventoNome)) : '',
+    p.eventoData  ? infoRow('Data',           escape(p.eventoData)) : '',
+    p.eventoLocal ? infoRow('Local',          escape(p.eventoLocal)) : '',
+  ].filter(Boolean).join('')
+
+  const contentHtml = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>
+    <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      A partir de agora você pode configurar gêneros, categorias, formações, avaliação e muito mais.<br/>
+      Quando estiver pronto, publique o link de inscrições e comece a receber coreografias!
+    </p>`
+
+  return {
+    subject: `Evento criado — ${p.eventoNome ?? 'CoreoHub'}`,
+    html: baseLayout({
+      preheader: `Seu evento ${p.eventoNome ?? ''} foi configurado com sucesso no CoreoHub.`,
+      title: 'Seu evento está no ar!',
+      intro: `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, as configurações do seu evento foram salvas. Tudo pronto para começar!`,
+      contentHtml,
+      ctaLabel: 'Acessar painel do produtor',
+      ctaUrl: `${p.appUrl ?? 'https://app.coreohub.com'}`,
+      footerNote: 'Você está recebendo este email por ser o produtor responsável pelo evento.',
+    }),
+  }
+}
+
 // ─── Handler ────────────────────────────────────────────────────────────────
 
 interface SendEmailRequest {
-  type: 'payment_confirmed_registrant' | 'payment_confirmed_producer'
+  type: 'payment_confirmed_registrant' | 'payment_confirmed_producer' | 'event_created_producer'
   payload: Record<string, unknown>
 }
 
@@ -284,6 +323,15 @@ Deno.serve(async (req) => {
         const p = payload as unknown as ProducerPayload
         if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
         const tpl = buildProducerNotification(p)
+        to = p.produtorEmail
+        subject = tpl.subject
+        html = tpl.html
+        break
+      }
+      case 'event_created_producer': {
+        const p = payload as unknown as EventCreatedPayload
+        if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
+        const tpl = buildEventCreatedProducer(p)
         to = p.produtorEmail
         subject = tpl.subject
         html = tpl.html

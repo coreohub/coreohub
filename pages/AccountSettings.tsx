@@ -437,6 +437,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
   const [saving, setSaving]       = useState(false);
   const [success, setSuccess]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
+  const [isFirstSave, setIsFirstSave] = useState(false);
 
   /* ── Pagamentos / Asaas ── */
   const [asaasProfile, setAsaasProfile] = useState<{
@@ -699,6 +700,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
     const fetchConfig = async () => {
       try {
         const { data } = await supabase.from('configuracoes').select('*').eq('id', 1).single();
+        setIsFirstSave(!data?.atualizado_em);
         if (data) {
           setGeneral({
             eventName:          data.nome_evento      || DEFAULT_GENERAL.eventName,
@@ -805,6 +807,29 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
       }, { onConflict: 'id' });
 
       if (sbError) throw sbError;
+
+      if (isFirstSave) {
+        setIsFirstSave(false);
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .single();
+        await supabase.functions.invoke('send-email', {
+          body: {
+            type: 'event_created_producer',
+            payload: {
+              produtorNome:  profileData?.full_name ?? '',
+              produtorEmail: user.email ?? '',
+              eventoNome:    general.eventName,
+              eventoData:    general.eventDate,
+              eventoLocal:   general.location,
+              appUrl:        window.location.origin,
+            },
+          },
+        });
+      }
+
       if (onSaveSuccess) onSaveSuccess();
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
