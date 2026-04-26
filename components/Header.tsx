@@ -56,8 +56,8 @@ const Header = ({ toggleSidebar, profile, theme, toggleTheme, activeRole, setAct
 
       <div className="flex items-center gap-3">
         {isSuperAdmin && (
-          <div className="hidden md:flex items-center gap-2 bg-slate-100 dark:bg-white/5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-white/10">
-            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Visão</span>
+          <div className="flex items-center gap-2 bg-slate-100 dark:bg-white/5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-white/10">
+            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 hidden md:block">Visão</span>
 
             <div className="relative" ref={dropdownRef}>
               <button
