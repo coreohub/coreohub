@@ -802,7 +802,6 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         regras_avaliacao:    { globalRules, overrides: genreOverrides } satisfies EvalConfig,
         premios_especiais:   awards,
         atualizado_em:       new Date().toISOString(),
-        created_by:          user.id,
       }, { onConflict: 'id' });
 
       if (sbError) throw sbError;
