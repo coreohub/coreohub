@@ -5,7 +5,7 @@ import {
   DollarSign, Users, Music, AlertCircle, TrendingUp,
   Plus, Search, ArrowUpRight, CreditCard, Calendar,
   UserCheck, CheckSquare, AlertTriangle, Loader2, ChevronDown,
-  Download, BarChart3,
+  Download, BarChart3, Copy, Check, ExternalLink,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -39,6 +39,47 @@ const MetricCard = ({ title, value, sub, icon: Icon, trend, warn }: any) => (
     <p className="text-[9px] text-slate-500 font-medium">{sub}</p>
   </motion.div>
 );
+
+const CopyLinkChip: React.FC<{ label: string; url: string; tone?: 'pink' | 'neutral' }> = ({ label, url, tone = 'neutral' }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      /* ignora — clipboard pode estar bloqueado */
+    }
+  };
+
+  const base = tone === 'pink'
+    ? 'bg-[#ff0068]/10 border-[#ff0068]/30 text-[#ff0068] hover:bg-[#ff0068]/20'
+    : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:border-[#ff0068]/40 hover:text-[#ff0068]';
+
+  return (
+    <div className={`inline-flex items-center rounded-xl border ${base} transition-all overflow-hidden`}>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-2 px-3 py-2 text-[9px] font-black uppercase tracking-widest"
+        title={url}
+      >
+        <ExternalLink size={11} /> {label}
+      </a>
+      <button
+        onClick={handleCopy}
+        className="px-2.5 py-2 border-l border-current/20 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+        title="Copiar link"
+        aria-label={`Copiar link de ${label}`}
+      >
+        {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+      </button>
+    </div>
+  );
+};
 
 const CountdownBadge = ({ eventDate }: { eventDate: string }) => {
   const today = new Date();
@@ -76,13 +117,13 @@ const ProducerDashboard = () => {
   const [commissions, setCommissions] = useState<any[]>([]);
 
   /* ── Edition selector ── */
-  const [allEvents, setAllEvents] = useState<{ id: string; name: string; edition_year?: number; start_date?: string }[]>([]);
+  const [allEvents, setAllEvents] = useState<{ id: string; name: string; slug?: string; is_public?: boolean; edition_year?: number; start_date?: string }[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase
       .from('events')
-      .select('id,name,edition_year,start_date')
+      .select('id,name,slug,is_public,edition_year,start_date')
       .order('start_date', { ascending: false })
       .then(({ data }) => {
         if (data && data.length > 0) {
@@ -91,6 +132,11 @@ const ProducerDashboard = () => {
         }
       });
   }, []);
+
+  const selectedEvent = useMemo(
+    () => allEvents.find(e => e.id === selectedEventId) ?? null,
+    [allEvents, selectedEventId],
+  );
 
   useEffect(() => {
     if (!selectedEventId) return;
@@ -212,6 +258,22 @@ const ProducerDashboard = () => {
                 <> · {fmtDate(eventData.data_evento)} · <CountdownBadge eventDate={eventData.data_evento} /></>
               )}
             </p>
+          )}
+
+          {selectedEvent && (
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              {selectedEvent.is_public !== false && (
+                <CopyLinkChip
+                  label="Página pública"
+                  url={`${window.location.origin}/evento/${selectedEvent.slug ?? selectedEvent.id}`}
+                  tone="pink"
+                />
+              )}
+              <CopyLinkChip
+                label="Link de inscrição"
+                url={`${window.location.origin}/festival/${selectedEvent.id}/register`}
+              />
+            </div>
           )}
         </div>
 

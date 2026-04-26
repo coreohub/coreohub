@@ -138,7 +138,7 @@ const Festivais = () => {
             </div>
             <h1 className="text-5xl lg:text-7xl font-black uppercase tracking-tighter italic leading-[0.9] mb-6">
               Encontre o<br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ff0068] to-[#e3ff0a]">próximo palco</span>
+              <span className="inline-block pr-4 text-transparent bg-clip-text bg-gradient-to-r from-[#ff0068] to-[#e3ff0a]">próximo palco</span>
             </h1>
             <p className="text-slate-400 text-lg max-w-xl leading-relaxed">
               Festivais, mostras e batalhas de dança em todo o Brasil. Filtre por estado e mês, encontre o seu e inscreva-se em segundos.
