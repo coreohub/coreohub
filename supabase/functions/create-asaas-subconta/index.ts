@@ -22,9 +22,10 @@ Deno.serve(async (req) => {
     )
     if (authErr || !user) throw new Error('Não autorizado')
 
-    const { cpf_cnpj, pix_key, company_type } = await req.json()
+    const { cpf_cnpj, pix_key, company_type, income_value } = await req.json()
     if (!cpf_cnpj) throw new Error('CPF/CNPJ é obrigatório')
     if (!pix_key)  throw new Error('Chave PIX é obrigatória')
+    if (!income_value || Number(income_value) <= 0) throw new Error('Renda/faturamento é obrigatório')
 
     const { data: profile } = await supabase
       .from('profiles')
@@ -51,7 +52,8 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         name:        profile.full_name,
         email:       email,
-        cpfCnpj:    cpfLimpo,
+        cpfCnpj:     cpfLimpo,
+        incomeValue: Number(income_value),
         ...(cpfLimpo.length === 14 && company_type ? { companyType: company_type } : {}),
       }),
     })

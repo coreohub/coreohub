@@ -446,7 +446,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
     pix_key?: string;
   } | null>(null);
   const [asaasLoading, setAsaasLoading]         = useState(false);
-  const [asaasForm, setAsaasForm]               = useState({ cpf_cnpj: '', pix_key: '', company_type: 'MEI' });
+  const [asaasForm, setAsaasForm]               = useState({ cpf_cnpj: '', pix_key: '', company_type: 'MEI', income_value: '' });
   const [asaasFormError, setAsaasFormError]     = useState<string | null>(null);
   const [currentUserId, setCurrentUserId]       = useState<string | null>(null);
   const [mpEvents, setMpEvents]                 = useState<any[]>([]);
@@ -478,6 +478,8 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
     setAsaasFormError(null);
     if (!asaasForm.cpf_cnpj.trim()) { setAsaasFormError('Informe seu CPF ou CNPJ.'); return; }
     if (!asaasForm.pix_key.trim())  { setAsaasFormError('Informe sua chave PIX para receber os repasses.'); return; }
+    const incomeNum = parseFloat(asaasForm.income_value.replace(/[^\d.,]/g, '').replace(',', '.'));
+    if (!incomeNum || incomeNum <= 0) { setAsaasFormError('Informe sua renda mensal ou faturamento.'); return; }
     setAsaasLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -491,6 +493,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
           cpf_cnpj:     asaasForm.cpf_cnpj,
           pix_key:      asaasForm.pix_key,
           company_type: asaasForm.cpf_cnpj.replace(/\D/g, '').length === 14 ? asaasForm.company_type : undefined,
+          income_value: incomeNum,
         }),
       });
       const data = await res.json();
@@ -1611,6 +1614,20 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                           </select>
                         </div>
                       )}
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                          {asaasForm.cpf_cnpj.replace(/\D/g, '').length === 14 ? 'Faturamento mensal estimado (R$)' : 'Renda mensal (R$)'}
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={asaasForm.income_value}
+                          onChange={e => setAsaasForm(f => ({ ...f, income_value: e.target.value }))}
+                          placeholder="Ex: 5000"
+                          className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                        />
+                        <p className="text-[9px] text-slate-400 mt-1">Exigido pelo Asaas para validação cadastral. Use uma estimativa.</p>
+                      </div>
                       <div>
                         <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Chave PIX para receber</label>
                         <input
