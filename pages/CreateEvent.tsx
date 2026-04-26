@@ -61,7 +61,9 @@ const CreateEvent = () => {
     ] as any[],
     registration_deadline: '',
     category_price: 0,
-    slots_limit: 0
+    slots_limit: 0,
+    event_type: 'private' as 'private' | 'government',
+    registration_lots: [] as { label: string; deadline: string; price: number }[],
   });
 
   const [newModality, setNewModality] = useState({ name: '', min_members: 1, max_members: 1, fee: 0, slots_limit: 0, weight: 0, format: EventFormat.RANKING, categories: [] as string[] });
@@ -173,6 +175,37 @@ const CreateEvent = () => {
           <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
             {activeTab === 'general' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Tipo do evento */}
+                <div className="md:col-span-2 space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Tipo do Evento</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, event_type: 'private' })}
+                      className={`p-5 rounded-2xl border text-left transition-all ${
+                        formData.event_type === 'private'
+                          ? 'bg-[#ff0068]/10 border-[#ff0068] text-white'
+                          : 'bg-slate-950 border-white/5 text-slate-400 hover:border-[#ff0068]/40'
+                      }`}
+                    >
+                      <p className="text-[10px] font-black uppercase tracking-widest text-[#ff0068]">Privado</p>
+                      <p className="text-xs font-bold mt-1">Com cobrança de inscrição via Asaas (split automático).</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, event_type: 'government' })}
+                      className={`p-5 rounded-2xl border text-left transition-all ${
+                        formData.event_type === 'government'
+                          ? 'bg-emerald-500/10 border-emerald-500 text-white'
+                          : 'bg-slate-950 border-white/5 text-slate-400 hover:border-emerald-500/40'
+                      }`}
+                    >
+                      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500">Governamental</p>
+                      <p className="text-xs font-bold mt-1">Inscrição gratuita, sem gateway. Ideal para JOMI/prefeituras.</p>
+                    </button>
+                  </div>
+                </div>
+
                 <div className="md:col-span-2 space-y-2">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Nome do Festival</label>
                   <input type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-5 bg-slate-950 rounded-2xl border border-white/5 text-white font-bold outline-none focus:ring-2 focus:ring-[#ff0068] transition-all" placeholder="Ex: Grand Festival 2025" />
@@ -231,6 +264,86 @@ const CreateEvent = () => {
                     <input type="date" value={formData.registration_deadline} onChange={e => setFormData({ ...formData, registration_deadline: e.target.value })} className="w-full p-5 bg-slate-950 rounded-2xl border border-white/5 text-white font-bold outline-none" />
                   </div>
                 </div>
+                {/* Lotes de inscrição */}
+                {formData.event_type === 'private' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Lotes de Inscrição</h4>
+                        <p className="text-[9px] text-slate-600 mt-1">Opcional. Preço do lote ativo substitui o preço da formação. Último lote pode ficar sem data.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({
+                          ...formData,
+                          registration_lots: [...formData.registration_lots, { label: `Lote ${formData.registration_lots.length + 1}`, deadline: '', price: 0 }],
+                        })}
+                        className="px-4 py-2 bg-[#e3ff0a] text-black rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all"
+                      >
+                        + Lote
+                      </button>
+                    </div>
+                    {formData.registration_lots.length === 0 ? (
+                      <p className="text-center py-6 text-[10px] text-slate-500 uppercase font-black border border-dashed border-white/5 rounded-2xl">
+                        Nenhum lote — usa o preço das formações
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {formData.registration_lots.map((lot, i) => (
+                          <div key={i} className="grid grid-cols-12 gap-2 items-center p-3 bg-slate-950 rounded-2xl border border-white/5">
+                            <input
+                              type="text"
+                              value={lot.label}
+                              onChange={e => {
+                                const lots = [...formData.registration_lots];
+                                lots[i] = { ...lots[i], label: e.target.value };
+                                setFormData({ ...formData, registration_lots: lots });
+                              }}
+                              placeholder="Ex: 1º Lote"
+                              className="col-span-4 bg-transparent text-white text-xs font-bold outline-none px-2"
+                            />
+                            <input
+                              type="date"
+                              value={lot.deadline}
+                              onChange={e => {
+                                const lots = [...formData.registration_lots];
+                                lots[i] = { ...lots[i], deadline: e.target.value };
+                                setFormData({ ...formData, registration_lots: lots });
+                              }}
+                              className="col-span-4 bg-transparent text-white text-xs font-bold outline-none px-2"
+                            />
+                            <div className="col-span-3 flex items-center gap-1">
+                              <span className="text-[10px] text-slate-500 font-black">R$</span>
+                              <input
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                value={lot.price}
+                                onChange={e => {
+                                  const lots = [...formData.registration_lots];
+                                  lots[i] = { ...lots[i], price: parseFloat(e.target.value) || 0 };
+                                  setFormData({ ...formData, registration_lots: lots });
+                                }}
+                                className="flex-1 bg-transparent text-white text-xs font-bold outline-none px-1"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setFormData({
+                                ...formData,
+                                registration_lots: formData.registration_lots.filter((_, idx) => idx !== i),
+                              })}
+                              className="col-span-1 text-slate-600 hover:text-rose-500 transition-all flex justify-center"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="space-y-4">
                   <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Formações Ativas</h4>
                   <div className="grid grid-cols-1 gap-3">
