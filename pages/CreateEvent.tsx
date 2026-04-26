@@ -64,6 +64,16 @@ const CreateEvent = () => {
     slots_limit: 0,
     event_type: 'private' as 'private' | 'government',
     registration_lots: [] as { label: string; deadline: string; price: number }[],
+
+    // Vitrine pública
+    is_public: true,
+    city: '',
+    state: '',
+    instagram_event: '',
+    tiktok_event: '',
+    youtube_event: '',
+    whatsapp_event: '',
+    website_event: '',
   });
 
   const [newModality, setNewModality] = useState({ name: '', min_members: 1, max_members: 1, fee: 0, slots_limit: 0, weight: 0, format: EventFormat.RANKING, categories: [] as string[] });
@@ -108,6 +118,16 @@ const CreateEvent = () => {
     }
   };
 
+  const slugify = (text: string): string => {
+    return text
+      .toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-');
+  };
+
   const handleCreate = async () => {
     if (!formData.name || !formData.agreed) {
       setError('Preencha o nome e aceite os termos.');
@@ -117,7 +137,8 @@ const CreateEvent = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Não autenticado');
-      await createEvent({ ...formData, created_by: user.id });
+      const slug = `${slugify(formData.name)}-${Math.random().toString(36).substring(2, 8)}`;
+      await createEvent({ ...formData, slug, created_by: user.id });
       setSuccess(true);
       setTimeout(() => navigate('/dashboard'), 2000);
     } catch (err: any) {
@@ -229,6 +250,62 @@ const CreateEvent = () => {
                       {formData.cover_url ? <img src={formData.cover_url} className="w-full h-full object-cover" /> : <Upload className="text-slate-700" />}
                     </div>
                     <input type="file" onChange={handleCoverUpload} className="text-[10px] text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:bg-[#ff0068] file:text-white" />
+                  </div>
+                </div>
+
+                {/* ─── Vitrine pública ─────────────────────────────────────── */}
+                <div className="md:col-span-2 mt-4 pt-8 border-t border-white/5 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-black uppercase tracking-tighter text-white">Vitrine pública</h3>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Aparece em /festivais e na página pública do evento</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, is_public: !formData.is_public })}
+                      className={`relative w-14 h-8 rounded-full transition-colors ${formData.is_public ? 'bg-[#ff0068]' : 'bg-slate-700'}`}
+                    >
+                      <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform ${formData.is_public ? 'translate-x-7' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Cidade</label>
+                      <input type="text" value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white font-bold outline-none focus:ring-2 focus:ring-[#ff0068]" placeholder="Ex: Recife" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">UF</label>
+                      <select value={formData.state} onChange={e => setFormData({ ...formData, state: e.target.value })} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white font-bold outline-none focus:ring-2 focus:ring-[#ff0068]">
+                        <option value="">—</option>
+                        {['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map(uf => (
+                          <option key={uf} value={uf}>{uf}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Instagram</label>
+                      <input type="text" value={formData.instagram_event} onChange={e => setFormData({ ...formData, instagram_event: e.target.value })} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white font-bold outline-none focus:ring-2 focus:ring-[#ff0068]" placeholder="@meufestival ou URL" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">TikTok</label>
+                      <input type="text" value={formData.tiktok_event} onChange={e => setFormData({ ...formData, tiktok_event: e.target.value })} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white font-bold outline-none focus:ring-2 focus:ring-[#ff0068]" placeholder="@meufestival" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">YouTube</label>
+                      <input type="text" value={formData.youtube_event} onChange={e => setFormData({ ...formData, youtube_event: e.target.value })} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white font-bold outline-none focus:ring-2 focus:ring-[#ff0068]" placeholder="@canalfestival" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">WhatsApp (DDI+DDD+nº)</label>
+                      <input type="text" value={formData.whatsapp_event} onChange={e => setFormData({ ...formData, whatsapp_event: e.target.value })} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white font-bold outline-none focus:ring-2 focus:ring-[#ff0068]" placeholder="5581999998888" />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Site oficial</label>
+                      <input type="text" value={formData.website_event} onChange={e => setFormData({ ...formData, website_event: e.target.value })} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white font-bold outline-none focus:ring-2 focus:ring-[#ff0068]" placeholder="https://meufestival.com.br" />
+                    </div>
                   </div>
                 </div>
               </div>

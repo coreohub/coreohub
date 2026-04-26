@@ -33,7 +33,7 @@ const LandingPage = () => {
               <span className="relative z-10 flex items-center gap-2">Entrar na Plataforma <ChevronRight size={18} /></span>
               <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
             </button>
-            <button onClick={() => navigate('/festival/1')} className="px-12 py-5 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-white/10 transition-all">
+            <button onClick={() => navigate('/festivais')} className="px-12 py-5 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-white/10 transition-all">
               Ver Festivais Ativos
             </button>
           </div>

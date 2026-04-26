@@ -33,6 +33,7 @@ const ProducerInviteLanding    = lazy(() => import('./pages/ProducerInvite'));
 const CreateEvent              = lazy(() => import('./pages/CreateEvent'));
 const FestivalShowcase         = lazy(() => import('./pages/FestivalShowcase'));
 const PublicEventPage          = lazy(() => import('./pages/PublicEventPage'));
+const Festivais                = lazy(() => import('./pages/Festivais'));
 const NewRegistration          = lazy(() => import('./pages/NewRegistration'));
 const Checkout                 = lazy(() => import('./pages/Checkout'));
 const PagamentoInscrito        = lazy(() => import('./pages/PagamentoInscrito'));
@@ -281,7 +282,8 @@ const App: React.FC = () => {
         <Route path="/battle-config" element={<PrivateRoute><BattleConfig /></PrivateRoute>} />
         <Route path="/battle-arena" element={<PrivateRoute><BattleArenaLive /></PrivateRoute>} />
 
-        <Route path="/evento/:id" element={<PublicEventPage />} />
+        <Route path="/festivais" element={<Suspense fallback={<PageLoader />}><Festivais /></Suspense>} />
+        <Route path="/evento/:idOrSlug" element={<Suspense fallback={<PageLoader />}><PublicEventPage /></Suspense>} />
         <Route path="/festival/:id" element={<FestivalShowcase />} />
         <Route path="/festival/:id/register" element={<PrivateRoute><NewRegistration /></PrivateRoute>} />
         <Route path="/festival/:id/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />

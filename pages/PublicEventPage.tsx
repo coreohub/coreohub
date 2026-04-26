@@ -3,29 +3,51 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import {
   Calendar, MapPin, Users, Music, Ticket, ExternalLink,
-  ChevronRight, Trophy, Clock, Star, Loader2, ArrowLeft, Youtube, Radio
+  ChevronRight, Trophy, Clock, Star, Loader2, ArrowLeft, Youtube, Radio,
+  Share2, Copy, Check, Instagram, Globe, MessageCircle,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import BrandIcon from '../components/BrandIcon';
 
+const TikTokIcon = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5.8 20.1a6.34 6.34 0 0 0 10.86-4.43V8.45a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1.84-.2z"/>
+  </svg>
+);
+
 const PublicEventPage = () => {
-  const { id } = useParams<{ id: string }>();
+  const { idOrSlug } = useParams<{ idOrSlug: string }>();
   const navigate = useNavigate();
   const [event, setEvent] = useState<any>(null);
   const [config, setConfig] = useState<any>(null);
   const [registrationsCount, setRegistrationsCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (!id) return;
+    if (!idOrSlug) return;
 
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [{ data: eventData }, { data: cfg }, { count }] = await Promise.all([
-          supabase.from('events').select('*').eq('id', id).single(),
-          supabase.from('configuracoes').select('*').eq('id', 1).single(),
-          supabase.from('registrations').select('*', { count: 'exact', head: true }).eq('event_id', id)
+        // UUID v4 tem 36 chars com hifens — se nao for UUID, trata como slug
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
+        const filterCol = isUuid ? 'id' : 'slug';
+
+        const { data: eventData } = await supabase
+          .from('events')
+          .select('*')
+          .eq(filterCol, idOrSlug)
+          .maybeSingle();
+
+        if (!eventData) {
+          setEvent(null);
+          return;
+        }
+
+        const [{ data: cfg }, { count }] = await Promise.all([
+          supabase.from('configuracoes').select('*').eq('id', 1).maybeSingle(),
+          supabase.from('registrations').select('*', { count: 'exact', head: true }).eq('event_id', eventData.id),
         ]);
 
         setEvent(eventData);
@@ -39,7 +61,23 @@ const PublicEventPage = () => {
     };
 
     fetchData();
-  }, [id]);
+  }, [idOrSlug]);
+
+  const handleShareCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* ignora */
+    }
+  };
+
+  const handleShareWhatsapp = () => {
+    if (!event) return;
+    const text = encodeURIComponent(`Confira o ${event.name} no CoreoHub: ${window.location.href}`);
+    window.open(`https://wa.me/?text=${text}`, '_blank', 'noopener');
+  };
 
   if (loading) {
     return (
@@ -54,8 +92,8 @@ const PublicEventPage = () => {
       <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center gap-6 p-8">
         <Trophy size={64} className="text-slate-700" />
         <h1 className="text-3xl font-black uppercase tracking-tighter">Evento não encontrado</h1>
-        <button onClick={() => navigate('/')} className="flex items-center gap-2 text-[#ff0068] font-black uppercase text-sm">
-          <ArrowLeft size={16} /> Voltar
+        <button onClick={() => navigate('/festivais')} className="flex items-center gap-2 text-[#ff0068] font-black uppercase text-sm">
+          <ArrowLeft size={16} /> Ver outros festivais
         </button>
       </div>
     );
@@ -75,19 +113,44 @@ const PublicEventPage = () => {
     return new Date(dateStr).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
   };
 
+  const eventId = event.id;
+  const localizacao = [event.city, event.state].filter(Boolean).join(' / ') || event.address;
+
+  // Normaliza links de redes — algumas pessoas digitam so o handle
+  const normalizeUrl = (raw?: string, prefix = '') => {
+    if (!raw) return null;
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    return `${prefix}${raw.replace(/^@/, '')}`;
+  };
+
+  const social = {
+    instagram: normalizeUrl(event.instagram_event, 'https://instagram.com/'),
+    tiktok:    normalizeUrl(event.tiktok_event,    'https://tiktok.com/@'),
+    youtube:   normalizeUrl(event.youtube_event,   'https://youtube.com/@'),
+    website:   normalizeUrl(event.website_event,   'https://'),
+    whatsapp:  event.whatsapp_event
+      ? `https://wa.me/${event.whatsapp_event.replace(/\D/g, '')}`
+      : null,
+  };
+
+  const hasSocial = Object.values(social).some(Boolean);
+
   return (
     <div className="min-h-screen bg-[#050505] text-white">
       {/* Hero */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-[#ff0068]/20 via-transparent to-[#050505]" />
         {event.cover_url ? (
-          <img src={event.cover_url} alt={event.name} className="w-full h-[50vh] object-cover opacity-30" />
+          <img src={event.cover_url} alt={event.name} className="w-full h-[55vh] object-cover opacity-30" />
         ) : (
-          <div className="w-full h-[50vh] bg-gradient-to-br from-[#ff0068]/10 via-slate-900 to-[#050505]" />
+          <div className="w-full h-[55vh] bg-gradient-to-br from-[#ff0068]/10 via-slate-900 to-[#050505]" />
         )}
 
         <div className="absolute inset-0 flex flex-col justify-end p-8 lg:p-16">
-          <div className="max-w-4xl">
+          <div className="max-w-5xl">
+            <Link to="/festivais" className="inline-flex items-center gap-2 mb-6 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068] transition-colors">
+              <ArrowLeft size={12} /> Vitrine de festivais
+            </Link>
             <div className="flex items-center gap-3 mb-4">
               <BrandIcon size={28} />
               <span className="text-[10px] font-black text-[#ff0068] uppercase tracking-[0.4em]">CoreoHub</span>
@@ -107,10 +170,10 @@ const PublicEventPage = () => {
                   {event.end_date && event.end_date !== event.start_date && ` — ${formatDate(event.end_date)}`}
                 </div>
               )}
-              {event.address && (
+              {localizacao && (
                 <div className="flex items-center gap-2 text-slate-300">
                   <MapPin size={16} className="text-[#ff0068]" />
-                  {event.address}
+                  {localizacao}
                 </div>
               )}
             </div>
@@ -140,7 +203,7 @@ const PublicEventPage = () => {
         {event.description && (
           <div className="space-y-4">
             <h2 className="text-2xl font-black uppercase tracking-tighter">Sobre o Evento</h2>
-            <p className="text-slate-400 leading-relaxed">{event.description}</p>
+            <p className="text-slate-400 leading-relaxed whitespace-pre-line">{event.description}</p>
           </div>
         )}
 
@@ -174,18 +237,78 @@ const PublicEventPage = () => {
           <div className="flex flex-col gap-3 min-w-[200px]">
             {isRegistrationOpen && (
               <Link
-                to={`/festival/${id}/register`}
+                to={`/festival/${eventId}/register`}
                 className="px-8 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30 flex items-center justify-center gap-2"
               >
                 Inscrever-se <ChevronRight size={16} />
               </Link>
             )}
             <Link
-              to={`/festival/${id}/leaderboard`}
+              to={`/festival/${eventId}/leaderboard`}
               className="px-8 py-4 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:border-[#ff0068]/50 transition-all flex items-center justify-center gap-2"
             >
               <Trophy size={16} /> Ver Ranking
             </Link>
+          </div>
+        </div>
+
+        {/* Redes sociais do evento */}
+        {hasSocial && (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-black uppercase tracking-tighter">Siga o evento</h2>
+            <div className="flex flex-wrap gap-3">
+              {social.instagram && (
+                <a href={social.instagram} target="_blank" rel="noopener noreferrer"
+                   className="flex items-center gap-2 px-5 py-3 bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#bc1888] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
+                  <Instagram size={16} /> Instagram
+                </a>
+              )}
+              {social.tiktok && (
+                <a href={social.tiktok} target="_blank" rel="noopener noreferrer"
+                   className="flex items-center gap-2 px-5 py-3 bg-black border border-white/20 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
+                  <TikTokIcon size={16} /> TikTok
+                </a>
+              )}
+              {social.youtube && (
+                <a href={social.youtube} target="_blank" rel="noopener noreferrer"
+                   className="flex items-center gap-2 px-5 py-3 bg-red-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
+                  <Youtube size={16} /> YouTube
+                </a>
+              )}
+              {social.whatsapp && (
+                <a href={social.whatsapp} target="_blank" rel="noopener noreferrer"
+                   className="flex items-center gap-2 px-5 py-3 bg-emerald-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
+                  <MessageCircle size={16} /> WhatsApp
+                </a>
+              )}
+              {social.website && (
+                <a href={social.website} target="_blank" rel="noopener noreferrer"
+                   className="flex items-center gap-2 px-5 py-3 bg-white/5 border border-white/10 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/10 transition-all">
+                  <Globe size={16} /> Site oficial
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Compartilhar */}
+        <div className="space-y-4">
+          <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
+            <Share2 size={22} className="text-[#ff0068]" /> Compartilhar
+          </h2>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={handleShareWhatsapp}
+              className="flex items-center gap-2 px-5 py-3 bg-emerald-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all"
+            >
+              <MessageCircle size={16} /> Enviar via WhatsApp
+            </button>
+            <button
+              onClick={handleShareCopy}
+              className="flex items-center gap-2 px-5 py-3 bg-white/5 border border-white/10 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/10 transition-all"
+            >
+              {copied ? (<><Check size={16} className="text-emerald-400" /> Link copiado!</>) : (<><Copy size={16} /> Copiar link</>)}
+            </button>
           </div>
         </div>
 

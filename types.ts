@@ -167,6 +167,17 @@ export interface Event {
 
   // Lotes de inscrição (array de { label, deadline, price })
   registration_lots?: RegistrationLot[];
+
+  // Vitrine pública
+  slug?: string;
+  city?: string;
+  state?: string;             // UF (2 letras)
+  whatsapp_event?: string;    // Numero so digitos com DDI (ex: 5511999999999)
+  instagram_event?: string;   // URL completa
+  tiktok_event?: string;
+  youtube_event?: string;
+  website_event?: string;
+  is_public?: boolean;
 }
 
 export interface Registration {
