@@ -446,7 +446,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
     pix_key?: string;
   } | null>(null);
   const [asaasLoading, setAsaasLoading]         = useState(false);
-  const [asaasForm, setAsaasForm]               = useState({ cpf_cnpj: '', pix_key: '' });
+  const [asaasForm, setAsaasForm]               = useState({ cpf_cnpj: '', pix_key: '', company_type: 'MEI' });
   const [asaasFormError, setAsaasFormError]     = useState<string | null>(null);
   const [currentUserId, setCurrentUserId]       = useState<string | null>(null);
   const [mpEvents, setMpEvents]                 = useState<any[]>([]);
@@ -487,7 +487,11 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
         },
-        body: JSON.stringify({ cpf_cnpj: asaasForm.cpf_cnpj, pix_key: asaasForm.pix_key }),
+        body: JSON.stringify({
+          cpf_cnpj:     asaasForm.cpf_cnpj,
+          pix_key:      asaasForm.pix_key,
+          company_type: asaasForm.cpf_cnpj.replace(/\D/g, '').length === 14 ? asaasForm.company_type : undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Erro ao conectar conta Asaas.');
@@ -1592,6 +1596,21 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                           className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
                         />
                       </div>
+                      {asaasForm.cpf_cnpj.replace(/\D/g, '').length === 14 && (
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Tipo de empresa</label>
+                          <select
+                            value={asaasForm.company_type}
+                            onChange={e => setAsaasForm(f => ({ ...f, company_type: e.target.value }))}
+                            className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+                          >
+                            <option value="MEI">MEI — Microempreendedor Individual</option>
+                            <option value="LIMITED">LTDA / SA — Sociedade Limitada ou Anônima</option>
+                            <option value="INDIVIDUAL">Empresário Individual</option>
+                            <option value="ASSOCIATION">Associação / Organização</option>
+                          </select>
+                        </div>
+                      )}
                       <div>
                         <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Chave PIX para receber</label>
                         <input

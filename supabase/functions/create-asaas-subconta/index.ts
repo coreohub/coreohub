@@ -22,17 +22,19 @@ Deno.serve(async (req) => {
     )
     if (authErr || !user) throw new Error('Não autorizado')
 
-    const { cpf_cnpj, pix_key } = await req.json()
+    const { cpf_cnpj, pix_key, company_type } = await req.json()
     if (!cpf_cnpj) throw new Error('CPF/CNPJ é obrigatório')
     if (!pix_key)  throw new Error('Chave PIX é obrigatória')
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('full_name, email')
+      .select('full_name')
       .eq('id', user.id)
       .single()
 
-    if (!profile?.full_name || !profile?.email) {
+    // email vem de auth.users (user.email), não de profiles
+    const email = user.email ?? ''
+    if (!profile?.full_name || !email) {
       throw new Error('Perfil incompleto. Preencha nome e email antes de continuar.')
     }
 
@@ -47,9 +49,10 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        name:     profile.full_name,
-        email:    profile.email,
-        cpfCnpj: cpfLimpo,
+        name:        profile.full_name,
+        email:       email,
+        cpfCnpj:    cpfLimpo,
+        ...(cpfLimpo.length === 14 && company_type ? { companyType: company_type } : {}),
       }),
     })
 
