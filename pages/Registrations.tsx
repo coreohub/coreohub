@@ -3,9 +3,11 @@ import {
   Search, Download, RefreshCw,
   Trash2, Pencil, AlertTriangle, X, DollarSign,
   ShieldAlert, CheckCircle2, Clock, Users, Info, ChevronDown,
+  Undo2, Loader2,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { motion, AnimatePresence } from 'motion/react';
+import { refundRegistration } from '../services/refundService';
 
 const Registrations = () => {
   const [registrations, setRegistrations] = useState<any[]>([]);
@@ -13,6 +15,39 @@ const Registrations = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('ALL');
+  const [refundModal, setRefundModal] = useState<any>(null);
+  const [refundAmount, setRefundAmount] = useState<string>('');
+  const [refundReason, setRefundReason] = useState('');
+  const [refunding, setRefunding] = useState(false);
+  const [refundError, setRefundError] = useState<string | null>(null);
+
+  const handleOpenRefund = (reg: any) => {
+    setRefundModal(reg);
+    setRefundAmount('');
+    setRefundReason('');
+    setRefundError(null);
+  };
+
+  const handleConfirmRefund = async () => {
+    if (!refundModal) return;
+    setRefunding(true);
+    setRefundError(null);
+    try {
+      const result = await refundRegistration({
+        registration_id: refundModal.id,
+        amount:          refundAmount ? Number(refundAmount) : undefined,
+        reason:          refundReason || undefined,
+      });
+      setRegistrations(prev => prev.map(r => r.id === refundModal.id
+        ? { ...r, status_pagamento: 'ESTORNADO', refunded_at: new Date().toISOString(), refund_amount: result.refund_amount }
+        : r));
+      setRefundModal(null);
+    } catch (e: any) {
+      setRefundError(e.message);
+    } finally {
+      setRefunding(false);
+    }
+  };
   const [tab, setTab] = useState<'LIST' | 'TRIAGEM'>('LIST');
   const [reviewingReg, setReviewingReg] = useState<any>(null);
 
@@ -250,7 +285,10 @@ const Registrations = () => {
                     </td>
                     <td className="px-8 py-6 text-right">
                       <div className="flex justify-end gap-2">
-                        {reg.status_pagamento === 'PENDENTE' && <button onClick={() => setReviewingReg(reg)} className="p-2 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all"><DollarSign size={16} /></button>}
+                        {reg.status_pagamento === 'PENDENTE' && <button onClick={() => setReviewingReg(reg)} className="p-2 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all" title="Validar pagamento"><DollarSign size={16} /></button>}
+                        {(reg.status_pagamento === 'CONFIRMADO' || reg.status_pagamento === 'APROVADO') && (
+                          <button onClick={() => handleOpenRefund(reg)} className="p-2 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-lg hover:bg-amber-500 hover:text-white transition-all" title="Reembolsar"><Undo2 size={16} /></button>
+                        )}
                         <button className="p-2 text-slate-500 hover:text-[#ff0068] transition-all"><Pencil size={16} /></button>
                         <button className="p-2 text-slate-500 hover:text-rose-500 transition-all"><Trash2 size={16} /></button>
                       </div>
@@ -408,6 +446,82 @@ const Registrations = () => {
                   <span className="text-xl font-black text-[#ff0068]">R$ {reviewingReg.valor_total || '0,00'}</span>
                 </div>
                 <button onClick={() => handleApprove(reviewingReg.id)} className="w-full py-5 bg-emerald-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:scale-105 transition-all shadow-xl shadow-emerald-500/20">Confirmar Recebimento</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* ── Refund modal ── */}
+        {refundModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => !refunding && setRefundModal(null)} className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" />
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 overflow-hidden shadow-2xl">
+              <div className="p-6 border-b border-slate-100 dark:border-white/5 flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-500/10 text-amber-500 rounded-xl border border-amber-500/20">
+                    <Undo2 size={16} />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight italic">Reembolso</h2>
+                    <p className="text-[10px] text-slate-500">{refundModal.nome_coreografia ?? refundModal.estudio ?? '—'}</p>
+                  </div>
+                </div>
+                <button onClick={() => !refunding && setRefundModal(null)} disabled={refunding} className="p-2 text-slate-500 hover:text-rose-500 disabled:opacity-50"><X size={20} /></button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-2xl">
+                  <p className="text-[10px] text-amber-700 dark:text-amber-400 leading-relaxed">
+                    O valor será estornado pela Asaas para o bailarino. Sua comissão também é estornada proporcionalmente. <strong>Ação irreversível.</strong>
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Valor a reembolsar (opcional)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={refundAmount}
+                    onChange={e => setRefundAmount(e.target.value)}
+                    placeholder="Em branco = reembolso total"
+                    className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500/50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Motivo (opcional)</label>
+                  <textarea
+                    rows={3}
+                    value={refundReason}
+                    onChange={e => setRefundReason(e.target.value)}
+                    placeholder="Ex: Cancelamento solicitado pelo bailarino..."
+                    className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500/50 resize-none"
+                  />
+                </div>
+
+                {refundError && (
+                  <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl">
+                    <AlertTriangle size={14} className="text-red-500 shrink-0" />
+                    <p className="text-xs text-red-600 dark:text-red-400">{refundError}</p>
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => setRefundModal(null)}
+                    disabled={refunding}
+                    className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-white/10 text-slate-700 dark:text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-white/5 disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleConfirmRefund}
+                    disabled={refunding}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                  >
+                    {refunding ? <Loader2 size={14} className="animate-spin" /> : <><Undo2 size={14} /> Confirmar Reembolso</>}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>

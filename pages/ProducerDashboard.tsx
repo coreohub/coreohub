@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import {
   DollarSign, Users, Music, AlertCircle, TrendingUp,
   Plus, Search, ArrowUpRight, CreditCard, Calendar,
   UserCheck, CheckSquare, AlertTriangle, Loader2, ChevronDown,
+  Download, BarChart3,
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 const MetricCard = ({ title, value, sub, icon: Icon, trend, warn }: any) => (
   <motion.div
@@ -71,6 +73,7 @@ const ProducerDashboard = () => {
   const [eventData, setEventData] = useState<{ nome_evento?: string; data_evento?: string } | null>(null);
   const [latestRegistrations, setLatestRegistrations] = useState<any[]>([]);
   const [filteredRegs, setFilteredRegs] = useState<any[]>([]);
+  const [commissions, setCommissions] = useState<any[]>([]);
 
   /* ── Edition selector ── */
   const [allEvents, setAllEvents] = useState<{ id: string; name: string; edition_year?: number; start_date?: string }[]>([]);
@@ -100,13 +103,16 @@ const ProducerDashboard = () => {
           { data: cfg },
           { data: judges },
           { data: checkins },
+          { data: comms },
         ] = await Promise.all([
           supabase.from('registrations').select('*').eq('event_id', selectedEventId),
           supabase.from('registrations').select('*').eq('event_id', selectedEventId).order('criado_em', { ascending: false }).limit(6),
           supabase.from('configuracoes').select('nome_evento,data_evento').eq('id', 1).single(),
           supabase.from('judges').select('id,is_active'),
           supabase.from('registrations').select('id,check_in_status').eq('event_id', selectedEventId),
+          supabase.from('platform_commissions').select('gross_amount,net_amount,commission_amount,created_at').eq('event_id', selectedEventId).order('created_at', { ascending: true }),
         ]);
+        setCommissions(comms ?? []);
 
         if (allRegs) {
           const confirmed = allRegs.filter(r => r.status_pagamento === 'CONFIRMADO');
@@ -147,6 +153,43 @@ const ProducerDashboard = () => {
     if (!d) return '—';
     const [y, m, day] = d.split('-');
     return `${day}/${m}/${y}`;
+  };
+
+  /* ── Agrega receita mensal a partir de platform_commissions ── */
+  const monthlyRevenue = useMemo(() => {
+    if (!commissions.length) return [] as { month: string; gross: number; net: number; fee: number }[];
+    const buckets = new Map<string, { month: string; gross: number; net: number; fee: number }>();
+    for (const c of commissions) {
+      if (!c.created_at) continue;
+      const d = new Date(c.created_at);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+      const cur = buckets.get(key) ?? { month: label, gross: 0, net: 0, fee: 0 };
+      cur.gross += Number(c.gross_amount ?? 0);
+      cur.net   += Number(c.net_amount ?? 0);
+      cur.fee   += Number(c.commission_amount ?? 0);
+      buckets.set(key, cur);
+    }
+    return Array.from(buckets.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
+  }, [commissions]);
+
+  const handleExportCSV = () => {
+    const header = ['data', 'valor_bruto', 'comissao_plataforma', 'valor_liquido_produtor'];
+    const rows = commissions.map(c => [
+      new Date(c.created_at).toLocaleDateString('pt-BR'),
+      Number(c.gross_amount ?? 0).toFixed(2).replace('.', ','),
+      Number(c.commission_amount ?? 0).toFixed(2).replace('.', ','),
+      Number(c.net_amount ?? 0).toFixed(2).replace('.', ','),
+    ]);
+    const csv = [header, ...rows].map(r => r.join(';')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const evName = allEvents.find(e => e.id === selectedEventId)?.name ?? 'coreohub';
+    a.download = `receita_${evName.replace(/\s+/g, '_').toLowerCase()}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -258,6 +301,52 @@ const ProducerDashboard = () => {
             sub="Prazo para preparação"
             icon={Calendar}
           />
+        </div>
+      )}
+
+      {/* Receita mensal */}
+      {!loading && (
+        <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-3xl overflow-hidden">
+          <div className="p-6 border-b border-slate-200 dark:border-white/5 flex justify-between items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-[#ff0068]/10 text-[#ff0068] rounded-xl border border-[#ff0068]/20">
+                <BarChart3 size={16} />
+              </div>
+              <div>
+                <h2 className="text-sm font-black uppercase text-slate-900 dark:text-white tracking-tight italic">Receita Mensal</h2>
+                <p className="text-[10px] text-slate-500">Consolidado de pagamentos aprovados deste evento</p>
+              </div>
+            </div>
+            <button
+              onClick={handleExportCSV}
+              disabled={commissions.length === 0}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white hover:border-[#ff0068]/40 hover:text-[#ff0068] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Download size={12} /> Exportar CSV
+            </button>
+          </div>
+          <div className="p-6">
+            {monthlyRevenue.length === 0 ? (
+              <p className="text-center py-10 text-[10px] text-slate-400 uppercase font-black">Sem pagamentos aprovados ainda</p>
+            ) : (
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthlyRevenue}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" strokeOpacity={0.2} />
+                    <XAxis dataKey="month" tick={{ fontSize: 10, fontWeight: 900, fill: '#94a3b8' }} />
+                    <YAxis tick={{ fontSize: 10, fontWeight: 900, fill: '#94a3b8' }} tickFormatter={(v) => `R$${v}`} />
+                    <Tooltip
+                      contentStyle={{ borderRadius: 12, border: '1px solid #ff0068', fontSize: 11, fontWeight: 800 }}
+                      formatter={(v: any) => [`R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, '']}
+                    />
+                    <Bar dataKey="gross" name="Bruto"    fill="#ff0068" radius={[8, 8, 0, 0]} />
+                    <Bar dataKey="fee"   name="Comissão" fill="#e3ff0a" radius={[8, 8, 0, 0]} />
+                    <Bar dataKey="net"   name="Líquido"  fill="#10b981" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
