@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import imageCompression from 'browser-image-compression';
 import { supabase } from '../services/supabase';
 import {
   User, Phone, MapPin, Save, Loader2,
@@ -81,18 +82,21 @@ interface FormState {
   location: string;
   document: string;
   dance_role: string;
+  avatar_url: string;
 }
 
 const MeuPerfil = () => {
   const [profile, setProfile]   = useState<any | null>(null);
   const [form, setForm]         = useState<FormState>({
     full_name: '', whatsapp: '', instagram: '',
-    location: '', document: '', dance_role: '',
+    location: '', document: '', dance_role: '', avatar_url: '',
   });
-  const [loading, setLoading]   = useState(true);
-  const [saving, setSaving]     = useState(false);
-  const [saved, setSaved]       = useState(false);
-  const [error, setError]       = useState<string | null>(null);
+  const [loading, setLoading]       = useState(true);
+  const [saving, setSaving]         = useState(false);
+  const [saved, setSaved]           = useState(false);
+  const [error, setError]           = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const fileInputRef                = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -108,6 +112,7 @@ const MeuPerfil = () => {
           location:   data.location   || '',
           document:   data.document   ? maskDoc(data.document) : '',
           dance_role: data.dance_role || '',
+          avatar_url: data.avatar_url || '',
         });
       }
       setLoading(false);
@@ -117,6 +122,31 @@ const MeuPerfil = () => {
 
   const set = (key: keyof FormState) => (val: string) =>
     setForm(f => ({ ...f, [key]: val }));
+
+  const handleAvatarUpload = async (file: File) => {
+    if (!file) return;
+    setAvatarUploading(true);
+    setError(null);
+    try {
+      const compressed = await imageCompression(file, {
+        maxSizeMB: 0.15,
+        maxWidthOrHeight: 320,
+        useWebWorker: true,
+        fileType: 'image/webp',
+      });
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(compressed);
+      });
+      setForm(f => ({ ...f, avatar_url: base64 }));
+    } catch (e: any) {
+      setError(`Erro ao processar foto: ${e.message}`);
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   const handleSave = async () => {
     if (docStatus(form.document) === 'invalid') {
@@ -135,6 +165,7 @@ const MeuPerfil = () => {
         location:   form.location,
         document:   form.document.replace(/\D/g, ''),
         dance_role: form.dance_role,
+        avatar_url: form.avatar_url || null,
       }).eq('id', user.id);
       if (err) throw err;
       setSaved(true);
@@ -172,14 +203,35 @@ const MeuPerfil = () => {
 
       {/* Avatar card */}
       <div className="flex items-center gap-4 p-5 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/8 rounded-2xl">
-        <div className="relative shrink-0">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#ff0068] to-[#d4005a] flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-[#ff0068]/20">
-            {form.full_name?.[0]?.toUpperCase() || <User size={24} />}
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={avatarUploading}
+          className="relative shrink-0 group"
+          title="Clique para alterar foto"
+        >
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#ff0068] to-[#d4005a] flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-[#ff0068]/20 overflow-hidden">
+            {form.avatar_url
+              ? <img src={form.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+              : (form.full_name?.[0]?.toUpperCase() || <User size={24} />)}
           </div>
-          <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 border border-white dark:border-slate-900 flex items-center justify-center">
-            <Camera size={10} className="text-slate-500" />
+          <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 border border-white dark:border-slate-900 flex items-center justify-center group-hover:bg-[#ff0068] group-hover:border-[#ff0068] transition-colors">
+            {avatarUploading
+              ? <Loader2 size={10} className="text-slate-500 animate-spin" />
+              : <Camera size={10} className="text-slate-500 group-hover:text-white transition-colors" />}
           </div>
-        </div>
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={e => {
+            const file = e.target.files?.[0];
+            if (file) handleAvatarUpload(file);
+            e.target.value = '';
+          }}
+        />
         <div className="min-w-0">
           <p className="font-black uppercase tracking-tight text-slate-900 dark:text-white truncate">
             {form.full_name || 'Sem nome'}
