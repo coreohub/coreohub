@@ -199,9 +199,27 @@ export interface Registration {
 /** Lote de inscrição com prazo e preço */
 export interface RegistrationLot {
   label: string;
+  /** ISO date (YYYY-MM-DD). String vazia = último lote, sem prazo */
   deadline: string;
   price: number;
 }
+
+/** Cupom de desconto por evento */
+export interface Coupon {
+  id: string;
+  event_id: string;
+  code: string;
+  discount_type: 'percent' | 'fixed';
+  discount_value: number;
+  max_uses?: number | null;
+  used_count: number;
+  expires_at?: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+/** Tipo do evento: privado (gateway de pagamento) ou governamental (gratuito) */
+export type EventType = 'private' | 'government';
 
 /** Permissões granulares para membros da equipe operacional */
 export interface PermissoesCustom {

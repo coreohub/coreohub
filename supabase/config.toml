@@ -402,6 +402,33 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
 
+[functions.refund-asaas-payment]
+enabled = true
+verify_jwt = true
+import_map = "./functions/refund-asaas-payment/deno.json"
+entrypoint = "./functions/refund-asaas-payment/index.ts"
+
+[functions.create-asaas-subconta]
+enabled = true
+verify_jwt = true
+import_map = "./functions/create-asaas-subconta/deno.json"
+entrypoint = "./functions/create-asaas-subconta/index.ts"
+
+# Cria cobrança Asaas com split automático (CoreoHub + produtor)
+[functions.create-payment-asaas]
+enabled = true
+verify_jwt = true
+import_map = "./functions/create-payment-asaas/deno.json"
+entrypoint = "./functions/create-payment-asaas/index.ts"
+
+# Webhook Asaas: verify_jwt = false — Asaas não envia Authorization header.
+# A autenticidade é garantida pelo campo `event` e validação do payment_id.
+[functions.asaas-webhook]
+enabled = true
+verify_jwt = false
+import_map = "./functions/asaas-webhook/deno.json"
+entrypoint = "./functions/asaas-webhook/index.ts"
+
 [functions.mp-oauth-callback]
 enabled = true
 verify_jwt = true

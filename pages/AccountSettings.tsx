@@ -315,15 +315,16 @@ const label = 'block text-[10px] font-black uppercase tracking-widest text-slate
 
 /* ═══════════════════════ EventCommissionCard ═══════════════════════ */
 interface EventCommissionCardProps {
-  event: { id: string; name: string; commission_type?: string; commission_percent?: number; commission_fixed?: number };
+  event: { id: string; name: string; commission_type?: string; commission_percent?: number; commission_fixed?: number; fee_mode?: string };
   saving: boolean;
-  onSave: (patch: { commission_type: string; commission_percent: number; commission_fixed: number }) => void;
+  onSave: (patch: { commission_type: string; commission_percent: number; commission_fixed: number; fee_mode: string }) => void;
 }
 
 const EventCommissionCard: React.FC<EventCommissionCardProps> = ({ event, saving, onSave }) => {
   const [type, setType]       = useState(event.commission_type ?? 'percent');
   const [percent, setPercent] = useState(event.commission_percent ?? 10);
   const [fixed, setFixed]     = useState(event.commission_fixed ?? 0);
+  const [feeMode, setFeeMode] = useState(event.fee_mode ?? 'repassar');
   const [dirty, setDirty]     = useState(false);
 
   const previewFee = (valor: number) => {
@@ -383,17 +384,41 @@ const EventCommissionCard: React.FC<EventCommissionCardProps> = ({ event, saving
         )}
       </div>
 
+      {/* Toggle fee_mode */}
+      <div>
+        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2 ml-1">Quem paga a taxa?</label>
+        <div className="grid grid-cols-2 gap-2">
+          {(['repassar', 'absorver'] as const).map(mode => (
+            <button
+              key={mode}
+              onClick={() => { setFeeMode(mode); setDirty(true); }}
+              className={`py-2.5 px-3 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
+                feeMode === mode
+                  ? 'bg-[#ff0068] text-white border-[#ff0068]'
+                  : 'bg-transparent text-slate-500 border-slate-200 dark:border-white/10 hover:border-[#ff0068]/40'
+              }`}
+            >
+              {mode === 'repassar' ? '🎭 Bailarino paga' : '🏠 Produtor absorve'}
+            </button>
+          ))}
+        </div>
+        <p className="text-[9px] text-slate-400 mt-1.5 ml-1">
+          {feeMode === 'repassar'
+            ? 'Exemplo R$100: bailarino paga R$110, produtor recebe R$100.'
+            : 'Exemplo R$100: bailarino paga R$100, produtor recebe R$90.'}
+        </p>
+      </div>
+
       {/* Preview + salvar */}
       <div className="flex items-center justify-between gap-4 pt-1">
         <div className="text-[10px] text-slate-500">
-          Exemplo em R$100,00: plataforma retém{' '}
+          Plataforma retém{' '}
           <span className="font-black text-[#ff0068]">R$ {previewFee(100)}</span>
-          {' '}· produtor recebe{' '}
-          <span className="font-black text-emerald-500">R$ {(100 - Number(previewFee(100))).toFixed(2)}</span>
+          {' '}em R$100 de inscrição
         </div>
         {dirty && (
           <button
-            onClick={() => { onSave({ commission_type: type, commission_percent: percent, commission_fixed: fixed }); setDirty(false); }}
+            onClick={() => { onSave({ commission_type: type, commission_percent: percent, commission_fixed: fixed, fee_mode: feeMode }); setDirty(false); }}
             disabled={saving}
             className="flex items-center gap-2 px-5 py-2.5 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#e0005c] transition-all disabled:opacity-50 shrink-0"
           >
@@ -413,73 +438,85 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
   const [success, setSuccess]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
 
-  /* ── Pagamentos / Mercado Pago ── */
-  const [mpProfile, setMpProfile] = useState<{
-    mp_user_id?: string;
-    mp_connected_at?: string;
-    mp_access_token?: string;
+  /* ── Pagamentos / Asaas ── */
+  const [asaasProfile, setAsaasProfile] = useState<{
+    asaas_subconta_id?: string;
+    asaas_wallet_id?: string;
+    cpf_cnpj?: string;
+    pix_key?: string;
   } | null>(null);
-  const [mpLoading, setMpLoading]         = useState(false);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [mpEvents, setMpEvents]           = useState<any[]>([]);
+  const [asaasLoading, setAsaasLoading]         = useState(false);
+  const [asaasForm, setAsaasForm]               = useState({ cpf_cnpj: '', pix_key: '' });
+  const [asaasFormError, setAsaasFormError]     = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId]       = useState<string | null>(null);
+  const [mpEvents, setMpEvents]                 = useState<any[]>([]);
   const [savingCommission, setSavingCommission] = useState<string | null>(null);
 
-  /* carrega perfil MP e eventos ao montar + trata retorno do OAuth MP */
+  /* carrega perfil Asaas e eventos ao montar */
   useEffect(() => {
-    const loadMpData = async () => {
+    const loadAsaasData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setCurrentUserId(user.id);
       const { data: profile } = await supabase
         .from('profiles')
-        .select('mp_user_id, mp_connected_at, mp_access_token')
+        .select('asaas_subconta_id, asaas_wallet_id, cpf_cnpj, pix_key')
         .eq('id', user.id)
         .single();
-      setMpProfile(profile);
+      setAsaasProfile(profile);
       const { data: events } = await supabase
         .from('events')
-        .select('id, name, commission_type, commission_percent, commission_fixed')
+        .select('id, name, commission_type, commission_percent, commission_fixed, fee_mode')
         .eq('created_by', user.id)
         .order('created_at', { ascending: false });
       setMpEvents(events ?? []);
     };
-    loadMpData();
-
-    // Detecta retorno do OAuth do Mercado Pago
-    const params = new URLSearchParams(window.location.search);
-    const mpStatus = params.get('mp_status');
-    if (mpStatus === 'success') {
-      setActiveTab('Pagamentos');
-      // Limpa o parâmetro da URL sem recarregar a página
-      window.history.replaceState({}, '', window.location.pathname);
-    } else if (mpStatus === 'error') {
-      setActiveTab('Pagamentos');
-      setError('Erro ao conectar conta do Mercado Pago. Tente novamente.');
-      window.history.replaceState({}, '', window.location.pathname);
-    }
+    loadAsaasData();
   }, []);
 
-  const handleConnectMP = () => {
-    if (!currentUserId) return;
-    const mpClientId = 'APP_USR-b37ec60c-92dc-450b-a8c2-27e059c5a530';
-    const redirectUri = encodeURIComponent('https://ghpltzzijlvykiytwslu.supabase.co/functions/v1/mp-oauth-callback');
-    const authUrl = `https://auth.mercadopago.com/authorization?client_id=${mpClientId}&response_type=code&platform_id=mp&redirect_uri=${redirectUri}&state=${currentUserId}`;
-    window.location.href = authUrl;
+  const handleConnectAsaas = async () => {
+    setAsaasFormError(null);
+    if (!asaasForm.cpf_cnpj.trim()) { setAsaasFormError('Informe seu CPF ou CNPJ.'); return; }
+    if (!asaasForm.pix_key.trim())  { setAsaasFormError('Informe sua chave PIX para receber os repasses.'); return; }
+    setAsaasLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('https://ghpltzzijlvykiytwslu.supabase.co/functions/v1/create-asaas-subconta', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ cpf_cnpj: asaasForm.cpf_cnpj, pix_key: asaasForm.pix_key }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Erro ao conectar conta Asaas.');
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('asaas_subconta_id, asaas_wallet_id, cpf_cnpj, pix_key')
+        .eq('id', currentUserId!)
+        .single();
+      setAsaasProfile(profile);
+    } catch (err: any) {
+      setAsaasFormError(err.message);
+    } finally {
+      setAsaasLoading(false);
+    }
   };
 
-  const handleDisconnectMP = async () => {
+  const handleDisconnectAsaas = async () => {
     if (!currentUserId) return;
-    if (!confirm('Deseja desconectar sua conta do Mercado Pago?')) return;
-    setMpLoading(true);
+    if (!confirm('Deseja desconectar sua conta? Os pagamentos ficarão indisponíveis até reconectar.')) return;
+    setAsaasLoading(true);
     await supabase.from('profiles').update({
-      mp_access_token: null, mp_refresh_token: null,
-      mp_user_id: null, mp_connected_at: null,
+      asaas_subconta_id: null, asaas_wallet_id: null,
+      cpf_cnpj: null, pix_key: null,
     }).eq('id', currentUserId);
-    setMpProfile(null);
-    setMpLoading(false);
+    setAsaasProfile(null);
+    setAsaasLoading(false);
   };
 
-  const handleSaveCommission = async (eventId: string, patch: { commission_type: string; commission_percent: number; commission_fixed: number }) => {
+  const handleSaveCommission = async (eventId: string, patch: { commission_type: string; commission_percent: number; commission_fixed: number; fee_mode?: string }) => {
     setSavingCommission(eventId);
     await supabase.from('events').update(patch).eq('id', eventId);
     setMpEvents(evs => evs.map(e => e.id === eventId ? { ...e, ...patch } : e));
@@ -1489,88 +1526,110 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
           <div className="space-y-6">
             <div>
               <h2 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white italic">
-                Pagamentos & <span className="text-[#ff0068]">Mercado Pago</span>
+                Pagamentos & <span className="text-[#ff0068]">Recebimentos</span>
               </h2>
               <p className="text-xs text-slate-500 mt-1">
-                Conecte sua conta do Mercado Pago para receber pagamentos de inscrições diretamente. A plataforma retém uma comissão configurável por evento.
+                Configure sua conta para receber os repasses das inscrições diretamente via PIX. O split é automático no momento do pagamento.
               </p>
             </div>
 
-            {/* Conexão MP */}
+            {/* Conexão Asaas */}
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-3xl overflow-hidden">
               <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100 dark:border-white/8">
                 <div className="p-2 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><CreditCard size={16} /></div>
                 <div>
-                  <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight italic">Conta Mercado Pago</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Autorize a plataforma a processar pagamentos em seu nome via split automático.</p>
+                  <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight italic">Conta de Recebimento</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Informe seu CPF/CNPJ e chave PIX para receber os repasses automaticamente.</p>
                 </div>
               </div>
               <div className="p-6">
-                {mpProfile?.mp_user_id ? (
+                {asaasProfile?.asaas_subconta_id ? (
                   <div className="space-y-4">
-                    {/* Status conectado */}
                     <div className="flex items-center gap-4 p-4 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-2xl">
                       <CheckCircle size={22} className="text-emerald-500 shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="font-black text-sm text-emerald-700 dark:text-emerald-400 uppercase tracking-tight">Conta Conectada</p>
+                        <p className="font-black text-sm text-emerald-700 dark:text-emerald-400 uppercase tracking-tight">Conta Configurada</p>
                         <p className="text-[10px] text-emerald-600 dark:text-emerald-500 mt-0.5">
-                          ID do Vendedor: <span className="font-bold">{mpProfile.mp_user_id}</span>
-                          {mpProfile.mp_connected_at && (
-                            <> · Conectado em {new Date(mpProfile.mp_connected_at).toLocaleDateString('pt-BR')}</>
-                          )}
+                          Chave PIX: <span className="font-bold">{asaasProfile.pix_key}</span>
+                          {asaasProfile.cpf_cnpj && <> · CPF/CNPJ: {asaasProfile.cpf_cnpj}</>}
                         </p>
                       </div>
                       <button
-                        onClick={handleDisconnectMP}
-                        disabled={mpLoading}
+                        onClick={handleDisconnectAsaas}
+                        disabled={asaasLoading}
                         className="shrink-0 px-4 py-2 rounded-xl border border-red-200 dark:border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-500/10 transition-all disabled:opacity-50"
                       >
-                        {mpLoading ? <Loader2 size={12} className="animate-spin" /> : 'Desconectar'}
+                        {asaasLoading ? <Loader2 size={12} className="animate-spin" /> : 'Remover'}
                       </button>
                     </div>
-
-                    {/* Info sobre o fluxo */}
                     <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-2xl">
                       <AlertCircle size={16} className="text-blue-500 shrink-0 mt-0.5" />
                       <p className="text-[10px] text-blue-700 dark:text-blue-400">
-                        Os pagamentos das inscrições caem diretamente na sua conta do Mercado Pago em tempo real. A comissão da plataforma é retida automaticamente no momento do pagamento.
+                        O repasse cai diretamente na sua chave PIX no momento em que o inscrito paga. A comissão da plataforma é descontada automaticamente.
                       </p>
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {/* Status desconectado */}
                     <div className="flex items-center gap-4 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-2xl">
                       <AlertCircle size={22} className="text-amber-500 shrink-0" />
                       <div className="flex-1">
-                        <p className="font-black text-sm text-amber-700 dark:text-amber-400 uppercase tracking-tight">Conta não conectada</p>
+                        <p className="font-black text-sm text-amber-700 dark:text-amber-400 uppercase tracking-tight">Conta não configurada</p>
                         <p className="text-[10px] text-amber-600 dark:text-amber-500 mt-0.5">
-                          Você precisa conectar sua conta do Mercado Pago para receber pagamentos de inscrições.
+                          Configure sua conta para habilitar o recebimento de inscrições pagas.
                         </p>
                       </div>
                     </div>
-                    <button
-                      onClick={handleConnectMP}
-                      className="flex items-center gap-3 px-6 py-4 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20 w-full justify-center"
-                    >
-                      <ExternalLink size={16} />
-                      Conectar conta Mercado Pago
-                    </button>
-                    <p className="text-[10px] text-center text-slate-400">
-                      Você será redirecionado para o Mercado Pago para autorizar a integração com segurança.
-                    </p>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">CPF ou CNPJ</label>
+                        <input
+                          type="text"
+                          value={asaasForm.cpf_cnpj}
+                          onChange={e => setAsaasForm(f => ({ ...f, cpf_cnpj: e.target.value }))}
+                          placeholder="000.000.000-00 ou 00.000.000/0001-00"
+                          className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Chave PIX para receber</label>
+                        <input
+                          type="text"
+                          value={asaasForm.pix_key}
+                          onChange={e => setAsaasForm(f => ({ ...f, pix_key: e.target.value }))}
+                          placeholder="CPF, e-mail, telefone ou chave aleatória"
+                          className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                        />
+                      </div>
+
+                      {asaasFormError && (
+                        <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl">
+                          <AlertCircle size={14} className="text-red-500 shrink-0" />
+                          <p className="text-[10px] text-red-600 dark:text-red-400">{asaasFormError}</p>
+                        </div>
+                      )}
+
+                      <button
+                        onClick={handleConnectAsaas}
+                        disabled={asaasLoading}
+                        className="flex items-center gap-3 px-6 py-4 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-50 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20 w-full justify-center"
+                      >
+                        {asaasLoading ? <Loader2 size={16} className="animate-spin" /> : <><CheckCircle size={16} /> Configurar conta de recebimento</>}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Comissão por evento */}
+            {/* Comissão e modo de repasse por evento */}
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-3xl overflow-hidden">
               <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100 dark:border-white/8">
                 <div className="p-2 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Percent size={16} /></div>
                 <div>
                   <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight italic">Modelo de Comissão por Evento</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Define quanto a plataforma retém por inscrição em cada evento seu.</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Define quanto a plataforma retém e quem paga a taxa em cada evento.</p>
                 </div>
               </div>
               <div className="p-6 space-y-4">
