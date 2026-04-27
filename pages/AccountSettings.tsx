@@ -690,9 +690,10 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
     gatilho_marcacao: 'MANUAL_MARCADOR' as 'MANUAL_MARCADOR' | 'MANUAL_COORDENADOR' | 'AUTO_SONOPLASTA',
   });
 
-  const [toleranceRule, setToleranceRule] = useState<{ mode: 'PERCENT' | 'COUNT'; value: number }>({
+  const [toleranceRule, setToleranceRule] = useState<{ mode: 'PERCENT' | 'COUNT'; value: number; enforcement?: 'FLEXIBLE' | 'STRICT' }>({
     mode: 'PERCENT',
     value: 20,
+    enforcement: 'FLEXIBLE',
   });
 
   /* ── Age Reference ── */
@@ -1511,12 +1512,46 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
               </div>
             </div>
 
+            <div className="space-y-3 pt-2">
+              <label className={label}>Como lidar com violações?</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {([
+                  { v: 'FLEXIBLE' as const, label: 'Flexível', desc: 'Permite inscrever — produtor aprova manualmente as violações' },
+                  { v: 'STRICT'   as const, label: 'Rígido',   desc: 'Bloqueia inscrição que viole a tolerância automaticamente' },
+                ]).map(opt => {
+                  const enforcement = toleranceRule.enforcement ?? 'FLEXIBLE';
+                  const active = enforcement === opt.v;
+                  return (
+                    <button
+                      key={opt.v}
+                      onClick={() => setToleranceRule(r => ({ ...r, enforcement: opt.v }))}
+                      className={`p-5 rounded-2xl border text-left transition-all ${
+                        active
+                          ? 'border-[#ff0068] bg-[#ff0068]/5'
+                          : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
+                      }`}
+                    >
+                      <p className={`text-[11px] font-black uppercase tracking-widest mb-2 ${active ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>
+                        {opt.label}
+                      </p>
+                      <p className="text-[10px] text-slate-400 leading-relaxed">{opt.desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="p-4 bg-[#ff0068]/5 border border-[#ff0068]/20 rounded-2xl">
               <p className="text-[11px] font-black text-[#ff0068] uppercase tracking-widest mb-1">Resumo da Regra</p>
               <p className="text-sm text-slate-900 dark:text-white">
                 {toleranceRule.mode === 'PERCENT'
                   ? `Até ${toleranceRule.value}% dos participantes do grupo pode estar fora da faixa etária.`
                   : `Até ${toleranceRule.value} participante(s) pode(m) estar fora da faixa etária.`}
+              </p>
+              <p className="text-xs text-slate-500 mt-2">
+                {(toleranceRule.enforcement ?? 'FLEXIBLE') === 'STRICT'
+                  ? '🔒 Inscrições que violarem serão bloqueadas no momento da submissão.'
+                  : '✋ Inscrições que violarem ficarão pendentes de aprovação manual do produtor.'}
               </p>
             </div>
           </div>

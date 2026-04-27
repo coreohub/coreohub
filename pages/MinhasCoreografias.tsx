@@ -162,6 +162,13 @@ const MinhasCoreografias = () => {
   const [ageRefMode,      setAgeRefMode]      = useState<'EVENT_DAY' | 'YEAR_END' | 'FIXED_DATE'>('EVENT_DAY');
   const [ageRefFixedDate, setAgeRefFixedDate] = useState<string>('');
 
+  /* ── tolerance rule (loaded from global config) ── */
+  const [toleranceRule, setToleranceRule] = useState<{
+    mode: 'PERCENT' | 'COUNT';
+    value: number;
+    enforcement: 'FLEXIBLE' | 'STRICT';
+  }>({ mode: 'PERCENT', value: 20, enforcement: 'FLEXIBLE' });
+
   /* ══════════════════════════════════════════════════════════
      DATA FETCHING
   ══════════════════════════════════════════════════════════ */
@@ -176,7 +183,7 @@ const MinhasCoreografias = () => {
         supabase.from('coreografias').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
         supabase.from('elenco').select('*').eq('user_id', user.id).order('nome'),
         supabase.from('events').select('id,name,start_date,location').order('start_date'),
-        supabase.from('configuracoes').select('event_id,nome_festival,local_evento,prazo_inscricao,categorias_predefinidas,formatos_precos'),
+        supabase.from('configuracoes').select('event_id,nome_festival,local_evento,prazo_inscricao,categorias_predefinidas,formatos_precos,tolerancia,age_reference,age_reference_date'),
       ]);
 
       if (coreoRes.error?.code === '42P01') { setTableError(true); return; }
@@ -222,6 +229,17 @@ const MinhasCoreografias = () => {
       // Global cats from first configuracoes entry as fallback
       const firstCfg = configsRes.data?.[0];
       setGlobalCats(firstCfg?.categorias_predefinidas || []);
+
+      // Load age reference and tolerance from config
+      if (firstCfg?.age_reference) setAgeRefMode(firstCfg.age_reference);
+      if (firstCfg?.age_reference_date) setAgeRefFixedDate(firstCfg.age_reference_date);
+      if (firstCfg?.tolerancia) {
+        setToleranceRule({
+          mode: firstCfg.tolerancia.mode ?? 'PERCENT',
+          value: firstCfg.tolerancia.value ?? 20,
+          enforcement: firstCfg.tolerancia.enforcement ?? 'FLEXIBLE',
+        });
+      }
 
       const enriched: Coreografia[] = (coreoRes.data || []).map(c => ({
         ...c,
@@ -313,6 +331,37 @@ const MinhasCoreografias = () => {
     return age >= form.cat_min_age && age <= form.cat_max_age;
   }, [form.categoria_nome, form.cat_min_age, form.cat_max_age, form.event_data, resolveRefDate]);
 
+  /* Tolerance violation check based on selected dancers */
+  const toleranceStatus = useMemo(() => {
+    const selected = form.bailarinos_ids
+      .map(id => elenco.find(b => b.id === id))
+      .filter((b): b is Bailarino => Boolean(b));
+
+    if (!form.categoria_nome || selected.length === 0) {
+      return { violates: false, outCount: 0, totalCount: 0, pct: 0, allowedLimit: 0, limitLabel: '' };
+    }
+
+    const outOfRange = selected.filter(b => !isDancerEligible(b));
+    const outCount = outOfRange.length;
+    const totalCount = selected.length;
+    const pct = totalCount > 0 ? (outCount / totalCount) * 100 : 0;
+
+    let violates = false;
+    let allowedLimit = 0;
+    let limitLabel = '';
+    if (toleranceRule.mode === 'PERCENT') {
+      violates = pct > toleranceRule.value;
+      allowedLimit = toleranceRule.value;
+      limitLabel = `${toleranceRule.value}%`;
+    } else {
+      violates = outCount > toleranceRule.value;
+      allowedLimit = toleranceRule.value;
+      limitLabel = `${toleranceRule.value} pessoa(s)`;
+    }
+
+    return { violates, outCount, totalCount, pct, allowedLimit, limitLabel };
+  }, [form.bailarinos_ids, form.categoria_nome, elenco, isDancerEligible, toleranceRule]);
+
   /* ══════════════════════════════════════════════════════════
      VALIDATION
   ══════════════════════════════════════════════════════════ */
@@ -335,6 +384,11 @@ const MinhasCoreografias = () => {
         errs.bailarinos = `Esta formação requer no mínimo ${form.mod_min} bailarino(s) elegível(is)`;
       if (form.bailarinos_ids.length > form.mod_max)
         errs.bailarinos = `Esta formação permite no máximo ${form.mod_max === 99 ? '∞' : form.mod_max} bailarino(s)`;
+
+      // Tolerance enforcement: STRICT mode blocks; FLEXIBLE allows with warning
+      if (toleranceRule.enforcement === 'STRICT' && toleranceStatus.violates) {
+        errs.bailarinos = `Tolerância excedida: ${toleranceStatus.outCount} bailarino(s) fora da faixa etária. Limite: até ${toleranceStatus.limitLabel}.`;
+      }
     }
     setFormErrors(errs);
     return Object.keys(errs).length === 0;
@@ -365,6 +419,14 @@ const MinhasCoreografias = () => {
         mod_fee:        form.mod_fee || 0,
         bailarinos_ids: form.bailarinos_ids,
         status:         'AGUARDANDO_PAGAMENTO',
+        tolerance_violation: toleranceStatus.violates ? {
+          out_count:    toleranceStatus.outCount,
+          total_count:  toleranceStatus.totalCount,
+          pct:          Math.round(toleranceStatus.pct * 10) / 10,
+          limit_label:  toleranceStatus.limitLabel,
+          mode:         toleranceRule.mode,
+          flagged_at:   new Date().toISOString(),
+        } : null,
       };
       if (editingId) {
         const { error: err } = await supabase.from('coreografias').update(payload).eq('id', editingId);
@@ -1037,6 +1099,21 @@ const MinhasCoreografias = () => {
                   {formErrors.bailarinos && (
                     <div className="flex items-center gap-2 p-3 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-xl text-rose-600 dark:text-rose-400 text-[9px] font-bold">
                       <AlertCircle size={12} /> {formErrors.bailarinos}
+                    </div>
+                  )}
+
+                  {toleranceStatus.violates && toleranceRule.enforcement === 'FLEXIBLE' && (
+                    <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-xl">
+                      <AlertCircle size={14} className="text-amber-500 mt-0.5 shrink-0" />
+                      <div className="text-[10px] text-amber-700 dark:text-amber-400 space-y-1">
+                        <p className="font-black uppercase tracking-widest">Tolerância excedida</p>
+                        <p>
+                          {toleranceStatus.outCount} de {toleranceStatus.totalCount} bailarino(s) fora da faixa etária
+                          {toleranceRule.mode === 'PERCENT' && ` (${Math.round(toleranceStatus.pct)}%)`}.
+                          Limite do evento: até {toleranceStatus.limitLabel}.
+                        </p>
+                        <p className="font-bold">Sua inscrição ficará pendente de aprovação manual do produtor.</p>
+                      </div>
                     </div>
                   )}
                 </>
