@@ -1634,7 +1634,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                 <div className="p-2 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><CreditCard size={16} /></div>
                 <div>
                   <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight italic">Conta de Recebimento</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Informe seu CPF/CNPJ e chave PIX para receber os repasses automaticamente.</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Informe seu CPF/CNPJ e chave PIX para receber os repasses automaticamente.</p>
                 </div>
               </div>
               <div className="p-6">
@@ -1753,7 +1753,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                 <div className="p-2 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Percent size={16} /></div>
                 <div>
                   <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight italic">Modelo de Comissão por Evento</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Define quanto a plataforma retém e quem paga a taxa em cada evento.</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Define quanto a plataforma retém e quem paga a taxa em cada evento.</p>
                 </div>
               </div>
               <div className="p-6 space-y-4">
@@ -1794,7 +1794,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                 <div className="p-2 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Scale size={16} /></div>
                 <div>
                   <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight italic">Escala de Pontuação</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Define a régua usada pelos jurados nos tablets.</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Define a régua usada pelos jurados nos tablets.</p>
                 </div>
               </div>
               <div className="p-5 space-y-4">
@@ -1843,7 +1843,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                 <div className="p-2 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Medal size={16} /></div>
                 <div>
                   <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight italic">Faixas de Medalha</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">
+                  <p className="text-xs text-slate-500 mt-0.5">
                     Nota mínima para cada medalha na Mostra Competitiva. Abaixo do Bronze = Participação.
                   </p>
                 </div>
@@ -1900,7 +1900,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                 <div className="p-2 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Lock size={16} /></div>
                 <div>
                   <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight italic">Bloqueio por Inatividade</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Tempo sem interação para o terminal do júri pedir o PIN novamente.</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Tempo sem interação para o terminal do júri pedir o PIN novamente.</p>
                 </div>
               </div>
               <div className="p-5 space-y-3">
@@ -1958,7 +1958,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                   <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight">
                     Configuração Global
                   </p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">
+                  <p className="text-xs text-slate-500 mt-0.5">
                     Aplica-se a todos os gêneros que não têm regra personalizada
                     {genres.length > 0 && (
                       <span className="ml-1 text-[#ff0068] font-bold">
@@ -2605,7 +2605,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                         <p className={`text-[11px] font-black uppercase tracking-widest ${genreModal.tempFree ? 'text-amber-500' : 'text-slate-900 dark:text-white'}`}>
                           Categoria Livre
                         </p>
-                        <p className="text-[10px] text-slate-500 mt-0.5">
+                        <p className="text-xs text-slate-500 mt-0.5">
                           {genreModal.tempFree
                             ? 'Sem restrição de idade — o Eixo Etário será pulado no checkout'
                             : 'Participantes precisam estar dentro da faixa etária da categoria'}
@@ -2630,7 +2630,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                         <p className={`text-[11px] font-black uppercase tracking-widest ${genreModal.tempShorterTrack ? 'text-violet-500' : 'text-slate-900 dark:text-white'}`}>
                           Trilha de Repertório
                         </p>
-                        <p className="text-[10px] text-slate-500 mt-0.5">
+                        <p className="text-xs text-slate-500 mt-0.5">
                           {genreModal.tempShorterTrack
                             ? 'Duração mínima ignorada — trilha original da obra é aceita em qualquer tamanho'
                             : 'Valida duração mínima da trilha conforme regras da modalidade'}
