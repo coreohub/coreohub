@@ -445,7 +445,7 @@ const Schedule = () => {
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black uppercase italic tracking-tight text-slate-900 dark:text-white">
-            Gestão de <span className="text-[#ff0068]">Sonoplastia</span>
+            Sonoplastia & <span className="text-[#ff0068]">Cronograma</span>
           </h1>
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-white/40 mt-0.5">
             Cronograma inteligente & trilhas sonoras
