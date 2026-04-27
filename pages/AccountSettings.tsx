@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../services/supabase';
+import { supabase, uploadEventCover } from '../services/supabase';
 import {
   getAllGenres, createGenre, updateGenre, deleteGenre,
   addSubgenre, editSubgenre, removeSubgenre,
@@ -15,6 +15,7 @@ import {
   Trophy, Star, Zap, Crown, Shirt, Award, Lock, Medal,
   Calendar, CalendarDays, CalendarRange,
   CreditCard, CheckCircle, AlertCircle, ExternalLink, Percent, Hash,
+  Image as ImageIcon, Upload,
 } from 'lucide-react';
 
 /* ── Evaluation Rules types ── */
@@ -297,6 +298,8 @@ const DEFAULT_GENERAL = {
   scoreScale: 'BASE_10' as ScoreScale,
   pinInactivityMinutes: 15 as number, // 0 = nunca bloquear
   medalThresholds: { gold: 9.0, silver: 8.0, bronze: 7.0 },
+  coverUrl: '',
+  description: '',
 };
 
 const SCORE_SCALE_OPTIONS: { id: ScoreScale; label: string; desc: string; example: string }[] = [
@@ -788,6 +791,8 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
             scoreScale: (data.escala_notas as ScoreScale) || DEFAULT_GENERAL.scoreScale,
             pinInactivityMinutes: data.pin_inactivity_minutes ?? DEFAULT_GENERAL.pinInactivityMinutes,
             medalThresholds: data.medal_thresholds ?? DEFAULT_GENERAL.medalThresholds,
+            coverUrl:    data.cover_url   ?? DEFAULT_GENERAL.coverUrl,
+            description: data.descricao   ?? DEFAULT_GENERAL.description,
           });
           setStyles(data.estilos?.length    ? data.estilos    : DEFAULT_MODALITIES);
           setFormats(data.formatos?.length ? data.formatos.map(migrateFormat) : DEFAULT_FORMATS);
@@ -861,6 +866,8 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         escala_notas:        general.scoreScale,
         pin_inactivity_minutes: general.pinInactivityMinutes,
         medal_thresholds:    general.medalThresholds,
+        cover_url:           general.coverUrl || null,
+        descricao:           general.description || null,
         estilos:             styles,
         formatos:            formats,
         categorias:          categories,
@@ -912,6 +919,8 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
 
         const eventPayload: Record<string, any> = {
           name:                    general.eventName,
+          description:             general.description || null,
+          cover_url:               general.coverUrl || null,
           edition_year:            editionYear,
           start_date:              general.eventDate || null,
           end_date:                general.eventDate || null,
@@ -1072,6 +1081,89 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
       case 'Geral':
         return (
           <div className="space-y-6">
+            {/* Vitrine Pública: banner + descrição */}
+            <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-5">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><ImageIcon size={18} /></div>
+                <div>
+                  <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Vitrine Pública</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Como o seu festival aparece na página de Festivais (`/festivais`).</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Banner */}
+                <div>
+                  <label className={label}>Banner do Evento (16:10 recomendado)</label>
+                  {general.coverUrl ? (
+                    <div className="relative group rounded-2xl overflow-hidden aspect-[16/10] bg-slate-100 dark:bg-slate-800">
+                      <img src={general.coverUrl} alt="Banner" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                        <label className="cursor-pointer px-4 py-2 bg-white/90 text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              try {
+                                const url = await uploadEventCover('config_' + Date.now(), file);
+                                setGeneral(g => ({ ...g, coverUrl: url }));
+                              } catch (err: any) {
+                                setError('Erro ao subir banner: ' + err.message);
+                              }
+                            }}
+                          />
+                          Trocar
+                        </label>
+                        <button
+                          onClick={() => setGeneral(g => ({ ...g, coverUrl: '' }))}
+                          className="px-4 py-2 bg-red-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-600"
+                        >
+                          Remover
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <label className="cursor-pointer flex flex-col items-center justify-center gap-3 aspect-[16/10] border-2 border-dashed border-slate-300 dark:border-white/10 rounded-2xl hover:border-[#ff0068]/50 transition-colors text-slate-400 hover:text-[#ff0068]">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            const url = await uploadEventCover('config_' + Date.now(), file);
+                            setGeneral(g => ({ ...g, coverUrl: url }));
+                          } catch (err: any) {
+                            setError('Erro ao subir banner: ' + err.message);
+                          }
+                        }}
+                      />
+                      <Upload size={28} />
+                      <p className="text-[10px] font-black uppercase tracking-widest">Clique para enviar</p>
+                      <p className="text-[9px] text-slate-400">PNG, JPG ou WEBP — recomendado 1280×800</p>
+                    </label>
+                  )}
+                </div>
+
+                {/* Descrição */}
+                <div>
+                  <label className={label}>Descrição do Evento</label>
+                  <textarea
+                    rows={8}
+                    value={general.description}
+                    onChange={e => setGeneral({ ...general, description: e.target.value })}
+                    placeholder="Conte sobre seu festival: história, modalidades, público, premiações..."
+                    className={`${input} resize-none h-full`}
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">Aparece na página pública do evento. Use para vender o evento aos inscritos.</p>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Dados do Evento */}
               <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-5">
