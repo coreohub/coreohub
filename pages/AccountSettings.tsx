@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase, uploadEventCover } from '../services/supabase';
+import imageCompression from 'browser-image-compression';
 import {
   getAllGenres, createGenre, updateGenre, deleteGenre,
   addSubgenre, editSubgenre, removeSubgenre,
@@ -941,8 +942,24 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
           .eq('id', 1)
           .single();
 
+        // Verifica se event_id ainda aponta pra um evento existente (pode ter sido deletado)
+        let existingEventId: string | null = null;
         if (cfgRow?.event_id) {
-          await supabase.from('events').update(eventPayload).eq('id', cfgRow.event_id);
+          const { data: existing } = await supabase
+            .from('events')
+            .select('id')
+            .eq('id', cfgRow.event_id)
+            .maybeSingle();
+          if (existing?.id) existingEventId = existing.id;
+        }
+
+        if (existingEventId) {
+          const { error: updateErr } = await supabase.from('events').update(eventPayload).eq('id', existingEventId);
+          if (updateErr) {
+            console.error('[sync] erro ao atualizar event:', updateErr);
+            throw updateErr;
+          }
+          console.log('[sync] event atualizado:', existingEventId);
         } else {
           const baseSlug = slugify(`${general.eventName}-${editionYear}`);
           const { data: newEvent, error: insertErr } = await supabase
@@ -954,20 +971,32 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
           // Conflito de slug → tenta com sufixo aleatório
           if (insertErr && (insertErr as any).code === '23505') {
             const altSlug = `${baseSlug}-${Math.random().toString(36).slice(2, 7)}`;
-            const { data: retryEvent } = await supabase
+            const { data: retryEvent, error: retryErr } = await supabase
               .from('events')
               .insert({ ...eventPayload, slug: altSlug })
               .select('id')
               .single();
+            if (retryErr) {
+              console.error('[sync] insert events (retry slug) falhou:', retryErr);
+              throw retryErr;
+            }
             if (retryEvent?.id) {
               await supabase.from('configuracoes').update({ event_id: retryEvent.id }).eq('id', 1);
+              console.log('[sync] event criado (slug alt):', retryEvent.id);
             }
+          } else if (insertErr) {
+            console.error('[sync] insert events falhou:', insertErr);
+            throw insertErr;
           } else if (newEvent?.id) {
             await supabase.from('configuracoes').update({ event_id: newEvent.id }).eq('id', 1);
+            console.log('[sync] event criado:', newEvent.id);
           }
         }
-      } catch (syncErr) {
-        console.warn('[AccountSettings] Sync para events falhou (não bloqueia save):', syncErr);
+      } catch (syncErr: any) {
+        const msg = syncErr?.message ?? String(syncErr);
+        console.error('[AccountSettings] Sync para events falhou:', syncErr);
+        // Sinaliza erro pro usuário sem bloquear save da config
+        setError(`Configurações salvas, mas a sincronização para a vitrine pública falhou: ${msg}. Veja o console para detalhes.`);
       }
 
       if (isFirstSave) {
@@ -1108,7 +1137,13 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                               const file = e.target.files?.[0];
                               if (!file) return;
                               try {
-                                const url = await uploadEventCover('config_' + Date.now(), file);
+                                const compressed = await imageCompression(file, {
+                                  maxSizeMB: 0.5,
+                                  maxWidthOrHeight: 1600,
+                                  useWebWorker: true,
+                                  fileType: 'image/webp',
+                                });
+                                const url = await uploadEventCover('config_' + Date.now(), compressed);
                                 setGeneral(g => ({ ...g, coverUrl: url }));
                               } catch (err: any) {
                                 setError('Erro ao subir banner: ' + err.message);
