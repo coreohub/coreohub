@@ -94,7 +94,12 @@ const MesaDeSom = () => {
 
     window.speechSynthesis.cancel();
 
-    const text = `Apresentando agora, estúdio ${reg.estudio}, com a coreografia ${reg.nome_coreografia}`;
+    const template = config?.texto_ia?.trim()
+      || 'Com a coreografia [COREOGRAFIA], recebam no palco: [ESTUDIO]';
+    const text = template
+      .replaceAll('[COREOGRAFIA]', reg.nome_coreografia ?? '')
+      .replaceAll('[ESTUDIO]', reg.estudio ?? '');
+
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'pt-BR';
     utterance.rate = 0.9;
@@ -164,7 +169,7 @@ const MesaDeSom = () => {
               onClick={() => currentTrack && handleAnnounce(currentTrack)}
               disabled={!currentTrack}
               className="p-4 bg-white/5 text-white rounded-2xl hover:bg-white/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
-              title="Anunciar"
+              title="Anunciar com Narração IA"
             >
               <Volume2 size={24} className="group-hover:text-[#ff0068] transition-colors" />
             </button>
@@ -243,7 +248,7 @@ const MesaDeSom = () => {
                     <button
                       onClick={() => handleAnnounce(reg)}
                       className="p-2 text-slate-400 hover:text-[#ff0068] hover:bg-[#ff0068]/10 rounded-xl transition-all"
-                      title="Anunciar"
+                      title="Anunciar com Narração IA"
                     >
                       <Volume2 size={16} />
                     </button>
