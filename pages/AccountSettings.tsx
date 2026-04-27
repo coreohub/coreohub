@@ -37,6 +37,50 @@ const DEFAULT_CRITERIOS: EvalCriterion[] = [
 const buildDefaultTiebreaker = (cs: EvalCriterion[]) =>
   ['maior_media', ...cs.map(c => `criterio_${c.name}`)];
 
+/**
+ * Preserves the user's manual cascade order when criterios are added/removed/renamed.
+ * - Rename: detects mesmo idx com nome diferente, atualiza a referência
+ * - Add: anexa novo critério no final da cascata
+ * - Remove: filtra a referência removida
+ * - maior_media é garantido na cascata (inserido no topo se ausente)
+ */
+const reconcileTiebreaker = (
+  oldDesempate: string[],
+  oldCriterios: EvalCriterion[],
+  newCriterios: EvalCriterion[],
+): string[] => {
+  const renameMap: Record<string, string> = {};
+  oldCriterios.forEach((oldC, i) => {
+    const newC = newCriterios[i];
+    if (newC && oldC.name !== newC.name) {
+      renameMap[oldC.name] = newC.name;
+    }
+  });
+  const newNames = new Set(newCriterios.map(c => c.name));
+
+  const remapped = oldDesempate
+    .map(key => {
+      if (key === 'maior_media') return key;
+      const oldName = key.replace('criterio_', '');
+      const newName = renameMap[oldName] ?? oldName;
+      return `criterio_${newName}`;
+    })
+    .filter(key => {
+      if (key === 'maior_media') return true;
+      return newNames.has(key.replace('criterio_', ''));
+    });
+
+  const existing = new Set(remapped);
+  for (const c of newCriterios) {
+    const k = `criterio_${c.name}`;
+    if (!existing.has(k)) remapped.push(k);
+  }
+
+  if (!remapped.includes('maior_media')) remapped.unshift('maior_media');
+
+  return remapped;
+};
+
 const DEFAULT_GLOBAL_RULES: EvalRules = {
   criterios: DEFAULT_CRITERIOS,
   desempate: buildDefaultTiebreaker(DEFAULT_CRITERIOS),
@@ -594,15 +638,15 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
   /* ── helpers for GLOBAL rules ── */
   const updateGlobalCriterion = (idx: number, patch: Partial<EvalCriterion>) => {
     const criterios = globalRules.criterios.map((c, i) => i === idx ? { ...c, ...patch } : c);
-    setGlobalRules({ criterios, desempate: buildDefaultTiebreaker(criterios) });
+    setGlobalRules({ criterios, desempate: reconcileTiebreaker(globalRules.desempate, globalRules.criterios, criterios) });
   };
   const addGlobalCriterion = () => {
     const criterios = [...globalRules.criterios, { name: 'Novo Quesito', peso: 1 }];
-    setGlobalRules({ criterios, desempate: buildDefaultTiebreaker(criterios) });
+    setGlobalRules({ criterios, desempate: reconcileTiebreaker(globalRules.desempate, globalRules.criterios, criterios) });
   };
   const removeGlobalCriterion = (idx: number) => {
     const criterios = globalRules.criterios.filter((_, i) => i !== idx);
-    setGlobalRules({ criterios, desempate: buildDefaultTiebreaker(criterios) });
+    setGlobalRules({ criterios, desempate: reconcileTiebreaker(globalRules.desempate, globalRules.criterios, criterios) });
   };
   const moveGlobalTiebreaker = (idx: number, dir: 1 | -1) => {
     const d = [...globalRules.desempate];
@@ -616,17 +660,17 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
   const updateCriterion = (genreId: string, idx: number, patch: Partial<EvalCriterion>) => {
     const rules = getEffectiveRules(genreId);
     const criterios = rules.criterios.map((c, i) => i === idx ? { ...c, ...patch } : c);
-    setGenreOverrides(prev => ({ ...prev, [genreId]: { criterios, desempate: buildDefaultTiebreaker(criterios) } }));
+    setGenreOverrides(prev => ({ ...prev, [genreId]: { criterios, desempate: reconcileTiebreaker(rules.desempate, rules.criterios, criterios) } }));
   };
   const addCriterion = (genreId: string) => {
     const rules = getEffectiveRules(genreId);
     const criterios = [...rules.criterios, { name: 'Novo Quesito', peso: 1 }];
-    setGenreOverrides(prev => ({ ...prev, [genreId]: { criterios, desempate: buildDefaultTiebreaker(criterios) } }));
+    setGenreOverrides(prev => ({ ...prev, [genreId]: { criterios, desempate: reconcileTiebreaker(rules.desempate, rules.criterios, criterios) } }));
   };
   const removeCriterion = (genreId: string, idx: number) => {
     const rules = getEffectiveRules(genreId);
     const criterios = rules.criterios.filter((_, i) => i !== idx);
-    setGenreOverrides(prev => ({ ...prev, [genreId]: { criterios, desempate: buildDefaultTiebreaker(criterios) } }));
+    setGenreOverrides(prev => ({ ...prev, [genreId]: { criterios, desempate: reconcileTiebreaker(rules.desempate, rules.criterios, criterios) } }));
   };
   const moveTiebreaker = (genreId: string, idx: number, dir: 1 | -1) => {
     const rules = getEffectiveRules(genreId);
