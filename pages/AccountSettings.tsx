@@ -836,6 +836,86 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
 
       if (sbError) throw sbError;
 
+      // Sync configuracoes → events (vitrine pública)
+      // Falha aqui não bloqueia o save da config legacy.
+      try {
+        const cityState = (general.city || '').split(',').map(s => s.trim()).filter(Boolean);
+        const editionYear = general.eventDate
+          ? new Date(general.eventDate + 'T12:00:00').getFullYear()
+          : new Date().getFullYear();
+
+        const formacoesAdapted = formats.map((f: any) => {
+          const firstLote = f.lotes?.[0];
+          return {
+            id:           String(f.id),
+            name:         f.name,
+            min_members:  f.minMembers ?? 1,
+            max_members:  (f.minMembers ?? 1) > 1 ? 99 : 1,
+            fee:          firstLote?.preco ?? 0,
+            base_fee:     firstLote?.preco ?? 0,
+            pricing_type: f.pricingType ?? 'FIXED',
+            lotes:        f.lotes ?? [],
+            is_active:    true,
+          };
+        });
+
+        const slugify = (s: string) =>
+          s.toLowerCase()
+            .normalize('NFD').replace(/[̀-ͯ]/g, '')
+            .replace(/[^a-z0-9\s-]/g, '')
+            .trim().replace(/\s+/g, '-').replace(/-+/g, '-');
+
+        const eventPayload: Record<string, any> = {
+          name:                    general.eventName,
+          edition_year:            editionYear,
+          start_date:              general.eventDate || null,
+          end_date:                general.eventDate || null,
+          registration_deadline:   general.regDeadline || null,
+          address:                 general.location || null,
+          city:                    cityState[0] || null,
+          state:                   cityState[1] || null,
+          formacoes_config:        formacoesAdapted,
+          categories_config:       categories,
+          styles_config:           styles,
+          is_public:               true,
+          created_by:              user.id,
+        };
+
+        const { data: cfgRow } = await supabase
+          .from('configuracoes')
+          .select('event_id')
+          .eq('id', 1)
+          .single();
+
+        if (cfgRow?.event_id) {
+          await supabase.from('events').update(eventPayload).eq('id', cfgRow.event_id);
+        } else {
+          const baseSlug = slugify(`${general.eventName}-${editionYear}`);
+          const { data: newEvent, error: insertErr } = await supabase
+            .from('events')
+            .insert({ ...eventPayload, slug: baseSlug })
+            .select('id')
+            .single();
+
+          // Conflito de slug → tenta com sufixo aleatório
+          if (insertErr && (insertErr as any).code === '23505') {
+            const altSlug = `${baseSlug}-${Math.random().toString(36).slice(2, 7)}`;
+            const { data: retryEvent } = await supabase
+              .from('events')
+              .insert({ ...eventPayload, slug: altSlug })
+              .select('id')
+              .single();
+            if (retryEvent?.id) {
+              await supabase.from('configuracoes').update({ event_id: retryEvent.id }).eq('id', 1);
+            }
+          } else if (newEvent?.id) {
+            await supabase.from('configuracoes').update({ event_id: newEvent.id }).eq('id', 1);
+          }
+        }
+      } catch (syncErr) {
+        console.warn('[AccountSettings] Sync para events falhou (não bloqueia save):', syncErr);
+      }
+
       if (isFirstSave) {
         setIsFirstSave(false);
         const { data: profileData } = await supabase
