@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import AsaasBadge from '../components/AsaasBadge';
 
 const MetricCard = ({ title, value, sub, icon: Icon, trend, warn }: any) => (
   <motion.div
@@ -527,6 +528,10 @@ const ProducerDashboard = () => {
             </p>
           </div>
         </div>
+      </div>
+
+      <div className="pt-4 border-t border-slate-200 dark:border-white/5">
+        <AsaasBadge variant="inline" />
       </div>
     </div>
   );

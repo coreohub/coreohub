@@ -7,6 +7,7 @@ import {
   CreditCard, Loader2, AlertCircle, CheckCircle, ArrowLeft, ExternalLink,
   Music2, Users, Tag, Ticket, X, Calendar, Shield,
 } from 'lucide-react';
+import AsaasBadge from '../components/AsaasBadge';
 
 const SUPABASE_URL = 'https://ghpltzzijlvykiytwslu.supabase.co';
 
@@ -367,9 +368,14 @@ const Checkout = () => {
         )}
 
         {!isGovernment && (
-          <p className="text-center text-[10px] text-slate-400 px-4">
-            Ao clicar em "Pagar", você será redirecionado para o checkout seguro do Asaas. Sua inscrição será confirmada automaticamente após a aprovação do pagamento.
-          </p>
+          <>
+            <p className="text-center text-[10px] text-slate-400 px-4">
+              Ao clicar em "Pagar", você será redirecionado para o checkout seguro do Asaas. Sua inscrição será confirmada automaticamente após a aprovação do pagamento.
+            </p>
+            <div className="flex justify-center pt-2">
+              <AsaasBadge variant="compact" />
+            </div>
+          </>
         )}
       </div>
     </div>

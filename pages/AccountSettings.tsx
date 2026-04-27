@@ -5,6 +5,7 @@ import {
   addSubgenre, editSubgenre, removeSubgenre,
 } from '../services/genreService';
 import { EventStyle, Subgenre } from '../types';
+import AsaasBadge from '../components/AsaasBadge';
 import {
   Settings, Clock, Save, Plus, Pencil, Trash2,
   Music2, DollarSign, Users, AlertTriangle,
@@ -1787,9 +1788,12 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                         O repasse cai diretamente na sua chave PIX no momento em que o inscrito paga. A comissão da plataforma é descontada automaticamente.
                       </p>
                     </div>
+                    <AsaasBadge variant="inline" />
                   </div>
                 ) : (
                   <div className="space-y-4">
+                    <AsaasBadge variant="card" />
+
                     <div className="flex items-center gap-4 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-2xl">
                       <AlertCircle size={22} className="text-amber-500 shrink-0" />
                       <div className="flex-1">

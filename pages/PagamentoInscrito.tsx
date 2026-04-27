@@ -6,6 +6,7 @@ import {
   Music2, ArrowRight, Clapperboard, ExternalLink,
   RefreshCw, ShieldCheck, Receipt,
 } from 'lucide-react';
+import AsaasBadge from '../components/AsaasBadge';
 
 const SUPABASE_URL  = 'https://ghpltzzijlvykiytwslu.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdocGx0enppamx2eWtpeXR3c2x1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMDAyNjEsImV4cCI6MjA4NTg3NjI2MX0.AshAXh_5Dn2S3E74XbnDtxnb92kER8tAxEdZmKnywG8';
@@ -387,11 +388,16 @@ const PagamentoInscrito = () => {
 
       {/* Footer info */}
       {!loading && coreografias.length > 0 && (
-        <div className="flex items-center justify-center gap-2 pt-1">
-          <Receipt size={12} className="text-slate-400" />
-          <p className="text-center text-[9px] text-slate-400 leading-relaxed">
-            Cada coreografia é paga individualmente. Pagamento seguro via Mercado Pago.
-          </p>
+        <div className="space-y-2 pt-1">
+          <div className="flex items-center justify-center gap-2">
+            <Receipt size={12} className="text-slate-400" />
+            <p className="text-center text-[9px] text-slate-400 leading-relaxed">
+              Cada coreografia é paga individualmente. Pagamento seguro via Asaas.
+            </p>
+          </div>
+          <div className="flex justify-center">
+            <AsaasBadge variant="compact" />
+          </div>
         </div>
       )}
 
