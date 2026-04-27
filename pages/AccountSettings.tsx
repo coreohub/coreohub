@@ -261,12 +261,39 @@ const SCORE_SCALE_OPTIONS: { id: ScoreScale; label: string; desc: string; exampl
 
 const DEFAULT_MODALITIES = ['Danças Urbanas', 'Balé Clássico', 'K-Pop', 'Estilo Livre'];
 
-const DEFAULT_FORMATS = [
-  { id: 1, name: 'Solo',          price_lote1: 100, data_virada: '2026-05-01', price_lote2: 120, pricingType: 'FIXED',      minMembers: 1 },
-  { id: 2, name: 'Duo',           price_lote1: 160, data_virada: '2026-05-01', price_lote2: 180, pricingType: 'FIXED',      minMembers: 2 },
-  { id: 3, name: 'Trio',          price_lote1: 210, data_virada: '2026-05-01', price_lote2: 240, pricingType: 'FIXED',      minMembers: 3 },
-  { id: 4, name: 'Conjunto/Grupo',price_lote1: 45,  data_virada: '2026-05-01', price_lote2: 55,  pricingType: 'PER_MEMBER', minMembers: 4 },
+interface FormatLote { data_virada: string | null; preco: number }
+interface FormatItem {
+  id: number;
+  name: string;
+  lotes: FormatLote[];
+  pricingType: 'FIXED' | 'PER_MEMBER';
+  minMembers: number;
+}
+
+const DEFAULT_FORMATS: FormatItem[] = [
+  { id: 1, name: 'Solo',           lotes: [{ data_virada: '2026-05-01', preco: 100 }, { data_virada: null, preco: 120 }], pricingType: 'FIXED',      minMembers: 1 },
+  { id: 2, name: 'Duo',            lotes: [{ data_virada: '2026-05-01', preco: 160 }, { data_virada: null, preco: 180 }], pricingType: 'FIXED',      minMembers: 2 },
+  { id: 3, name: 'Trio',           lotes: [{ data_virada: '2026-05-01', preco: 210 }, { data_virada: null, preco: 240 }], pricingType: 'FIXED',      minMembers: 3 },
+  { id: 4, name: 'Conjunto/Grupo', lotes: [{ data_virada: '2026-05-01', preco: 45  }, { data_virada: null, preco: 55  }], pricingType: 'PER_MEMBER', minMembers: 4 },
 ];
+
+/** Migra formato legado (price_lote1/lote2/data_virada) pro modelo de N lotes */
+const migrateFormat = (f: any): FormatItem => {
+  if (Array.isArray(f.lotes) && f.lotes.length > 0) {
+    return { ...f, lotes: f.lotes };
+  }
+  const lotes: FormatLote[] = [];
+  if (f.price_lote1 != null) lotes.push({ data_virada: f.data_virada || null, preco: Number(f.price_lote1) });
+  if (f.price_lote2 != null) lotes.push({ data_virada: null, preco: Number(f.price_lote2) });
+  if (lotes.length === 0) lotes.push({ data_virada: null, preco: 0 });
+  return {
+    id: f.id,
+    name: f.name,
+    lotes,
+    pricingType: f.pricingType ?? 'FIXED',
+    minMembers: f.minMembers ?? 1,
+  };
+};
 
 const DEFAULT_CATEGORIES = [
   { id: 1, name: 'Infantil', min: 7,  max: 11 },
@@ -310,7 +337,7 @@ const SUBGENRE_SUGGESTIONS: Record<string, string[]> = {
 };
 
 /* ─── shared input style ─── */
-const input = 'w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-5 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm';
+const input = 'w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-5 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm dark:[color-scheme:dark]';
 const label = 'block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5 ml-1';
 
 /* ═══════════════════════ EventCommissionCard ═══════════════════════ */
@@ -717,7 +744,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
             medalThresholds: data.medal_thresholds ?? DEFAULT_GENERAL.medalThresholds,
           });
           setStyles(data.estilos?.length    ? data.estilos    : DEFAULT_MODALITIES);
-          setFormats(data.formatos?.length  ? data.formatos   : DEFAULT_FORMATS);
+          setFormats(data.formatos?.length ? data.formatos.map(migrateFormat) : DEFAULT_FORMATS);
           setCategories(data.categorias?.length ? data.categorias : DEFAULT_CATEGORIES);
           setLinks(data.links || []);
           if (data.tolerancia) setToleranceRule(data.tolerancia);
@@ -844,13 +871,13 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
   const openAdd = () => {
     setModalMode('add');
     setEditingId(null);
-    setTempValue(activeTab === 'Formações' ? { pricingType: 'FIXED', minMembers: 1 } : {});
+    setTempValue(activeTab === 'Formações' ? { pricingType: 'FIXED', minMembers: 1, lotes: [{ data_virada: null, preco: 0 }] } : {});
     setIsModalOpen(true);
   };
   const openEdit = (id: number | string, data: any) => {
     setModalMode('edit');
     setEditingId(id);
-    setTempValue(data);
+    setTempValue(activeTab === 'Formações' ? migrateFormat(data) : data);
     setIsModalOpen(true);
   };
   const handleDelete = (id: number | string) => {
@@ -860,8 +887,9 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
   };
   const handleModalSubmit = () => {
     if (activeTab === 'Formações') {
-      if (modalMode === 'add') setFormats([...formats, { ...tempValue, id: Date.now() }]);
-      else setFormats(formats.map(f => f.id === editingId ? { ...tempValue, id: editingId } : f));
+      const { price_lote1, price_lote2, data_virada, ...clean } = tempValue;
+      if (modalMode === 'add') setFormats([...formats, { ...clean, id: Date.now() }]);
+      else setFormats(formats.map(f => f.id === editingId ? { ...clean, id: editingId } : f));
     }
     if (activeTab === 'Categorias') {
       if (modalMode === 'add') setCategories([...categories, { ...tempValue, id: Date.now() }]);
@@ -1291,20 +1319,19 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-6 mr-4">
-                    <div className="text-center">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Lote 1</p>
-                      <p className="font-black text-[#ff0068]">R$ {f.price_lote1}</p>
-                    </div>
-                    <div className="w-px h-8 bg-slate-200 dark:bg-white/10" />
-                    <div className="text-center">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Lote 2</p>
-                      <p className="font-black text-slate-900 dark:text-white">R$ {f.price_lote2}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Virada</p>
-                      <p className="font-bold text-xs text-slate-900 dark:text-white">{f.data_virada}</p>
-                    </div>
+                  <div className="flex items-center gap-3 mr-4 flex-wrap justify-end">
+                    {(f.lotes ?? []).map((lote: FormatLote, i: number) => (
+                      <React.Fragment key={i}>
+                        {i > 0 && <div className="w-px h-8 bg-slate-200 dark:bg-white/10" />}
+                        <div className="text-center">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Lote {i + 1}</p>
+                          <p className={`font-black ${i === 0 ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>R$ {lote.preco}</p>
+                          <p className="text-[9px] text-slate-400 mt-0.5">
+                            {lote.data_virada ? `até ${lote.data_virada}` : 'até prazo final'}
+                          </p>
+                        </div>
+                      </React.Fragment>
+                    ))}
                   </div>
                   <ActBtns onEdit={() => openEdit(f.id, f)} onDelete={() => handleDelete(f.id)} />
                 </Row>
@@ -2255,27 +2282,79 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
   /* ── modal content ── */
   const renderModalContent = () => {
     switch (activeTab) {
-      case 'Formações':
+      case 'Formações': {
+        const lotes: FormatLote[] = Array.isArray(tempValue.lotes) && tempValue.lotes.length > 0
+          ? tempValue.lotes
+          : [{ data_virada: null, preco: 0 }];
+
+        const updateLote = (idx: number, patch: Partial<FormatLote>) => {
+          const next = lotes.map((l, i) => i === idx ? { ...l, ...patch } : l);
+          setTempValue((v: any) => ({ ...v, lotes: next }));
+        };
+        const addLote = () => {
+          // novo lote vai pro penúltimo (último é sempre o "até prazo final")
+          const next = [...lotes];
+          next.splice(next.length - 1, 0, { data_virada: '', preco: 0 });
+          setTempValue((v: any) => ({ ...v, lotes: next }));
+        };
+        const removeLote = (idx: number) => {
+          if (lotes.length <= 1) return;
+          const next = lotes.filter((_, i) => i !== idx);
+          // garante que o último não tem data_virada
+          if (next.length > 0) next[next.length - 1] = { ...next[next.length - 1], data_virada: null };
+          setTempValue((v: any) => ({ ...v, lotes: next }));
+        };
+
         return (
           <div className="space-y-4">
             <div>
               <label className={label}>Nome do Formato</label>
               <input type="text" value={tempValue.name || ''} onChange={e => setTempValue((v: any) => ({ ...v, name: e.target.value }))} placeholder="Ex: Solo, Duo, Grupo..." className={input} />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={label}>Preço Lote 1 (R$)</label>
-                <input type="number" value={tempValue.price_lote1 || ''} onChange={e => setTempValue((v: any) => ({ ...v, price_lote1: Number(e.target.value) }))} className={input} />
-              </div>
-              <div>
-                <label className={label}>Preço Lote 2 (R$)</label>
-                <input type="number" value={tempValue.price_lote2 || ''} onChange={e => setTempValue((v: any) => ({ ...v, price_lote2: Number(e.target.value) }))} className={input} />
-              </div>
-            </div>
+
             <div>
-              <label className={label}>Data de Virada de Lote</label>
-              <input type="date" value={tempValue.data_virada || ''} onChange={e => setTempValue((v: any) => ({ ...v, data_virada: e.target.value }))} className={input} />
+              <div className="flex items-center justify-between mb-2">
+                <label className={label}>Lotes de Preço</label>
+                <button onClick={addLote} className="text-[10px] font-black uppercase tracking-widest text-[#ff0068] hover:text-[#e0005c] flex items-center gap-1">
+                  <Plus size={12} /> Adicionar Lote
+                </button>
+              </div>
+              <div className="space-y-2">
+                {lotes.map((lote, i) => {
+                  const isLast = i === lotes.length - 1;
+                  return (
+                    <div key={i} className="flex gap-2 items-start bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-2xl p-3">
+                      <div className="w-12 shrink-0 pt-2.5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Lote {i + 1}</p>
+                      </div>
+                      <div className="flex-1 grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">Preço (R$)</label>
+                          <input type="number" min={0} value={lote.preco || ''} onChange={e => updateLote(i, { preco: Number(e.target.value) })} className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 font-bold text-sm" />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">
+                            {isLast ? 'Até prazo final' : 'Vira em'}
+                          </label>
+                          {isLast ? (
+                            <input type="text" disabled value="Prazo de inscrição" className="w-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-xl py-2 px-3 text-slate-400 text-xs italic cursor-not-allowed" />
+                          ) : (
+                            <input type="date" value={lote.data_virada || ''} onChange={e => updateLote(i, { data_virada: e.target.value })} className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 font-bold text-sm dark:[color-scheme:dark]" />
+                          )}
+                        </div>
+                      </div>
+                      {lotes.length > 1 && (
+                        <button onClick={() => removeLote(i)} className="p-2 text-slate-400 hover:text-red-500 transition-colors shrink-0" title="Remover lote">
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-[9px] text-slate-400 mt-2">O último lote vai até o prazo de inscrição configurado em <strong>Geral</strong>.</p>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={label}>Tipo de Cobrança</label>
@@ -2291,6 +2370,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
             </div>
           </div>
         );
+      }
       case 'Categorias':
         return (
           <div className="space-y-4">
@@ -2310,10 +2390,10 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                   min={0}
                   value={tempValue.max || ''}
                   onChange={e => setTempValue((v: any) => ({ ...v, max: e.target.value === '' ? null : Number(e.target.value) }))}
-                  placeholder="Deixe em branco para sem limite"
+                  placeholder="∞ sem limite"
                   className={input}
                 />
-                <p className="text-[9px] text-slate-400 mt-1">Sem limite = "{tempValue.min || 0}+ anos"</p>
+                <p className="text-[9px] text-slate-400 mt-1">Vazio = "{tempValue.min || 0}+ anos"</p>
               </div>
             </div>
           </div>
