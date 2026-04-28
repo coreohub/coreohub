@@ -307,6 +307,9 @@ const DEFAULT_GENERAL = {
 interface ProgramItem { hora: string; atividade: string }
 const DEFAULT_PROGRAMACAO: ProgramItem[] = [];
 
+interface TicketType { nome: string; preco: number; obs?: string; link?: string }
+interface Sponsor    { nome: string; logo_url: string; link?: string }
+
 const SCORE_SCALE_OPTIONS: { id: ScoreScale; label: string; desc: string; example: string }[] = [
   { id: 'BASE_10',  label: 'Base 10 — Decimal',    desc: 'Notas de 0,00 a 10,00 com casas decimais',     example: 'Ex: 9,8' },
   { id: 'BASE_100', label: 'Base 100 — Centesimal', desc: 'Notas inteiras de 0 a 100, sem vírgula',        example: 'Ex: 98' },
@@ -613,6 +616,8 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
 
   const [general, setGeneral] = useState({ ...DEFAULT_GENERAL });
   const [programacao, setProgramacao] = useState<ProgramItem[]>([]);
+  const [ingressos, setIngressos]     = useState<TicketType[]>([]);
+  const [sponsors, setSponsors]       = useState<Sponsor[]>([]);
   const [styles,  setStyles]  = useState<string[]>(DEFAULT_MODALITIES);
   const [formats, setFormats] = useState<any[]>(DEFAULT_FORMATS);
   const [categories, setCategories] = useState<any[]>(DEFAULT_CATEGORIES);
@@ -802,6 +807,8 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
             eventTime:   data.hora_evento ?? DEFAULT_GENERAL.eventTime,
           });
           if (Array.isArray(data.programacao)) setProgramacao(data.programacao);
+          if (Array.isArray(data.ingressos_audiencia)) setIngressos(data.ingressos_audiencia);
+          if (Array.isArray(data.patrocinadores))     setSponsors(data.patrocinadores);
           setStyles(data.estilos?.length    ? data.estilos    : DEFAULT_MODALITIES);
           setFormats(data.formatos?.length ? data.formatos.map(migrateFormat) : DEFAULT_FORMATS);
           setCategories(data.categorias?.length ? data.categorias : DEFAULT_CATEGORIES);
@@ -878,6 +885,8 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         descricao:           general.description || null,
         hora_evento:         general.eventTime || null,
         programacao:         programacao,
+        ingressos_audiencia: ingressos,
+        patrocinadores:      sponsors,
         estilos:             styles,
         formatos:            formats,
         categorias:          categories,
@@ -943,6 +952,8 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
           styles_config:           styles,
           event_time:              general.eventTime || null,
           programacao_config:      programacao,
+          ingressos_config:        ingressos,
+          patrocinadores_config:   sponsors,
           is_public:               true,
           created_by:              user.id,
         };
@@ -1329,6 +1340,149 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                       <button
                         onClick={() => setProgramacao(p => p.filter((_, idx) => idx !== i))}
                         className="p-2 text-slate-400 hover:text-red-500 shrink-0"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Ingressos para Audiência */}
+            <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><DollarSign size={18} /></div>
+                  <div>
+                    <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Ingressos para Audiência</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Tipos de ingresso pra quem vai assistir (pais, amigos, público em geral). Diferente da inscrição do bailarino.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIngressos(t => [...t, { nome: '', preco: 0, obs: '', link: '' }])}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#ff0068]/10 text-[#ff0068] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0068]/20 shrink-0"
+                >
+                  <Plus size={12} /> Adicionar Tipo
+                </button>
+              </div>
+              <div className="space-y-3 mt-4">
+                {ingressos.length === 0 ? (
+                  <p className="text-center text-slate-400 py-8 text-xs italic">Nenhum tipo. Ex: "Meia Entrada R$10 + 1kg de alimento" ou "Inteira R$20".</p>
+                ) : (
+                  ingressos.map((item, i) => (
+                    <div key={i} className="grid grid-cols-12 gap-2 items-start bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-xl p-3">
+                      <input
+                        type="text"
+                        value={item.nome}
+                        onChange={e => setIngressos(t => t.map((x, idx) => idx === i ? { ...x, nome: e.target.value } : x))}
+                        placeholder="Nome (Ex: Meia Entrada)"
+                        className="col-span-4 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                      />
+                      <input
+                        type="number"
+                        min={0} step={0.01}
+                        value={item.preco || ''}
+                        onChange={e => setIngressos(t => t.map((x, idx) => idx === i ? { ...x, preco: Number(e.target.value) } : x))}
+                        placeholder="Preço"
+                        className="col-span-2 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                      />
+                      <input
+                        type="text"
+                        value={item.obs ?? ''}
+                        onChange={e => setIngressos(t => t.map((x, idx) => idx === i ? { ...x, obs: e.target.value } : x))}
+                        placeholder="Obs (Ex: + 1kg alimento)"
+                        className="col-span-3 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                      />
+                      <input
+                        type="text"
+                        value={item.link ?? ''}
+                        onChange={e => setIngressos(t => t.map((x, idx) => idx === i ? { ...x, link: e.target.value } : x))}
+                        placeholder="Link compra (opc.)"
+                        className="col-span-2 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                      />
+                      <button
+                        onClick={() => setIngressos(t => t.filter((_, idx) => idx !== i))}
+                        className="col-span-1 p-2 text-slate-400 hover:text-red-500 self-center justify-self-center"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Patrocinadores / Apoiadores */}
+            <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Award size={18} /></div>
+                  <div>
+                    <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Patrocinadores & Apoiadores</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Logos que aparecem na vitrine pública. Ex: prefeitura, secretaria de cultura, marcas patrocinadoras.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSponsors(s => [...s, { nome: '', logo_url: '', link: '' }])}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#ff0068]/10 text-[#ff0068] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0068]/20 shrink-0"
+                >
+                  <Plus size={12} /> Adicionar
+                </button>
+              </div>
+              <div className="space-y-3 mt-4">
+                {sponsors.length === 0 ? (
+                  <p className="text-center text-slate-400 py-8 text-xs italic">Nenhum patrocinador cadastrado.</p>
+                ) : (
+                  sponsors.map((sp, i) => (
+                    <div key={i} className="grid grid-cols-12 gap-2 items-center bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-xl p-3">
+                      <div className="col-span-2 flex items-center justify-center">
+                        {sp.logo_url ? (
+                          <img src={sp.logo_url} alt={sp.nome} className="h-12 max-w-full object-contain" />
+                        ) : (
+                          <label className="cursor-pointer flex items-center justify-center h-12 w-full border-2 border-dashed border-slate-300 dark:border-white/10 rounded-lg text-slate-400 hover:text-[#ff0068] hover:border-[#ff0068]/40">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                try {
+                                  const compressed = await imageCompression(file, {
+                                    maxSizeMB: 0.2,
+                                    maxWidthOrHeight: 400,
+                                    useWebWorker: true,
+                                    fileType: 'image/webp',
+                                  });
+                                  const url = await uploadEventCover('sponsor_' + Date.now(), compressed);
+                                  setSponsors(s => s.map((x, idx) => idx === i ? { ...x, logo_url: url } : x));
+                                } catch (err: any) {
+                                  setError('Erro ao subir logo: ' + err.message);
+                                }
+                              }}
+                            />
+                            <Upload size={14} />
+                          </label>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        value={sp.nome}
+                        onChange={e => setSponsors(s => s.map((x, idx) => idx === i ? { ...x, nome: e.target.value } : x))}
+                        placeholder="Nome"
+                        className="col-span-4 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                      />
+                      <input
+                        type="url"
+                        value={sp.link ?? ''}
+                        onChange={e => setSponsors(s => s.map((x, idx) => idx === i ? { ...x, link: e.target.value } : x))}
+                        placeholder="https://site-do-patrocinador.com (opc.)"
+                        className="col-span-5 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                      />
+                      <button
+                        onClick={() => setSponsors(s => s.filter((_, idx) => idx !== i))}
+                        className="col-span-1 p-2 text-slate-400 hover:text-red-500 self-center justify-self-center"
                       >
                         <Trash2 size={14} />
                       </button>

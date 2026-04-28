@@ -235,6 +235,41 @@ const PublicEventPage = () => {
           </div>
         )}
 
+        {/* Ingressos para Audiência */}
+        {Array.isArray(event.ingressos_config) && event.ingressos_config.filter((t: any) => t.nome).length > 0 && (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
+              <Ticket size={24} className="text-[#ff0068]" /> Ingressos
+            </h2>
+            <p className="text-xs text-slate-400">Para o público que vai assistir. Bailarinos inscritos não precisam comprar.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {event.ingressos_config
+                .filter((t: any) => t.nome)
+                .map((t: any, i: number) => (
+                  <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col gap-2 hover:border-[#ff0068]/40 transition-colors">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="font-black uppercase text-sm text-white">{t.nome}</p>
+                      <p className="text-[#ff0068] font-black text-lg">
+                        {Number(t.preco) > 0 ? `R$ ${Number(t.preco).toFixed(2)}` : 'Grátis'}
+                      </p>
+                    </div>
+                    {t.obs && <p className="text-[10px] text-slate-400">{t.obs}</p>}
+                    {t.link && (
+                      <a
+                        href={t.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="self-start inline-flex items-center gap-1.5 text-[10px] font-black text-[#ff0068] uppercase tracking-widest hover:underline"
+                      >
+                        Comprar <ExternalLink size={10} />
+                      </a>
+                    )}
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
         {/* Modalities */}
         {event.formacoes_config && event.formacoes_config.length > 0 && (
           <div className="space-y-4">
@@ -315,6 +350,33 @@ const PublicEventPage = () => {
                   <Globe size={16} /> Site oficial
                 </a>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Patrocinadores */}
+        {Array.isArray(event.patrocinadores_config) && event.patrocinadores_config.filter((s: any) => s.logo_url).length > 0 && (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-black uppercase tracking-tighter">Realização & Apoio</h2>
+            <div className="bg-white/5 border border-white/10 rounded-3xl p-8">
+              <div className="flex flex-wrap items-center justify-center gap-8">
+                {event.patrocinadores_config
+                  .filter((s: any) => s.logo_url)
+                  .map((s: any, i: number) => {
+                    const Img = (
+                      <img
+                        src={s.logo_url}
+                        alt={s.nome || 'Patrocinador'}
+                        className="h-12 md:h-16 max-w-[180px] object-contain opacity-90 hover:opacity-100 transition-opacity"
+                      />
+                    );
+                    return s.link ? (
+                      <a key={i} href={s.link} target="_blank" rel="noopener noreferrer" title={s.nome}>{Img}</a>
+                    ) : (
+                      <div key={i} title={s.nome}>{Img}</div>
+                    );
+                  })}
+              </div>
             </div>
           </div>
         )}
