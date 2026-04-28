@@ -1,11 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Save, ArrowLeft, FileText,
   Settings, Info, RefreshCw,
   Scale, AlertCircle, Sparkles,
-  Upload, Trash2, Check
+  Upload, Trash2, Check, CloudOff,
 } from 'lucide-react';
+
+const DRAFT_KEY = 'coreohub_create_event_draft';
 import { motion, AnimatePresence } from 'motion/react';
 import { createEvent, supabase } from '../services/supabase';
 import { extractRegulationData } from '../services/geminiService';
@@ -24,6 +26,8 @@ const CreateEvent = () => {
   const [error, setError] = useState<string | null>(null);
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
+  const draftTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -78,6 +82,25 @@ const CreateEvent = () => {
 
   const [newModality, setNewModality] = useState({ name: '', min_members: 1, max_members: 1, fee: 0, slots_limit: 0, weight: 0, format: EventFormat.RANKING, categories: [] as string[] });
   const [analyzing, setAnalyzing] = useState(false);
+
+  // Restore draft on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(DRAFT_KEY);
+    if (saved) {
+      try { setFormData(JSON.parse(saved)); } catch {}
+    }
+  }, []);
+
+  // Auto-save draft 800ms after last change
+  useEffect(() => {
+    clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(formData));
+      setDraftSaved(true);
+      setTimeout(() => setDraftSaved(false), 2000);
+    }, 800);
+    return () => clearTimeout(draftTimer.current);
+  }, [formData]);
 
   const handleAddModality = () => {
     if (newModality.name.trim()) {
@@ -152,6 +175,7 @@ const CreateEvent = () => {
       if (!user) throw new Error('Não autenticado');
       const slug = `${slugify(formData.name)}-${Math.random().toString(36).substring(2, 8)}`;
       await createEvent({ ...formData, slug, created_by: user.id });
+      localStorage.removeItem(DRAFT_KEY);
       setSuccess(true);
       setTimeout(() => navigate('/dashboard'), 2000);
     } catch (err: any) {
@@ -162,49 +186,60 @@ const CreateEvent = () => {
   };
 
   const tabs = [
-    { id: 'general', label: 'Identidade', icon: Info },
-    { id: 'regulation', label: 'Documentos', icon: FileText },
-    { id: 'technical', label: 'Regras Técnicas', icon: Settings },
-    { id: 'judging', label: 'Julgamento', icon: Scale },
+    { id: 'general',    label: 'Identidade',     short: 'Geral',  icon: Info     },
+    { id: 'regulation', label: 'Documentos',      short: 'Docs',   icon: FileText },
+    { id: 'technical',  label: 'Regras Técnicas', short: 'Regras', icon: Settings },
+    { id: 'judging',    label: 'Julgamento',      short: 'Juri',   icon: Scale    },
   ];
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 p-4 md:p-0">
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/dashboard')} className="p-3 bg-white/5 rounded-2xl border border-white/5 text-slate-400 hover:text-white transition-all">
-            <ArrowLeft size={20} />
+    <div className="max-w-5xl mx-auto space-y-6 p-4 md:p-0">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <button onClick={() => navigate('/dashboard')} className="shrink-0 p-2.5 bg-white/5 rounded-2xl border border-white/5 text-slate-400 hover:text-white transition-all">
+            <ArrowLeft size={18} />
           </button>
-          <div>
-            <h1 className="text-3xl font-black text-white uppercase tracking-tighter">Criar <span className="text-[#ff0068]">Festival</span></h1>
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Setup inicial do seu evento</p>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-3xl font-black text-white uppercase tracking-tighter leading-none">
+              Criar <span className="text-[#ff0068]">Festival</span>
+            </h1>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-slate-500 text-[9px] font-bold uppercase tracking-widest hidden sm:block">Setup inicial do seu evento</p>
+              {draftSaved && (
+                <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1">
+                  <Check size={9} /> Rascunho salvo
+                </span>
+              )}
+            </div>
           </div>
         </div>
         <button
           onClick={handleCreate}
           disabled={isSaving}
-          className="px-8 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2 shadow-xl shadow-[#ff0068]/20"
+          className="shrink-0 px-4 sm:px-8 py-3 sm:py-4 bg-[#ff0068] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2 shadow-xl shadow-[#ff0068]/20"
         >
-          {isSaving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
-          {isSaving ? 'Salvando...' : 'Salvar Festival'}
+          {isSaving ? <RefreshCw size={15} className="animate-spin" /> : <Save size={15} />}
+          <span className="hidden sm:inline">{isSaving ? 'Salvando...' : 'Salvar Festival'}</span>
         </button>
       </div>
 
       {error && <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-rose-500 text-[10px] font-black uppercase tracking-widest flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
 
-      <div className="flex gap-2 p-2 bg-slate-900/50 rounded-3xl border border-white/5">
+      <div className="flex gap-1.5 p-1.5 bg-slate-900/50 rounded-3xl border border-white/5">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as TabType)}
-            className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === tab.id ? 'bg-white/10 text-[#e3ff0a] shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+            className={`flex-1 py-3 sm:py-4 rounded-2xl font-black text-[9px] sm:text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 ${activeTab === tab.id ? 'bg-white/10 text-[#e3ff0a] shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
           >
-            <tab.icon size={16} /> {tab.label}
+            <tab.icon size={14} className="shrink-0" />
+            <span className="hidden sm:inline">{tab.label}</span>
+            <span className="sm:hidden">{tab.short}</span>
           </button>
         ))}
       </div>
 
-      <div className="bg-slate-900/40 p-8 md:p-12 rounded-[3rem] border border-white/5 shadow-2xl min-h-[500px]">
+      <div className="bg-slate-900/40 p-4 sm:p-8 md:p-12 rounded-2xl sm:rounded-[3rem] border border-white/5 shadow-2xl min-h-[500px]">
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
             {activeTab === 'general' && (
