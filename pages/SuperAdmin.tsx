@@ -21,6 +21,7 @@ interface ProducerRow {
   events_count: number;
   total_gross: number;
   total_commission: number;
+  default_commission_percent: number;
 }
 
 interface CommissionRow {
@@ -68,6 +69,7 @@ const SuperAdmin = () => {
   const [inviteSaving, setInviteSaving]       = useState(false);
   const [inviteError, setInviteError]         = useState<string | null>(null);
   const [copiedToken, setCopiedToken]         = useState<string | null>(null);
+  const [editingCommission, setEditingCommission] = useState<{ id: string; value: string } | null>(null);
 
   /* Verificação de acesso */
   useEffect(() => {
@@ -99,7 +101,7 @@ const SuperAdmin = () => {
             .select('*')
             .order('created_at', { ascending: false }),
           supabase.from('profiles')
-            .select('id, full_name, email, is_blocked, asaas_subconta_id'),
+            .select('id, full_name, email, is_blocked, asaas_subconta_id, default_commission_percent'),
           supabase.from('events')
             .select('id, name, slug, created_by, start_date, event_type, commission_type, commission_percent, commission_fixed, fee_mode, is_public')
             .order('start_date', { ascending: false }),
@@ -140,6 +142,7 @@ const SuperAdmin = () => {
             events_count:      eventsByProducer.get(p.id) ?? 0,
             total_gross:       grossByProducer.get(p.id) ?? 0,
             total_commission:  commissionByProducer.get(p.id) ?? 0,
+            default_commission_percent: Number(p.default_commission_percent ?? 10),
           }))
           .sort((a, b) => b.total_commission - a.total_commission);
         setProducers(enriched);
@@ -265,6 +268,18 @@ const SuperAdmin = () => {
     const { error: updErr } = await supabase.from('events').update({ is_public: next }).eq('id', ev.id);
     if (updErr) { alert('Falha: ' + updErr.message); return; }
     setEventsList(list => list.map(e => e.id === ev.id ? { ...e, is_public: next } : e));
+  };
+
+  const handleSaveProducerCommission = async (producerId: string) => {
+    if (!editingCommission || editingCommission.id !== producerId) return;
+    const percent = parseFloat(editingCommission.value);
+    if (isNaN(percent) || percent < 0 || percent > 100) { alert('Valor inválido (0–100).'); return; }
+    const { error: updErr } = await supabase.from('profiles')
+      .update({ default_commission_percent: percent })
+      .eq('id', producerId);
+    if (updErr) { alert('Falha: ' + updErr.message); return; }
+    setProducers(list => list.map(p => p.id === producerId ? { ...p, default_commission_percent: percent } : p));
+    setEditingCommission(null);
   };
 
   const handleExportCSV = () => {
@@ -627,6 +642,7 @@ const SuperAdmin = () => {
                       <th className="px-4 py-3">Eventos</th>
                       <th className="px-4 py-3">GMV</th>
                       <th className="px-4 py-3">Comissão</th>
+                      <th className="px-4 py-3 text-center" title="Comissão padrão aplicada aos eventos deste produtor">% Padrão</th>
                       <th className="px-4 py-3">Asaas</th>
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3 text-right" />
@@ -642,6 +658,38 @@ const SuperAdmin = () => {
                         <td className="px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300">{p.events_count}</td>
                         <td className="px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 tabular-nums">R$ {p.total_gross.toFixed(2)}</td>
                         <td className="px-4 py-3 text-xs font-black text-[#ff0068] tabular-nums">R$ {p.total_commission.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-center">
+                          {editingCommission?.id === p.id ? (
+                            <div className="flex items-center gap-1 justify-center">
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={0.5}
+                                value={editingCommission.value}
+                                onChange={e => setEditingCommission({ id: p.id, value: e.target.value })}
+                                onKeyDown={e => { if (e.key === 'Enter') handleSaveProducerCommission(p.id); if (e.key === 'Escape') setEditingCommission(null); }}
+                                autoFocus
+                                className="w-14 bg-slate-100 dark:bg-white/10 border border-[#ff0068]/40 rounded-lg px-2 py-1 text-xs font-black text-center text-slate-900 dark:text-white outline-none"
+                              />
+                              <span className="text-[10px] text-slate-400 font-black">%</span>
+                              <button onClick={() => handleSaveProducerCommission(p.id)} className="p-1 rounded-lg text-emerald-500 hover:bg-emerald-500/10"><Check size={12} /></button>
+                              <button onClick={() => setEditingCommission(null)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5"><X size={12} /></button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setEditingCommission({ id: p.id, value: String(p.default_commission_percent) })}
+                              className={`text-[10px] font-black px-2 py-0.5 rounded-full transition-colors hover:ring-1 hover:ring-[#ff0068]/40 ${
+                                p.default_commission_percent === 0
+                                  ? 'text-emerald-500 bg-emerald-500/10'
+                                  : 'text-[#ff0068] bg-[#ff0068]/10'
+                              }`}
+                              title="Clique para editar"
+                            >
+                              {p.default_commission_percent}%
+                            </button>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           {p.asaas_subconta_id
                             ? <span className="text-[9px] font-black uppercase text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">Conectado</span>
