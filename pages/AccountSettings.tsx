@@ -293,6 +293,7 @@ const DEFAULT_GENERAL = {
   location: 'Concha Acústica',
   city: 'Votuporanga, SP',
   eventDate: '2026-07-11',
+  eventTime: '19:00',
   regDeadline: '2026-06-30',
   trackDeadline: '2026-07-05',
   tipos_apresentacao: ['Competitiva', 'Avaliada'],
@@ -302,6 +303,9 @@ const DEFAULT_GENERAL = {
   coverUrl: '',
   description: '',
 };
+
+interface ProgramItem { hora: string; atividade: string }
+const DEFAULT_PROGRAMACAO: ProgramItem[] = [];
 
 const SCORE_SCALE_OPTIONS: { id: ScoreScale; label: string; desc: string; example: string }[] = [
   { id: 'BASE_10',  label: 'Base 10 — Decimal',    desc: 'Notas de 0,00 a 10,00 com casas decimais',     example: 'Ex: 9,8' },
@@ -608,6 +612,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
   };
 
   const [general, setGeneral] = useState({ ...DEFAULT_GENERAL });
+  const [programacao, setProgramacao] = useState<ProgramItem[]>([]);
   const [styles,  setStyles]  = useState<string[]>(DEFAULT_MODALITIES);
   const [formats, setFormats] = useState<any[]>(DEFAULT_FORMATS);
   const [categories, setCategories] = useState<any[]>(DEFAULT_CATEGORIES);
@@ -794,7 +799,9 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
             medalThresholds: data.medal_thresholds ?? DEFAULT_GENERAL.medalThresholds,
             coverUrl:    data.cover_url   ?? DEFAULT_GENERAL.coverUrl,
             description: data.descricao   ?? DEFAULT_GENERAL.description,
+            eventTime:   data.hora_evento ?? DEFAULT_GENERAL.eventTime,
           });
+          if (Array.isArray(data.programacao)) setProgramacao(data.programacao);
           setStyles(data.estilos?.length    ? data.estilos    : DEFAULT_MODALITIES);
           setFormats(data.formatos?.length ? data.formatos.map(migrateFormat) : DEFAULT_FORMATS);
           setCategories(data.categorias?.length ? data.categorias : DEFAULT_CATEGORIES);
@@ -869,6 +876,8 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         medal_thresholds:    general.medalThresholds,
         cover_url:           general.coverUrl || null,
         descricao:           general.description || null,
+        hora_evento:         general.eventTime || null,
+        programacao:         programacao,
         estilos:             styles,
         formatos:            formats,
         categorias:          categories,
@@ -932,6 +941,8 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
           formacoes_config:        formacoesAdapted,
           categories_config:       categories,
           styles_config:           styles,
+          event_time:              general.eventTime || null,
+          programacao_config:      programacao,
           is_public:               true,
           created_by:              user.id,
         };
@@ -1224,6 +1235,16 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                     <input type="date" value={general.eventDate} onChange={e => setGeneral({ ...general, eventDate: e.target.value })} className={input} />
                   </div>
                 </div>
+                <div>
+                  <label className={label}>Hora de Início</label>
+                  <input
+                    type="time"
+                    value={general.eventTime}
+                    onChange={e => setGeneral({ ...general, eventTime: e.target.value })}
+                    className={input}
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">Aparece na vitrine pública. Ex: 19:00</p>
+                </div>
               </div>
 
               {/* Prazos */}
@@ -1240,6 +1261,80 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                   <label className={label}>Prazo Final de Envio de Trilhas</label>
                   <input type="date" value={general.trackDeadline} onChange={e => setGeneral({ ...general, trackDeadline: e.target.value })} className={input} />
                 </div>
+              </div>
+            </div>
+
+            {/* Programação Detalhada */}
+            <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Clock size={18} /></div>
+                  <div>
+                    <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Programação do Evento</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Linha do tempo que aparece na página pública. Adicione cada bloco com horário e atividade.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setProgramacao(p => [...p, { hora: '', atividade: '' }])}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#ff0068]/10 text-[#ff0068] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0068]/20 shrink-0"
+                >
+                  <Plus size={12} /> Adicionar Bloco
+                </button>
+              </div>
+              <div className="space-y-2 mt-4">
+                {programacao.length === 0 ? (
+                  <p className="text-center text-slate-400 py-8 text-xs italic">Nenhum bloco. Clique em "Adicionar Bloco" — Ex: "18h Solenidade", "19h Mostra de Dança", "21h Premiação".</p>
+                ) : (
+                  programacao.map((item, i) => (
+                    <div key={i} className="flex gap-2 items-center bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-xl p-3">
+                      <input
+                        type="time"
+                        value={item.hora}
+                        onChange={e => setProgramacao(p => p.map((x, idx) => idx === i ? { ...x, hora: e.target.value } : x))}
+                        className="w-28 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50 dark:[color-scheme:dark]"
+                      />
+                      <input
+                        type="text"
+                        value={item.atividade}
+                        onChange={e => setProgramacao(p => p.map((x, idx) => idx === i ? { ...x, atividade: e.target.value } : x))}
+                        placeholder="Ex: Solenidade da Sapatilha de Pontas"
+                        className="flex-1 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                      />
+                      <div className="flex flex-col gap-0.5 shrink-0">
+                        <button
+                          onClick={() => setProgramacao(p => {
+                            if (i === 0) return p;
+                            const next = [...p];
+                            [next[i-1], next[i]] = [next[i], next[i-1]];
+                            return next;
+                          })}
+                          disabled={i === 0}
+                          className="p-1 text-slate-400 hover:text-[#ff0068] disabled:opacity-20"
+                        >
+                          <ArrowUp size={12} />
+                        </button>
+                        <button
+                          onClick={() => setProgramacao(p => {
+                            if (i === p.length - 1) return p;
+                            const next = [...p];
+                            [next[i+1], next[i]] = [next[i], next[i+1]];
+                            return next;
+                          })}
+                          disabled={i === programacao.length - 1}
+                          className="p-1 text-slate-400 hover:text-[#ff0068] disabled:opacity-20"
+                        >
+                          <ArrowDown size={12} />
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => setProgramacao(p => p.filter((_, idx) => idx !== i))}
+                        className="p-2 text-slate-400 hover:text-red-500 shrink-0"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 

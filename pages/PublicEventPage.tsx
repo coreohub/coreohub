@@ -170,6 +170,12 @@ const PublicEventPage = () => {
                   {event.end_date && event.end_date !== event.start_date && ` — ${formatDate(event.end_date)}`}
                 </div>
               )}
+              {event.event_time && (
+                <div className="flex items-center gap-2 text-slate-300">
+                  <Clock size={16} className="text-[#ff0068]" />
+                  {event.event_time}
+                </div>
+              )}
               {localizacao && (
                 <div className="flex items-center gap-2 text-slate-300">
                   <MapPin size={16} className="text-[#ff0068]" />
@@ -204,6 +210,28 @@ const PublicEventPage = () => {
           <div className="space-y-4">
             <h2 className="text-2xl font-black uppercase tracking-tighter">Sobre o Evento</h2>
             <p className="text-slate-400 leading-relaxed whitespace-pre-line">{event.description}</p>
+          </div>
+        )}
+
+        {/* Programação */}
+        {Array.isArray(event.programacao_config) && event.programacao_config.length > 0 && (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
+              <Clock size={24} className="text-[#ff0068]" /> Programação
+            </h2>
+            <div className="space-y-2">
+              {event.programacao_config
+                .filter((p: any) => p.atividade)
+                .map((item: any, i: number) => (
+                  <div key={i} className="flex items-center gap-4 p-4 bg-white/5 border border-white/10 rounded-2xl hover:border-[#ff0068]/30 transition-colors">
+                    <div className="shrink-0 w-20 text-center">
+                      <p className="text-2xl font-black text-[#ff0068] tabular-nums tracking-tighter">{item.hora || '--:--'}</p>
+                    </div>
+                    <div className="w-px h-10 bg-white/10 shrink-0" />
+                    <p className="font-bold text-sm text-white">{item.atividade}</p>
+                  </div>
+                ))}
+            </div>
           </div>
         )}
 

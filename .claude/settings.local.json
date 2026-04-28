@@ -4,7 +4,9 @@
       "Bash(npx tsc *)",
       "Bash(npx vite *)",
       "Bash(supabase functions *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }
