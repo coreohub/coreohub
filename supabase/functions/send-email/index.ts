@@ -298,6 +298,18 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  // Apenas chamadas internas (service_role_key) são permitidas.
+  // Previne uso não autorizado do domínio Resend para phishing/spam.
+  const serviceKey = Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+  const token = (req.headers.get('Authorization') ?? '').replace('Bearer ', '')
+  if (!serviceKey || token !== serviceKey) {
+    console.warn('[send-email] chamada não autorizada bloqueada')
+    return new Response(JSON.stringify({ error: 'Não autorizado' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+
   try {
     const { type, payload } = (await req.json()) as SendEmailRequest
 

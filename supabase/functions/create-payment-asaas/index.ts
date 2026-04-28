@@ -1,7 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+const ALLOWED_ORIGIN = Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
@@ -24,6 +25,11 @@ Deno.serve(async (req) => {
       Deno.env.get('SERVICE_ROLE_KEY') ?? ''
     )
 
+    // Verifica autenticação e ownership da inscrição
+    const authHeader = req.headers.get('Authorization') ?? ''
+    const { data: { user } } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''))
+    if (!user) throw new Error('Não autorizado.')
+
     // ── 1. Coreografia ───────────────────────────────────────────────────────
     const { data: coreo, error: coreoErr } = await supabase
       .from('coreografias')
@@ -32,6 +38,7 @@ Deno.serve(async (req) => {
       .single()
 
     if (coreoErr || !coreo) throw new Error(`Coreografia não encontrada: ${coreoErr?.message}`)
+    if (coreo.user_id !== user.id) throw new Error('Sem permissão para esta inscrição.')
 
     // ── 2. Perfil do inscrito ────────────────────────────────────────────────
     const { data: inscritoProfile } = await supabase

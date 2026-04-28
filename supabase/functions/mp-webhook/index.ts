@@ -101,6 +101,33 @@ function extrairPaymentId(url: URL, body: any): { id: string | null; kind: strin
   return { id: null, kind: 'unknown' }
 }
 
+// Valida assinatura HMAC-SHA256 do Mercado Pago (Webhooks v2)
+// Header: x-signature = "ts=<ts>,v1=<hex>"
+async function validateMpSignature(req: Request, paymentId: string): Promise<boolean> {
+  const secret = Deno.env.get('MP_WEBHOOK_SECRET') ?? ''
+  if (!secret) return true // sem secret configurado: pula (retrocompat)
+
+  const xSig = req.headers.get('x-signature') ?? ''
+  const xReqId = req.headers.get('x-request-id') ?? ''
+  if (!xSig) return false
+
+  const tsMatch = xSig.match(/ts=(\d+)/)
+  const v1Match = xSig.match(/v1=([0-9a-f]+)/)
+  if (!tsMatch || !v1Match) return false
+
+  const ts = tsMatch[1]
+  const received = v1Match[1]
+  const manifest = `id:${paymentId};request-id:${xReqId};ts:${ts};`
+
+  const enc = new TextEncoder()
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  )
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(manifest))
+  const expected = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('')
+  return expected === received
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -133,6 +160,17 @@ Deno.serve(async (req) => {
     if (!paymentId) {
       console.log('[mp-webhook] notificação sem paymentId, ignorando')
       return ok({ status: 'ignored', reason: 'no_payment_id' })
+    }
+
+    // Valida assinatura MP quando disponível (Webhooks v2)
+    if (req.headers.get('x-signature')) {
+      const valid = await validateMpSignature(req, paymentId)
+      if (!valid) {
+        console.warn('[mp-webhook] assinatura x-signature inválida — possível spoofing')
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
     }
 
     console.log(`[mp-webhook] paymentId=${paymentId} (origem=${kind})`)

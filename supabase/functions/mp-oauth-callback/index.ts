@@ -5,83 +5,112 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// ─── HMAC-SHA256 helper ───────────────────────────────────────────────────────
+
+async function hmacSha256(secret: string, message: string): Promise<string> {
+  const enc = new TextEncoder()
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  )
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message))
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+// ─── State validation ─────────────────────────────────────────────────────────
+// State format: base64url(<producerId>:<timestamp>:<hmac>)
+// Timestamp em segundos — válido por 15 minutos.
+
+async function verifyOAuthState(
+  stateParam: string,
+  secret: string
+): Promise<string> {
+  let decoded: string
+  try {
+    decoded = atob(stateParam.replace(/-/g, '+').replace(/_/g, '/'))
+  } catch {
+    throw new Error('state inválido')
+  }
+
+  const parts = decoded.split(':')
+  if (parts.length < 3) throw new Error('state malformado')
+
+  const [producerId, tsStr, receivedHmac] = parts
+  const ts = parseInt(tsStr, 10)
+  const now = Math.floor(Date.now() / 1000)
+
+  if (isNaN(ts) || now - ts > 900) throw new Error('state expirado ou timestamp inválido')
+
+  const expected = await hmacSha256(secret, `${producerId}:${tsStr}`)
+  if (expected !== receivedHmac) throw new Error('state com assinatura inválida (CSRF)')
+
+  return producerId
+}
+
 Deno.serve(async (req) => {
-  // Lidar com requisições CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  const frontendUrl = Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'
+
   try {
-    const url = new URL(req.url)
-    const code = url.searchParams.get('code')
-    const state = url.searchParams.get('state') // Este é o producer_id que passamos no link
+    const url   = new URL(req.url)
+    const code  = url.searchParams.get('code')
+    const state = url.searchParams.get('state')
 
     if (!code || !state) {
       throw new Error('Código ou estado não fornecido pelo Mercado Pago.')
     }
 
-    const clientId = Deno.env.get('MP_CLIENT_ID')
+    // Valida CSRF via HMAC antes de usar o state
+    const stateSecret = Deno.env.get('OAUTH_STATE_SECRET') ?? ''
+    if (!stateSecret) throw new Error('OAUTH_STATE_SECRET não configurado')
+
+    const producerId = await verifyOAuthState(state, stateSecret)
+
+    const clientId     = Deno.env.get('MP_CLIENT_ID')
     const clientSecret = Deno.env.get('MP_CLIENT_SECRET')
-    
-    // O redirect_uri deve ser EXATAMENTE o mesmo que você configurou no painel do MP
-    const redirectUri = `${url.origin}/functions/v1/mp-oauth-callback`
+    const redirectUri  = `${url.origin}/functions/v1/mp-oauth-callback`
 
-    console.log('Trocando código por tokens no Mercado Pago...')
-
-    // 1. Trocar o código por tokens na API do Mercado Pago
     const response = await fetch('https://api.mercadopago.com/oauth/token', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        client_id: clientId,
+        client_id:     clientId,
         client_secret: clientSecret,
-        grant_type: 'authorization_code',
-        code: code,
-        redirect_uri: redirectUri,
+        grant_type:    'authorization_code',
+        code,
+        redirect_uri:  redirectUri,
       }),
     })
 
     const mpData = await response.json()
+    if (!response.ok) throw new Error(`Falha na autenticação do MP: ${mpData.message ?? 'Erro desconhecido'}`)
 
-    if (!response.ok) {
-      console.error('Erro na resposta do Mercado Pago:', mpData)
-      throw new Error(`Falha na autenticação do Mercado Pago: ${mpData.message || 'Erro desconhecido'}`)
-    }
-
-    // 2. Inicializar o cliente Supabase com a Service Role Key para poder atualizar o profile
-    const supabaseClient = createClient(
+    const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SERVICE_ROLE_KEY') ?? ''
     )
 
-    // 3. Salvar os tokens no profile do produtor
-    console.log(`Atualizando tokens para o produtor ${state}...`)
-    const { error: updateError } = await supabaseClient
+    const { error: updateError } = await supabase
       .from('profiles')
       .update({
-        mp_access_token: mpData.access_token,
+        mp_access_token:  mpData.access_token,
         mp_refresh_token: mpData.refresh_token,
-        mp_user_id: String(mpData.user_id), // Este é o ID do vendedor no MP
-        mp_connected_at: new Date().toISOString()
+        mp_user_id:       String(mpData.user_id),
+        mp_connected_at:  new Date().toISOString(),
       })
-      .eq('id', state)
+      .eq('id', producerId)
 
-    if (updateError) {
-      console.error('Erro ao atualizar perfil no Supabase:', updateError)
-      throw updateError
-    }
+    if (updateError) throw updateError
 
-    // 4. Redirecionar o produtor de volta para a aplicação frontend
-    // Ajuste as URLs de redirecionamento conforme necessário
-    const isLocalhost = url.origin.includes('localhost') || url.origin.includes('127.0.0.1')
-    const frontendBaseUrl = isLocalhost ? 'http://localhost:5173' : 'https://dance-pro-festival.vercel.app'
-    
-    return Response.redirect(`${frontendBaseUrl}/account-settings?mp_status=success`, 303)
+    return Response.redirect(`${frontendUrl}/account-settings?mp_status=success`, 303)
 
-  } catch (error) {
-    console.error('Erro na função mp-oauth-callback:', error.message)
-    return Response.redirect(`http://localhost:5173/account-settings?mp_status=error&message=${encodeURIComponent(error.message)}`, 303)
+  } catch (error: any) {
+    console.error('[mp-oauth-callback] erro:', error.message)
+    return Response.redirect(
+      `${frontendUrl}/account-settings?mp_status=error&message=${encodeURIComponent(error.message)}`,
+      303
+    )
   }
 })

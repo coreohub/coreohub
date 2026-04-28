@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../services/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../services/supabase';
 import {
   CreditCard, Loader2, AlertCircle, CheckCircle2,
   Music2, ArrowRight, Clapperboard, ExternalLink,
@@ -8,8 +8,6 @@ import {
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 
-const SUPABASE_URL  = 'https://ghpltzzijlvykiytwslu.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdocGx0enppamx2eWtpeXR3c2x1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMDAyNjEsImV4cCI6MjA4NTg3NjI2MX0.AshAXh_5Dn2S3E74XbnDtxnb92kER8tAxEdZmKnywG8';
 
 interface Coreografia {
   id: string;
@@ -169,12 +167,12 @@ const PagamentoInscrito = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/create-payment`, {
+      const response = await fetch(`${supabaseUrl}/functions/v1/create-payment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
-          'apikey': SUPABASE_ANON,
+          'apikey': supabaseAnonKey,
         },
         body: JSON.stringify({ registration_id: coreo.id, event_id: coreo.event_id }),
       });

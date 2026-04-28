@@ -50,17 +50,24 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  // Validação do token Asaas (header asaas-access-token)
+  // Validação obrigatória do token Asaas.
+  // Se ASAAS_WEBHOOK_TOKEN não estiver configurado o endpoint recusa tudo —
+  // isso evita que um deploy sem secrets aceite POSTs não autenticados.
   const expectedToken = Deno.env.get('ASAAS_WEBHOOK_TOKEN') ?? ''
-  if (expectedToken) {
-    const receivedToken = req.headers.get('asaas-access-token') ?? ''
-    if (receivedToken !== expectedToken) {
-      console.warn('[asaas-webhook] token inválido recebido')
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+  if (!expectedToken) {
+    console.error('[asaas-webhook] ASAAS_WEBHOOK_TOKEN não configurado — recusando')
+    return new Response(JSON.stringify({ error: 'Misconfigured' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+  const receivedToken = req.headers.get('asaas-access-token') ?? ''
+  if (receivedToken !== expectedToken) {
+    console.warn('[asaas-webhook] token inválido recebido')
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
   }
 
   const ok = (payload: Record<string, unknown>) =>

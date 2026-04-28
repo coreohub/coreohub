@@ -1,4 +1,5 @@
 -- ================================================================
+-- ⚠️  NUNCA EXECUTAR EM PRODUÇÃO — apenas para ambiente local/staging
 -- COREOHUB — SEED DE DADOS CORRIGIDO v2
 -- Baseado nas colunas reais verificadas no banco
 -- Execute no SQL Editor do Supabase

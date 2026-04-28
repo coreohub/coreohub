@@ -31,8 +31,20 @@ const StatCard = ({ title, value, sub, icon: Icon, color }: any) => (
 const SuperAdminDashboard = () => {
   const [events, setEvents] = useState<any[]>([]);
   const [stats, setStats] = useState({ totalGmv: 0, totalRevenue: 0, activeEvents: 0, totalUsers: 0 });
+  const [authorized, setAuthorized] = useState<boolean | null>(null);
 
   useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setAuthorized(false); return; }
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+      setAuthorized(profile?.role === 'COREOHUB_ADMIN');
+    };
+    checkAuth();
+  }, []);
+
+  useEffect(() => {
+    if (!authorized) return;
     const fetchData = async () => {
       const { data: eventsData } = await supabase.from('events').select('*, profiles:created_by(full_name)');
       const { count: usersCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
@@ -48,7 +60,10 @@ const SuperAdminDashboard = () => {
       setEvents(eventsData || []);
     };
     fetchData();
-  }, []);
+  }, [authorized]);
+
+  if (authorized === null) return <div className="flex items-center justify-center h-64 text-slate-400 font-black uppercase tracking-widest text-xs">Verificando acesso...</div>;
+  if (!authorized) return <div className="flex items-center justify-center h-64 text-red-500 font-black uppercase tracking-widest text-xs">Acesso negado.</div>;
 
   return (
     <div className="space-y-10 pb-20 animate-in fade-in duration-700">
