@@ -33,6 +33,20 @@ interface CommissionRow {
   created_at: string;
 }
 
+interface EventRow {
+  id: string;
+  name: string;
+  slug: string | null;
+  created_by: string | null;
+  start_date: string | null;
+  event_type: 'private' | 'government' | null;
+  commission_type: 'PERCENT' | 'FIXED' | null;
+  commission_percent: number | null;
+  commission_fixed: number | null;
+  fee_mode: 'repassar' | 'absorver' | null;
+  is_public: boolean | null;
+}
+
 const SuperAdmin = () => {
   const navigate = useNavigate();
   const [authorized, setAuthorized] = useState<boolean | null>(null);
@@ -42,7 +56,11 @@ const SuperAdmin = () => {
   const [commissions, setCommissions]   = useState<CommissionRow[]>([]);
   const [producers, setProducers]       = useState<ProducerRow[]>([]);
   const [eventsByName, setEventsByName] = useState<Map<string, string>>(new Map());
+  const [eventsList, setEventsList]     = useState<EventRow[]>([]);
   const [invites, setInvites]           = useState<ProducerInvite[]>([]);
+  const [eventSearch, setEventSearch]   = useState('');
+  const [eventFilter, setEventFilter]   = useState<'all' | 'private' | 'government' | 'free'>('all');
+  const [eventEdit, setEventEdit]       = useState<EventRow | null>(null);
 
   /* Modal de convite */
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -83,7 +101,8 @@ const SuperAdmin = () => {
           supabase.from('profiles')
             .select('id, full_name, email, is_blocked, asaas_subconta_id'),
           supabase.from('events')
-            .select('id, name, created_by'),
+            .select('id, name, slug, created_by, start_date, event_type, commission_type, commission_percent, commission_fixed, fee_mode, is_public')
+            .order('start_date', { ascending: false }),
           listInvites(),
         ]);
 
@@ -99,6 +118,7 @@ const SuperAdmin = () => {
           }
         }
         setEventsByName(eventMap);
+        setEventsList((evs ?? []) as EventRow[]);
 
         const grossByProducer      = new Map<string, number>();
         const commissionByProducer = new Map<string, number>();
@@ -213,6 +233,38 @@ const SuperAdmin = () => {
     if (!confirm(`Excluir convite para ${inv.email}?`)) return;
     await deleteInvite(inv.id);
     setInvites(list => list.filter(x => x.id !== inv.id));
+  };
+
+  const handleSaveEventCommission = async (patch: Partial<EventRow>) => {
+    if (!eventEdit) return;
+    const update: Record<string, any> = {};
+    if (patch.commission_type    !== undefined) update.commission_type    = patch.commission_type;
+    if (patch.commission_percent !== undefined) update.commission_percent = patch.commission_percent;
+    if (patch.commission_fixed   !== undefined) update.commission_fixed   = patch.commission_fixed;
+    if (patch.fee_mode           !== undefined) update.fee_mode           = patch.fee_mode;
+    if (patch.event_type         !== undefined) update.event_type         = patch.event_type;
+    if (patch.is_public          !== undefined) update.is_public          = patch.is_public;
+
+    const { error: updErr } = await supabase.from('events').update(update).eq('id', eventEdit.id);
+    if (updErr) { alert('Falha ao salvar: ' + updErr.message); return; }
+    setEventsList(list => list.map(e => e.id === eventEdit.id ? { ...e, ...patch } : e));
+    setEventEdit(null);
+  };
+
+  const handleMakeEventFree = async (ev: EventRow) => {
+    if (!confirm(`Tornar "${ev.name}" gratuito? Comissão zera e taxa Asaas é absorvida pela plataforma.`)) return;
+    const { error: updErr } = await supabase.from('events')
+      .update({ commission_percent: 0, commission_fixed: 0, fee_mode: 'absorver' })
+      .eq('id', ev.id);
+    if (updErr) { alert('Falha: ' + updErr.message); return; }
+    setEventsList(list => list.map(e => e.id === ev.id ? { ...e, commission_percent: 0, commission_fixed: 0, fee_mode: 'absorver' } : e));
+  };
+
+  const handleToggleEventPublic = async (ev: EventRow) => {
+    const next = !ev.is_public;
+    const { error: updErr } = await supabase.from('events').update({ is_public: next }).eq('id', ev.id);
+    if (updErr) { alert('Falha: ' + updErr.message); return; }
+    setEventsList(list => list.map(e => e.id === ev.id ? { ...e, is_public: next } : e));
   };
 
   const handleExportCSV = () => {
@@ -415,6 +467,153 @@ const SuperAdmin = () => {
             </Section>
           </div>
 
+          {/* Tabela de eventos */}
+          <Section icon={Calendar} title="Eventos da Plataforma" sub="Gerencie comissão, tipo e visibilidade na vitrine">
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <input
+                type="text"
+                value={eventSearch}
+                onChange={e => setEventSearch(e.target.value)}
+                placeholder="Buscar por nome..."
+                className="flex-1 min-w-[180px] bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+              />
+              <div className="flex gap-2">
+                {(['all','private','government','free'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setEventFilter(f)}
+                    className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                      eventFilter === f
+                        ? 'bg-[#ff0068] text-white'
+                        : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    {f === 'all' ? 'Todos' : f === 'private' ? 'Privados' : f === 'government' ? 'Governo' : 'Gratuitos'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {(() => {
+              const producerById = new Map(producers.map(p => [p.id, p.full_name ?? p.email ?? '—']));
+              const term = eventSearch.toLowerCase();
+              const filtered = eventsList.filter(ev => {
+                if (term && !ev.name?.toLowerCase().includes(term)) return false;
+                if (eventFilter === 'private'    && ev.event_type !== 'private')    return false;
+                if (eventFilter === 'government' && ev.event_type !== 'government') return false;
+                if (eventFilter === 'free' && (Number(ev.commission_percent ?? 0) > 0 || Number(ev.commission_fixed ?? 0) > 0)) return false;
+                return true;
+              });
+
+              if (filtered.length === 0) {
+                return <p className="text-center py-6 text-[10px] text-slate-400 uppercase font-black">Nenhum evento encontrado</p>;
+              }
+
+              return (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="text-left text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-white/5">
+                        <th className="px-4 py-3">Evento</th>
+                        <th className="px-4 py-3">Produtor</th>
+                        <th className="px-4 py-3">Data</th>
+                        <th className="px-4 py-3">Tipo</th>
+                        <th className="px-4 py-3">Comissão</th>
+                        <th className="px-4 py-3">Vitrine</th>
+                        <th className="px-4 py-3 text-right" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                      {filtered.map(ev => {
+                        const isFree = Number(ev.commission_percent ?? 0) === 0 && Number(ev.commission_fixed ?? 0) === 0;
+                        return (
+                          <tr key={ev.id} className="hover:bg-slate-50 dark:hover:bg-white/5">
+                            <td className="px-4 py-3">
+                              <p className="text-xs font-black text-slate-900 dark:text-white">{ev.name}</p>
+                              {ev.slug && <p className="text-[9px] text-slate-400">/{ev.slug}</p>}
+                            </td>
+                            <td className="px-4 py-3 text-xs text-slate-700 dark:text-slate-300 truncate max-w-[180px]">
+                              {ev.created_by ? producerById.get(ev.created_by) ?? '—' : '—'}
+                            </td>
+                            <td className="px-4 py-3 text-xs text-slate-700 dark:text-slate-300 tabular-nums">
+                              {ev.start_date ? new Date(ev.start_date + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                ev.event_type === 'government'
+                                  ? 'text-blue-500 bg-blue-500/10'
+                                  : 'text-slate-500 bg-slate-100 dark:bg-white/5'
+                              }`}>
+                                {ev.event_type === 'government' ? 'Governo' : 'Privado'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-xs tabular-nums">
+                              {isFree ? (
+                                <span className="text-emerald-500 font-black uppercase tracking-widest text-[9px]">Gratuito</span>
+                              ) : (
+                                <span className="text-slate-700 dark:text-slate-300">
+                                  {ev.commission_type === 'FIXED'
+                                    ? `R$ ${Number(ev.commission_fixed ?? 0).toFixed(2)}`
+                                    : `${Number(ev.commission_percent ?? 0)}%`
+                                  }
+                                  {ev.fee_mode === 'absorver' && <span className="ml-1 text-[8px] text-slate-400">(absorve)</span>}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              <button
+                                onClick={() => handleToggleEventPublic(ev)}
+                                className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full transition-colors ${
+                                  ev.is_public
+                                    ? 'text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/20'
+                                    : 'text-slate-400 bg-slate-100 dark:bg-white/5 hover:bg-slate-200'
+                                }`}
+                                title={ev.is_public ? 'Clique para ocultar' : 'Clique para publicar'}
+                              >
+                                {ev.is_public ? 'Pública' : 'Oculta'}
+                              </button>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex justify-end gap-1">
+                                {!isFree && (
+                                  <button
+                                    onClick={() => handleMakeEventFree(ev)}
+                                    className="p-2 rounded-lg text-emerald-500 hover:bg-emerald-500/10"
+                                    title="Tornar gratuito"
+                                  >
+                                    <DollarSign size={14} />
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => setEventEdit(ev)}
+                                  className="p-2 rounded-lg text-slate-400 hover:text-[#ff0068] hover:bg-[#ff0068]/10"
+                                  title="Editar comissão"
+                                >
+                                  <BarChart3 size={14} />
+                                </button>
+                                {ev.slug && (
+                                  <a
+                                    href={`/evento/${ev.slug}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-2 rounded-lg text-slate-400 hover:text-[#ff0068] hover:bg-[#ff0068]/10"
+                                    title="Abrir vitrine"
+                                  >
+                                    <ExternalLink size={14} />
+                                  </a>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+          </Section>
+
           {/* Tabela de produtores */}
           <Section icon={Users} title="Produtores Ativos" sub="Ordenado por receita gerada para a CoreoHub">
             {producers.length === 0 ? (
@@ -472,6 +671,15 @@ const SuperAdmin = () => {
             )}
           </Section>
         </>
+      )}
+
+      {/* Modal Editar Comissão */}
+      {eventEdit && (
+        <EventCommissionModal
+          event={eventEdit}
+          onClose={() => setEventEdit(null)}
+          onSave={handleSaveEventCommission}
+        />
       )}
 
       {/* Modal Convite */}
@@ -564,5 +772,138 @@ const Section: React.FC<{ icon: any; title: string; sub?: string; className?: st
     <div className="p-6">{children}</div>
   </div>
 );
+
+/* ────────────────────────────────────────────────────────────────────────
+   Modal de edição de comissão de evento
+   ──────────────────────────────────────────────────────────────────────── */
+const EventCommissionModal: React.FC<{
+  event: EventRow;
+  onClose: () => void;
+  onSave: (patch: Partial<EventRow>) => void;
+}> = ({ event, onClose, onSave }) => {
+  const [type, setType]         = useState<'PERCENT' | 'FIXED'>(event.commission_type ?? 'PERCENT');
+  const [percent, setPercent]   = useState<number>(Number(event.commission_percent ?? 10));
+  const [fixed, setFixed]       = useState<number>(Number(event.commission_fixed ?? 0));
+  const [feeMode, setFeeMode]   = useState<'repassar' | 'absorver'>(event.fee_mode ?? 'repassar');
+  const [eventType, setEventType] = useState<'private' | 'government'>(event.event_type ?? 'private');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5">
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Editar Comissão</h3>
+            <p className="text-xs text-slate-500 mt-0.5 truncate">{event.name}</p>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {/* Tipo de evento */}
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Tipo de Evento</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['private','government'] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setEventType(t)}
+                  className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
+                    eventType === t
+                      ? 'bg-[#ff0068] text-white border-[#ff0068]'
+                      : 'bg-slate-50 dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'
+                  }`}
+                >
+                  {t === 'private' ? 'Privado' : 'Governo'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Modelo */}
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Modelo</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['PERCENT','FIXED'] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setType(t)}
+                  className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
+                    type === t
+                      ? 'bg-[#ff0068]/10 text-[#ff0068] border-[#ff0068]/40'
+                      : 'bg-slate-50 dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'
+                  }`}
+                >
+                  {t === 'PERCENT' ? 'Percentual' : 'Valor Fixo'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Valor */}
+          {type === 'PERCENT' ? (
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Percentual (%)</label>
+              <input
+                type="number" min={0} max={100} step={0.1}
+                value={percent}
+                onChange={e => setPercent(Number(e.target.value))}
+                className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+              />
+            </div>
+          ) : (
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Valor Fixo (R$)</label>
+              <input
+                type="number" min={0} step={0.01}
+                value={fixed}
+                onChange={e => setFixed(Number(e.target.value))}
+                className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+              />
+            </div>
+          )}
+
+          {/* Quem paga a taxa Asaas */}
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Taxa Asaas</label>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { v: 'repassar' as const, label: 'Repassar', desc: 'Inscrito paga a taxa' },
+                { v: 'absorver' as const, label: 'Absorver', desc: 'Plataforma paga' },
+              ]).map(opt => (
+                <button
+                  key={opt.v}
+                  onClick={() => setFeeMode(opt.v)}
+                  className={`py-3 px-3 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all text-left ${
+                    feeMode === opt.v
+                      ? 'bg-[#ff0068]/10 text-[#ff0068] border-[#ff0068]/40'
+                      : 'bg-slate-50 dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'
+                  }`}
+                >
+                  <div>{opt.label}</div>
+                  <div className="text-[8px] font-medium normal-case text-slate-400 mt-1">{opt.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button
+            onClick={() => onSave({
+              commission_type:    type,
+              commission_percent: type === 'PERCENT' ? percent : 0,
+              commission_fixed:   type === 'FIXED'   ? fixed   : 0,
+              fee_mode:           feeMode,
+              event_type:         eventType,
+            })}
+            className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-xl font-black text-sm uppercase tracking-widest"
+          >
+            <Check size={16} /> Salvar Comissão
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default SuperAdmin;
