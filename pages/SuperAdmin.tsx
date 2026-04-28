@@ -76,10 +76,10 @@ const SuperAdmin = () => {
       if (!user) { navigate('/login'); return; }
       const { data: profile } = await supabase
         .from('profiles')
-        .select('is_super_admin')
+        .select('is_super_admin, role')
         .eq('id', user.id)
         .single();
-      setAuthorized(Boolean(profile?.is_super_admin));
+      setAuthorized(Boolean(profile?.is_super_admin) || profile?.role === 'USUALDANCE_ADMIN');
     })();
   }, [navigate]);
 

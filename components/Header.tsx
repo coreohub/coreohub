@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Menu, Music, Moon, Sun, ChevronDown, Check } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Menu, Moon, Sun, ChevronDown, Check } from 'lucide-react';
 import { UserRole, Profile as UserProfile } from '../types';
 import { getInitials } from '../utils/formatters';
+import BrandIcon from './BrandIcon';
 
 interface HeaderProps {
   toggleSidebar: () => void;
@@ -22,6 +24,7 @@ const ROLE_OPTIONS: { role: UserRole; label: string; color: string }[] = [
 ];
 
 const Header = ({ toggleSidebar, profile, theme, toggleTheme, activeRole, setActiveRole }: HeaderProps) => {
+  const navigate = useNavigate();
   const isSuperAdmin = profile?.role === UserRole.USUALDANCE_ADMIN;
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -45,9 +48,7 @@ const Header = ({ toggleSidebar, profile, theme, toggleTheme, activeRole, setAct
           <Menu size={20} />
         </button>
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-[#ff0068] rounded-lg flex items-center justify-center text-white shadow-md shadow-[#ff0068]/20">
-            <Music size={16} />
-          </div>
+          <BrandIcon size={32} />
           <span className="text-xs font-black uppercase tracking-tighter text-slate-900 dark:text-white hidden sm:block">
             Coreo<span className="text-[#ff0068]">Hub</span>
           </span>
@@ -107,7 +108,7 @@ const Header = ({ toggleSidebar, profile, theme, toggleTheme, activeRole, setAct
           {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
         </button>
 
-        <div className="flex flex-col items-end mr-1">
+        <div className="hidden sm:flex flex-col items-end mr-1">
           <span className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-tight">{profile?.full_name || 'Usuário'}</span>
           <span
             className="text-[8px] font-black uppercase tracking-widest"
@@ -116,11 +117,16 @@ const Header = ({ toggleSidebar, profile, theme, toggleTheme, activeRole, setAct
             {activeOption.label}
           </span>
         </div>
-        <div className="w-9 h-9 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 p-0.5 shadow-lg">
+        <button
+          onClick={() => navigate('/profile')}
+          className="w-9 h-9 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 p-0.5 shadow-lg hover:scale-105 transition-transform"
+          aria-label="Meu perfil"
+          title="Meu perfil"
+        >
           <div className="w-full h-full flex items-center justify-center text-[#ff0068] bg-[#ff0068]/10 rounded-[10px] font-black text-xs border border-[#ff0068]/20">
             {getInitials(profile?.full_name || 'U')}
           </div>
-        </div>
+        </button>
       </div>
     </header>
   );

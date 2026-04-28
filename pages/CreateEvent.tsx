@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { createEvent, supabase } from '../services/supabase';
-import { analyzeRegulation } from '../services/geminiService';
+import { extractRegulationData } from '../services/geminiService';
 import { EventFormat } from '../types';
 import EventFormatSelector from '../components/EventFormatSelector';
 
@@ -105,11 +105,24 @@ const CreateEvent = () => {
     if (!formData.rules_text) return;
     setAnalyzing(true);
     try {
-      const analysis = await analyzeRegulation(formData.rules_text);
+      const x = await extractRegulationData(formData.rules_text);
+      const rid = () => Math.random().toString(36).substring(7);
       setFormData(prev => ({
         ...prev,
-        formacoes_config: [...prev.formacoes_config, ...analysis.formacoes.map(m => ({ ...m, id: Math.random().toString(36).substring(7) }))],
-        categories_config: [...prev.categories_config, ...analysis.categories.map(c => ({ ...c, id: Math.random().toString(36).substring(7) }))],
+        // Campos escalares: só preenche se o produtor ainda não escreveu nada
+        name:                   prev.name        || x.event_name        || '',
+        address:                prev.address     || x.address           || '',
+        start_date:             prev.start_date  || x.start_date        || '',
+        registration_deadline:  prev.registration_deadline || x.registration_deadline || '',
+        default_format:         x.event_format ? (x.event_format as EventFormat) : prev.default_format,
+        score_scale:            (x.score_scale === 10 || x.score_scale === 100) ? x.score_scale : prev.score_scale,
+        age_tolerance_mode:     x.age_tolerance_mode ?? prev.age_tolerance_mode,
+        age_tolerance_value:    x.age_tolerance_value ?? prev.age_tolerance_value,
+        // Listas: faz append (usuário pode já ter adicionado manualmente)
+        formacoes_config:  [...prev.formacoes_config,  ...x.formacoes.map(m  => ({ ...m, id: rid(), min_members: 1, max_members: 1, slots_limit: 100, weight: 0, categories: [] }))],
+        categories_config: [...prev.categories_config, ...x.categories.map(c => ({ ...c, id: rid(), fee: 0, slots_limit: 0, weight: 0 }))],
+        criteria_config:   [...prev.criteria_config,   ...x.criteria.map(cr  => ({ id: rid(), name: cr.name, weight: cr.weight, fee: 0, slots_limit: 0 }))],
+        registration_lots: [...prev.registration_lots, ...x.registration_lots],
       }));
     } catch (err) {
       setError('Erro na análise da IA.');

@@ -5,10 +5,12 @@ import {
   Check, X, AlertCircle, Briefcase,
   Calendar, CreditCard, QrCode, Mic2,
   ClipboardList, Filter, ChevronDown, Star,
+  Copy, ExternalLink,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
 import { UserRole, PermissoesCustom, PERMISSOES_DEFAULT } from '../types';
+import { createTeamInvite, buildTeamInviteUrl } from '../services/teamInviteService';
 
 /* ── Role presets ── */
 const EQUIPE_ROLES: {
@@ -107,6 +109,8 @@ const EquipeProdutor = () => {
   const [inviting, setInviting]       = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState(false);
+  const [inviteUrl, setInviteUrl]     = useState<string | null>(null);
+  const [copied, setCopied]           = useState(false);
   const [presetOpen, setPresetOpen]   = useState(false);
 
   /* Edit-permissions modal */
@@ -151,38 +155,39 @@ const EquipeProdutor = () => {
     setInviting(true);
     setInviteError(null);
     try {
-      const { data: existing } = await supabase
-        .from('profiles')
-        .select('id,role')
-        .eq('email', inviteEmail.trim().toLowerCase())
-        .maybeSingle();
-
-      if (!existing) {
-        setInviteError('Usuário não encontrado. O membro precisa ter uma conta cadastrada no app primeiro.');
-        setInviting(false);
-        return;
-      }
-
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: inviteRole, cargo: inviteCargo.trim() || null, permissoes_custom: perms })
-        .eq('id', existing.id);
-      if (error) throw error;
-
+      const invite = await createTeamInvite({
+        email:             inviteEmail.trim(),
+        cargo:             inviteCargo.trim() || undefined,
+        role:              inviteRole,
+        permissoes_custom: perms,
+      });
+      setInviteUrl(buildTeamInviteUrl(invite.token));
       setInviteSuccess(true);
-      setTimeout(() => {
-        setInviteOpen(false);
-        setInviteSuccess(false);
-        setInviteEmail('');
-        setInviteCargo('');
-        setPerms(PERMISSOES_DEFAULT);
-        fetchMembers();
-      }, 1500);
     } catch (e: any) {
-      setInviteError(e.message || 'Erro ao convidar.');
+      setInviteError(e.message || 'Erro ao gerar convite.');
     } finally {
       setInviting(false);
     }
+  };
+
+  const handleCopyUrl = async () => {
+    if (!inviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard bloqueado */ }
+  };
+
+  const resetInviteModal = () => {
+    setInviteOpen(false);
+    setInviteSuccess(false);
+    setInviteUrl(null);
+    setCopied(false);
+    setInviteEmail('');
+    setInviteCargo('');
+    setPerms(PERMISSOES_DEFAULT);
+    setInviteRole(UserRole.RECEPCAO);
   };
 
   /* ── Remove ── */
@@ -424,11 +429,38 @@ const EquipeProdutor = () => {
               </div>
 
               {inviteSuccess ? (
-                <div className="p-8 text-center space-y-4">
+                <div className="p-8 text-center space-y-5">
                   <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto">
                     <Check size={28} className="text-emerald-500" />
                   </div>
-                  <p className="font-black uppercase text-slate-900 dark:text-white">Membro adicionado!</p>
+                  <div>
+                    <p className="font-black uppercase text-slate-900 dark:text-white text-lg">Convite gerado!</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Copie o link abaixo e envie para o membro.</p>
+                  </div>
+                  <div className="flex items-center gap-2 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-3">
+                    <span className="text-[10px] text-slate-600 dark:text-slate-300 font-mono truncate flex-1">{inviteUrl}</span>
+                    <button
+                      onClick={handleCopyUrl}
+                      className={`shrink-0 p-2 rounded-xl transition-all ${copied ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-200 dark:bg-white/10 text-slate-500 hover:text-[#ff0068]'}`}
+                    >
+                      {copied ? <Check size={14} /> : <Copy size={14} />}
+                    </button>
+                  </div>
+                  <div className="flex gap-3">
+                    <a
+                      href={inviteUrl ?? '#'}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#ff0068] transition-all"
+                    >
+                      <ExternalLink size={13} /> Visualizar
+                    </a>
+                    <button
+                      onClick={resetInviteModal}
+                      className="flex-1 py-2.5 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all"
+                    >
+                      Fechar
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="p-8 space-y-6">
@@ -444,7 +476,7 @@ const EquipeProdutor = () => {
                         className="w-full pl-10 pr-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50 transition-all"
                       />
                     </div>
-                    <p className="text-[9px] text-slate-400 ml-1">O membro precisa ter uma conta no CoreoHub.</p>
+                    <p className="text-[9px] text-slate-400 ml-1">O link será gerado para este e-mail. O membro pode criar conta ao aceitar.</p>
                   </div>
 
                   {/* Cargo */}

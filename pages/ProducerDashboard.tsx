@@ -130,6 +130,8 @@ const ProducerDashboard = () => {
         if (data && data.length > 0) {
           setAllEvents(data);
           setSelectedEventId(prev => prev ?? data[0].id);
+        } else {
+          setLoading(false);
         }
       });
   }, []);

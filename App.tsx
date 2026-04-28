@@ -30,6 +30,7 @@ const JudgePractice            = lazy(() => import('./pages/JudgePractice'));
 const ProducerDashboard        = lazy(() => import('./pages/ProducerDashboard'));
 const SuperAdminDashboard      = lazy(() => import('./pages/SuperAdmin'));
 const ProducerInviteLanding    = lazy(() => import('./pages/ProducerInvite'));
+const TeamInviteLanding        = lazy(() => import('./pages/TeamInvite'));
 const CreateEvent              = lazy(() => import('./pages/CreateEvent'));
 const FestivalShowcase         = lazy(() => import('./pages/FestivalShowcase'));
 const PublicEventPage          = lazy(() => import('./pages/PublicEventPage'));
@@ -257,6 +258,7 @@ const App: React.FC = () => {
         <Route path="/login" element={<Auth />} />
         <Route path="/register" element={<Auth />} />
         <Route path="/convite/:token" element={<Suspense fallback={<PageLoader />}><ProducerInviteLanding /></Suspense>} />
+        <Route path="/equipe-convite/:token" element={<Suspense fallback={<PageLoader />}><TeamInviteLanding /></Suspense>} />
 
         <Route path="/dashboard" element={<PrivateRoute {...privateRouteProps}><Dashboard profile={profile!} config={config} activeRole={activeRole!} /></PrivateRoute>} />
         <Route path="/bailarinos" element={<PrivateRoute {...privateRouteProps}><Bailarinos /></PrivateRoute>} />
