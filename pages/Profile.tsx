@@ -69,7 +69,7 @@ const ROLE_LABELS: Record<string, string> = {
   INDEPENDENT:      'Independente',
   JUDGE:            'Jurado',
   TEAM:             'Equipe',
-  USUALDANCE_ADMIN: 'Super Admin',
+  COREOHUB_ADMIN: 'Super Admin',
   USER:             'Inscrito',
   STAFF:            'Staff',
   SPECTATOR:        'Espectador',

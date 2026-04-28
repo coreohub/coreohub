@@ -28,7 +28,7 @@ const INSCRITO_NAV = [
 
 const PRODUTOR_ROLES = new Set([
   UserRole.ORGANIZER,
-  UserRole.USUALDANCE_ADMIN,
+  UserRole.COREOHUB_ADMIN,
 ]);
 
 const buildProdutorNav = (videoSelectionEnabled: boolean) => [

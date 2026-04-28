@@ -79,7 +79,7 @@ const SuperAdmin = () => {
         .select('is_super_admin, role')
         .eq('id', user.id)
         .single();
-      setAuthorized(Boolean(profile?.is_super_admin) || profile?.role === 'USUALDANCE_ADMIN');
+      setAuthorized(Boolean(profile?.is_super_admin) || profile?.role === 'COREOHUB_ADMIN');
     })();
   }, [navigate]);
 

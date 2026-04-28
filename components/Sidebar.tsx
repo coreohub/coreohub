@@ -37,15 +37,15 @@ type MenuSection = {
   items: MenuItem[];
 };
 
-const ALL_ORGANIZER = [UserRole.ORGANIZER, UserRole.USUALDANCE_ADMIN];
-const ALL_JUDGE     = [UserRole.JUDGE, UserRole.USUALDANCE_ADMIN];
-const ALL_USER      = [UserRole.USER, UserRole.STUDIO_DIRECTOR, UserRole.CHOREOGRAPHER, UserRole.INDEPENDENT, UserRole.TEAM, UserRole.SPECTATOR, UserRole.USUALDANCE_ADMIN];
+const ALL_ORGANIZER = [UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN];
+const ALL_JUDGE     = [UserRole.JUDGE, UserRole.COREOHUB_ADMIN];
+const ALL_USER      = [UserRole.USER, UserRole.STUDIO_DIRECTOR, UserRole.CHOREOGRAPHER, UserRole.INDEPENDENT, UserRole.TEAM, UserRole.SPECTATOR, UserRole.COREOHUB_ADMIN];
 
 // Equipe operacional — todos os sub-roles + organizer + admin
 const ALL_EQUIPE = [
   UserRole.COORDENADOR, UserRole.MESARIO, UserRole.SONOPLASTA,
   UserRole.RECEPCAO, UserRole.PALCO,
-  UserRole.STAFF, UserRole.ORGANIZER, UserRole.USUALDANCE_ADMIN,
+  UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN,
 ];
 
 // Mapeamento permissão → item de menu (usado para membros com permissoes_custom)
@@ -102,19 +102,19 @@ const menuSections: MenuSection[] = [
     roles: ALL_EQUIPE,
     items: [
       // Coordenador — acesso amplo
-      { path: '/check-in',        label: 'Credenciamento',          icon: QrCode,          roles: [UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.USUALDANCE_ADMIN] },
-      { path: '/manage-schedule', label: 'Cronograma',              icon: Calendar,        roles: [UserRole.COORDENADOR, UserRole.MESARIO, UserRole.SONOPLASTA, UserRole.RECEPCAO, UserRole.PALCO, UserRole.STAFF, UserRole.ORGANIZER, UserRole.USUALDANCE_ADMIN] },
+      { path: '/check-in',        label: 'Credenciamento',          icon: QrCode,          roles: [UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
+      { path: '/manage-schedule', label: 'Cronograma',              icon: Calendar,        roles: [UserRole.COORDENADOR, UserRole.MESARIO, UserRole.SONOPLASTA, UserRole.RECEPCAO, UserRole.PALCO, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
       // Credenciamento
       { path: '/check-in',        label: 'Credenciamento',          icon: QrCode,          roles: [UserRole.RECEPCAO] },
       // Marcacao de Palco
-      { path: '/marcacao-palco',  label: 'Marcacao de Palco',       icon: PersonStanding,  roles: [UserRole.PALCO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.USUALDANCE_ADMIN] },
+      { path: '/marcacao-palco',  label: 'Marcacao de Palco',       icon: PersonStanding,  roles: [UserRole.PALCO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
       // Mesario — suporte ao juri
-      { path: '/suporte-juri',    label: 'Suporte ao Juri',         icon: Headphones,      roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.USUALDANCE_ADMIN] },
+      { path: '/suporte-juri',    label: 'Suporte ao Juri',         icon: Headphones,      roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
     ],
   },
   {
     section: 'Admin',
-    roles: [UserRole.USUALDANCE_ADMIN],
+    roles: [UserRole.COREOHUB_ADMIN],
     items: [
       { path: '/super-admin',        label: 'Painel Admin',  icon: ShieldCheck },
       { path: '/trilhas',            label: 'Trilhas Sonoras', icon: Music      },

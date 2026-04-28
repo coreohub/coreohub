@@ -27,10 +27,10 @@ export const getOrCreateProfile = async (user: any): Promise<Profile | null> => 
     }
 
     if (existingProfile) {
-      if (user.email && ADMIN_EMAILS.includes(user.email) && existingProfile.role !== UserRole.USUALDANCE_ADMIN) {
+      if (user.email && ADMIN_EMAILS.includes(user.email) && existingProfile.role !== UserRole.COREOHUB_ADMIN) {
         const { data: updatedProfile } = await supabase
           .from('profiles')
-          .update({ role: UserRole.USUALDANCE_ADMIN })
+          .update({ role: UserRole.COREOHUB_ADMIN })
           .eq('id', user.id)
           .select()
           .single();
@@ -45,7 +45,7 @@ export const getOrCreateProfile = async (user: any): Promise<Profile | null> => 
       id: user.id,
       full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Novo Usuário',
       email: user.email,
-      role: isAdminEmail ? UserRole.USUALDANCE_ADMIN : UserRole.INDEPENDENT,
+      role: isAdminEmail ? UserRole.COREOHUB_ADMIN : UserRole.INDEPENDENT,
     };
 
     const { data: createdProfile, error: insertError } = await supabase

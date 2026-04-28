@@ -15,7 +15,7 @@ interface HeaderProps {
 }
 
 const ROLE_OPTIONS: { role: UserRole; label: string; color: string }[] = [
-  { role: UserRole.USUALDANCE_ADMIN, label: 'Super Admin', color: '#ff0068' },
+  { role: UserRole.COREOHUB_ADMIN, label: 'Super Admin', color: '#ff0068' },
   { role: UserRole.ORGANIZER,        label: 'Produtor',    color: '#8b5cf6' },
   { role: UserRole.STAFF,            label: 'Equipe',      color: '#0ea5e9' },
   { role: UserRole.JUDGE,            label: 'Jurado',      color: '#f59e0b' },
@@ -25,7 +25,7 @@ const ROLE_OPTIONS: { role: UserRole; label: string; color: string }[] = [
 
 const Header = ({ toggleSidebar, profile, theme, toggleTheme, activeRole, setActiveRole }: HeaderProps) => {
   const navigate = useNavigate();
-  const isSuperAdmin = profile?.role === UserRole.USUALDANCE_ADMIN;
+  const isSuperAdmin = profile?.role === UserRole.COREOHUB_ADMIN;
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
