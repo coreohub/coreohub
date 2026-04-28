@@ -292,12 +292,14 @@ const Festivais = () => {
                 Anuncie seu próximo festival na CoreoHub. Inscrições, pagamentos com split automático, jurados, lives e certificados — tudo num só lugar.
               </p>
             </div>
-            <Link
-              to="/login"
+            <a
+              href="https://wa.me/5517997936169?text=Ol%C3%A1%2C%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20a%20CoreoHub"
+              target="_blank"
+              rel="noopener noreferrer"
               className="px-8 py-5 bg-[#ff0068] text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] flex items-center gap-2 hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30 whitespace-nowrap"
             >
               Cadastrar meu festival <ArrowRight size={16} />
-            </Link>
+            </a>
           </div>
         </div>
       </section>

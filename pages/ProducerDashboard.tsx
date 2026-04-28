@@ -8,6 +8,8 @@ import {
   Download, BarChart3, Copy, Check, ExternalLink,
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { Profile as UserProfile } from '../types';
+import GuiaDoProdutor from '../components/GuiaDoProdutor';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import AsaasBadge from '../components/AsaasBadge';
 
@@ -97,7 +99,11 @@ const CountdownBadge = ({ eventDate }: { eventDate: string }) => {
   );
 };
 
-const ProducerDashboard = () => {
+interface ProducerDashboardProps {
+  profile: UserProfile;
+}
+
+const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -307,6 +313,9 @@ const ProducerDashboard = () => {
           </button>
         </div>
       </header>
+
+      {/* Guia do produtor — só aparece enquanto onboarding estiver pendente */}
+      <GuiaDoProdutor profile={profile} />
 
       {/* Metric cards */}
       {loading ? (

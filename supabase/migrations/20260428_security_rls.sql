@@ -28,81 +28,94 @@ CREATE POLICY "super_admin_all_coreografias" ON coreografias
   WITH CHECK (is_super_admin(auth.uid()));
 
 -- ── evaluations ──────────────────────────────────────────────────────────────
+-- evaluations.judge_id aponta pra judges.id (jurados autenticam via PIN, não auth).
+-- Logo, escrita é controlada pelo produtor do evento que abre o terminal.
 ALTER TABLE evaluations ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "judge_own_evaluations" ON evaluations;
-CREATE POLICY "judge_own_evaluations" ON evaluations
-  FOR ALL
-  USING (judge_id = auth.uid())
-  WITH CHECK (judge_id = auth.uid());
-
+DROP POLICY IF EXISTS "judge_own_evaluations"     ON evaluations;
 DROP POLICY IF EXISTS "producer_reads_evaluations" ON evaluations;
-CREATE POLICY "producer_reads_evaluations" ON evaluations
-  FOR SELECT
+DROP POLICY IF EXISTS "producer_manages_evaluations" ON evaluations;
+DROP POLICY IF EXISTS "inscrito_reads_own_evaluations" ON evaluations;
+DROP POLICY IF EXISTS "super_admin_all_evaluations" ON evaluations;
+
+CREATE POLICY "producer_manages_evaluations" ON evaluations
+  FOR ALL
   USING (
+    EXISTS (
+      SELECT 1 FROM events e
+      WHERE e.id = evaluations.event_id AND e.created_by = auth.uid()
+    )
+  )
+  WITH CHECK (
     EXISTS (
       SELECT 1 FROM events e
       WHERE e.id = evaluations.event_id AND e.created_by = auth.uid()
     )
   );
 
-DROP POLICY IF EXISTS "super_admin_all_evaluations" ON evaluations;
+CREATE POLICY "inscrito_reads_own_evaluations" ON evaluations
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM coreografias c
+      WHERE c.id = evaluations.registration_id AND c.user_id = auth.uid()
+    )
+    OR EXISTS (
+      SELECT 1 FROM registrations r
+      WHERE r.id = evaluations.registration_id AND r.user_id = auth.uid()
+    )
+  );
+
 CREATE POLICY "super_admin_all_evaluations" ON evaluations
   FOR ALL
   USING (is_super_admin(auth.uid()))
   WITH CHECK (is_super_admin(auth.uid()));
 
 -- ── judges ───────────────────────────────────────────────────────────────────
+-- judges é um cadastro global (sem event_id/user_id).
+-- Qualquer autenticado lê; apenas organizers/admin escrevem.
 ALTER TABLE judges ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "producer_manages_own_judges" ON judges;
-CREATE POLICY "producer_manages_own_judges" ON judges
+DROP POLICY IF EXISTS "judge_reads_own_assignment"  ON judges;
+DROP POLICY IF EXISTS "super_admin_all_judges"       ON judges;
+DROP POLICY IF EXISTS "authenticated_reads_judges"   ON judges;
+DROP POLICY IF EXISTS "organizer_manages_judges"     ON judges;
+
+CREATE POLICY "authenticated_reads_judges" ON judges
+  FOR SELECT
+  USING (auth.uid() IS NOT NULL);
+
+CREATE POLICY "organizer_manages_judges" ON judges
   FOR ALL
   USING (
     EXISTS (
-      SELECT 1 FROM events e
-      WHERE e.id = judges.event_id AND e.created_by = auth.uid()
+      SELECT 1 FROM profiles p
+      WHERE p.id = auth.uid()
+        AND p.role IN ('ORGANIZER', 'COREOHUB_ADMIN')
     )
   )
   WITH CHECK (
     EXISTS (
-      SELECT 1 FROM events e
-      WHERE e.id = judges.event_id AND e.created_by = auth.uid()
+      SELECT 1 FROM profiles p
+      WHERE p.id = auth.uid()
+        AND p.role IN ('ORGANIZER', 'COREOHUB_ADMIN')
     )
   );
 
-DROP POLICY IF EXISTS "judge_reads_own_assignment" ON judges;
-CREATE POLICY "judge_reads_own_assignment" ON judges
-  FOR SELECT
-  USING (user_id = auth.uid());
-
-DROP POLICY IF EXISTS "super_admin_all_judges" ON judges;
-CREATE POLICY "super_admin_all_judges" ON judges
-  FOR ALL
-  USING (is_super_admin(auth.uid()))
-  WITH CHECK (is_super_admin(auth.uid()));
-
 -- ── elenco ───────────────────────────────────────────────────────────────────
+-- elenco é o cadastro pessoal de bailarinos do usuário (só tem user_id).
 ALTER TABLE elenco ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "inscrito_own_elenco" ON elenco;
+DROP POLICY IF EXISTS "inscrito_own_elenco"        ON elenco;
+DROP POLICY IF EXISTS "producer_reads_event_elenco" ON elenco;
+DROP POLICY IF EXISTS "super_admin_all_elenco"      ON elenco;
+
 CREATE POLICY "inscrito_own_elenco" ON elenco
   FOR ALL
   USING (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
 
-DROP POLICY IF EXISTS "producer_reads_event_elenco" ON elenco;
-CREATE POLICY "producer_reads_event_elenco" ON elenco
-  FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM coreografias c
-      JOIN events e ON e.id = c.event_id
-      WHERE c.id = elenco.coreografia_id AND e.created_by = auth.uid()
-    )
-  );
-
-DROP POLICY IF EXISTS "super_admin_all_elenco" ON elenco;
 CREATE POLICY "super_admin_all_elenco" ON elenco
   FOR ALL
   USING (is_super_admin(auth.uid()))

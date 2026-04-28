@@ -32,6 +32,7 @@ const SuperAdminDashboard      = lazy(() => import('./pages/SuperAdmin'));
 const ProducerInviteLanding    = lazy(() => import('./pages/ProducerInvite'));
 const TeamInviteLanding        = lazy(() => import('./pages/TeamInvite'));
 const CreateEvent              = lazy(() => import('./pages/CreateEvent'));
+const CriarEventoGate          = lazy(() => import('./pages/CriarEventoGate'));
 const FestivalShowcase         = lazy(() => import('./pages/FestivalShowcase'));
 const PublicEventPage          = lazy(() => import('./pages/PublicEventPage'));
 const Festivais                = lazy(() => import('./pages/Festivais'));
@@ -267,7 +268,7 @@ const App: React.FC = () => {
         <Route path="/profile" element={<PrivateRoute {...privateRouteProps}><Profile /></PrivateRoute>} />
         <Route path="/meus-resultados" element={<PrivateRoute {...privateRouteProps}><MyResults activeRole={activeRole!} /></PrivateRoute>} />
 
-        <Route path="/qg-organizador" element={<PrivateRoute {...privateRouteProps}><ProducerDashboard /></PrivateRoute>} />
+        <Route path="/qg-organizador" element={<PrivateRoute {...privateRouteProps}><ProducerDashboard profile={profile!} /></PrivateRoute>} />
         <Route path="/registrations" element={<PrivateRoute {...privateRouteProps}><Registrations /></PrivateRoute>} />
         <Route path="/manage-schedule" element={<PrivateRoute {...privateRouteProps}><Schedule /></PrivateRoute>} />
         <Route path="/apuracao" element={<PrivateRoute {...privateRouteProps}><ResultsPanel /></PrivateRoute>} />
@@ -290,7 +291,7 @@ const App: React.FC = () => {
         <Route path="/minha-seletiva"       element={<PrivateRoute {...privateRouteProps}><SeletivaInscrito /></PrivateRoute>} />
         <Route path="/importar-regulamento" element={<PrivateRoute {...privateRouteProps}><RegulationAIParser /></PrivateRoute>} />
 
-        <Route path="/criar-evento" element={<PrivateRoute {...privateRouteProps}><CreateEvent /></PrivateRoute>} />
+        <Route path="/criar-evento" element={<Suspense fallback={<PageLoader />}><CriarEventoGate /></Suspense>} />
         <Route path="/event-config" element={<PrivateRoute {...privateRouteProps}><RegistrationGradeConfig /></PrivateRoute>} />
         <Route path="/generate-narration" element={<PrivateRoute {...privateRouteProps}><AINarration /></PrivateRoute>} />
         <Route path="/ai-analysis" element={<PrivateRoute {...privateRouteProps}><AIAnalysis /></PrivateRoute>} />

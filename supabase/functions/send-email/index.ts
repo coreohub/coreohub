@@ -247,6 +247,51 @@ async function sendViaResend(params: {
   return { id: data?.id as string | undefined }
 }
 
+// ─── Template: producer_welcome ─────────────────────────────────────────────
+
+interface ProducerWelcomePayload {
+  produtorNome?: string
+  produtorEmail: string
+  appUrl?: string
+}
+
+function buildProducerWelcome(p: ProducerWelcomePayload) {
+  const contentHtml = `
+    <p style="margin:0 0 16px;font-size:14px;line-height:1.65;color:#334155;">
+      Sua conta de produtor foi criada com sucesso. Agora você pode:
+    </p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">
+      <tr><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;">
+        <p style="margin:0;font-size:13px;color:#0b0b0f;font-weight:700;">1. Conectar sua conta Asaas</p>
+        <p style="margin:4px 0 0;font-size:12px;color:#64748b;">Para receber os pagamentos das inscrições com split automático.</p>
+      </td></tr>
+      <tr><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;">
+        <p style="margin:0;font-size:13px;color:#0b0b0f;font-weight:700;">2. Configurar seu festival</p>
+        <p style="margin:4px 0 0;font-size:12px;color:#64748b;">Datas, modalidades, categorias, estilos e valores.</p>
+      </td></tr>
+      <tr><td style="padding:10px 0;">
+        <p style="margin:0;font-size:13px;color:#0b0b0f;font-weight:700;">3. Compartilhar o link de inscrições</p>
+        <p style="margin:4px 0 0;font-size:12px;color:#64748b;">Divulgue no Instagram, WhatsApp e redes do festival.</p>
+      </td></tr>
+    </table>
+    <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      O guia passo a passo está disponível no painel do produtor para te ajudar em cada etapa.
+    </p>`
+
+  return {
+    subject: `Bem-vindo(a) à CoreoHub!`,
+    html: baseLayout({
+      preheader: `Sua conta de produtor está pronta. Veja os próximos passos para colocar seu festival no ar.`,
+      title: 'Conta de produtor criada!',
+      intro: `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, sua conta no CoreoHub foi criada e está pronta para receber inscrições. Aqui vai um guia rápido:`,
+      contentHtml,
+      ctaLabel: 'Acessar painel do produtor',
+      ctaUrl: `${p.appUrl ?? 'https://app.coreohub.com'}/qg-organizador`,
+      footerNote: 'Qualquer dúvida, fale com a gente pelo WhatsApp +55 17 99793-6169.',
+    }),
+  }
+}
+
 // ─── Template: event_created_producer ───────────────────────────────────────
 
 interface EventCreatedPayload {
@@ -289,7 +334,7 @@ function buildEventCreatedProducer(p: EventCreatedPayload) {
 // ─── Handler ────────────────────────────────────────────────────────────────
 
 interface SendEmailRequest {
-  type: 'payment_confirmed_registrant' | 'payment_confirmed_producer' | 'event_created_producer'
+  type: 'payment_confirmed_registrant' | 'payment_confirmed_producer' | 'event_created_producer' | 'producer_welcome'
   payload: Record<string, unknown>
 }
 
@@ -298,20 +343,57 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  // Apenas chamadas internas (service_role_key) são permitidas.
-  // Previne uso não autorizado do domínio Resend para phishing/spam.
+  // Auth: chamadas internas (service_role_key) → liberadas para qualquer tipo.
+  // Chamadas com user JWT → liberadas apenas para 'producer_welcome' e somente
+  // se o email do payload bater com o email do JWT (evita phishing).
   const serviceKey = Deno.env.get('SERVICE_ROLE_KEY') ?? ''
   const token = (req.headers.get('Authorization') ?? '').replace('Bearer ', '')
-  if (!serviceKey || token !== serviceKey) {
-    console.warn('[send-email] chamada não autorizada bloqueada')
-    return new Response(JSON.stringify({ error: 'Não autorizado' }), {
-      status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  const isService = serviceKey && token === serviceKey
+
+  // Lê o body uma vez para a checagem de auth + processamento
+  let body: SendEmailRequest
+  try {
+    body = await req.json()
+  } catch {
+    return new Response(JSON.stringify({ error: 'Body inválido' }), {
+      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
 
+  if (!isService) {
+    // Bloqueia tudo que não seja producer_welcome via JWT de user
+    if (body?.type !== 'producer_welcome') {
+      console.warn('[send-email] chamada não autorizada bloqueada (sem service_key)')
+      return new Response(JSON.stringify({ error: 'Não autorizado' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Valida JWT e confere se o email do JWT bate com o do payload
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    if (!token || !supabaseUrl || !anonKey) {
+      return new Response(JSON.stringify({ error: 'Não autorizado' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2')
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    })
+    const { data: { user } } = await userClient.auth.getUser()
+    const payloadEmail = (body?.payload as any)?.produtorEmail
+    if (!user?.email || !payloadEmail || user.email.toLowerCase() !== String(payloadEmail).toLowerCase()) {
+      console.warn('[send-email] producer_welcome com email não correspondente bloqueado')
+      return new Response(JSON.stringify({ error: 'Não autorizado' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+  }
+
   try {
-    const { type, payload } = (await req.json()) as SendEmailRequest
+    const { type, payload } = body
 
     if (!type || !payload) {
       throw new Error('type e payload são obrigatórios')
@@ -344,6 +426,15 @@ Deno.serve(async (req) => {
         const p = payload as unknown as EventCreatedPayload
         if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
         const tpl = buildEventCreatedProducer(p)
+        to = p.produtorEmail
+        subject = tpl.subject
+        html = tpl.html
+        break
+      }
+      case 'producer_welcome': {
+        const p = payload as unknown as ProducerWelcomePayload
+        if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
+        const tpl = buildProducerWelcome(p)
         to = p.produtorEmail
         subject = tpl.subject
         html = tpl.html
