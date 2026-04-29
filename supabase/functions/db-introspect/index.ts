@@ -40,6 +40,56 @@ Deno.serve(async (req) => {
       })
     }
 
+    if (action === 'list-recent-events') {
+      const evs = await sql`
+        SELECT e.id, e.name, e.created_by, e.created_at, p.email, p.full_name
+        FROM events e
+        LEFT JOIN profiles p ON p.id = e.created_by
+        ORDER BY e.created_at DESC LIMIT 10
+      `
+      return new Response(JSON.stringify({ events: evs }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'inspect-configuracoes') {
+      const rows = await sql`
+        SELECT c.id, c.event_id, e.name AS event_name, e.created_by
+        FROM configuracoes c
+        LEFT JOIN events e ON e.id = c.event_id
+        ORDER BY c.id
+      `
+      return new Response(JSON.stringify({ rows }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'fix-configuracoes-event-id') {
+      const userId = url.searchParams.get('user_id') ?? ''
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'user_id obrigatório' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      // Pega evento mais recente do user
+      const evs = await sql`
+        SELECT id, name FROM events WHERE created_by = ${userId}::uuid
+        ORDER BY created_at DESC LIMIT 1
+      `
+      if (evs.length === 0) {
+        return new Response(JSON.stringify({ error: 'Nenhum evento encontrado pra esse user' }), {
+          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      const eventId = evs[0].id
+      await sql`
+        UPDATE configuracoes SET event_id = ${eventId}::uuid WHERE id = '1'
+      `
+      return new Response(JSON.stringify({ ok: true, event_id: eventId, event_name: evs[0].name }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     if (action === 'test-insert') {
       const payload = await req.json()
       try {

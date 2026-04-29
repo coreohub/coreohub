@@ -869,8 +869,23 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Usuário não autenticado.');
 
+      // RLS de configuracoes exige event_id apontando pra evento do user.
+      // Sem isso, o upsert falha mesmo na criação inicial.
+      const { data: myEvent } = await supabase
+        .from('events')
+        .select('id')
+        .eq('created_by', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!myEvent?.id) {
+        throw new Error('Crie um evento antes de salvar configurações.');
+      }
+
       const { error: sbError } = await supabase.from('configuracoes').upsert({
         id: 1,
+        event_id: myEvent.id,
         nome_evento:         general.eventName,
         local_evento:        general.location,
         cidade_estado:       general.city,
