@@ -239,7 +239,7 @@ const Sidebar = ({ isOpen, toggle, onLogout, activeRole, profile, videoSelection
             </div>
           </nav>
 
-          <div className="p-3 border-t border-slate-200 dark:border-white/10">
+          <div className="p-3 pb-20 sm:pb-3 border-t border-slate-200 dark:border-white/10">
             <button
               onClick={onLogout}
               className="flex items-center gap-2.5 w-full px-3 py-2 text-slate-600 dark:text-slate-400 hover:text-rose-500 transition-all rounded-xl hover:bg-rose-500/10"
