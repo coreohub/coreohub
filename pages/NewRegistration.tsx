@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { ChevronRight, Loader2, Music2, Users, User, AlertCircle } from 'lucide-react';
 
-const input = 'w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-5 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm';
+const input = 'w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-5 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm dark:[color-scheme:dark]';
 const label = 'block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5 ml-1';
 
 const NewRegistration = () => {
@@ -40,16 +40,29 @@ const NewRegistration = () => {
           .select('id, name, description, start_date, end_date, formacoes_config, cover_url')
           .eq('id', eventId)
           .single(),
+        // Multi-tenant: lê config do próprio evento. Fallback abaixo se vazio.
         supabase
           .from('configuracoes')
           .select('categorias, estilos, prazo_inscricao')
-          .eq('id', 1)
+          .eq('event_id', eventId)
           .maybeSingle(),
       ]);
 
+      // Se a row per-event não tiver dados (evento recém-criado sem config),
+      // tenta a row legacy id='1' como fallback.
+      let configFinal: any = cfg;
+      if (!configFinal || (!configFinal.categorias && !configFinal.estilos)) {
+        const { data: legacy } = await supabase
+          .from('configuracoes')
+          .select('categorias, estilos, prazo_inscricao')
+          .eq('id', '1')
+          .maybeSingle();
+        configFinal = legacy ?? configFinal;
+      }
+
       if (evErr || !ev) { setError('Evento não encontrado.'); setLoading(false); return; }
       setEvent(ev);
-      setConfig(cfg);
+      setConfig(configFinal);
       setLoading(false);
     };
     load();
@@ -62,30 +75,53 @@ const NewRegistration = () => {
   const selectedFormacao = formacoes.find(m => m.name === form.formacao);
   const fee: number = selectedFormacao?.fee ?? selectedFormacao?.base_fee ?? 0;
 
+  // Limites de participantes da formação selecionada (Solo: 1, Duo: 2, etc).
+  const minMembers: number = Number(selectedFormacao?.min_members ?? 1);
+  const maxMembers: number = Number(selectedFormacao?.max_members ?? 50);
+
+  // Reseta num_participants pro mínimo da formação ao trocar de formação,
+  // ou clamp se estiver fora dos limites.
+  useEffect(() => {
+    if (!selectedFormacao) return;
+    setForm(f => {
+      if (f.num_participants < minMembers || f.num_participants > maxMembers) {
+        return { ...f, num_participants: minMembers };
+      }
+      return f;
+    });
+  }, [form.formacao, minMembers, maxMembers, selectedFormacao]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.choreography_name.trim()) { setError('Informe o nome da coreografia.'); return; }
     if (!form.formacao)  { setError('Selecione a formação.'); return; }
     if (!form.category)  { setError('Selecione a categoria.'); return; }
     if (fee <= 0)        { setError('Esta formação não possui valor configurado. Contate o produtor.'); return; }
+    if (form.num_participants < minMembers || form.num_participants > maxMembers) {
+      setError(`Esta formação aceita de ${minMembers} a ${maxMembers} participantes.`);
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
 
     try {
+      // Tabela `registrations` usa nomes em português. Colunas reais validadas
+      // via db-introspect: nome_coreografia, formato_participacao, categoria,
+      // estilo_danca, status, status_pagamento, criado_em, data_inscricao.
       const { data: reg, error: regErr } = await supabase
         .from('registrations')
         .insert({
-          event_id: eventId,
-          user_id: userId,
-          choreography_name: form.choreography_name.trim(),
-          formacao: form.formacao,
-          category: form.category,
-          dance_style: form.dance_style || null,
-          status: 'PENDENTE',
-          status_pagamento: 'PENDENTE',
-          audio_duration_seconds: 0,
-          applied_penalty: 0,
+          event_id:             eventId,
+          user_id:              userId,
+          nome_coreografia:     form.choreography_name.trim(),
+          formato_participacao: form.formacao,
+          categoria:            form.category,
+          estilo_danca:         form.dance_style || null,
+          status:               'PENDENTE',
+          status_pagamento:     'PENDENTE',
+          criado_em:            new Date().toISOString(),
+          data_inscricao:       new Date().toISOString(),
         })
         .select('id')
         .single();
@@ -202,16 +238,31 @@ const NewRegistration = () => {
             )}
 
             <div>
-              <label className={label}>Número de participantes</label>
+              <label className={label}>
+                Número de participantes
+                {minMembers === maxMembers && (
+                  <span className="ml-2 text-[9px] font-bold text-slate-400 normal-case tracking-normal">
+                    (fixo: {minMembers})
+                  </span>
+                )}
+              </label>
               <div className="relative">
                 <User size={13} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
-                  type="number" min={1} max={50}
+                  type="number"
+                  min={minMembers}
+                  max={maxMembers}
                   value={form.num_participants}
                   onChange={e => setForm(f => ({ ...f, num_participants: Number(e.target.value) }))}
-                  className={`${input} pl-9`}
+                  disabled={minMembers === maxMembers}
+                  className={`${input} pl-9 disabled:opacity-60 disabled:cursor-not-allowed`}
                 />
               </div>
+              {minMembers !== maxMembers && (
+                <p className="text-[10px] text-slate-500 mt-1.5 ml-1">
+                  Entre {minMembers} e {maxMembers} participantes
+                </p>
+              )}
             </div>
           </div>
 
