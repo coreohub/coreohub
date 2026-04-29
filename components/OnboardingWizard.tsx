@@ -19,6 +19,17 @@ const slugify = (text: string) =>
     .replace(/[^a-z0-9\s-]/g, '')
     .trim().replace(/\s+/g, '-').replace(/-+/g, '-');
 
+/** Mescla arrays de configs sem duplicar por `name` — primeira ocorrência vence. */
+const mergeByName = <T extends { name: string }>(items: T[]): T[] => {
+  const seen = new Set<string>();
+  return items.filter(it => {
+    const k = it.name.trim().toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+};
+
 const OnboardingWizard: React.FC = () => {
   const navigate = useNavigate();
   const pdfInputRef = useRef<HTMLInputElement>(null);
@@ -33,16 +44,25 @@ const OnboardingWizard: React.FC = () => {
     city: '',
     state: '',
     start_date: '',
-    template: null as TemplateId | null,
+    templates: [] as TemplateId[],
     is_paid: true,
     category_price: 0,
   });
+
+  const toggleTemplate = (id: TemplateId) => {
+    setData(prev => ({
+      ...prev,
+      templates: prev.templates.includes(id)
+        ? prev.templates.filter(t => t !== id)
+        : [...prev.templates, id],
+    }));
+  };
 
   const [createdEvent, setCreatedEvent] = useState<{ id: string; slug: string } | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
 
   const canAdvanceStep1 = !!(data.name.trim() && data.city.trim() && data.start_date);
-  const canAdvanceStep2 = !!data.template;
+  const canAdvanceStep2 = data.templates.length > 0;
 
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -81,14 +101,24 @@ const OnboardingWizard: React.FC = () => {
   };
 
   const handleCreate = async () => {
-    if (!data.template) return;
+    if (data.templates.length === 0) return;
     setSaving(true);
     setError(null);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Sessão expirada — faça login de novo.');
 
-      const tpl = getTemplate(data.template);
+      // Combina os templates selecionados — se ambos, prioriza Competitiva
+      // como default_format e mescla formações/critérios sem duplicar por nome.
+      const tpls = data.templates.map(getTemplate);
+      const hasCompetitiva = data.templates.includes('COMPETITIVA');
+      const baseTpl = hasCompetitiva ? getTemplate('COMPETITIVA') : tpls[0];
+
+      const mergedFormacoes = mergeByName(tpls.flatMap(t => t.formacoes_config));
+      const mergedCategorias = mergeByName(tpls.flatMap(t => t.categories_config));
+      const mergedStyles = mergeByName(tpls.flatMap(t => t.styles_config));
+      const mergedCriteria = mergeByName(tpls.flatMap(t => t.criteria_config));
+
       const slug = `${slugify(data.name)}-${Math.random().toString(36).substring(2, 8)}`;
 
       const payload: any = {
@@ -102,12 +132,12 @@ const OnboardingWizard: React.FC = () => {
         created_by:            user.id,
         is_public:             true,
         agreed:                true,
-        default_format:        tpl.default_format,
-        score_scale:           tpl.score_scale,
-        formacoes_config:      tpl.formacoes_config.map(f => ({ ...f, fee: data.is_paid ? data.category_price : 0 })),
-        categories_config:     tpl.categories_config,
-        styles_config:         tpl.styles_config,
-        criteria_config:       tpl.criteria_config,
+        default_format:        baseTpl.default_format,
+        score_scale:           baseTpl.score_scale,
+        formacoes_config:      mergedFormacoes.map(f => ({ ...f, fee: data.is_paid ? data.category_price : 0 })),
+        categories_config:     mergedCategorias,
+        styles_config:         mergedStyles,
+        criteria_config:       mergedCriteria,
         category_price:        data.is_paid ? data.category_price : 0,
         event_type:            data.is_paid ? 'private' : 'government',
         registration_lots:     [],
@@ -300,19 +330,19 @@ const OnboardingWizard: React.FC = () => {
                   Como vai ser sua <span className="text-[#ff0068]">mostra?</span>
                 </h1>
                 <p className="text-sm text-slate-500 font-medium">
-                  Escolha o formato — você pode ajustar depois.
+                  Pode escolher uma ou as duas — seu festival pode ter modalidades de cada tipo.
                 </p>
               </div>
 
               <div className="space-y-3">
                 {eventTemplates.map(tpl => {
-                  const selected = data.template === tpl.id;
+                  const selected = data.templates.includes(tpl.id);
                   const Icon = tpl.id === 'COMPETITIVA' ? Trophy : Star;
                   return (
                     <button
                       key={tpl.id}
                       type="button"
-                      onClick={() => setData({ ...data, template: tpl.id })}
+                      onClick={() => toggleTemplate(tpl.id)}
                       className={`w-full text-left p-6 rounded-3xl border-2 transition-all ${
                         selected
                           ? 'border-[#ff0068] bg-[#ff0068]/5 scale-[1.01]'
