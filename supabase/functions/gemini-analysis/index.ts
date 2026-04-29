@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
 
     if (pdf_base64) {
       response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash',
         contents: {
           parts: [
             {
@@ -148,7 +148,7 @@ Datas em formato ISO 8601 (YYYY-MM-DD). Tempos no formato MM:SS.`,
       })
     } else {
       response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash',
         contents: `Você é um especialista em regulamentos de festivais de dança brasileiros.
 Analise o regulamento abaixo e extraia TODOS os dados estruturados.
 Para campos não encontrados no regulamento, retorne null (nunca invente valores).
