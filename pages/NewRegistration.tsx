@@ -70,7 +70,11 @@ const NewRegistration = () => {
 
   const formacoes: any[] = event?.formacoes_config ?? [];
   const categories: any[] = config?.categorias ?? [];
-  const styles: any[]     = config?.estilos ?? [];
+  // estilos pode vir como array de strings (legacy) ou objetos {id, name}.
+  // Normaliza pra { id, name } pra renderizar consistentemente.
+  const styles: { id: string; name: string }[] = (config?.estilos ?? []).map((s: any, i: number) =>
+    typeof s === 'string' ? { id: `s_${i}`, name: s } : { id: s.id ?? s.name ?? `s_${i}`, name: s.name ?? '' }
+  ).filter((s: any) => s.name);
 
   const selectedFormacao = formacoes.find(m => m.name === form.formacao);
   const fee: number = selectedFormacao?.fee ?? selectedFormacao?.base_fee ?? 0;

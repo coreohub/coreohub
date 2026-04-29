@@ -75,7 +75,7 @@ const Checkout = () => {
       const [{ data: reg }, { data: ev }] = await Promise.all([
         supabase
           .from('registrations')
-          .select('id, choreography_name, formacao, category, dance_style, status_pagamento, payment_url, profiles(full_name, email)')
+          .select('id, nome_coreografia, formato_participacao, categoria, estilo_danca, status_pagamento, payment_url, profiles(full_name, email)')
           .eq('id', registrationId)
           .single(),
         supabase
@@ -96,7 +96,7 @@ const Checkout = () => {
       setEvent(ev);
 
       const formacoes: any[] = ev.formacoes_config ?? [];
-      const mod = formacoes.find((m: any) => m.name === reg.formacao);
+      const mod = formacoes.find((m: any) => m.name === reg.formato_participacao);
       const feeFromFormacao = mod?.fee ?? mod?.base_fee ?? 0;
 
       // Lotes vêm da própria formação (cada formação tem seus lotes).
@@ -236,9 +236,9 @@ const Checkout = () => {
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Resumo da Inscrição</p>
 
           <div className="space-y-3">
-            <LineItem icon={Music2} label="Coreografia" value={registration?.choreography_name} />
-            <LineItem icon={Users}  label="Formação"    value={registration?.formacao} />
-            <LineItem icon={Tag}    label="Categoria"   value={registration?.category} />
+            <LineItem icon={Music2} label="Coreografia" value={registration?.nome_coreografia} />
+            <LineItem icon={Users}  label="Formação"    value={registration?.formato_participacao} />
+            <LineItem icon={Tag}    label="Categoria"   value={registration?.categoria} />
           </div>
 
           {/* Lote ativo */}

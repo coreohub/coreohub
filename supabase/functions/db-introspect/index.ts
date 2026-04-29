@@ -194,6 +194,14 @@ Deno.serve(async (req) => {
       })
     }
 
+    if (action === 'registration-detail') {
+      const regId = url.searchParams.get('id') ?? ''
+      const rows = await sql`SELECT * FROM registrations WHERE id = ${regId}::uuid`
+      return new Response(JSON.stringify({ row: rows[0] ?? null }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     if (action === 'event-detail') {
       const eventId = url.searchParams.get('id') ?? ''
       const rows = await sql`
