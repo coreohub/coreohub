@@ -24,28 +24,40 @@ const NewRegistration = () => {
     num_participants: 1,
   });
 
+  const [config, setConfig] = useState<any>(null);
+
   useEffect(() => {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { navigate('/auth'); return; }
       setUserId(user.id);
 
-      const { data: ev, error: evErr } = await supabase
-        .from('events')
-        .select('id, name, description, start_date, end_date, registration_deadline, formacoes_config, categories_config, styles_config, cover_url')
-        .eq('id', eventId)
-        .single();
+      // Categorias, estilos e prazo de inscrição moram em `configuracoes`,
+      // não em `events`. Carregamos os dois em paralelo.
+      const [{ data: ev, error: evErr }, { data: cfg }] = await Promise.all([
+        supabase
+          .from('events')
+          .select('id, name, description, start_date, end_date, formacoes_config, cover_url')
+          .eq('id', eventId)
+          .single(),
+        supabase
+          .from('configuracoes')
+          .select('categorias, estilos, prazo_inscricao')
+          .eq('id', 1)
+          .maybeSingle(),
+      ]);
 
       if (evErr || !ev) { setError('Evento não encontrado.'); setLoading(false); return; }
       setEvent(ev);
+      setConfig(cfg);
       setLoading(false);
     };
     load();
   }, [eventId, navigate]);
 
   const formacoes: any[] = event?.formacoes_config ?? [];
-  const categories: any[] = event?.categories_config ?? [];
-  const styles: any[]     = event?.styles_config ?? [];
+  const categories: any[] = config?.categorias ?? [];
+  const styles: any[]     = config?.estilos ?? [];
 
   const selectedFormacao = formacoes.find(m => m.name === form.formacao);
   const fee: number = selectedFormacao?.fee ?? selectedFormacao?.base_fee ?? 0;
