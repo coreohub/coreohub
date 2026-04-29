@@ -3,15 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles, FileUp, ArrowRight, ArrowLeft, Trophy, Star,
-  CheckCircle2, RefreshCw, AlertCircle, Calendar, MapPin,
-  DollarSign, Gift, Copy, MessageCircle, Settings2, Loader2,
+  CheckCircle2, RefreshCw, AlertCircle, Copy, MessageCircle,
+  Settings2, Loader2,
 } from 'lucide-react';
 import { createEvent, supabase } from '../services/supabase';
 import { extractRegulationFromPdfOrThrow, isExtractEmpty, RegulationExtract } from '../services/geminiService';
 import { eventTemplates, getTemplate, TemplateId } from '../services/eventTemplates';
 import { EventFormat } from '../types';
 
-type Step = 1 | 2 | 3 | 4;
+type Step = 1 | 2 | 3;
 
 const slugify = (text: string) =>
   text.toLowerCase()
@@ -45,9 +45,10 @@ const OnboardingWizard: React.FC = () => {
     state: '',
     start_date: '',
     templates: [] as TemplateId[],
-    is_paid: true,
-    category_price: 0,
   });
+
+  const [createdEvent, setCreatedEvent] = useState<{ id: string; slug: string } | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const toggleTemplate = (id: TemplateId) => {
     setData(prev => ({
@@ -57,9 +58,6 @@ const OnboardingWizard: React.FC = () => {
         : [...prev.templates, id],
     }));
   };
-
-  const [createdEvent, setCreatedEvent] = useState<{ id: string; slug: string } | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
 
   const canAdvanceStep1 = !!(data.name.trim() && data.city.trim() && data.start_date);
   const canAdvanceStep2 = data.templates.length > 0;
@@ -108,16 +106,10 @@ const OnboardingWizard: React.FC = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Sessão expirada — faça login de novo.');
 
-      // Combina os templates selecionados — se ambos, prioriza Competitiva
-      // como default_format e mescla formações/critérios sem duplicar por nome.
+      // Combina os templates selecionados (Competitiva tem prioridade como default).
       const tpls = data.templates.map(getTemplate);
       const hasCompetitiva = data.templates.includes('COMPETITIVA');
       const baseTpl = hasCompetitiva ? getTemplate('COMPETITIVA') : tpls[0];
-
-      const mergedFormacoes = mergeByName(tpls.flatMap(t => t.formacoes_config));
-      const mergedCategorias = mergeByName(tpls.flatMap(t => t.categories_config));
-      const mergedStyles = mergeByName(tpls.flatMap(t => t.styles_config));
-      const mergedCriteria = mergeByName(tpls.flatMap(t => t.criteria_config));
 
       const slug = `${slugify(data.name)}-${Math.random().toString(36).substring(2, 8)}`;
 
@@ -126,7 +118,6 @@ const OnboardingWizard: React.FC = () => {
         start_date:            data.start_date,
         city:                  data.city,
         state:                 data.state,
-        address:               data.city + (data.state ? `, ${data.state}` : ''),
         edition_year:          new Date(data.start_date).getFullYear() || new Date().getFullYear(),
         slug,
         created_by:            user.id,
@@ -134,12 +125,10 @@ const OnboardingWizard: React.FC = () => {
         agreed:                true,
         default_format:        baseTpl.default_format,
         score_scale:           baseTpl.score_scale,
-        formacoes_config:      mergedFormacoes.map(f => ({ ...f, fee: data.is_paid ? data.category_price : 0 })),
-        categories_config:     mergedCategorias,
-        styles_config:         mergedStyles,
-        criteria_config:       mergedCriteria,
-        category_price:        data.is_paid ? data.category_price : 0,
-        event_type:            data.is_paid ? 'private' : 'government',
+        formacoes_config:      mergeByName(tpls.flatMap(t => t.formacoes_config)),
+        categories_config:     mergeByName(tpls.flatMap(t => t.categories_config)),
+        styles_config:         mergeByName(tpls.flatMap(t => t.styles_config)),
+        criteria_config:       mergeByName(tpls.flatMap(t => t.criteria_config)),
         registration_lots:     [],
         age_tolerance_mode:    'PERCENT',
         age_tolerance_value:   0,
@@ -150,7 +139,7 @@ const OnboardingWizard: React.FC = () => {
       if (!ev?.id) throw new Error('Não foi possível criar o evento.');
 
       setCreatedEvent({ id: ev.id, slug: ev.slug ?? slug });
-      setStep(4);
+      setStep(3);
     } catch (e: any) {
       setError(e.message ?? 'Erro ao criar o evento.');
     } finally {
@@ -184,7 +173,7 @@ const OnboardingWizard: React.FC = () => {
       <div className="max-w-2xl mx-auto">
         {/* Progress */}
         <div className="flex items-center justify-center gap-2 mb-10">
-          {[1, 2, 3, 4].map(s => (
+          {[1, 2, 3].map(s => (
             <div
               key={s}
               className={`h-1.5 rounded-full transition-all duration-500 ${
@@ -195,13 +184,13 @@ const OnboardingWizard: React.FC = () => {
             />
           ))}
           <span className="ml-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            {step}/4
+            {step}/3
           </span>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-rose-500 text-xs font-bold flex items-center gap-2">
-            <AlertCircle size={16} /> {error}
+          <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-rose-500 text-xs font-bold flex items-start gap-2">
+            <AlertCircle size={16} className="mt-0.5 shrink-0" /> <span className="break-words">{error}</span>
           </div>
         )}
 
@@ -216,12 +205,12 @@ const OnboardingWizard: React.FC = () => {
               className="space-y-6"
             >
               <div className="text-center space-y-2">
-                <span className="text-[10px] font-black text-[#ff0068] uppercase tracking-[0.3em]">Passo 1 de 4</span>
+                <span className="text-[10px] font-black text-[#ff0068] uppercase tracking-[0.3em]">Passo 1 de 3</span>
                 <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
                   Vamos criar sua <span className="text-[#ff0068]">mostra</span>
                 </h1>
                 <p className="text-sm text-slate-500 font-medium">
-                  Comece pelo básico — você refina depois.
+                  Comece pelo básico — você refina os detalhes depois.
                 </p>
               </div>
 
@@ -325,7 +314,7 @@ const OnboardingWizard: React.FC = () => {
               className="space-y-6"
             >
               <div className="text-center space-y-2">
-                <span className="text-[10px] font-black text-[#ff0068] uppercase tracking-[0.3em]">Passo 2 de 4</span>
+                <span className="text-[10px] font-black text-[#ff0068] uppercase tracking-[0.3em]">Passo 2 de 3</span>
                 <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
                   Como vai ser sua <span className="text-[#ff0068]">mostra?</span>
                 </h1>
@@ -383,118 +372,8 @@ const OnboardingWizard: React.FC = () => {
                   <ArrowLeft size={14} /> Voltar
                 </button>
                 <button
-                  onClick={() => setStep(3)}
-                  disabled={!canAdvanceStep2}
-                  className="flex-1 flex items-center justify-center gap-2 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-[#ff0068]/20 disabled:opacity-40 disabled:hover:scale-100"
-                >
-                  Continuar <ArrowRight size={15} />
-                </button>
-              </div>
-            </motion.div>
-          )}
-
-          {/* ───────── STEP 3: Inscrição ───────── */}
-          {step === 3 && (
-            <motion.div
-              key="s3"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="space-y-6"
-            >
-              <div className="text-center space-y-2">
-                <span className="text-[10px] font-black text-[#ff0068] uppercase tracking-[0.3em]">Passo 3 de 4</span>
-                <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
-                  A inscrição é <span className="text-[#ff0068]">paga?</span>
-                </h1>
-                <p className="text-sm text-slate-500 font-medium">
-                  Você define se vai cobrar dos participantes.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setData({ ...data, is_paid: true })}
-                  className={`p-6 rounded-3xl border-2 text-left transition-all ${
-                    data.is_paid
-                      ? 'border-[#ff0068] bg-[#ff0068]/5'
-                      : 'border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 hover:border-[#ff0068]/40'
-                  }`}
-                >
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 ${
-                    data.is_paid ? 'bg-[#ff0068] text-white' : 'bg-slate-100 dark:bg-white/5 text-slate-500'
-                  }`}>
-                    <DollarSign size={22} />
-                  </div>
-                  <h3 className="text-base font-black uppercase tracking-tight text-slate-900 dark:text-white">
-                    Inscrição paga
-                  </h3>
-                  <p className="text-xs text-slate-500 font-medium mt-1">
-                    Cobra dos participantes via Asaas com split automático.
-                  </p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setData({ ...data, is_paid: false, category_price: 0 })}
-                  className={`p-6 rounded-3xl border-2 text-left transition-all ${
-                    !data.is_paid
-                      ? 'border-emerald-500 bg-emerald-500/5'
-                      : 'border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 hover:border-emerald-500/40'
-                  }`}
-                >
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 ${
-                    !data.is_paid ? 'bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-white/5 text-slate-500'
-                  }`}>
-                    <Gift size={22} />
-                  </div>
-                  <h3 className="text-base font-black uppercase tracking-tight text-slate-900 dark:text-white">
-                    Inscrição gratuita
-                  </h3>
-                  <p className="text-xs text-slate-500 font-medium mt-1">
-                    Sem cobrança. Ideal pra editais públicos e mostras patrocinadas.
-                  </p>
-                </button>
-              </div>
-
-              {data.is_paid && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="space-y-4 bg-white dark:bg-slate-900/60 rounded-3xl border border-slate-200 dark:border-white/10 p-6 overflow-hidden"
-                >
-                  <Field label="Valor base da inscrição (R$)">
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      value={data.category_price || ''}
-                      onChange={e => setData({ ...data, category_price: parseFloat(e.target.value) || 0 })}
-                      placeholder="0,00"
-                      className={inputCls}
-                    />
-                  </Field>
-                  <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-                    <AlertCircle size={14} className="text-amber-500 mt-0.5 shrink-0" />
-                    <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium leading-relaxed">
-                      Pra receber o dinheiro, você vai precisar conectar sua conta Asaas
-                      depois — sem ela, ninguém consegue pagar.
-                    </p>
-                  </div>
-                </motion.div>
-              )}
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setStep(2)}
-                  className="px-5 py-4 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:text-slate-900 dark:hover:text-white transition-all flex items-center gap-2"
-                >
-                  <ArrowLeft size={14} /> Voltar
-                </button>
-                <button
                   onClick={handleCreate}
-                  disabled={saving}
+                  disabled={!canAdvanceStep2 || saving}
                   className="flex-1 flex items-center justify-center gap-2 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-[#ff0068]/20 disabled:opacity-40 disabled:hover:scale-100"
                 >
                   {saving
@@ -505,10 +384,10 @@ const OnboardingWizard: React.FC = () => {
             </motion.div>
           )}
 
-          {/* ───────── STEP 4: Pronto ───────── */}
-          {step === 4 && createdEvent && (
+          {/* ───────── STEP 3: Pronto ───────── */}
+          {step === 3 && createdEvent && (
             <motion.div
-              key="s4"
+              key="s3"
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               className="space-y-6"
@@ -523,10 +402,10 @@ const OnboardingWizard: React.FC = () => {
                   <CheckCircle2 size={42} className="text-emerald-500" />
                 </motion.div>
                 <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
-                  Sua mostra está <span className="text-emerald-500">no ar!</span>
+                  Sua mostra <span className="text-emerald-500">foi criada!</span>
                 </h1>
-                <p className="text-sm text-slate-500 font-medium">
-                  Agora é só compartilhar pros bailarinos se inscreverem.
+                <p className="text-sm text-slate-500 font-medium max-w-md mx-auto">
+                  Próximos passos: configurar preços, gêneros, jurados e critérios em <strong>Configurações</strong>.
                 </p>
               </div>
 
@@ -563,10 +442,10 @@ const OnboardingWizard: React.FC = () => {
                   Ir pro painel <ArrowRight size={13} />
                 </button>
                 <button
-                  onClick={() => navigate('/account-settings?tab=Pagamentos')}
-                  className="flex items-center justify-center gap-2 py-3.5 bg-[#e3ff0a]/10 border border-[#e3ff0a]/30 text-[#7a8400] dark:text-[#e3ff0a] rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-[#e3ff0a]/20 transition-all"
+                  onClick={() => navigate('/account-settings')}
+                  className="flex items-center justify-center gap-2 py-3.5 bg-[#ff0068]/10 border border-[#ff0068]/30 text-[#ff0068] rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-[#ff0068]/20 transition-all"
                 >
-                  <Settings2 size={13} /> Configurar pagamentos
+                  <Settings2 size={13} /> Configurar agora
                 </button>
               </div>
             </motion.div>

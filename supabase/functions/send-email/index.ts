@@ -126,6 +126,8 @@ interface RegistrantPayload {
   eventoData?: string
   valorPago?: number
   appUrl?: string
+  /** Email do produtor — vira reply-to do email transacional */
+  produtorEmail?: string
 }
 
 function buildRegistrantConfirmation(p: RegistrantPayload) {
@@ -147,8 +149,10 @@ function buildRegistrantConfirmation(p: RegistrantPayload) {
       e orientações finais serão enviadas pelo produtor do evento à medida que a programação for definida.
     </p>`
 
+  // Subject com nome do festival como prefixo, quando disponível, pra contexto
+  const subjectPrefix = p.eventoNome ? `[${p.eventoNome}] ` : ''
   return {
-    subject: `Inscrição confirmada — ${p.coreoNome ?? 'CoreoHub'}`,
+    subject: `${subjectPrefix}Inscrição confirmada${p.coreoNome ? ` — ${p.coreoNome}` : ''}`,
     html: baseLayout({
       preheader: `Seu pagamento foi aprovado. Inscrição garantida em ${p.eventoNome ?? 'CoreoHub'}.`,
       title: 'Inscrição confirmada!',
@@ -213,13 +217,25 @@ async function sendViaResend(params: {
   subject: string
   html: string
   replyTo?: string
+  /** Nome do festival — se passado, From vira "{festivalName} via CoreoHub <email-original>" */
+  festivalName?: string
 }) {
   const apiKey = Deno.env.get('RESEND_API_KEY')
   if (!apiKey) {
     throw new Error('RESEND_API_KEY não configurado')
   }
 
-  const from = Deno.env.get('EMAIL_FROM') ?? 'CoreoHub <onboarding@resend.dev>'
+  const baseFrom = Deno.env.get('EMAIL_FROM') ?? 'CoreoHub <onboarding@resend.dev>'
+
+  // Constrói From dinâmico: "Festival X via CoreoHub <email>" quando há nome do festival
+  let from = baseFrom
+  if (params.festivalName) {
+    // Extrai email do baseFrom (formato "Nome <email>")
+    const match = baseFrom.match(/<(.+)>/)
+    const email = match ? match[1] : baseFrom
+    const cleanName = params.festivalName.replace(/[<>"]/g, '').trim()
+    from = `${cleanName} via CoreoHub <${email}>`
+  }
 
   const resp = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -402,6 +418,8 @@ Deno.serve(async (req) => {
     let to: string
     let subject: string
     let html: string
+    let festivalName: string | undefined
+    let replyTo: string | undefined
 
     switch (type) {
       case 'payment_confirmed_registrant': {
@@ -411,6 +429,10 @@ Deno.serve(async (req) => {
         to = p.inscritoEmail
         subject = tpl.subject
         html = tpl.html
+        // From name combinado: "{festival} via CoreoHub"
+        festivalName = p.eventoNome
+        // Reply-to do produtor: bailarino que responde, fala com o produtor
+        replyTo = p.produtorEmail
         break
       }
       case 'payment_confirmed_producer': {
@@ -444,7 +466,7 @@ Deno.serve(async (req) => {
         throw new Error(`type desconhecido: ${type}`)
     }
 
-    const { id } = await sendViaResend({ to, subject, html })
+    const { id } = await sendViaResend({ to, subject, html, festivalName, replyTo })
 
     console.log(`[send-email] ok type=${type} to=${to} id=${id}`)
 

@@ -10,6 +10,7 @@ import {
 import { motion } from 'motion/react';
 import { Profile as UserProfile } from '../types';
 import GuiaDoProdutor from '../components/GuiaDoProdutor';
+import ProducerAlerts from '../components/ProducerAlerts';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import AsaasBadge from '../components/AsaasBadge';
 
@@ -124,13 +125,14 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
   const [commissions, setCommissions] = useState<any[]>([]);
 
   /* ── Edition selector ── */
-  const [allEvents, setAllEvents] = useState<{ id: string; name: string; slug?: string; is_public?: boolean; edition_year?: number; start_date?: string }[]>([]);
+  const [allEvents, setAllEvents] = useState<{ id: string; name: string; slug?: string; is_public?: boolean; edition_year?: number; start_date?: string; category_price?: number; formacoes_config?: any[] }[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [asaasConnected, setAsaasConnected] = useState(false);
 
   useEffect(() => {
     supabase
       .from('events')
-      .select('id,name,slug,is_public,edition_year,start_date')
+      .select('id,name,slug,is_public,edition_year,start_date,category_price,formacoes_config')
       .order('start_date', { ascending: false })
       .then(({ data }) => {
         if (data && data.length > 0) {
@@ -140,12 +142,30 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
           setLoading(false);
         }
       });
-  }, []);
+
+    supabase
+      .from('profiles')
+      .select('asaas_subconta_id')
+      .eq('id', profile.id)
+      .maybeSingle()
+      .then(({ data }) => setAsaasConnected(!!data?.asaas_subconta_id));
+  }, [profile.id]);
 
   const selectedEvent = useMemo(
     () => allEvents.find(e => e.id === selectedEventId) ?? null,
     [allEvents, selectedEventId],
   );
+
+  /* ── Verifica se o evento tem inscrição paga (precisa de Asaas) ── */
+  const eventNeedsAsaas = useMemo(() => {
+    if (!selectedEvent) return false;
+    const price = Number(selectedEvent.category_price ?? 0);
+    const formacoes: any[] = Array.isArray(selectedEvent.formacoes_config) ? selectedEvent.formacoes_config : [];
+    const formacaoPaga = formacoes.some(f => Number(f?.fee ?? 0) > 0);
+    return price > 0 || formacaoPaga;
+  }, [selectedEvent]);
+
+  const linkBlocked = eventNeedsAsaas && !asaasConnected;
 
   useEffect(() => {
     if (!selectedEventId) return;
@@ -278,10 +298,20 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
                   tone="pink"
                 />
               )}
-              <CopyLinkChip
-                label="Link de inscrição"
-                url={`${window.location.origin}/festival/${selectedEvent.id}/register`}
-              />
+              {linkBlocked ? (
+                <button
+                  onClick={() => navigate('/account-settings?tab=Pagamentos')}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border bg-rose-500/10 border-rose-500/30 text-rose-500 hover:bg-rose-500/20 text-[9px] font-black uppercase tracking-widest transition-all"
+                  title="Conecte sua conta Asaas para liberar inscrições pagas"
+                >
+                  <AlertCircle size={11} /> Conecte Asaas para liberar inscrições
+                </button>
+              ) : (
+                <CopyLinkChip
+                  label="Link de inscrição"
+                  url={`${window.location.origin}/festival/${selectedEvent.id}/register`}
+                />
+              )}
             </div>
           )}
         </div>
@@ -316,6 +346,9 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
 
       {/* Guia do produtor — só aparece enquanto onboarding estiver pendente */}
       <GuiaDoProdutor profile={profile} />
+
+      {/* Alertas acionáveis — Asaas, critérios, prazos */}
+      <ProducerAlerts profile={profile} />
 
       {/* Metric cards */}
       {loading ? (

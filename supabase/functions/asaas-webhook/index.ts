@@ -220,8 +220,9 @@ Deno.serve(async (req) => {
             eventoData:    eventData?.event_date
               ? new Date(eventData.event_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
               : null,
-            valorPago: grossAmount,
+            valorPago:     grossAmount,
             appUrl,
+            produtorEmail: produtorProfile?.email,
           }))
         }
 
