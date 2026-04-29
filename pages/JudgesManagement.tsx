@@ -95,6 +95,7 @@ const JudgesManagement = () => {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [showPin, setShowPin] = useState(false);
   const [copiedField, setCopiedField] = useState<'pin' | 'link' | null>(null);
+  const [revealedPinId, setRevealedPinId] = useState<string | null>(null);
 
   const copyToClipboard = async (text: string, field: 'pin' | 'link') => {
     try {
@@ -417,7 +418,7 @@ const JudgesManagement = () => {
                   {isExpanded ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
                 </div>
 
-                {/* Expanded: signature preview */}
+                {/* Expanded: PIN + competencies + bio */}
                 <AnimatePresence>
                   {isExpanded && (
                     <motion.div
@@ -427,7 +428,34 @@ const JudgesManagement = () => {
                       transition={{ duration: 0.2 }}
                       className="overflow-hidden"
                     >
-                      <div className="px-5 pb-5 space-y-2">
+                      <div className="px-5 pb-5 space-y-3">
+                        {judge.pin && (
+                          <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-emerald-50 dark:bg-emerald-500/5 border border-emerald-200 dark:border-emerald-500/20 rounded-xl">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <KeyRound size={12} className="text-emerald-500 shrink-0" />
+                              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">PIN</span>
+                              <span className="text-base font-black tracking-[0.4em] text-slate-900 dark:text-white">
+                                {revealedPinId === judge.id ? judge.pin : '••••'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setRevealedPinId(revealedPinId === judge.id ? null : judge.id); }}
+                                className="p-1.5 text-slate-500 hover:text-[#ff0068] transition-colors"
+                                title={revealedPinId === judge.id ? 'Ocultar' : 'Mostrar'}
+                              >
+                                {revealedPinId === judge.id ? <EyeOff size={12} /> : <Eye size={12} />}
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); copyToClipboard(judge.pin!, 'pin'); }}
+                                className="p-1.5 text-slate-500 hover:text-[#ff0068] transition-colors"
+                                title="Copiar PIN"
+                              >
+                                {copiedField === 'pin' ? <CheckCircle2 size={12} className="text-emerald-500" /> : <Copy size={12} />}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                         <div className="flex flex-wrap gap-1.5">
                           {judge.competencias_generos.map(g => (
                             <span key={g} className="px-2 py-1 bg-[#ff0068]/10 text-[#ff0068] rounded-xl text-[9px] font-black uppercase tracking-widest">{g}</span>
@@ -600,11 +628,11 @@ const JudgesManagement = () => {
                       <select
                         value={form.language || 'pt-BR'}
                         onChange={e => setForm(f => ({ ...f, language: e.target.value }))}
-                        className={inputCls}
+                        className={`${inputCls} bg-slate-50 dark:bg-slate-800`}
                       >
-                        <option value="pt-BR">Português (Brasil)</option>
-                        <option value="en-US">English</option>
-                        <option value="es-ES">Español</option>
+                        <option value="pt-BR" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Português (Brasil)</option>
+                        <option value="en-US" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">English</option>
+                        <option value="es-ES" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Español</option>
                       </select>
                       <p className="text-[9px] text-slate-400 ml-1 mt-1">Idioma exibido no Terminal de Jurados deste jurado</p>
                     </div>
