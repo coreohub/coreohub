@@ -96,11 +96,14 @@ const Festivais = () => {
     if (!start) return 'Em breve';
     // Parse com T12:00:00 evita shift de timezone (UTC midnight vira dia anterior em BRT).
     const d1 = new Date(start + 'T12:00:00');
-    const opts: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' };
-    const left = d1.toLocaleDateString('pt-BR', opts);
+    const fullOpts: Intl.DateTimeFormatOptions = { weekday: 'short', day: '2-digit', month: 'short' };
+    const dayOpts: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' };
+    const fmt = (d: Date, opts: Intl.DateTimeFormatOptions) =>
+      d.toLocaleDateString('pt-BR', opts).replace(/\./g, '').replace(/,/g, '').trim();
+    const left = fmt(d1, fullOpts);
     if (!end || end === start) return left;
     const d2 = new Date(end + 'T12:00:00');
-    return `${left} – ${d2.toLocaleDateString('pt-BR', opts)}`;
+    return `${left} – ${fmt(d2, dayOpts)}`;
   };
 
   return (
