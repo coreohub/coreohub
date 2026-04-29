@@ -113,25 +113,22 @@ const OnboardingWizard: React.FC = () => {
 
       const slug = `${slugify(data.name)}-${Math.random().toString(36).substring(2, 8)}`;
 
+      // Payload mínimo — só colunas confirmadamente existentes na tabela `events`.
+      // Detalhes (categorias, estilos, critérios, tolerância) ficam em `configuracoes`,
+      // configurados depois pelo produtor em /account-settings.
       const payload: any = {
-        name:                  data.name,
-        start_date:            data.start_date,
-        city:                  data.city,
-        state:                 data.state,
-        edition_year:          new Date(data.start_date).getFullYear() || new Date().getFullYear(),
+        name:             data.name,
+        start_date:       data.start_date,
+        city:             data.city,
+        state:            data.state,
+        edition_year:     new Date(data.start_date).getFullYear() || new Date().getFullYear(),
         slug,
-        created_by:            user.id,
-        is_public:             true,
-        agreed:                true,
-        default_format:        baseTpl.default_format,
-        score_scale:           baseTpl.score_scale,
-        formacoes_config:      mergeByName(tpls.flatMap(t => t.formacoes_config)),
-        categories_config:     mergeByName(tpls.flatMap(t => t.categories_config)),
-        styles_config:         mergeByName(tpls.flatMap(t => t.styles_config)),
-        criteria_config:       mergeByName(tpls.flatMap(t => t.criteria_config)),
-        registration_lots:     [],
-        age_tolerance_mode:    'PERCENT',
-        age_tolerance_value:   0,
+        created_by:       user.id,
+        is_public:        true,
+        default_format:   baseTpl.default_format,
+        formacoes_config: mergeByName(tpls.flatMap(t => t.formacoes_config)),
+        category_price:   0,
+        event_type:       'private',
       };
 
       const result = await createEvent(payload);
