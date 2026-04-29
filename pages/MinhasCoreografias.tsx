@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { getGenres } from '../services/genreService';
 import { EventStyle } from '../types';
@@ -132,8 +133,10 @@ const STEP_LABELS = ['Evento & Nome', 'Estilo · Categoria · Formação', 'Elen
 ══════════════════════════════════════════════════════════════ */
 const MinhasCoreografias = () => {
   /* ── master data ── */
+  const navigate = useNavigate();
   const [coreografias,  setCoreografias]  = useState<Coreografia[]>([]);
   const [elenco,        setElenco]        = useState<Bailarino[]>([]);
+  const [vitrineRegs,   setVitrineRegs]   = useState<any[]>([]);
   const [allEvents,     setAllEvents]     = useState<EventData[]>([]);
   const [globalCats,    setGlobalCats]    = useState<Categoria[]>([]);
   const [loading,       setLoading]       = useState(true);
@@ -179,12 +182,20 @@ const MinhasCoreografias = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [coreoRes, elencoRes, eventsRes, configsRes] = await Promise.all([
+      const [coreoRes, elencoRes, eventsRes, configsRes, registrationsRes] = await Promise.all([
         supabase.from('coreografias').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
         supabase.from('elenco').select('*').eq('user_id', user.id).order('nome'),
         supabase.from('events').select('id,name,start_date,location').order('start_date'),
         supabase.from('configuracoes').select('event_id,nome_festival,local_evento,prazo_inscricao,categorias_predefinidas,formatos_precos,tolerancia,age_reference,age_reference_date'),
+        // Inscrições feitas via vitrine pública (tabela registrations).
+        // Workaround enquanto a unificação (#12 backlog) não é feita.
+        supabase
+          .from('registrations')
+          .select('id, event_id, nome_coreografia, formato_participacao, categoria, estilo_danca, status_pagamento, payment_url, criado_em')
+          .eq('user_id', user.id)
+          .order('criado_em', { ascending: false }),
       ]);
+      setVitrineRegs(registrationsRes.data ?? []);
 
       if (coreoRes.error?.code === '42P01') { setTableError(true); return; }
       if (coreoRes.error) throw coreoRes.error;
@@ -593,12 +604,56 @@ const MinhasCoreografias = () => {
         </button>
       </div>
 
-      {/* ── Warnings ── */}
-      {!loading && elenco.length === 0 && (
+      {/* ── Inscrições via vitrine pública (tabela registrations) ── */}
+      {/* Workaround pra dívida #12 do backlog: unificar coreografias + registrations */}
+      {!loading && vitrineRegs.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+            Inscrições recentes
+          </h2>
+          <div className="space-y-2">
+            {vitrineRegs.map(reg => {
+              const ev = allEvents.find(e => e.id === reg.event_id);
+              const statusColor = reg.status_pagamento === 'CONFIRMADO' || reg.status_pagamento === 'APROVADO'
+                ? 'text-emerald-500 bg-emerald-500/10'
+                : 'text-amber-500 bg-amber-500/10';
+              const statusLabel = reg.status_pagamento === 'CONFIRMADO' || reg.status_pagamento === 'APROVADO'
+                ? 'Confirmada'
+                : 'Aguardando pagamento';
+              return (
+                <div key={reg.id} className="flex items-center gap-4 p-4 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight truncate">
+                      {reg.nome_coreografia ?? '(sem nome)'}
+                    </p>
+                    <p className="text-[10px] text-slate-500 mt-0.5 truncate">
+                      {ev?.name ?? 'Evento'} · {reg.formato_participacao} · {reg.categoria}
+                    </p>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${statusColor} shrink-0`}>
+                    {statusLabel}
+                  </span>
+                  {reg.status_pagamento !== 'CONFIRMADO' && reg.status_pagamento !== 'APROVADO' && (
+                    <button
+                      onClick={() => navigate(`/festival/${reg.event_id}/checkout?registration_id=${reg.id}`)}
+                      className="px-4 py-2 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#d4005a] transition-all shrink-0"
+                    >
+                      Pagar
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Warnings (só para fluxo de coreografias com elenco) ── */}
+      {!loading && elenco.length === 0 && coreografias.length === 0 && vitrineRegs.length === 0 && (
         <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl">
           <AlertTriangle size={14} className="text-amber-500 shrink-0 mt-0.5" />
           <p className="text-[9px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wide">
-            Cadastre bailarinos no <strong>Meu Elenco</strong> antes de criar coreografias.
+            Pra montar grupos com elenco próprio, cadastre bailarinos em <strong>Meu Elenco</strong>. Pra inscrições simples (Solo, Duo), use a vitrine pública dos eventos.
           </p>
         </div>
       )}
