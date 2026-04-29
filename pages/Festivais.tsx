@@ -35,7 +35,7 @@ const Festivais = () => {
       try {
         const { data, error } = await supabase
           .from('events')
-          .select('id, slug, name, description, cover_url, start_date, end_date, address, city, state, formacoes_config, edition_year, is_public')
+          .select('id, slug, name, description, start_date, end_date, location, city, state, formacoes_config, edition_year, is_public')
           .eq('is_public', true)
           .order('start_date', { ascending: false });
         if (error) throw error;
@@ -313,7 +313,7 @@ const EventCard: React.FC<{
   dateLabel: string;
   muted?: boolean;
 }> = ({ event, minPrice, dateLabel, muted }) => {
-  const localizacao = [event.city, event.state].filter(Boolean).join(' / ') || event.address;
+  const localizacao = [event.city, event.state].filter(Boolean).join(' / ') || (event as any).location;
   const target = `/evento/${event.slug ?? event.id}`;
 
   return (
