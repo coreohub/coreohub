@@ -220,7 +220,7 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
 
       // Persist URL, duration and status on coreografias row
       const { error: dbErr } = await supabase
-        .from('coreografias')
+        .from('registrations')
         .update({ trilha_url: publicUrl, status_trilha: 'ENVIADA', duracao_trilha_segundos: durationSeconds })
         .eq('id', coreo.id);
 
@@ -248,7 +248,7 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
         await supabase.storage.from('trilhas').remove([filePath]);
       }
       await supabase
-        .from('coreografias')
+        .from('registrations')
         .update({ trilha_url: null, status_trilha: 'PENDENTE' })
         .eq('id', coreo.id);
       onRemoved(coreo.id);
@@ -439,7 +439,7 @@ const CentralDeMidia = () => {
 
       // First check if the new columns exist (LIMIT 0 — no data loaded)
       const { error: colErr } = await supabase
-        .from('coreografias')
+        .from('registrations')
         .select('trilha_url, status_trilha')
         .limit(0);
 
@@ -453,10 +453,10 @@ const CentralDeMidia = () => {
 
       const [coreoRes, profileRes, genres] = await Promise.all([
         supabase
-          .from('coreografias')
-          .select('*')
+          .from('registrations')
+          .select('*, nome:nome_coreografia, formacao:formato_participacao, categoria_nome:categoria, estilo_nome:estilo_danca')
           .eq('user_id', user.id)
-          .order('created_at', { ascending: false }),
+          .order('criado_em', { ascending: false }),
         supabase
           .from('profiles')
           .select('full_name')

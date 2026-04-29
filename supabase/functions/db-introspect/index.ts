@@ -345,6 +345,387 @@ Deno.serve(async (req) => {
       })
     }
 
+    if (action === 'list-producer-asaas') {
+      const rows = await sql`
+        SELECT p.id, p.email, p.full_name, p.role, p.asaas_subconta_id, p.asaas_wallet_id, p.cpf_cnpj, p.pix_key
+        FROM profiles p
+        WHERE p.asaas_subconta_id IS NOT NULL
+        ORDER BY p.full_name
+      `
+      return new Response(JSON.stringify({ producers: rows }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'add-asaas-api-key-column') {
+      await sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS asaas_api_key TEXT`
+      await sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS asaas_access_token TEXT`
+      await sql`NOTIFY pgrst, 'reload schema'`
+      return new Response(JSON.stringify({ ok: true, columns: ['asaas_api_key', 'asaas_access_token'] }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'set-producer-asaas-api-key') {
+      // Pra subcontas existentes que foram criadas sem salvar a apiKey.
+      const subcontaId = url.searchParams.get('subconta_id') ?? ''
+      const apiKey = url.searchParams.get('api_key') ?? ''
+      if (!subcontaId || !apiKey) {
+        return new Response(JSON.stringify({ error: 'subconta_id e api_key obrigatórios' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      const result = await sql`
+        UPDATE profiles SET asaas_api_key = ${apiKey}
+        WHERE asaas_subconta_id = ${subcontaId}
+        RETURNING id, full_name
+      `
+      return new Response(JSON.stringify({ ok: true, updated: result[0] }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'register-pix-on-subconta') {
+      // Registra a chave PIX de um produtor na subconta dele no Asaas.
+      // Usa a apiKey DA SUBCONTA (já salva no profile).
+      const subcontaId = url.searchParams.get('subconta_id') ?? ''
+      if (!subcontaId) {
+        return new Response(JSON.stringify({ error: 'subconta_id obrigatório' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      const profile = await sql`
+        SELECT asaas_api_key, pix_key, full_name
+        FROM profiles WHERE asaas_subconta_id = ${subcontaId}
+      `
+      const p = profile[0]
+      if (!p?.asaas_api_key) {
+        return new Response(JSON.stringify({ error: 'apiKey da subconta ainda não salva. Use action=set-producer-asaas-api-key primeiro.' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      if (!p?.pix_key) {
+        return new Response(JSON.stringify({ error: 'pix_key não cadastrada no profile do produtor.' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+
+      // Detecta tipo de chave PIX heuristicamente
+      const key = String(p.pix_key).trim()
+      const onlyDigits = key.replace(/\D/g, '')
+      let pixType = 'EVP' // chave aleatória
+      if (key.includes('@')) pixType = 'EMAIL'
+      else if (onlyDigits.length === 11 && !/^\d{11}$/.test(key)) pixType = 'CPF'
+      else if (onlyDigits.length === 14) pixType = 'CNPJ'
+      else if (onlyDigits.length === 11) pixType = 'PHONE' // celular brasileiro DDD+9 dígitos
+      else if (onlyDigits.length === 13 && onlyDigits.startsWith('55')) pixType = 'PHONE'
+
+      const body: any = { type: pixType }
+      // Asaas aceita 'EVP' sem 'key' (gera aleatória). Pra outros tipos, precisa enviar a chave.
+      if (pixType !== 'EVP') {
+        body.key = pixType === 'PHONE' && !key.startsWith('+')
+          ? `+55${onlyDigits.slice(-11)}`
+          : (pixType === 'PHONE' ? key : (pixType === 'CPF' || pixType === 'CNPJ' ? onlyDigits : key))
+      }
+
+      const pixRes = await fetch(`${ASAAS_BASE_URL}/pix/addressKeys`, {
+        method: 'POST',
+        headers: {
+          'access_token': p.asaas_api_key,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      })
+      const pixData = await pixRes.json()
+
+      return new Response(JSON.stringify({
+        ok: pixRes.ok,
+        status: pixRes.status,
+        body_sent: body,
+        response: pixData,
+      }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'add-refund-columns-to-registrations') {
+      // Adiciona colunas de reembolso/cupom que existiam em coreografias mas
+      // não em registrations. Faz parte do #12 do backlog (unificação).
+      await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ`
+      await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS refund_amount NUMERIC(10,2)`
+      await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS refund_reason TEXT`
+      await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS coupon_id UUID REFERENCES coupons(id) ON DELETE SET NULL`
+      await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(10,2)`
+      await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ`
+      await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS duracao_trilha_segundos INTEGER`
+      await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS subgenero TEXT`
+      await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS mod_fee NUMERIC(10,2)`
+      await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS tolerance_violation JSONB`
+      await sql`NOTIFY pgrst, 'reload schema'`
+      return new Response(JSON.stringify({ ok: true, columns_added: ['refunded_at','refund_amount','refund_reason','coupon_id','discount_amount','paid_at','duracao_trilha_segundos','subgenero','mod_fee','tolerance_violation'] }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'count-tables') {
+      const tables = url.searchParams.get('tables')?.split(',') ?? ['coreografias', 'registrations']
+      const counts: any = {}
+      for (const t of tables) {
+        try {
+          const r = await sql.unsafe(`SELECT COUNT(*) AS c FROM "${t}"`)
+          counts[t] = Number(r[0].c)
+        } catch (e) { counts[t] = `erro: ${(e as Error).message}` }
+      }
+      return new Response(JSON.stringify({ counts }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'validate-apikey') {
+      // Testa apiKey em sandbox e produção pra descobrir onde funciona.
+      const apiKey = url.searchParams.get('api_key') ?? ''
+      if (!apiKey) {
+        return new Response(JSON.stringify({ error: 'api_key obrigatório' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const tries = [
+        { env: 'sandbox', base: 'https://sandbox.asaas.com/api/v3' },
+        { env: 'production', base: 'https://api.asaas.com/v3' },
+      ]
+
+      const results: any[] = []
+      for (const t of tries) {
+        try {
+          const res = await fetch(`${t.base}/myAccount/account`, {
+            headers: { 'access_token': apiKey },
+          })
+          const body = await res.json().catch(() => ({}))
+          results.push({
+            env: t.env,
+            status: res.status,
+            ok: res.ok,
+            account_name: body?.name,
+            account_email: body?.email,
+            account_id: body?.id,
+          })
+        } catch (e) {
+          results.push({ env: t.env, error: (e as Error).message })
+        }
+      }
+
+      return new Response(JSON.stringify({ results }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'list-and-create-subconta-tokens') {
+      // Endpoint correto: /accounts/{id}/accessTokens
+      // Doc: https://docs.asaas.com/reference/listar-chaves-de-api-de-uma-subconta
+      const subcontaId = url.searchParams.get('subconta_id') ?? ''
+      const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
+      const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+
+      // 1. Lista tokens existentes da subconta
+      const listRes = await fetch(`${ASAAS_BASE_URL}/accounts/${subcontaId}/accessTokens`, {
+        headers: { 'access_token': ASAAS_API_KEY },
+      })
+      const listText = await listRes.text()
+      let listBody: any
+      try { listBody = JSON.parse(listText) } catch { listBody = listText.substring(0, 300) }
+
+      // 2. Cria novo token
+      const createRes = await fetch(`${ASAAS_BASE_URL}/accounts/${subcontaId}/accessTokens`, {
+        method: 'POST',
+        headers: { 'access_token': ASAAS_API_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'CoreoHub-PIX-Setup' }),
+      })
+      const createText = await createRes.text()
+      let createBody: any
+      try { createBody = JSON.parse(createText) } catch { createBody = createText.substring(0, 300) }
+
+      // 3. Se a criação retornou apiKey, salva no profile
+      let saved = false
+      if (createRes.ok && createBody?.apiKey) {
+        await sql`
+          UPDATE profiles SET asaas_api_key = ${createBody.apiKey}
+          WHERE asaas_subconta_id = ${subcontaId}
+        `
+        saved = true
+      }
+
+      return new Response(JSON.stringify({
+        list: { status: listRes.status, body: listBody },
+        create: { status: createRes.status, body: createBody },
+        saved_to_profile: saved,
+      }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'try-multiple-apikey-endpoints') {
+      const subcontaId = url.searchParams.get('subconta_id') ?? ''
+      const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
+      const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+
+      const tries: { method: string, url: string, body?: any }[] = [
+        { method: 'POST', url: `/accounts/${subcontaId}/apiKey`, body: { name: 'CoreoHub' } },
+        { method: 'POST', url: `/customerApiAccessToken`, body: { customer: subcontaId, name: 'CoreoHub' } },
+        { method: 'POST', url: `/customerApiAccessToken`, body: { account: subcontaId } },
+        { method: 'GET',  url: `/accounts/${subcontaId}/apiKeys` },
+        { method: 'GET',  url: `/customerApiAccessToken?customer=${subcontaId}` },
+        { method: 'POST', url: `/myAccount/apiKey`, body: { account: subcontaId } },
+      ]
+
+      const results: any[] = []
+      for (const t of tries) {
+        try {
+          const opts: any = {
+            method: t.method,
+            headers: { 'access_token': ASAAS_API_KEY, 'Content-Type': 'application/json' },
+          }
+          if (t.body) opts.body = JSON.stringify(t.body)
+          const res = await fetch(`${ASAAS_BASE_URL}${t.url}`, opts)
+          const text = await res.text()
+          let body: any
+          try { body = JSON.parse(text) } catch { body = text.substring(0, 200) }
+          results.push({ try: `${t.method} ${t.url}`, status: res.status, body })
+        } catch (e) {
+          results.push({ try: `${t.method} ${t.url}`, error: (e as Error).message })
+        }
+      }
+
+      return new Response(JSON.stringify({ results }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'create-apikey-for-subconta') {
+      // Cria uma apiKey nova pra subconta filha usando o endpoint do master
+      // que só funciona com "Gerenciamento de Chaves de API de Subcontas" habilitado.
+      const subcontaId = url.searchParams.get('subconta_id') ?? ''
+      if (!subcontaId) {
+        return new Response(JSON.stringify({ error: 'subconta_id obrigatório' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
+      const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+
+      // Endpoint Asaas: POST /accounts/{id}/apiKeys com nome da chave
+      const res = await fetch(`${ASAAS_BASE_URL}/accounts/${subcontaId}/apiKeys`, {
+        method: 'POST',
+        headers: {
+          'access_token': ASAAS_API_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: 'CoreoHub-Auto-Generated' }),
+      })
+
+      const data = await res.json().catch(() => ({}))
+
+      if (res.ok && data.apiKey) {
+        // Salva no profile
+        await sql`
+          UPDATE profiles SET asaas_api_key = ${data.apiKey}
+          WHERE asaas_subconta_id = ${subcontaId}
+        `
+      }
+
+      return new Response(JSON.stringify({
+        ok: res.ok,
+        status: res.status,
+        response: data,
+      }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'try-get-subconta-apikey') {
+      // Tenta vários endpoints conhecidos do Asaas pra obter a apiKey de uma
+      // subconta filha usando a apiKey da master.
+      const subcontaId = url.searchParams.get('subconta_id') ?? ''
+      if (!subcontaId) {
+        return new Response(JSON.stringify({ error: 'subconta_id obrigatório' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
+      const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+
+      const attempts: any[] = []
+
+      // Tentativa 1: GET /accounts/{id}/apiKey
+      const a1 = await fetch(`${ASAAS_BASE_URL}/accounts/${subcontaId}/apiKey`, {
+        headers: { 'access_token': ASAAS_API_KEY },
+      }).then(r => r.json().then(b => ({ url: 'GET /accounts/{id}/apiKey', status: r.status, body: b })))
+        .catch(e => ({ url: 'GET /accounts/{id}/apiKey', error: (e as Error).message }))
+      attempts.push(a1)
+
+      // Tentativa 2: POST /accounts/{id}/apiKey
+      const a2 = await fetch(`${ASAAS_BASE_URL}/accounts/${subcontaId}/apiKey`, {
+        method: 'POST',
+        headers: { 'access_token': ASAAS_API_KEY, 'Content-Type': 'application/json' },
+        body: '{}',
+      }).then(r => r.json().then(b => ({ url: 'POST /accounts/{id}/apiKey', status: r.status, body: b })))
+        .catch(e => ({ url: 'POST /accounts/{id}/apiKey', error: (e as Error).message }))
+      attempts.push(a2)
+
+      // Tentativa 3: GET /accounts/{id} já vimos que retorna apiKey: null. Skip.
+      // Tentativa 4: GET /myAccount/apiKeys com header da master + ?accountId=
+      const a4 = await fetch(`${ASAAS_BASE_URL}/myAccount/apiKeys?accountId=${subcontaId}`, {
+        headers: { 'access_token': ASAAS_API_KEY },
+      }).then(r => r.json().then(b => ({ url: 'GET /myAccount/apiKeys', status: r.status, body: b })))
+        .catch(e => ({ url: 'GET /myAccount/apiKeys', error: (e as Error).message }))
+      attempts.push(a4)
+
+      return new Response(JSON.stringify({ attempts }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'inspect-asaas-account') {
+      // Busca dados reais da subconta no Asaas + lista chaves PIX cadastradas.
+      const subcontaId = url.searchParams.get('subconta_id') ?? ''
+      if (!subcontaId) {
+        return new Response(JSON.stringify({ error: 'subconta_id obrigatório' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
+      const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+
+      // 1. Busca dados da subconta (master pode listar filhas)
+      const accountRes = await fetch(`${ASAAS_BASE_URL}/accounts/${subcontaId}`, {
+        headers: { 'access_token': ASAAS_API_KEY },
+      })
+      const accountData = await accountRes.json()
+
+      // 2. Lista chaves PIX da subconta (precisa do apiKey dela ou query no master)
+      // Tenta via accounts/{id}/pix/addressKeys (algumas variantes do Asaas suportam)
+      let pixKeys: any = null
+      try {
+        const pixRes = await fetch(`${ASAAS_BASE_URL}/accounts/${subcontaId}/pix/addressKeys`, {
+          headers: { 'access_token': ASAAS_API_KEY },
+        })
+        pixKeys = await pixRes.json()
+      } catch (e) {
+        pixKeys = { note: `Endpoint não disponível: ${(e as Error).message}` }
+      }
+
+      return new Response(JSON.stringify({
+        account_status: accountRes.status,
+        account: accountData,
+        pix_keys: pixKeys,
+      }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     if (action === 'check-rls') {
       // Lista todas as tabelas em public com status de RLS.
       const rows = await sql`

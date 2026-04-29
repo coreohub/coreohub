@@ -70,14 +70,61 @@ Deno.serve(async (req) => {
     const { error: updateErr } = await supabase
       .from('profiles')
       .update({
-        asaas_subconta_id: subcontaData.id,
-        asaas_wallet_id:   subcontaData.walletId,
-        cpf_cnpj:          cpfLimpo,
-        pix_key:           pix_key.trim(),
+        asaas_subconta_id:  subcontaData.id,
+        asaas_wallet_id:    subcontaData.walletId,
+        asaas_api_key:      subcontaData.apiKey ?? null,
+        asaas_access_token: subcontaData.accessToken ?? null,
+        cpf_cnpj:           cpfLimpo,
+        pix_key:            pix_key.trim(),
       })
       .eq('id', user.id)
 
     if (updateErr) throw new Error(`Erro ao salvar dados: ${updateErr.message}`)
+
+    // ── Registra a chave PIX na subconta usando a apiKey dela ─────────────
+    // Sem isso o Asaas não oferece PIX como método na cobrança.
+    // Falha aqui não bloqueia o cadastro — o produtor pode registrar depois.
+    if (subcontaData.apiKey) {
+      try {
+        const key = pix_key.trim()
+        const onlyDigits = key.replace(/\D/g, '')
+        let pixType = 'EVP'
+        let pixKey: string | undefined
+        if (key.includes('@')) {
+          pixType = 'EMAIL'
+          pixKey = key
+        } else if (onlyDigits.length === 14) {
+          pixType = 'CNPJ'
+          pixKey = onlyDigits
+        } else if (onlyDigits.length === 11) {
+          // Heurística: 11 dígitos pode ser CPF ou celular. Se começa com DDD comum (1-9), é celular.
+          pixType = 'PHONE'
+          pixKey = `+55${onlyDigits}`
+        } else if (onlyDigits.length === 13 && onlyDigits.startsWith('55')) {
+          pixType = 'PHONE'
+          pixKey = `+${onlyDigits}`
+        }
+
+        const pixRes = await fetch(`${ASAAS_BASE_URL}/pix/addressKeys`, {
+          method: 'POST',
+          headers: {
+            'access_token': subcontaData.apiKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(pixType === 'EVP' ? { type: pixType } : { type: pixType, key: pixKey }),
+        })
+        if (!pixRes.ok) {
+          const pixErr = await pixRes.json().catch(() => ({}))
+          console.warn(`[create-asaas-subconta] PIX não registrado (${pixRes.status}):`, pixErr)
+        } else {
+          console.log(`[create-asaas-subconta] PIX ${pixType} registrado pra subconta ${subcontaData.id}`)
+        }
+      } catch (pixErr) {
+        console.warn('[create-asaas-subconta] erro ao registrar PIX:', (pixErr as Error).message)
+      }
+    } else {
+      console.warn('[create-asaas-subconta] subconta criada sem apiKey — PIX não registrado automaticamente')
+    }
 
     console.log(`[create-asaas-subconta] subconta criada para ${user.id}: ${subcontaData.id}`)
 

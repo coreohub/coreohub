@@ -48,10 +48,10 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
   useEffect(() => {
     const fetchCoreografias = async () => {
       const { data } = await supabase
-        .from('coreografias')
-        .select('id, nome, status, trilha_url, formacao, categoria_nome, estilo_nome')
+        .from('registrations')
+        .select('id, status, trilha_url, nome:nome_coreografia, formacao:formato_participacao, categoria_nome:categoria, estilo_nome:estilo_danca')
         .eq('user_id', profile.id)
-        .order('created_at', { ascending: false });
+        .order('criado_em', { ascending: false });
       if (data) setCoreografias(data);
       setLoading(false);
     };

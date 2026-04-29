@@ -82,7 +82,11 @@ const PagamentoInscrito = () => {
       if (!user) { navigate('/login'); return; }
 
       const [coreoRes, eventRes] = await Promise.all([
-        supabase.from('coreografias').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+        supabase
+          .from('registrations')
+          .select('*, nome:nome_coreografia, formacao:formato_participacao, categoria_nome:categoria, estilo_nome:estilo_danca')
+          .eq('user_id', user.id)
+          .order('criado_em', { ascending: false }),
         supabase.from('events').select('id, formacoes_config').order('created_at').limit(1).single(),
       ]);
 

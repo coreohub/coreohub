@@ -127,9 +127,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Atualizar status da coreografia
+    // Atualizar status da inscrição
     const { error: updErr } = await supabase
-      .from('coreografias')
+      .from('registrations')
       .update({
         status_pagamento: statusInterno,
         payment_id:       String(payment.id),
@@ -138,14 +138,14 @@ Deno.serve(async (req) => {
       .eq('id', registrationId)
 
     if (updErr) {
-      console.error('[asaas-webhook] erro ao atualizar coreografia:', updErr.message)
+      console.error('[asaas-webhook] erro ao atualizar inscrição:', updErr.message)
     }
 
     // Se aprovado, registrar comissão e enviar emails
     if (statusInterno === 'APROVADO') {
       const { data: coreo } = await supabase
-        .from('coreografias')
-        .select('event_id, user_id, nome, formacao, modalidade, tipo_apresentacao')
+        .from('registrations')
+        .select('event_id, user_id, nome:nome_coreografia, formacao:formato_participacao, tipo_apresentacao')
         .eq('id', registrationId)
         .single()
 

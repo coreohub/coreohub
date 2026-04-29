@@ -30,35 +30,14 @@ Deno.serve(async (req) => {
     const { data: { user } } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''))
     if (!user) throw new Error('Não autorizado.')
 
-    // ── 1. Inscrição (registrations OR coreografias legacy) ────────────────
-    // Vitrine pública insere em `registrations`. Fluxo legacy (MinhasCoreografias)
-    // insere em `coreografias`. Suportamos os dois.
-    let coreoTable: 'registrations' | 'coreografias' = 'registrations'
-    let coreo: any = null
-    let coreoErr: any = null
+    // ── 1. Inscrição (tabela `registrations` unificada — backlog #12 concluído) ──
+    const { data: coreo, error: coreoErr } = await supabase
+      .from('registrations')
+      .select('*')
+      .eq('id', registration_id)
+      .maybeSingle()
 
-    {
-      const result = await supabase
-        .from('registrations')
-        .select('*')
-        .eq('id', registration_id)
-        .maybeSingle()
-      coreo = result.data
-      coreoErr = result.error
-    }
-
-    if (!coreo) {
-      coreoTable = 'coreografias'
-      const result = await supabase
-        .from('coreografias')
-        .select('*')
-        .eq('id', registration_id)
-        .maybeSingle()
-      coreo = result.data
-      coreoErr = result.error
-    }
-
-    if (!coreo) throw new Error(`Inscrição não encontrada: ${coreoErr?.message ?? 'id inexistente em registrations e coreografias'}`)
+    if (!coreo) throw new Error(`Inscrição não encontrada: ${coreoErr?.message ?? 'id inexistente em registrations'}`)
     if (coreo.user_id !== user.id) throw new Error('Sem permissão para esta inscrição.')
 
     // ── 2. Perfil do inscrito ────────────────────────────────────────────────
@@ -282,15 +261,15 @@ Deno.serve(async (req) => {
       updatePayload.discount_amount = discountAmount > 0 ? discountAmount : null
     }
     const { error: updateErr } = await supabase
-      .from(coreoTable)
+      .from('registrations')
       .update(updatePayload)
       .eq('id', registration_id)
     if (updateErr) {
-      console.warn(`[create-payment-asaas] update ${coreoTable} parcial: ${updateErr.message}`)
-      // Tenta de novo sem coupon_id/discount_amount caso a tabela não tenha essas colunas
+      console.warn(`[create-payment-asaas] update registrations parcial: ${updateErr.message}`)
+      // Retry sem coupon_id/discount_amount se a tabela não tiver essas colunas.
       delete updatePayload.coupon_id
       delete updatePayload.discount_amount
-      await supabase.from(coreoTable).update(updatePayload).eq('id', registration_id)
+      await supabase.from('registrations').update(updatePayload).eq('id', registration_id)
     }
 
     // ── 10b. Incrementa uso do cupom (best-effort) ───────────────────────────

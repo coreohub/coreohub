@@ -182,20 +182,32 @@ const MinhasCoreografias = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [coreoRes, elencoRes, eventsRes, configsRes, registrationsRes] = await Promise.all([
-        supabase.from('coreografias').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+      // #12 Backlog concluído: unificadas em `registrations`. Aliases PostgREST
+      // mantêm os nomes legacy do JS (nome, formacao, categoria_nome, estilo_nome)
+      // mapeados pras colunas reais (nome_coreografia, formato_participacao, etc).
+      const [coreoRes, elencoRes, eventsRes, configsRes] = await Promise.all([
+        supabase
+          .from('registrations')
+          .select(`
+            id, user_id, event_id, status, status_trilha, status_pagamento,
+            payment_url, payment_id, payment_preference_id, payment_method,
+            trilha_url, criado_em, created_at, tipo_apresentacao,
+            bailarinos_detalhes,
+            nome:nome_coreografia,
+            estilo_nome:estilo_danca,
+            categoria_nome:categoria,
+            formacao:formato_participacao
+          `)
+          .eq('user_id', user.id)
+          .order('criado_em', { ascending: false }),
         supabase.from('elenco').select('*').eq('user_id', user.id).order('nome'),
         supabase.from('events').select('id,name,start_date,location').order('start_date'),
         supabase.from('configuracoes').select('event_id,nome_festival,local_evento,prazo_inscricao,categorias_predefinidas,formatos_precos,tolerancia,age_reference,age_reference_date'),
-        // Inscrições feitas via vitrine pública (tabela registrations).
-        // Workaround enquanto a unificação (#12 backlog) não é feita.
-        supabase
-          .from('registrations')
-          .select('id, event_id, nome_coreografia, formato_participacao, categoria, estilo_danca, status_pagamento, payment_url, criado_em')
-          .eq('user_id', user.id)
-          .order('criado_em', { ascending: false }),
       ]);
-      setVitrineRegs(registrationsRes.data ?? []);
+
+      // Mantém estado vitrineRegs zerado (a UI legacy ainda referencia, mas
+      // todas inscrições agora vêm pela query única acima).
+      setVitrineRegs([]);
 
       if (coreoRes.error?.code === '42P01') { setTableError(true); return; }
       if (coreoRes.error) throw coreoRes.error;
@@ -252,12 +264,27 @@ const MinhasCoreografias = () => {
         });
       }
 
-      const enriched: Coreografia[] = (coreoRes.data || []).map(c => ({
-        ...c,
-        _bailarinos_nomes: (c.bailarinos_ids || [])
-          .map((id: string) => bailarinos.find(b => b.id === id)?.nome)
-          .filter(Boolean),
-      }));
+      // bailarinos_detalhes é jsonb com objetos {id, nome?, ...}.
+      // Extraímos os IDs pra preservar API legacy `bailarinos_ids`.
+      const enriched: Coreografia[] = (coreoRes.data || []).map((c: any) => {
+        const detalhes = Array.isArray(c.bailarinos_detalhes) ? c.bailarinos_detalhes : [];
+        const bailarinos_ids: string[] = detalhes
+          .map((b: any) => (typeof b === 'string' ? b : b?.id))
+          .filter(Boolean);
+        const event_data = c.event_data || {};
+        return {
+          ...c,
+          bailarinos_ids,
+          // Restaura campos legacy de event_data jsonb pra compat com a UI
+          event_nome: event_data.event_nome ?? '',
+          subgenero: event_data.subgenero ?? '',
+          mod_fee: event_data.mod_fee ?? 0,
+          tolerance_violation: event_data.tolerance_violation ?? null,
+          _bailarinos_nomes: bailarinos_ids
+            .map((id: string) => bailarinos.find(b => b.id === id)?.nome)
+            .filter(Boolean),
+        };
+      });
       setCoreografias(enriched);
     } catch (e: any) {
       setError(e.message);
@@ -417,33 +444,43 @@ const MinhasCoreografias = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const payload = {
-        user_id:        user.id,
-        nome:           form.nome.trim(),
-        event_id:       form.event_id   || null,
-        event_nome:     form.event_nome || '',
-        event_data:     form.event_data || null,
-        estilo_nome:    form.estilo_nome,
-        subgenero:      form.subgenero,
-        categoria_nome: form.categoria_nome,
-        formacao:       form.formacao,
-        mod_fee:        form.mod_fee || 0,
-        bailarinos_ids: form.bailarinos_ids,
-        status:         'AGUARDANDO_PAGAMENTO',
-        tolerance_violation: toleranceStatus.violates ? {
-          out_count:    toleranceStatus.outCount,
-          total_count:  toleranceStatus.totalCount,
-          pct:          Math.round(toleranceStatus.pct * 10) / 10,
-          limit_label:  toleranceStatus.limitLabel,
-          mode:         toleranceRule.mode,
-          flagged_at:   new Date().toISOString(),
-        } : null,
+      // Mapeamento de campos legacy → colunas reais da tabela `registrations`.
+      // event_data, subgenero, mod_fee, tolerance_violation: campos legacy que
+      // não existem em registrations — guardados em event_data jsonb (já existe).
+      const bailarinosDetalhes = (form.bailarinos_ids || []).map((id: string) => ({ id }));
+      const payload: Record<string, any> = {
+        user_id:              user.id,
+        event_id:             form.event_id   || null,
+        nome_coreografia:     form.nome.trim(),
+        estilo_danca:         form.estilo_nome,
+        categoria:            form.categoria_nome,
+        formato_participacao: form.formacao,
+        bailarinos_detalhes:  bailarinosDetalhes,
+        status:               'AGUARDANDO_PAGAMENTO',
+        criado_em:            new Date().toISOString(),
+        data_inscricao:       new Date().toISOString(),
+        // Metadados legacy (event_nome, subgenero, mod_fee, tolerance_violation)
+        // armazenados em event_data jsonb pra compatibilidade.
+        event_data: {
+          event_nome:          form.event_nome || '',
+          subgenero:           form.subgenero,
+          mod_fee:             form.mod_fee || 0,
+          tolerance_violation: toleranceStatus.violates ? {
+            out_count:    toleranceStatus.outCount,
+            total_count:  toleranceStatus.totalCount,
+            pct:          Math.round(toleranceStatus.pct * 10) / 10,
+            limit_label:  toleranceStatus.limitLabel,
+            mode:         toleranceRule.mode,
+            flagged_at:   new Date().toISOString(),
+          } : null,
+          ...(form.event_data || {}),
+        },
       };
       if (editingId) {
-        const { error: err } = await supabase.from('coreografias').update(payload).eq('id', editingId);
+        const { error: err } = await supabase.from('registrations').update(payload).eq('id', editingId);
         if (err) throw err;
       } else {
-        const { error: err } = await supabase.from('coreografias').insert([payload]);
+        const { error: err } = await supabase.from('registrations').insert([payload]);
         if (err) throw err;
       }
       closeForm();
@@ -501,7 +538,7 @@ const MinhasCoreografias = () => {
   };
 
   const handleDelete = async (id: string) => {
-    await supabase.from('coreografias').delete().eq('id', id);
+    await supabase.from('registrations').delete().eq('id', id);
     setCoreografias(prev => prev.filter(c => c.id !== id));
     setConfirmDel(null);
   };
@@ -604,52 +641,8 @@ const MinhasCoreografias = () => {
         </button>
       </div>
 
-      {/* ── Inscrições via vitrine pública (tabela registrations) ── */}
-      {/* Workaround pra dívida #12 do backlog: unificar coreografias + registrations */}
-      {!loading && vitrineRegs.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
-            Inscrições recentes
-          </h2>
-          <div className="space-y-2">
-            {vitrineRegs.map(reg => {
-              const ev = allEvents.find(e => e.id === reg.event_id);
-              const statusColor = reg.status_pagamento === 'CONFIRMADO' || reg.status_pagamento === 'APROVADO'
-                ? 'text-emerald-500 bg-emerald-500/10'
-                : 'text-amber-500 bg-amber-500/10';
-              const statusLabel = reg.status_pagamento === 'CONFIRMADO' || reg.status_pagamento === 'APROVADO'
-                ? 'Confirmada'
-                : 'Aguardando pagamento';
-              return (
-                <div key={reg.id} className="flex items-center gap-4 p-4 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight truncate">
-                      {reg.nome_coreografia ?? '(sem nome)'}
-                    </p>
-                    <p className="text-[10px] text-slate-500 mt-0.5 truncate">
-                      {ev?.name ?? 'Evento'} · {reg.formato_participacao} · {reg.categoria}
-                    </p>
-                  </div>
-                  <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${statusColor} shrink-0`}>
-                    {statusLabel}
-                  </span>
-                  {reg.status_pagamento !== 'CONFIRMADO' && reg.status_pagamento !== 'APROVADO' && (
-                    <button
-                      onClick={() => navigate(`/festival/${reg.event_id}/checkout?registration_id=${reg.id}`)}
-                      className="px-4 py-2 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#d4005a] transition-all shrink-0"
-                    >
-                      Pagar
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ── Warnings (só para fluxo de coreografias com elenco) ── */}
-      {!loading && elenco.length === 0 && coreografias.length === 0 && vitrineRegs.length === 0 && (
+      {/* ── Warnings (só pra fluxo de novas coreografias com elenco) ── */}
+      {!loading && elenco.length === 0 && coreografias.length === 0 && (
         <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl">
           <AlertTriangle size={14} className="text-amber-500 shrink-0 mt-0.5" />
           <p className="text-[9px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wide">

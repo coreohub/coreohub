@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
     if (!user) throw new Error('Não autorizado.')
 
     const { data: coreo } = await supabase
-      .from('coreografias')
+      .from('registrations')
       .select('id, payment_id, event_id, status_pagamento, refunded_at')
       .eq('id', registration_id)
       .single()
@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
 
     // Atualiza coreografia
     await supabase
-      .from('coreografias')
+      .from('registrations')
       .update({
         refunded_at:     now,
         refund_amount:   refundedAmount,

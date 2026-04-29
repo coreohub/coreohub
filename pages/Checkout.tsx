@@ -200,7 +200,7 @@ const Checkout = () => {
         .update({ status_pagamento: 'CONFIRMADO', valor_pago: 0 })
         .eq('id', registrationId);
       await supabase
-        .from('coreografias')
+        .from('registrations')
         .update({ status_pagamento: 'APROVADO' })
         .eq('id', registrationId);
       navigate(`/pagamento/sucesso?registration_id=${registrationId}`);

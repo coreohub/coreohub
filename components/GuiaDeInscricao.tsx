@@ -77,7 +77,7 @@ const GuiaDeInscricao: React.FC<Props> = ({ profile, config }) => {
     const fetchData = async () => {
       const [elencoRes, coreografiasRes] = await Promise.all([
         supabase.from('elenco').select('id', { count: 'exact', head: true }).eq('user_id', profile.id),
-        supabase.from('coreografias').select('id, status, trilha_url').eq('user_id', profile.id),
+        supabase.from('registrations').select('id, status, trilha_url').eq('user_id', profile.id),
       ]);
       setElencoCount(elencoRes.count ?? 0);
       setCoreografias(coreografiasRes.data ?? []);

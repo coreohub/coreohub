@@ -23,11 +23,11 @@ const PagamentoSucesso = () => {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Detalhe da coreografia que acabou de pagar (se tiver id na URL).
+      // Detalhe da inscrição que acabou de pagar (se tiver id na URL).
       if (registrationId) {
         const { data: coreo } = await supabase
-          .from('coreografias')
-          .select('nome, formacao, tipo_apresentacao, event_id')
+          .from('registrations')
+          .select('event_id, tipo_apresentacao, nome:nome_coreografia, formacao:formato_participacao')
           .eq('id', registrationId)
           .single();
 
@@ -45,10 +45,10 @@ const PagamentoSucesso = () => {
         }
       }
 
-      // Conta quantas outras coreografias ainda estão pendentes para esse usuário.
+      // Conta quantas outras inscrições ainda estão pendentes para esse usuário.
       if (user) {
         const { count } = await supabase
-          .from('coreografias')
+          .from('registrations')
           .select('id', { count: 'exact', head: true })
           .eq('user_id', user.id)
           .neq('status_pagamento', 'APROVADO')
