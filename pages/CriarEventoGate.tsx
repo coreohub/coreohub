@@ -5,7 +5,7 @@ import {
   Crown, Loader2, AlertCircle, CheckCircle, ArrowRight, Lock, Mail, User, Sparkles,
 } from 'lucide-react';
 
-const CreateEvent = lazy(() => import('./CreateEvent'));
+const OnboardingWizard = lazy(() => import('../components/OnboardingWizard'));
 
 type AuthStatus = 'loading' | 'anon' | 'ready';
 
@@ -98,7 +98,7 @@ const CriarEventoGate: React.FC = () => {
           <Loader2 size={32} className="animate-spin text-[#ff0068]" />
         </div>
       }>
-        <CreateEvent />
+        <OnboardingWizard />
       </Suspense>
     );
   }
@@ -167,7 +167,7 @@ const CriarEventoGate: React.FC = () => {
           </button>
 
           <p className="text-[10px] text-center text-slate-400 leading-relaxed">
-            Ao criar a conta você seguirá para o cadastro do festival e configuração da conta de recebimento (Asaas).
+            Ao criar a conta, você passa por 4 passos rápidos pra colocar sua mostra no ar.
           </p>
         </div>
 
