@@ -111,7 +111,10 @@ const OnboardingWizard: React.FC = () => {
       const hasCompetitiva = data.templates.includes('COMPETITIVA');
       const baseTpl = hasCompetitiva ? getTemplate('COMPETITIVA') : tpls[0];
 
-      const slug = `${slugify(data.name)}-${Math.random().toString(36).substring(2, 8)}`;
+      // Slug limpo "festival-ano". Conflito de unicidade é tratado pelo retry com sufixo abaixo.
+      const editionYear = new Date(data.start_date).getFullYear() || new Date().getFullYear();
+      const baseSlug = `${slugify(data.name)}-${editionYear}`;
+      const slug = baseSlug;
 
       // Payload validado contra o schema real da tabela events (testado via
       // db-introspect). Detalhes (categorias, estilos, critérios, tolerância,
@@ -130,11 +133,23 @@ const OnboardingWizard: React.FC = () => {
         event_type:       'private',
       };
 
-      const result = await createEvent(payload);
+      let result: any;
+      let finalSlug = slug;
+      try {
+        result = await createEvent(payload);
+      } catch (e: any) {
+        // Conflito de slug → retry com sufixo aleatório
+        if (String(e?.code) === '23505' || /duplicate|unique/i.test(e?.message ?? '')) {
+          finalSlug = `${baseSlug}-${Math.random().toString(36).substring(2, 6)}`;
+          result = await createEvent({ ...payload, slug: finalSlug });
+        } else {
+          throw e;
+        }
+      }
       const ev = Array.isArray(result) ? result[0] : result;
       if (!ev?.id) throw new Error('Não foi possível criar o evento.');
 
-      setCreatedEvent({ id: ev.id, slug: ev.slug ?? slug });
+      setCreatedEvent({ id: ev.id, slug: ev.slug ?? finalSlug });
       setStep(3);
     } catch (e: any) {
       setError(e.message ?? 'Erro ao criar o evento.');

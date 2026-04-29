@@ -140,7 +140,7 @@ const Leaderboard = () => {
           <div className="flex items-center gap-4">
             <BrandIcon size={28} />
             <div>
-              <p className="text-[9px] font-black text-[#ff0068] uppercase tracking-[0.4em]">Ranking Oficial</p>
+              <p className="text-[9px] font-black text-[#ff0068] uppercase tracking-[0.4em]">Resultados Oficiais</p>
               <h1 className="text-2xl font-black uppercase tracking-tighter italic">
                 {eventName || 'CoreoHub'}
               </h1>

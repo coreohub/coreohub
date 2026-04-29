@@ -40,6 +40,23 @@ Deno.serve(async (req) => {
       })
     }
 
+    if (action === 'update-slug') {
+      const eventId = url.searchParams.get('event_id') ?? ''
+      const newSlug = url.searchParams.get('slug') ?? ''
+      if (!eventId || !newSlug) {
+        return new Response(JSON.stringify({ error: 'event_id e slug obrigatórios' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      const updated = await sql`
+        UPDATE events SET slug = ${newSlug} WHERE id = ${eventId}::uuid
+        RETURNING id, slug, name
+      `
+      return new Response(JSON.stringify({ ok: true, updated: updated[0] }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     if (action === 'apply-events-cover-url') {
       await sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS cover_url TEXT`
       const updated = await sql`

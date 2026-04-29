@@ -75,7 +75,7 @@ const PublicEventPage = () => {
 
   const handleShareWhatsapp = () => {
     if (!event) return;
-    const text = encodeURIComponent(`Confira o ${event.name} no CoreoHub: ${window.location.href}`);
+    const text = encodeURIComponent(`Confira o ${event.name}: ${window.location.href}`);
     window.open(`https://wa.me/?text=${text}`, '_blank', 'noopener');
   };
 
@@ -274,7 +274,7 @@ const PublicEventPage = () => {
         {event.formacoes_config && event.formacoes_config.length > 0 && (
           <div className="space-y-4">
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-              <Music size={24} className="text-[#ff0068]" /> Formações
+              <Music size={24} className="text-[#ff0068]" /> Inscrições disponíveis
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {event.formacoes_config.map((mod: any, i: number) => (
@@ -310,7 +310,7 @@ const PublicEventPage = () => {
               to={`/festival/${eventId}/leaderboard`}
               className="px-8 py-4 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:border-[#ff0068]/50 transition-all flex items-center justify-center gap-2"
             >
-              <Trophy size={16} /> Ver Ranking
+              <Trophy size={16} /> Resultados
             </Link>
           </div>
         </div>
