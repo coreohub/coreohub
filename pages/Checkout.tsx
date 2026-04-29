@@ -61,6 +61,10 @@ const Checkout = () => {
   const [couponError, setCouponError]         = useState<string | null>(null);
   const [appliedCoupon, setAppliedCoupon]     = useState<{ id: string; code: string; discount: number } | null>(null);
 
+  /* ── CPF/CNPJ — Asaas exige no payer ── */
+  const [needsCpf, setNeedsCpf] = useState(false);
+  const [cpfInput, setCpfInput] = useState('');
+
   const isGovernment = event?.event_type === 'government';
   const finalValue   = Math.max(0, baseFee - (appliedCoupon?.discount ?? 0));
 
@@ -94,6 +98,17 @@ const Checkout = () => {
 
       setRegistration(reg);
       setEvent(ev);
+
+      // Asaas exige CPF/CNPJ. Se o profile não tem, vai precisar pedir.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && ev.event_type !== 'government') {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('cpf_cnpj')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (!prof?.cpf_cnpj?.trim()) setNeedsCpf(true);
+      }
 
       const formacoes: any[] = ev.formacoes_config ?? [];
       const mod = formacoes.find((m: any) => m.name === reg.formato_participacao);
@@ -137,6 +152,21 @@ const Checkout = () => {
     setPaying(true);
     setError(null);
     try {
+      // Se precisa de CPF, valida e salva no profile antes de gerar pagamento.
+      if (needsCpf) {
+        const cleaned = cpfInput.replace(/\D/g, '');
+        if (cleaned.length !== 11 && cleaned.length !== 14) {
+          throw new Error('CPF (11 dígitos) ou CNPJ (14 dígitos) obrigatório.');
+        }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Sessão expirada — faça login novamente.');
+        const { error: cpfErr } = await supabase
+          .from('profiles')
+          .update({ cpf_cnpj: cleaned })
+          .eq('id', user.id);
+        if (cpfErr) throw new Error(`Não foi possível salvar o CPF: ${cpfErr.message}`);
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
       const response = await fetch(`${SUPABASE_URL}/functions/v1/create-payment-asaas`, {
         method: 'POST',
@@ -346,6 +376,26 @@ const Checkout = () => {
               <p className="font-black uppercase tracking-wider">Pagamento seguro via Asaas</p>
               <p>Você será redirecionado para o ambiente seguro de pagamento. Aceitamos Pix, cartão de crédito e boleto bancário.</p>
             </div>
+          </div>
+        )}
+
+        {/* CPF / CNPJ — exigido pelo Asaas, só pra eventos pagos sem dado prévio */}
+        {needsCpf && !isGovernment && (
+          <div className="space-y-2 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 rounded-3xl p-5 shadow-sm">
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 ml-1">
+              CPF ou CNPJ <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={cpfInput}
+              onChange={e => setCpfInput(e.target.value)}
+              placeholder="000.000.000-00"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-5 text-slate-900 dark:text-white outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm"
+            />
+            <p className="text-[10px] text-slate-500 ml-1">
+              Necessário pra emitir a cobrança no Asaas. Salvamos no seu perfil pra próximas inscrições.
+            </p>
           </div>
         )}
 
