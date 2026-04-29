@@ -109,7 +109,9 @@ const PublicEventPage = () => {
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '—';
-    return new Date(dateStr).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+    // Parse com T12:00:00 evita shift UTC midnight → dia anterior em BRT.
+    const iso = dateStr.includes('T') ? dateStr : dateStr + 'T12:00:00';
+    return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
   };
 
   const eventId = event.id;

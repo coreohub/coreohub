@@ -112,6 +112,40 @@ Deno.serve(async (req) => {
       })
     }
 
+    if (action === 'apply-public-configuracoes-policy') {
+      // Permite ANÔNIMOS lerem configuracoes que pertencem a eventos públicos.
+      // Sem isso, vitrine pública (PublicEventPage) não consegue ler prazos,
+      // prêmios, descrição etc.
+      await sql`DROP POLICY IF EXISTS "anyone_reads_public_event_configuracoes" ON configuracoes`
+      await sql`
+        CREATE POLICY "anyone_reads_public_event_configuracoes" ON configuracoes
+          FOR SELECT
+          USING (
+            EXISTS (
+              SELECT 1 FROM events e
+              WHERE e.id = configuracoes.event_id AND e.is_public = TRUE
+            )
+          )
+      `
+      // Caso especial: row legacy id='1' que aponta pra evento público também
+      // precisa ser lida por anon (algumas telas leem por id=1 ainda).
+      await sql`DROP POLICY IF EXISTS "anyone_reads_legacy_singleton_for_public_event" ON configuracoes`
+      await sql`
+        CREATE POLICY "anyone_reads_legacy_singleton_for_public_event" ON configuracoes
+          FOR SELECT
+          USING (
+            id = '1' AND EXISTS (
+              SELECT 1 FROM events e
+              WHERE e.id = configuracoes.event_id AND e.is_public = TRUE
+            )
+          )
+      `
+      await sql`NOTIFY pgrst, 'reload schema'`
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     if (action === 'apply-protect-commission') {
       await sql`
         CREATE OR REPLACE FUNCTION protect_commission_columns() RETURNS trigger AS $func$
