@@ -4,7 +4,7 @@ import { supabase } from '../services/supabase';
 import {
   User, Phone, MapPin, Save, Loader2,
   CheckCircle, AlertCircle, CreditCard, Music2,
-  Instagram, Camera, XCircle, Mail, Edit3,
+  Instagram, Camera, XCircle, Mail, Edit3, Lock,
 } from 'lucide-react';
 
 /* ── CPF/CNPJ validation ── */
@@ -104,6 +104,59 @@ const MeuPerfil = () => {
   const [emailUpdating, setEmailUpdating] = useState(false);
   const [emailMsg, setEmailMsg]           = useState<{ type: 'ok' | 'err', text: string } | null>(null);
 
+  /* ── Edição de senha ── */
+  const [authProviders, setAuthProviders] = useState<string[]>([]);
+  const hasPassword = authProviders.includes('email');
+  const [editingPassword, setEditingPassword]   = useState(false);
+  const [currentPassword, setCurrentPassword]   = useState('');
+  const [newPassword, setNewPassword]           = useState('');
+  const [confirmPassword, setConfirmPassword]   = useState('');
+  const [passwordUpdating, setPasswordUpdating] = useState(false);
+  const [passwordMsg, setPasswordMsg]           = useState<{ type: 'ok' | 'err', text: string } | null>(null);
+
+  const handleUpdatePassword = async () => {
+    setPasswordMsg(null);
+    if (newPassword.length < 6) {
+      setPasswordMsg({ type: 'err', text: 'A senha precisa ter no mínimo 6 caracteres.' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMsg({ type: 'err', text: 'A confirmação da senha não bate com a nova senha.' });
+      return;
+    }
+    setPasswordUpdating(true);
+    try {
+      // Re-auth: se já tinha senha definida, valida a atual antes de mudar.
+      if (hasPassword) {
+        if (!currentPassword) {
+          throw new Error('Informe sua senha atual pra confirmar a alteração.');
+        }
+        const { error: signErr } = await supabase.auth.signInWithPassword({
+          email:    profile?.email ?? '',
+          password: currentPassword,
+        });
+        if (signErr) throw new Error('Senha atual incorreta.');
+      }
+
+      const { error: updErr } = await supabase.auth.updateUser({ password: newPassword });
+      if (updErr) throw updErr;
+
+      setPasswordMsg({
+        type: 'ok',
+        text: hasPassword ? 'Senha alterada com sucesso.' : 'Senha definida! Agora você pode logar com e-mail e senha também.',
+      });
+      setEditingPassword(false);
+      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+      // Recarrega providers (caso seja primeira definição de senha)
+      const { data: { user } } = await supabase.auth.getUser();
+      setAuthProviders((user?.identities ?? []).map((i: any) => i.provider));
+    } catch (e: any) {
+      setPasswordMsg({ type: 'err', text: e?.message ?? 'Erro ao atualizar senha.' });
+    } finally {
+      setPasswordUpdating(false);
+    }
+  };
+
   const handleUpdateEmail = async () => {
     setEmailMsg(null);
     const trimmed = newEmail.trim();
@@ -132,6 +185,8 @@ const MeuPerfil = () => {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      // Quais providers o user usa pra logar (email, google, etc.)
+      setAuthProviders((user.identities ?? []).map((i: any) => i.provider));
       const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
       if (data) {
         setProfile(data);
@@ -378,6 +433,88 @@ const MeuPerfil = () => {
               }`}>
                 {emailMsg.type === 'ok' ? <CheckCircle size={12} className="mt-0.5 shrink-0" /> : <AlertCircle size={12} className="mt-0.5 shrink-0" />}
                 <span>{emailMsg.text}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Senha — adapta entre 'Alterar' (já tem) e 'Definir' (login social only) */}
+          <div>
+            <label className={labelClass}>
+              <Lock size={10} /> Senha
+              {!hasPassword && authProviders.length > 0 && (
+                <span className="ml-2 text-[8px] font-bold text-slate-400 normal-case tracking-normal">
+                  (você loga via {authProviders.join(', ')})
+                </span>
+              )}
+            </label>
+            {!editingPassword ? (
+              <button
+                type="button"
+                onClick={() => { setEditingPassword(true); setPasswordMsg(null); }}
+                className="px-4 py-2.5 bg-[#ff0068]/10 text-[#ff0068] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0068]/20 transition-all flex items-center gap-1.5"
+              >
+                <Edit3 size={11} /> {hasPassword ? 'Alterar senha' : 'Definir senha'}
+              </button>
+            ) : (
+              <div className="space-y-2 bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 rounded-xl p-4">
+                {hasPassword && (
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={e => setCurrentPassword(e.target.value)}
+                    placeholder="Senha atual"
+                    className={inputClass()}
+                    autoFocus
+                  />
+                )}
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  placeholder="Nova senha (mín 6 caracteres)"
+                  className={inputClass()}
+                  autoFocus={!hasPassword}
+                />
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder="Confirma a nova senha"
+                  className={inputClass()}
+                />
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleUpdatePassword}
+                    disabled={passwordUpdating}
+                    className="flex-1 px-4 py-2.5 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#d4005a] transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    {passwordUpdating ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle size={11} />}
+                    {hasPassword ? 'Alterar senha' : 'Definir senha'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingPassword(false);
+                      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+                      setPasswordMsg(null);
+                    }}
+                    disabled={passwordUpdating}
+                    className="px-3 py-2.5 bg-slate-200 dark:bg-white/5 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-300 dark:hover:bg-white/10 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+            {passwordMsg && (
+              <div className={`mt-2 flex items-start gap-2 p-3 rounded-lg text-[10px] font-bold leading-relaxed ${
+                passwordMsg.type === 'ok'
+                  ? 'bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                  : 'bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400'
+              }`}>
+                {passwordMsg.type === 'ok' ? <CheckCircle size={12} className="mt-0.5 shrink-0" /> : <AlertCircle size={12} className="mt-0.5 shrink-0" />}
+                <span>{passwordMsg.text}</span>
               </div>
             )}
           </div>
