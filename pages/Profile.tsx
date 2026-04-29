@@ -4,7 +4,7 @@ import { supabase } from '../services/supabase';
 import {
   User, Phone, MapPin, Save, Loader2,
   CheckCircle, AlertCircle, CreditCard, Music2,
-  Instagram, Camera, XCircle,
+  Instagram, Camera, XCircle, Mail, Edit3,
 } from 'lucide-react';
 
 /* ── CPF/CNPJ validation ── */
@@ -97,6 +97,36 @@ const MeuPerfil = () => {
   const [error, setError]           = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const fileInputRef                = useRef<HTMLInputElement | null>(null);
+
+  /* ── Edição de email (auth.users) ── */
+  const [editingEmail, setEditingEmail]   = useState(false);
+  const [newEmail, setNewEmail]           = useState('');
+  const [emailUpdating, setEmailUpdating] = useState(false);
+  const [emailMsg, setEmailMsg]           = useState<{ type: 'ok' | 'err', text: string } | null>(null);
+
+  const handleUpdateEmail = async () => {
+    setEmailMsg(null);
+    const trimmed = newEmail.trim();
+    if (!trimmed || !trimmed.includes('@') || trimmed === profile?.email) {
+      setEmailMsg({ type: 'err', text: 'Informe um e-mail diferente do atual.' });
+      return;
+    }
+    setEmailUpdating(true);
+    try {
+      const { error: updErr } = await supabase.auth.updateUser({ email: trimmed });
+      if (updErr) throw updErr;
+      setEmailMsg({
+        type: 'ok',
+        text: `Enviamos um link de confirmação para ${trimmed} e também para o e-mail atual. A troca só é efetivada após você confirmar nos dois.`,
+      });
+      setEditingEmail(false);
+      setNewEmail('');
+    } catch (e: any) {
+      setEmailMsg({ type: 'err', text: e?.message ?? 'Erro ao atualizar e-mail.' });
+    } finally {
+      setEmailUpdating(false);
+    }
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -285,6 +315,71 @@ const MeuPerfil = () => {
               onChange={e => set('location')(e.target.value)}
               placeholder="São Paulo, SP"
               className={inputClass()} />
+          </div>
+
+          {/* E-mail (auth) — alteração requer confirmação por link */}
+          <div>
+            <label className={labelClass}><Mail size={10} /> E-mail de login</label>
+            {!editingEmail ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="email"
+                  value={profile?.email ?? ''}
+                  readOnly
+                  className={`${inputClass()} opacity-70 cursor-not-allowed`}
+                />
+                <button
+                  type="button"
+                  onClick={() => { setEditingEmail(true); setNewEmail(profile?.email ?? ''); setEmailMsg(null); }}
+                  className="px-3 py-2.5 bg-[#ff0068]/10 text-[#ff0068] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0068]/20 transition-all flex items-center gap-1.5 shrink-0"
+                >
+                  <Edit3 size={11} /> Alterar
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="email"
+                    value={newEmail}
+                    onChange={e => setNewEmail(e.target.value)}
+                    placeholder="novo@email.com"
+                    className={inputClass()}
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={handleUpdateEmail}
+                    disabled={emailUpdating}
+                    className="px-4 py-2.5 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#d4005a] transition-all flex items-center gap-1.5 shrink-0 disabled:opacity-50"
+                  >
+                    {emailUpdating ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle size={11} />}
+                    Confirmar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setEditingEmail(false); setEmailMsg(null); }}
+                    disabled={emailUpdating}
+                    className="px-3 py-2.5 bg-slate-100 dark:bg-white/5 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-white/10 transition-all shrink-0"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+                <p className="text-[9px] text-slate-400 leading-relaxed">
+                  Vamos mandar um link de confirmação no e-mail novo E no atual. A troca só vale depois de você clicar nos dois links.
+                </p>
+              </div>
+            )}
+            {emailMsg && (
+              <div className={`mt-2 flex items-start gap-2 p-3 rounded-lg text-[10px] font-bold leading-relaxed ${
+                emailMsg.type === 'ok'
+                  ? 'bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                  : 'bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400'
+              }`}>
+                {emailMsg.type === 'ok' ? <CheckCircle size={12} className="mt-0.5 shrink-0" /> : <AlertCircle size={12} className="mt-0.5 shrink-0" />}
+                <span>{emailMsg.text}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
