@@ -24,6 +24,15 @@ const Auth = () => {
   const passwordRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // Se a sessão já existe (callback OAuth processou os tokens do hash antes
+    // do mount, ou o usuário já tinha login salvo), redireciona direto.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setIsAuthenticating(true);
+        setTimeout(() => navigate(redirectTo || '/dashboard'), 0);
+      }
+    });
+
     // IMPORTANTE: o callback de onAuthStateChange NÃO pode usar await de queries
     // do Supabase (deadlock do lock interno de auth). O App.tsx já cuida de
     // getOrCreateProfile — aqui só navegamos após o SIGNED_IN.
