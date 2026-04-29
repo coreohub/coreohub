@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import {
-  Calendar, MapPin, Users, Music, Ticket, ExternalLink,
+  Calendar, MapPin, Music, Ticket, ExternalLink,
   ChevronRight, Trophy, Clock, Star, Loader2, ArrowLeft, Youtube, Radio,
   Share2, Copy, Check, Instagram, Globe, MessageCircle,
 } from 'lucide-react';
@@ -20,7 +20,6 @@ const PublicEventPage = () => {
   const navigate = useNavigate();
   const [event, setEvent] = useState<any>(null);
   const [config, setConfig] = useState<any>(null);
-  const [registrationsCount, setRegistrationsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
@@ -45,14 +44,14 @@ const PublicEventPage = () => {
           return;
         }
 
-        const [{ data: cfg }, { count }] = await Promise.all([
-          supabase.from('configuracoes').select('*').eq('id', 1).maybeSingle(),
-          supabase.from('registrations').select('*', { count: 'exact', head: true }).eq('event_id', eventData.id),
-        ]);
+        const { data: cfg } = await supabase
+          .from('configuracoes')
+          .select('*')
+          .eq('id', 1)
+          .maybeSingle();
 
         setEvent(eventData);
         setConfig(cfg);
-        setRegistrationsCount(count || 0);
       } catch (err) {
         console.error('Erro ao carregar evento:', err);
       } finally {
@@ -190,9 +189,8 @@ const PublicEventPage = () => {
       {/* Content */}
       <div className="max-w-5xl mx-auto px-8 py-16 space-y-12">
         {/* Stats Row */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
-            { label: 'Inscrições', value: registrationsCount, icon: Users },
             { label: 'Vagas', value: event.slots_limit ?? '∞', icon: Star },
             { label: 'Prazo', value: formatDate(event.registration_deadline), icon: Clock },
             { label: 'Premiação', value: config?.premiacao || '—', icon: Trophy },

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { UserRole, Profile as UserProfile } from './types';
 import { supabase } from './services/supabase';
@@ -81,7 +81,12 @@ interface PrivateRouteProps {
 const PrivateRoute: React.FC<PrivateRouteProps> = ({
   session, profile, activeRole, theme, toggleTheme, setActiveRole, videoSelectionEnabled, children,
 }) => {
-  if (!session) return <Navigate to="/login" replace />;
+  const location = useLocation();
+  if (!session) {
+    // Preserva a rota original pra Auth retomar após login/signup.
+    const redirectTo = location.pathname + location.search;
+    return <Navigate to="/login" state={{ redirectTo }} replace />;
+  }
   if (!profile || !activeRole) return null;
   return (
     <PrivateLayout
