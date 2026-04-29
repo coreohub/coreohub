@@ -23,6 +23,28 @@ const Auth = () => {
   const [password, setPassword] = useState('');
   const passwordRef = useRef<HTMLInputElement>(null);
 
+  // Quando o login vem de um deep link de festival, mostra contexto do evento
+  // pra reduzir confusão ("estou me inscrevendo em qual mostra?")
+  const [eventContext, setEventContext] = useState<{ name: string; coverUrl: string | null } | null>(null);
+
+  useEffect(() => {
+    if (!redirectTo) { setEventContext(null); return; }
+    // /festival/:id/... ou /evento/:idOrSlug
+    const m = redirectTo.match(/^\/(?:festival|evento)\/([^/?#]+)/);
+    if (!m) { setEventContext(null); return; }
+    const idOrSlug = decodeURIComponent(m[1]);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
+    const filterCol = isUuid ? 'id' : 'slug';
+    (async () => {
+      const { data } = await supabase
+        .from('events')
+        .select('name, cover_url')
+        .eq(filterCol, idOrSlug)
+        .maybeSingle();
+      if (data?.name) setEventContext({ name: data.name, coverUrl: data.cover_url ?? null });
+    })();
+  }, [redirectTo]);
+
   useEffect(() => {
     // Se a sessão já existe (callback OAuth processou os tokens do hash antes
     // do mount, ou o usuário já tinha login salvo), redireciona direto.
@@ -134,6 +156,28 @@ const Auth = () => {
             Gestão Inteligente para Festivais de Dança
           </p>
         </div>
+
+        {eventContext && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4 rounded-2xl border border-[#ff0068]/30 bg-[#ff0068]/5 overflow-hidden"
+          >
+            {eventContext.coverUrl && (
+              <div className="h-20 w-full overflow-hidden">
+                <img src={eventContext.coverUrl} alt={eventContext.name} className="w-full h-full object-cover" />
+              </div>
+            )}
+            <div className="px-4 py-3 flex flex-col items-center text-center gap-1">
+              <span className="text-[8px] font-black uppercase tracking-[0.3em] text-[#ff0068]">
+                Você está se inscrevendo em
+              </span>
+              <span className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                {eventContext.name}
+              </span>
+            </div>
+          </motion.div>
+        )}
 
         <div className="bg-white dark:bg-white/5 backdrop-blur-2xl p-6 md:p-8 rounded-[2.5rem] border border-slate-200 dark:border-white/10 shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#ff0068] to-transparent opacity-50" />
