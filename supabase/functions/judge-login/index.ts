@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
   if (action === 'list') {
     const { data: judges, error } = await supa
       .from('judges')
-      .select('id, name, avatar_url, competencias_generos, is_active')
+      .select('*')
       .eq('created_by', producer.id)
       .order('name')
 
@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
 
     const { data: judge, error } = await supa
       .from('judges')
-      .select('id, name, pin, language, competencias_generos, created_by, is_active')
+      .select('*')
       .eq('id', judge_id)
       .eq('created_by', producer.id)
       .maybeSingle()
@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
   const verifyJudge = async (judge_id: string) => {
     const { data } = await supa
       .from('judges')
-      .select('id, name, language, competencias_generos, competencias_formatos, created_by, is_active')
+      .select('*')
       .eq('id', judge_id)
       .eq('created_by', producer.id)
       .maybeSingle()
@@ -147,7 +147,7 @@ Deno.serve(async (req) => {
     // Lista todos os jurados do produtor (pra cards/filtros que mostram outros)
     const [{ data: allJudges }, { data: configByEvent }, { data: configLegacy }, { data: registrations }, { data: eventStyles }] = await Promise.all([
       supa.from('judges')
-        .select('id, name, avatar_url, language, competencias_generos, competencias_formatos, is_active')
+        .select('*')
         .eq('created_by', producer.id)
         .order('name'),
       event?.id
