@@ -951,20 +951,19 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
             .replace(/[^a-z0-9\s-]/g, '')
             .trim().replace(/\s+/g, '-').replace(/-+/g, '-');
 
+        // Payload validado contra schema real da tabela events.
+        // Removidos: cover_url, registration_deadline, categories_config,
+        // styles_config (não existem na tabela). 'address' renomeado pra 'location'.
         const eventPayload: Record<string, any> = {
           name:                    general.eventName,
           description:             general.description || null,
-          cover_url:               general.coverUrl || null,
           edition_year:            editionYear,
           start_date:              general.eventDate || null,
           end_date:                general.eventDate || null,
-          registration_deadline:   general.regDeadline || null,
-          address:                 general.location || null,
+          location:                general.location || null,
           city:                    cityState[0] || null,
           state:                   cityState[1] || null,
           formacoes_config:        formacoesAdapted,
-          categories_config:       categories,
-          styles_config:           styles,
           event_time:              general.eventTime || null,
           programacao_config:      programacao,
           ingressos_config:        ingressos,
