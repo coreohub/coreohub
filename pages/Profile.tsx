@@ -4,7 +4,7 @@ import { supabase } from '../services/supabase';
 import {
   User, Phone, MapPin, Save, Loader2,
   CheckCircle, AlertCircle, CreditCard, Music2,
-  Instagram, Camera, XCircle, Mail, Edit3, Lock,
+  Instagram, Camera, XCircle, Mail, Edit3, Lock, LogOut,
 } from 'lucide-react';
 
 /* ── CPF/CNPJ validation ── */
@@ -603,6 +603,17 @@ const MeuPerfil = () => {
             ? <><CheckCircle size={18} /> Perfil Salvo!</>
             : <><Save size={18} /> Salvar Perfil</>
         }
+      </button>
+
+      {/* Logout */}
+      <button
+        onClick={async () => {
+          await supabase.auth.signOut();
+          window.location.href = '/login';
+        }}
+        className="w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 active:scale-[0.98] bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20"
+      >
+        <LogOut size={16} /> Sair da Conta
       </button>
     </div>
   );
