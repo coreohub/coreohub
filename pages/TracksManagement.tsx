@@ -34,7 +34,8 @@ const TracksManagement = () => {
       setRegistrations(regs || []);
       setFilteredRegistrations(regs || []);
 
-      const { data: cfg } = await supabase.from('configuracoes').select('*').eq('id', 1).single();
+      const { fetchActiveEventConfig } = await import('../services/supabase');
+      const cfg = await fetchActiveEventConfig('*');
       setConfig(cfg || { tempo_entrada: 15 });
     } catch (err) {
       console.error(err);

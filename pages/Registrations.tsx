@@ -81,12 +81,13 @@ const Registrations = () => {
       let regsQuery = supabase.from('registrations').select('*').order('criado_em', { ascending: false });
       if (selectedEventId) regsQuery = regsQuery.eq('event_id', selectedEventId);
 
+      const { fetchActiveEventConfig } = await import('../services/supabase');
       const [
         { data, error },
-        { data: cfg },
+        cfg,
       ] = await Promise.all([
         regsQuery,
-        supabase.from('configuracoes').select('tolerancia,age_reference,age_reference_date,data_evento').eq('id', 1).single(),
+        fetchActiveEventConfig('tolerancia,age_reference,age_reference_date,data_evento'),
       ]);
       if (error) throw error;
       setRegistrations(data || []);

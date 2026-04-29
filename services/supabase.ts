@@ -298,11 +298,81 @@ export const uploadRegulationPdf = async (eventId: string, file: File): Promise<
   return publicUrl;
 };
 
+// ─── Configuracoes Multi-tenant ──────────────────────────────────────────────
+// #6 Fase 2: telas leem config do evento ativo do user (em vez de id=1 singleton).
+
+/**
+ * Resolve qual `event_id` usar pra buscar configuracoes.
+ * - Se eventIdHint passado: usa ele
+ * - Senão: evento mais recente criado pelo user logado (caso ORGANIZER)
+ * - Senão: null (caller decide o que fazer — geralmente fallback id=1)
+ */
+export const resolveActiveEventId = async (eventIdHint?: string | null): Promise<string | null> => {
+  if (eventIdHint) return eventIdHint;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: ev } = await supabase
+    .from('events')
+    .select('id')
+    .eq('created_by', user.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return ev?.id ?? null;
+};
+
+/**
+ * Busca a row de `configuracoes` do evento ativo do user.
+ * Tenta primeiro `event_id = X` (multi-tenant correto). Fallback id='1' (legacy).
+ * Use isso em vez de `eq('id', 1)` direto.
+ */
+export const fetchActiveEventConfig = async (
+  columns = '*',
+  eventIdHint?: string | null
+): Promise<Record<string, any> | null> => {
+  const eventId = await resolveActiveEventId(eventIdHint);
+  if (eventId) {
+    const { data } = await supabase
+      .from('configuracoes')
+      .select(columns)
+      .eq('event_id', eventId)
+      .maybeSingle();
+    if (data) return data as Record<string, any>;
+  }
+  // Fallback legacy
+  const { data } = await supabase
+    .from('configuracoes')
+    .select(columns)
+    .eq('id', '1')
+    .maybeSingle();
+  return data as Record<string, any> | null;
+};
+
+/**
+ * Atualiza configuracoes do evento ativo (multi-tenant) E também a row
+ * legacy id='1' pra compatibilidade com telas ainda não 100% refatoradas.
+ */
+export const updateActiveEventConfig = async (
+  updates: Record<string, any>,
+  eventIdHint?: string | null
+): Promise<void> => {
+  const eventId = await resolveActiveEventId(eventIdHint);
+  if (eventId) {
+    await supabase.from('configuracoes')
+      .update(updates)
+      .eq('event_id', eventId);
+  }
+  // Sync na row legacy
+  await supabase.from('configuracoes')
+    .update(updates)
+    .eq('id', '1');
+};
+
 // ─── Verificação de Conexão ───────────────────────────────────────────────────
 
 export const checkConnection = async (): Promise<ConnectionStatus> => {
   try {
-    const { data, error } = await supabase.from('configuracoes').select('id').eq('id', 1).single();
+    const { data, error } = await supabase.from('configuracoes').select('id').eq('id', '1').single();
     if (error) {
       const type = error.code === '42P01' ? 'no_table' : 
                    (error.message.includes('JWT') || error.code === 'PGRST301') ? 'auth_error' : 'error';

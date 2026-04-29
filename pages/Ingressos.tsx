@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Ticket, ExternalLink, Info, Loader2 } from 'lucide-react';
-import { supabase } from '../services/supabase';
+import { fetchActiveEventConfig } from '../services/supabase';
 
 const Ingressos = () => {
   const [url, setUrl] = useState<string | null>(null);
@@ -9,7 +9,7 @@ const Ingressos = () => {
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        const { data } = await supabase.from('configuracoes').select('url_ingressos').eq('id', 1).single();
+        const data = await fetchActiveEventConfig('url_ingressos');
         if (data?.url_ingressos) setUrl(data.url_ingressos);
       } catch (err) {
         console.error('Erro ao buscar URL de ingressos:', err);

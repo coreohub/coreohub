@@ -180,7 +180,10 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
         ] = await Promise.all([
           supabase.from('registrations').select('*').eq('event_id', selectedEventId),
           supabase.from('registrations').select('*').eq('event_id', selectedEventId).order('criado_em', { ascending: false }).limit(6),
-          supabase.from('configuracoes').select('nome_evento,data_evento').eq('id', 1).single(),
+          // ProducerDashboard tem evento selecionado explicitamente — passa como hint
+          supabase.from('configuracoes').select('nome_evento,data_evento').eq('event_id', selectedEventId).maybeSingle().then(r =>
+            r.data ? r : supabase.from('configuracoes').select('nome_evento,data_evento').eq('id', '1').maybeSingle()
+          ),
           supabase.from('judges').select('id,is_active'),
           supabase.from('registrations').select('id,check_in_status').eq('event_id', selectedEventId),
           supabase.from('platform_commissions').select('gross_amount,net_amount,commission_amount,created_at').eq('event_id', selectedEventId).order('created_at', { ascending: true }),

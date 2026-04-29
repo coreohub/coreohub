@@ -67,8 +67,9 @@ const StageMarker = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [{ data: cfg }, { data: regs }] = await Promise.all([
-          supabase.from('configuracoes').select('tempo_marcacao_palco,marcar_palco_ativo,gatilho_marcacao').eq('id', 1).single(),
+        const { fetchActiveEventConfig } = await import('../services/supabase');
+        const [cfg, { data: regs }] = await Promise.all([
+          fetchActiveEventConfig('tempo_marcacao_palco,marcar_palco_ativo,gatilho_marcacao'),
           supabase
             .from('registrations')
             .select('id,nome_coreografia,estudio,categoria,estilo_danca,elenco,ordem_apresentacao')

@@ -66,8 +66,8 @@ const ResultsPanel = () => {
   const fetchResults = async () => {
     setLoading(true);
     try {
-      const { data: cfg } = await supabase
-        .from('configuracoes').select('medal_thresholds').eq('id', 1).single();
+      const { fetchActiveEventConfig } = await import('../services/supabase');
+      const cfg = await fetchActiveEventConfig('medal_thresholds');
       setThresholds(cfg?.medal_thresholds ?? DEFAULT_THRESHOLDS);
 
       const { data: evals, error } = await supabase

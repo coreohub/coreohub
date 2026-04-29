@@ -175,8 +175,8 @@ const App: React.FC = () => {
 
   const fetchConfig = async () => {
     try {
-      const { data, error } = await supabase.from('configuracoes').select('*').eq('id', 1).single();
-      if (error && error.code !== 'PGRST116') throw error;
+      const { fetchActiveEventConfig } = await import('./services/supabase');
+      const data = await fetchActiveEventConfig('*');
       if (data) setConfig(data);
     } catch (err: any) {
       console.error('Error fetching config:', err);

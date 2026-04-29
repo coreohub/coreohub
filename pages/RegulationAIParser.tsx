@@ -162,7 +162,8 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       if (edited.criteria_config)            updates.criteria_config             = edited.criteria;
       if (edited.tiebreaker_rules)           updates.tiebreaker_rules            = edited.tiebreaker_rules;
 
-      await supabase.from('configuracoes').update(updates).eq('id', 1);
+      const { updateActiveEventConfig } = await import('../services/supabase');
+      await updateActiveEventConfig(updates);
       onApply?.(edited);
       setStep('done');
     } catch (err) {

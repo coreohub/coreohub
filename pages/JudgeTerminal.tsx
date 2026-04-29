@@ -411,9 +411,10 @@ const JudgeTerminal = () => {
     (async () => {
       setIsLoading(true);
       try {
-        const [{ data: jData }, { data: cfg }, { data: sched }, { data: gData }] = await Promise.all([
+        const { fetchActiveEventConfig } = await import('../services/supabase');
+        const [{ data: jData }, cfg, { data: sched }, { data: gData }] = await Promise.all([
           supabase.from('judges').select('*'),
-          supabase.from('configuracoes').select('regras_avaliacao, escala_notas, premios_especiais, pin_inactivity_minutes').eq('id', 1).single(),
+          fetchActiveEventConfig('regras_avaliacao, escala_notas, premios_especiais, pin_inactivity_minutes'),
           supabase.from('registrations').select('*').eq('status', 'APROVADA').order('ordem_apresentacao', { ascending: true }),
           supabase.from('event_styles').select('id, name'),
         ]);
