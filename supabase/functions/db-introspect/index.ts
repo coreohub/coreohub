@@ -40,6 +40,42 @@ Deno.serve(async (req) => {
       })
     }
 
+    if (action === 'apply-events-cover-url') {
+      await sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS cover_url TEXT`
+      const updated = await sql`
+        UPDATE events e
+        SET cover_url = c.cover_url
+        FROM configuracoes c
+        WHERE c.id = '1' AND c.event_id = e.id AND c.cover_url IS NOT NULL AND e.cover_url IS NULL
+        RETURNING e.id, e.name, e.cover_url
+      `
+      await sql`NOTIFY pgrst, 'reload schema'`
+      return new Response(JSON.stringify({ ok: true, backfilled: updated }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'event-detail') {
+      const eventId = url.searchParams.get('id') ?? ''
+      const rows = await sql`
+        SELECT * FROM events WHERE id = ${eventId}::uuid
+      `
+      return new Response(JSON.stringify({ event: rows[0] ?? null }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'list-public-events') {
+      const evs = await sql`
+        SELECT id, name, is_public, start_date, slug, city, state
+        FROM events WHERE is_public = true
+        ORDER BY start_date DESC
+      `
+      return new Response(JSON.stringify({ events: evs }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     if (action === 'list-recent-events') {
       const evs = await sql`
         SELECT e.id, e.name, e.created_by, e.created_at, p.email, p.full_name

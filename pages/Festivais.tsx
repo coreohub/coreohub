@@ -35,7 +35,7 @@ const Festivais = () => {
       try {
         const { data, error } = await supabase
           .from('events')
-          .select('id, slug, name, description, start_date, end_date, location, city, state, formacoes_config, edition_year, is_public')
+          .select('id, slug, name, description, cover_url, start_date, end_date, location, city, state, formacoes_config, edition_year, is_public')
           .eq('is_public', true)
           .order('start_date', { ascending: false });
         if (error) throw error;
@@ -56,7 +56,7 @@ const Festivais = () => {
       if (search && !e.name?.toLowerCase().includes(search.toLowerCase())) return false;
       if (stateFilter && e.state !== stateFilter) return false;
       if (monthFilter !== null && e.start_date) {
-        const m = new Date(e.start_date).getMonth();
+        const m = new Date(e.start_date + 'T12:00:00').getMonth();
         if (m !== monthFilter) return false;
       }
       return true;
@@ -94,11 +94,12 @@ const Festivais = () => {
 
   const formatDateRange = (start?: string, end?: string) => {
     if (!start) return 'Em breve';
-    const d1 = new Date(start);
+    // Parse com T12:00:00 evita shift de timezone (UTC midnight vira dia anterior em BRT).
+    const d1 = new Date(start + 'T12:00:00');
     const opts: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' };
     const left = d1.toLocaleDateString('pt-BR', opts);
     if (!end || end === start) return left;
-    const d2 = new Date(end);
+    const d2 = new Date(end + 'T12:00:00');
     return `${left} – ${d2.toLocaleDateString('pt-BR', opts)}`;
   };
 

@@ -978,6 +978,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         const eventPayload: Record<string, any> = {
           name:                    general.eventName,
           description:             general.description || null,
+          cover_url:               general.coverUrl || null,
           edition_year:            editionYear,
           start_date:              general.eventDate || null,
           end_date:                general.eventDate || null,
