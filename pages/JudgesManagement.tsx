@@ -106,7 +106,20 @@ const JudgesManagement = () => {
   };
 
   const copyJudgeAccessLink = async () => {
-    const url = `${window.location.origin}/judge-login`;
+    // Busca o token do produtor logado pra gerar link público assinado
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('judge_access_token')
+      .eq('id', user.id)
+      .maybeSingle();
+    const token = profile?.judge_access_token;
+    if (!token) {
+      alert('Não foi possível gerar o link. Recarregue a página e tente de novo.');
+      return;
+    }
+    const url = `${window.location.origin}/judge-login/${token}`;
     await copyToClipboard(url, 'link');
   };
 

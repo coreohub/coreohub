@@ -1,28 +1,28 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Award, Loader2, Lock, ArrowLeft, ShieldCheck, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { supabase } from '../services/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../services/supabase';
 
 /**
- * Página de seleção e login de jurado.
+ * Página pública de seleção e login de jurado.
  *
- * Fluxo: produtor já está logado no dispositivo (tablet/celular do evento) e
- * compartilha esta URL no WhatsApp dos jurados. Cada jurado clica no próprio
- * nome, digita o PIN de 4 dígitos (combinado pelo produtor) e é redirecionado
- * pro /judge-terminal.
+ * URL: /judge-login/:token (token é o profiles.judge_access_token do produtor)
  *
- * Sessão: NÃO usa Supabase Auth (overhead grande pra cadastro simples).
- * Persiste apenas em localStorage com expiração de 24h. As queries do terminal
- * continuam rodando sob a sessão do produtor que tá logado no device.
+ * Fluxo:
+ * 1. Página pública — não exige nenhum login. Funciona no celular do jurado.
+ * 2. Chama Edge Function `judge-login` com action=list pra puxar a lista de
+ *    jurados daquele produtor (só nome/avatar, PIN nunca trafega).
+ * 3. Jurado escolhe nome → digita PIN → chamada Edge Function action=validate.
+ * 4. Edge Function valida PIN no backend (PIN nunca chega no client por outro
+ *    caminho que não a tentativa do próprio usuário).
+ * 5. Sucesso → salva sessão em localStorage por 24h → redireciona pro /judge-terminal.
  */
 
 interface Judge {
   id: string;
   name: string;
   avatar_url?: string | null;
-  pin?: string | null;
-  is_active?: boolean | null;
   competencias_generos?: string[] | null;
 }
 
@@ -34,6 +34,8 @@ const LOCKOUT_MS = 5 * 60 * 1000; // 5 min
 export interface JudgeSession {
   judge_id: string;
   judge_name: string;
+  language: string;
+  producer_token: string;
   expires_at: number;
 }
 
@@ -56,47 +58,61 @@ export const clearJudgeSession = () => {
   localStorage.removeItem(SESSION_KEY);
 };
 
+const callJudgeLogin = async (body: Record<string, unknown>) => {
+  const res = await fetch(`${supabaseUrl}/functions/v1/judge-login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': supabaseAnonKey,
+      'Authorization': `Bearer ${supabaseAnonKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+  return { status: res.status, data: await res.json().catch(() => ({})) };
+};
+
 const JudgeLogin: React.FC = () => {
   const navigate = useNavigate();
+  const { token: paramToken } = useParams<{ token: string }>();
   const [judges, setJudges] = useState<Judge[]>([]);
+  const [producerName, setProducerName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tokenInvalid, setTokenInvalid] = useState(false);
   const [selectedJudge, setSelectedJudge] = useState<Judge | null>(null);
   const [pinInput, setPinInput] = useState('');
   const [attemptsLeft, setAttemptsLeft] = useState(MAX_ATTEMPTS);
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
-  const [authError, setAuthError] = useState(false);
 
   const avatarSrc = (j: Judge) =>
     j.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(j.name)}`;
 
   useEffect(() => {
-    // Sessão válida → manda direto pro terminal
+    if (!paramToken) {
+      setTokenInvalid(true);
+      setLoading(false);
+      return;
+    }
+    // Sessão válida e do mesmo produtor → manda direto pro terminal
     const session = readJudgeSession();
-    if (session) {
+    if (session && session.producer_token === paramToken) {
       navigate('/judge-terminal', { replace: true });
       return;
     }
     (async () => {
-      const { data: { session: authSession } } = await supabase.auth.getSession();
-      if (!authSession) {
-        setAuthError(true);
-        setLoading(false);
-        return;
-      }
-      const { data, error: e } = await supabase
-        .from('judges')
-        .select('id, name, avatar_url, pin, is_active, competencias_generos')
-        .order('name');
-      if (e) {
-        setError('Não foi possível carregar a lista de jurados.');
+      const { status, data } = await callJudgeLogin({ action: 'list', token: paramToken });
+      if (status === 404 || data?.reason === 'invalid_token') {
+        setTokenInvalid(true);
+      } else if (status === 200 && data?.ok) {
+        setJudges(data.judges ?? []);
+        setProducerName(data.producer_name ?? null);
       } else {
-        setJudges((data || []).filter(j => j.is_active !== false));
+        setError(data?.detail ?? 'Não foi possível carregar a lista de jurados.');
       }
       setLoading(false);
     })();
-  }, [navigate]);
+  }, [paramToken, navigate]);
 
   const lockoutSecondsLeft = useMemo(() => {
     if (!lockedUntil) return 0;
@@ -140,35 +156,45 @@ const JudgeLogin: React.FC = () => {
   };
 
   useEffect(() => {
-    if (pinInput.length !== 4 || !selectedJudge || validating) return;
+    if (pinInput.length !== 4 || !selectedJudge || validating || !paramToken) return;
     setValidating(true);
-    // Validação local: já temos o pin do jurado em memória pq /judges retornou
-    // pra um produtor autenticado. Não precisa round-trip extra.
-    const ok = selectedJudge.pin === pinInput;
-    setTimeout(() => {
-      if (ok) {
+    (async () => {
+      const { status, data } = await callJudgeLogin({
+        action: 'validate',
+        token: paramToken,
+        judge_id: selectedJudge.id,
+        pin: pinInput,
+      });
+
+      if (status === 200 && data?.ok) {
         const session: JudgeSession = {
-          judge_id: selectedJudge.id,
-          judge_name: selectedJudge.name,
+          judge_id: data.judge.id,
+          judge_name: data.judge.name,
+          language: data.judge.language ?? 'pt-BR',
+          producer_token: paramToken,
           expires_at: Date.now() + SESSION_TTL_MS,
         };
         localStorage.setItem(SESSION_KEY, JSON.stringify(session));
         navigate('/judge-terminal', { replace: true });
-      } else {
-        const left = attemptsLeft - 1;
-        setAttemptsLeft(left);
-        setPinInput('');
-        if (left <= 0) {
-          setLockedUntil(Date.now() + LOCKOUT_MS);
-          setSelectedJudge(null);
-          setError('Muitas tentativas erradas. Aguarde 5 minutos.');
-        } else {
-          setError(`PIN incorreto. ${left} tentativa${left === 1 ? '' : 's'} restante${left === 1 ? '' : 's'}.`);
-        }
-        setValidating(false);
+        return;
       }
-    }, 250);
-  }, [pinInput, selectedJudge, attemptsLeft, navigate, validating]);
+
+      // Falhas
+      const left = attemptsLeft - 1;
+      setAttemptsLeft(left);
+      setPinInput('');
+      if (left <= 0) {
+        setLockedUntil(Date.now() + LOCKOUT_MS);
+        setSelectedJudge(null);
+        setError('Muitas tentativas erradas. Aguarde 5 minutos.');
+      } else if (data?.reason === 'invalid_pin') {
+        setError(`PIN incorreto. ${left} tentativa${left === 1 ? '' : 's'} restante${left === 1 ? '' : 's'}.`);
+      } else {
+        setError('Erro ao validar. Tente novamente.');
+      }
+      setValidating(false);
+    })();
+  }, [pinInput, selectedJudge, attemptsLeft, navigate, paramToken, validating]);
 
   if (loading) {
     return (
@@ -178,26 +204,20 @@ const JudgeLogin: React.FC = () => {
     );
   }
 
-  if (authError) {
+  if (tokenInvalid) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-6">
         <div className="max-w-md w-full text-center space-y-5">
-          <div className="inline-flex p-4 rounded-3xl bg-amber-500/10 border border-amber-500/20">
-            <ShieldCheck size={28} className="text-amber-500" />
+          <div className="inline-flex p-4 rounded-3xl bg-rose-500/10 border border-rose-500/20">
+            <ShieldCheck size={28} className="text-rose-500" />
           </div>
           <h1 className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white italic">
-            Dispositivo não preparado
+            Link inválido ou expirado
           </h1>
           <p className="text-xs text-slate-500 font-bold leading-relaxed">
-            Esse tablet/celular precisa estar logado na conta do produtor antes do jurado entrar.
-            Peça pra alguém da produção fazer login primeiro.
+            Esse link de acesso não existe mais ou foi revogado pelo produtor.
+            Peça um link novo na produção.
           </p>
-          <button
-            onClick={() => navigate('/login')}
-            className="px-5 py-3 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest"
-          >
-            Ir pra tela de login
-          </button>
         </div>
       </div>
     );
@@ -218,6 +238,11 @@ const JudgeLogin: React.FC = () => {
           <p className="text-xs text-slate-500 font-bold">
             Toque no seu nome e digite o PIN de 4 dígitos enviado pelo produtor.
           </p>
+          {producerName && (
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Produtor: <span className="text-slate-600 dark:text-slate-300">{producerName}</span>
+            </p>
+          )}
         </div>
 
         {/* Lockout banner */}
@@ -230,10 +255,18 @@ const JudgeLogin: React.FC = () => {
           </div>
         )}
 
+        {/* Inline error */}
+        {error && !selectedJudge && (
+          <div className="flex items-center gap-2 p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500">
+            <AlertCircle size={14} className="shrink-0" />
+            <p className="text-xs font-bold">{error}</p>
+          </div>
+        )}
+
         {/* Judge grid */}
         {judges.length === 0 ? (
           <div className="text-center py-16 text-xs font-bold text-slate-400">
-            Nenhum jurado cadastrado nesse evento. Peça pra produção cadastrar primeiro.
+            Nenhum jurado cadastrado por esse produtor.
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -261,10 +294,6 @@ const JudgeLogin: React.FC = () => {
             ))}
           </div>
         )}
-
-        <p className="text-center text-[10px] text-slate-400 font-bold">
-          Não é jurado? <button onClick={() => navigate(-1)} className="text-[#ff0068]">Voltar</button>
-        </p>
       </div>
 
       {/* PIN modal */}
@@ -353,6 +382,7 @@ const JudgeLogin: React.FC = () => {
 
               <div className="flex items-center gap-1.5 justify-center text-[9px] font-bold uppercase tracking-widest text-slate-400">
                 <Lock size={10} /> {attemptsLeft}/{MAX_ATTEMPTS} tentativas
+                {validating && <Loader2 size={10} className="animate-spin" />}
               </div>
             </motion.div>
           </div>
