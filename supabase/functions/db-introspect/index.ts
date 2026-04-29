@@ -223,6 +223,146 @@ Deno.serve(async (req) => {
       })
     }
 
+    if (action === 'apply-rls-fix') {
+      // Habilita RLS em todas as tabelas que estavam desligadas.
+      // events e profiles JÁ tinham policies mas RLS estava off — policies ignoradas.
+      // Outras (categories, subcategories, event_styles, destaques_votacao) ganham
+      // policies básicas: leitura pra autenticados, escrita só super admin.
+      const results: any = {}
+
+      // ── events: habilita RLS (policies já existem) ─────────────────────────
+      await sql`ALTER TABLE events ENABLE ROW LEVEL SECURITY`
+      results.events = 'RLS enabled (policies preserved)'
+
+      // ── profiles: habilita RLS (policies já existem) ───────────────────────
+      await sql`ALTER TABLE profiles ENABLE ROW LEVEL SECURITY`
+      results.profiles = 'RLS enabled (policies preserved)'
+
+      // ── event_styles: catálogo de gêneros, leitura autenticada, escrita admin
+      await sql`ALTER TABLE event_styles ENABLE ROW LEVEL SECURITY`
+      await sql`DROP POLICY IF EXISTS "authenticated_reads_event_styles" ON event_styles`
+      await sql`
+        CREATE POLICY "authenticated_reads_event_styles" ON event_styles
+        FOR SELECT USING (auth.uid() IS NOT NULL)
+      `
+      await sql`DROP POLICY IF EXISTS "admin_writes_event_styles" ON event_styles`
+      await sql`
+        CREATE POLICY "admin_writes_event_styles" ON event_styles
+        FOR ALL USING (
+          EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'COREOHUB_ADMIN')
+        ) WITH CHECK (
+          EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'COREOHUB_ADMIN')
+        )
+      `
+      results.event_styles = 'RLS enabled + policies created'
+
+      // ── categories / subcategories: catálogo público (read-only pra todos) ──
+      await sql`ALTER TABLE categories ENABLE ROW LEVEL SECURITY`
+      await sql`DROP POLICY IF EXISTS "public_reads_categories" ON categories`
+      await sql`
+        CREATE POLICY "public_reads_categories" ON categories
+        FOR SELECT USING (true)
+      `
+      await sql`DROP POLICY IF EXISTS "admin_writes_categories" ON categories`
+      await sql`
+        CREATE POLICY "admin_writes_categories" ON categories
+        FOR ALL USING (
+          EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'COREOHUB_ADMIN')
+        ) WITH CHECK (
+          EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'COREOHUB_ADMIN')
+        )
+      `
+      results.categories = 'RLS enabled + policies created'
+
+      await sql`ALTER TABLE subcategories ENABLE ROW LEVEL SECURITY`
+      await sql`DROP POLICY IF EXISTS "public_reads_subcategories" ON subcategories`
+      await sql`
+        CREATE POLICY "public_reads_subcategories" ON subcategories
+        FOR SELECT USING (true)
+      `
+      await sql`DROP POLICY IF EXISTS "admin_writes_subcategories" ON subcategories`
+      await sql`
+        CREATE POLICY "admin_writes_subcategories" ON subcategories
+        FOR ALL USING (
+          EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'COREOHUB_ADMIN')
+        ) WITH CHECK (
+          EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'COREOHUB_ADMIN')
+        )
+      `
+      results.subcategories = 'RLS enabled + policies created'
+
+      // ── destaques_votacao: voto popular, autenticado lê e insere o seu ──────
+      await sql`ALTER TABLE destaques_votacao ENABLE ROW LEVEL SECURITY`
+      await sql`DROP POLICY IF EXISTS "authenticated_reads_destaques" ON destaques_votacao`
+      await sql`
+        CREATE POLICY "authenticated_reads_destaques" ON destaques_votacao
+        FOR SELECT USING (auth.uid() IS NOT NULL)
+      `
+      await sql`DROP POLICY IF EXISTS "user_inserts_own_vote" ON destaques_votacao`
+      await sql`
+        CREATE POLICY "user_inserts_own_vote" ON destaques_votacao
+        FOR INSERT WITH CHECK (auth.uid() IS NOT NULL)
+      `
+      results.destaques_votacao = 'RLS enabled + policies created'
+
+      // ── equipe_convites: schema simples (id, email, cargo, permissoes, status)
+      // Sem FK pra evento ou user. Só super admin gerencia por enquanto.
+      await sql`DROP POLICY IF EXISTS "admin_manages_team_invites" ON equipe_convites`
+      await sql`
+        CREATE POLICY "admin_manages_team_invites" ON equipe_convites
+        FOR ALL USING (
+          EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'COREOHUB_ADMIN')
+        ) WITH CHECK (
+          EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'COREOHUB_ADMIN')
+        )
+      `
+      // Convidado pode ler o próprio convite pelo email do JWT.
+      await sql`DROP POLICY IF EXISTS "invitee_reads_own" ON equipe_convites`
+      await sql`
+        CREATE POLICY "invitee_reads_own" ON equipe_convites
+        FOR SELECT USING (
+          email = (SELECT email FROM auth.users WHERE id = auth.uid())
+        )
+      `
+      results.equipe_convites = 'policies added (admin manage + invitee reads own)'
+
+      // ── popular_votes: votação por registration. Autenticado lê e vota. ───
+      await sql`DROP POLICY IF EXISTS "authenticated_reads_popular_votes" ON popular_votes`
+      await sql`
+        CREATE POLICY "authenticated_reads_popular_votes" ON popular_votes
+        FOR SELECT USING (auth.uid() IS NOT NULL)
+      `
+      await sql`DROP POLICY IF EXISTS "authenticated_writes_popular_votes" ON popular_votes`
+      await sql`
+        CREATE POLICY "authenticated_writes_popular_votes" ON popular_votes
+        FOR ALL USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL)
+      `
+      results.popular_votes = 'policies added (RLS already on)'
+
+      await sql`NOTIFY pgrst, 'reload schema'`
+      return new Response(JSON.stringify({ ok: true, results }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'check-rls') {
+      // Lista todas as tabelas em public com status de RLS.
+      const rows = await sql`
+        SELECT
+          c.relname AS table_name,
+          c.relrowsecurity AS rls_enabled,
+          c.relforcerowsecurity AS rls_forced,
+          (SELECT COUNT(*) FROM pg_policies p WHERE p.schemaname = 'public' AND p.tablename = c.relname) AS policy_count
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r'
+        ORDER BY c.relrowsecurity ASC, c.relname ASC
+      `
+      return new Response(JSON.stringify({ tables: rows }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     if (action === 'list-recent-events') {
       const evs = await sql`
         SELECT e.id, e.name, e.created_by, e.created_at, p.email, p.full_name
