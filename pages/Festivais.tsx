@@ -96,14 +96,24 @@ const Festivais = () => {
     if (!start) return 'Em breve';
     // Parse com T12:00:00 evita shift de timezone (UTC midnight vira dia anterior em BRT).
     const d1 = new Date(start + 'T12:00:00');
-    const fullOpts: Intl.DateTimeFormatOptions = { weekday: 'short', day: '2-digit', month: 'short' };
-    const dayOpts: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' };
+    const clean = (s: string) => s.replace(/\./g, '').replace(/,/g, '').trim();
     const fmt = (d: Date, opts: Intl.DateTimeFormatOptions) =>
-      d.toLocaleDateString('pt-BR', opts).replace(/\./g, '').replace(/,/g, '').trim();
-    const left = fmt(d1, fullOpts);
-    if (!end || end === start) return left;
+      clean(d.toLocaleDateString('pt-BR', opts));
+
+    const fullOpts:    Intl.DateTimeFormatOptions = { weekday: 'short', day: '2-digit', month: 'short' };
+    const weekDayOpts: Intl.DateTimeFormatOptions = { weekday: 'short', day: '2-digit' };
+
+    // Sem fim ou mesmo dia → "SÁB 11 DE JUL"
+    if (!end || end === start) return fmt(d1, fullOpts);
+
     const d2 = new Date(end + 'T12:00:00');
-    return `${left} – ${fmt(d2, dayOpts)}`;
+    const sameMonth = d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear();
+
+    // Mesmo mês → "SEX 10 – DOM 12 DE JUL"
+    if (sameMonth) return `${fmt(d1, weekDayOpts)} – ${fmt(d2, fullOpts)}`;
+
+    // Atravessa mês → "SEX 30 DE NOV – DOM 02 DE DEZ"
+    return `${fmt(d1, fullOpts)} – ${fmt(d2, fullOpts)}`;
   };
 
   return (
