@@ -807,7 +807,25 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        const { data } = await supabase.from('configuracoes').select('*').eq('id', 1).single();
+        // Multi-tenant: tenta ler da row do evento atual do produtor.
+        // Fallback: row legacy id='1' (compat com outras 12 telas ainda não refatoradas).
+        const { data: { user } } = await supabase.auth.getUser();
+        let data: any = null;
+        if (user) {
+          const { data: myEvent } = await supabase
+            .from('events').select('id')
+            .eq('created_by', user.id)
+            .order('created_at', { ascending: false })
+            .limit(1).maybeSingle();
+          if (myEvent?.id) {
+            const res = await supabase.from('configuracoes').select('*').eq('id', myEvent.id).maybeSingle();
+            data = res.data;
+          }
+        }
+        if (!data) {
+          const res = await supabase.from('configuracoes').select('*').eq('id', '1').maybeSingle();
+          data = res.data;
+        }
         setIsFirstSave(!data?.atualizado_em);
         if (data) {
           setGeneral({
@@ -904,8 +922,11 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         throw new Error('Crie um evento antes de salvar configurações.');
       }
 
-      const { error: sbError } = await supabase.from('configuracoes').upsert({
-        id: 1,
+      // Multi-tenant: salvamos em DUAS rows com mesmo conteúdo:
+      // - id=event_id: row dedicada do evento (novo padrão, multi-tenant correto)
+      // - id='1': row legacy (compat com 12 telas que ainda leem id=1)
+      // Quando todas as telas migrarem pra ler id=event_id, removemos a row '1'.
+      const cfgPayload = {
         event_id: myEvent.id,
         nome_evento:         general.eventName,
         local_evento:        general.location,
@@ -939,9 +960,21 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         regras_avaliacao:    { globalRules, overrides: genreOverrides } satisfies EvalConfig,
         premios_especiais:   awards,
         atualizado_em:       new Date().toISOString(),
-      }, { onConflict: 'id' });
+      };
 
-      if (sbError) throw sbError;
+      // Salva na row do evento (multi-tenant)
+      const { error: errA } = await supabase.from('configuracoes').upsert(
+        { id: myEvent.id, ...cfgPayload },
+        { onConflict: 'id' }
+      );
+      if (errA) throw errA;
+
+      // Salva na row legacy id='1' pra outras telas continuarem funcionando
+      const { error: errB } = await supabase.from('configuracoes').upsert(
+        { id: '1', ...cfgPayload },
+        { onConflict: 'id' }
+      );
+      if (errB) throw errB;
 
       // Sync configuracoes → events (vitrine pública)
       // Falha aqui não bloqueia o save da config legacy.

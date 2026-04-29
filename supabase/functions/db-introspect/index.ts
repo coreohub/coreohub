@@ -57,6 +57,94 @@ Deno.serve(async (req) => {
       })
     }
 
+    if (action === 'apply-configuracoes-multi-tenant') {
+      // 1. Trigger que cria row de configuracoes automaticamente quando evento é criado.
+      await sql`
+        CREATE OR REPLACE FUNCTION ensure_configuracoes_for_event() RETURNS trigger AS $func$
+        BEGIN
+          INSERT INTO configuracoes (id, event_id)
+          VALUES (NEW.id::text, NEW.id)
+          ON CONFLICT (id) DO NOTHING;
+          RETURN NEW;
+        END;
+        $func$ LANGUAGE plpgsql SECURITY DEFINER;
+      `
+      await sql`DROP TRIGGER IF EXISTS auto_create_configuracoes ON events`
+      await sql`
+        CREATE TRIGGER auto_create_configuracoes
+          AFTER INSERT ON events
+          FOR EACH ROW
+          EXECUTE FUNCTION ensure_configuracoes_for_event()
+      `
+
+      // 2. Backfill: pra cada evento sem config, cria uma. Se a row legacy id='1'
+      // aponta pra esse evento, clona seus dados; senão fica vazia (defaults).
+      const result = await sql`
+        INSERT INTO configuracoes (
+          id, event_id,
+          nome_evento, local_evento, cidade_estado, data_evento,
+          prazo_inscricao, prazo_trilhas, tipos_apresentacao, escala_notas,
+          pin_inactivity_minutes, medal_thresholds, estilos, formatos, categorias,
+          tolerancia, age_reference, age_reference_date, tempo_entrada,
+          intervalo_seguranca, texto_ia, marcar_palco_ativo, tempo_marcacao_palco,
+          gatilho_marcacao, links, regras_avaliacao, premios_especiais,
+          atualizado_em, hora_evento, programacao, ingressos_audiencia,
+          patrocinadores, cover_url, descricao
+        )
+        SELECT
+          e.id::text, e.id,
+          legacy.nome_evento, legacy.local_evento, legacy.cidade_estado, legacy.data_evento,
+          legacy.prazo_inscricao, legacy.prazo_trilhas, legacy.tipos_apresentacao, legacy.escala_notas,
+          legacy.pin_inactivity_minutes, legacy.medal_thresholds, legacy.estilos, legacy.formatos, legacy.categorias,
+          legacy.tolerancia, legacy.age_reference, legacy.age_reference_date, legacy.tempo_entrada,
+          legacy.intervalo_seguranca, legacy.texto_ia, legacy.marcar_palco_ativo, legacy.tempo_marcacao_palco,
+          legacy.gatilho_marcacao, legacy.links, legacy.regras_avaliacao, legacy.premios_especiais,
+          legacy.atualizado_em, legacy.hora_evento, legacy.programacao, legacy.ingressos_audiencia,
+          legacy.patrocinadores, legacy.cover_url, legacy.descricao
+        FROM events e
+        LEFT JOIN configuracoes existing ON existing.id = e.id::text
+        LEFT JOIN configuracoes legacy   ON legacy.id = '1' AND legacy.event_id = e.id
+        WHERE existing.id IS NULL
+        RETURNING id, event_id
+      `
+      return new Response(JSON.stringify({ ok: true, backfilled: result }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'apply-protect-commission') {
+      await sql`
+        CREATE OR REPLACE FUNCTION protect_commission_columns() RETURNS trigger AS $func$
+        BEGIN
+          IF auth.role() = 'service_role' THEN
+            RETURN NEW;
+          END IF;
+          IF EXISTS (
+            SELECT 1 FROM profiles
+            WHERE id = auth.uid() AND role = 'COREOHUB_ADMIN'
+          ) THEN
+            RETURN NEW;
+          END IF;
+          NEW.commission_type    := OLD.commission_type;
+          NEW.commission_percent := OLD.commission_percent;
+          NEW.commission_fixed   := OLD.commission_fixed;
+          RETURN NEW;
+        END;
+        $func$ LANGUAGE plpgsql SECURITY DEFINER;
+      `
+      await sql`DROP TRIGGER IF EXISTS protect_commission_columns_trigger ON events`
+      await sql`
+        CREATE TRIGGER protect_commission_columns_trigger
+          BEFORE UPDATE ON events
+          FOR EACH ROW
+          EXECUTE FUNCTION protect_commission_columns()
+      `
+      await sql`NOTIFY pgrst, 'reload schema'`
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     if (action === 'apply-events-cover-url') {
       await sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS cover_url TEXT`
       const updated = await sql`
@@ -101,6 +189,13 @@ Deno.serve(async (req) => {
         ORDER BY e.created_at DESC LIMIT 10
       `
       return new Response(JSON.stringify({ events: evs }, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'dump-configuracoes') {
+      const rows = await sql`SELECT * FROM configuracoes WHERE id = '1'`
+      return new Response(JSON.stringify({ row: rows[0] }, null, 2), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }

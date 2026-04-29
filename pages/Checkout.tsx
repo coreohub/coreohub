@@ -11,17 +11,30 @@ import AsaasBadge from '../components/AsaasBadge';
 
 const SUPABASE_URL = 'https://ghpltzzijlvykiytwslu.supabase.co';
 
-/** Retorna o lote ativo (primeiro com deadline futura) ou o último sem deadline */
-function getActiveLot(lots: RegistrationLot[] | null | undefined): {
-  lot: RegistrationLot | null;
+/**
+ * Lotes vivem em `formacoes_config[].lotes`, não em uma coluna global de events.
+ * Formato: `{ preco, data_virada }` (data_virada=null = lote final, sem deadline).
+ */
+type FormacaoLote = { preco: number; data_virada: string | null };
+
+interface ActiveLot {
+  preco: number;
+  data_virada: string | null;
+  /** Índice 1-based pra mostrar "Lote 1", "Lote 2" etc */
+  index: number;
+}
+
+function getActiveLotFromFormacao(lotes: FormacaoLote[] | null | undefined): {
+  lot: ActiveLot | null;
   allExpired: boolean;
 } {
-  if (!lots || lots.length === 0) return { lot: null, allExpired: false };
+  if (!lotes || lotes.length === 0) return { lot: null, allExpired: false };
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  for (const lot of lots) {
-    if (!lot.deadline) return { lot, allExpired: false }; // último lote sem prazo
-    const deadline = new Date(lot.deadline + 'T23:59:59');
-    if (deadline.getTime() >= today.getTime()) return { lot, allExpired: false };
+  for (let i = 0; i < lotes.length; i++) {
+    const lot = lotes[i];
+    if (!lot.data_virada) return { lot: { ...lot, index: i + 1 }, allExpired: false };
+    const deadline = new Date(lot.data_virada + 'T23:59:59');
+    if (deadline.getTime() >= today.getTime()) return { lot: { ...lot, index: i + 1 }, allExpired: false };
   }
   return { lot: null, allExpired: true };
 }
@@ -39,7 +52,7 @@ const Checkout = () => {
   const [confirming, setConfirming]   = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const [baseFee, setBaseFee]         = useState<number>(0);
-  const [activeLot, setActiveLot]     = useState<RegistrationLot | null>(null);
+  const [activeLot, setActiveLot]     = useState<ActiveLot | null>(null);
   const [allLotsExpired, setAllLotsExpired] = useState(false);
 
   /* ── Cupom ── */
@@ -67,7 +80,7 @@ const Checkout = () => {
           .single(),
         supabase
           .from('events')
-          .select('id, name, cover_url, formacoes_config, created_by, event_type, registration_lots')
+          .select('id, name, cover_url, formacoes_config, created_by, event_type')
           .eq('id', eventId)
           .single(),
       ]);
@@ -86,12 +99,13 @@ const Checkout = () => {
       const mod = formacoes.find((m: any) => m.name === reg.formacao);
       const feeFromFormacao = mod?.fee ?? mod?.base_fee ?? 0;
 
-      const { lot, allExpired } = getActiveLot(ev.registration_lots);
+      // Lotes vêm da própria formação (cada formação tem seus lotes).
+      const { lot, allExpired } = getActiveLotFromFormacao(mod?.lotes);
       setActiveLot(lot);
       setAllLotsExpired(allExpired);
 
-      // Preço do lote ativo substitui o preço da formação
-      setBaseFee(lot?.price ?? feeFromFormacao);
+      // Preço do lote ativo substitui o preço base da formação
+      setBaseFee(lot?.preco ?? feeFromFormacao);
 
       setLoading(false);
     };
@@ -232,10 +246,10 @@ const Checkout = () => {
             <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-2xl">
               <Calendar size={14} className="text-emerald-500 shrink-0" />
               <div className="flex-1 text-[10px] text-emerald-700 dark:text-emerald-400">
-                <p className="font-black uppercase tracking-widest">{activeLot.label}</p>
-                {activeLot.deadline && (
+                <p className="font-black uppercase tracking-widest">Lote {activeLot.index}</p>
+                {activeLot.data_virada && (
                   <p className="opacity-80">
-                    Até {new Date(activeLot.deadline + 'T12:00').toLocaleDateString('pt-BR')}
+                    Até {new Date(activeLot.data_virada + 'T12:00').toLocaleDateString('pt-BR')}
                   </p>
                 )}
               </div>

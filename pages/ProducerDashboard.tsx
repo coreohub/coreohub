@@ -125,14 +125,14 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
   const [commissions, setCommissions] = useState<any[]>([]);
 
   /* ── Edition selector ── */
-  const [allEvents, setAllEvents] = useState<{ id: string; name: string; slug?: string; is_public?: boolean; edition_year?: number; start_date?: string; category_price?: number; formacoes_config?: any[] }[]>([]);
+  const [allEvents, setAllEvents] = useState<{ id: string; name: string; slug?: string; is_public?: boolean; edition_year?: number; start_date?: string; formacoes_config?: any[] }[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [asaasConnected, setAsaasConnected] = useState(false);
 
   useEffect(() => {
     supabase
       .from('events')
-      .select('id,name,slug,is_public,edition_year,start_date,category_price,formacoes_config')
+      .select('id,name,slug,is_public,edition_year,start_date,formacoes_config')
       .order('start_date', { ascending: false })
       .then(({ data }) => {
         if (data && data.length > 0) {
@@ -159,10 +159,8 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
   /* ── Verifica se o evento tem inscrição paga (precisa de Asaas) ── */
   const eventNeedsAsaas = useMemo(() => {
     if (!selectedEvent) return false;
-    const price = Number(selectedEvent.category_price ?? 0);
     const formacoes: any[] = Array.isArray(selectedEvent.formacoes_config) ? selectedEvent.formacoes_config : [];
-    const formacaoPaga = formacoes.some(f => Number(f?.fee ?? 0) > 0);
-    return price > 0 || formacaoPaga;
+    return formacoes.some(f => Number(f?.fee ?? 0) > 0);
   }, [selectedEvent]);
 
   const linkBlocked = eventNeedsAsaas && !asaasConnected;

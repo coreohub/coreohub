@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
     // ── 3. Evento ────────────────────────────────────────────────────────────
     const { data: event } = await supabase
       .from('events')
-      .select('id, name, created_by, commission_percent, commission_type, formacoes_config, fee_mode, event_type, registration_lots')
+      .select('id, name, created_by, commission_percent, commission_type, formacoes_config, fee_mode, event_type')
       .eq('id', event_id)
       .single()
 
@@ -91,20 +91,22 @@ Deno.serve(async (req) => {
 
     const formacaoUsada = formacaoNome || primeiraFormacao?.name || 'padrão'
 
-    // ── 5b. Lote ativo substitui o preço base ────────────────────────────────
-    const lots: Array<{ label: string; deadline: string; price: number }> = (event as any).registration_lots ?? []
-    if (lots.length > 0) {
+    // ── 5b. Lote ativo da formação substitui o preço base ───────────────────
+    // Lotes vivem em formacoes_config[].lotes (formato { preco, data_virada }).
+    const formacaoLotes: Array<{ preco: number; data_virada: string | null }> =
+      (primeiraFormacao as any)?.lotes ?? []
+    if (formacaoLotes.length > 0) {
       const today = new Date()
       today.setHours(0, 0, 0, 0)
-      let lotPicked: typeof lots[number] | null = null
+      let lotPicked: typeof formacaoLotes[number] | null = null
       let allExpired = true
-      for (const lot of lots) {
-        if (!lot.deadline) { lotPicked = lot; allExpired = false; break }
-        const d = new Date(lot.deadline + 'T23:59:59')
+      for (const lot of formacaoLotes) {
+        if (!lot.data_virada) { lotPicked = lot; allExpired = false; break }
+        const d = new Date(lot.data_virada + 'T23:59:59')
         if (d.getTime() >= today.getTime()) { lotPicked = lot; allExpired = false; break }
       }
       if (allExpired) throw new Error('Inscrições encerradas: prazo de todos os lotes vencido.')
-      if (lotPicked && lotPicked.price > 0) baseFee = lotPicked.price
+      if (lotPicked && lotPicked.preco > 0) baseFee = lotPicked.preco
     }
 
     if (baseFee <= 0) {

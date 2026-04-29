@@ -58,7 +58,7 @@ const ProducerAlerts: React.FC<Props> = ({ profile }) => {
       const [eventsRes, profileRes, cfgRes] = await Promise.all([
         supabase
           .from('events')
-          .select('id, name, category_price, registration_deadline, formacoes_config')
+          .select('id, name, formacoes_config')
           .eq('created_by', profile.id),
         supabase
           .from('profiles')
@@ -67,7 +67,7 @@ const ProducerAlerts: React.FC<Props> = ({ profile }) => {
           .maybeSingle(),
         supabase
           .from('configuracoes')
-          .select('regras_avaliacao')
+          .select('regras_avaliacao, prazo_inscricao, event_id')
           .eq('id', 1)
           .maybeSingle(),
       ]);
@@ -75,13 +75,15 @@ const ProducerAlerts: React.FC<Props> = ({ profile }) => {
       const events = eventsRes.data ?? [];
       const asaasOk = !!profileRes.data?.asaas_subconta_id;
       const hasCriterios = !!(cfgRes.data?.regras_avaliacao && (cfgRes.data.regras_avaliacao as any)?.globalRules);
+      // Prazo de inscrição vive em configuracoes (singleton), não em events.
+      // Se aponta pra um evento do produtor, é o prazo dele.
+      const cfgPrazo: string | null = cfgRes.data?.prazo_inscricao ?? null;
+      const cfgEventId: string | null = cfgRes.data?.event_id ?? null;
 
       // ── ALERTA CRÍTICO: Asaas não conectado mas tem evento pago ───────
       const hasPaidEvent = events.some(e => {
-        const price = Number(e.category_price ?? 0);
         const formacoes: any[] = Array.isArray(e.formacoes_config) ? e.formacoes_config : [];
-        const formacaoPaga = formacoes.some((f: any) => Number(f?.fee ?? 0) > 0);
-        return price > 0 || formacaoPaga;
+        return formacoes.some((f: any) => Number(f?.fee ?? 0) > 0);
       });
 
       if (!asaasOk && hasPaidEvent) {
@@ -111,29 +113,31 @@ const ProducerAlerts: React.FC<Props> = ({ profile }) => {
         });
       }
 
-      // ── INFO: Prazos críticos de inscrição ────────────────────────────
-      for (const ev of events) {
-        if (!ev.registration_deadline) continue;
-        const days = daysUntil(ev.registration_deadline);
-        if (days < 0 || days > 7) continue;
+      // ── INFO: Prazo crítico de inscrição (vem de configuracoes) ───────
+      // Configuracoes é singleton hoje, então só temos prazo do evento que ela aponta.
+      // Após refatoração multi-tenant (#6 backlog) isso vira por evento.
+      const targetEvent = cfgEventId ? events.find(e => e.id === cfgEventId) : null;
+      if (cfgPrazo && targetEvent) {
+        const days = daysUntil(cfgPrazo);
+        if (days >= 0 && days <= 7) {
+          const { count } = await supabase
+            .from('registrations')
+            .select('*', { count: 'exact', head: true })
+            .eq('event_id', targetEvent.id)
+            .eq('status_pagamento', 'CONFIRMADO');
 
-        const { count } = await supabase
-          .from('registrations')
-          .select('*', { count: 'exact', head: true })
-          .eq('event_id', ev.id)
-          .eq('status_pagamento', 'CONFIRMADO');
+          const dayLabel = days === 0 ? 'hoje' : days === 1 ? 'amanhã' : `em ${days} dias`;
+          const inscritos = count ?? 0;
 
-        const dayLabel = days === 0 ? 'hoje' : days === 1 ? 'amanhã' : `em ${days} dias`;
-        const inscritos = count ?? 0;
-
-        newAlerts.push({
-          id: `deadline-${ev.id}`,
-          severity: days <= 1 ? 'warning' : 'info',
-          icon: Clock,
-          title: `Inscrições encerram ${dayLabel}`,
-          description: `${ev.name} — ${inscritos} inscrição${inscritos !== 1 ? 'ões' : ''} confirmada${inscritos !== 1 ? 's' : ''}.`,
-          dismissable: true,
-        });
+          newAlerts.push({
+            id: `deadline-${targetEvent.id}`,
+            severity: days <= 1 ? 'warning' : 'info',
+            icon: Clock,
+            title: `Inscrições encerram ${dayLabel}`,
+            description: `${targetEvent.name} — ${inscritos} inscrição${inscritos !== 1 ? 'ões' : ''} confirmada${inscritos !== 1 ? 's' : ''}.`,
+            dismissable: true,
+          });
+        }
       }
 
       setAlerts(newAlerts);

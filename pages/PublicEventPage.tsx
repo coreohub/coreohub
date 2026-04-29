@@ -200,7 +200,7 @@ const PublicEventPage = () => {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
             { label: 'Vagas', value: event.slots_limit ?? '∞', icon: Star },
-            { label: 'Prazo', value: formatDate(event.registration_deadline), icon: Clock },
+            { label: 'Prazo', value: formatDate(config?.prazo_inscricao), icon: Clock },
             { label: 'Premiação', value: premiacaoLabel, icon: Trophy },
           ].map(({ label, value, icon: Icon }) => (
             <div key={label} className="bg-white/5 border border-white/10 rounded-3xl p-6">

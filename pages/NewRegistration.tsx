@@ -131,9 +131,9 @@ const NewRegistration = () => {
           <h1 className="text-2xl font-black uppercase tracking-tight text-slate-900 dark:text-white mt-1 italic">
             {event.name}
           </h1>
-          {event.registration_deadline && (
+          {config?.prazo_inscricao && (
             <p className="text-xs text-slate-500 mt-1">
-              Inscrições até {new Date(event.registration_deadline).toLocaleDateString('pt-BR')}
+              Inscrições até {new Date(config.prazo_inscricao + 'T12:00:00').toLocaleDateString('pt-BR')}
             </p>
           )}
         </div>
