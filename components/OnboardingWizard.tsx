@@ -113,9 +113,9 @@ const OnboardingWizard: React.FC = () => {
 
       const slug = `${slugify(data.name)}-${Math.random().toString(36).substring(2, 8)}`;
 
-      // Payload absoluto mínimo — só colunas que confirmadamente são lidas em
-      // outras páginas em produção. Tudo o mais (formato, preços, tipo, etc) o
-      // produtor refina em /account-settings.
+      // Payload validado contra o schema real da tabela events (testado via
+      // db-introspect). Detalhes (categorias, estilos, critérios, tolerância,
+      // preços por formação) ficam em /account-settings.
       const payload: any = {
         name:             data.name,
         slug,
@@ -123,9 +123,11 @@ const OnboardingWizard: React.FC = () => {
         start_date:       data.start_date,
         city:             data.city,
         state:            data.state,
+        location:         data.city + (data.state ? `, ${data.state}` : ''),
         edition_year:     new Date(data.start_date).getFullYear() || new Date().getFullYear(),
         is_public:        true,
         formacoes_config: mergeByName(tpls.flatMap(t => t.formacoes_config)),
+        event_type:       'private',
       };
 
       const result = await createEvent(payload);
