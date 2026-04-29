@@ -113,22 +113,19 @@ const OnboardingWizard: React.FC = () => {
 
       const slug = `${slugify(data.name)}-${Math.random().toString(36).substring(2, 8)}`;
 
-      // Payload mínimo — só colunas confirmadamente existentes na tabela `events`.
-      // Detalhes (categorias, estilos, critérios, tolerância) ficam em `configuracoes`,
-      // configurados depois pelo produtor em /account-settings.
+      // Payload absoluto mínimo — só colunas que confirmadamente são lidas em
+      // outras páginas em produção. Tudo o mais (formato, preços, tipo, etc) o
+      // produtor refina em /account-settings.
       const payload: any = {
         name:             data.name,
+        slug,
+        created_by:       user.id,
         start_date:       data.start_date,
         city:             data.city,
         state:            data.state,
         edition_year:     new Date(data.start_date).getFullYear() || new Date().getFullYear(),
-        slug,
-        created_by:       user.id,
         is_public:        true,
-        default_format:   baseTpl.default_format,
         formacoes_config: mergeByName(tpls.flatMap(t => t.formacoes_config)),
-        category_price:   0,
-        event_type:       'private',
       };
 
       const result = await createEvent(payload);
