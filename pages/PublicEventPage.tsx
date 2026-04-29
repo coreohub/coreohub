@@ -134,6 +134,14 @@ const PublicEventPage = () => {
 
   const hasSocial = Object.values(social).some(Boolean);
 
+  // Prêmios habilitados (vêm de configuracoes.premios_especiais como array de SpecialAward)
+  const enabledAwards: any[] = Array.isArray(config?.premios_especiais)
+    ? config.premios_especiais.filter((a: any) => a?.enabled)
+    : [];
+  const premiacaoLabel = enabledAwards.length > 0
+    ? `${enabledAwards.length} prêmio${enabledAwards.length !== 1 ? 's' : ''}`
+    : '—';
+
   return (
     <div className="min-h-screen bg-[#050505] text-white">
       {/* Hero */}
@@ -193,7 +201,7 @@ const PublicEventPage = () => {
           {[
             { label: 'Vagas', value: event.slots_limit ?? '∞', icon: Star },
             { label: 'Prazo', value: formatDate(event.registration_deadline), icon: Clock },
-            { label: 'Premiação', value: config?.premiacao || '—', icon: Trophy },
+            { label: 'Premiação', value: premiacaoLabel, icon: Trophy },
           ].map(({ label, value, icon: Icon }) => (
             <div key={label} className="bg-white/5 border border-white/10 rounded-3xl p-6">
               <Icon size={20} className="text-[#ff0068] mb-3" />
@@ -281,6 +289,30 @@ const PublicEventPage = () => {
                   <span className="text-[#ff0068] font-black text-sm">
                     {mod.fee ? `R$ ${Number(mod.fee).toFixed(2)}` : 'Gratuito'}
                   </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Prêmios habilitados */}
+        {enabledAwards.length > 0 && (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
+              <Trophy size={24} className="text-[#ff0068]" /> Premiação
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {enabledAwards.map((award: any) => (
+                <div key={award.id} className="bg-white/5 border border-white/10 rounded-2xl p-5">
+                  <p className="font-black uppercase text-sm tracking-tight">{award.name}</p>
+                  {award.description && (
+                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">{award.description}</p>
+                  )}
+                  {award.formation && award.formation !== 'TODOS' && (
+                    <span className="inline-block mt-2 px-2 py-1 rounded-full bg-[#ff0068]/10 text-[#ff0068] text-[9px] font-black uppercase tracking-widest">
+                      {award.formation}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
