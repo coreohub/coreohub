@@ -401,9 +401,10 @@ interface EventCommissionCardProps {
   event: { id: string; name: string; commission_type?: string; commission_percent?: number; commission_fixed?: number; fee_mode?: string };
   saving: boolean;
   onSave: (patch: { commission_type: string; commission_percent: number; commission_fixed: number; fee_mode: string }) => void;
+  isAdmin: boolean;
 }
 
-const EventCommissionCard: React.FC<EventCommissionCardProps> = ({ event, saving, onSave }) => {
+const EventCommissionCard: React.FC<EventCommissionCardProps> = ({ event, saving, onSave, isAdmin }) => {
   const [type, setType]       = useState(event.commission_type ?? 'percent');
   const [percent, setPercent] = useState(event.commission_percent ?? 10);
   const [fixed, setFixed]     = useState(event.commission_fixed ?? 0);
@@ -416,56 +417,74 @@ const EventCommissionCard: React.FC<EventCommissionCardProps> = ({ event, saving
     return (valor * percent / 100 + fixed).toFixed(2);
   };
 
+  // Resumo legível pro produtor (read-only). Admin vê os controles editáveis.
+  const summary =
+    type === 'percent'  ? `${percent}% sobre cada inscrição` :
+    type === 'fixed'    ? `R$ ${fixed.toFixed(2)} fixo por inscrição` :
+                          `${percent}% + R$ ${fixed.toFixed(2)} por inscrição`;
+
   return (
     <div className="border border-slate-200 dark:border-white/10 rounded-2xl p-5 space-y-4">
       <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight truncate">{event.name}</p>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {/* Tipo */}
-        <div>
-          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5 ml-1">Modelo</label>
-          <select
-            value={type}
-            onChange={e => { setType(e.target.value); setDirty(true); }}
-            className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-4 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm"
-          >
-            <option value="percent">Percentual (%)</option>
-            <option value="fixed">Valor Fixo (R$)</option>
-            <option value="combined">Combinado (% + R$)</option>
-          </select>
+
+      {!isAdmin ? (
+        <div className="flex items-start gap-3 p-4 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-200 dark:border-white/10">
+          <div className="p-1.5 bg-[#ff0068]/10 rounded-lg text-[#ff0068]"><Percent size={14} /></div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Comissão da plataforma</p>
+            <p className="text-sm font-black text-slate-900 dark:text-white mt-0.5">{summary}</p>
+            <p className="text-[10px] text-slate-400 mt-1">Este valor é definido pela CoreoHub e não pode ser alterado.</p>
+          </div>
         </div>
-
-        {/* Percentual */}
-        {(type === 'percent' || type === 'combined') && (
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Tipo */}
           <div>
-            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5 ml-1">Percentual (%)</label>
-            <div className="relative">
-              <Percent size={13} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="number" min={0} max={100} step={0.5}
-                value={percent}
-                onChange={e => { setPercent(Number(e.target.value)); setDirty(true); }}
-                className="w-full pl-9 bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 pr-4 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm"
-              />
-            </div>
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5 ml-1">Modelo</label>
+            <select
+              value={type}
+              onChange={e => { setType(e.target.value); setDirty(true); }}
+              className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-4 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm"
+            >
+              <option value="percent">Percentual (%)</option>
+              <option value="fixed">Valor Fixo (R$)</option>
+              <option value="combined">Combinado (% + R$)</option>
+            </select>
           </div>
-        )}
 
-        {/* Fixo */}
-        {(type === 'fixed' || type === 'combined') && (
-          <div>
-            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5 ml-1">Valor Fixo (R$)</label>
-            <div className="relative">
-              <Hash size={13} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="number" min={0} step={0.5}
-                value={fixed}
-                onChange={e => { setFixed(Number(e.target.value)); setDirty(true); }}
-                className="w-full pl-9 bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 pr-4 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm"
-              />
+          {/* Percentual */}
+          {(type === 'percent' || type === 'combined') && (
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5 ml-1">Percentual (%)</label>
+              <div className="relative">
+                <Percent size={13} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="number" min={0} max={100} step={0.5}
+                  value={percent}
+                  onChange={e => { setPercent(Number(e.target.value)); setDirty(true); }}
+                  className="w-full pl-9 bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 pr-4 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm"
+                />
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+
+          {/* Fixo */}
+          {(type === 'fixed' || type === 'combined') && (
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5 ml-1">Valor Fixo (R$)</label>
+              <div className="relative">
+                <Hash size={13} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="number" min={0} step={0.5}
+                  value={fixed}
+                  onChange={e => { setFixed(Number(e.target.value)); setDirty(true); }}
+                  className="w-full pl-9 bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 pr-4 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Toggle fee_mode */}
       <div>
@@ -529,6 +548,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
     cpf_cnpj?: string;
     pix_key?: string;
   } | null>(null);
+  const [isAdmin, setIsAdmin]                   = useState(false);
   const [asaasLoading, setAsaasLoading]         = useState(false);
   const [asaasForm, setAsaasForm]               = useState({ cpf_cnpj: '', pix_key: '', company_type: 'MEI', income_value: '' });
   const [asaasFormError, setAsaasFormError]     = useState<string | null>(null);
@@ -544,10 +564,11 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
       setCurrentUserId(user.id);
       const { data: profile } = await supabase
         .from('profiles')
-        .select('asaas_subconta_id, asaas_wallet_id, cpf_cnpj, pix_key')
+        .select('asaas_subconta_id, asaas_wallet_id, cpf_cnpj, pix_key, role')
         .eq('id', user.id)
         .single();
       setAsaasProfile(profile);
+      setIsAdmin((profile as any)?.role === 'COREOHUB_ADMIN');
       const { data: events } = await supabase
         .from('events')
         .select('id, name, commission_type, commission_percent, commission_fixed, fee_mode')
@@ -2284,6 +2305,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                       event={ev}
                       saving={savingCommission === ev.id}
                       onSave={(patch) => handleSaveCommission(ev.id, patch)}
+                      isAdmin={isAdmin}
                     />
                   ))
                 )}
