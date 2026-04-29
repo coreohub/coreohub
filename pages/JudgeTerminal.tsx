@@ -12,6 +12,7 @@ import { supabase } from '../services/supabase';
 import { useT, useLocale, setLocale } from '../hooks/useT';
 import type { JudgeDictKey } from '../i18n/judge-pt';
 import { readJudgeSession, clearJudgeSession } from './JudgeLogin';
+import { fetchTerminalData, fetchPreviousEvaluations, submitEvaluation as submitEvaluationViaApi } from '../services/judgeApi';
 
 /** Maps the canonical PT criterion name (used as score key in DB) to a dict key. */
 const DEFAULT_CRITERION_KEYS: Record<string, JudgeDictKey> = {
@@ -374,20 +375,23 @@ const JudgeTerminal = () => {
   /* ── Tie detection: check previous scores for same genre ── */
   const checkTie = useCallback(async (judgeId: string, estiloName: string, avgScore: number) => {
     try {
-      const { data: regs } = await supabase
-        .from('registrations')
-        .select('id')
-        .eq('estilo_danca', estiloName)
-        .eq('status', 'APROVADA');
+      // Filtra registrations no schedule já carregado (não precisa nova query).
+      // Schedule já contém apenas eventos do produtor ativo + status APROVADA.
+      const ids = schedule.filter(s => s.estilo_danca === estiloName).map(s => s.id);
+      if (ids.length === 0) return;
 
-      if (!regs || regs.length === 0) return;
-      const ids = regs.map(r => r.id);
-
-      const { data: evals } = await supabase
-        .from('evaluations')
-        .select('final_weighted_average')
-        .eq('judge_id', judgeId)
-        .in('registration_id', ids);
+      let evals: any[] = [];
+      if (judgeSession) {
+        // Phase 2A: via Edge Function (não precisa de RLS de produtor)
+        evals = await fetchPreviousEvaluations(ids);
+      } else {
+        const { data } = await supabase
+          .from('evaluations')
+          .select('final_weighted_average')
+          .eq('judge_id', judgeId)
+          .in('registration_id', ids);
+        evals = data ?? [];
+      }
 
       if (!evals || evals.length === 0) {
         setPrevGenreScores([]);
@@ -405,10 +409,13 @@ const JudgeTerminal = () => {
         setTieWarning(null);
       }
     } catch { /* silent */ }
-  }, [t]);
+  }, [t, schedule, judgeSession]);
 
   /* ── realtime ── */
   useEffect(() => {
+    // Phase 2A: jurado sem produtor logado não consegue subscribe (sem RLS).
+    // O cronograma fica estático nessa sessão; refresh manual via reload.
+    if (judgeSession) return;
     const ch = supabase.channel('judge-terminal-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'registrations' }, () => {
         supabase.from('registrations').select('*').eq('status', 'APROVADA')
@@ -424,13 +431,33 @@ const JudgeTerminal = () => {
     (async () => {
       setIsLoading(true);
       try {
-        const { fetchActiveEventConfig } = await import('../services/supabase');
-        const [{ data: jData }, cfg, { data: sched }, { data: gData }] = await Promise.all([
-          supabase.from('judges').select('*'),
-          fetchActiveEventConfig('regras_avaliacao, escala_notas, premios_especiais, pin_inactivity_minutes'),
-          supabase.from('registrations').select('*').eq('status', 'APROVADA').order('ordem_apresentacao', { ascending: true }),
-          supabase.from('event_styles').select('id, name'),
-        ]);
+        let jData: any[] | null = null;
+        let cfg: any = null;
+        let sched: any[] | null = null;
+        let gData: any[] | null = null;
+
+        if (judgeSession) {
+          // Phase 2A: jurado logou via PIN, sem sessão de produtor.
+          // Tudo vem da Edge Function (que valida o token + judge_id no backend).
+          const td = await fetchTerminalData();
+          jData = td.judges;
+          cfg = td.config;
+          sched = td.registrations;
+          gData = td.event_styles;
+        } else {
+          // Fluxo legado: produtor/admin logado no device, queries diretas via RLS.
+          const { fetchActiveEventConfig } = await import('../services/supabase');
+          const [judgesRes, cfgRes, schedRes, gRes] = await Promise.all([
+            supabase.from('judges').select('*'),
+            fetchActiveEventConfig('regras_avaliacao, escala_notas, premios_especiais, pin_inactivity_minutes'),
+            supabase.from('registrations').select('*').eq('status', 'APROVADA').order('ordem_apresentacao', { ascending: true }),
+            supabase.from('event_styles').select('id, name'),
+          ]);
+          jData = judgesRes.data;
+          cfg = cfgRes;
+          sched = schedRes.data;
+          gData = gRes.data;
+        }
 
         const judgeList = jData && jData.length > 0
           ? jData
@@ -491,7 +518,7 @@ const JudgeTerminal = () => {
         setIsLoading(false);
       }
     })();
-  }, [resolveGenreCriteria]);
+  }, [resolveGenreCriteria, judgeSession]);
 
   /* ── Visible awards for the current performance (filtered by formation) ── */
   const visibleAwards = useMemo(() => {
@@ -680,7 +707,9 @@ const JudgeTerminal = () => {
 
     try {
       const nominatedAwards = visibleAwards.filter(a => nominations[a.id]);
-      if (nominatedAwards.length > 0) {
+      // Phase 2A: destaques_votacao não disponível pra jurado sem produtor
+      // logado (RLS). Vai ser refatorado em Phase 2B.
+      if (!judgeSession && nominatedAwards.length > 0) {
         const highlights = nominatedAwards.map(a => ({
           registration_id: currentPerformance.id,
           judge_id:        selectedJudge.id,
@@ -690,8 +719,10 @@ const JudgeTerminal = () => {
         await supabase.from('destaques_votacao').insert(highlights);
       }
 
-      let audioUrl = null;
-      if (rollingChunksRef.current.length > 0) {
+      let audioUrl: string | null = null;
+      // Phase 2A: jurado sem produtor logado não consegue upload pro Storage
+      // (RLS exige session). Áudio fica desabilitado nesse modo até Phase 2B.
+      if (!judgeSession && rollingChunksRef.current.length > 0) {
         const blob = new Blob(rollingChunksRef.current, { type: 'audio/webm' });
         const fn   = `feedback_${currentPerformance.id}_${selectedJudge.id}_${Date.now()}.webm`;
         const { data: up, error: ue } = await supabase.storage.from('audio-feedbacks').upload(fn, blob);
@@ -709,7 +740,7 @@ const JudgeTerminal = () => {
           submitted_at:    now,
           feedback_text:   feedbackText.trim() || null,
         };
-        const { error: evalErr } = await supabase.from('evaluations').insert([{
+        const evalRow = {
           registration_id:        currentPerformance.id,
           judge_id:               selectedJudge.id,
           scores:                 {},
@@ -719,8 +750,13 @@ const JudgeTerminal = () => {
           submitted_at:           now,
           created_at:             now,
           audit_log:              auditEntry,
-        }]);
-        if (evalErr) throw evalErr;
+        };
+        if (judgeSession) {
+          await submitEvaluationViaApi(evalRow);
+        } else {
+          const { error: evalErr } = await supabase.from('evaluations').insert([evalRow]);
+          if (evalErr) throw evalErr;
+        }
         setIsSubmitted(true);
         setSubmittedAt(now);
         return;
@@ -744,7 +780,7 @@ const JudgeTerminal = () => {
         criteria_used:   activeCriteria,
       };
 
-      const { error: evalErr } = await supabase.from('evaluations').insert([{
+      const evalRow = {
         registration_id:        currentPerformance.id,
         judge_id:               selectedJudge.id,
         scores:                 numScores,
@@ -754,8 +790,13 @@ const JudgeTerminal = () => {
         submitted_at:           now,
         created_at:             now,
         audit_log:              auditEntry,
-      }]);
-      if (evalErr) throw evalErr;
+      };
+      if (judgeSession) {
+        await submitEvaluationViaApi(evalRow);
+      } else {
+        const { error: evalErr } = await supabase.from('evaluations').insert([evalRow]);
+        if (evalErr) throw evalErr;
+      }
 
       // Lock the fields — don't advance yet so the judge can review
       setIsSubmitted(true);
