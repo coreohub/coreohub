@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Mic, StopCircle, Check, Loader2, Delete,
   Music, ChevronRight, Star, Trophy, X,
   AlertCircle, ChevronDown, Lock, Unlock,
   Shield, AlertTriangle, ClipboardCheck,
   Zap, Crown, Users, Award, Shirt,
-  Monitor, Tablet, Smartphone,
+  Monitor, Tablet, Smartphone, LogOut,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useT, useLocale, setLocale } from '../hooks/useT';
 import type { JudgeDictKey } from '../i18n/judge-pt';
+import { readJudgeSession, clearJudgeSession } from './JudgeLogin';
 
 /** Maps the canonical PT criterion name (used as score key in DB) to a dict key. */
 const DEFAULT_CRITERION_KEYS: Record<string, JudgeDictKey> = {
@@ -143,6 +145,17 @@ const scoreGrade = (v: string | number, scale: ScoreScale = 'BASE_10') => {
 
 /* ════════════════════════ COMPONENT ════════════════════════ */
 const JudgeTerminal = () => {
+  const navigate = useNavigate();
+
+  // Sessão de jurado (PIN-based, via /judge-login). Quando existe, o terminal
+  // pula o seletor "qual jurado é você?" e fixa o jurado da sessão.
+  const judgeSession = useMemo(() => readJudgeSession(), []);
+
+  const handleSwitchJudge = () => {
+    clearJudgeSession();
+    navigate('/judge-login', { replace: true });
+  };
+
   /* ── i18n ──
    * O idioma é definido pelo produtor por jurado (campo `language` em `judges`).
    * O jurado não escolhe — recebe o terminal já configurado. */
@@ -423,7 +436,11 @@ const JudgeTerminal = () => {
           ? jData
           : [{ id: 'mock', name: 'Jurado (Demo)', language: 'pt-BR' }];
         setJudges(judgeList);
-        setSelectedJudge(judgeList[0]);
+        // Se veio da /judge-login, fixa o jurado da sessão. Senão, primeiro da lista.
+        const sessionJudge = judgeSession
+          ? judgeList.find(j => j.id === judgeSession.judge_id)
+          : null;
+        setSelectedJudge(sessionJudge ?? judgeList[0]);
 
         // Score scale
         if (cfg?.escala_notas) setScoreScale(cfg.escala_notas as ScoreScale);
@@ -1093,8 +1110,9 @@ const JudgeTerminal = () => {
           {/* Judge selector */}
           <div className="relative">
             <button
-              onClick={() => setShowJudgePicker(p => !p)}
+              onClick={() => judgeSession ? handleSwitchJudge() : setShowJudgePicker(p => !p)}
               className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 rounded-xl transition-all"
+              title={judgeSession ? 'Trocar jurado (sair e voltar pro login)' : undefined}
             >
               <div className="w-6 h-6 rounded-lg bg-[#ff0068] flex items-center justify-center text-white text-[9px] font-black shrink-0">
                 {selectedJudge?.name?.[0] || 'J'}
@@ -1117,10 +1135,10 @@ const JudgeTerminal = () => {
                     )}
                 <p className="text-[7px] text-slate-400 uppercase tracking-widest">{t('header.judgeLabel')}</p>
               </div>
-              <ChevronDown size={12} className="text-slate-400" />
+              {judgeSession ? <LogOut size={12} className="text-slate-400" /> : <ChevronDown size={12} className="text-slate-400" />}
             </button>
 
-            {showJudgePicker && judges.length > 1 && (
+            {!judgeSession && showJudgePicker && judges.length > 1 && (
               <div className="absolute right-0 top-full mt-2 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden">
                 {judges.map(j => (
                   <button

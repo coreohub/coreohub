@@ -60,6 +60,7 @@ const SuporteJuri              = lazy(() => import('./pages/SuporteJuri'));
 const VideoSelection           = lazy(() => import('./pages/VideoSelection'));
 const SeletivaInscrito         = lazy(() => import('./pages/SeletivaInscrito'));
 const RegulationAIParser       = lazy(() => import('./pages/RegulationAIParser'));
+const JudgeLogin               = lazy(() => import('./pages/JudgeLogin'));
 
 const PageLoader = () => (
   <div className="flex-1 flex items-center justify-center min-h-[40vh]">
@@ -263,6 +264,7 @@ const App: React.FC = () => {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Auth />} />
         <Route path="/register" element={<Auth />} />
+        <Route path="/judge-login" element={<Suspense fallback={<PageLoader />}><JudgeLogin /></Suspense>} />
         <Route path="/convite/:token" element={<Suspense fallback={<PageLoader />}><ProducerInviteLanding /></Suspense>} />
         <Route path="/equipe-convite/:token" element={<Suspense fallback={<PageLoader />}><TeamInviteLanding /></Suspense>} />
 

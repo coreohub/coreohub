@@ -3,8 +3,10 @@ import {
   UserPlus, Pencil, Trash2, Instagram, Fingerprint,
   ShieldCheck, KeyRound, X, Save, Loader2, RefreshCw,
   Mic, Award, ChevronDown, ChevronUp, Upload, Camera,
-  CheckCircle2, AlertCircle
+  CheckCircle2, AlertCircle, Copy, Eye, EyeOff, Link as LinkIcon,
 } from 'lucide-react';
+
+const generatePin = (): string => String(Math.floor(Math.random() * 10000)).padStart(4, '0');
 import { motion, AnimatePresence } from 'motion/react';
 import imageCompression from 'browser-image-compression';
 import { supabase } from '../services/supabase';
@@ -91,6 +93,21 @@ const JudgesManagement = () => {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [showPin, setShowPin] = useState(false);
+  const [copiedField, setCopiedField] = useState<'pin' | 'link' | null>(null);
+
+  const copyToClipboard = async (text: string, field: 'pin' | 'link') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 1500);
+    } catch {}
+  };
+
+  const copyJudgeAccessLink = async () => {
+    const url = `${window.location.origin}/judge-login`;
+    await copyToClipboard(url, 'link');
+  };
 
   /* ── fetch ── */
   const fetchAll = useCallback(async () => {
@@ -127,10 +144,12 @@ const JudgesManagement = () => {
   /* ── open modal ── */
   const openAdd = () => {
     setEditingJudge(null);
-    setForm(EMPTY_JUDGE);
+    // Gera PIN automaticamente pra evitar campo vazio (segue prática Square/Toast).
+    setForm({ ...EMPTY_JUDGE, pin: generatePin() });
     setTab('publico');
     setSaveError(null);
     setSaveSuccess(false);
+    setShowPin(false);
     setModalOpen(true);
   };
 
@@ -274,6 +293,17 @@ const JudgesManagement = () => {
         <div className="flex gap-2">
           <button onClick={fetchAll} className="p-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-400 hover:text-[#ff0068] transition-all">
             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button
+            onClick={copyJudgeAccessLink}
+            disabled={judges.length === 0}
+            className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Copiar link de acesso pros jurados"
+          >
+            {copiedField === 'link'
+              ? <><CheckCircle2 size={14} className="text-emerald-500" /> Link copiado</>
+              : <><LinkIcon size={14} /> Link dos jurados</>
+            }
           </button>
           <button
             onClick={openAdd}
@@ -658,20 +688,50 @@ const JudgesManagement = () => {
                         <KeyRound size={12} /> PIN de Acesso (4 dígitos)
                       </label>
                       <p className="text-[9px] text-slate-400 ml-1 mb-2">
-                        Desbloqueio rápido do tablet sem chamar suporte. Sugestão: dia + mês de nascimento.
+                        Gerado automaticamente pelo sistema. Compartilhe com o jurado via WhatsApp ao enviar o link de acesso.
                       </p>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={4}
-                        placeholder="0000"
-                        value={form.pin || ''}
-                        onChange={e => {
-                          const v = e.target.value.replace(/\D/g, '').slice(0, 4);
-                          setForm(f => ({ ...f, pin: v }));
-                        }}
-                        className={`${inputCls} w-32 text-center text-xl tracking-[0.4em] font-black`}
-                      />
+                      <div className="flex items-center gap-2">
+                        <input
+                          type={showPin ? 'text' : 'password'}
+                          inputMode="numeric"
+                          maxLength={4}
+                          placeholder="0000"
+                          value={form.pin || ''}
+                          onChange={e => {
+                            const v = e.target.value.replace(/\D/g, '').slice(0, 4);
+                            setForm(f => ({ ...f, pin: v }));
+                          }}
+                          className={`${inputCls} w-32 text-center text-xl tracking-[0.4em] font-black`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPin(s => !s)}
+                          className="p-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-500 hover:text-[#ff0068] transition-all"
+                          title={showPin ? 'Ocultar PIN' : 'Mostrar PIN'}
+                        >
+                          {showPin ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => form.pin && copyToClipboard(form.pin, 'pin')}
+                          disabled={!form.pin || form.pin.length !== 4}
+                          className="p-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-500 hover:text-[#ff0068] transition-all disabled:opacity-40"
+                          title="Copiar PIN"
+                        >
+                          {copiedField === 'pin'
+                            ? <CheckCircle2 size={14} className="text-emerald-500" />
+                            : <Copy size={14} />
+                          }
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setForm(f => ({ ...f, pin: generatePin() }))}
+                          className="p-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-500 hover:text-[#ff0068] transition-all"
+                          title="Gerar novo PIN"
+                        >
+                          <RefreshCw size={14} />
+                        </button>
+                      </div>
                     </div>
 
                   </>
