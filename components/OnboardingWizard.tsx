@@ -7,7 +7,7 @@ import {
   DollarSign, Gift, Copy, MessageCircle, Settings2, Loader2,
 } from 'lucide-react';
 import { createEvent, supabase } from '../services/supabase';
-import { extractRegulationFromPdf, RegulationExtract } from '../services/geminiService';
+import { extractRegulationFromPdfOrThrow, isExtractEmpty, RegulationExtract } from '../services/geminiService';
 import { eventTemplates, getTemplate, TemplateId } from '../services/eventTemplates';
 import { EventFormat } from '../types';
 
@@ -56,15 +56,24 @@ const OnboardingWizard: React.FC = () => {
         reader.onload = () => resolve((reader.result as string).split(',')[1]);
         reader.onerror = reject;
       });
-      const x: RegulationExtract = await extractRegulationFromPdf(b64);
+
+      const x: RegulationExtract = await extractRegulationFromPdfOrThrow(b64);
+
+      if (isExtractEmpty(x)) {
+        setError('A IA processou o PDF mas não conseguiu extrair dados. Preencha manualmente abaixo.');
+        return;
+      }
+
       setData(prev => ({
         ...prev,
         name:       prev.name       || x.event_name  || '',
         start_date: prev.start_date || x.start_date  || '',
         city:       prev.city       || (x.address?.split(',')[0]?.trim() ?? ''),
       }));
-    } catch {
-      setError('Não consegui ler esse PDF. Pode preencher manualmente abaixo.');
+    } catch (err: any) {
+      const msg = err?.message ?? 'Erro desconhecido';
+      console.error('[wizard] erro ao analisar PDF:', err);
+      setError(`Falha na análise do PDF: ${msg}`);
     } finally {
       setAnalyzing(false);
       if (pdfInputRef.current) pdfInputRef.current.value = '';

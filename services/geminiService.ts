@@ -127,6 +127,7 @@ export async function analyzeRegulation(text: string): Promise<RegulationAnalysi
 
 // ─── Extração completa — texto ────────────────────────────────────────────────
 
+/** Versão tolerante: engole erro e retorna objeto vazio. Usar quando NÃO precisa avisar o usuário. */
 export async function extractRegulationData(text: string): Promise<RegulationExtract> {
   try {
     const raw = await callGeminiEdge({ text })
@@ -135,6 +136,12 @@ export async function extractRegulationData(text: string): Promise<RegulationExt
     console.warn('extractRegulationData falhou:', (e as Error).message)
     return buildEmptyExtract()
   }
+}
+
+/** Versão estrita: propaga erro pro UI mostrar. Usar quando o usuário precisa saber que falhou. */
+export async function extractRegulationDataOrThrow(text: string): Promise<RegulationExtract> {
+  const raw = await callGeminiEdge({ text })
+  return parseRawExtract(raw)
 }
 
 // ─── Extração completa — PDF base64 ──────────────────────────────────────────
@@ -147,4 +154,21 @@ export async function extractRegulationFromPdf(base64Pdf: string): Promise<Regul
     console.warn('extractRegulationFromPdf falhou:', (e as Error).message)
     return buildEmptyExtract()
   }
+}
+
+/** Versão estrita: propaga erro pro UI mostrar. Usar quando o usuário precisa saber que falhou. */
+export async function extractRegulationFromPdfOrThrow(base64Pdf: string): Promise<RegulationExtract> {
+  const raw = await callGeminiEdge({ pdf_base64: base64Pdf })
+  return parseRawExtract(raw)
+}
+
+/** Heurística: o extract está vazio (todos os campos principais null/array vazio)? */
+export function isExtractEmpty(x: RegulationExtract): boolean {
+  return !x.event_name
+    && !x.start_date
+    && !x.address
+    && x.formacoes.length === 0
+    && x.categories.length === 0
+    && x.criteria.length === 0
+    && x.registration_lots.length === 0
 }
