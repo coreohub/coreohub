@@ -15,6 +15,12 @@
 -- Ou rode manualmente pra testar:
 --   SELECT public.cleanup_old_audio_feedbacks();
 
+-- O código frontend escreve audio_url em evaluations há tempo, mas a coluna
+-- nunca foi criada via migration (provavelmente foi referenciada no código
+-- antes do schema ser oficial). Adicionamos aqui antes de criar a função,
+-- senão o CREATE FUNCTION falha com "column ev.audio_url does not exist".
+ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS audio_url TEXT;
+
 CREATE OR REPLACE FUNCTION public.cleanup_old_audio_feedbacks()
 RETURNS TABLE(deleted_count integer, freed_paths text[])
 LANGUAGE plpgsql
