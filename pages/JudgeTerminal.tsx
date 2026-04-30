@@ -153,6 +153,8 @@ const JudgeTerminal = () => {
   const judgeSession = useMemo(() => readJudgeSession(), []);
 
   const handleSwitchJudge = () => {
+    // Confirmação pra evitar saída acidental no meio da avaliação
+    if (!confirm('Sair e voltar pra seleção de jurado? Notas em andamento serão perdidas.')) return;
     clearJudgeSession();
     navigate('/judge-login', { replace: true });
   };
@@ -1180,12 +1182,16 @@ const JudgeTerminal = () => {
           >
             {isRecording ? <StopCircle size={12} /> : <Mic size={12} />}
             {isRecording && (
-              <div className="flex gap-0.5 items-center h-3">
+              <div className="flex gap-0.5 items-center h-3.5">
                 {audioLevels.map((level, i) => (
                   <div
                     key={i}
-                    className="w-0.5 bg-rose-500 rounded-full transition-all duration-100"
-                    style={{ height: `${Math.max(30, level * 100)}%` }}
+                    className="w-1 bg-rose-500 rounded-sm"
+                    style={{
+                      height: `${Math.max(20, level * 100)}%`,
+                      // Sem transition: snap imediato pra parecer reativo ao audio real
+                      transition: 'height 30ms linear',
+                    }}
                   />
                 ))}
               </div>
@@ -1641,9 +1647,10 @@ const JudgeTerminal = () => {
                     </span>
                   </div>
 
-                  {/* Number grid — denso em mobile, capado em desktop pra
-                      botoes nao virarem gigantes (research: 42-72px otimo) */}
-                  <div className="flex-1 grid grid-cols-3 gap-1 md:gap-2 max-h-[400px] mx-auto w-full max-w-2xl">
+                  {/* Number grid — denso em mobile, capado SO em desktop pra
+                      botoes nao virarem gigantes (research: 42-72px otimo).
+                      max-h aplicado so em lg+ pra nao cortar 4a linha em mobile. */}
+                  <div className="flex-1 grid grid-cols-3 gap-1 md:gap-2 lg:max-h-[400px] mx-auto w-full max-w-2xl">
                     {[1,2,3,4,5,6,7,8,9].map(n => (
                       <button
                         key={n}
@@ -1740,7 +1747,7 @@ const JudgeTerminal = () => {
               <button
                 onClick={handleFinish}
                 disabled={!enabled}
-                className={`flex-1 sm:flex-none sm:px-8 md:px-12 py-2.5 md:py-3 rounded-xl font-black text-[10px] md:text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 touch-manipulation
+                className={`px-6 sm:px-8 md:px-12 py-2.5 md:py-3 rounded-xl font-black text-[10px] md:text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 touch-manipulation
                   ${enabled
                     ? 'bg-[#ff0068] hover:bg-[#d4005a] text-white shadow-xl shadow-[#ff0068]/20 active:scale-95'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
