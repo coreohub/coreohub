@@ -1610,8 +1610,9 @@ const JudgeTerminal = () => {
                     </span>
                   </div>
 
-                  {/* Number grid — denso em mobile */}
-                  <div className="flex-1 grid grid-cols-3 gap-1 md:gap-2">
+                  {/* Number grid — denso em mobile, capado em desktop pra
+                      botoes nao virarem gigantes (research: 42-72px otimo) */}
+                  <div className="flex-1 grid grid-cols-3 gap-1 md:gap-2 max-h-[400px] mx-auto w-full max-w-2xl">
                     {[1,2,3,4,5,6,7,8,9].map(n => (
                       <button
                         key={n}
