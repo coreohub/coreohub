@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Award, Loader2, Lock, ArrowLeft, ShieldCheck, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../services/supabase';
+import InstallPWAButton from '../components/InstallPWAButton';
 
 /**
  * Página pública de seleção e login de jurado.
@@ -243,6 +244,9 @@ const JudgeLogin: React.FC = () => {
               Produtor: <span className="text-slate-600 dark:text-slate-300">{producerName}</span>
             </p>
           )}
+          <div className="pt-2">
+            <InstallPWAButton />
+          </div>
         </div>
 
         {/* Lockout banner */}
