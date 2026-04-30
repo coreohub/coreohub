@@ -4,7 +4,7 @@ import { supabase } from '../services/supabase';
 import {
   Calendar, MapPin, Music, Ticket, ExternalLink,
   ChevronRight, Trophy, Clock, Star, Loader2, ArrowLeft, Youtube, Radio,
-  Share2, Copy, Check, Instagram, Globe, MessageCircle,
+  Share2, Copy, Check, Instagram, Globe, MessageCircle, Mail, FileText, Download,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import BrandIcon from '../components/BrandIcon';
@@ -143,6 +143,7 @@ const PublicEventPage = () => {
     whatsapp:  event.whatsapp_event
       ? `https://wa.me/${event.whatsapp_event.replace(/\D/g, '')}`
       : null,
+    email:     event.email_event ? `mailto:${event.email_event}` : null,
   };
 
   const hasSocial = Object.values(social).some(Boolean);
@@ -398,7 +399,34 @@ const PublicEventPage = () => {
                   <Globe size={16} /> Site oficial
                 </a>
               )}
+              {social.email && (
+                <a href={social.email}
+                   className="flex items-center gap-2 px-5 py-3 bg-blue-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
+                  <Mail size={16} /> E-mail
+                </a>
+              )}
             </div>
+          </div>
+        )}
+
+        {/* Regulamento PDF — download direto */}
+        {event.regulation_pdf_url && (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-black uppercase tracking-tighter">Regulamento</h2>
+            <a
+              href={event.regulation_pdf_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              download
+              className="inline-flex items-center gap-3 px-6 py-4 bg-white/5 border border-white/10 hover:border-[#ff0068]/40 hover:bg-[#ff0068]/5 rounded-2xl transition-all group"
+            >
+              <FileText size={20} className="text-[#ff0068]" />
+              <div className="flex-1 text-left">
+                <p className="text-xs font-black uppercase tracking-tight">Baixar regulamento</p>
+                <p className="text-[10px] text-slate-400 font-bold">PDF oficial do festival</p>
+              </div>
+              <Download size={16} className="text-slate-400 group-hover:text-[#ff0068] transition-colors" />
+            </a>
           </div>
         )}
 

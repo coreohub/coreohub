@@ -73,6 +73,8 @@ const CreateEvent = () => {
     youtube_event: '',
     whatsapp_event: '',
     website_event: '',
+    email_event: '',
+    regulation_pdf_url: '',
   });
 
   useEffect(() => {
@@ -434,6 +436,41 @@ const CreateEvent = () => {
                     <div className="space-y-2 md:col-span-2">
                       <label className={labelCls}>Site oficial</label>
                       <input type="text" value={formData.website_event} onChange={e => setFormData({ ...formData, website_event: e.target.value })} className={inputCls.replace('p-5', 'p-4')} placeholder="https://meufestival.com.br" />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <label className={labelCls}>E-mail de contato</label>
+                      <input type="email" value={formData.email_event} onChange={e => setFormData({ ...formData, email_event: e.target.value })} className={inputCls.replace('p-5', 'p-4')} placeholder="contato@meufestival.com.br" />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <label className={labelCls}>Regulamento (PDF)</label>
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            const { uploadEventRules } = await import('../services/supabase');
+                            // Antes do evento existir, usa um id temporário (timestamp).
+                            // Após criar o evento real, o file fica linkado pela URL.
+                            const tempId = formData.name?.toLowerCase().replace(/\s+/g, '-') || `draft-${Date.now()}`;
+                            const url = await uploadEventRules(tempId, file);
+                            setFormData({ ...formData, regulation_pdf_url: url });
+                          } catch (err: any) {
+                            alert(`Erro ao enviar PDF: ${err?.message ?? err}`);
+                          }
+                        }}
+                        className={inputCls.replace('p-5', 'p-4')}
+                      />
+                      {formData.regulation_pdf_url && (
+                        <p className="text-[10px] text-emerald-500">
+                          ✓ Regulamento enviado.{' '}
+                          <a href={formData.regulation_pdf_url} target="_blank" rel="noopener noreferrer" className="underline">Ver PDF</a>
+                        </p>
+                      )}
+                      <p className="text-[10px] text-slate-400">
+                        Disponibilizado pra download na página pública do festival.
+                      </p>
                     </div>
                   </div>
                 </div>

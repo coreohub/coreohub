@@ -107,12 +107,26 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
         setProgress('Enviando ao Gemini...');
         extracted = await extractRegulationFromPdf(base64);
 
-        // Upload to Supabase storage for record-keeping (non-blocking)
+        // Upload to Supabase storage and link no evento ativo (não-bloqueante)
         try {
           setProgress('Salvando regulamento...');
           const { data: { user } } = await supabase.auth.getUser();
-          const eventId = user?.id ?? 'unknown';
-          await uploadRegulationPdf(eventId, selectedFile);
+          if (user) {
+            // Tenta linkar ao evento mais recente do produtor pra ficar disponível
+            // pra download na vitrine pública.
+            const { data: ev } = await supabase
+              .from('events')
+              .select('id')
+              .eq('created_by', user.id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            const eventId = ev?.id ?? user.id;
+            const url = await uploadRegulationPdf(eventId, selectedFile);
+            if (ev?.id && url) {
+              await supabase.from('events').update({ regulation_pdf_url: url }).eq('id', ev.id);
+            }
+          }
         } catch (_) { /* storage failure is non-critical */ }
       } else {
         if (!pastedText.trim()) {
