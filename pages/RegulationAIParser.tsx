@@ -1,9 +1,10 @@
 import React, { useState, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Sparkles, FileText, CheckCircle2, AlertTriangle, RefreshCw,
   FileSearch, Upload, X, ChevronRight, Save, RotateCcw,
   Calendar, Clock, DollarSign, Scale, Trophy, Users,
-  Layers, Star, Info, FileUp,
+  Layers, Star, Info, FileUp, Settings, ArrowRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { extractRegulationData, extractRegulationFromPdf, RegulationExtract } from '../services/geminiService';
@@ -43,6 +44,7 @@ const inputCls = 'w-full px-4 py-3 bg-transparent text-sm text-slate-900 dark:te
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void }> = ({ onApply }) => {
+  const navigate = useNavigate();
   const [step, setStep] = useState<Step>('upload');
   const [inputMode, setInputMode] = useState<'pdf' | 'text'>('pdf');
   const [pastedText, setPastedText] = useState('');
@@ -593,12 +595,23 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
           <div className="text-center space-y-2">
             <p className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Configurações Aplicadas!</p>
             <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Os dados do regulamento foram salvos no seu evento.</p>
+            <p className="text-xs text-slate-500 max-w-md mx-auto">
+              Confira em <strong>Configurações</strong> se a IA acertou os detalhes (categorias, gêneros, prazos, prêmios) e ajuste o que precisar antes de abrir as inscrições.
+            </p>
           </div>
+          {/* CTA primária: revisar o que foi aplicado */}
           <button
-            onClick={handleReset}
+            onClick={() => navigate('/account-settings')}
             className="flex items-center gap-2 px-8 py-4 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-[#ff0068]/20"
           >
-            <RotateCcw size={14} /> Importar Outro Regulamento
+            <Settings size={14} /> Revisar Configurações Aplicadas <ArrowRight size={14} />
+          </button>
+          {/* CTA secundária discreta — só pra quem quer mesmo importar outro */}
+          <button
+            onClick={handleReset}
+            className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-all"
+          >
+            <RotateCcw size={11} /> Importar outro regulamento
           </button>
         </div>
       )}

@@ -17,6 +17,7 @@ import {
   Calendar, CalendarDays, CalendarRange,
   CreditCard, CheckCircle, AlertCircle, ExternalLink, Percent, Hash,
   Image as ImageIcon, Upload,
+  Instagram, MessageCircle, Globe, Mail, FileText, Youtube,
 } from 'lucide-react';
 
 /* ── Evaluation Rules types ── */
@@ -636,6 +637,17 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
   };
 
   const [general, setGeneral] = useState({ ...DEFAULT_GENERAL });
+  // Identidade pública do evento (vem da tabela events, não configuracoes)
+  const [identity, setIdentity] = useState({
+    instagram_event:    '',
+    tiktok_event:       '',
+    youtube_event:      '',
+    whatsapp_event:     '',
+    website_event:      '',
+    email_event:        '',
+    regulation_pdf_url: '',
+  });
+  const [identityUploading, setIdentityUploading] = useState(false);
   const [programacao, setProgramacao] = useState<ProgramItem[]>([]);
   const [ingressos, setIngressos]     = useState<TicketType[]>([]);
   const [sponsors, setSponsors]       = useState<Sponsor[]>([]);
@@ -813,13 +825,23 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         let data: any = null;
         if (user) {
           const { data: myEvent } = await supabase
-            .from('events').select('id')
+            .from('events').select('id, instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url')
             .eq('created_by', user.id)
             .order('created_at', { ascending: false })
             .limit(1).maybeSingle();
           if (myEvent?.id) {
             const res = await supabase.from('configuracoes').select('*').eq('id', myEvent.id).maybeSingle();
             data = res.data;
+            // Identidade pública: campos diretos da tabela events
+            setIdentity({
+              instagram_event:    myEvent.instagram_event ?? '',
+              tiktok_event:       myEvent.tiktok_event ?? '',
+              youtube_event:      myEvent.youtube_event ?? '',
+              whatsapp_event:     myEvent.whatsapp_event ?? '',
+              website_event:      myEvent.website_event ?? '',
+              email_event:        myEvent.email_event ?? '',
+              regulation_pdf_url: myEvent.regulation_pdf_url ?? '',
+            });
           }
         }
         if (!data) {
@@ -975,6 +997,22 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         { onConflict: 'id' }
       );
       if (errB) throw errB;
+
+      // Identidade pública (redes sociais + e-mail + regulamento PDF) vai
+      // direto na tabela events
+      const { error: errIdentity } = await supabase
+        .from('events')
+        .update({
+          instagram_event:    identity.instagram_event || null,
+          tiktok_event:       identity.tiktok_event || null,
+          youtube_event:      identity.youtube_event || null,
+          whatsapp_event:     identity.whatsapp_event || null,
+          website_event:      identity.website_event || null,
+          email_event:        identity.email_event || null,
+          regulation_pdf_url: identity.regulation_pdf_url || null,
+        })
+        .eq('id', myEvent.id);
+      if (errIdentity) throw errIdentity;
 
       // Sync configuracoes → events (vitrine pública)
       // Falha aqui não bloqueia o save da config legacy.
@@ -1341,6 +1379,87 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                   <label className={label}>Prazo Final de Envio de Trilhas</label>
                   <input type="date" value={general.trackDeadline} onChange={e => setGeneral({ ...general, trackDeadline: e.target.value })} className={input} />
                 </div>
+              </div>
+            </div>
+
+            {/* Identidade & Contato — exibido na vitrine pública */}
+            <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Globe size={18} /></div>
+                <div>
+                  <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Identidade & Contato</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Aparece na vitrine pública do festival.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className={label}><Instagram size={11} className="inline mr-1" /> Instagram</label>
+                  <input type="text" value={identity.instagram_event} onChange={e => setIdentity({ ...identity, instagram_event: e.target.value })} placeholder="@meufestival" className={input} />
+                </div>
+                <div>
+                  <label className={label}>TikTok</label>
+                  <input type="text" value={identity.tiktok_event} onChange={e => setIdentity({ ...identity, tiktok_event: e.target.value })} placeholder="@meufestival" className={input} />
+                </div>
+                <div>
+                  <label className={label}><Youtube size={11} className="inline mr-1" /> YouTube</label>
+                  <input type="text" value={identity.youtube_event} onChange={e => setIdentity({ ...identity, youtube_event: e.target.value })} placeholder="@canalfestival" className={input} />
+                </div>
+                <div>
+                  <label className={label}><MessageCircle size={11} className="inline mr-1" /> WhatsApp</label>
+                  <input type="text" value={identity.whatsapp_event} onChange={e => setIdentity({ ...identity, whatsapp_event: e.target.value })} placeholder="5581999998888 (DDI+DDD+nº)" className={input} />
+                </div>
+                <div>
+                  <label className={label}><Globe size={11} className="inline mr-1" /> Site oficial</label>
+                  <input type="text" value={identity.website_event} onChange={e => setIdentity({ ...identity, website_event: e.target.value })} placeholder="https://meufestival.com.br" className={input} />
+                </div>
+                <div>
+                  <label className={label}><Mail size={11} className="inline mr-1" /> E-mail de contato</label>
+                  <input type="email" value={identity.email_event} onChange={e => setIdentity({ ...identity, email_event: e.target.value })} placeholder="contato@meufestival.com.br" className={input} />
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 dark:border-white/10 pt-5">
+                <label className={label}><FileText size={11} className="inline mr-1" /> Regulamento (PDF)</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setIdentityUploading(true);
+                      try {
+                        const { data: { user } } = await supabase.auth.getUser();
+                        if (!user) throw new Error('Usuário não autenticado.');
+                        const { data: ev } = await supabase
+                          .from('events').select('id')
+                          .eq('created_by', user.id)
+                          .order('created_at', { ascending: false })
+                          .limit(1).maybeSingle();
+                        if (!ev?.id) throw new Error('Crie um evento primeiro.');
+                        const { uploadEventRules } = await import('../services/supabase');
+                        const url = await uploadEventRules(ev.id, file);
+                        setIdentity({ ...identity, regulation_pdf_url: url });
+                      } catch (err: any) {
+                        alert(`Erro ao enviar PDF: ${err?.message ?? err}`);
+                      } finally {
+                        setIdentityUploading(false);
+                      }
+                    }}
+                    className={`${input} flex-1`}
+                  />
+                  {identityUploading && <Loader2 size={14} className="animate-spin text-[#ff0068]" />}
+                </div>
+                {identity.regulation_pdf_url && (
+                  <p className="text-[10px] text-emerald-500 mt-2">
+                    ✓ Regulamento enviado.{' '}
+                    <a href={identity.regulation_pdf_url} target="_blank" rel="noopener noreferrer" className="underline">Ver PDF</a>
+                  </p>
+                )}
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Disponibilizado pra download na página pública. Lembra de "Salvar" no fim da página.
+                </p>
               </div>
             </div>
 
