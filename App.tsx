@@ -283,10 +283,21 @@ const App: React.FC = () => {
   const videoSelectionEnabled = config.video_selection_enabled ?? false;
   const privateRouteProps = { session, profile, activeRole, theme, toggleTheme, setActiveRole, videoSelectionEnabled };
 
+  // Phase 2B+: tablet em modo Terminal redireciona / pra /judge-login/<token>
+  // automaticamente (kiosk mode).
+  const RootRedirect = () => {
+    try {
+      const isKiosk = localStorage.getItem('coreohub_tablet_kiosk_mode') === 'true';
+      const token = localStorage.getItem('coreohub_tablet_judge_token');
+      if (isKiosk && token) return <Navigate to={`/judge-login/${token}`} replace />;
+    } catch {}
+    return <Navigate to="/login" replace />;
+  };
+
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<RootRedirect />} />
         <Route path="/login" element={<Auth />} />
         <Route path="/register" element={<Auth />} />
         <Route path="/judge-login" element={<Suspense fallback={<PageLoader />}><JudgeLogin /></Suspense>} />

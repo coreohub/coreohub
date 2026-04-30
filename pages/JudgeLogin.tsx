@@ -32,6 +32,22 @@ const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 5 * 60 * 1000; // 5 min
 
+// Modo Terminal (tablet do evento configurado pra abrir direto na seleção
+// de jurado quando o ícone do PWA é clicado).
+const TABLET_TOKEN_KEY = 'coreohub_tablet_judge_token';
+const TABLET_KIOSK_KEY = 'coreohub_tablet_kiosk_mode';
+
+export const isTabletKioskMode = (): boolean => {
+  try {
+    return localStorage.getItem(TABLET_KIOSK_KEY) === 'true' &&
+           !!localStorage.getItem(TABLET_TOKEN_KEY);
+  } catch { return false; }
+};
+
+export const getTabletToken = (): string | null => {
+  try { return localStorage.getItem(TABLET_TOKEN_KEY); } catch { return null; }
+};
+
 export interface JudgeSession {
   judge_id: string;
   judge_name: string;
@@ -85,6 +101,9 @@ const JudgeLogin: React.FC = () => {
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
+  const [kioskMode, setKioskMode] = useState<boolean>(false);
+  const [showSwitchPrompt, setShowSwitchPrompt] = useState(false);
+  const [switchInput, setSwitchInput] = useState('');
 
   const avatarSrc = (j: Judge) =>
     j.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(j.name)}`;
@@ -95,6 +114,12 @@ const JudgeLogin: React.FC = () => {
       setLoading(false);
       return;
     }
+    // Auto-substituição: sempre que esta página carrega com um token válido,
+    // ela vira o token "amarrado" do tablet (substituindo um anterior).
+    try { localStorage.setItem(TABLET_TOKEN_KEY, paramToken); } catch {}
+    // Lê estado do modo Terminal pra controlar visibilidade dos botões.
+    try { setKioskMode(localStorage.getItem(TABLET_KIOSK_KEY) === 'true'); } catch {}
+
     // Sessão válida e do mesmo produtor → manda direto pro terminal
     const session = readJudgeSession();
     if (session && session.producer_token === paramToken) {
@@ -114,6 +139,38 @@ const JudgeLogin: React.FC = () => {
       setLoading(false);
     })();
   }, [paramToken, navigate]);
+
+  const enableKioskMode = () => {
+    try { localStorage.setItem(TABLET_KIOSK_KEY, 'true'); } catch {}
+    setKioskMode(true);
+    alert('Tablet configurado como Terminal de Jurado. A partir de agora, abrir o app vai direto pra esta tela.');
+  };
+
+  const disableKioskMode = () => {
+    if (!confirm('Sair do modo Terminal? O ícone do app vai voltar a abrir a tela de login do produtor.')) return;
+    try {
+      localStorage.removeItem(TABLET_KIOSK_KEY);
+      localStorage.removeItem(TABLET_TOKEN_KEY);
+    } catch {}
+    setKioskMode(false);
+  };
+
+  const handleSwitchEvent = () => {
+    const raw = switchInput.trim();
+    if (!raw) return;
+    // Aceita link completo OU só o token (UUID)
+    const tokenMatch = raw.match(/judge-login\/([0-9a-f-]{36})/i) || raw.match(/^([0-9a-f-]{36})$/i);
+    if (!tokenMatch) {
+      alert('Link ou token inválido. Cole o link completo ou só o UUID.');
+      return;
+    }
+    const newToken = tokenMatch[1];
+    setShowSwitchPrompt(false);
+    setSwitchInput('');
+    // Limpa sessão de jurado anterior antes de trocar
+    try { localStorage.removeItem(SESSION_KEY); } catch {}
+    navigate(`/judge-login/${newToken}`, { replace: true });
+  };
 
   const lockoutSecondsLeft = useMemo(() => {
     if (!lockedUntil) return 0;
@@ -244,10 +301,71 @@ const JudgeLogin: React.FC = () => {
               Produtor: <span className="text-slate-600 dark:text-slate-300">{producerName}</span>
             </p>
           )}
-          <div className="pt-2">
+          <div className="pt-2 flex flex-wrap gap-2 justify-center">
             <InstallPWAButton />
+            {!kioskMode ? (
+              <button
+                onClick={enableKioskMode}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
+                title="Faz com que o ícone do app abra direto nessa tela. Use em tablet de evento."
+              >
+                ⚙ Configurar como Terminal
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => setShowSwitchPrompt(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#ff0068]/10 border border-[#ff0068]/30 hover:bg-[#ff0068]/20 text-[#ff0068] rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
+                >
+                  ↔ Trocar evento
+                </button>
+                <button
+                  onClick={disableKioskMode}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-500/10 border border-slate-500/30 hover:bg-slate-500/20 text-slate-500 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
+                >
+                  Sair do modo Terminal
+                </button>
+              </>
+            )}
           </div>
         </div>
+
+        {/* Modal de troca de evento */}
+        {showSwitchPrompt && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm" onClick={() => setShowSwitchPrompt(false)}>
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl p-6 max-w-md w-full space-y-4" onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-black uppercase tracking-tighter text-slate-900 dark:text-white">
+                Trocar de evento
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Cole o link do novo evento (recebido do produtor) ou só o token UUID. O tablet vai passar a mostrar os jurados desse novo evento.
+              </p>
+              <input
+                type="text"
+                value={switchInput}
+                onChange={e => setSwitchInput(e.target.value)}
+                placeholder="https://app.coreohub.com/judge-login/xxxx-xxxx-..."
+                className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowSwitchPrompt(false)}
+                  className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-slate-500 text-[10px] font-black uppercase tracking-widest"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSwitchEvent}
+                  disabled={!switchInput.trim()}
+                  className="flex-1 py-3 rounded-2xl bg-[#ff0068] text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                >
+                  Trocar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Lockout banner */}
         {lockedUntil && lockoutSecondsLeft > 0 && (
