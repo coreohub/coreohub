@@ -1479,9 +1479,10 @@ const JudgeTerminal = () => {
                 </div>
               </div>
 
-              {/* Criteria list — 2-col em mobile (cabe mais critério em
-                  landscape compacto), 1-col em tablet+ (mais legível). */}
-              <div className="flex-1 px-2 py-2 grid grid-cols-2 md:grid-cols-1 gap-1 content-start">
+              {/* Criteria list — 2-col em mobile/tablet (cabe mais criterio
+                  em landscape compacto, alinhado com numpad), 1-col so em
+                  desktop (lg+) onde sobra largura. */}
+              <div className="flex-1 px-2 py-2 grid grid-cols-2 lg:grid-cols-1 gap-1 content-start">
                 {(() => {
                   const totalPeso = activeCriteria.reduce((s, c) => s + c.peso, 0);
                   return activeCriteria.map((criterion, i) => {
@@ -1720,20 +1721,58 @@ const JudgeTerminal = () => {
                     </button>
                   </div>
 
-                  {/* BASE_10: "next" as full-width row below grid */}
-                  {scoreScale === 'BASE_10' && (
-                    <button
-                      onClick={handleNext}
-                      disabled={isLastField}
-                      className={`shrink-0 w-full flex items-center justify-center gap-2 py-2 md:py-3 rounded-lg md:rounded-xl font-black text-xs uppercase tracking-widest transition-all touch-manipulation
-                        ${isLastField
-                          ? 'bg-slate-100 dark:bg-slate-800 text-slate-300 dark:text-slate-600 border border-slate-200 dark:border-slate-700 cursor-not-allowed'
-                          : 'bg-[#ff0068] hover:bg-[#d4005a] text-white shadow-lg shadow-[#ff0068]/20 active:scale-95'
-                        }`}
-                    >
-                      <ChevronRight size={15} /> {t('numpad.nextField')}
-                    </button>
-                  )}
+                  {/* BASE_10: botao unico CTA — Proximo ou Enviar Nota.
+                      Padrao wizard multi-step (Typeform/Google Forms): mesmo
+                      botao avanca e finaliza, reduzindo carga cognitiva e
+                      eliminando rodape duplicado. */}
+                  {scoreScale === 'BASE_10' && (() => {
+                    const missingCount = activeCriteria.filter(c => !scores[c.name] || scores[c.name] === '').length;
+                    const isFinalSubmit = isLastField && isAllFilled && !isSubmitted && !allDone;
+                    const enabled = isFinalSubmit
+                      ? !isSubmitting
+                      : (!isLastField || !isSubmitted);
+
+                    if (isFinalSubmit) {
+                      return (
+                        <button
+                          onClick={handleFinish}
+                          disabled={!enabled}
+                          className="shrink-0 w-full flex items-center justify-center gap-2 py-2 md:py-3 rounded-lg md:rounded-xl font-black text-xs uppercase tracking-widest transition-all touch-manipulation bg-[#ff0068] hover:bg-[#d4005a] text-white shadow-lg shadow-[#ff0068]/20 active:scale-95"
+                        >
+                          {isSubmitting
+                            ? <Loader2 size={15} className="animate-spin" />
+                            : <><Check size={15} /> {isAvaliada ? t('submit.feedback') : t('submit.score')}</>
+                          }
+                        </button>
+                      );
+                    }
+
+                    if (isLastField && !isAllFilled) {
+                      return (
+                        <button
+                          disabled
+                          className="shrink-0 w-full flex items-center justify-center gap-2 py-2 md:py-3 rounded-lg md:rounded-xl font-black text-xs uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700 cursor-not-allowed"
+                          title={`Preencha os ${missingCount} critérios restantes`}
+                        >
+                          Faltam {missingCount} {missingCount === 1 ? 'critério' : 'critérios'}
+                        </button>
+                      );
+                    }
+
+                    return (
+                      <button
+                        onClick={handleNext}
+                        disabled={isLastField}
+                        className={`shrink-0 w-full flex items-center justify-center gap-2 py-2 md:py-3 rounded-lg md:rounded-xl font-black text-xs uppercase tracking-widest transition-all touch-manipulation
+                          ${isLastField
+                            ? 'bg-slate-100 dark:bg-slate-800 text-slate-300 dark:text-slate-600 border border-slate-200 dark:border-slate-700 cursor-not-allowed'
+                            : 'bg-[#ff0068] hover:bg-[#d4005a] text-white shadow-lg shadow-[#ff0068]/20 active:scale-95'
+                          }`}
+                      >
+                        <ChevronRight size={15} /> {t('numpad.nextField')}
+                      </button>
+                    );
+                  })()}
                 </div>
               )}
             </section>
@@ -1741,54 +1780,16 @@ const JudgeTerminal = () => {
         )}
       </main>
 
-      {/* Submit error */}
+      {/* Submit error — flutuante no rodape sem ocupar barra fixa */}
       {submitError && (
-        <div className="shrink-0 mx-4 mb-1 flex items-center gap-2 px-4 py-3 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-xl text-rose-600 dark:text-rose-400 text-[9px] font-black uppercase tracking-widest">
+        <div className="shrink-0 mx-4 mb-2 flex items-center gap-2 px-4 py-2 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-xl text-rose-600 dark:text-rose-400 text-[9px] font-black uppercase tracking-widest">
           <AlertCircle size={12} /> {submitError}
         </div>
       )}
 
-      {/* ── Bottom bar — só submit (mic foi pro header) ── */}
-      <div className="shrink-0 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 px-3 py-2 md:px-4 md:py-2.5">
-        <div className="flex items-center gap-2 justify-end">
-
-          {/* Submit button — Progressive Enabling pattern (research-backed):
-              fica visível disabled com label dinâmico mostrando o que falta.
-              Esconder reduz descoberta — usuário não sabe que o botão existe. */}
-          {!isSubmitted ? (() => {
-            const missingCount = isAvaliada
-              ? 0
-              : activeCriteria.filter(c => !scores[c.name] || scores[c.name] === '').length;
-            const enabled = isAllFilled && currentPerformance && !allDone && !isSubmitting;
-            const label = isSubmitting
-              ? null
-              : missingCount > 0
-                ? `Faltam ${missingCount} ${missingCount === 1 ? 'critério' : 'critérios'}`
-                : (isAvaliada ? t('submit.feedback') : t('submit.score'));
-            return (
-              <button
-                onClick={handleFinish}
-                disabled={!enabled}
-                className={`px-6 sm:px-8 md:px-12 py-2.5 md:py-3 rounded-xl font-black text-[10px] md:text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 touch-manipulation
-                  ${enabled
-                    ? 'bg-[#ff0068] hover:bg-[#d4005a] text-white shadow-xl shadow-[#ff0068]/20 active:scale-95'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
-                  }`}
-                title={!enabled && missingCount > 0 ? `Preencha os ${missingCount} critérios restantes` : undefined}
-              >
-                {isSubmitting
-                  ? <Loader2 size={16} className="animate-spin" />
-                  : <><Check size={16} /> {label}</>
-                }
-              </button>
-            );
-          })() : (
-            <div className="px-3 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest shrink-0">
-              <Check size={14} /> {t('submit.saved')}
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Bottom bar removida — Submit foi mesclado no botao "Proximo Quesito"
+          que vira "Enviar Nota" no ultimo criterio (padrao wizard).
+          Mic ja estava no header. Liberou ~70px de altura. */}
     </div>
   );
 
