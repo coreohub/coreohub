@@ -1131,50 +1131,56 @@ const JudgeTerminal = () => {
         </div>
       )}
 
-      {/* ── Header — compacto pra caber em landscape sem scroll ── */}
-      <header className="shrink-0 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-4 py-2 flex items-center justify-between gap-3">
+      {/* ── Header — denso: 1 linha em mobile, 2 em tablet ── */}
+      <header className="shrink-0 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-3 py-1.5 flex items-center justify-between gap-2">
 
         {/* Live + coreography info */}
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex items-center gap-1.5 shrink-0">
-            <div className={`w-2 h-2 rounded-full ${currentPerformance ? 'bg-rose-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`} />
-            <span className="text-[8px] font-black uppercase tracking-[0.3em] text-rose-500">{t('header.live')}</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-1 shrink-0">
+            <div className={`w-1.5 h-1.5 rounded-full ${currentPerformance ? 'bg-rose-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`} />
+            <span className="text-[8px] font-black uppercase tracking-[0.2em] text-rose-500 hidden sm:inline">{t('header.live')}</span>
           </div>
           <div className="min-w-0">
-            <h2 className="text-base font-black uppercase tracking-tighter italic leading-none truncate text-slate-900 dark:text-white">
+            <h2 className="text-sm sm:text-base font-black uppercase tracking-tighter italic leading-none truncate text-slate-900 dark:text-white">
               {currentPerformance?.nome_coreografia || t('header.waiting')}
             </h2>
             {currentPerformance && (
-              <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate">
+              <p className="text-[8px] sm:text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate hidden sm:block">
                 {currentPerformance.estudio} · {currentPerformance.estilo_danca} · {currentPerformance.categoria}
-                <span className="ml-2 text-[#ff0068]">· {t('header.criteriaCount', { count: activeCriteria.length })}</span>
                 {filteredSchedule.length > 0 && (
                   <span className="ml-2 text-slate-400 dark:text-slate-500">({currentIndex + 1}/{filteredSchedule.length})</span>
                 )}
+              </p>
+            )}
+            {/* Em mobile, mostra só "estilo · 1/3" — info crítica em 1 linha */}
+            {currentPerformance && (
+              <p className="text-[8px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate sm:hidden">
+                {currentPerformance.estilo_danca}
+                {filteredSchedule.length > 0 && <span className="ml-1.5 text-slate-400">{currentIndex + 1}/{filteredSchedule.length}</span>}
               </p>
             )}
           </div>
         </div>
 
         {/* Actions: PIN lock + judge selector */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
 
-          {/* PIN setup button */}
+          {/* PIN setup button — escondido em mobile (acessível via outros caminhos) */}
           <button
             onClick={() => setShowPinSetup(true)}
-            className="p-2 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 transition-all"
+            className="hidden md:inline-flex p-1.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 transition-all"
             title={t('header.pinSetupTooltip')}
           >
-            <Shield size={14} />
+            <Shield size={12} />
           </button>
 
           {/* Manual lock */}
           <button
             onClick={() => setPinLocked(true)}
-            className="p-2 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 transition-all"
+            className="p-1.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 transition-all"
             title={t('header.lockNowTooltip')}
           >
-            <Lock size={14} />
+            <Lock size={12} />
           </button>
 
           {/* Judge selector */}
@@ -1234,16 +1240,16 @@ const JudgeTerminal = () => {
         </div>
       </header>
 
-      {/* Demo mode banner — simplificado: badge + sair (sem toggles de dispositivo) */}
+      {/* Demo mode banner — faixa fina (16px) com badge + sair */}
       {isDemoMode && (
-        <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-1.5 bg-indigo-500 text-white text-[9px] font-black uppercase tracking-widest">
-          <div className="flex items-center gap-2 min-w-0">
-            <Star size={11} className="shrink-0" />
+        <div className="shrink-0 flex items-center justify-between gap-2 px-3 h-5 bg-indigo-500 text-white text-[8px] font-black uppercase tracking-widest">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Star size={9} className="shrink-0" />
             <span className="truncate">{t('demo.bannerShort')}</span>
           </div>
           <button
             onClick={() => { setSchedule([]); setCurrentIndex(0); setIsDemoMode(false); setPreviewDevice(null); }}
-            className="flex items-center gap-1 px-2 py-0.5 bg-white/20 hover:bg-white/30 rounded-lg transition-all text-[8px] shrink-0"
+            className="px-1.5 py-0 bg-white/20 hover:bg-white/30 rounded transition-all text-[7px] shrink-0"
           >
             {t('demo.exit')}
           </button>
@@ -1503,7 +1509,7 @@ const JudgeTerminal = () => {
             </section>
 
             {/* ══ NUMPAD PANEL — compact, right on tablet ══ */}
-            <section className="flex-1 p-2 md:p-3 flex flex-col bg-slate-50 dark:bg-slate-950 border-l border-transparent dark:border-slate-800">
+            <section className="flex-1 p-1.5 md:p-3 flex flex-col bg-slate-50 dark:bg-slate-950 border-l border-transparent dark:border-slate-800">
 
               {isSubmitted ? (
                 /* ── Submitted / Locked state ── */
@@ -1571,10 +1577,10 @@ const JudgeTerminal = () => {
 
               ) : (
                 /* ── Numpad ── */
-                <div className="flex flex-col h-full gap-3">
+                <div className="flex flex-col h-full gap-1.5 md:gap-2">
 
-                  {/* Numpad header */}
-                  <div className="flex items-center justify-between shrink-0">
+                  {/* Numpad header — escondido em mobile pra economizar verticais */}
+                  <div className="hidden md:flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-2">
                       <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">{t('numpad.label')}</span>
                       <span className={`text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${
@@ -1590,26 +1596,27 @@ const JudgeTerminal = () => {
                     </span>
                   </div>
 
-                  {/* Score display — flashes red on invalid input */}
-                  <div className={`shrink-0 h-14 md:h-16 rounded-xl border-2 flex items-center justify-center shadow-inner transition-all duration-100 ${
+                  {/* Score display — só visível em tablet+. Em mobile, o valor
+                      já é mostrado no row do critério ativo (economia de ~80px) */}
+                  <div className={`hidden md:flex shrink-0 h-12 md:h-14 rounded-xl border-2 items-center justify-center shadow-inner transition-all duration-100 ${
                     flashInvalid
                       ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-500'
                       : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-600'
                   }`}>
-                    <span className={`text-4xl md:text-5xl font-black italic tabular-nums tracking-tight transition-colors ${
+                    <span className={`text-3xl md:text-4xl font-black italic tabular-nums tracking-tight transition-colors ${
                       flashInvalid ? 'text-rose-500' : scoreGrade(scores[activeField] || '', scoreScale)
                     }`}>
                       {scores[activeField] || '0'}
                     </span>
                   </div>
 
-                  {/* Number grid — fills available space */}
-                  <div className="flex-1 grid grid-cols-3 gap-1.5 md:gap-2">
+                  {/* Number grid — denso em mobile */}
+                  <div className="flex-1 grid grid-cols-3 gap-1 md:gap-2">
                     {[1,2,3,4,5,6,7,8,9].map(n => (
                       <button
                         key={n}
                         onClick={() => handleKey(n.toString())}
-                        className="bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95 border border-slate-200 dark:border-slate-600 rounded-xl text-xl md:text-2xl font-black transition-all text-slate-900 dark:text-white shadow-sm touch-manipulation"
+                        className="bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95 border border-slate-200 dark:border-slate-600 rounded-lg md:rounded-xl text-xl md:text-2xl font-black transition-all text-slate-900 dark:text-white shadow-sm touch-manipulation"
                       >
                         {n}
                       </button>
@@ -1619,7 +1626,7 @@ const JudgeTerminal = () => {
                     {scoreScale === 'BASE_10' ? (
                       <button
                         onClick={() => handleKey('.')}
-                        className="bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 border border-amber-200 dark:border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl text-xl md:text-2xl font-black transition-all active:scale-95 flex items-center justify-center touch-manipulation"
+                        className="bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 border border-amber-200 dark:border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-lg md:rounded-xl text-xl md:text-2xl font-black transition-all active:scale-95 flex items-center justify-center touch-manipulation"
                         title={t('numpad.decimalTooltip')}
                       >
                         ,
@@ -1628,7 +1635,7 @@ const JudgeTerminal = () => {
                       <button
                         onClick={handleNext}
                         disabled={isLastField}
-                        className={`rounded-xl flex items-center justify-center transition-all touch-manipulation
+                        className={`rounded-lg md:rounded-xl flex items-center justify-center transition-all touch-manipulation
                           ${isLastField
                             ? 'bg-slate-100 dark:bg-slate-800 text-slate-300 dark:text-slate-600 border border-slate-200 dark:border-slate-700'
                             : 'bg-[#ff0068] hover:bg-[#d4005a] text-white shadow-lg shadow-[#ff0068]/20 active:scale-95'
@@ -1640,13 +1647,13 @@ const JudgeTerminal = () => {
 
                     <button
                       onClick={() => handleKey('0')}
-                      className="bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-xl md:text-2xl font-black transition-all text-slate-900 dark:text-white shadow-sm active:scale-95 touch-manipulation"
+                      className="bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg md:rounded-xl text-xl md:text-2xl font-black transition-all text-slate-900 dark:text-white shadow-sm active:scale-95 touch-manipulation"
                     >
                       0
                     </button>
                     <button
                       onClick={() => handleKey('del')}
-                      className="bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-500 border border-rose-200 dark:border-rose-500/10 rounded-xl flex items-center justify-center transition-all active:scale-95 touch-manipulation"
+                      className="bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-500 border border-rose-200 dark:border-rose-500/10 rounded-lg md:rounded-xl flex items-center justify-center transition-all active:scale-95 touch-manipulation"
                     >
                       <Delete size={20} />
                     </button>
@@ -1657,7 +1664,7 @@ const JudgeTerminal = () => {
                     <button
                       onClick={handleNext}
                       disabled={isLastField}
-                      className={`shrink-0 w-full flex items-center justify-center gap-2 py-3 md:py-3.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all touch-manipulation
+                      className={`shrink-0 w-full flex items-center justify-center gap-2 py-2 md:py-3 rounded-lg md:rounded-xl font-black text-xs uppercase tracking-widest transition-all touch-manipulation
                         ${isLastField
                           ? 'bg-slate-100 dark:bg-slate-800 text-slate-300 dark:text-slate-600 border border-slate-200 dark:border-slate-700 cursor-not-allowed'
                           : 'bg-[#ff0068] hover:bg-[#d4005a] text-white shadow-lg shadow-[#ff0068]/20 active:scale-95'
