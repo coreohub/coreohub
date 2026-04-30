@@ -1730,23 +1730,37 @@ const JudgeTerminal = () => {
             )}
           </button>
 
-          {/* Submit button — only shows when not yet submitted */}
-          {!isSubmitted ? (
-            <button
-              onClick={handleFinish}
-              disabled={isSubmitting || !isAllFilled || !currentPerformance || allDone}
-              className={`px-4 py-2.5 md:px-5 md:py-3 rounded-xl font-black text-[10px] md:text-xs uppercase tracking-widest transition-all flex items-center gap-2 shrink-0 touch-manipulation
-                ${isAllFilled && currentPerformance && !allDone
-                  ? 'bg-[#ff0068] hover:bg-[#d4005a] text-white shadow-xl shadow-[#ff0068]/20 active:scale-95'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
-                }`}
-            >
-              {isSubmitting
-                ? <Loader2 size={16} className="animate-spin" />
-                : <><Check size={16} /> {isAvaliada ? t('submit.feedback') : t('submit.score')}</>
-              }
-            </button>
-          ) : (
+          {/* Submit button — Progressive Enabling pattern (research-backed):
+              fica visível disabled com label dinâmico mostrando o que falta.
+              Esconder reduz descoberta — usuário não sabe que o botão existe. */}
+          {!isSubmitted ? (() => {
+            const missingCount = isAvaliada
+              ? 0
+              : activeCriteria.filter(c => !scores[c.name] || scores[c.name] === '').length;
+            const enabled = isAllFilled && currentPerformance && !allDone && !isSubmitting;
+            const label = isSubmitting
+              ? null
+              : missingCount > 0
+                ? `Faltam ${missingCount} ${missingCount === 1 ? 'critério' : 'critérios'}`
+                : (isAvaliada ? t('submit.feedback') : t('submit.score'));
+            return (
+              <button
+                onClick={handleFinish}
+                disabled={!enabled}
+                className={`px-4 py-2.5 md:px-5 md:py-3 rounded-xl font-black text-[10px] md:text-xs uppercase tracking-widest transition-all flex items-center gap-2 shrink-0 touch-manipulation
+                  ${enabled
+                    ? 'bg-[#ff0068] hover:bg-[#d4005a] text-white shadow-xl shadow-[#ff0068]/20 active:scale-95'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                  }`}
+                title={!enabled && missingCount > 0 ? `Preencha os ${missingCount} critérios restantes` : undefined}
+              >
+                {isSubmitting
+                  ? <Loader2 size={16} className="animate-spin" />
+                  : <><Check size={16} /> {label}</>
+                }
+              </button>
+            );
+          })() : (
             <div className="px-3 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest shrink-0">
               <Check size={14} /> {t('submit.saved')}
             </div>
