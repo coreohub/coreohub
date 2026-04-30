@@ -123,7 +123,15 @@ const JudgeTerminalRoute: React.FC<{ privateRouteProps: any }> = ({ privateRoute
   } catch {}
 
   if (hasJudgeSession) {
-    return <Suspense fallback={<PageLoader />}><JudgeTerminal /></Suspense>;
+    // Wrapper h-screen pra o terminal preencher o viewport (sem PrivateLayout
+    // que normalmente provê esse contexto pro fluxo do produtor).
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <div className="h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
+          <JudgeTerminal />
+        </div>
+      </Suspense>
+    );
   }
   return <PrivateRoute {...privateRouteProps}><JudgeTerminal /></PrivateRoute>;
 };

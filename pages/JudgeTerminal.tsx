@@ -1131,11 +1131,11 @@ const JudgeTerminal = () => {
         </div>
       )}
 
-      {/* ── Header ── */}
-      <header className="shrink-0 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-5 py-3 flex items-center justify-between gap-4">
+      {/* ── Header — compacto pra caber em landscape sem scroll ── */}
+      <header className="shrink-0 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-4 py-2 flex items-center justify-between gap-3">
 
         {/* Live + coreography info */}
-        <div className="flex items-center gap-4 min-w-0">
+        <div className="flex items-center gap-3 min-w-0">
           <div className="flex items-center gap-1.5 shrink-0">
             <div className={`w-2 h-2 rounded-full ${currentPerformance ? 'bg-rose-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`} />
             <span className="text-[8px] font-black uppercase tracking-[0.3em] text-rose-500">{t('header.live')}</span>
@@ -1681,14 +1681,14 @@ const JudgeTerminal = () => {
       )}
 
       {/* ── Bottom bar ── */}
-      <div className="shrink-0 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 px-4 py-3 md:px-5 md:py-4">
-        <div className="flex items-center gap-3">
+      <div className="shrink-0 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 px-3 py-2 md:px-4 md:py-2.5">
+        <div className="flex items-center gap-2">
 
           {/* Mic */}
           <button
             onClick={isRecording ? stopRecording : startRecording}
             disabled={isSubmitted}
-            className={`flex items-center gap-3 flex-1 p-3 rounded-2xl border transition-all
+            className={`flex items-center gap-2 flex-1 p-2 rounded-xl border transition-all
               ${isSubmitted
                 ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-50 cursor-not-allowed'
                 : isRecording
@@ -1696,9 +1696,9 @@ const JudgeTerminal = () => {
                   : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'
               }`}
           >
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0
               ${isRecording ? 'bg-rose-500 animate-pulse text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300'}`}>
-              {isRecording ? <StopCircle size={16} /> : <Mic size={16} />}
+              {isRecording ? <StopCircle size={14} /> : <Mic size={14} />}
             </div>
             <div className="text-left min-w-0">
               <p className="text-[8px] font-black uppercase tracking-widest">
@@ -1728,19 +1728,19 @@ const JudgeTerminal = () => {
             <button
               onClick={handleFinish}
               disabled={isSubmitting || !isAllFilled || !currentPerformance || allDone}
-              className={`px-5 py-4 md:px-7 md:py-5 rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-widest transition-all flex items-center gap-2 shrink-0 touch-manipulation
+              className={`px-4 py-2.5 md:px-5 md:py-3 rounded-xl font-black text-[10px] md:text-xs uppercase tracking-widest transition-all flex items-center gap-2 shrink-0 touch-manipulation
                 ${isAllFilled && currentPerformance && !allDone
                   ? 'bg-[#ff0068] hover:bg-[#d4005a] text-white shadow-xl shadow-[#ff0068]/20 active:scale-95'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
                 }`}
             >
               {isSubmitting
-                ? <Loader2 size={18} className="animate-spin" />
-                : <><Check size={18} /> {isAvaliada ? t('submit.feedback') : t('submit.score')}</>
+                ? <Loader2 size={16} className="animate-spin" />
+                : <><Check size={16} /> {isAvaliada ? t('submit.feedback') : t('submit.score')}</>
               }
             </button>
           ) : (
-            <div className="px-4 py-4 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest shrink-0">
+            <div className="px-3 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest shrink-0">
               <Check size={14} /> {t('submit.saved')}
             </div>
           )}
