@@ -42,7 +42,7 @@ const wasDismissedRecently = () => {
 
 export const InstallPWAButton: React.FC<{ className?: string }> = ({ className = '' }) => {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [showIosHint, setShowIosHint] = useState(false);
+  const [showHint, setShowHint] = useState(false);
   const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
@@ -64,8 +64,10 @@ export const InstallPWAButton: React.FC<{ className?: string }> = ({ className =
       const choice = await installPrompt.userChoice;
       if (choice.outcome === 'accepted') setHidden(true);
       setInstallPrompt(null);
-    } else if (isIOS()) {
-      setShowIosHint(true);
+    } else {
+      // Sem prompt nativo (iOS Safari, Chrome sem heurística disparada, etc.)
+      // Mostra instruções manuais.
+      setShowHint(true);
     }
   };
 
@@ -76,21 +78,36 @@ export const InstallPWAButton: React.FC<{ className?: string }> = ({ className =
 
   if (hidden) return null;
 
-  // Em desktop sem prompt e fora do iOS, não mostra (browser não suporta install)
-  if (!installPrompt && !isIOS()) return null;
-
-  if (showIosHint) {
+  if (showHint) {
+    const ios = isIOS();
     return (
       <div className={`fixed bottom-4 left-4 right-4 z-50 max-w-md mx-auto bg-slate-900 border border-[#ff0068]/30 rounded-2xl p-4 shadow-2xl ${className}`}>
-        <button onClick={handleDismiss} className="absolute top-2 right-2 p-1 text-slate-500 hover:text-white">
+        <button onClick={() => setShowHint(false)} className="absolute top-2 right-2 p-1 text-slate-500 hover:text-white">
           <X size={14} />
         </button>
-        <p className="text-[10px] font-black uppercase tracking-widest text-[#ff0068] mb-2">Instalar no iPhone/iPad</p>
-        <p className="text-xs text-slate-300 leading-relaxed">
-          1. Toque no botão <strong>Compartilhar</strong> (□↑) no Safari<br />
-          2. Role e selecione <strong>"Adicionar à Tela de Início"</strong><br />
-          3. Toque em <strong>Adicionar</strong>
+        <p className="text-[10px] font-black uppercase tracking-widest text-[#ff0068] mb-2">
+          Instalar como app
         </p>
+        {ios ? (
+          <p className="text-xs text-slate-300 leading-relaxed">
+            <strong>iPhone/iPad (Safari):</strong><br />
+            1. Toque no botão <strong>Compartilhar</strong> (□↑)<br />
+            2. Role e selecione <strong>"Adicionar à Tela de Início"</strong><br />
+            3. Toque em <strong>Adicionar</strong>
+          </p>
+        ) : (
+          <p className="text-xs text-slate-300 leading-relaxed">
+            <strong>Android/Desktop (Chrome/Edge):</strong><br />
+            Toque no menu <strong>⋮</strong> do navegador → <strong>"Instalar app"</strong> (ou <strong>"Adicionar à tela inicial"</strong>).<br /><br />
+            Se não aparecer, recarregue a página algumas vezes — o navegador libera a opção após confirmar que é um PWA válido.
+          </p>
+        )}
+        <button
+          onClick={handleDismiss}
+          className="mt-3 text-[10px] text-slate-500 hover:text-slate-300 underline"
+        >
+          Não mostrar por 7 dias
+        </button>
       </div>
     );
   }
