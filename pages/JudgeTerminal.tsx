@@ -1162,8 +1162,38 @@ const JudgeTerminal = () => {
           </div>
         </div>
 
-        {/* Actions: PIN lock + judge selector */}
+        {/* Actions: mic + PIN lock + judge selector */}
         <div className="flex items-center gap-1.5 shrink-0">
+
+          {/* Mic compacto inline — substitui o card grande do rodapé */}
+          <button
+            onClick={isRecording ? stopRecording : startRecording}
+            disabled={isSubmitted}
+            className={`inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border transition-all
+              ${isSubmitted
+                ? 'bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-50 cursor-not-allowed'
+                : isRecording
+                  ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-300 dark:border-rose-500/30 text-rose-600 dark:text-rose-400'
+                  : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10'
+              }`}
+            title={isRecording ? t('mic.recording') : t('mic.idle')}
+          >
+            {isRecording ? <StopCircle size={12} /> : <Mic size={12} />}
+            {isRecording && (
+              <div className="flex gap-0.5 items-center h-3">
+                {audioLevels.map((level, i) => (
+                  <div
+                    key={i}
+                    className="w-0.5 bg-rose-500 rounded-full transition-all duration-100"
+                    style={{ height: `${Math.max(30, level * 100)}%` }}
+                  />
+                ))}
+              </div>
+            )}
+            <span className="text-[8px] font-black uppercase tracking-widest hidden sm:inline">
+              {isRecording ? 'REC' : 'MIC'}
+            </span>
+          </button>
 
           {/* PIN setup button — escondido em mobile (acessível via outros caminhos) */}
           <button
@@ -1689,48 +1719,9 @@ const JudgeTerminal = () => {
         </div>
       )}
 
-      {/* ── Bottom bar ── */}
+      {/* ── Bottom bar — só submit (mic foi pro header) ── */}
       <div className="shrink-0 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 px-3 py-2 md:px-4 md:py-2.5">
-        <div className="flex items-center gap-2">
-
-          {/* Mic */}
-          <button
-            onClick={isRecording ? stopRecording : startRecording}
-            disabled={isSubmitted}
-            className={`flex items-center gap-2 flex-1 p-2 rounded-xl border transition-all
-              ${isSubmitted
-                ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-50 cursor-not-allowed'
-                : isRecording
-                  ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400'
-                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'
-              }`}
-          >
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0
-              ${isRecording ? 'bg-rose-500 animate-pulse text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300'}`}>
-              {isRecording ? <StopCircle size={14} /> : <Mic size={14} />}
-            </div>
-            <div className="text-left min-w-0">
-              <p className="text-[8px] font-black uppercase tracking-widest">
-                {isRecording ? t('mic.recording') : t('mic.idle')}
-              </p>
-              <p className="text-[9px] font-bold truncate text-slate-700 dark:text-slate-300">
-                {isRecording ? t('mic.recordingHint') : t('mic.idleHint')}
-              </p>
-            </div>
-            {/* Onda sonora real via AnalyserNode — visível e proeminente
-                pra dar feedback claro de que tá gravando e capturando voz */}
-            {isRecording && (
-              <div className="flex gap-1 items-center shrink-0 h-10 px-2">
-                {audioLevels.map((level, i) => (
-                  <div
-                    key={i}
-                    className="w-1.5 bg-rose-500 rounded-full transition-all duration-100"
-                    style={{ height: `${Math.max(25, level * 100)}%` }}
-                  />
-                ))}
-              </div>
-            )}
-          </button>
+        <div className="flex items-center gap-2 justify-end">
 
           {/* Submit button — Progressive Enabling pattern (research-backed):
               fica visível disabled com label dinâmico mostrando o que falta.
@@ -1749,7 +1740,7 @@ const JudgeTerminal = () => {
               <button
                 onClick={handleFinish}
                 disabled={!enabled}
-                className={`px-4 py-2.5 md:px-5 md:py-3 rounded-xl font-black text-[10px] md:text-xs uppercase tracking-widest transition-all flex items-center gap-2 shrink-0 touch-manipulation
+                className={`flex-1 sm:flex-none sm:px-8 md:px-12 py-2.5 md:py-3 rounded-xl font-black text-[10px] md:text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 touch-manipulation
                   ${enabled
                     ? 'bg-[#ff0068] hover:bg-[#d4005a] text-white shadow-xl shadow-[#ff0068]/20 active:scale-95'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
