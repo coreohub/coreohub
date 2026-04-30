@@ -78,6 +78,11 @@ export const fetchPreviousEvaluations = async (registration_ids?: string[]) => {
   }>;
 };
 
+export interface JudgeHighlight {
+  tipo_destaque: string;
+  award_name?: string | null;
+}
+
 export const submitEvaluation = async (payload: {
   registration_id: string;
   scores: Record<string, number>;
@@ -87,6 +92,7 @@ export const submitEvaluation = async (payload: {
   submitted_at: string;
   created_at: string;
   audit_log: any;
+  highlights?: JudgeHighlight[];
 }) => {
   const { token, judge_id } = requireJudgeSession();
   const { data, status } = await callJudgeFn({
@@ -98,4 +104,35 @@ export const submitEvaluation = async (payload: {
   if (status !== 200 || !data?.ok) {
     throw new Error(data?.detail ?? data?.reason ?? 'failed_to_submit');
   }
+};
+
+/**
+ * Faz upload do áudio de feedback via Edge Function (multipart/form-data).
+ * Retorna a URL pública pra ser usada em audio_url da evaluation.
+ *
+ * Phase 2B: jurado sem produtor logado não pode usar Storage direto, então
+ * a Edge Function valida sessão e faz upload com service-role.
+ */
+export const uploadAudio = async (registrationId: string, blob: Blob): Promise<string> => {
+  const { token, judge_id } = requireJudgeSession();
+  const form = new FormData();
+  form.append('token', token);
+  form.append('judge_id', judge_id);
+  form.append('registration_id', registrationId);
+  form.append('audio', blob, 'feedback.webm');
+
+  const res = await fetch(JUDGE_FN_URL, {
+    method: 'POST',
+    headers: {
+      // NÃO setar Content-Type — browser cuida do boundary do multipart
+      'apikey': supabaseAnonKey,
+      'Authorization': `Bearer ${supabaseAnonKey}`,
+    },
+    body: form,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status !== 200 || !data?.ok || !data?.audio_url) {
+    throw new Error(data?.detail ?? data?.reason ?? 'failed_to_upload_audio');
+  }
+  return data.audio_url as string;
 };

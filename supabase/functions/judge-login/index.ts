@@ -43,6 +43,55 @@ Deno.serve(async (req) => {
 
   const supa = createClient(supabaseUrl, serviceKey)
 
+  // ─── Branch: multipart (upload-audio) ────────────────────────────────────
+  // Phase 2B: jurado sem produtor logado precisa subir áudio via Edge Function
+  // (não tem permissão pra Storage direto). Frontend manda multipart/form-data
+  // com campos: token, judge_id, registration_id, audio.
+  const contentType = req.headers.get('content-type') ?? ''
+  if (contentType.startsWith('multipart/form-data')) {
+    const form = await req.formData()
+    const token = String(form.get('token') ?? '')
+    const judge_id = String(form.get('judge_id') ?? '')
+    const registration_id = String(form.get('registration_id') ?? '')
+    const audio = form.get('audio') as File | null
+
+    if (!token || !judge_id || !registration_id || !audio) {
+      return json({ ok: false, reason: 'missing_fields' }, 400)
+    }
+
+    // Resolve produtor + valida jurado
+    const { data: producer } = await supa
+      .from('profiles').select('id').eq('judge_access_token', token).maybeSingle()
+    if (!producer) return json({ ok: false, reason: 'invalid_token' }, 404)
+
+    const { data: judge } = await supa
+      .from('judges').select('id').eq('id', judge_id).eq('created_by', producer.id).maybeSingle()
+    if (!judge) return json({ ok: false, reason: 'judge_not_found' }, 404)
+
+    // Valida registration pertence a um evento do produtor
+    const { data: reg } = await supa
+      .from('registrations')
+      .select('id, events!inner(created_by)')
+      .eq('id', registration_id)
+      .maybeSingle()
+    if (!reg || (reg as any).events?.created_by !== producer.id) {
+      return json({ ok: false, reason: 'registration_not_found_or_not_yours' }, 403)
+    }
+
+    const ext = (audio.type.includes('webm') ? 'webm' : (audio.name.split('.').pop() ?? 'bin'))
+    const fileName = `feedback_${registration_id}_${judge_id}_${Date.now()}.${ext}`
+    const buf = new Uint8Array(await audio.arrayBuffer())
+
+    const { error: upErr } = await supa.storage
+      .from('audio-feedbacks')
+      .upload(fileName, buf, { contentType: audio.type || 'audio/webm', upsert: false })
+    if (upErr) return json({ error: 'storage_error', detail: upErr.message }, 500)
+
+    const { data: pub } = supa.storage.from('audio-feedbacks').getPublicUrl(fileName)
+    return json({ ok: true, audio_url: pub.publicUrl })
+  }
+
+  // ─── Branch: JSON ────────────────────────────────────────────────────────
   let body: any
   try { body = await req.json() } catch { return json({ error: 'invalid_json' }, 400) }
 
@@ -247,6 +296,24 @@ Deno.serve(async (req) => {
 
     const { error } = await supa.from('evaluations').insert([evalRow])
     if (error) return json({ error: 'db_error', detail: error.message }, 500)
+
+    // Phase 2B: também aceita destaques (prêmios especiais nomeados pelo jurado)
+    const highlights = Array.isArray(payload.highlights) ? payload.highlights : []
+    if (highlights.length > 0) {
+      const rows = highlights
+        .filter((h: any) => h && h.tipo_destaque)
+        .map((h: any) => ({
+          registration_id: evalRow.registration_id,
+          judge_id:        judge.id,
+          tipo_destaque:   String(h.tipo_destaque).toUpperCase(),
+          award_name:      h.award_name ?? null,
+        }))
+      if (rows.length > 0) {
+        const { error: hErr } = await supa.from('destaques_votacao').insert(rows)
+        // Falha em destaque não invalida a avaliação — só loga
+        if (hErr) console.warn('destaques_votacao insert error:', hErr.message)
+      }
+    }
 
     return json({ ok: true })
   }
