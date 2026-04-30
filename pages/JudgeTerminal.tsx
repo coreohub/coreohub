@@ -1651,27 +1651,28 @@ const JudgeTerminal = () => {
                     </div>
                   </div>
 
-                  {/* Score display — só visível em tablet+. Em mobile, o valor
-                      já é mostrado no row do critério ativo (economia de ~80px) */}
-                  <div className={`hidden md:flex shrink-0 h-12 md:h-14 rounded-xl border-2 items-center justify-center shadow-inner transition-all duration-100 ${
+                  {/* Score display — só visível em desktop (lg+). Em mobile e
+                      tablet, o valor já é mostrado no row do critério ativo
+                      (economia critica de ~80px). */}
+                  <div className={`hidden lg:flex shrink-0 h-14 rounded-xl border-2 items-center justify-center shadow-inner transition-all duration-100 ${
                     flashInvalid
                       ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-500'
                       : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-600'
                   }`}>
-                    <span className={`text-3xl md:text-4xl font-black italic tabular-nums tracking-tight transition-colors ${
+                    <span className={`text-4xl font-black italic tabular-nums tracking-tight transition-colors ${
                       flashInvalid ? 'text-rose-500' : scoreGrade(scores[activeField] || '', scoreScale)
                     }`}>
                       {scores[activeField] || '0'}
                     </span>
                   </div>
 
-                  {/* Number grid — 4 linhas dividindo o espaco igualmente.
-                      grid-rows-4 + auto-rows-fr sao essenciais: sem isso as
-                      linhas pegam tamanho de conteudo (auto) e a 4a linha
-                      estoura pra fora do flex-1, sendo cortada por overflow-hidden
-                      do parent. (Research: 42-72px touch target ideal — capado
-                      so em lg+ pra nao virar gigante em monitor.) */}
-                  <div className="flex-1 grid grid-cols-3 grid-rows-4 [&>*]:min-h-0 gap-1 md:gap-2 lg:max-h-[400px] mx-auto w-full max-w-2xl">
+                  {/* Number grid — 4 linhas iguais via inline style (mais
+                      garantido que classes Tailwind em alguns ambientes).
+                      min-h-0 nos children permite squish se necessario. */}
+                  <div
+                    className="flex-1 min-h-0 grid grid-cols-3 [&>*]:min-h-0 gap-1 md:gap-2 lg:max-h-[400px] mx-auto w-full max-w-2xl"
+                    style={{ gridTemplateRows: 'repeat(4, minmax(0, 1fr))' }}
+                  >
                     {[1,2,3,4,5,6,7,8,9].map(n => (
                       <button
                         key={n}
