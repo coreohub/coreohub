@@ -1705,14 +1705,15 @@ const JudgeTerminal = () => {
                 {isRecording ? t('mic.recordingHint') : t('mic.idleHint')}
               </p>
             </div>
-            {/* Onda sonora real via AnalyserNode */}
+            {/* Onda sonora real via AnalyserNode — visível e proeminente
+                pra dar feedback claro de que tá gravando e capturando voz */}
             {isRecording && (
-              <div className="flex gap-[3px] items-end shrink-0 h-5">
+              <div className="flex gap-1 items-center shrink-0 h-10 px-2">
                 {audioLevels.map((level, i) => (
                   <div
                     key={i}
-                    className="w-1 bg-rose-500 rounded-full transition-all duration-75"
-                    style={{ height: `${Math.max(15, level * 100)}%` }}
+                    className="w-1.5 bg-rose-500 rounded-full transition-all duration-100"
+                    style={{ height: `${Math.max(25, level * 100)}%` }}
                   />
                 ))}
               </div>

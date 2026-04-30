@@ -114,6 +114,17 @@ const PublicEventPage = () => {
     return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
   };
 
+  // Formato curto com dia da semana: "Sáb, 16/06/2026"
+  const formatDeadline = (dateStr?: string) => {
+    if (!dateStr) return null;
+    const iso = dateStr.includes('T') ? dateStr : dateStr + 'T12:00:00';
+    const d = new Date(iso);
+    const wd = new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(d).replace('.', '');
+    const cap = wd.charAt(0).toUpperCase() + wd.slice(1);
+    const date = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
+    return `${cap}, ${date}`;
+  };
+
   const eventId = event.id;
   const localizacao = [event.city, event.state].filter(Boolean).join(' / ') || event.address;
 
@@ -200,11 +211,16 @@ const PublicEventPage = () => {
       <div className="max-w-5xl mx-auto px-8 py-16 space-y-12">
         {/* Stats Row */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[
-            { label: 'Vagas', value: event.slots_limit ?? '∞', icon: Star },
-            { label: 'Prazo', value: formatDate(config?.prazo_inscricao), icon: Clock },
+          {([
+            // Esconde vagas se produtor não preencheu (não mostra "0" ou "∞")
+            event.slots_limit
+              ? { label: 'Vagas', value: event.slots_limit, icon: Star }
+              : null,
+            formatDeadline(config?.prazo_inscricao)
+              ? { label: 'Inscrições até', value: formatDeadline(config?.prazo_inscricao), icon: Clock }
+              : null,
             { label: 'Premiação', value: premiacaoLabel, icon: Trophy },
-          ].map(({ label, value, icon: Icon }) => (
+          ].filter(Boolean) as { label: string; value: any; icon: any }[]).map(({ label, value, icon: Icon }) => (
             <div key={label} className="bg-white/5 border border-white/10 rounded-3xl p-6">
               <Icon size={20} className="text-[#ff0068] mb-3" />
               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{label}</p>
