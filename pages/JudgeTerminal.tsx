@@ -1425,8 +1425,9 @@ const JudgeTerminal = () => {
                 </div>
               </div>
 
-              {/* Criteria list — slim rows */}
-              <div className="flex-1 px-2 py-2 space-y-1">
+              {/* Criteria list — 2-col em mobile (cabe mais critério em
+                  landscape compacto), 1-col em tablet+ (mais legível). */}
+              <div className="flex-1 px-2 py-2 grid grid-cols-2 md:grid-cols-1 gap-1 content-start">
                 {(() => {
                   const totalPeso = activeCriteria.reduce((s, c) => s + c.peso, 0);
                   return activeCriteria.map((criterion, i) => {
