@@ -4,6 +4,31 @@ export const formatWhatsApp = (value: string) => {
   return nums.replace(/(\d{2})(\d{1})(\d{4})(\d{4})/, '($1) $2 $3-$4');
 };
 
+/**
+ * Formata WhatsApp do evento aceitando DDI (até 13 dígitos: 55 + DDD + 9 + 8).
+ * Resultado:
+ *   "+55 17 99877-6655" quando tem DDI
+ *   "(17) 99877-6655"   quando só DDD + celular
+ * Limita o input a 13 dígitos numéricos pra impedir excesso.
+ */
+export const formatEventWhatsApp = (value: string) => {
+  const d = value.replace(/\D/g, '').slice(0, 13);
+  if (d.length === 0) return '';
+  // Com DDI (12-13 dígitos): "+55 17 99877-6655"
+  if (d.length >= 12) {
+    const tail = d.slice(9);
+    return `+${d.slice(0, 2)} ${d.slice(2, 4)} ${d.slice(4, 9)}${tail ? '-' + tail : ''}`;
+  }
+  // 11 dígitos (DDD + celular): "(17) 99877-6655"
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  // 10 dígitos (fixo): "(17) 9877-6655"
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  // Digitação parcial — mantém legível
+  if (d.length > 7) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length > 2) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  return d;
+};
+
 export const formatCPF = (value: string) => {
   const nums = value.replace(/\D/g, '');
   if (nums.length <= 11) {

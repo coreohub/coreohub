@@ -19,6 +19,7 @@ import {
   Image as ImageIcon, Upload,
   Instagram, MessageCircle, Globe, Mail, FileText, Youtube,
 } from 'lucide-react';
+import { formatEventWhatsApp } from '../utils/formatters';
 
 /* ── Evaluation Rules types ── */
 interface EvalCriterion { name: string; peso: number; displayName?: string; }
@@ -1407,7 +1408,15 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                 </div>
                 <div>
                   <label className={label}><MessageCircle size={11} className="inline mr-1" /> WhatsApp</label>
-                  <input type="text" value={identity.whatsapp_event} onChange={e => setIdentity({ ...identity, whatsapp_event: e.target.value })} placeholder="5581999998888 (DDI+DDD+nº)" className={input} />
+                  <input
+                    type="text"
+                    value={formatEventWhatsApp(identity.whatsapp_event)}
+                    onChange={e => setIdentity({ ...identity, whatsapp_event: e.target.value.replace(/\D/g, '').slice(0, 13) })}
+                    placeholder="+55 17 99877-6655"
+                    className={input}
+                    inputMode="tel"
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">DDI + DDD + número (até 13 dígitos)</p>
                 </div>
                 <div>
                   <label className={label}><Globe size={11} className="inline mr-1" /> Site oficial</label>

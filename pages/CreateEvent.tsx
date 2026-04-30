@@ -8,6 +8,7 @@ import {
 const DRAFT_KEY = 'coreohub_create_event_draft';
 import { motion, AnimatePresence } from 'motion/react';
 import { createEvent, supabase } from '../services/supabase';
+import { formatEventWhatsApp } from '../utils/formatters';
 import { extractRegulationData, extractRegulationFromPdf, RegulationExtract } from '../services/geminiService';
 import { EventFormat } from '../types';
 
@@ -430,8 +431,15 @@ const CreateEvent = () => {
                       <input type="text" value={formData.youtube_event} onChange={e => setFormData({ ...formData, youtube_event: e.target.value })} className={inputCls.replace('p-5', 'p-4')} placeholder="@canalfestival" />
                     </div>
                     <div className="space-y-2">
-                      <label className={labelCls}>WhatsApp (DDI+DDD+nº)</label>
-                      <input type="text" value={formData.whatsapp_event} onChange={e => setFormData({ ...formData, whatsapp_event: e.target.value })} className={inputCls.replace('p-5', 'p-4')} placeholder="5581999998888" />
+                      <label className={labelCls}>WhatsApp</label>
+                      <input
+                        type="text"
+                        value={formatEventWhatsApp(formData.whatsapp_event)}
+                        onChange={e => setFormData({ ...formData, whatsapp_event: e.target.value.replace(/\D/g, '').slice(0, 13) })}
+                        className={inputCls.replace('p-5', 'p-4')}
+                        placeholder="+55 17 99877-6655"
+                        inputMode="tel"
+                      />
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <label className={labelCls}>Site oficial</label>
