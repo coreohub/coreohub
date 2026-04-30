@@ -415,6 +415,10 @@ const JudgeTerminal = () => {
 
   /* ── realtime / polling ── */
   useEffect(() => {
+    // Em demo mode, NÃO sincroniza com o banco — o schedule fictício do demo
+    // tem que persistir até o jurado sair do modo manualmente.
+    if (isDemoMode) return;
+
     // Phase 2B: jurado-sessão usa polling a cada 30s (não tem realtime sem
     // auth de produtor). Produtor/admin logado usa realtime do Supabase.
     if (judgeSession) {
@@ -437,7 +441,7 @@ const JudgeTerminal = () => {
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, []);
+  }, [isDemoMode, judgeSession]);
 
   /* ── initial fetch ── */
   useEffect(() => {
@@ -1230,45 +1234,19 @@ const JudgeTerminal = () => {
         </div>
       </header>
 
-      {/* Demo mode banner */}
+      {/* Demo mode banner — simplificado: badge + sair (sem toggles de dispositivo) */}
       {isDemoMode && (
-        <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-2 bg-indigo-500 text-white text-[9px] font-black uppercase tracking-widest">
+        <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-1.5 bg-indigo-500 text-white text-[9px] font-black uppercase tracking-widest">
           <div className="flex items-center gap-2 min-w-0">
             <Star size={11} className="shrink-0" />
-            <span className="hidden sm:inline truncate">{t('demo.bannerLong')}</span>
-            <span className="sm:hidden">{t('demo.bannerShort')}</span>
+            <span className="truncate">{t('demo.bannerShort')}</span>
           </div>
-
-          {/* Device preview toggles */}
-          <div className="flex items-center gap-1 shrink-0">
-            <span className="text-white/60 text-[7px] hidden md:inline mr-1">{t('demo.previewLabel')}</span>
-            {([
-              { id: 'mobile',  Icon: Smartphone, label: t('demo.deviceMobile') },
-              { id: 'tablet',  Icon: Tablet,     label: t('demo.deviceTablet') },
-              { id: 'desktop', Icon: Monitor,    label: t('demo.deviceDesktop') },
-            ] as const).map(({ id, Icon, label }) => (
-              <button
-                key={id}
-                title={label}
-                onClick={() => setPreviewDevice(prev => prev === id ? null : id)}
-                className={`p-1.5 rounded-lg transition-all ${
-                  previewDevice === id
-                    ? 'bg-white text-indigo-600 shadow'
-                    : 'bg-white/20 hover:bg-white/30 text-white'
-                }`}
-              >
-                <Icon size={12} />
-              </button>
-            ))}
-
-            <div className="w-px h-4 bg-white/30 mx-1" />
-            <button
-              onClick={() => { setSchedule([]); setCurrentIndex(0); setIsDemoMode(false); setPreviewDevice(null); }}
-              className="flex items-center gap-1 px-2 py-0.5 bg-white/20 hover:bg-white/30 rounded-lg transition-all text-[8px]"
-            >
-              {t('demo.exit')}
-            </button>
-          </div>
+          <button
+            onClick={() => { setSchedule([]); setCurrentIndex(0); setIsDemoMode(false); setPreviewDevice(null); }}
+            className="flex items-center gap-1 px-2 py-0.5 bg-white/20 hover:bg-white/30 rounded-lg transition-all text-[8px] shrink-0"
+          >
+            {t('demo.exit')}
+          </button>
         </div>
       )}
 
