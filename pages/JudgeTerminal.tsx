@@ -1665,10 +1665,13 @@ const JudgeTerminal = () => {
                     </span>
                   </div>
 
-                  {/* Number grid — denso em mobile, capado SO em desktop pra
-                      botoes nao virarem gigantes (research: 42-72px otimo).
-                      max-h aplicado so em lg+ pra nao cortar 4a linha em mobile. */}
-                  <div className="flex-1 grid grid-cols-3 gap-1 md:gap-2 lg:max-h-[400px] mx-auto w-full max-w-2xl">
+                  {/* Number grid — 4 linhas dividindo o espaco igualmente.
+                      grid-rows-4 + auto-rows-fr sao essenciais: sem isso as
+                      linhas pegam tamanho de conteudo (auto) e a 4a linha
+                      estoura pra fora do flex-1, sendo cortada por overflow-hidden
+                      do parent. (Research: 42-72px touch target ideal — capado
+                      so em lg+ pra nao virar gigante em monitor.) */}
+                  <div className="flex-1 grid grid-cols-3 grid-rows-4 [&>*]:min-h-0 gap-1 md:gap-2 lg:max-h-[400px] mx-auto w-full max-w-2xl">
                     {[1,2,3,4,5,6,7,8,9].map(n => (
                       <button
                         key={n}
