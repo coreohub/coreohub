@@ -86,11 +86,13 @@ const DEFAULT_CRITERIA: CriterionWithWeight[] = [
 /* ── Score scale helpers ── */
 const SCALE_MAX: Record<ScoreScale, number> = { BASE_10: 10, BASE_100: 100 };
 
-/** Returns true if `raw` string is a valid partial/complete score for the given scale */
+/** Returns true if `raw` string is a valid partial/complete score for the given scale.
+ *  BASE_10  → 1 decimal max (ex: 9.8). Antes aceitava 9.88 — bug.
+ *  BASE_100 → inteiro 0-100 sem decimais. */
 const isValidScoreStr = (raw: string, scale: ScoreScale): boolean => {
   if (scale === 'BASE_100') return /^\d{0,3}$/.test(raw) && (raw === '' || parseInt(raw, 10) <= 100);
-  // BASE_10: allow up to "10", "10.0", "10.00", or "X.XX"
-  return /^\d{0,2}(\.\d{0,2})?$/.test(raw) && (raw === '' || parseFloat(raw) <= 10);
+  // BASE_10: aceita "9", "9.", "9.8", "10", "10.0" — sempre 1 decimal max
+  return /^\d{0,2}(\.\d{0,1})?$/.test(raw) && (raw === '' || parseFloat(raw) <= 10);
 };
 
 /* ── Demo data for testing without approved registrations ── */
@@ -1182,19 +1184,35 @@ const JudgeTerminal = () => {
           >
             {isRecording ? <StopCircle size={12} /> : <Mic size={12} />}
             {isRecording && (
-              <div className="flex gap-0.5 items-center h-3.5">
-                {audioLevels.map((level, i) => (
-                  <div
-                    key={i}
-                    className="w-1 bg-rose-500 rounded-sm"
-                    style={{
-                      height: `${Math.max(20, level * 100)}%`,
-                      // Sem transition: snap imediato pra parecer reativo ao audio real
-                      transition: 'height 30ms linear',
-                    }}
-                  />
-                ))}
-              </div>
+              /* Waveform SVG real — linha ondulada animada baseada em audioLevels.
+                 Mais "som" visual que barras verticais (research-backed: padrão
+                 Voice Memos / Otter / WhatsApp). */
+              <svg
+                viewBox="0 0 60 14"
+                preserveAspectRatio="none"
+                className="h-4 w-12 shrink-0"
+              >
+                <path
+                  d={(() => {
+                    const w = 60, h = 14, mid = h / 2;
+                    const n = audioLevels.length;
+                    // Espelha levels pra criar uma onda simétrica acima/abaixo
+                    const points = audioLevels.map((l, i) => {
+                      const x = (i / (n - 1)) * w;
+                      const dir = i % 2 === 0 ? 1 : -1;
+                      const amp = Math.max(0.15, l) * (mid - 1);
+                      return `${x},${mid - dir * amp}`;
+                    });
+                    return `M 0,${mid} L ${points.join(' L ')} L ${w},${mid}`;
+                  })()}
+                  stroke="rgb(244 63 94)"
+                  strokeWidth="1.2"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ transition: 'd 30ms linear' }}
+                />
+              </svg>
             )}
             <span className="text-[8px] font-black uppercase tracking-widest hidden sm:inline">
               {isRecording ? 'REC' : 'MIC'}
