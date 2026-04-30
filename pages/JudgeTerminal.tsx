@@ -1579,8 +1579,11 @@ const JudgeTerminal = () => {
                 /* ── Numpad ── */
                 <div className="flex flex-col h-full gap-1.5 md:gap-2">
 
-                  {/* Numpad header — escondido em mobile pra economizar verticais */}
-                  <div className="hidden md:flex items-center justify-between shrink-0">
+                  {/* Numpad header — só "0-10" / "0-100".
+                      Critério ativo já fica destacado na lista da esquerda;
+                      repetir aqui era ruído visual (research-backed: redundância
+                      reduz scan-ability). */}
+                  <div className="hidden md:flex items-center justify-start shrink-0">
                     <div className="flex items-center gap-2">
                       <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">{t('numpad.label')}</span>
                       <span className={`text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${
@@ -1591,9 +1594,6 @@ const JudgeTerminal = () => {
                         {scoreScale === 'BASE_10' ? '0 – 10' : '0 – 100'}
                       </span>
                     </div>
-                    <span className="text-[8px] font-black text-[#ff0068] uppercase tracking-widest truncate max-w-[50%]">
-                      ▶ {activeField ? criterionLabel({ name: activeField, peso: 0 }) : ''}
-                    </span>
                   </div>
 
                   {/* Score display — só visível em tablet+. Em mobile, o valor
