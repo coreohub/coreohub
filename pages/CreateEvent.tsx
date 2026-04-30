@@ -450,7 +450,7 @@ const CreateEvent = () => {
                       <input type="email" value={formData.email_event} onChange={e => setFormData({ ...formData, email_event: e.target.value })} className={inputCls.replace('p-5', 'p-4')} placeholder="contato@meufestival.com.br" />
                     </div>
                     <div className="space-y-2 md:col-span-2">
-                      <label className={labelCls}>Regulamento (PDF)</label>
+                      <label className={labelCls}>Regulamento ou Edital (PDF)</label>
                       <input
                         type="file"
                         accept="application/pdf"
@@ -477,6 +477,7 @@ const CreateEvent = () => {
                         </p>
                       )}
                       <p className="text-[10px] text-slate-400">
+                        Aceita regulamento privado ou edital público.
                         Disponibilizado pra download na página pública do festival.
                       </p>
                     </div>

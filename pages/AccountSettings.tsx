@@ -1429,7 +1429,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
               </div>
 
               <div className="border-t border-slate-200 dark:border-white/10 pt-5">
-                <label className={label}><FileText size={11} className="inline mr-1" /> Regulamento (PDF)</label>
+                <label className={label}><FileText size={11} className="inline mr-1" /> Regulamento ou Edital (PDF)</label>
                 <div className="flex items-center gap-3">
                   <input
                     type="file"
@@ -1467,7 +1467,8 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                   </p>
                 )}
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Disponibilizado pra download na página pública. Lembra de "Salvar" no fim da página.
+                  Aceita regulamento privado ou edital público (prefeitura, JOMI, Bolsa Cultura).
+                  Disponibilizado pra download na vitrine. Lembra de "Salvar" no fim da página.
                 </p>
               </div>
             </div>

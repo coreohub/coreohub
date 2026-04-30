@@ -137,7 +137,9 @@ Deno.serve(async (req) => {
           parts: [
             {
               text: `Você é um especialista em regulamentos de festivais de dança brasileiros.
-Analise este regulamento em PDF e extraia TODOS os dados estruturados.
+O documento pode ser um REGULAMENTO PRIVADO (festival particular) ou um EDITAL público de chamamento (prefeitura, governo, fundação cultural — ex: JOMI, Bolsa Cultura, Mostras Municipais).
+Em ambos os casos, extraia APENAS os dados operacionais do festival: categorias, gêneros, formações, prazos, prêmios, critérios de avaliação, formato.
+IGNORE: preâmbulo legal, justificativa, base legal (lei nº, decreto), declarações exigidas, anexos administrativos, formulários em branco, contrato modelo, cronograma de execução fiscal.
 Para campos não encontrados, retorne null (nunca invente valores).
 Datas em formato ISO 8601 (YYYY-MM-DD). Tempos no formato MM:SS.`,
             },
@@ -150,12 +152,14 @@ Datas em formato ISO 8601 (YYYY-MM-DD). Tempos no formato MM:SS.`,
       response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: `Você é um especialista em regulamentos de festivais de dança brasileiros.
-Analise o regulamento abaixo e extraia TODOS os dados estruturados.
-Para campos não encontrados no regulamento, retorne null (nunca invente valores).
+O texto abaixo pode ser um REGULAMENTO PRIVADO (festival particular) ou um EDITAL público de chamamento (prefeitura, governo, fundação cultural — ex: JOMI, Bolsa Cultura, Mostras Municipais).
+Em ambos os casos, extraia APENAS os dados operacionais do festival: categorias, gêneros, formações, prazos, prêmios, critérios de avaliação, formato.
+IGNORE: preâmbulo legal, justificativa, base legal (lei nº, decreto), declarações exigidas, anexos administrativos, formulários em branco, contrato modelo, cronograma de execução fiscal.
+Para campos não encontrados, retorne null (nunca invente valores).
 Datas devem estar no formato ISO 8601 (YYYY-MM-DD) quando possível.
 Tempos de apresentação no formato MM:SS.
 
-REGULAMENTO:
+DOCUMENTO:
 ${text}`,
         config: schema,
       })

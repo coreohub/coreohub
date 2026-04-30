@@ -214,10 +214,10 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">
-            Importar <span className="text-[#ff0068]">Regulamento</span>
+            Importar <span className="text-[#ff0068]">Regulamento ou Edital</span>
           </h1>
           <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">
-            IA extrai e preenche as configurações do evento automaticamente
+            IA lê regulamento privado OU edital público (JOMI, Bolsa Cultura, prefeituras) e preenche as configurações do evento automaticamente
           </p>
         </div>
         {step !== 'upload' && (
