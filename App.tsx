@@ -283,7 +283,23 @@ const App: React.FC = () => {
         <Route path="/equipe-jurados" element={<PrivateRoute {...privateRouteProps}><JudgesManagement /></PrivateRoute>} />
         <Route path="/account-settings" element={<PrivateRoute {...privateRouteProps}><AccountSettings onSaveSuccess={fetchConfig} /></PrivateRoute>} />
 
-        <Route path="/judge-terminal" element={<PrivateRoute {...privateRouteProps}><JudgeTerminal /></PrivateRoute>} />
+        <Route path="/judge-terminal" element={
+          // Phase 2B: jurado-sessão (localStorage) acessa o terminal sem
+          // sessão do Supabase. Quando há judgeSession, renderiza standalone.
+          // Quando não há, é o fluxo do produtor com PrivateLayout completo.
+          (() => {
+            try {
+              const raw = localStorage.getItem('coreohub_judge_session');
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed?.expires_at && parsed.expires_at > Date.now()) {
+                  return <Suspense fallback={<PageLoader />}><JudgeTerminal /></Suspense>;
+                }
+              }
+            } catch {}
+            return <PrivateRoute {...privateRouteProps}><JudgeTerminal /></PrivateRoute>;
+          })()
+        } />
         <Route path="/judge-practice" element={<PrivateRoute {...privateRouteProps}><JudgePractice /></PrivateRoute>} />
         <Route path="/equipe-jurados-config" element={<PrivateRoute {...privateRouteProps}><JudgeManagement /></PrivateRoute>} />
 
