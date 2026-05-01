@@ -41,6 +41,9 @@ export interface TerminalEvent {
   deliberation_status?: DeliberationStatus;
   conferencia_started_at?: string | null;
   conferencia_duration_seconds?: number;
+  // Phase 4: âncora central de apresentação ao vivo (Mesa de Som controla)
+  live_registration_id?: string | null;
+  live_started_at?: string | null;
 }
 
 export interface TerminalData {

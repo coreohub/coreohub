@@ -222,6 +222,11 @@ const JudgeTerminal = () => {
   const [starredSet, setStarredSet] = useState<Set<string>>(new Set());
   const [starringInFlight, setStarringInFlight] = useState(false);
 
+  // Phase 4: âncora central — qual apresentação está em palco AGORA segundo
+  // a Mesa de Som. Quando muda, terminal mostra banner "AO VIVO" e auto-advance
+  // após jurado submeter nota.
+  const [liveRegistrationId, setLiveRegistrationId] = useState<string | null>(null);
+
   /* ── Audio ── */
   const [isRecording,   setIsRecording]   = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
@@ -433,6 +438,8 @@ const JudgeTerminal = () => {
         try {
           const td = await fetchTerminalData();
           if (td.registrations) setSchedule(td.registrations);
+          // Phase 4: atualiza âncora de "ao vivo" via polling
+          setLiveRegistrationId(td.event?.live_registration_id ?? null);
         } catch (e) {
           // Silencioso — não interrompe avaliação por falha de polling
           console.warn('Polling falhou:', e);
@@ -440,11 +447,17 @@ const JudgeTerminal = () => {
       }, 30_000);
       return () => clearInterval(interval);
     }
+    // Produtor/admin: realtime tanto pra registrations quanto pro evento (live)
     const ch = supabase.channel('judge-terminal-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'registrations' }, () => {
         supabase.from('registrations').select('*').eq('status', 'APROVADA')
           .order('ordem_apresentacao', { ascending: true })
           .then(({ data }) => { if (data) setSchedule(data); });
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'events' }, (payload: any) => {
+        // Phase 4: Mesa de Som mudou live_registration_id
+        const newLive = payload.new?.live_registration_id ?? null;
+        setLiveRegistrationId(newLive);
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -472,19 +485,30 @@ const JudgeTerminal = () => {
           if (Array.isArray(td.marcacoes) && td.marcacoes.length > 0) {
             setStarredSet(new Set(td.marcacoes.map(m => m.registration_id)));
           }
+          // Phase 4: hidrata âncora "ao vivo" da Mesa de Som
+          setLiveRegistrationId(td.event?.live_registration_id ?? null);
         } else {
           // Fluxo legado: produtor/admin logado no device, queries diretas via RLS.
           const { fetchActiveEventConfig } = await import('../services/supabase');
-          const [judgesRes, cfgRes, schedRes, gRes] = await Promise.all([
+          const [judgesRes, cfgRes, schedRes, gRes, evRes] = await Promise.all([
             supabase.from('judges').select('*'),
             fetchActiveEventConfig('regras_avaliacao, escala_notas, premios_especiais, pin_inactivity_minutes'),
             supabase.from('registrations').select('*').eq('status', 'APROVADA').order('ordem_apresentacao', { ascending: true }),
             supabase.from('event_styles').select('id, name'),
+            // Phase 4: lê live_registration_id do evento ativo
+            supabase.from('events')
+              .select('live_registration_id')
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle(),
           ]);
           jData = judgesRes.data;
           cfg = cfgRes;
           sched = schedRes.data;
           gData = gRes.data;
+          if (evRes.data?.live_registration_id) {
+            setLiveRegistrationId(evRes.data.live_registration_id);
+          }
         }
 
         const judgeList = jData && jData.length > 0
@@ -568,6 +592,26 @@ const JudgeTerminal = () => {
     // starredSet NÃO reseta por apresentação — é global por jurado/evento.
     // O estado da estrela na apresentação atual vem de `starredSet.has(currentPerformance.id)`
   }, [currentIndex, currentPerformance?.estilo_danca, evalConfig, genreList, resolveGenreCriteria]);
+
+  /* ── Phase 4: auto-advance pós-submit quando Mesa de Som troca a live ──
+     Quando jurado já submeteu nota E a Mesa marcou outra apresentação como
+     ao vivo, terminal pula automaticamente pra essa nova apresentação.
+     Self-paced preservado: se ainda não submeteu, NÃO interrompe avaliação. */
+  useEffect(() => {
+    if (!liveRegistrationId || !isSubmitted) return;
+    if (!filteredSchedule.length) return;
+    if (currentPerformance?.id === liveRegistrationId) return;
+    const liveIdx = filteredSchedule.findIndex((r: any) => r.id === liveRegistrationId);
+    if (liveIdx < 0 || liveIdx === currentIndex) return;
+    // Reset states (mesma lógica do handleAdvance, mas vai pro índice da live)
+    setIsSubmitted(false);
+    setSubmittedAt(null);
+    rollingChunksRef.current = [];
+    setMicAttempted(false);
+    setTieWarning(null);
+    setFeedbackText('');
+    setCurrentIndex(liveIdx);
+  }, [liveRegistrationId, isSubmitted, filteredSchedule, currentPerformance?.id, currentIndex]);
 
   /* ── Tie check whenever weighted avg changes and all filled ── */
   useEffect(() => {
@@ -1219,6 +1263,35 @@ const JudgeTerminal = () => {
           </div>
         </div>
       )}
+
+      {/* ── Phase 4: Banner "AO VIVO" quando Mesa de Som marca outra apresentação ──
+            Mostra só quando jurado AINDA NÃO submeteu (após submit, auto-advance
+            cuida disso). Sinaliza pro jurado que ele está olhando a apresentação
+            errada. Click leva pra apresentação ao vivo. */}
+      {liveRegistrationId && currentPerformance && liveRegistrationId !== currentPerformance.id && !isSubmitted && (() => {
+        const liveReg = filteredSchedule.find((r: any) => r.id === liveRegistrationId);
+        if (!liveReg) return null; // live é de outro gênero (não desse jurado)
+        const liveIdx = filteredSchedule.indexOf(liveReg);
+        return (
+          <button
+            onClick={() => {
+              setIsSubmitted(false);
+              setSubmittedAt(null);
+              rollingChunksRef.current = [];
+              setMicAttempted(false);
+              setTieWarning(null);
+              setFeedbackText('');
+              setCurrentIndex(liveIdx);
+            }}
+            className="shrink-0 w-full bg-rose-500 hover:bg-rose-600 text-white px-3 py-1.5 flex items-center justify-center gap-2 transition-colors"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+            <span className="text-[9px] font-black uppercase tracking-widest">AO VIVO:</span>
+            <span className="text-[10px] font-black uppercase tracking-tight truncate">{liveReg.nome_coreografia}</span>
+            <ChevronRight size={12} className="shrink-0" />
+          </button>
+        );
+      })()}
 
       {/* ── Header — denso: 1 linha em mobile, 2 em tablet ── */}
       <header className="shrink-0 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-3 py-1.5 flex items-center justify-between gap-2">

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Music, Volume2, Play, Pause, SkipForward,
-  Search, Loader2, AlertCircle, Clock
+  Search, Loader2, AlertCircle, Clock, Radio, StopCircle
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
@@ -12,6 +12,9 @@ const MesaDeSom = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentTrack, setCurrentTrack] = useState<any | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  // Phase 4: id do evento ativo + flag de "broadcasting" pra mostrar feedback
+  const [eventId, setEventId] = useState<string | null>(null);
+  const [updatingLive, setUpdatingLive] = useState(false);
 
   useEffect(() => {
     fetchSchedule();
@@ -20,6 +23,16 @@ const MesaDeSom = () => {
   const fetchSchedule = async () => {
     setIsLoading(true);
     try {
+      // Resolve evento ativo do produtor pra ler live_registration_id atual
+      const { data: ev } = await supabase
+        .from('events')
+        .select('id, live_registration_id')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (ev?.id) setEventId(ev.id);
+
       const { data, error } = await supabase
         .from('registrations')
         .select('*')
@@ -27,7 +40,14 @@ const MesaDeSom = () => {
         .order('ordem_apresentacao', { ascending: true });
 
       if (error) throw error;
-      setRegistrations(data || []);
+      const regs = data || [];
+      setRegistrations(regs);
+
+      // Hidrata currentTrack se já houver apresentação ao vivo no banco
+      if (ev?.live_registration_id) {
+        const live = regs.find((r: any) => r.id === ev.live_registration_id);
+        if (live) setCurrentTrack(live);
+      }
 
       const { data: cfg } = await supabase
         .from('configuracoes')
@@ -107,9 +127,43 @@ const MesaDeSom = () => {
     window.speechSynthesis.speak(utterance);
   };
 
-  const handlePrepare = (reg: any) => {
+  // Phase 4: marcar apresentação como AO VIVO no banco. Jurados recebem via
+  // polling/realtime e veem banner "AO VIVO" + auto-advance pos-submit.
+  const handlePrepare = async (reg: any) => {
     setCurrentTrack(reg);
     setIsPlaying(false);
+    if (!eventId) return;
+    setUpdatingLive(true);
+    try {
+      const { error } = await supabase
+        .from('events')
+        .update({
+          live_registration_id: reg.id,
+          live_started_at: new Date().toISOString(),
+        })
+        .eq('id', eventId);
+      if (error) console.warn('Falha ao marcar live no banco:', error.message);
+    } finally {
+      setUpdatingLive(false);
+    }
+  };
+
+  // Phase 4: encerrar transmissao (zera live_registration_id pra jurados saberem
+  // que nao tem apresentacao no palco agora — entre coreografias ou intervalo).
+  const handleEndLive = async () => {
+    setCurrentTrack(null);
+    setIsPlaying(false);
+    if (!eventId) return;
+    setUpdatingLive(true);
+    try {
+      const { error } = await supabase
+        .from('events')
+        .update({ live_registration_id: null, live_started_at: null })
+        .eq('id', eventId);
+      if (error) console.warn('Falha ao encerrar live:', error.message);
+    } finally {
+      setUpdatingLive(false);
+    }
   };
 
   const filteredSchedule = registrations.filter(reg =>
@@ -151,9 +205,9 @@ const MesaDeSom = () => {
 
           <div className="flex-1 text-center md:text-left space-y-2">
             <div className="flex items-center justify-center md:justify-start gap-2">
-              <div className={`w-2 h-2 rounded-full ${isPlaying ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`} />
-              <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em]">
-                {isPlaying ? 'REPRODUZINDO AGORA' : 'AGUARDANDO COMANDO'}
+              <div className={`w-2 h-2 rounded-full ${currentTrack ? 'bg-rose-500 animate-pulse' : 'bg-slate-600'}`} />
+              <span className={`text-[8px] font-black uppercase tracking-[0.3em] ${currentTrack ? 'text-rose-500' : 'text-slate-400'}`}>
+                {currentTrack ? 'AO VIVO PARA JURADOS' : 'AGUARDANDO COMANDO'}
               </span>
             </div>
             <h2 className="text-2xl font-black uppercase tracking-tighter italic text-white">
@@ -181,10 +235,12 @@ const MesaDeSom = () => {
               {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" className="ml-1" />}
             </button>
             <button
-              className="p-4 bg-white/5 text-white rounded-2xl hover:bg-white/10 transition-all"
-              title="Próxima"
+              onClick={handleEndLive}
+              disabled={!currentTrack || updatingLive}
+              className="p-4 bg-white/5 text-white rounded-2xl hover:bg-rose-500/20 hover:text-rose-400 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Encerrar transmissão (jurados pararão de ver AO VIVO)"
             >
-              <SkipForward size={24} />
+              <StopCircle size={24} />
             </button>
           </div>
         </div>
@@ -254,13 +310,16 @@ const MesaDeSom = () => {
                     </button>
                     <button
                       onClick={() => handlePrepare(reg)}
-                      className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                      disabled={updatingLive}
+                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-50 ${
                         currentTrack?.id === reg.id
                           ? 'bg-[#ff0068] text-white shadow-lg shadow-[#ff0068]/20'
-                          : 'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/20'
+                          : 'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-400 hover:bg-[#ff0068]/10 hover:text-[#ff0068]'
                       }`}
+                      title={currentTrack?.id === reg.id ? 'Apresentação ao vivo pra jurados' : 'Marcar como ao vivo (jurados verão essa apresentação como ativa)'}
                     >
-                      {currentTrack?.id === reg.id ? 'No Ar' : 'Preparar'}
+                      {currentTrack?.id === reg.id ? <Radio size={11} /> : null}
+                      {currentTrack?.id === reg.id ? 'Ao Vivo' : 'Iniciar'}
                     </button>
                   </div>
                 </div>

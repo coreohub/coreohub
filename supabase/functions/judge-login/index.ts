@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
   const resolveActiveEvent = async () => {
     const { data } = await supa
       .from('events')
-      .select('id, name, slug, status, deliberation_status, conferencia_started_at, conferencia_duration_seconds')
+      .select('id, name, slug, status, deliberation_status, conferencia_started_at, conferencia_duration_seconds, live_registration_id, live_started_at')
       .eq('created_by', producer.id)
       .order('created_at', { ascending: false })
       .limit(1)

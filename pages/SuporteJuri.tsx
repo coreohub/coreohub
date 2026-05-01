@@ -3,7 +3,7 @@ import { supabase } from '../services/supabase';
 import {
   Headphones, RefreshCw, Loader2, CheckCircle2,
   AlertTriangle, Wifi, WifiOff, Monitor, User,
-  CircleDot, Clock,
+  CircleDot, Clock, Radio, Hourglass,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -26,6 +26,16 @@ interface JudgeState {
   lastSeen?: string;
 }
 
+interface LiveStatus {
+  registration_id: string;
+  nome_coreografia: string;
+  estilo_danca: string;
+  estudio: string;
+  started_at: string | null;
+  // judge_id → submitted_at (quem ja submeteu pra essa apresentacao)
+  submissions: Record<string, string>;
+}
+
 const statusConfig: Record<JudgeStatus, { label: string; color: string; bg: string; icon: React.ElementType }> = {
   ONLINE:   { label: 'Online',   color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20', icon: CheckCircle2 },
   OFFLINE:  { label: 'Offline',  color: 'text-slate-400',   bg: 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10', icon: WifiOff },
@@ -39,6 +49,8 @@ const SuporteJuri = () => {
   const [currentStyle, setCurrentStyle] = useState<string>('');
   const [currentPresentation, setCurrentPresentation] = useState<string>('');
   const [online, setOnline] = useState(navigator.onLine);
+  // Phase 4: status da apresentacao ao vivo segundo a Mesa de Som
+  const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
 
   useEffect(() => {
     const on  = () => setOnline(true);
@@ -46,6 +58,53 @@ const SuporteJuri = () => {
     window.addEventListener('online', on);
     window.addEventListener('offline', off);
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+  }, []);
+
+  // Phase 4: busca apresentacao ao vivo + quais jurados ja submeteram nota
+  const fetchLiveStatus = useCallback(async () => {
+    try {
+      const { data: ev } = await supabase
+        .from('events')
+        .select('id, live_registration_id, live_started_at')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!ev?.live_registration_id) {
+        setLiveStatus(null);
+        return;
+      }
+
+      const [{ data: reg }, { data: evals }] = await Promise.all([
+        supabase
+          .from('registrations')
+          .select('id, nome_coreografia, estilo_danca, estudio')
+          .eq('id', ev.live_registration_id)
+          .maybeSingle(),
+        supabase
+          .from('evaluations')
+          .select('judge_id, submitted_at')
+          .eq('registration_id', ev.live_registration_id),
+      ]);
+
+      if (!reg) { setLiveStatus(null); return; }
+
+      const submissions: Record<string, string> = {};
+      (evals ?? []).forEach((e: any) => {
+        if (e.judge_id && e.submitted_at) submissions[e.judge_id] = e.submitted_at;
+      });
+
+      setLiveStatus({
+        registration_id: reg.id,
+        nome_coreografia: reg.nome_coreografia,
+        estilo_danca: reg.estilo_danca,
+        estudio: reg.estudio,
+        started_at: ev.live_started_at,
+        submissions,
+      });
+    } catch (e) {
+      console.warn('fetchLiveStatus:', e);
+    }
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -63,6 +122,8 @@ const SuporteJuri = () => {
 
       const list: Judge[] = judgesData || [];
       setJudges(list);
+      // Phase 4: carrega live status em paralelo
+      await fetchLiveStatus();
 
       // Initialize states preserving existing
       setJudgeStates(prev => {
@@ -90,9 +151,22 @@ const SuporteJuri = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchLiveStatus]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Phase 4: realtime no events (live_registration_id) + evaluations da live atual
+  useEffect(() => {
+    const ch = supabase.channel('coordenador-juri-live')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'events' }, () => {
+        fetchLiveStatus();
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'evaluations' }, () => {
+        fetchLiveStatus();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [fetchLiveStatus]);
 
   const setStatus = (judgeId: string, status: JudgeStatus) => {
     setJudgeStates(prev => ({
@@ -133,19 +207,67 @@ const SuporteJuri = () => {
         </div>
       </div>
 
-      {/* Em julgamento agora */}
-      {(currentPresentation || currentStyle) && (
+      {/* Phase 4: Apresentação ao vivo (Mesa de Som controla) + status de submissões */}
+      {liveStatus ? (
+        <div className="bg-rose-500/5 border-2 border-rose-500/30 rounded-3xl overflow-hidden">
+          <div className="px-5 py-4 bg-rose-500/10 flex items-center gap-4 border-b border-rose-500/20">
+            <div className="w-10 h-10 bg-rose-500 rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-rose-500/30">
+              <Radio size={18} className="text-white animate-pulse" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[9px] font-black uppercase tracking-widest text-rose-500 mb-0.5">AO VIVO no palco</p>
+              <p className="font-black text-base text-slate-900 dark:text-white uppercase tracking-tight truncate">{liveStatus.nome_coreografia}</p>
+              <p className="text-[9px] text-slate-500 uppercase font-bold tracking-widest truncate">
+                {liveStatus.estudio} · {liveStatus.estilo_danca}
+              </p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Submetidas</p>
+              <p className="text-2xl font-black text-rose-500 tabular-nums leading-none">
+                {Object.keys(liveStatus.submissions).length}/{judges.length}
+              </p>
+            </div>
+          </div>
+          <div className="px-5 py-3 bg-white dark:bg-white/5">
+            <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-2">Status dos jurados</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+              {judges.map(j => {
+                const submitted = liveStatus.submissions[j.id];
+                return (
+                  <div
+                    key={j.id}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl border ${
+                      submitted
+                        ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30'
+                        : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10'
+                    }`}
+                  >
+                    {submitted
+                      ? <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
+                      : <Hourglass size={12} className="text-amber-500 shrink-0 animate-pulse" />
+                    }
+                    <span className={`text-[10px] font-black uppercase tracking-tight truncate ${submitted ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-600 dark:text-slate-300'}`}>
+                      {j.name}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : (currentPresentation || currentStyle) ? (
         <div className="bg-[#ff0068]/5 border border-[#ff0068]/20 rounded-3xl p-5 flex items-center gap-4">
           <div className="w-10 h-10 bg-[#ff0068]/10 rounded-2xl flex items-center justify-center shrink-0">
             <CircleDot size={18} className="text-[#ff0068] animate-pulse" />
           </div>
           <div>
-            <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] mb-0.5">Em julgamento agora</p>
+            <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] mb-0.5">Próxima na fila</p>
             <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight">{currentPresentation || '—'}</p>
             {currentStyle && <p className="text-[9px] text-slate-400 uppercase font-bold tracking-widest">{currentStyle}</p>}
+            <p className="text-[8px] text-slate-400 mt-1 italic">Mesa de Som ainda não iniciou transmissão</p>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Judge cards */}
       {loading ? (
