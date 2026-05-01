@@ -217,7 +217,7 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
             Importar <span className="text-[#ff0068]">Regulamento ou Edital</span>
           </h1>
           <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">
-            IA lê regulamento privado OU edital público (JOMI, Bolsa Cultura, prefeituras) e preenche as configurações do evento automaticamente
+            IA lê o documento e preenche as configurações do evento automaticamente
           </p>
         </div>
         {step !== 'upload' && (
@@ -345,7 +345,7 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
             <p className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tighter">Analisando Regulamento</p>
             <p className="text-[10px] font-black text-[#ff0068] uppercase tracking-[0.3em] animate-pulse">{progress || 'Processando...'}</p>
           </div>
-          <p className="text-[10px] text-slate-400 text-center max-w-xs">A IA está lendo o documento e extraindo todos os dados estruturados. Aguarde...</p>
+          <p className="text-[10px] text-slate-400 text-center max-w-xs">Extraindo dados do documento. Aguarde alguns segundos.</p>
         </div>
       )}
 

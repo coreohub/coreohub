@@ -2518,10 +2518,12 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                           <span className={`text-[11px] font-black uppercase tracking-widest ${active ? 'text-[#ff0068]' : 'text-slate-700 dark:text-slate-300'}`}>
                             {opt.label}
                           </span>
-                          <span className={`text-xs font-black tabular-nums italic px-2 py-0.5 rounded-lg shrink-0 ${
+                          {/* Numero de exemplo grande pro produtor visualizar
+                              como ficara na tela do terminal de jurado */}
+                          <span className={`text-2xl font-black tabular-nums italic px-2.5 py-0.5 rounded-lg shrink-0 leading-none ${
                             active ? 'bg-[#ff0068]/15 text-[#ff0068]' : 'bg-slate-100 dark:bg-white/5 text-slate-500'
                           }`}>
-                            {opt.example}
+                            {opt.example.replace('Ex: ', '')}
                           </span>
                         </div>
                         <p className="text-[10px] text-slate-500 dark:text-slate-400">{opt.desc}</p>

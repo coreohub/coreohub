@@ -136,14 +136,17 @@ const DEMO_AWARDS: SpecialAward[] = [
   { id: 'tpl_grupo',      name: 'Melhor Grupo da Noite',enabled: true, isTemplate: true, formation: 'Grupo', description: 'Melhor desempenho em grupo' },
 ];
 
-/** Grade colour — pass `scale` to normalise BASE_100 values to 0-10 range */
-const scoreGrade = (v: string | number, scale: ScoreScale = 'BASE_10') => {
+/** Cor da nota — neutra (sem semântica que enviese o jurado).
+ *  Antes: vermelho < 7, amarelo 7-8.9, verde >= 9.
+ *  Pesquisa de viés cognitivo (BMC Psychology, NN/G color-bias): cores
+ *  semânticas em scoring induzem o jurado a buscar inconscientemente o
+ *  "verde positivo", inflando notas. Padrão olímpico: cor única neutra.
+ *  scale parameter mantido pra retro-compatibilidade da assinatura. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const scoreGrade = (v: string | number, _scale: ScoreScale = 'BASE_10') => {
   const n = typeof v === 'number' ? v : parseFloat(v as string);
   if (!v || isNaN(n)) return 'text-slate-400 dark:text-slate-500';
-  const norm = scale === 'BASE_100' ? n / 10 : n;
-  if (norm >= 9) return 'text-emerald-600 dark:text-emerald-400';
-  if (norm >= 7) return 'text-yellow-600  dark:text-yellow-400';
-  return 'text-rose-600 dark:text-rose-400';
+  return 'text-slate-900 dark:text-white';
 };
 
 /* ════════════════════════ COMPONENT ════════════════════════ */
@@ -1294,7 +1297,9 @@ const JudgeTerminal = () => {
         </div>
       </header>
 
-      {/* Demo mode banner — faixa fina (16px) com badge + sair */}
+      {/* Demo mode banner — TEMPORARIAMENTE REMOVIDO (backlog: restaurar
+          quando produtos ficarem mais maduros pra preview de produção limpo).
+          Aviso de modo demo já existe na tela anterior antes do produtor entrar.
       {isDemoMode && (
         <div className="shrink-0 flex items-center justify-between gap-2 px-3 h-5 bg-indigo-500 text-white text-[8px] font-black uppercase tracking-widest">
           <div className="flex items-center gap-1.5 min-w-0">
@@ -1309,6 +1314,7 @@ const JudgeTerminal = () => {
           </button>
         </div>
       )}
+      */}
 
       {/* Progress bar */}
       {filteredSchedule.length > 0 && (
@@ -1513,8 +1519,10 @@ const JudgeTerminal = () => {
                             }`}>
                             {i + 1}
                           </span>
-                          <div className="min-w-0 text-left">
-                            <span className={`text-[11px] font-black uppercase tracking-widest truncate block leading-tight
+                          <div className="min-w-0 text-left flex-1">
+                            {/* Quebra em ate 2 linhas em vez de truncar com '...'
+                                Tracking reduzido um tique pra caber mais texto */}
+                            <span className={`text-[11px] font-black uppercase tracking-tight line-clamp-2 block leading-tight
                               ${isActive && !isSubmitted ? 'text-[#ff0068]' : val ? 'text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-400'}`}>
                               {criterionLabel(criterion)}
                             </span>
@@ -1635,22 +1643,10 @@ const JudgeTerminal = () => {
                 /* ── Numpad ── */
                 <div className="flex flex-col h-full gap-1.5 md:gap-2">
 
-                  {/* Numpad header — só "0-10" / "0-100".
-                      Critério ativo já fica destacado na lista da esquerda;
-                      repetir aqui era ruído visual (research-backed: redundância
-                      reduz scan-ability). */}
-                  <div className="hidden md:flex items-center justify-start shrink-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">{t('numpad.label')}</span>
-                      <span className={`text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${
-                        scoreScale === 'BASE_10'
-                          ? 'bg-[#ff0068]/10 text-[#ff0068]'
-                          : 'bg-indigo-100 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400'
-                      }`}>
-                        {scoreScale === 'BASE_10' ? '0 – 10' : '0 – 100'}
-                      </span>
-                    </div>
-                  </div>
+                  {/* Numpad header REMOVIDO. A escala (0-10 / 0-100) já é
+                      configurada pelo produtor antes do evento; o jurado não
+                      precisa do lembrete a cada nota. Padrao Square POS:
+                      teclado direto sem header. */}
 
                   {/* Score display — só visível em desktop (lg+). Em mobile e
                       tablet, o valor já é mostrado no row do critério ativo
