@@ -302,6 +302,9 @@ const DEFAULT_GENERAL = {
   scoreScale: 'BASE_10' as ScoreScale,
   pinInactivityMinutes: 15 as number, // 0 = nunca bloquear
   medalThresholds: { gold: 9.0, silver: 8.0, bronze: 7.0 },
+  // 'THRESHOLD' = ouro/prata/bronze por nota mínima (várias medalhas).
+  // 'RANKING' = 1º/2º/3º lugar pela colocação (uma medalha por posição).
+  premiationSystem: 'THRESHOLD' as 'THRESHOLD' | 'RANKING',
   coverUrl: '',
   description: '',
 };
@@ -864,6 +867,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
             scoreScale: (data.escala_notas as ScoreScale) || DEFAULT_GENERAL.scoreScale,
             pinInactivityMinutes: data.pin_inactivity_minutes ?? DEFAULT_GENERAL.pinInactivityMinutes,
             medalThresholds: data.medal_thresholds ?? DEFAULT_GENERAL.medalThresholds,
+            premiationSystem: (data.premiation_system as 'THRESHOLD' | 'RANKING') || DEFAULT_GENERAL.premiationSystem,
             coverUrl:    data.cover_url   ?? DEFAULT_GENERAL.coverUrl,
             description: data.descricao   ?? DEFAULT_GENERAL.description,
             eventTime:   data.hora_evento ?? DEFAULT_GENERAL.eventTime,
@@ -961,6 +965,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         escala_notas:        general.scoreScale,
         pin_inactivity_minutes: general.pinInactivityMinutes,
         medal_thresholds:    general.medalThresholds,
+        premiation_system:   general.premiationSystem,
         cover_url:           general.coverUrl || null,
         descricao:           general.description || null,
         hora_evento:         general.eventTime || null,
@@ -2542,61 +2547,119 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
               </div>
             </div>
 
-            {/* ── FAIXAS DE MEDALHA ── */}
+            {/* ── SISTEMA DE PREMIAÇÃO ── */}
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-3xl overflow-hidden">
               <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100 dark:border-slate-800">
                 <div className="p-2 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Medal size={16} /></div>
                 <div>
-                  <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight italic">Faixas de Medalha</p>
+                  <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight italic">Sistema de Premiação</p>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Nota mínima para cada medalha na Mostra Competitiva. Abaixo do Bronze = Participação.
+                    Como o seu evento define os ganhadores.
                   </p>
                 </div>
               </div>
-              <div className="p-5 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+
+              {/* Toggle THRESHOLD vs RANKING */}
+              <div className="p-5 pb-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {([
-                    { key: 'gold',   label: 'Ouro',   color: 'text-yellow-500',  bg: 'bg-yellow-50 dark:bg-yellow-500/10',  border: 'border-yellow-300 dark:border-yellow-500/30' },
-                    { key: 'silver', label: 'Prata',  color: 'text-slate-400',   bg: 'bg-slate-50  dark:bg-slate-700/30',   border: 'border-slate-300  dark:border-slate-500/30'  },
-                    { key: 'bronze', label: 'Bronze', color: 'text-amber-600',   bg: 'bg-amber-50  dark:bg-amber-500/10',   border: 'border-amber-300  dark:border-amber-500/30'  },
-                  ] as const).map(({ key, label, color, bg, border }) => {
-                    const val = general.medalThresholds[key];
-                    const maxVal = general.scoreScale === 'BASE_100' ? 100 : 10;
+                    { id: 'THRESHOLD', label: 'Por nota mínima', desc: 'Vários ganhadores. Ouro/Prata/Bronze pela nota — abaixo do Bronze = Participação.', example: 'Ex: 5 inscritos com Ouro' },
+                    { id: 'RANKING',   label: 'Por colocação',   desc: '1º, 2º e 3º lugar pela melhor nota. Apenas 1 ganhador por posição.',                          example: 'Ex: Top 3 do evento' },
+                  ] as const).map(opt => {
+                    const active = general.premiationSystem === opt.id;
                     return (
-                      <div key={key} className={`flex flex-col gap-2 p-4 rounded-2xl border-2 ${bg} ${border}`}>
-                        <div className="flex items-center gap-2">
-                          <Medal size={14} className={color} />
-                          <span className={`text-[11px] font-black uppercase tracking-widest ${color}`}>{label}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400 shrink-0">≥</span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={maxVal}
-                            step={general.scoreScale === 'BASE_100' ? 1 : 0.1}
-                            value={val}
-                            onChange={e => {
-                              const n = parseFloat(e.target.value);
-                              if (!isNaN(n)) setGeneral(g => ({ ...g, medalThresholds: { ...g.medalThresholds, [key]: n } }));
-                            }}
-                            className={`w-full px-3 py-1.5 rounded-xl border ${border} bg-white dark:bg-slate-900 text-sm font-black tabular-nums ${color} outline-none focus:ring-2 focus:ring-[#ff0068]/30 text-center`}
-                          />
-                        </div>
-                      </div>
+                      <button
+                        key={opt.id}
+                        onClick={() => setGeneral(g => ({ ...g, premiationSystem: opt.id }))}
+                        className={`flex flex-col gap-1 p-4 rounded-2xl border-2 transition-all text-left ${
+                          active
+                            ? 'border-[#ff0068] bg-[#ff0068]/5'
+                            : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
+                        }`}
+                      >
+                        <span className={`text-[11px] font-black uppercase tracking-widest ${active ? 'text-[#ff0068]' : 'text-slate-700 dark:text-slate-300'}`}>
+                          {opt.label}
+                        </span>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">{opt.desc}</p>
+                        <span className="text-[9px] font-bold text-slate-400 italic mt-0.5">{opt.example}</span>
+                      </button>
                     );
                   })}
                 </div>
-                <div className="flex items-start gap-2.5 px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 rounded-2xl">
-                  <Medal size={12} className="text-[#ff0068] shrink-0 mt-0.5" />
-                  <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400 leading-relaxed">
-                    Ouro ≥ <strong className="text-yellow-500">{general.medalThresholds.gold}</strong>
-                    {' · '}Prata ≥ <strong className="text-slate-400">{general.medalThresholds.silver}</strong>
-                    {' · '}Bronze ≥ <strong className="text-amber-600">{general.medalThresholds.bronze}</strong>
-                    {' · '}Abaixo de <strong>{general.medalThresholds.bronze}</strong> = Participação
-                  </p>
-                </div>
               </div>
+
+              {/* Conditional UI por sistema escolhido */}
+              {general.premiationSystem === 'THRESHOLD' ? (
+                <div className="px-5 pb-5 pt-2 space-y-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Faixas de medalha
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {([
+                      { key: 'gold',   label: 'Ouro',   color: 'text-yellow-500',  bg: 'bg-yellow-50 dark:bg-yellow-500/10',  border: 'border-yellow-300 dark:border-yellow-500/30' },
+                      { key: 'silver', label: 'Prata',  color: 'text-slate-400',   bg: 'bg-slate-50  dark:bg-slate-700/30',   border: 'border-slate-300  dark:border-slate-500/30'  },
+                      { key: 'bronze', label: 'Bronze', color: 'text-amber-600',   bg: 'bg-amber-50  dark:bg-amber-500/10',   border: 'border-amber-300  dark:border-amber-500/30'  },
+                    ] as const).map(({ key, label, color, bg, border }) => {
+                      const val = general.medalThresholds[key];
+                      const maxVal = general.scoreScale === 'BASE_100' ? 100 : 10;
+                      return (
+                        <div key={key} className={`flex flex-col gap-2 p-4 rounded-2xl border-2 ${bg} ${border}`}>
+                          <div className="flex items-center gap-2">
+                            <Medal size={14} className={color} />
+                            <span className={`text-[11px] font-black uppercase tracking-widest ${color}`}>{label}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 shrink-0">≥</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={maxVal}
+                              step={general.scoreScale === 'BASE_100' ? 1 : 0.1}
+                              value={val}
+                              onChange={e => {
+                                const n = parseFloat(e.target.value);
+                                if (!isNaN(n)) setGeneral(g => ({ ...g, medalThresholds: { ...g.medalThresholds, [key]: n } }));
+                              }}
+                              className={`w-full px-3 py-1.5 rounded-xl border ${border} bg-white dark:bg-slate-900 text-sm font-black tabular-nums ${color} outline-none focus:ring-2 focus:ring-[#ff0068]/30 text-center`}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex items-start gap-2.5 px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 rounded-2xl">
+                    <Medal size={12} className="text-[#ff0068] shrink-0 mt-0.5" />
+                    <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400 leading-relaxed">
+                      Ouro ≥ <strong className="text-yellow-500">{general.medalThresholds.gold}</strong>
+                      {' · '}Prata ≥ <strong className="text-slate-400">{general.medalThresholds.silver}</strong>
+                      {' · '}Bronze ≥ <strong className="text-amber-600">{general.medalThresholds.bronze}</strong>
+                      {' · '}Abaixo de <strong>{general.medalThresholds.bronze}</strong> = Participação
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="px-5 pb-5 pt-2 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {([
+                      { pos: '1º', label: 'Primeiro lugar', color: 'text-yellow-500', bg: 'bg-yellow-50 dark:bg-yellow-500/10', border: 'border-yellow-300 dark:border-yellow-500/30' },
+                      { pos: '2º', label: 'Segundo lugar',  color: 'text-slate-400',  bg: 'bg-slate-50  dark:bg-slate-700/30',  border: 'border-slate-300  dark:border-slate-500/30'  },
+                      { pos: '3º', label: 'Terceiro lugar', color: 'text-amber-600',  bg: 'bg-amber-50  dark:bg-amber-500/10',  border: 'border-amber-300  dark:border-amber-500/30'  },
+                    ] as const).map(({ pos, label, color, bg, border }) => (
+                      <div key={pos} className={`flex flex-col items-center gap-1 p-5 rounded-2xl border-2 ${bg} ${border}`}>
+                        <span className={`text-3xl font-black italic tabular-nums ${color}`}>{pos}</span>
+                        <span className={`text-[10px] font-black uppercase tracking-widest ${color}`}>{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-start gap-2.5 px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 rounded-2xl">
+                    <Medal size={12} className="text-[#ff0068] shrink-0 mt-0.5" />
+                    <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400 leading-relaxed">
+                      As 3 maiores notas do evento ganham as colocações automaticamente.
+                      Demais inscritos ficam fora do pódio.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* ── BLOQUEIO AUTOMÁTICO DO TERMINAL ── */}

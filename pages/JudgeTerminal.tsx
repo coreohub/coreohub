@@ -1540,11 +1540,13 @@ const JudgeTerminal = () => {
                 })()}
               </div>
 
-              {/* Nominations — conditional, only shown when there are visible awards */}
+              {/* Indicacoes — chips compactos com flex-wrap. Substitui o grid
+                  fixo de 2 colunas (que deixava 3 awards em 2 linhas com scroll).
+                  Agora todos cabem em 1-2 linhas sem scroll. */}
               {visibleAwards.length > 0 && (
                 <div className="px-2 pb-2 pt-1 border-t border-slate-100 dark:border-slate-800">
-                  <p className="text-[7px] font-black uppercase tracking-widest text-slate-400 px-1 mb-1.5">{t('criteria.nominationsLabel')}</p>
-                  <div className={`grid gap-1.5 ${visibleAwards.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                  <p className="text-[7px] font-black uppercase tracking-widest text-slate-400 px-1 mb-1">{t('criteria.nominationsLabel')}</p>
+                  <div className="flex flex-wrap gap-1">
                     {visibleAwards.map(award => {
                       const Icon      = resolveAwardIcon(award);
                       const nominated = !!nominations[award.id];
@@ -1554,15 +1556,15 @@ const JudgeTerminal = () => {
                           onClick={() => { if (!isSubmitted) { toggleNomination(award.id); handleActivity(); } }}
                           disabled={isSubmitted}
                           title={award.description || award.name}
-                          className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-[7px] font-black uppercase tracking-widest border transition-all leading-tight text-center
+                          className={`flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg text-[8px] font-black uppercase tracking-tight border transition-all leading-none flex-1 min-w-0
                             ${nominated
-                              ? 'bg-violet-600 border-transparent text-white shadow-md shadow-violet-500/20'
+                              ? 'bg-violet-600 border-transparent text-white shadow-sm'
                               : isSubmitted
                                 ? 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 cursor-default'
                                 : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-violet-400/40 hover:text-violet-500'
                             }`}
                         >
-                          <Icon size={10} className="shrink-0" />
+                          <Icon size={9} className="shrink-0" />
                           <span className="truncate">{award.name}</span>
                         </button>
                       );
