@@ -162,11 +162,13 @@ const JudgeTerminal = () => {
   const scoresRef = useRef<Record<string, string>>({});
 
   const handleSwitchJudge = () => {
-    // Confirmacao contextual: so se houver nota em rascunho (research-backed —
-    // logout nao eh destrutivo, modal so atrita; padrao Twitter/Slack).
-    // `scores` eh o state de notas digitadas (vai ser declarado abaixo).
+    // Confirmacao SEMPRE — proposito eh trava de seguranca contra clique
+    // acidental no meio do festival. Mensagem mais forte se houver rascunho.
     const hasDraft = Object.values(scoresRef.current ?? {}).some(v => v !== '' && v !== undefined && v !== null);
-    if (hasDraft && !confirm('Sair? Sua nota em andamento será descartada.')) return;
+    const msg = hasDraft
+      ? 'Sair do terminal? Sua nota em andamento será descartada e você precisará digitar o PIN novamente pra voltar.'
+      : 'Sair do terminal? Você precisará digitar o PIN novamente pra voltar.';
+    if (!confirm(msg)) return;
     clearJudgeSession();
     navigate('/judge-login', { replace: true });
   };
