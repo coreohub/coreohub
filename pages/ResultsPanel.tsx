@@ -32,16 +32,33 @@ interface GroupedResult {
 }
 
 interface MedalThresholds { gold: number; silver: number; bronze: number; }
+type PremiationSystem = 'THRESHOLD' | 'RANKING';
 
 const DEFAULT_THRESHOLDS: MedalThresholds = { gold: 9.0, silver: 8.0, bronze: 7.0 };
 
+/* ── Medal styles ── */
+const MEDAL_GOLD          = { label: 'Ouro',         color: 'text-yellow-500', bg: 'bg-yellow-50 dark:bg-yellow-500/10', border: 'border-yellow-200 dark:border-yellow-500/30' };
+const MEDAL_SILVER        = { label: 'Prata',        color: 'text-slate-400',  bg: 'bg-slate-50 dark:bg-slate-800',      border: 'border-slate-300 dark:border-slate-600'      };
+const MEDAL_BRONZE        = { label: 'Bronze',       color: 'text-amber-600',  bg: 'bg-amber-50 dark:bg-amber-500/10',   border: 'border-amber-200 dark:border-amber-500/30'   };
+const MEDAL_PARTICIPATION = { label: 'Participação', color: 'text-slate-500',  bg: 'bg-slate-50 dark:bg-white/5',        border: 'border-slate-200 dark:border-white/10'       };
+
 /* ── Helpers ── */
-const getMedal = (score: number, t: MedalThresholds) => {
-  if (score >= t.gold)   return { label: 'Ouro',        color: 'text-yellow-500',  bg: 'bg-yellow-50 dark:bg-yellow-500/10',  border: 'border-yellow-200 dark:border-yellow-500/30' };
-  if (score >= t.silver) return { label: 'Prata',       color: 'text-slate-400',   bg: 'bg-slate-50 dark:bg-slate-800',       border: 'border-slate-300 dark:border-slate-600'      };
-  if (score >= t.bronze) return { label: 'Bronze',      color: 'text-amber-600',   bg: 'bg-amber-50 dark:bg-amber-500/10',    border: 'border-amber-200 dark:border-amber-500/30'   };
-  return                        { label: 'Participação', color: 'text-slate-500',   bg: 'bg-slate-50 dark:bg-white/5',         border: 'border-slate-200 dark:border-white/10'       };
+const getMedalByThreshold = (score: number, t: MedalThresholds) => {
+  if (score >= t.gold)   return MEDAL_GOLD;
+  if (score >= t.silver) return MEDAL_SILVER;
+  if (score >= t.bronze) return MEDAL_BRONZE;
+  return MEDAL_PARTICIPATION;
 };
+
+const getMedalByRank = (rank: number) => {
+  if (rank === 0) return MEDAL_GOLD;
+  if (rank === 1) return MEDAL_SILVER;
+  if (rank === 2) return MEDAL_BRONZE;
+  return MEDAL_PARTICIPATION;
+};
+
+const resolveMedal = (score: number, rank: number, system: PremiationSystem, t: MedalThresholds) =>
+  system === 'RANKING' ? getMedalByRank(rank) : getMedalByThreshold(score, t);
 
 const scoreColor = (score: number, t: MedalThresholds) => {
   if (score >= t.gold)   return 'text-yellow-500 dark:text-yellow-400';
@@ -61,14 +78,16 @@ const ResultsPanel = () => {
   const [filterCategory, setFilterCategory] = useState('');
   const [publishing, setPublishing] = useState(false);
   const [thresholds, setThresholds] = useState<MedalThresholds>(DEFAULT_THRESHOLDS);
+  const [premiationSystem, setPremiationSystem] = useState<PremiationSystem>('THRESHOLD');
 
   /* ── Fetch ── */
   const fetchResults = async () => {
     setLoading(true);
     try {
       const { fetchActiveEventConfig } = await import('../services/supabase');
-      const cfg = await fetchActiveEventConfig('medal_thresholds');
+      const cfg = await fetchActiveEventConfig('medal_thresholds, premiation_system');
       setThresholds(cfg?.medal_thresholds ?? DEFAULT_THRESHOLDS);
+      setPremiationSystem(cfg?.premiation_system === 'RANKING' ? 'RANKING' : 'THRESHOLD');
 
       const { data: evals, error } = await supabase
         .from('evaluations')
@@ -203,7 +222,7 @@ const ResultsPanel = () => {
     ];
     Object.entries(groupedByGenreCat).forEach(([, entries]) => {
       entries.forEach((r, i) => {
-        const medal = getMedal(r.average_score, thresholds);
+        const medal = resolveMedal(r.average_score, i, premiationSystem, thresholds);
         rows.push([`${i + 1}°`, r.nome_coreografia, r.estudio, r.estilo_danca, r.categoria, r.tipo_apresentacao, r.average_score.toFixed(2), r.evaluations_count, medal.label]);
       });
     });
@@ -357,7 +376,7 @@ const ResultsPanel = () => {
 
                   <div className="divide-y divide-slate-100 dark:divide-white/5">
                     {entries.map((entry, idx) => {
-                      const medal  = getMedal(entry.average_score, thresholds);
+                      const medal  = resolveMedal(entry.average_score, idx, premiationSystem, thresholds);
                       const isOpen = expandedId === entry.id;
                       return (
                         <div key={entry.id}>

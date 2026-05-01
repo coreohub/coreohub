@@ -31,8 +31,20 @@ const requireJudgeSession = () => {
   return { token: s.producer_token, judge_id: s.judge_id };
 };
 
+export type DeliberationStatus = 'COLETANDO' | 'DELIBERACAO' | 'CONFERENCIA' | 'LIBERADO';
+
+export interface TerminalEvent {
+  id: string;
+  name: string;
+  slug: string | null;
+  status: string | null;
+  deliberation_status?: DeliberationStatus;
+  conferencia_started_at?: string | null;
+  conferencia_duration_seconds?: number;
+}
+
 export interface TerminalData {
-  event: { id: string; name: string; slug: string | null; status: string | null } | null;
+  event: TerminalEvent | null;
   judge: {
     id: string;
     name: string;
@@ -49,6 +61,7 @@ export interface TerminalData {
   } | null;
   registrations: any[];
   event_styles: { id: string; name: string }[];
+  marcacoes: { registration_id: string }[];
 }
 
 export const fetchTerminalData = async (): Promise<TerminalData> => {
@@ -135,4 +148,107 @@ export const uploadAudio = async (registrationId: string, blob: Blob): Promise<s
     throw new Error(data?.detail ?? data?.reason ?? 'failed_to_upload_audio');
   }
   return data.audio_url as string;
+};
+
+/* ─── Phase 3 — Deliberação de prêmios especiais ────────────────────────── */
+
+export interface StarredAward {
+  id: string;
+  name: string;
+  enabled: boolean;
+  isTemplate?: boolean;
+  formation?: string;
+  description?: string;
+}
+
+export interface StarredRegistration {
+  id: string;
+  nome_coreografia: string;
+  estudio: string;
+  estilo_danca: string;
+  categoria: string;
+  tipo_apresentacao?: string;
+  formacao?: string;
+}
+
+export interface StarredData {
+  event: TerminalEvent | null;
+  marcacoes: { registration_id: string; created_at: string }[];
+  deliberations: { registration_id: string; award_id: string; award_name: string }[];
+  registrations: StarredRegistration[];
+  awards: StarredAward[];
+}
+
+export interface DeliberationAttribution {
+  registration_id: string;
+  award_id: string;
+  award_name: string;
+}
+
+export interface ConferenciaData {
+  event: TerminalEvent | null;
+  mine: { registration_id: string; award_id: string; award_name: string }[];
+  aggregate: {
+    registration_id: string;
+    award_id: string;
+    award_name: string;
+    judge_count: number;
+  }[];
+  registrations: {
+    id: string;
+    nome_coreografia: string;
+    estudio: string;
+    estilo_danca: string;
+    categoria: string;
+  }[];
+}
+
+/** Toggle estrela na apresentação atual. Retorna estado novo (starred). */
+export const toggleStar = async (registration_id: string): Promise<boolean> => {
+  const { token, judge_id } = requireJudgeSession();
+  const { data, status } = await callJudgeFn({
+    action: 'submit-star',
+    token,
+    judge_id,
+    registration_id,
+  });
+  if (status !== 200 || !data?.ok) {
+    throw new Error(data?.detail ?? data?.reason ?? 'failed_to_star');
+  }
+  return Boolean(data.starred);
+};
+
+/** Lista marcações + deliberações já feitas pelo jurado (pra tela /deliberacao). */
+export const fetchStarred = async (): Promise<StarredData> => {
+  const { token, judge_id } = requireJudgeSession();
+  const { data, status } = await callJudgeFn({ action: 'get-starred', token, judge_id });
+  if (status !== 200 || !data?.ok) {
+    throw new Error(data?.detail ?? data?.reason ?? 'failed_to_load');
+  }
+  return data as StarredData;
+};
+
+/** Submete o conjunto completo de atribuições jurado→prêmio (substitui anterior). */
+export const submitDeliberation = async (attributions: DeliberationAttribution[]) => {
+  const { token, judge_id } = requireJudgeSession();
+  const { data, status } = await callJudgeFn({
+    action: 'submit-deliberation',
+    token,
+    judge_id,
+    attributions,
+  });
+  if (status !== 200 || !data?.ok) {
+    throw new Error(data?.detail ?? data?.reason ?? 'failed_to_submit_deliberation');
+  }
+  return data.count as number;
+};
+
+/** Atribuições do jurado + agregado anônimo do evento (pra tela /conferencia). */
+export const fetchConferencia = async (): Promise<ConferenciaData> => {
+  const { token, judge_id } = requireJudgeSession();
+  const { data, status } = await callJudgeFn({ action: 'get-conferencia', token, judge_id });
+  if (status !== 200 || !data?.ok) {
+    throw new Error(data?.detail ?? data?.reason ?? 'failed_to_load');
+  }
+  return data as ConferenciaData;
 };

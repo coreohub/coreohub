@@ -216,19 +216,21 @@ const JudgeTerminal = () => {
 
   /* ── Special Awards (loaded from event config) ── */
   const [awardsConfig, setAwardsConfig] = useState<SpecialAward[]>([]);
-  const [nominations,  setNominations]  = useState<Record<string, boolean>>({});  // award.id → nominated
-
-  const toggleNomination = (awardId: string) =>
-    setNominations(prev => ({ ...prev, [awardId]: !prev[awardId] }));
+  // Phase 3: marcações ⭐ por apresentação (Set de registration_id).
+  // Substitui o modelo antigo de chips por prêmio — agora é 1 estrela curatorial,
+  // a atribuição de prêmio acontece pós-bloco em /deliberacao.
+  const [starredSet, setStarredSet] = useState<Set<string>>(new Set());
+  const [starringInFlight, setStarringInFlight] = useState(false);
 
   /* ── Audio ── */
   const [isRecording,   setIsRecording]   = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [micAttempted,  setMicAttempted]  = useState(false);
-  const [audioLevels,   setAudioLevels]   = useState<number[]>([0, 0, 0, 0, 0]);
   const audioContextRef    = useRef<AudioContext | null>(null);
   const analyserRef        = useRef<AnalyserNode | null>(null);
   const animationFrameRef  = useRef<number | undefined>(undefined);
+  const waveformCanvasRef  = useRef<HTMLCanvasElement | null>(null);
+  const waveformBarsRef    = useRef<number[]>([]);
   // Buffer de gravação: chunks de 1s (timeslice) acumulados.
   // Phase 2B: passa de "rolling 90s" pra gravação completa, com cap de 30 min
   // (1800s) só pra evitar memory leak em jurado que esquece de parar.
@@ -359,9 +361,9 @@ const JudgeTerminal = () => {
     setCurrentIndex(0);
     setIsSubmitted(false);
     setSubmittedAt(null);
-    setNominations({});
+    setStarredSet(new Set()); // limpa starred local; load do terminal-data popula novamente
     rollingChunksRef.current = [];
-    setAudioLevels([0, 0, 0, 0, 0]);
+    waveformBarsRef.current = [];
     setTieWarning(null);
   }, [selectedJudge?.id]);
 
@@ -468,6 +470,10 @@ const JudgeTerminal = () => {
           cfg = td.config;
           sched = td.registrations;
           gData = td.event_styles;
+          // Phase 3: hidrata estrelas previamente marcadas neste evento
+          if (Array.isArray(td.marcacoes) && td.marcacoes.length > 0) {
+            setStarredSet(new Set(td.marcacoes.map(m => m.registration_id)));
+          }
         } else {
           // Fluxo legado: produtor/admin logado no device, queries diretas via RLS.
           const { fetchActiveEventConfig } = await import('../services/supabase');
@@ -551,7 +557,7 @@ const JudgeTerminal = () => {
     return awardsConfig.filter(a => awardMatchesFormation(a, formation));
   }, [currentPerformance, awardsConfig]);
 
-  /* ── Update criteria + reset nominations when performance changes ── */
+  /* ── Update criteria when performance changes ── */
   useEffect(() => {
     if (!currentPerformance) return;
     const newCriteria = resolveGenreCriteria(currentPerformance.estilo_danca, evalConfig, genreList);
@@ -561,7 +567,8 @@ const JudgeTerminal = () => {
     setIsSubmitted(false);
     setSubmittedAt(null);
     setTieWarning(null);
-    setNominations({});  // reset nominations for new performance
+    // starredSet NÃO reseta por apresentação — é global por jurado/evento.
+    // O estado da estrela na apresentação atual vem de `starredSet.has(currentPerformance.id)`
   }, [currentIndex, currentPerformance?.estilo_danca, evalConfig, genreList, resolveGenreCriteria]);
 
   /* ── Tie check whenever weighted avg changes and all filled ── */
@@ -594,28 +601,66 @@ const JudgeTerminal = () => {
       if (ac.state === 'suspended') await ac.resume();
       audioContextRef.current = ac;
 
-      // AnalyserNode para onda sonora real
+      // AnalyserNode pra waveform real (time-domain, oscilografica).
+      // fftSize 256 → 128 samples por frame, mais que suficiente pra calcular
+      // RMS por frame e empurrar pra um buffer rolling de barras verticais.
       const source   = ac.createMediaStreamSource(stream);
       const analyser = ac.createAnalyser();
-      analyser.fftSize = 32;
+      analyser.fftSize = 256;
       source.connect(analyser);
       analyserRef.current = analyser;
 
-      // Loop de animação baseado em níveis reais de áudio
-      const updateLevels = () => {
-        if (!analyserRef.current) return;
-        const data = new Uint8Array(analyserRef.current.frequencyBinCount);
-        analyserRef.current.getByteFrequencyData(data);
-        const bucketSize = Math.max(1, Math.floor(data.length / 5));
-        const levels = Array.from({ length: 5 }, (_, i) => {
-          const slice = data.slice(i * bucketSize, (i + 1) * bucketSize);
-          const avg   = slice.reduce((a, b) => a + b, 0) / slice.length;
-          return avg / 255;
-        });
-        setAudioLevels(levels);
-        animationFrameRef.current = requestAnimationFrame(updateLevels);
+      // Buffer rolling de amplitudes (RMS por frame). Cada entrada vira uma
+      // barra vertical no canvas — padrao Voice Memos / WhatsApp.
+      const MAX_BARS = 32;
+      waveformBarsRef.current = [];
+
+      const drawWaveform = () => {
+        const analyser = analyserRef.current;
+        const canvas   = waveformCanvasRef.current;
+        if (!analyser || !canvas) {
+          animationFrameRef.current = requestAnimationFrame(drawWaveform);
+          return;
+        }
+        // Time-domain: 128 = silencio, 0/255 = picos
+        const buf = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteTimeDomainData(buf);
+
+        // RMS amostral (deviation media da linha de silencio)
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) {
+          const v = (buf[i] - 128) / 128;
+          sum += v * v;
+        }
+        const rms = Math.sqrt(sum / buf.length);
+
+        const bars = waveformBarsRef.current;
+        bars.push(rms);
+        if (bars.length > MAX_BARS) bars.shift();
+
+        // Render
+        const dpr = window.devicePixelRatio || 1;
+        const w   = canvas.width  / dpr;
+        const h   = canvas.height / dpr;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx.clearRect(0, 0, w, h);
+          ctx.fillStyle = 'rgb(244 63 94)'; // rose-500
+          const mid     = h / 2;
+          const barW    = w / MAX_BARS;
+          const barGap  = Math.max(1, barW * 0.35);
+          bars.forEach((amp, i) => {
+            // Boost low signal pra dar feedback visivel mesmo em fala baixa
+            const scaled = Math.min(1, amp * 2.5);
+            const barH   = Math.max(1.5, scaled * (h - 2));
+            const x      = i * barW;
+            ctx.fillRect(x, mid - barH / 2, barW - barGap, barH);
+          });
+        }
+        animationFrameRef.current = requestAnimationFrame(drawWaveform);
       };
-      animationFrameRef.current = requestAnimationFrame(updateLevels);
+      animationFrameRef.current = requestAnimationFrame(drawWaveform);
 
       // Rolling buffer: chunks de 1s, mantém últimos 90s
       rollingChunksRef.current = [];
@@ -637,11 +682,17 @@ const JudgeTerminal = () => {
     if (mediaRecorder && isRecording) {
       mediaRecorder.stop();
       setIsRecording(false);
-      setAudioLevels([0, 0, 0, 0, 0]);
+      waveformBarsRef.current = [];
       mediaRecorder.stream.getTracks().forEach(t => t.stop());
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       if (analyserRef.current) { analyserRef.current.disconnect(); analyserRef.current = null; }
       if (audioContextRef.current) audioContextRef.current.close();
+      // Limpa o canvas pra nao deixar a ultima frame congelada
+      const c = waveformCanvasRef.current;
+      if (c) {
+        const ctx = c.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, c.width, c.height);
+      }
     }
   };
 
@@ -650,6 +701,60 @@ const JudgeTerminal = () => {
     if (flashRef.current) clearTimeout(flashRef.current);
     setFlashInvalid(true);
     flashRef.current = setTimeout(() => setFlashInvalid(false), 500);
+  };
+
+  /* ── Phase 3: toggle estrela na apresentação atual ─────────────────────
+     - Em demo: toggle só local (não persiste)
+     - Em judgeSession: chama Edge Function (submit-star) com optimistic update
+     - Em fluxo legado: insert/delete direto no Supabase
+  */
+  const toggleStarCurrent = async () => {
+    if (!currentPerformance || isSubmitted || starringInFlight) return;
+    handleActivity();
+    const id = currentPerformance.id;
+    const wasStarred = starredSet.has(id);
+
+    // Optimistic update
+    setStarredSet(prev => {
+      const next = new Set(prev);
+      if (wasStarred) next.delete(id); else next.add(id);
+      return next;
+    });
+
+    if (isDemoMode) return; // não persiste em demo
+
+    setStarringInFlight(true);
+    try {
+      if (judgeSession) {
+        const { toggleStar } = await import('../services/judgeApi');
+        await toggleStar(id);
+      } else if (selectedJudge) {
+        // Fluxo legado: produtor logado, RLS via auth.uid()
+        if (wasStarred) {
+          await supabase
+            .from('marcacoes_juri')
+            .delete()
+            .eq('judge_id', selectedJudge.id)
+            .eq('registration_id', id);
+        } else {
+          await supabase.from('marcacoes_juri').insert([{
+            judge_id: selectedJudge.id,
+            registration_id: id,
+            event_id: currentPerformance.event_id,
+          }]);
+        }
+      }
+    } catch (e) {
+      console.warn('Falha ao toggle estrela, revertendo:', e);
+      // Reverte optimistic update
+      setStarredSet(prev => {
+        const next = new Set(prev);
+        if (wasStarred) next.add(id); else next.delete(id);
+        return next;
+      });
+    } finally {
+      setStarringInFlight(false);
+    }
   };
 
   /* ── Numpad — scale-aware input handler ── */
@@ -730,22 +835,9 @@ const JudgeTerminal = () => {
     }
 
     try {
-      const nominatedAwards = visibleAwards.filter(a => nominations[a.id]);
-      // Em judgeSession os destaques vão junto no payload de submit-evaluation
-      // (Edge Function insere). No fluxo do produtor logado, insere direto.
-      if (!judgeSession && nominatedAwards.length > 0) {
-        const highlights = nominatedAwards.map(a => ({
-          registration_id: currentPerformance.id,
-          judge_id:        selectedJudge.id,
-          tipo_destaque:   a.id.toUpperCase(),
-          award_name:      a.name,
-        }));
-        await supabase.from('destaques_votacao').insert(highlights);
-      }
-      // Highlights pra mandar via Edge Function quando jurado-sessão
-      const judgeSessionHighlights = judgeSession
-        ? nominatedAwards.map(a => ({ tipo_destaque: a.id.toUpperCase(), award_name: a.name }))
-        : [];
+      // Phase 3: highlights/destaques inline foram REMOVIDOS — atribuição de
+      // prêmio especial agora acontece pós-bloco em /deliberacao a partir das
+      // marcações ⭐ (tabela marcacoes_juri).
 
       let audioUrl: string | null = null;
       if (rollingChunksRef.current.length > 0) {
@@ -788,7 +880,7 @@ const JudgeTerminal = () => {
           audit_log:              auditEntry,
         };
         if (judgeSession) {
-          await submitEvaluationViaApi({ ...evalRow, highlights: judgeSessionHighlights });
+          await submitEvaluationViaApi(evalRow);
         } else {
           const { error: evalErr } = await supabase.from('evaluations').insert([evalRow]);
           if (evalErr) throw evalErr;
@@ -828,7 +920,7 @@ const JudgeTerminal = () => {
         audit_log:              auditEntry,
       };
       if (judgeSession) {
-        await submitEvaluationViaApi({ ...evalRow, highlights: judgeSessionHighlights });
+        await submitEvaluationViaApi(evalRow);
       } else {
         const { error: evalErr } = await supabase.from('evaluations').insert([evalRow]);
         if (evalErr) throw evalErr;
@@ -861,7 +953,7 @@ const JudgeTerminal = () => {
     setScores(initScores(demoCriteria));
     setActiveField(demoCriteria[0].name);
     setAwardsConfig(DEMO_AWARDS);
-    setNominations({});
+    setStarredSet(new Set());
     setIsDemoMode(true);
     setIsSubmitted(false);
     setSubmittedAt(null);
@@ -874,9 +966,9 @@ const JudgeTerminal = () => {
     handleActivity();
     setIsSubmitted(false);
     setSubmittedAt(null);
-    setNominations({});
+    // starredSet persiste — é global por jurado/evento
     rollingChunksRef.current = [];
-    setAudioLevels([0, 0, 0, 0, 0]);
+    waveformBarsRef.current = [];
     setMicAttempted(false);
     setTieWarning(null);
     setFeedbackText('');
@@ -1169,8 +1261,33 @@ const JudgeTerminal = () => {
           </div>
         </div>
 
-        {/* Actions: mic + PIN lock + judge selector */}
+        {/* Actions: ⭐ marcar destaque + mic + PIN lock + judge selector */}
         <div className="flex items-center gap-1.5 shrink-0">
+
+          {/* Phase 3: ⭐ Marcar destaque pra deliberação pós-bloco.
+              Single-tap curatorial — atribuição de prêmio acontece em /deliberacao. */}
+          {currentPerformance && (() => {
+            const starred = starredSet.has(currentPerformance.id);
+            return (
+              <button
+                onClick={toggleStarCurrent}
+                disabled={isSubmitted || starringInFlight}
+                title={starred ? 'Remover marcação' : 'Marcar como destaque pra deliberação'}
+                className={`inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border transition-all
+                  ${isSubmitted
+                    ? 'bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-50 cursor-not-allowed'
+                    : starred
+                      ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-300 dark:border-amber-500/30 text-amber-600 dark:text-amber-400'
+                      : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:bg-amber-50 dark:hover:bg-amber-500/5 hover:text-amber-500 hover:border-amber-300/50'
+                  }`}
+              >
+                <Star size={12} className={starred ? 'fill-current' : ''} />
+                <span className="text-[8px] font-black uppercase tracking-widest hidden sm:inline">
+                  {starred ? 'Destaque' : 'Marcar'}
+                </span>
+              </button>
+            );
+          })()}
 
           {/* Mic compacto inline — substitui o card grande do rodapé */}
           <button
@@ -1187,35 +1304,21 @@ const JudgeTerminal = () => {
           >
             {isRecording ? <StopCircle size={12} /> : <Mic size={12} />}
             {isRecording && (
-              /* Waveform SVG real — linha ondulada animada baseada em audioLevels.
-                 Mais "som" visual que barras verticais (research-backed: padrão
-                 Voice Memos / Otter / WhatsApp). */
-              <svg
-                viewBox="0 0 60 14"
-                preserveAspectRatio="none"
+              /* Waveform real — Web Audio AnalyserNode em time-domain renderizado
+                 em canvas 2D. Barras verticais rolling espelhadas no centro,
+                 padrao Voice Memos / WhatsApp. */
+              <canvas
+                ref={el => {
+                  waveformCanvasRef.current = el;
+                  // HiDPI: dimensoes internas = CSS * dpr pra ficar nitido
+                  if (el) {
+                    const dpr = window.devicePixelRatio || 1;
+                    if (el.width !== 60 * dpr) el.width = 60 * dpr;
+                    if (el.height !== 16 * dpr) el.height = 16 * dpr;
+                  }
+                }}
                 className="h-4 w-12 shrink-0"
-              >
-                <path
-                  d={(() => {
-                    const w = 60, h = 14, mid = h / 2;
-                    const n = audioLevels.length;
-                    // Espelha levels pra criar uma onda simétrica acima/abaixo
-                    const points = audioLevels.map((l, i) => {
-                      const x = (i / (n - 1)) * w;
-                      const dir = i % 2 === 0 ? 1 : -1;
-                      const amp = Math.max(0.15, l) * (mid - 1);
-                      return `${x},${mid - dir * amp}`;
-                    });
-                    return `M 0,${mid} L ${points.join(' L ')} L ${w},${mid}`;
-                  })()}
-                  stroke="rgb(244 63 94)"
-                  strokeWidth="1.2"
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  style={{ transition: 'd 30ms linear' }}
-                />
-              </svg>
+              />
             )}
             <span className="text-[8px] font-black uppercase tracking-widest hidden sm:inline">
               {isRecording ? 'REC' : 'MIC'}
@@ -1464,10 +1567,10 @@ const JudgeTerminal = () => {
 
         ) : (
           /* ── Tablet-first layout: criteria bigger (left), numpad compact (right) ── */
-          <div className="flex flex-col-reverse md:flex-row h-full min-h-0 overflow-hidden">
+          <div className="flex flex-col-reverse landscape:flex-row h-full min-h-0 overflow-hidden">
 
             {/* ══ CRITERIA PANEL — expanded, left on tablet ══ */}
-            <section className="w-full md:w-[44%] lg:w-[42%] flex flex-col border-t md:border-t-0 md:border-r border-slate-100 dark:border-slate-800 bg-white dark:bg-transparent overflow-y-auto">
+            <section className="w-full landscape:w-[44%] lg:w-[42%] flex flex-col border-t landscape:border-t-0 landscape:border-r border-slate-100 dark:border-slate-800 bg-white dark:bg-transparent overflow-y-auto">
 
               {/* Sticky header: genre + weighted avg */}
               <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2.5 bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800">
@@ -1489,9 +1592,7 @@ const JudgeTerminal = () => {
                   em landscape compacto, alinhado com numpad), 1-col so em
                   desktop (lg+) onde sobra largura. */}
               <div className="flex-1 px-2 py-2 grid grid-cols-2 lg:grid-cols-1 gap-1 content-start">
-                {(() => {
-                  const totalPeso = activeCriteria.reduce((s, c) => s + c.peso, 0);
-                  return activeCriteria.map((criterion, i) => {
+                {activeCriteria.map((criterion, i) => {
                     const isActive = activeField === criterion.name;
                     const val      = scores[criterion.name] || '';
                     return (
@@ -1511,10 +1612,10 @@ const JudgeTerminal = () => {
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <span className={`text-[7px] font-black w-4 h-4 rounded-md flex items-center justify-center shrink-0
-                            ${isSubmitted || val
-                              ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                              : isActive
-                                ? 'bg-[#ff0068] text-white'
+                            ${isActive
+                              ? 'bg-[#ff0068] text-white'
+                              : isSubmitted || val
+                                ? 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                                 : 'bg-slate-100 dark:bg-white/5 text-slate-400'
                             }`}>
                             {i + 1}
@@ -1527,7 +1628,7 @@ const JudgeTerminal = () => {
                               {criterionLabel(criterion)}
                             </span>
                             <span className="text-[7px] text-slate-400 font-bold">
-                              ×{criterion.peso} · {totalPeso > 0 ? Math.round((criterion.peso / totalPeso) * 100) : 0}%
+                              peso {criterion.peso}
                             </span>
                           </div>
                         </div>
@@ -1536,42 +1637,12 @@ const JudgeTerminal = () => {
                         </span>
                       </button>
                     );
-                  });
-                })()}
+                  })}
               </div>
 
-              {/* Indicacoes — chips compactos com flex-wrap. Substitui o grid
-                  fixo de 2 colunas (que deixava 3 awards em 2 linhas com scroll).
-                  Agora todos cabem em 1-2 linhas sem scroll. */}
-              {visibleAwards.length > 0 && (
-                <div className="px-2 pb-2 pt-1 border-t border-slate-100 dark:border-slate-800">
-                  <p className="text-[7px] font-black uppercase tracking-widest text-slate-400 px-1 mb-1">{t('criteria.nominationsLabel')}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {visibleAwards.map(award => {
-                      const Icon      = resolveAwardIcon(award);
-                      const nominated = !!nominations[award.id];
-                      return (
-                        <button
-                          key={award.id}
-                          onClick={() => { if (!isSubmitted) { toggleNomination(award.id); handleActivity(); } }}
-                          disabled={isSubmitted}
-                          title={award.description || award.name}
-                          className={`flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg text-[8px] font-black uppercase tracking-tight border transition-all leading-none flex-1 min-w-0
-                            ${nominated
-                              ? 'bg-violet-600 border-transparent text-white shadow-sm'
-                              : isSubmitted
-                                ? 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 cursor-default'
-                                : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-violet-400/40 hover:text-violet-500'
-                            }`}
-                        >
-                          <Icon size={9} className="shrink-0" />
-                          <span className="truncate">{award.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+              {/* Phase 3: chips de awards inline FORAM REMOVIDOS.
+                  A marcação agora é única (⭐) no header acima do score, e a
+                  atribuição de prêmio especial acontece pós-bloco em /deliberacao. */}
             </section>
 
             {/* ══ NUMPAD PANEL — compact, right on tablet ══ */}
@@ -1605,18 +1676,13 @@ const JudgeTerminal = () => {
                       ))}
                     </div>
                   </div>
-                  {/* Submitted nominations summary */}
-                  {visibleAwards.filter(a => nominations[a.id]).length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {visibleAwards.filter(a => nominations[a.id]).map(a => {
-                        const Icon = resolveAwardIcon(a);
-                        return (
-                          <div key={a.id} className="flex items-center gap-1 px-2 py-1 bg-violet-100 dark:bg-violet-500/15 border border-violet-200 dark:border-violet-500/20 rounded-full">
-                            <Icon size={8} className="text-violet-600 dark:text-violet-400" />
-                            <span className="text-[7px] font-black uppercase tracking-widest text-violet-700 dark:text-violet-300">{a.name}</span>
-                          </div>
-                        );
-                      })}
+                  {/* Phase 3: Indicador de estrela quando esta apresentação foi marcada */}
+                  {currentPerformance && starredSet.has(currentPerformance.id) && (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-full">
+                      <Star size={10} className="text-amber-500 dark:text-amber-400 fill-amber-500 dark:fill-amber-400" />
+                      <span className="text-[8px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">
+                        Marcada como destaque
+                      </span>
                     </div>
                   )}
 

@@ -3126,11 +3126,16 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                 {lotes.map((lote, i) => {
                   const isLast = i === lotes.length - 1;
                   return (
-                    <div key={i} className="flex gap-2 items-start bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-2xl p-3">
-                      <div className="w-12 shrink-0 pt-2.5">
+                    <div key={i} className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-2xl p-3">
+                      <div className="flex items-center justify-between mb-2">
                         <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Lote {i + 1}</p>
+                        {lotes.length > 1 && (
+                          <button onClick={() => removeLote(i)} className="p-1 -mr-1 text-slate-400 hover:text-red-500 transition-colors" title="Remover lote">
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
-                      <div className="flex-1 grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
                           <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">Preço (R$)</label>
                           <input type="number" min={0} value={lote.preco || ''} onChange={e => updateLote(i, { preco: Number(e.target.value) })} className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 font-bold text-sm" />
@@ -3146,11 +3151,6 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                           )}
                         </div>
                       </div>
-                      {lotes.length > 1 && (
-                        <button onClick={() => removeLote(i)} className="p-2 text-slate-400 hover:text-red-500 transition-colors shrink-0" title="Remover lote">
-                          <Trash2 size={14} />
-                        </button>
-                      )}
                     </div>
                   );
                 })}

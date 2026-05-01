@@ -12,6 +12,12 @@
  *   { action: "submit-evaluation", token, judge_id, payload } — Phase 2A: salva avaliação
  *   { action: "get-previous-evaluations", token, judge_id } — Phase 2A: notas já dadas
  *
+ *   Phase 3 — Deliberação de prêmios especiais:
+ *   { action: "submit-star", token, judge_id, registration_id } — toggle estrela na apresentação
+ *   { action: "get-starred", token, judge_id } — lista marcações do jurado pra /deliberacao
+ *   { action: "submit-deliberation", token, judge_id, attributions: [{ registration_id, award_id, award_name }] }
+ *   { action: "get-conferencia", token, judge_id } — atribuições do jurado + agregado anônimo do evento
+ *
  * Segurança:
  *   - Token é o profiles.judge_access_token (revogável pelo produtor)
  *   - Toda action valida que judge_id pertence ao produtor do token
@@ -175,7 +181,7 @@ Deno.serve(async (req) => {
   const resolveActiveEvent = async () => {
     const { data } = await supa
       .from('events')
-      .select('id, name, slug, status')
+      .select('id, name, slug, status, deliberation_status, conferencia_started_at, conferencia_duration_seconds')
       .eq('created_by', producer.id)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -194,7 +200,7 @@ Deno.serve(async (req) => {
     const event = await resolveActiveEvent()
 
     // Lista todos os jurados do produtor (pra cards/filtros que mostram outros)
-    const [{ data: allJudges }, { data: configByEvent }, { data: configLegacy }, { data: registrations }, { data: eventStyles }] = await Promise.all([
+    const [{ data: allJudges }, { data: configByEvent }, { data: configLegacy }, { data: registrations }, { data: eventStyles }, { data: marcacoes }] = await Promise.all([
       supa.from('judges')
         .select('*')
         .eq('created_by', producer.id)
@@ -218,6 +224,13 @@ Deno.serve(async (req) => {
             .order('ordem_apresentacao', { ascending: true })
         : Promise.resolve({ data: [] } as any),
       supa.from('event_styles').select('id, name'),
+      // Phase 3: marcações ⭐ já feitas por este jurado neste evento
+      event?.id
+        ? supa.from('marcacoes_juri')
+            .select('registration_id')
+            .eq('judge_id', judge_id)
+            .eq('event_id', event.id)
+        : Promise.resolve({ data: [] } as any),
     ])
 
     const config = configByEvent ?? configLegacy ?? null
@@ -236,6 +249,7 @@ Deno.serve(async (req) => {
       config,
       registrations: registrations ?? [],
       event_styles: eventStyles ?? [],
+      marcacoes: marcacoes ?? [],
     })
   }
 
@@ -316,6 +330,183 @@ Deno.serve(async (req) => {
     }
 
     return json({ ok: true })
+  }
+
+  // ─── action: submit-star (toggle marcação ⭐ durante apresentação) ────────
+  if (action === 'submit-star') {
+    const { judge_id, registration_id } = body ?? {}
+    if (!judge_id || !registration_id) return json({ ok: false, reason: 'missing_fields' }, 400)
+
+    const judge = await verifyJudge(judge_id)
+    if (!judge) return json({ ok: false, reason: 'judge_not_found' }, 404)
+
+    // Resolve event_id pela registration + valida ownership
+    const { data: reg } = await supa
+      .from('registrations')
+      .select('id, event_id, events!inner(created_by)')
+      .eq('id', registration_id)
+      .maybeSingle()
+
+    if (!reg || (reg as any).events?.created_by !== producer.id) {
+      return json({ ok: false, reason: 'registration_not_found_or_not_yours' }, 403)
+    }
+
+    // Toggle: se já existe, remove; se não, insere
+    const { data: existing } = await supa
+      .from('marcacoes_juri')
+      .select('id')
+      .eq('judge_id', judge_id)
+      .eq('registration_id', registration_id)
+      .maybeSingle()
+
+    if (existing) {
+      const { error } = await supa.from('marcacoes_juri').delete().eq('id', existing.id)
+      if (error) return json({ error: 'db_error', detail: error.message }, 500)
+      return json({ ok: true, starred: false })
+    }
+
+    const { error } = await supa.from('marcacoes_juri').insert([{
+      judge_id,
+      registration_id,
+      event_id: (reg as any).event_id,
+      created_by: producer.id,
+    }])
+    if (error) return json({ error: 'db_error', detail: error.message }, 500)
+    return json({ ok: true, starred: true })
+  }
+
+  // ─── action: get-starred (lista marcações + atribuições atuais) ──────────
+  if (action === 'get-starred') {
+    const { judge_id } = body ?? {}
+    if (!judge_id) return json({ ok: false, reason: 'missing_fields' }, 400)
+
+    const judge = await verifyJudge(judge_id)
+    if (!judge) return json({ ok: false, reason: 'judge_not_found' }, 404)
+
+    const event = await resolveActiveEvent()
+    if (!event?.id) {
+      return json({ ok: true, event: null, marcacoes: [], deliberations: [], registrations: [], awards: [] })
+    }
+
+    const [{ data: marcacoes }, { data: dels }, { data: configByEvent }, { data: configLegacy }] = await Promise.all([
+      supa.from('marcacoes_juri')
+        .select('registration_id, created_at')
+        .eq('judge_id', judge_id)
+        .eq('event_id', event.id),
+      supa.from('deliberations')
+        .select('registration_id, award_id, award_name')
+        .eq('judge_id', judge_id)
+        .eq('event_id', event.id),
+      supa.from('configuracoes')
+        .select('premios_especiais')
+        .eq('event_id', event.id)
+        .maybeSingle(),
+      supa.from('configuracoes')
+        .select('premios_especiais')
+        .eq('id', '1')
+        .maybeSingle(),
+    ])
+
+    const awardsRaw = (configByEvent ?? configLegacy)?.premios_especiais ?? []
+    const awards = Array.isArray(awardsRaw)
+      ? awardsRaw.filter((a: any) => a && a.enabled)
+      : []
+
+    // Carrega só as registrations marcadas (otimiza payload)
+    const regIds = (marcacoes ?? []).map((m: any) => m.registration_id)
+    let registrations: any[] = []
+    if (regIds.length > 0) {
+      const { data: regs } = await supa
+        .from('registrations')
+        .select('id, nome_coreografia, estudio, estilo_danca, categoria, tipo_apresentacao, formacao')
+        .in('id', regIds)
+      registrations = regs ?? []
+    }
+
+    return json({
+      ok: true,
+      event,
+      marcacoes: marcacoes ?? [],
+      deliberations: dels ?? [],
+      registrations,
+      awards,
+    })
+  }
+
+  // ─── action: submit-deliberation (jurado atribui prêmios às marcações) ──
+  if (action === 'submit-deliberation') {
+    const { judge_id, attributions } = body ?? {}
+    if (!judge_id || !Array.isArray(attributions)) {
+      return json({ ok: false, reason: 'missing_fields' }, 400)
+    }
+
+    const judge = await verifyJudge(judge_id)
+    if (!judge) return json({ ok: false, reason: 'judge_not_found' }, 404)
+
+    const event = await resolveActiveEvent()
+    if (!event?.id) return json({ ok: false, reason: 'no_event' }, 400)
+
+    // Strategy: snapshot semantics — apaga deliberações antigas do jurado
+    // pro evento e reinsere. Idempotente, simples de raciocinar.
+    const { error: delErr } = await supa
+      .from('deliberations')
+      .delete()
+      .eq('judge_id', judge_id)
+      .eq('event_id', event.id)
+    if (delErr) return json({ error: 'db_error', detail: delErr.message }, 500)
+
+    // Filtra atribuições válidas (precisa de registration + award + name)
+    const rows = attributions
+      .filter((a: any) => a && a.registration_id && a.award_id && a.award_name)
+      .map((a: any) => ({
+        judge_id,
+        registration_id: a.registration_id,
+        event_id:        event.id,
+        award_id:        String(a.award_id),
+        award_name:      String(a.award_name),
+        created_by:      producer.id,
+      }))
+
+    if (rows.length > 0) {
+      const { error } = await supa.from('deliberations').insert(rows)
+      if (error) return json({ error: 'db_error', detail: error.message }, 500)
+    }
+
+    return json({ ok: true, count: rows.length })
+  }
+
+  // ─── action: get-conferencia (atribuições do jurado + agregado anônimo) ─
+  if (action === 'get-conferencia') {
+    const { judge_id } = body ?? {}
+    if (!judge_id) return json({ ok: false, reason: 'missing_fields' }, 400)
+
+    const judge = await verifyJudge(judge_id)
+    if (!judge) return json({ ok: false, reason: 'judge_not_found' }, 404)
+
+    const event = await resolveActiveEvent()
+    if (!event?.id) return json({ ok: true, event: null, mine: [], aggregate: [] })
+
+    const [{ data: mine }, { data: aggregate }, { data: regs }] = await Promise.all([
+      supa.from('deliberations')
+        .select('registration_id, award_id, award_name')
+        .eq('judge_id', judge_id)
+        .eq('event_id', event.id),
+      // View já agregada e anônima (só contagem)
+      supa.from('deliberation_aggregate')
+        .select('registration_id, award_id, award_name, judge_count')
+        .eq('event_id', event.id),
+      supa.from('registrations')
+        .select('id, nome_coreografia, estudio, estilo_danca, categoria')
+        .eq('event_id', event.id),
+    ])
+
+    return json({
+      ok: true,
+      event,
+      mine: mine ?? [],
+      aggregate: aggregate ?? [],
+      registrations: regs ?? [],
+    })
   }
 
   return json({ error: 'unknown_action' }, 400)

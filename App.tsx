@@ -26,6 +26,9 @@ const AINarration              = lazy(() => import('./pages/AINarration'));
 const AIAnalysis               = lazy(() => import('./pages/AIAnalysis'));
 const CheckIn                  = lazy(() => import('./pages/CheckIn'));
 const JudgeTerminal            = lazy(() => import('./pages/JudgeTerminal'));
+const Deliberacao              = lazy(() => import('./pages/Deliberacao'));
+const Conferencia              = lazy(() => import('./pages/Conferencia'));
+const Deliberacoes             = lazy(() => import('./pages/Deliberacoes'));
 const JudgePractice            = lazy(() => import('./pages/JudgePractice'));
 const ProducerDashboard        = lazy(() => import('./pages/ProducerDashboard'));
 const SuperAdminDashboard      = lazy(() => import('./pages/SuperAdmin'));
@@ -134,6 +137,29 @@ const JudgeTerminalRoute: React.FC<{ privateRouteProps: any }> = ({ privateRoute
     );
   }
   return <PrivateRoute {...privateRouteProps}><JudgeTerminal /></PrivateRoute>;
+};
+
+/** Wrapper genérico pra rotas de jurado standalone (judgeSession do localStorage).
+ *  Usado por /deliberacao e /conferencia — não exigem auth de produtor. */
+const JudgeStandaloneRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  let hasJudgeSession = false;
+  try {
+    const raw = localStorage.getItem('coreohub_judge_session');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.expires_at && parsed.expires_at > Date.now()) hasJudgeSession = true;
+    }
+  } catch {}
+
+  if (!hasJudgeSession) return <Navigate to="/" replace />;
+
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        {children}
+      </div>
+    </Suspense>
+  );
 };
 
 const PrivateLayout: React.FC<{
@@ -328,6 +354,9 @@ const App: React.FC = () => {
         <Route path="/account-settings" element={<PrivateRoute {...privateRouteProps}><AccountSettings onSaveSuccess={fetchConfig} /></PrivateRoute>} />
 
         <Route path="/judge-terminal" element={<JudgeTerminalRoute privateRouteProps={privateRouteProps} />} />
+        <Route path="/deliberacao" element={<JudgeStandaloneRoute><Deliberacao /></JudgeStandaloneRoute>} />
+        <Route path="/conferencia" element={<JudgeStandaloneRoute><Conferencia /></JudgeStandaloneRoute>} />
+        <Route path="/deliberacoes" element={<PrivateRoute {...privateRouteProps}><Deliberacoes /></PrivateRoute>} />
         <Route path="/judge-practice" element={<PrivateRoute {...privateRouteProps}><JudgePractice /></PrivateRoute>} />
         <Route path="/equipe-jurados-config" element={<PrivateRoute {...privateRouteProps}><JudgeManagement /></PrivateRoute>} />
 

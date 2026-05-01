@@ -54,7 +54,7 @@ const PERM_MENU: { perm: PermKey; path: string; label: string; icon: React.Eleme
   { perm: 'cronograma_leitura', path: '/manage-schedule', label: 'Cronograma',        icon: Calendar        },
   { perm: 'credenciamento',     path: '/check-in',        label: 'Credenciamento',    icon: QrCode          },
   { perm: 'marcacao_palco',     path: '/marcacao-palco',  label: 'Marcação de Palco', icon: PersonStanding  },
-  { perm: 'suporte_juri',       path: '/suporte-juri',    label: 'Suporte ao Júri',   icon: Headphones      },
+  { perm: 'suporte_juri',       path: '/suporte-juri',    label: 'Coordenador do Júri', icon: Headphones    },
   { perm: 'inscricoes_leitura', path: '/registrations',   label: 'Inscrições',        icon: ClipboardList   },
   { perm: 'triagem',            path: '/registrations',   label: 'Triagem',           icon: Filter          },
   { perm: 'financeiro',         path: '/qg-organizador',  label: 'Financeiro',        icon: CreditCard      },
@@ -70,6 +70,7 @@ const menuSections: MenuSection[] = [
       { path: '/seletiva-video',       label: 'Seletiva de Video',        icon: Video          },
       { path: '/importar-regulamento', label: 'Importar Regulamento',     icon: FileSearch     },
       { path: '/apuracao',             label: 'Resultados',               icon: BarChart2      },
+      { path: '/deliberacoes',         label: 'Deliberacao',              icon: Trophy         },
       { path: '/manage-schedule',      label: 'Sonoplastia e Cronograma', icon: Calendar       },
       { path: '/equipe-jurados',       label: 'Jurados',                  icon: UserCheck      },
       { path: '/generate-narration',   label: 'Narracao IA',              icon: Tv             },
@@ -108,8 +109,9 @@ const menuSections: MenuSection[] = [
       { path: '/check-in',        label: 'Credenciamento',          icon: QrCode,          roles: [UserRole.RECEPCAO] },
       // Marcacao de Palco
       { path: '/marcacao-palco',  label: 'Marcacao de Palco',       icon: PersonStanding,  roles: [UserRole.PALCO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
-      // Mesario — suporte ao juri
-      { path: '/suporte-juri',    label: 'Suporte ao Juri',         icon: Headphones,      roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
+      // Coordenador do Juri — acompanhamento de jurados + deliberacao
+      { path: '/suporte-juri',    label: 'Coordenador do Juri',     icon: Headphones,      roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
+      { path: '/deliberacoes',    label: 'Deliberacao',             icon: Trophy,          roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
     ],
   },
   {

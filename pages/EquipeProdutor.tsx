@@ -69,7 +69,7 @@ const PERM_GROUPS: { label: string; items: { key: PermKey; label: string; icon: 
     items: [
       { key: 'credenciamento',  label: 'Credenciamento / QR', icon: QrCode },
       { key: 'marcacao_palco',  label: 'Marcação de Palco', icon: Mic2 },
-      { key: 'suporte_juri',    label: 'Suporte ao Júri', icon: Star },
+      { key: 'suporte_juri',    label: 'Coordenador do Júri', icon: Star },
     ],
   },
   {
