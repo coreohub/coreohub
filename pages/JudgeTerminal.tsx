@@ -230,7 +230,6 @@ const JudgeTerminal = () => {
   const analyserRef        = useRef<AnalyserNode | null>(null);
   const animationFrameRef  = useRef<number | undefined>(undefined);
   const waveformCanvasRef  = useRef<HTMLCanvasElement | null>(null);
-  const waveformBarsRef    = useRef<number[]>([]);
   // Buffer de gravação: chunks de 1s (timeslice) acumulados.
   // Phase 2B: passa de "rolling 90s" pra gravação completa, com cap de 30 min
   // (1800s) só pra evitar memory leak em jurado que esquece de parar.
@@ -363,7 +362,6 @@ const JudgeTerminal = () => {
     setSubmittedAt(null);
     setStarredSet(new Set()); // limpa starred local; load do terminal-data popula novamente
     rollingChunksRef.current = [];
-    waveformBarsRef.current = [];
     setTieWarning(null);
   }, [selectedJudge?.id]);
 
@@ -601,62 +599,56 @@ const JudgeTerminal = () => {
       if (ac.state === 'suspended') await ac.resume();
       audioContextRef.current = ac;
 
-      // AnalyserNode pra waveform real (time-domain, oscilografica).
-      // fftSize 256 → 128 samples por frame, mais que suficiente pra calcular
-      // RMS por frame e empurrar pra um buffer rolling de barras verticais.
+      // AnalyserNode em frequency-domain (FFT spectrum analyzer).
+      // Padrao Spotify/Winamp: barras fixas que dancam com magnitude da frequencia.
+      // fftSize 64 → 32 bins, cada bar representa uma faixa. Smoothing evita jitter.
+      // Diferente de time-domain: silencio = barras zeradas (nao oscila no nada).
       const source   = ac.createMediaStreamSource(stream);
       const analyser = ac.createAnalyser();
-      analyser.fftSize = 256;
+      analyser.fftSize = 64;
+      analyser.smoothingTimeConstant = 0.8;
       source.connect(analyser);
       analyserRef.current = analyser;
 
-      // Buffer rolling de amplitudes (RMS por frame). Cada entrada vira uma
-      // barra vertical no canvas — padrao Voice Memos / WhatsApp.
-      const MAX_BARS = 32;
-      waveformBarsRef.current = [];
+      const NUM_BARS = analyser.frequencyBinCount; // 32
+      // Reusa o buffer entre frames (evita alocar Uint8Array a cada draw)
+      const freqData = new Uint8Array(NUM_BARS);
 
       const drawWaveform = () => {
-        const analyser = analyserRef.current;
-        const canvas   = waveformCanvasRef.current;
-        if (!analyser || !canvas) {
+        const an     = analyserRef.current;
+        const canvas = waveformCanvasRef.current;
+        if (!an || !canvas) {
           animationFrameRef.current = requestAnimationFrame(drawWaveform);
           return;
         }
-        // Time-domain: 128 = silencio, 0/255 = picos
-        const buf = new Uint8Array(analyser.frequencyBinCount);
-        analyser.getByteTimeDomainData(buf);
+        // Frequency-domain: 0 = silencio, 255 = pico de magnitude na faixa
+        an.getByteFrequencyData(freqData);
 
-        // RMS amostral (deviation media da linha de silencio)
-        let sum = 0;
-        for (let i = 0; i < buf.length; i++) {
-          const v = (buf[i] - 128) / 128;
-          sum += v * v;
-        }
-        const rms = Math.sqrt(sum / buf.length);
-
-        const bars = waveformBarsRef.current;
-        bars.push(rms);
-        if (bars.length > MAX_BARS) bars.shift();
-
-        // Render
         const dpr = window.devicePixelRatio || 1;
         const w   = canvas.width  / dpr;
         const h   = canvas.height / dpr;
         const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-          ctx.clearRect(0, 0, w, h);
-          ctx.fillStyle = 'rgb(244 63 94)'; // rose-500
-          const mid     = h / 2;
-          const barW    = w / MAX_BARS;
-          const barGap  = Math.max(1, barW * 0.35);
-          bars.forEach((amp, i) => {
-            // Boost low signal pra dar feedback visivel mesmo em fala baixa
-            const scaled = Math.min(1, amp * 2.5);
-            const barH   = Math.max(1.5, scaled * (h - 2));
-            const x      = i * barW;
-            ctx.fillRect(x, mid - barH / 2, barW - barGap, barH);
-          });
+        if (!ctx) {
+          animationFrameRef.current = requestAnimationFrame(drawWaveform);
+          return;
+        }
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = 'rgb(255 0 104)'; // brand #ff0068
+
+        const mid    = h / 2;
+        const barW   = w / NUM_BARS;
+        const barGap = Math.max(1, barW * 0.35);
+
+        for (let i = 0; i < NUM_BARS; i++) {
+          // Boost levemente pra fala baixa virar visivel sem saturar
+          const norm   = Math.min(1, (freqData[i] / 255) * 1.4);
+          const barH   = norm * (h - 2);
+          // Floor baixo (1px) pra silencio nao desaparecer 100% — sinaliza "vivo"
+          const drawnH = Math.max(1, barH);
+          const x      = i * barW;
+          // Espelha no eixo central (sobe + desce)
+          ctx.fillRect(x, mid - drawnH / 2, barW - barGap, drawnH);
         }
         animationFrameRef.current = requestAnimationFrame(drawWaveform);
       };
@@ -682,8 +674,7 @@ const JudgeTerminal = () => {
     if (mediaRecorder && isRecording) {
       mediaRecorder.stop();
       setIsRecording(false);
-      waveformBarsRef.current = [];
-      mediaRecorder.stream.getTracks().forEach(t => t.stop());
+        mediaRecorder.stream.getTracks().forEach(t => t.stop());
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       if (analyserRef.current) { analyserRef.current.disconnect(); analyserRef.current = null; }
       if (audioContextRef.current) audioContextRef.current.close();
@@ -968,7 +959,6 @@ const JudgeTerminal = () => {
     setSubmittedAt(null);
     // starredSet persiste — é global por jurado/evento
     rollingChunksRef.current = [];
-    waveformBarsRef.current = [];
     setMicAttempted(false);
     setTieWarning(null);
     setFeedbackText('');
@@ -1265,7 +1255,8 @@ const JudgeTerminal = () => {
         <div className="flex items-center gap-1.5 shrink-0">
 
           {/* Phase 3: ⭐ Marcar destaque pra deliberação pós-bloco.
-              Single-tap curatorial — atribuição de prêmio acontece em /deliberacao. */}
+              Em desktop (lg+) fica aqui no header; em mobile/tablet pequeno
+              vai pra um botão grande abaixo dos critérios (ergonomia polegar). */}
           {currentPerformance && (() => {
             const starred = starredSet.has(currentPerformance.id);
             return (
@@ -1273,7 +1264,7 @@ const JudgeTerminal = () => {
                 onClick={toggleStarCurrent}
                 disabled={isSubmitted || starringInFlight}
                 title={starred ? 'Remover marcação' : 'Marcar como destaque pra deliberação'}
-                className={`inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border transition-all
+                className={`hidden lg:inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border transition-all
                   ${isSubmitted
                     ? 'bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-50 cursor-not-allowed'
                     : starred
@@ -1282,7 +1273,7 @@ const JudgeTerminal = () => {
                   }`}
               >
                 <Star size={12} className={starred ? 'fill-current' : ''} />
-                <span className="text-[8px] font-black uppercase tracking-widest hidden sm:inline">
+                <span className="text-[8px] font-black uppercase tracking-widest">
                   {starred ? 'Destaque' : 'Marcar'}
                 </span>
               </button>
@@ -1591,7 +1582,7 @@ const JudgeTerminal = () => {
               {/* Criteria list — 2-col em mobile/tablet (cabe mais criterio
                   em landscape compacto, alinhado com numpad), 1-col so em
                   desktop (lg+) onde sobra largura. */}
-              <div className="flex-1 px-2 py-2 grid grid-cols-2 lg:grid-cols-1 gap-1 content-start">
+              <div className="flex-1 px-2 py-2 grid grid-cols-2 gap-1 content-start lg:grid-cols-1 lg:content-stretch lg:auto-rows-fr">
                 {activeCriteria.map((criterion, i) => {
                     const isActive = activeField === criterion.name;
                     const val      = scores[criterion.name] || '';
@@ -1640,9 +1631,31 @@ const JudgeTerminal = () => {
                   })}
               </div>
 
-              {/* Phase 3: chips de awards inline FORAM REMOVIDOS.
-                  A marcação agora é única (⭐) no header acima do score, e a
-                  atribuição de prêmio especial acontece pós-bloco em /deliberacao. */}
+              {/* Phase 3: ⭐ Marcar destaque (visível só em mobile/tablet pequeno).
+                  Em lg+ o botão fica no header. Aqui embaixo do painel de critérios
+                  pra ergonomia (polegar alcança facil em landscape mobile/tablet),
+                  com destaque visual pra não esquecer durante apresentação. */}
+              {currentPerformance && (() => {
+                const starred = starredSet.has(currentPerformance.id);
+                return (
+                  <div className="lg:hidden px-2 py-2 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950">
+                    <button
+                      onClick={toggleStarCurrent}
+                      disabled={isSubmitted || starringInFlight}
+                      className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 font-black uppercase tracking-widest text-[10px] transition-all
+                        ${isSubmitted
+                          ? 'bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-400 opacity-60 cursor-not-allowed'
+                          : starred
+                            ? 'bg-amber-100 dark:bg-amber-500/15 border-amber-400 dark:border-amber-500/40 text-amber-700 dark:text-amber-400 shadow-sm shadow-amber-500/10'
+                            : 'bg-amber-50/50 dark:bg-amber-500/5 border-amber-300/50 dark:border-amber-500/20 text-amber-600 dark:text-amber-500 hover:bg-amber-100 dark:hover:bg-amber-500/10 active:scale-[0.98]'
+                        }`}
+                    >
+                      <Star size={14} className={starred ? 'fill-current' : ''} />
+                      {starred ? 'Marcado como destaque' : 'Marcar destaque'}
+                    </button>
+                  </div>
+                );
+              })()}
             </section>
 
             {/* ══ NUMPAD PANEL — compact, right on tablet ══ */}
