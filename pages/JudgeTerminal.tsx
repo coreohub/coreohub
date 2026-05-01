@@ -157,9 +157,16 @@ const JudgeTerminal = () => {
   // pula o seletor "qual jurado é você?" e fixa o jurado da sessão.
   const judgeSession = useMemo(() => readJudgeSession(), []);
 
+  // Ref espelhando o state `scores` (declarado abaixo) — usado em handleSwitchJudge
+  // pra checar rascunho sem expor scores em closure (state nao existe ainda nessa linha).
+  const scoresRef = useRef<Record<string, string>>({});
+
   const handleSwitchJudge = () => {
-    // Confirmação pra evitar saída acidental no meio da avaliação
-    if (!confirm('Sair e voltar pra seleção de jurado? Notas em andamento serão perdidas.')) return;
+    // Confirmacao contextual: so se houver nota em rascunho (research-backed —
+    // logout nao eh destrutivo, modal so atrita; padrao Twitter/Slack).
+    // `scores` eh o state de notas digitadas (vai ser declarado abaixo).
+    const hasDraft = Object.values(scoresRef.current ?? {}).some(v => v !== '' && v !== undefined && v !== null);
+    if (hasDraft && !confirm('Sair? Sua nota em andamento será descartada.')) return;
     clearJudgeSession();
     navigate('/judge-login', { replace: true });
   };
@@ -213,6 +220,8 @@ const JudgeTerminal = () => {
   /* ── Scoring ── */
   const [activeField, setActiveField] = useState<string>(DEFAULT_CRITERIA[0].name);
   const [scores, setScores]           = useState<Record<string, string>>({});
+  // Mantem scoresRef sincronizado com scores (usado por handleSwitchJudge)
+  useEffect(() => { scoresRef.current = scores; }, [scores]);
 
   /* ── Special Awards (loaded from event config) ── */
   const [awardsConfig, setAwardsConfig] = useState<SpecialAward[]>([]);
@@ -657,6 +666,9 @@ const JudgeTerminal = () => {
       const NUM_BARS = analyser.frequencyBinCount; // 32
       // Reusa o buffer entre frames (evita alocar Uint8Array a cada draw)
       const freqData = new Uint8Array(NUM_BARS);
+      // Visualizacao espelhada esquerda<->direita (estilo Spotify Now Playing):
+      // mostramos metade dos bins, duplicados pra ambos os lados do centro horizontal.
+      const HALF_BARS = Math.floor(NUM_BARS / 2);
 
       const drawWaveform = () => {
         const an     = analyserRef.current;
@@ -680,19 +692,25 @@ const JudgeTerminal = () => {
         ctx.clearRect(0, 0, w, h);
         ctx.fillStyle = 'rgb(255 0 104)'; // brand #ff0068
 
-        const mid    = h / 2;
-        const barW   = w / NUM_BARS;
+        const midY     = h / 2;
+        const midX     = w / 2;
+        // Total de barras renderizadas = HALF_BARS * 2 (esquerda + direita)
+        const totalBars = HALF_BARS * 2;
+        const barW   = w / totalBars;
         const barGap = Math.max(1, barW * 0.35);
 
-        for (let i = 0; i < NUM_BARS; i++) {
+        for (let i = 0; i < HALF_BARS; i++) {
           // Boost levemente pra fala baixa virar visivel sem saturar
           const norm   = Math.min(1, (freqData[i] / 255) * 1.4);
           const barH   = norm * (h - 2);
-          // Floor baixo (1px) pra silencio nao desaparecer 100% — sinaliza "vivo"
           const drawnH = Math.max(1, barH);
-          const x      = i * barW;
-          // Espelha no eixo central (sobe + desce)
-          ctx.fillRect(x, mid - drawnH / 2, barW - barGap, drawnH);
+          // Espelhado: bar i vai a esquerda (midX - distancia) E direita (midX + distancia)
+          // Quanto maior i (frequencia mais alta), mais distante do centro
+          const distFromCenter = i * barW;
+          // Esquerda do centro
+          ctx.fillRect(midX - distFromCenter - barW + barGap / 2, midY - drawnH / 2, barW - barGap, drawnH);
+          // Direita do centro
+          ctx.fillRect(midX + distFromCenter + barGap / 2, midY - drawnH / 2, barW - barGap, drawnH);
         }
         animationFrameRef.current = requestAnimationFrame(drawWaveform);
       };
@@ -1108,46 +1126,59 @@ const JudgeTerminal = () => {
 
   if (pinLocked || showPinSetup) {
     return (
-      <div className="h-full flex flex-col items-center justify-center bg-slate-950 rounded-3xl select-none gap-6 p-6">
-        {/* Icon */}
-        <div className="w-20 h-20 rounded-full bg-[#ff0068]/10 border-2 border-[#ff0068]/30 flex items-center justify-center">
-          <Shield size={32} className="text-[#ff0068]" />
-        </div>
+      // Layout responsivo: portrait/desktop = 1 coluna empilhada (info em cima,
+      // numpad embaixo). Landscape mobile = 2 colunas (info esquerda, numpad
+      // direita) — necessario porque viewport curto (~370px) corta o numpad.
+      // Padrao 1Password / Nubank em landscape mobile.
+      <div className="h-full flex flex-col landscape:flex-row landscape:lg:flex-col items-center justify-center bg-slate-950 rounded-3xl select-none gap-6 landscape:gap-10 landscape:lg:gap-6 p-6">
 
-        {/* Title */}
-        <div className="text-center space-y-1">
-          <h2 className="text-xl font-black uppercase tracking-tighter italic text-white">{pinTitle}</h2>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{pinSubtitle}</p>
-          {selectedJudge && (
-            <p className="text-[9px] text-slate-500 uppercase tracking-widest">
-              {judgeDisplayName(selectedJudge.name)}
-            </p>
+        {/* Coluna esquerda (landscape mobile) / em cima (portrait/desktop): info */}
+        <div className="flex flex-col items-center gap-4 landscape:gap-3 landscape:lg:gap-4">
+          {/* Icon */}
+          <div className="w-20 h-20 landscape:w-14 landscape:h-14 landscape:lg:w-20 landscape:lg:h-20 rounded-full bg-[#ff0068]/10 border-2 border-[#ff0068]/30 flex items-center justify-center shrink-0">
+            <Shield size={32} className="text-[#ff0068] landscape:w-6 landscape:h-6 landscape:lg:w-8 landscape:lg:h-8" />
+          </div>
+
+          {/* Title */}
+          <div className="text-center space-y-1">
+            <h2 className="text-xl landscape:text-base landscape:lg:text-xl font-black uppercase tracking-tighter italic text-white">{pinTitle}</h2>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{pinSubtitle}</p>
+            {selectedJudge && (
+              <p className="text-[9px] text-slate-500 uppercase tracking-widest">
+                {judgeDisplayName(selectedJudge.name)}
+              </p>
+            )}
+          </div>
+
+          {/* PIN dots */}
+          <div className={`flex gap-4 transition-all ${pinError ? 'animate-bounce' : ''}`}>
+            {[0,1,2,3].map(i => (
+              <div
+                key={i}
+                className={`w-5 h-5 rounded-full border-2 transition-all ${
+                  displayPin.length > i
+                    ? pinError
+                      ? 'bg-rose-500 border-rose-500'
+                      : 'bg-[#ff0068] border-[#ff0068]'
+                    : 'bg-transparent border-white/20'
+                }`}
+              />
+            ))}
+          </div>
+
+          {/* Hint */}
+          {pinLocked && !showPinSetup && (
+            <p className="text-[8px] text-slate-600 uppercase tracking-widest">{t('pin.hint')}</p>
           )}
         </div>
 
-        {/* PIN dots */}
-        <div className={`flex gap-4 transition-all ${pinError ? 'animate-bounce' : ''}`}>
-          {[0,1,2,3].map(i => (
-            <div
-              key={i}
-              className={`w-5 h-5 rounded-full border-2 transition-all ${
-                displayPin.length > i
-                  ? pinError
-                    ? 'bg-rose-500 border-rose-500'
-                    : 'bg-[#ff0068] border-[#ff0068]'
-                  : 'bg-transparent border-white/20'
-              }`}
-            />
-          ))}
-        </div>
-
-        {/* PIN numpad */}
-        <div className="grid grid-cols-3 gap-3 w-full max-w-xs">
+        {/* Coluna direita (landscape mobile) / embaixo (portrait/desktop): numpad */}
+        <div className="grid grid-cols-3 gap-3 w-full max-w-xs landscape:max-w-[280px] landscape:lg:max-w-xs">
           {[1,2,3,4,5,6,7,8,9].map(n => (
             <button
               key={n}
               onClick={() => handlePinKey(n.toString())}
-              className="bg-white/5 hover:bg-white/10 active:scale-95 border border-white/8 rounded-2xl text-2xl font-black py-5 transition-all text-white"
+              className="bg-white/5 hover:bg-white/10 active:scale-95 border border-white/8 rounded-2xl text-2xl font-black py-5 landscape:py-3 landscape:lg:py-5 transition-all text-white"
             >
               {n}
             </button>
@@ -1155,22 +1186,17 @@ const JudgeTerminal = () => {
           <div /> {/* spacer */}
           <button
             onClick={() => handlePinKey('0')}
-            className="bg-white/5 hover:bg-white/10 border border-white/8 rounded-2xl text-2xl font-black py-5 transition-all text-white active:scale-95"
+            className="bg-white/5 hover:bg-white/10 border border-white/8 rounded-2xl text-2xl font-black py-5 landscape:py-3 landscape:lg:py-5 transition-all text-white active:scale-95"
           >
             0
           </button>
           <button
             onClick={handlePinDel}
-            className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/10 rounded-2xl flex items-center justify-center py-5 transition-all active:scale-95"
+            className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/10 rounded-2xl flex items-center justify-center py-5 landscape:py-3 landscape:lg:py-5 transition-all active:scale-95"
           >
             <Delete size={20} />
           </button>
         </div>
-
-        {/* Hint */}
-        {pinLocked && !showPinSetup && (
-          <p className="text-[8px] text-slate-600 uppercase tracking-widest">{t('pin.hint')}</p>
-        )}
 
         {/* Cancel setup */}
         {showPinSetup && (
@@ -1341,8 +1367,8 @@ const JudgeTerminal = () => {
                   ${isSubmitted
                     ? 'bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-50 cursor-not-allowed'
                     : starred
-                      ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-300 dark:border-amber-500/30 text-amber-600 dark:text-amber-400'
-                      : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:bg-amber-50 dark:hover:bg-amber-500/5 hover:text-amber-500 hover:border-amber-300/50'
+                      ? 'bg-slate-900 dark:bg-white border-slate-900 dark:border-white text-white dark:text-slate-900 shadow-sm'
+                      : 'bg-white dark:bg-white/5 border-slate-300 dark:border-white/20 text-slate-600 dark:text-slate-300 hover:border-slate-500 dark:hover:border-white/50'
                   }`}
               >
                 <Star size={12} className={starred ? 'fill-current' : ''} />
@@ -1392,7 +1418,7 @@ const JudgeTerminal = () => {
           {/* PIN setup button — escondido em mobile (acessível via outros caminhos) */}
           <button
             onClick={() => setShowPinSetup(true)}
-            className="hidden md:inline-flex p-1.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 transition-all"
+            className="hidden lg:inline-flex p-1.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 transition-all"
             title={t('header.pinSetupTooltip')}
           >
             <Shield size={12} />
@@ -1719,8 +1745,8 @@ const JudgeTerminal = () => {
                         ${isSubmitted
                           ? 'bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-400 opacity-60 cursor-not-allowed'
                           : starred
-                            ? 'bg-amber-100 dark:bg-amber-500/15 border-amber-400 dark:border-amber-500/40 text-amber-700 dark:text-amber-400 shadow-sm shadow-amber-500/10'
-                            : 'bg-amber-50/50 dark:bg-amber-500/5 border-amber-300/50 dark:border-amber-500/20 text-amber-600 dark:text-amber-500 hover:bg-amber-100 dark:hover:bg-amber-500/10 active:scale-[0.98]'
+                            ? 'bg-slate-900 dark:bg-white border-slate-900 dark:border-white text-white dark:text-slate-900 shadow-md'
+                            : 'bg-white dark:bg-white/5 border-slate-300 dark:border-white/30 text-slate-600 dark:text-slate-300 hover:border-slate-500 dark:hover:border-white/60 active:scale-[0.98]'
                         }`}
                     >
                       <Star size={14} className={starred ? 'fill-current' : ''} />
@@ -1760,9 +1786,9 @@ const JudgeTerminal = () => {
 
                   {/* Indicador de estrela quando esta apresentação foi marcada */}
                   {currentPerformance && starredSet.has(currentPerformance.id) && (
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-full">
-                      <Star size={9} className="text-amber-500 dark:text-amber-400 fill-amber-500 dark:fill-amber-400" />
-                      <span className="text-[8px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 dark:bg-white border border-slate-900 dark:border-white rounded-full">
+                      <Star size={9} className="text-white dark:text-slate-900 fill-current" />
+                      <span className="text-[8px] font-black uppercase tracking-widest text-white dark:text-slate-900">
                         Marcada
                       </span>
                     </div>
