@@ -1152,7 +1152,7 @@ const JudgeTerminal = () => {
 
   const terminalNode = (
     <div
-      className={`relative flex flex-col bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-3xl overflow-hidden select-none border border-slate-200 dark:border-slate-700 ${activeDeviceClass}`}
+      className={`relative flex flex-col bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-3xl overflow-hidden select-none border border-slate-200 dark:border-slate-700 lg:max-w-7xl lg:mx-auto lg:w-full ${activeDeviceClass}`}
       onPointerMove={handleActivity}
       onKeyDown={handleActivity}
       onClick={handleActivity}
@@ -1662,61 +1662,45 @@ const JudgeTerminal = () => {
             <section className="flex-1 p-1.5 md:p-3 flex flex-col bg-slate-50 dark:bg-slate-950 border-l border-transparent dark:border-slate-800">
 
               {isSubmitted ? (
-                /* ── Submitted / Locked state ── */
-                <div className="flex-1 flex flex-col items-center justify-center gap-5 text-center">
-                  <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border-2 border-emerald-200 dark:border-emerald-500/30 flex items-center justify-center">
-                    <ClipboardCheck size={36} className="text-emerald-500 dark:text-emerald-400" />
+                /* ── Submitted / Aguardando próxima ──
+                   Layout compacto: ícone, "Aguardando próxima apresentação",
+                   média final, indicador de destaque, link sutil de fallback.
+                   Cabe em viewport mobile landscape sem scroll. */
+                <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-3 py-2 overflow-y-auto">
+                  <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border-2 border-emerald-200 dark:border-emerald-500/30 flex items-center justify-center shrink-0">
+                    <ClipboardCheck size={24} className="text-emerald-500 dark:text-emerald-400" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-black uppercase tracking-tighter italic text-emerald-600 dark:text-emerald-400">{t('submitted.title')}</h3>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mt-0.5">{t('submitted.subtitle')}</p>
+                    <h3 className="text-base md:text-lg font-black uppercase tracking-tighter italic text-emerald-600 dark:text-emerald-400 leading-none">{t('submitted.title')}</h3>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mt-1">
+                      Aguardando próxima apresentação
+                    </p>
                   </div>
-                  <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 space-y-3">
-                    <div className="text-center">
-                      <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1">{t('submitted.weightedTitle')}</p>
-                      <span className={`text-5xl font-black italic tabular-nums ${scoreGrade(calcWeightedAvg(), scoreScale)}`}>
-                        {calcWeightedAvg()}
-                      </span>
-                    </div>
-                    <div className="border-t border-slate-100 dark:border-slate-700 pt-3 space-y-1.5">
-                      {activeCriteria.map(c => (
-                        <div key={c.name} className="flex items-center justify-between text-[10px]">
-                          <span className="text-slate-500 dark:text-slate-400 font-bold">{criterionLabel(c)} <span className="text-slate-300 dark:text-slate-600">(×{c.peso})</span></span>
-                          <span className={`font-black tabular-nums ${scoreGrade(scores[c.name] || '0', scoreScale)}`}>
-                            {scores[c.name] || '0'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+
+                  {/* Média final compacta */}
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Média</span>
+                    <span className={`text-3xl md:text-4xl font-black italic tabular-nums leading-none ${scoreGrade(calcWeightedAvg(), scoreScale)}`}>
+                      {calcWeightedAvg()}
+                    </span>
                   </div>
-                  {/* Phase 3: Indicador de estrela quando esta apresentação foi marcada */}
+
+                  {/* Indicador de estrela quando esta apresentação foi marcada */}
                   {currentPerformance && starredSet.has(currentPerformance.id) && (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-full">
-                      <Star size={10} className="text-amber-500 dark:text-amber-400 fill-amber-500 dark:fill-amber-400" />
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-full">
+                      <Star size={9} className="text-amber-500 dark:text-amber-400 fill-amber-500 dark:fill-amber-400" />
                       <span className="text-[8px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">
-                        Marcada como destaque
+                        Marcada
                       </span>
                     </div>
                   )}
 
-                  {submittedAt && (
-                    <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">
-                      <Unlock size={10} className="text-slate-400 shrink-0" />
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                        {t('submitted.submittedAt', {
-                          time: new Date(submittedAt).toLocaleTimeString(
-                            formatLocale,
-                            { hour: '2-digit', minute: '2-digit', second: '2-digit' },
-                          ),
-                        })}
-                      </p>
-                    </div>
-                  )}
+                  {/* Link sutil de fallback (caso produtor não avance fila) */}
                   <button
                     onClick={handleAdvance}
-                    className="w-full max-w-sm px-8 py-5 bg-[#ff0068] hover:bg-[#d4005a] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-[#ff0068]/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                    className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white underline underline-offset-2 transition-colors"
                   >
-                    <ChevronRight size={18} /> {t('submitted.next')}
+                    Avançar manualmente <ChevronRight size={10} />
                   </button>
                 </div>
 
