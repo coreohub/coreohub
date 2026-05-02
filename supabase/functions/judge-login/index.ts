@@ -137,6 +137,8 @@ Deno.serve(async (req) => {
   }
 
   // ─── action: validate ────────────────────────────────────────────────────
+  // Rate limit: 5 tentativas falhas consecutivas -> bloqueio de 5 min.
+  // PIN tem so 10k combinacoes; sem isso, brute-force trivializa o login.
   if (action === 'validate') {
     const { judge_id, pin } = body ?? {}
     if (!judge_id || !pin) return json({ ok: false, reason: 'missing_fields' }, 400)
@@ -151,7 +153,37 @@ Deno.serve(async (req) => {
     if (error) return json({ error: 'db_error', detail: error.message }, 500)
     if (!judge || judge.is_active === false) return json({ ok: false, reason: 'judge_not_found' }, 404)
 
-    if (judge.pin !== pin) return json({ ok: false, reason: 'invalid_pin' }, 401)
+    // Verifica lockout antes de comparar PIN
+    const { data: attempts } = await supa
+      .from('judge_login_attempts')
+      .select('failed_count, locked_until')
+      .eq('judge_id', judge_id)
+      .maybeSingle()
+
+    const now = Date.now()
+    if (attempts?.locked_until && new Date(attempts.locked_until).getTime() > now) {
+      const secondsLeft = Math.ceil((new Date(attempts.locked_until).getTime() - now) / 1000)
+      return json({ ok: false, reason: 'locked', seconds_left: secondsLeft }, 429)
+    }
+
+    // PIN incorreto: incrementa contador, bloqueia se chegou em 5
+    if (judge.pin !== pin) {
+      // Se ja saiu da janela de 15min sem falha nova, comeca contador do zero
+      const stale = !attempts?.updated_at || (now - new Date(attempts.updated_at).getTime() > 15 * 60 * 1000)
+      const newCount = stale ? 1 : (attempts?.failed_count ?? 0) + 1
+      const lockUntil = newCount >= 5 ? new Date(now + 5 * 60 * 1000).toISOString() : null
+      await supa.from('judge_login_attempts').upsert({
+        judge_id,
+        failed_count: newCount,
+        locked_until: lockUntil,
+        updated_at: new Date(now).toISOString(),
+      }, { onConflict: 'judge_id' })
+      const attemptsLeft = Math.max(0, 5 - newCount)
+      return json({ ok: false, reason: 'invalid_pin', attempts_left: attemptsLeft }, 401)
+    }
+
+    // Sucesso: zera o contador
+    await supa.from('judge_login_attempts').delete().eq('judge_id', judge_id)
 
     return json({
       ok: true,

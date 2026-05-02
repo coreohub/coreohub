@@ -102,6 +102,46 @@ Deno.serve(async (req) => {
       return ok({ status: 'error', reason: 'no_external_reference' })
     }
 
+    // Defesa em profundidade contra forja de webhook (token estatico
+    // pode vazar): cross-check via API Asaas. Atacante com token vazado
+    // nao consegue forjar PAYMENT_RECEIVED de payment inexistente nem
+    // com status diferente do real.
+    //
+    // Pagamentos sao criados no master Asaas com split pra subconta do
+    // produtor, entao master enxerga tudo via /payments/{id}.
+    const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
+    const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+    if (ASAAS_API_KEY) {
+      try {
+        const verifyRes = await fetch(`${ASAAS_BASE_URL}/payments/${payment.id}`, {
+          headers: { 'access_token': ASAAS_API_KEY, 'Content-Type': 'application/json' },
+        })
+        if (verifyRes.status === 404) {
+          console.error(`[asaas-webhook] payment_id=${payment.id} nao existe na API — rejeitando (possivel forja)`)
+          return ok({ status: 'rejected', reason: 'not_found_in_asaas' })
+        }
+        if (verifyRes.status === 200) {
+          const apiPayment = await verifyRes.json()
+          if (apiPayment.status !== payment.status) {
+            console.error(`[asaas-webhook] status mismatch payment_id=${payment.id}: webhook=${payment.status} api=${apiPayment.status} — rejeitando`)
+            return ok({ status: 'rejected', reason: 'status_mismatch' })
+          }
+          // Se externalReference da API tambem nao bater, e forja
+          if (apiPayment.externalReference && apiPayment.externalReference !== registrationId) {
+            console.error(`[asaas-webhook] externalReference mismatch payment_id=${payment.id}: webhook=${registrationId} api=${apiPayment.externalReference} — rejeitando`)
+            return ok({ status: 'rejected', reason: 'external_reference_mismatch' })
+          }
+        }
+        // Outros status (401/5xx/timeout) -> log e segue (Asaas retentara
+        // se retornarmos nao-200; aqui deixamos passar pra nao bloquear
+        // webhook legitimo durante incidente da API)
+      } catch (e) {
+        console.error(`[asaas-webhook] cross-check exception (segue mesmo assim):`, (e as Error).message)
+      }
+    } else {
+      console.warn('[asaas-webhook] ASAAS_API_KEY nao configurada — cross-check pulado')
+    }
+
     const statusInterno = STATUS_MAP[payment.status] ?? 'PENDENTE'
     console.log(
       `[asaas-webhook] payment_id=${payment.id} asaas_status=${payment.status}` +
