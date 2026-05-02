@@ -3,7 +3,7 @@ import {
   GripVertical, Sparkles, Download, Save, AlertCircle,
   CheckCircle2, Music, MusicIcon, Settings2, RefreshCw,
   Loader2, FileArchive, Users, ChevronDown, ChevronUp, Info,
-  Volume2, Play, Pause, Radio, StopCircle,
+  Volume2, Play, Pause, Radio, StopCircle, AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -18,7 +18,7 @@ import {
   type BatchItem, type NarrationKind,
 } from '../services/narrationApi';
 
-type AudioSlot = { audio_url: string; duration_seconds: number };
+type AudioSlot = { audio_url: string; duration_seconds: number; voice_id?: string };
 type AudioMap = Record<string, { entrada?: AudioSlot; saida?: AudioSlot }>;
 
 // ---------- types ----------
@@ -154,6 +154,7 @@ interface SortableRowProps {
   isGenerating: boolean;
   batchInProgress: boolean;
   updatingLive: boolean;
+  currentVoice: string;
   onGenerateOne: (reg: Registration) => void;
   onAnnounce: (reg: Registration) => void;
   onPrepare: (reg: Registration) => void;
@@ -161,7 +162,7 @@ interface SortableRowProps {
 
 const SortableRow: React.FC<SortableRowProps> = ({
   reg, index, conflicts,
-  audioSet, saidaAtiva, isLive, isGenerating, batchInProgress, updatingLive,
+  audioSet, saidaAtiva, isLive, isGenerating, batchInProgress, updatingLive, currentVoice,
   onGenerateOne, onAnnounce, onPrepare,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -179,6 +180,11 @@ const SortableRow: React.FC<SortableRowProps> = ({
   const hasEntrada = !!audioSet?.entrada;
   const hasSaida = !!audioSet?.saida;
   const fullyReady = hasEntrada && (!saidaAtiva || hasSaida);
+  // Voz "antiga" = audio gerado com voice_id diferente da voz atual nas Configurações.
+  // voice_id ausente (audios antigos pré-tracking) = nao da pra saber, nao avisa.
+  const entradaOutdated = hasEntrada && !!audioSet!.entrada!.voice_id && audioSet!.entrada!.voice_id !== currentVoice;
+  const saidaOutdated = hasSaida && !!audioSet!.saida!.voice_id && audioSet!.saida!.voice_id !== currentVoice;
+  const anyOutdated = entradaOutdated || saidaOutdated;
 
   return (
     <div
@@ -216,15 +222,37 @@ const SortableRow: React.FC<SortableRowProps> = ({
             {reg.nome_coreografia}
           </h4>
           {hasEntrada && (
-            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-violet-500/10 border border-violet-500/20 rounded-full shrink-0" title={`Entrada IA pronta (${Math.round(audioSet!.entrada!.duration_seconds)}s)`}>
-              <CheckCircle2 size={9} className="text-violet-500" />
-              <span className="text-[8px] font-black text-violet-600 dark:text-violet-400 uppercase">E</span>
+            <div
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full shrink-0 border ${
+                entradaOutdated
+                  ? 'bg-amber-500/10 border-amber-500/40'
+                  : 'bg-violet-500/10 border-violet-500/20'
+              }`}
+              title={entradaOutdated
+                ? `Entrada gerada com voz ${audioSet!.entrada!.voice_id}. Voz atual: ${currentVoice}. Clique no botão IA pra regerar.`
+                : `Entrada IA pronta (${Math.round(audioSet!.entrada!.duration_seconds)}s)`}
+            >
+              {entradaOutdated
+                ? <AlertTriangle size={9} className="text-amber-500" />
+                : <CheckCircle2 size={9} className="text-violet-500" />}
+              <span className={`text-[8px] font-black uppercase ${entradaOutdated ? 'text-amber-600 dark:text-amber-400' : 'text-violet-600 dark:text-violet-400'}`}>E</span>
             </div>
           )}
           {saidaAtiva && hasSaida && (
-            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full shrink-0" title={`Saída IA pronta (${Math.round(audioSet!.saida!.duration_seconds)}s)`}>
-              <CheckCircle2 size={9} className="text-emerald-500" />
-              <span className="text-[8px] font-black text-emerald-600 dark:text-emerald-400 uppercase">S</span>
+            <div
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full shrink-0 border ${
+                saidaOutdated
+                  ? 'bg-amber-500/10 border-amber-500/40'
+                  : 'bg-emerald-500/10 border-emerald-500/20'
+              }`}
+              title={saidaOutdated
+                ? `Saída gerada com voz ${audioSet!.saida!.voice_id}. Voz atual: ${currentVoice}. Clique no botão IA pra regerar.`
+                : `Saída IA pronta (${Math.round(audioSet!.saida!.duration_seconds)}s)`}
+            >
+              {saidaOutdated
+                ? <AlertTriangle size={9} className="text-amber-500" />
+                : <CheckCircle2 size={9} className="text-emerald-500" />}
+              <span className={`text-[8px] font-black uppercase ${saidaOutdated ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>S</span>
             </div>
           )}
           {hasConflict && (
@@ -294,10 +322,13 @@ const SortableRow: React.FC<SortableRowProps> = ({
           onClick={() => onGenerateOne(reg)}
           disabled={isGenerating || batchInProgress}
           className="p-2 text-slate-400 hover:text-violet-500 hover:bg-violet-500/10 rounded-xl transition-all disabled:opacity-50"
-          title={fullyReady ? 'Regerar narração IA' : (saidaAtiva ? 'Gerar narrações IA (entrada + saída)' : 'Gerar narração IA')}
+          title={anyOutdated
+            ? `Regerar com voz atual (${currentVoice})`
+            : fullyReady ? 'Regerar narração IA' : (saidaAtiva ? 'Gerar narrações IA (entrada + saída)' : 'Gerar narração IA')}
         >
           {isGenerating
             ? <Loader2 size={14} className="animate-spin text-violet-500" />
+            : anyOutdated ? <RefreshCw size={14} className="text-amber-500" />
             : fullyReady ? <RefreshCw size={14} /> : <Sparkles size={14} />}
         </button>
         <button
@@ -344,6 +375,20 @@ const Schedule = () => {
   /* Edition selector */
   const [allEvents, setAllEvents] = useState<{ id: string; name: string; edition_year?: number }[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [eventPickerOpen, setEventPickerOpen] = useState(false);
+  const eventPickerRef = useRef<HTMLDivElement | null>(null);
+
+  // Fecha dropdown ao clicar fora (substitui <select> nativo que ignora tema escuro no Chrome/Win)
+  useEffect(() => {
+    if (!eventPickerOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (eventPickerRef.current && !eventPickerRef.current.contains(e.target as Node)) {
+        setEventPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [eventPickerOpen]);
 
   /* Narração + player (absorvido da Mesa de Som — Etapa 1) */
   const [config, setConfig] = useState<any>(null);
@@ -424,7 +469,7 @@ const Schedule = () => {
           audioRows.forEach((a: any) => {
             const kind: NarrationKind = a.kind === 'saida' ? 'saida' : 'entrada';
             if (!map[a.registration_id]) map[a.registration_id] = {};
-            map[a.registration_id][kind] = { audio_url: a.audio_url, duration_seconds: a.duration_seconds };
+            map[a.registration_id][kind] = { audio_url: a.audio_url, duration_seconds: a.duration_seconds, voice_id: a.voice_id };
           });
           setAudios(map);
         } catch (e) {
@@ -571,12 +616,13 @@ const Schedule = () => {
     setBatchProgress({ done: 0, total: items.length });
     try {
       const result = await generateNarrationBatch(selectedEventId, items, config?.voice_id);
+      const usedVoice = config?.voice_id || 'Charon';
       const newMap: AudioMap = { ...audios };
       result.results.forEach(r => {
         if (r.ok && r.audio_url) {
           const k: NarrationKind = r.kind === 'saida' ? 'saida' : 'entrada';
           if (!newMap[r.registration_id]) newMap[r.registration_id] = {};
-          newMap[r.registration_id][k] = { audio_url: r.audio_url, duration_seconds: r.duration_seconds ?? 10 };
+          newMap[r.registration_id][k] = { audio_url: r.audio_url, duration_seconds: r.duration_seconds ?? 10, voice_id: usedVoice };
         }
       });
       setAudios(newMap);
@@ -606,10 +652,11 @@ const Schedule = () => {
         }
       }
       if (updates.length) {
+        const usedVoice = config?.voice_id || 'Charon';
         setAudios(prev => {
           const next = { ...prev };
           if (!next[reg.id]) next[reg.id] = {};
-          updates.forEach(u => { next[reg.id][u.kind] = { audio_url: u.url, duration_seconds: u.dur }; });
+          updates.forEach(u => { next[reg.id][u.kind] = { audio_url: u.url, duration_seconds: u.dur, voice_id: usedVoice }; });
           return next;
         });
       }
@@ -765,23 +812,45 @@ const Schedule = () => {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Edition selector */}
-          {allEvents.length > 0 && (
-            <div className="relative">
-              <select
-                value={selectedEventId ?? ''}
-                onChange={e => setSelectedEventId(e.target.value)}
-                className="appearance-none pl-3 pr-8 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 transition-all cursor-pointer"
-              >
-                {allEvents.map(ev => (
-                  <option key={ev.id} value={ev.id}>
-                    {ev.edition_year ? `${ev.edition_year} — ` : ''}{ev.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            </div>
-          )}
+          {/* Edition selector — dropdown custom (select nativo ignorava tema escuro no Chrome/Win) */}
+          {allEvents.length > 0 && (() => {
+            const selectedEv = allEvents.find(ev => ev.id === selectedEventId);
+            return (
+              <div className="relative" ref={eventPickerRef}>
+                <button
+                  type="button"
+                  onClick={() => setEventPickerOpen(o => !o)}
+                  className="appearance-none pl-3 pr-8 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 transition-all cursor-pointer min-w-[200px] text-left"
+                >
+                  {selectedEv
+                    ? `${selectedEv.edition_year ? selectedEv.edition_year + ' — ' : ''}${selectedEv.name}`
+                    : 'Selecione...'}
+                </button>
+                <ChevronDown size={10} className={`absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-transform ${eventPickerOpen ? 'rotate-180' : ''}`} />
+                {eventPickerOpen && (
+                  <div className="absolute top-full mt-1 left-0 right-0 min-w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl shadow-2xl z-30 overflow-hidden max-h-64 overflow-y-auto">
+                    {allEvents.map(ev => {
+                      const isSelected = ev.id === selectedEventId;
+                      return (
+                        <button
+                          key={ev.id}
+                          type="button"
+                          onClick={() => { setSelectedEventId(ev.id); setEventPickerOpen(false); }}
+                          className={`block w-full text-left px-3 py-2 text-[9px] font-black uppercase tracking-widest transition-colors ${
+                            isSelected
+                              ? 'bg-[#ff0068]/10 text-[#ff0068]'
+                              : 'text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5'
+                          }`}
+                        >
+                          {ev.edition_year ? `${ev.edition_year} — ` : ''}{ev.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <button
             onClick={() => fetchData(selectedEventId)}
@@ -1088,6 +1157,7 @@ const Schedule = () => {
                   isGenerating={generatingId === reg.id}
                   batchInProgress={!!batchProgress}
                   updatingLive={updatingLive}
+                  currentVoice={config?.voice_id || 'Charon'}
                   onGenerateOne={handleGenerateOne}
                   onAnnounce={handleAnnounce}
                   onPrepare={handlePrepare}
