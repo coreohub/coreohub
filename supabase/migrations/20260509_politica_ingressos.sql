@@ -16,6 +16,12 @@
 -- Backfill: eventos existentes com lista preenchida -> INTERNO; com
 -- url_ingressos -> EXTERNO; senao -> NAO_DEFINIDO.
 
+-- Garantia: a coluna url_ingressos era assumida pelo frontend (Ingressos.tsx,
+-- AccountSettings) mas nunca foi criada via migration explicita. Cria agora
+-- pra suportar o modo EXTERNO da politica + corrigir bug latente.
+ALTER TABLE configuracoes
+  ADD COLUMN IF NOT EXISTS url_ingressos TEXT;
+
 ALTER TABLE configuracoes
   ADD COLUMN IF NOT EXISTS politica_ingressos TEXT DEFAULT 'NAO_DEFINIDO';
 
