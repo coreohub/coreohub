@@ -3621,8 +3621,8 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         )}
       </AnimatePresence>
 
-      {/* Save bar */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-white/10 z-40 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
+      {/* Save bar — bottom-16 em mobile pra nao ficar atras do BottomNavBar (h-16 sm:hidden) */}
+      <div className="fixed bottom-16 sm:bottom-0 left-0 right-0 p-4 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-white/10 z-40 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
         <div className="max-w-5xl mx-auto flex justify-end">
           <button
             onClick={handleSave}

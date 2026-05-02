@@ -38,7 +38,7 @@ const buildProdutorNav = (videoSelectionEnabled: boolean) => [
     ? [{ path: '/seletiva-video', label: 'Seletiva', icon: Video }]
     : []
   ),
-  { path: '/manage-schedule',  label: 'Agenda',    icon: Calendar      },
+  { path: '/manage-schedule',  label: 'Crono',     icon: Calendar      },
   { path: '/account-settings', label: 'Config',    icon: Settings      },
 ];
 

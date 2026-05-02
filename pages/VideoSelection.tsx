@@ -370,7 +370,46 @@ const VideoSelection: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 rounded-[2.5rem] overflow-hidden shadow-sm dark:shadow-2xl">
+        <>
+        {/* Mobile: cards empilhados (< sm). Botão grande pra revisar. */}
+        <div className="sm:hidden space-y-3">
+          {filtered.map(reg => (
+            <div key={reg.id} className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 rounded-2xl p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-slate-900 dark:text-white uppercase tracking-tight text-sm truncate">
+                    {reg.nome_coreografia}
+                  </p>
+                  <p className="text-[9px] text-[#ff0068] font-bold uppercase tracking-widest mt-0.5">
+                    {reg.formato_participacao} {reg.categoria ? `· ${reg.categoria}` : ''}
+                  </p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 truncate">
+                    {reg.profiles?.full_name ?? reg.estudio ?? '—'}
+                  </p>
+                </div>
+                <div className="shrink-0">{statusChip(reg.video_status)}</div>
+              </div>
+              {reg.video_status === 'submitted' ? (
+                <button
+                  onClick={() => { setReviewing(reg); setFeedback(reg.video_feedback ?? ''); }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 active:scale-95 transition-all"
+                >
+                  <Video size={14} /> Revisar Vídeo
+                </button>
+              ) : (
+                <button
+                  onClick={() => { setReviewing(reg); setFeedback(reg.video_feedback ?? ''); }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
+                >
+                  <MessageSquare size={14} /> Rever decisão
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop: tabela (sm+). */}
+        <div className="hidden sm:block bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 rounded-[2.5rem] overflow-hidden shadow-sm dark:shadow-2xl">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/5">
@@ -434,6 +473,7 @@ const VideoSelection: React.FC = () => {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       {/* Review Modal */}

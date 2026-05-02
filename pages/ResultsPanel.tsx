@@ -90,40 +90,49 @@ const ResultsPanel = () => {
       setThresholds(cfg?.medal_thresholds ?? DEFAULT_THRESHOLDS);
       setPremiationSystem(cfg?.premiation_system === 'RANKING' ? 'RANKING' : 'THRESHOLD');
 
+      // Query refatorada: 3 queries simples sem joins PostgREST.
+      // Antes usava `registrations!inner(...)` mas PostgREST as vezes nao
+      // reconhece a FK e devolve 400. Mais robusto buscar separado e juntar
+      // no client. Performance equivalente em escala de festival (~100 evals).
       const { data: evals, error } = await supabase
         .from('evaluations')
-        .select(`
-          id,
-          registration_id,
-          final_weighted_average,
-          scores,
-          audio_url,
-          submitted_at,
-          audit_log,
-          judge_id,
-          judges(name),
-          registrations!inner(
-            id, nome_coreografia, estudio,
-            estilo_danca, categoria, tipo_apresentacao, status
-          )
-        `)
+        .select('id, registration_id, judge_id, final_weighted_average, scores, audio_url, submitted_at, audit_log')
         .order('submitted_at', { ascending: true });
-
       if (error) throw error;
+
+      const regIds = Array.from(new Set((evals ?? []).map((e: any) => e.registration_id).filter(Boolean)));
+      const judgeIds = Array.from(new Set((evals ?? []).map((e: any) => e.judge_id).filter(Boolean)));
+
+      const [regsRes, judgesRes] = await Promise.all([
+        regIds.length > 0
+          ? supabase.from('registrations')
+              .select('id, nome_coreografia, estudio, estilo_danca, categoria, tipo_apresentacao, status')
+              .in('id', regIds)
+          : Promise.resolve({ data: [], error: null }),
+        judgeIds.length > 0
+          ? supabase.from('judges').select('id, name').in('id', judgeIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      const regsById: Record<string, any> = {};
+      (regsRes.data ?? []).forEach((r: any) => { regsById[r.id] = r; });
+      const judgesById: Record<string, any> = {};
+      (judgesRes.data ?? []).forEach((j: any) => { judgesById[j.id] = j; });
 
       const grouped: Record<string, any> = {};
       (evals || []).forEach((e: any) => {
         const rid = e.registration_id;
-        const reg = e.registrations;
+        const reg = regsById[rid];
+        if (!reg) return; // evaluations órfãs (registration deletada) ignoradas
         if (!grouped[rid]) {
           grouped[rid] = {
             id: rid,
-            nome_coreografia: reg?.nome_coreografia ?? '—',
-            estudio:          reg?.estudio          ?? '—',
-            estilo_danca:     reg?.estilo_danca      ?? '—',
-            categoria:        reg?.categoria         ?? '—',
-            tipo_apresentacao: reg?.tipo_apresentacao ?? 'Competitiva',
-            status:           reg?.status            ?? '—',
+            nome_coreografia: reg.nome_coreografia ?? '—',
+            estudio:          reg.estudio          ?? '—',
+            estilo_danca:     reg.estilo_danca      ?? '—',
+            categoria:        reg.categoria         ?? '—',
+            tipo_apresentacao: reg.tipo_apresentacao ?? 'Competitiva',
+            status:           reg.status            ?? '—',
             scores_all:    [],
             scores_detail: [],
           };
@@ -132,7 +141,7 @@ const ResultsPanel = () => {
           grouped[rid].scores_all.push(Number(e.final_weighted_average));
         }
         grouped[rid].scores_detail.push({
-          judge:       e.judges?.name || e.judge_id,
+          judge:       judgesById[e.judge_id]?.name || e.judge_id,
           judge_id:    e.judge_id,
           scores:      e.scores || {},
           final:       e.final_weighted_average,
