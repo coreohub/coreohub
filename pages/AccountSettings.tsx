@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase, uploadEventCover } from '../services/supabase';
+import { supabase, uploadEventCover, supabaseUrl } from '../services/supabase';
 import imageCompression from 'browser-image-compression';
 import {
   getAllGenres, createGenre, updateGenre, deleteGenre,
@@ -17,7 +17,7 @@ import {
   Trophy, Star, Zap, Crown, Shirt, Award, Lock, Medal,
   Calendar, CalendarDays, CalendarRange,
   CreditCard, CheckCircle, AlertCircle, ExternalLink, Percent, Hash,
-  Image as ImageIcon, Upload,
+  Image as ImageIcon, Upload, Play, Pause, Volume2,
   Instagram, MessageCircle, Globe, Mail, FileText, Youtube,
 } from 'lucide-react';
 import { formatEventWhatsApp } from '../utils/formatters';
@@ -780,10 +780,36 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
     tempShorterTrack: boolean;
   }>({ open: false, mode: 'add-genre', tempName: '', tempFree: false, tempShorterTrack: false });
 
+  /* Sample player de vozes — toca o WAV pre-gerado em narrations/_samples/{voice}.wav */
+  const [samplePlaying, setSamplePlaying] = useState<string | null>(null);
+  const sampleAudioRef = React.useRef<HTMLAudioElement | null>(null);
+
+  const toggleVoiceSample = (voice: string) => {
+    const url = `${supabaseUrl}/storage/v1/object/public/narrations/_samples/${voice.toLowerCase()}.wav`;
+    if (samplePlaying === voice) {
+      sampleAudioRef.current?.pause();
+      setSamplePlaying(null);
+      return;
+    }
+    if (sampleAudioRef.current) {
+      sampleAudioRef.current.pause();
+      sampleAudioRef.current.src = '';
+    }
+    const audio = new Audio(url);
+    sampleAudioRef.current = audio;
+    audio.addEventListener('ended', () => setSamplePlaying(null));
+    audio.addEventListener('error', () => setSamplePlaying(null));
+    audio.play()
+      .then(() => setSamplePlaying(voice))
+      .catch(() => setSamplePlaying(null));
+  };
+
   const [flowConfig, setFlowConfig] = useState({
     tempo_entrada: 15,
     texto_ia: 'Com a coreografia [COREOGRAFIA], recebam no palco: [ESTUDIO]',
-    voice_id: null as string | null, // IA de Narração: voice ElevenLabs (NULL = default)
+    texto_ia_saida: 'Uma salva de palmas para [ESTUDIO]!',
+    narracao_saida_ativa: false, // opt-in: maioria dos festivais BR usa só entrada + aplauso
+    voice_id: null as string | null, // IA de Narração: voz Gemini (NULL = Charon default)
     marcar_palco_ativo: true,
     intervalo_seguranca: 3,
     tempo_marcacao_palco: 45,
@@ -918,6 +944,8 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
           setFlowConfig({
             tempo_entrada:        data.tempo_entrada         ?? 15,
             texto_ia:             data.texto_ia              ?? flowConfig.texto_ia,
+            texto_ia_saida:       data.texto_ia_saida        ?? flowConfig.texto_ia_saida,
+            narracao_saida_ativa: data.narracao_saida_ativa  ?? false,
             voice_id:             data.voice_id              ?? null,
             marcar_palco_ativo:   data.marcar_palco_ativo    ?? true,
             intervalo_seguranca:  data.intervalo_seguranca   ?? 3,
@@ -986,6 +1014,8 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         tempo_entrada:        flowConfig.tempo_entrada,
         intervalo_seguranca:  flowConfig.intervalo_seguranca,
         texto_ia:             flowConfig.texto_ia,
+        texto_ia_saida:       flowConfig.texto_ia_saida,
+        narracao_saida_ativa: flowConfig.narracao_saida_ativa,
         voice_id:             flowConfig.voice_id,
         marcar_palco_ativo:   flowConfig.marcar_palco_ativo,
         tempo_marcacao_palco: flowConfig.tempo_marcacao_palco,
@@ -2274,37 +2304,112 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-6">
               <div className="flex items-center gap-3 mb-2">
                 <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Settings size={18} /></div>
-                <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Texto de Narração IA</h3>
+                <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Narração IA</h3>
               </div>
-              <p className="text-xs text-slate-500 -mt-4">
-                Use os marcadores <code className="text-[#ff0068] bg-[#ff0068]/10 px-1 rounded">[COREOGRAFIA]</code> e <code className="text-[#ff0068] bg-[#ff0068]/10 px-1 rounded">[ESTUDIO]</code> para personalizar.
-              </p>
-              <textarea
-                rows={6}
-                value={flowConfig.texto_ia}
-                onChange={e => setFlowConfig(f => ({ ...f, texto_ia: e.target.value }))}
-                className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-5 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-medium text-sm resize-none"
-              />
 
-              {/* IA de Narração — escolha de voz ElevenLabs */}
-              <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/10">
+              {/* Narração de ENTRADA — sempre ativa */}
+              <div>
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 block">
-                  Voz da narração IA
+                  Narração de Entrada
                 </label>
-                <select
-                  value={(flowConfig as any).voice_id ?? ''}
-                  onChange={e => setFlowConfig(f => ({ ...f, voice_id: e.target.value || null } as any))}
-                  className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-2.5 px-4 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all text-sm"
-                >
-                  <option value="">Charon (locutor masculino, padrão)</option>
-                  <option value="Puck">Puck (masculino jovem)</option>
-                  <option value="Fenrir">Fenrir (masculino enérgico)</option>
-                  <option value="Kore">Kore (feminina firme)</option>
-                  <option value="Leda">Leda (feminina calma)</option>
-                  <option value="Aoede">Aoede (feminina musical)</option>
-                </select>
-                <p className="text-[10px] text-slate-400 mt-2 italic">
-                  As narrações são geradas via Google Gemini 2.5 Audio TTS (qualidade profissional, PT-BR nativo). Use o botão "Gerar narrações IA" na <strong>Mesa de Som</strong> ou em <strong>Sonoplastia & Cronograma</strong>. <span className="text-emerald-500">Free tier generoso (1M tokens/dia)</span>.
+                <p className="text-xs text-slate-500 mb-3">
+                  Tocada antes da coreografia. Marcadores: <code className="text-[#ff0068] bg-[#ff0068]/10 px-1 rounded">[COREOGRAFIA]</code> e <code className="text-[#ff0068] bg-[#ff0068]/10 px-1 rounded">[ESTUDIO]</code>.
+                </p>
+                <textarea
+                  rows={4}
+                  value={flowConfig.texto_ia}
+                  onChange={e => setFlowConfig(f => ({ ...f, texto_ia: e.target.value }))}
+                  className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-5 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-medium text-sm resize-none"
+                />
+              </div>
+
+              {/* Narração de SAÍDA — opt-in */}
+              <div className="pt-4 border-t border-slate-200 dark:border-white/10">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    Narração de Saída <span className="text-slate-400 normal-case font-normal">(opcional)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setFlowConfig(f => ({ ...f, narracao_saida_ativa: !f.narracao_saida_ativa }))}
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${
+                      flowConfig.narracao_saida_ativa
+                        ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/30'
+                        : 'bg-slate-100 dark:bg-white/5 text-slate-500 border border-slate-200 dark:border-white/10'
+                    }`}
+                  >
+                    {flowConfig.narracao_saida_ativa ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                    {flowConfig.narracao_saida_ativa ? 'Ativa' : 'Desativada'}
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 mb-3">
+                  Tocada manualmente pela Mesa de Som ao "Encerrar Apresentação". Curta (3-8s), agradecimento ou transição.
+                </p>
+                {flowConfig.narracao_saida_ativa && (
+                  <textarea
+                    rows={3}
+                    value={flowConfig.texto_ia_saida}
+                    onChange={e => setFlowConfig(f => ({ ...f, texto_ia_saida: e.target.value }))}
+                    placeholder="Ex: Uma salva de palmas para [ESTUDIO]!"
+                    className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-5 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-medium text-sm resize-none"
+                  />
+                )}
+              </div>
+
+              {/* Voz da narração — picker com sample preview */}
+              <div className="pt-4 border-t border-slate-200 dark:border-white/10">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 block">
+                  Voz da Narração
+                </label>
+                <p className="text-xs text-slate-500 mb-3">
+                  Clique no <Volume2 size={11} className="inline" /> pra ouvir cada voz e escolher a do seu festival.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {[
+                    { id: '', name: 'Charon', desc: 'Locutor masculino (padrão)' },
+                    { id: 'Puck', name: 'Puck', desc: 'Masculino jovem' },
+                    { id: 'Fenrir', name: 'Fenrir', desc: 'Masculino enérgico' },
+                    { id: 'Kore', name: 'Kore', desc: 'Feminina firme' },
+                    { id: 'Leda', name: 'Leda', desc: 'Feminina calma' },
+                    { id: 'Aoede', name: 'Aoede', desc: 'Feminina musical' },
+                  ].map(v => {
+                    const isSelected = (flowConfig.voice_id ?? '') === v.id;
+                    const isPlaying = samplePlaying === v.name;
+                    return (
+                      <div
+                        key={v.name}
+                        onClick={() => setFlowConfig(f => ({ ...f, voice_id: v.id || null }))}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-2xl border cursor-pointer transition-all ${
+                          isSelected
+                            ? 'border-[#ff0068]/60 bg-[#ff0068]/5'
+                            : 'border-slate-200 dark:border-white/10 hover:border-[#ff0068]/30'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); toggleVoiceSample(v.name); }}
+                          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                            isPlaying
+                              ? 'bg-[#ff0068] text-white animate-pulse'
+                              : 'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 hover:bg-[#ff0068]/10 hover:text-[#ff0068]'
+                          }`}
+                          title={isPlaying ? 'Pausar' : 'Ouvir sample'}
+                        >
+                          {isPlaying ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" className="ml-0.5" />}
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-black uppercase tracking-tight ${isSelected ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>
+                            {v.name}
+                          </p>
+                          <p className="text-[10px] text-slate-400">{v.desc}</p>
+                        </div>
+                        {isSelected && <CheckCircle size={14} className="text-[#ff0068] shrink-0" />}
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-3 italic">
+                  Geradas via Google Gemini 2.5 Audio TTS, PT-BR nativo. <span className="text-emerald-500">Free tier (1M tokens/dia)</span>.
                 </p>
               </div>
             </div>

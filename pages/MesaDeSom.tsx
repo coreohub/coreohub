@@ -7,8 +7,11 @@ import {
 import { supabase } from '../services/supabase';
 import {
   generateNarrationBatch, generateNarration, deleteNarration, fetchNarrationAudios,
-  type BatchItem,
+  type BatchItem, type NarrationKind,
 } from '../services/narrationApi';
+
+type AudioSlot = { audio_url: string; duration_seconds: number };
+type AudioMap = Record<string, { entrada?: AudioSlot; saida?: AudioSlot }>;
 
 const MesaDeSom = () => {
   const [registrations, setRegistrations] = useState<any[]>([]);
@@ -20,8 +23,8 @@ const MesaDeSom = () => {
   // Phase 4: id do evento ativo + flag de "broadcasting"
   const [eventId, setEventId] = useState<string | null>(null);
   const [updatingLive, setUpdatingLive] = useState(false);
-  // IA de Narração: mapa registration_id -> { audio_url, duration_seconds }
-  const [audios, setAudios] = useState<Record<string, { audio_url: string; duration_seconds: number }>>({});
+  // IA de Narração: mapa registration_id -> { entrada?, saida? }
+  const [audios, setAudios] = useState<AudioMap>({});
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
   // Audio element ref pra controlar playback do MP3 da narração
@@ -73,13 +76,15 @@ const MesaDeSom = () => {
 
       if (cfg) setConfig(cfg);
 
-      // IA de Narração: carrega audios pre-renderizados
+      // IA de Narração: carrega audios pre-renderizados (entrada + saida)
       if (ev?.id) {
         try {
           const audioRows = await fetchNarrationAudios(ev.id);
-          const map: Record<string, any> = {};
+          const map: AudioMap = {};
           audioRows.forEach((a: any) => {
-            map[a.registration_id] = { audio_url: a.audio_url, duration_seconds: a.duration_seconds };
+            const kind: NarrationKind = a.kind === 'saida' ? 'saida' : 'entrada';
+            if (!map[a.registration_id]) map[a.registration_id] = {};
+            map[a.registration_id][kind] = { audio_url: a.audio_url, duration_seconds: a.duration_seconds };
           });
           setAudios(map);
         } catch (e) {
@@ -93,37 +98,50 @@ const MesaDeSom = () => {
     }
   };
 
-  // Constrói o texto da narração aplicando o template em texto_ia
-  const buildNarrationText = (reg: any): string => {
-    const template = (config?.texto_ia ?? '').trim()
-      || 'Com a coreografia [COREOGRAFIA], recebam no palco: [ESTUDIO]';
+  // Constrói o texto da narração aplicando o template (entrada ou saida)
+  const buildNarrationText = (reg: any, kind: NarrationKind = 'entrada'): string => {
+    const fallback = kind === 'saida'
+      ? 'Uma salva de palmas para [ESTUDIO]!'
+      : 'Com a coreografia [COREOGRAFIA], recebam no palco: [ESTUDIO]';
+    const tplKey = kind === 'saida' ? 'texto_ia_saida' : 'texto_ia';
+    const template = (config?.[tplKey] ?? '').trim() || fallback;
     return template
       .replaceAll('[COREOGRAFIA]', reg.nome_coreografia ?? '')
       .replaceAll('[ESTUDIO]', reg.estudio ?? '');
   };
 
-  // IA de Narração — gerar todas em batch
+  // Saida ativa? lido da config do produtor
+  const saidaAtiva = !!config?.narracao_saida_ativa;
+
+  // IA de Narração — gerar todas em batch (entrada + saida se ativa)
   const handleGenerateAll = async () => {
     if (!eventId) { alert('Nenhum evento ativo encontrado.'); return; }
     if (registrations.length === 0) return;
 
-    const items: BatchItem[] = registrations.map(reg => ({
-      registration_id: reg.id,
-      text: buildNarrationText(reg),
-    }));
+    const items: BatchItem[] = [];
+    registrations.forEach(reg => {
+      items.push({ registration_id: reg.id, text: buildNarrationText(reg, 'entrada'), kind: 'entrada' });
+      if (saidaAtiva) {
+        items.push({ registration_id: reg.id, text: buildNarrationText(reg, 'saida'), kind: 'saida' });
+      }
+    });
 
-    if (!confirm(`Gerar ${items.length} narrações via IA?\n\nIsso usa créditos da ElevenLabs (~${Math.round(items.reduce((s, i) => s + i.text.length, 0) / 1000)}k caracteres). Custo estimado: $${(items.reduce((s, i) => s + i.text.length, 0) / 100000 * 5).toFixed(2)}.`)) {
+    const totalChars = items.reduce((s, i) => s + i.text.length, 0);
+    const tipoMsg = saidaAtiva ? `${registrations.length} entradas + ${registrations.length} saídas` : `${registrations.length} narrações`;
+    if (!confirm(`Gerar ${tipoMsg} via IA (Gemini 2.5)?\n\nVoz: ${config?.voice_id || 'Charon (locutor masculino padrão)'}\nTotal: ~${Math.round(totalChars / 1000)}k caracteres.\n\nGratuito no plano free do Gemini (1M tokens/dia).`)) {
       return;
     }
 
     setBatchProgress({ done: 0, total: items.length });
     try {
       const result = await generateNarrationBatch(eventId, items, config?.voice_id);
-      // Hidrata todas em sucesso
-      const newMap = { ...audios };
+      // Hidrata por kind
+      const newMap: AudioMap = { ...audios };
       result.results.forEach(r => {
         if (r.ok && r.audio_url) {
-          newMap[r.registration_id] = { audio_url: r.audio_url, duration_seconds: r.duration_seconds ?? 10 };
+          const k: NarrationKind = r.kind === 'saida' ? 'saida' : 'entrada';
+          if (!newMap[r.registration_id]) newMap[r.registration_id] = {};
+          newMap[r.registration_id][k] = { audio_url: r.audio_url, duration_seconds: r.duration_seconds ?? 10 };
         }
       });
       setAudios(newMap);
@@ -136,27 +154,40 @@ const MesaDeSom = () => {
     }
   };
 
-  // IA de Narração — gerar/regerar 1 individual
+  // IA de Narração — gerar/regerar 1 individual (entrada + saida se ativa)
   const handleGenerateOne = async (reg: any) => {
     if (!eventId) return;
     setGeneratingId(reg.id);
     try {
-      const text = buildNarrationText(reg);
-      const result = await generateNarration(eventId, reg.id, text, config?.voice_id);
-      if (result.ok && result.audio_url) {
-        setAudios(prev => ({
-          ...prev,
-          [reg.id]: { audio_url: result.audio_url!, duration_seconds: result.duration_seconds ?? 10 },
-        }));
-      } else {
-        alert('Falha ao gerar: ' + (result.error ?? 'desconhecido'));
+      const kinds: NarrationKind[] = saidaAtiva ? ['entrada', 'saida'] : ['entrada'];
+      let lastError: string | null = null;
+      const updates: { kind: NarrationKind; url: string; dur: number }[] = [];
+      for (const kind of kinds) {
+        const text = buildNarrationText(reg, kind);
+        const result = await generateNarration(eventId, reg.id, text, config?.voice_id, kind);
+        if (result.ok && result.audio_url) {
+          updates.push({ kind, url: result.audio_url, dur: result.duration_seconds ?? 10 });
+        } else {
+          lastError = result.error ?? 'desconhecido';
+        }
       }
+      if (updates.length) {
+        setAudios(prev => {
+          const next = { ...prev };
+          if (!next[reg.id]) next[reg.id] = {};
+          updates.forEach(u => { next[reg.id][u.kind] = { audio_url: u.url, duration_seconds: u.dur }; });
+          return next;
+        });
+      }
+      if (lastError) alert('Falha ao gerar: ' + lastError);
     } finally {
       setGeneratingId(null);
     }
   };
 
   // IA de Narração — preview/play do audio pre-renderizado
+  // Mantem ref do audio atual + sincroniza isPlaying com eventos play/pause/ended
+  // pra que os botoes grandes do header reflitam o estado real do playback.
   const playNarration = (audio_url: string) => {
     if (narrationAudioRef.current) {
       narrationAudioRef.current.pause();
@@ -164,7 +195,26 @@ const MesaDeSom = () => {
     }
     const audio = new Audio(audio_url);
     narrationAudioRef.current = audio;
+    audio.addEventListener('play', () => setIsPlaying(true));
+    audio.addEventListener('pause', () => setIsPlaying(false));
+    audio.addEventListener('ended', () => setIsPlaying(false));
     audio.play().catch(e => console.warn('Falha ao tocar narração:', e));
+  };
+
+  // Toggle do botao Play/Pause grande do header.
+  // Se ja tem audio carregado, pausa/resume. Se nao, tenta tocar a narração
+  // pre-renderizada da currentTrack (ou Web Speech como fallback).
+  const togglePlayPause = () => {
+    const a = narrationAudioRef.current;
+    if (a && a.src) {
+      if (a.paused) {
+        a.play().catch(e => console.warn('Falha ao retomar narração:', e));
+      } else {
+        a.pause();
+      }
+      return;
+    }
+    if (currentTrack) handleAnnounce(currentTrack);
   };
 
   const conflicts = React.useMemo(() => {
@@ -210,10 +260,10 @@ const MesaDeSom = () => {
     return conflictMap;
   }, [registrations, config?.intervalo_seguranca]);
 
-  const handleAnnounce = (reg: any) => {
-    // Prioridade: audio pre-renderizado via ElevenLabs (qualidade profissional).
+  const handleAnnounce = (reg: any, kind: NarrationKind = 'entrada') => {
+    // Prioridade: audio pre-renderizado via Gemini (qualidade profissional).
     // Fallback: Web Speech API (TTS robotico nativo, gratis).
-    const pre = audios[reg.id];
+    const pre = audios[reg.id]?.[kind];
     if (pre?.audio_url) {
       playNarration(pre.audio_url);
       return;
@@ -224,7 +274,7 @@ const MesaDeSom = () => {
       return;
     }
     window.speechSynthesis.cancel();
-    const text = buildNarrationText(reg);
+    const text = buildNarrationText(reg, kind);
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'pt-BR';
     utterance.rate = 0.9;
@@ -261,6 +311,18 @@ const MesaDeSom = () => {
   // Phase 4: encerrar transmissao (zera live_registration_id pra jurados saberem
   // que nao tem apresentacao no palco agora — entre coreografias ou intervalo).
   const handleEndLive = async () => {
+    // Se saida ativa e tem audio de saida da currentTrack, toca antes de zerar.
+    // Senao, encerra direto.
+    const ending = currentTrack;
+    if (saidaAtiva && ending && audios[ending.id]?.saida) {
+      handleAnnounce(ending, 'saida');
+    } else {
+      if (narrationAudioRef.current) {
+        narrationAudioRef.current.pause();
+        narrationAudioRef.current.src = '';
+      }
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+    }
     setCurrentTrack(null);
     setIsPlaying(false);
     if (!eventId) return;
@@ -350,9 +412,10 @@ const MesaDeSom = () => {
               <Volume2 size={24} className="group-hover:text-[#ff0068] transition-colors" />
             </button>
             <button
-              onClick={() => setIsPlaying(!isPlaying)}
+              onClick={togglePlayPause}
               disabled={!currentTrack}
               className="w-16 h-16 bg-[#ff0068] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-[#ff0068]/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title={isPlaying ? 'Pausar narração' : 'Tocar narração'}
             >
               {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" className="ml-1" />}
             </button>
@@ -360,7 +423,9 @@ const MesaDeSom = () => {
               onClick={handleEndLive}
               disabled={!currentTrack || updatingLive}
               className="p-4 bg-white/5 text-white rounded-2xl hover:bg-rose-500/20 hover:text-rose-400 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              title="Encerrar transmissão (jurados pararão de ver AO VIVO)"
+              title={saidaAtiva && currentTrack && audios[currentTrack.id]?.saida
+                ? 'Encerrar com narração de saída (toca antes de zerar live)'
+                : 'Encerrar transmissão (jurados pararão de ver AO VIVO)'}
             >
               <StopCircle size={24} />
             </button>
@@ -391,7 +456,10 @@ const MesaDeSom = () => {
           ) : (
             filteredSchedule.map((reg, index) => {
               const regConflicts = conflicts[reg.id] || [];
-              const audio = audios[reg.id];
+              const audioSet = audios[reg.id];
+              const hasEntrada = !!audioSet?.entrada;
+              const hasSaida = !!audioSet?.saida;
+              const fullyReady = hasEntrada && (!saidaAtiva || hasSaida);
               const isGeneratingThis = generatingId === reg.id;
               return (
                 <div
@@ -407,11 +475,17 @@ const MesaDeSom = () => {
                       <h4 className={`text-xs font-black uppercase tracking-tight truncate ${currentTrack?.id === reg.id ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>
                         {reg.nome_coreografia}
                       </h4>
-                      {/* IA Narração: badge de status do audio pre-renderizado */}
-                      {audio && (
-                        <div className="flex items-center gap-1 px-1.5 py-0.5 bg-violet-500/10 border border-violet-500/20 rounded-full" title={`Áudio IA pronto (${Math.round(audio.duration_seconds)}s)`}>
+                      {/* IA Narração: badges de status (entrada / saida) */}
+                      {hasEntrada && (
+                        <div className="flex items-center gap-1 px-1.5 py-0.5 bg-violet-500/10 border border-violet-500/20 rounded-full" title={`Entrada IA pronta (${Math.round(audioSet!.entrada!.duration_seconds)}s)`}>
                           <CheckCircle2 size={9} className="text-violet-500" />
-                          <span className="text-[8px] font-black text-violet-600 dark:text-violet-400 uppercase">IA</span>
+                          <span className="text-[8px] font-black text-violet-600 dark:text-violet-400 uppercase">E</span>
+                        </div>
+                      )}
+                      {saidaAtiva && hasSaida && (
+                        <div className="flex items-center gap-1 px-1.5 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full" title={`Saída IA pronta (${Math.round(audioSet!.saida!.duration_seconds)}s)`}>
+                          <CheckCircle2 size={9} className="text-emerald-500" />
+                          <span className="text-[8px] font-black text-emerald-600 dark:text-emerald-400 uppercase">S</span>
                         </div>
                       )}
                       {regConflicts.length > 0 && (
@@ -437,11 +511,11 @@ const MesaDeSom = () => {
                       onClick={() => handleGenerateOne(reg)}
                       disabled={isGeneratingThis || !!batchProgress}
                       className="p-2 text-slate-400 hover:text-violet-500 hover:bg-violet-500/10 rounded-xl transition-all disabled:opacity-50"
-                      title={audio ? 'Regerar narração IA' : 'Gerar narração IA'}
+                      title={fullyReady ? 'Regerar narração IA' : (saidaAtiva ? 'Gerar narrações IA (entrada + saída)' : 'Gerar narração IA')}
                     >
                       {isGeneratingThis
                         ? <Loader2 size={16} className="animate-spin text-violet-500" />
-                        : audio ? <RefreshCw size={16} /> : <Sparkles size={16} />
+                        : fullyReady ? <RefreshCw size={16} /> : <Sparkles size={16} />
                       }
                     </button>
                     <button

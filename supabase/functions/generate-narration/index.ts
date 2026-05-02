@@ -18,10 +18,16 @@
  *   - Leda — feminina calma
  *   - Aoede — feminina musical
  *
+ * Narração tem 2 tipos (kind):
+ *   - 'entrada' (default): longa (10-25s), ficha tecnica completa
+ *   - 'saida'           : curta (3-8s), agradecimento/transicao
+ *
  * Actions (POST JSON):
- *   { action: "generate", event_id, registration_id, text, voice_id? }
+ *   { action: "generate", event_id, registration_id, text, voice_id?, kind? }
  *   { action: "generate-batch", event_id, items, voice_id? }
- *   { action: "delete", event_id, registration_id }
+ *     items: [{ registration_id, text, kind? }]
+ *   { action: "delete", event_id, registration_id, kind? }
+ *     kind omitido = remove ambas (entrada + saida)
  *
  * Response do Gemini eh PCM raw (audio/L16;rate=24000;codec=pcm).
  * Convertido pra WAV manualmente (header RIFF de 44 bytes + dados PCM).
@@ -121,13 +127,20 @@ Deno.serve(async (req) => {
     return json({ error: 'event_not_found_or_not_yours' }, 403)
   }
 
-  const generateOne = async (registration_id: string, text: string, voice_id?: string): Promise<{
+  const generateOne = async (
+    registration_id: string,
+    text: string,
+    voice_id?: string,
+    kind: 'entrada' | 'saida' = 'entrada',
+  ): Promise<{
     ok: boolean;
     audio_url?: string;
     duration_seconds?: number;
+    kind?: 'entrada' | 'saida';
     error?: string;
   }> => {
     if (!text || text.trim().length === 0) return { ok: false, error: 'empty_text' }
+    if (kind !== 'entrada' && kind !== 'saida') return { ok: false, error: 'invalid_kind' }
 
     const voice = voice_id || DEFAULT_VOICE
 
@@ -165,7 +178,7 @@ Deno.serve(async (req) => {
       // Duracao do audio = bytes / (sampleRate * channels * bytesPerSample)
       const durationSeconds = pcmBytes.length / (SAMPLE_RATE * CHANNELS * (BITS_PER_SAMPLE / 8))
 
-      const fileName = `${event_id}/${registration_id}_${Date.now()}.wav`
+      const fileName = `${event_id}/${registration_id}_${kind}_${Date.now()}.wav`
       const { error: upErr } = await supa.storage
         .from('narrations')
         .upload(fileName, wavBytes, { contentType: 'audio/wav', upsert: true })
@@ -180,10 +193,12 @@ Deno.serve(async (req) => {
         .delete()
         .eq('event_id', event_id)
         .eq('registration_id', registration_id)
+        .eq('kind', kind)
 
       const { error: insErr } = await supa.from('narration_audios').insert([{
         event_id,
         registration_id,
+        kind,
         audio_url,
         voice_id: voice,
         text_used: text.trim(),
@@ -193,16 +208,16 @@ Deno.serve(async (req) => {
 
       if (insErr) return { ok: false, error: `db: ${insErr.message}` }
 
-      return { ok: true, audio_url, duration_seconds: durationSeconds }
+      return { ok: true, audio_url, duration_seconds: durationSeconds, kind }
     } catch (e: any) {
       return { ok: false, error: e?.message ?? 'unknown' }
     }
   }
 
   if (action === 'generate') {
-    const { registration_id, text, voice_id } = body
+    const { registration_id, text, voice_id, kind } = body
     if (!registration_id || !text) return json({ error: 'missing_fields' }, 400)
-    const result = await generateOne(registration_id, text, voice_id)
+    const result = await generateOne(registration_id, text, voice_id, kind ?? 'entrada')
     return json(result, result.ok ? 200 : 500)
   }
 
@@ -220,7 +235,7 @@ Deno.serve(async (req) => {
       const batch = items.slice(i, i + POOL_SIZE)
       const batchResults = await Promise.all(
         batch.map((item: any) =>
-          generateOne(item.registration_id, item.text, voice_id)
+          generateOne(item.registration_id, item.text, voice_id, item.kind ?? 'entrada')
             .then(r => ({ registration_id: item.registration_id, ...r }))
         )
       )
@@ -234,28 +249,32 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'delete') {
-    const { registration_id } = body
+    const { registration_id, kind } = body
     if (!registration_id) return json({ error: 'missing_fields' }, 400)
 
-    const { data: row } = await supa
+    let q = supa
       .from('narration_audios')
-      .select('audio_url')
+      .select('audio_url, kind')
       .eq('event_id', event_id)
       .eq('registration_id', registration_id)
-      .maybeSingle()
+    if (kind) q = q.eq('kind', kind)
 
-    if (row?.audio_url) {
-      const match = row.audio_url.match(/\/narrations\/(.+)$/)
-      if (match) {
-        await supa.storage.from('narrations').remove([match[1]])
+    const { data: rows } = await q
+
+    for (const row of rows ?? []) {
+      if (row?.audio_url) {
+        const match = row.audio_url.match(/\/narrations\/(.+)$/)
+        if (match) await supa.storage.from('narrations').remove([match[1]])
       }
     }
 
-    await supa
+    let del = supa
       .from('narration_audios')
       .delete()
       .eq('event_id', event_id)
       .eq('registration_id', registration_id)
+    if (kind) del = del.eq('kind', kind)
+    await del
 
     return json({ ok: true })
   }
