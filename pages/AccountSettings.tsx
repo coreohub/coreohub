@@ -658,6 +658,8 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
   const [identityUploading, setIdentityUploading] = useState(false);
   const [programacao, setProgramacao] = useState<ProgramItem[]>([]);
   const [ingressos, setIngressos]     = useState<TicketType[]>([]);
+  const [politicaIngressos, setPoliticaIngressos] = useState<'NAO_DEFINIDO' | 'GRATUITO' | 'INTERNO' | 'EXTERNO'>('NAO_DEFINIDO');
+  const [urlIngressosExterno, setUrlIngressosExterno] = useState<string>('');
   const [sponsors, setSponsors]       = useState<Sponsor[]>([]);
   const [styles,  setStyles]  = useState<string[]>(DEFAULT_MODALITIES);
   const [formats, setFormats] = useState<any[]>(DEFAULT_FORMATS);
@@ -977,6 +979,17 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
           });
           if (Array.isArray(data.programacao)) setProgramacao(data.programacao);
           if (Array.isArray(data.ingressos_audiencia)) setIngressos(data.ingressos_audiencia);
+          // Politica de ingressos (#11). Se a coluna nao veio (banco sem migration ainda),
+          // infere a partir dos dados pra nao quebrar UI: lista preenchida -> INTERNO,
+          // url_ingressos -> EXTERNO, senao NAO_DEFINIDO.
+          if (data.politica_ingressos) {
+            setPoliticaIngressos(data.politica_ingressos);
+          } else if (Array.isArray(data.ingressos_audiencia) && data.ingressos_audiencia.length > 0) {
+            setPoliticaIngressos('INTERNO');
+          } else if (data.url_ingressos) {
+            setPoliticaIngressos('EXTERNO');
+          }
+          if (data.url_ingressos) setUrlIngressosExterno(data.url_ingressos);
           if (Array.isArray(data.patrocinadores))     setSponsors(data.patrocinadores);
           setStyles(data.estilos?.length    ? data.estilos    : DEFAULT_MODALITIES);
           setFormats(data.formatos?.length ? data.formatos.map(migrateFormat) : DEFAULT_FORMATS);
@@ -1078,6 +1091,8 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         hora_evento:         general.eventTime || null,
         programacao:         programacao,
         ingressos_audiencia: ingressos,
+        politica_ingressos:  politicaIngressos,
+        url_ingressos:       politicaIngressos === 'EXTERNO' ? (urlIngressosExterno || null) : null,
         patrocinadores:      sponsors,
         estilos:             styles,
         formatos:            formats,
@@ -1177,6 +1192,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
           event_time:              general.eventTime || null,
           programacao_config:      programacao,
           ingressos_config:        ingressos,
+          politica_ingressos:      politicaIngressos,
           patrocinadores_config:   sponsors,
           is_public:               true,
           created_by:              user.id,
@@ -1663,24 +1679,76 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
               </div>
             </div>
 
-            {/* Ingressos para Audiência */}
+            {/* Ingressos para Audiência (#11) */}
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><DollarSign size={18} /></div>
-                  <div>
-                    <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Ingressos para Audiência</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">Tipos de ingresso pra quem vai assistir (pais, amigos, público em geral). Diferente da inscrição do bailarino.</p>
-                  </div>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><DollarSign size={18} /></div>
+                <div>
+                  <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Ingressos para Audiência</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Tipos de ingresso pra quem vai assistir (pais, amigos, público em geral). Diferente da inscrição do bailarino.</p>
                 </div>
-                <button
-                  onClick={() => setIngressos(t => [...t, { nome: '', preco: 0, obs: '', link: '' }])}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-[#ff0068]/10 text-[#ff0068] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0068]/20 shrink-0"
-                >
-                  <Plus size={12} /> Adicionar Tipo
-                </button>
               </div>
-              <div className="space-y-3 mt-4">
+
+              {/* Politica: 4 opcoes */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5">
+                {([
+                  { v: 'NAO_DEFINIDO', label: 'Não definido', desc: 'Esconde a seção' },
+                  { v: 'GRATUITO',     label: 'Gratuito',      desc: 'Sem ingresso' },
+                  { v: 'INTERNO',      label: 'Lista interna', desc: 'Tipos abaixo' },
+                  { v: 'EXTERNO',      label: 'Site externo',  desc: 'Ticketeira' },
+                ] as const).map(opt => {
+                  const active = politicaIngressos === opt.v;
+                  return (
+                    <button
+                      key={opt.v}
+                      type="button"
+                      onClick={() => setPoliticaIngressos(opt.v)}
+                      className={`text-left p-3 rounded-xl border transition-all ${
+                        active
+                          ? 'border-[#ff0068]/60 bg-[#ff0068]/5'
+                          : 'border-slate-200 dark:border-white/10 hover:border-[#ff0068]/30'
+                      }`}
+                    >
+                      <p className={`text-[10px] font-black uppercase tracking-tight ${active ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>{opt.label}</p>
+                      <p className="text-[9px] text-slate-400 mt-0.5">{opt.desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {politicaIngressos === 'GRATUITO' && (
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 font-bold">
+                  ✓ Vitrine pública mostrará banner verde: <em>"Entrada gratuita — não é necessário ingresso para assistir"</em>.
+                </p>
+              )}
+
+              {politicaIngressos === 'EXTERNO' && (
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    Link da ticketeira externa
+                  </label>
+                  <input
+                    type="url"
+                    value={urlIngressosExterno}
+                    onChange={e => setUrlIngressosExterno(e.target.value)}
+                    placeholder="https://sympla.com.br/seu-evento"
+                    className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2.5 px-4 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-[#ff0068]/50"
+                  />
+                  <p className="text-[9px] text-slate-400">Vitrine pública mostrará botão "Comprar ingressos" linkando para essa URL.</p>
+                </div>
+              )}
+
+              {politicaIngressos === 'INTERNO' && (
+                <>
+                  <div className="flex items-center justify-end mb-3">
+                    <button
+                      onClick={() => setIngressos(t => [...t, { nome: '', preco: 0, obs: '', link: '' }])}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-[#ff0068]/10 text-[#ff0068] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0068]/20"
+                    >
+                      <Plus size={12} /> Adicionar Tipo
+                    </button>
+                  </div>
+                  <div className="space-y-3">
                 {ingressos.length === 0 ? (
                   <p className="text-center text-slate-400 py-8 text-xs italic">Nenhum tipo. Ex: "Meia Entrada R$10 + 1kg de alimento" ou "Inteira R$20".</p>
                 ) : (
@@ -1724,7 +1792,9 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                     </div>
                   ))
                 )}
-              </div>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Patrocinadores / Apoiadores */}

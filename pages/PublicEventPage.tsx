@@ -282,40 +282,95 @@ const PublicEventPage = () => {
           </div>
         )}
 
-        {/* Ingressos para Audiência */}
-        {Array.isArray(event.ingressos_config) && event.ingressos_config.filter((t: any) => t.nome).length > 0 && (
-          <div className="space-y-4">
-            <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-              <Ticket size={24} className="text-[#ff0068]" /> Ingressos
-            </h2>
-            <p className="text-xs text-slate-400">Para o público que vai assistir. Bailarinos inscritos não precisam comprar.</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {event.ingressos_config
-                .filter((t: any) => t.nome)
-                .map((t: any, i: number) => (
-                  <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col gap-2 hover:border-[#ff0068]/40 transition-colors">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <p className="font-black uppercase text-sm text-white">{t.nome}</p>
-                      <p className="text-[#ff0068] font-black text-lg">
-                        {Number(t.preco) > 0 ? `R$ ${Number(t.preco).toFixed(2)}` : 'Grátis'}
-                      </p>
-                    </div>
-                    {t.obs && <p className="text-[10px] text-slate-400">{t.obs}</p>}
-                    {t.link && (
-                      <a
-                        href={t.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="self-start inline-flex items-center gap-1.5 text-[10px] font-black text-[#ff0068] uppercase tracking-widest hover:underline"
-                      >
-                        Comprar <ExternalLink size={10} />
-                      </a>
-                    )}
+        {/* Ingressos para Audiência (#11) — politica_ingressos define modo */}
+        {(() => {
+          // Resolve politica preferindo events; cai pra config; senao infere
+          // pelos dados (compat com produtores que ainda nao escolheram).
+          const politica: string =
+            event.politica_ingressos
+            || config?.politica_ingressos
+            || (Array.isArray(event.ingressos_config) && event.ingressos_config.filter((t: any) => t.nome).length > 0 ? 'INTERNO'
+              : config?.url_ingressos ? 'EXTERNO'
+              : 'NAO_DEFINIDO');
+
+          if (politica === 'NAO_DEFINIDO') return null;
+
+          if (politica === 'GRATUITO') {
+            return (
+              <div className="space-y-4">
+                <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
+                  <Ticket size={24} className="text-emerald-400" /> Ingressos
+                </h2>
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-6 flex items-start gap-4">
+                  <div className="p-3 bg-emerald-500/20 rounded-2xl text-emerald-400 shrink-0">
+                    <Ticket size={24} />
                   </div>
-                ))}
-            </div>
-          </div>
-        )}
+                  <div>
+                    <p className="font-black uppercase text-sm text-emerald-400">Entrada gratuita</p>
+                    <p className="text-xs text-slate-300 mt-1">Não é necessário ingresso para assistir. Chegue cedo para garantir lugar.</p>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          if (politica === 'EXTERNO' && config?.url_ingressos) {
+            return (
+              <div className="space-y-4">
+                <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
+                  <Ticket size={24} className="text-[#ff0068]" /> Ingressos
+                </h2>
+                <p className="text-xs text-slate-400">Para o público que vai assistir. Bailarinos inscritos não precisam comprar.</p>
+                <a
+                  href={config.url_ingressos}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-3 px-6 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-[#ff0068]/20"
+                >
+                  <Ticket size={18} /> Comprar Ingressos <ExternalLink size={14} />
+                </a>
+              </div>
+            );
+          }
+
+          if (politica === 'INTERNO' && Array.isArray(event.ingressos_config) && event.ingressos_config.filter((t: any) => t.nome).length > 0) {
+            return (
+              <div className="space-y-4">
+                <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
+                  <Ticket size={24} className="text-[#ff0068]" /> Ingressos
+                </h2>
+                <p className="text-xs text-slate-400">Para o público que vai assistir. Bailarinos inscritos não precisam comprar.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {event.ingressos_config
+                    .filter((t: any) => t.nome)
+                    .map((t: any, i: number) => (
+                      <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col gap-2 hover:border-[#ff0068]/40 transition-colors">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <p className="font-black uppercase text-sm text-white">{t.nome}</p>
+                          <p className="text-[#ff0068] font-black text-lg">
+                            {Number(t.preco) > 0 ? `R$ ${Number(t.preco).toFixed(2)}` : 'Grátis'}
+                          </p>
+                        </div>
+                        {t.obs && <p className="text-[10px] text-slate-400">{t.obs}</p>}
+                        {t.link && (
+                          <a
+                            href={t.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="self-start inline-flex items-center gap-1.5 text-[10px] font-black text-[#ff0068] uppercase tracking-widest hover:underline"
+                          >
+                            Comprar <ExternalLink size={10} />
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              </div>
+            );
+          }
+
+          return null;
+        })()}
 
         {/* Modalities */}
         {event.formacoes_config && event.formacoes_config.length > 0 && (
@@ -505,19 +560,8 @@ const PublicEventPage = () => {
           </div>
         )}
 
-        {/* Ticket link */}
-        {config?.url_ingressos && (
-          <div className="flex justify-center">
-            <a
-              href={config.url_ingressos}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-3 text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-[#ff0068] transition-all"
-            >
-              <Ticket size={16} /> Comprar Ingresso de Plateia <ExternalLink size={12} />
-            </a>
-          </div>
-        )}
+        {/* Link redundante removido — politica_ingressos=EXTERNO acima ja
+            renderiza o botao "Comprar Ingressos" quando aplicavel (#11) */}
       </div>
     </div>
   );
