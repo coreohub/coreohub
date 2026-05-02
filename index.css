@@ -11,6 +11,13 @@
 }
 
 @layer base {
+  html, body {
+    /* Bloqueia pull-to-refresh nativo do navegador. App nao tem pull-to-refresh
+       implementado e o "rubber band" so atrapalha (sobra espaco abaixo do conteudo
+       quando arrasta no celular). Tambem evita que tablets de jurado em modo PWA
+       caiam acidentalmente em re-navegacao indesejada. */
+    overscroll-behavior-y: contain;
+  }
   body {
     @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen transition-colors duration-300;
     font-family: theme('fontFamily.sans');
