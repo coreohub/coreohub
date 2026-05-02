@@ -72,6 +72,7 @@ const menuSections: MenuSection[] = [
       { path: '/apuracao',             label: 'Resultados',               icon: BarChart2      },
       { path: '/deliberacoes',         label: 'Deliberacao',              icon: Trophy         },
       { path: '/manage-schedule',      label: 'Sonoplastia e Cronograma', icon: Calendar       },
+      { path: '/mesa-de-som',          label: 'Mesa de Som',              icon: Music          },
       { path: '/equipe-jurados',       label: 'Jurados',                  icon: UserCheck      },
       { path: '/minha-equipe',         label: 'Minha Equipe',             icon: Users          },
       { path: '/account-settings',     label: 'Configuracoes',            icon: Settings       },
