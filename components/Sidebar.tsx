@@ -66,36 +66,36 @@ const menuSections: MenuSection[] = [
     roles: ALL_ORGANIZER,
     items: [
       { path: '/qg-organizador',       label: 'OG do Produtor',           icon: Gavel          },
-      { path: '/registrations',        label: 'Inscricoes',               icon: ClipboardList  },
-      { path: '/seletiva-video',       label: 'Seletiva de Video',        icon: Video          },
+      { path: '/registrations',        label: 'Inscrições',               icon: ClipboardList  },
+      { path: '/seletiva-video',       label: 'Seletiva de Vídeo',        icon: Video          },
       { path: '/importar-regulamento', label: 'Importar Regulamento',     icon: FileSearch     },
       { path: '/apuracao',             label: 'Resultados',               icon: BarChart2      },
-      { path: '/deliberacoes',         label: 'Deliberacao',              icon: Trophy         },
+      { path: '/deliberacoes',         label: 'Deliberação',              icon: Trophy         },
       { path: '/manage-schedule',      label: 'Sonoplastia e Cronograma', icon: Calendar       },
       { path: '/mesa-de-som',          label: 'Mesa de Som',              icon: Music          },
       { path: '/equipe-jurados',       label: 'Jurados',                  icon: UserCheck      },
       { path: '/minha-equipe',         label: 'Minha Equipe',             icon: Users          },
-      { path: '/account-settings',     label: 'Configuracoes',            icon: Settings       },
+      { path: '/account-settings',     label: 'Configurações',            icon: Settings       },
     ],
   },
   {
     section: 'Inscrito',
     roles: ALL_USER,
     items: [
-      { path: '/dashboard',           label: 'Inicio',                icon: LayoutDashboard },
+      { path: '/dashboard',           label: 'Início',                icon: LayoutDashboard },
       { path: '/profile',             label: 'Meu Perfil',            icon: UserRound       },
       { path: '/bailarinos',          label: 'Meu Elenco',            icon: Users           },
       { path: '/minhas-coreografias', label: 'Minhas Coreografias',   icon: Clapperboard    },
-      { path: '/central-de-midia',    label: 'Central de Midia',      icon: Music2          },
+      { path: '/central-de-midia',    label: 'Central de Mídia',      icon: Music2          },
       { path: '/meus-resultados',     label: 'Feedbacks / Resultados', icon: Trophy         },
       { path: '/ingressos',           label: 'Comprar Ingressos',     icon: Ticket          },
     ],
   },
   {
-    section: 'Juri',
+    section: 'Júri',
     roles: ALL_JUDGE,
     items: [
-      { path: '/judge-terminal', label: 'Terminal de Juri', icon: Award },
+      { path: '/judge-terminal', label: 'Terminal de Júri', icon: Award },
     ],
   },
   {
@@ -109,11 +109,11 @@ const menuSections: MenuSection[] = [
       // Credenciamento
       { path: '/check-in',        label: 'Credenciamento',          icon: QrCode,          roles: [UserRole.RECEPCAO] },
       // Marcacao de Palco
-      { path: '/marcacao-palco',  label: 'Marcacao de Palco',       icon: PersonStanding,  roles: [UserRole.PALCO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
+      { path: '/marcacao-palco',  label: 'Marcação de Palco',       icon: PersonStanding,  roles: [UserRole.PALCO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
       // Coordenador do Juri — acompanhamento de jurados + deliberacao
-      { path: '/suporte-juri',    label: 'Coordenador do Juri',     icon: Headphones,      roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
+      { path: '/suporte-juri',    label: 'Coordenador do Júri',     icon: Headphones,      roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
       // Deliberacao: ORGANIZER ja ve na secao Produtor — evita duplicar
-      { path: '/deliberacoes',    label: 'Deliberacao',             icon: Trophy,          roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.COREOHUB_ADMIN] },
+      { path: '/deliberacoes',    label: 'Deliberação',             icon: Trophy,          roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.COREOHUB_ADMIN] },
     ],
   },
   {
@@ -151,7 +151,7 @@ const Sidebar = ({ isOpen, toggle, onLogout, activeRole, profile, videoSelection
       // Injeta "Seletiva de Vídeo" na seção do Inscrito somente quando ativa
       .map(sec => {
         if (sec.section !== 'Inscrito') return sec;
-        const seletivaItem = { path: '/minha-seletiva', label: 'Seletiva de Video', icon: Video };
+        const seletivaItem = { path: '/minha-seletiva', label: 'Seletiva de Vídeo', icon: Video };
         if (!videoSelectionEnabled) return sec;
         // Insere após "Central de Midia"
         const insertAfter = '/central-de-midia';
