@@ -11,6 +11,7 @@ import { motion } from 'motion/react';
 import { Profile as UserProfile } from '../types';
 import GuiaDoProdutor from '../components/GuiaDoProdutor';
 import ProducerAlerts from '../components/ProducerAlerts';
+import DemoOnboardingCard from '../components/DemoOnboardingCard';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import AsaasBadge from '../components/AsaasBadge';
 
@@ -330,7 +331,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
                   <option key={ev.id} value={ev.id}>
                     {ev.edition_year ? `${ev.edition_year} — ` : ''}{ev.name}
                   </option>
-                ))}
+                ))}{/* badge [DEMO] já aparece no name pq o seed inclui prefixo */}
               </select>
               <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             </div>
@@ -344,6 +345,11 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
           </button>
         </div>
       </header>
+
+      {/* DemoOnboardingCard — aparece quando produtor não tem nenhum evento.
+          Padrao mercado (Trello/Notion): empty state com CTA pra popular demo
+          + atalho pra criar evento real. */}
+      {allEvents.length === 0 && <DemoOnboardingCard />}
 
       {/* Guia do produtor — só aparece enquanto onboarding estiver pendente */}
       <GuiaDoProdutor profile={profile} />

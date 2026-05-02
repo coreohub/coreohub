@@ -7,6 +7,7 @@ import {
 } from '../services/genreService';
 import { EventStyle, Subgenre } from '../types';
 import AsaasBadge from '../components/AsaasBadge';
+import DemoSettingsTab from '../components/DemoSettingsTab';
 import {
   Settings, Clock, Save, Plus, Pencil, Trash2,
   Music2, DollarSign, Users, AlertTriangle,
@@ -266,7 +267,8 @@ type TabType =
   | 'Tolerância'
   | 'Fluxo do Evento'
   | 'Redirecionamentos'
-  | 'Pagamentos';
+  | 'Pagamentos'
+  | 'Demo';
 
 const TABS: { label: TabType; icon: React.ElementType }[] = [
   { label: 'Geral',             icon: Settings },
@@ -279,6 +281,7 @@ const TABS: { label: TabType; icon: React.ElementType }[] = [
   { label: 'Fluxo do Evento',   icon: Clapperboard },
   { label: 'Redirecionamentos', icon: Link2 },
   { label: 'Pagamentos',        icon: CreditCard },
+  { label: 'Demo',              icon: Sparkles },
 ];
 
 const TIPOS_APRESENTACAO_OPTIONS = [
@@ -3099,6 +3102,9 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
           </div>
         );
       }
+
+      case 'Demo':
+        return <DemoSettingsTab />;
 
       default:
         return null;

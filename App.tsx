@@ -5,6 +5,7 @@ import { UserRole, Profile as UserProfile } from './types';
 import { supabase } from './services/supabase';
 import { getOrCreateProfile } from './services/profileService';
 import Sidebar from './components/Sidebar';
+import DemoBanner from './components/DemoBanner';
 import Header from './components/Header';
 import BottomNavBar from './components/BottomNavBar';
 
@@ -202,10 +203,14 @@ const PrivateLayout: React.FC<{
           setActiveRole={setActiveRole}
         />
         {/* pb-20 no mobile para não sobrepor o BottomNavBar */}
-        <main className="flex-1 overflow-y-auto p-3 lg:p-4 relative z-10 pb-20 sm:pb-4">
-          <Suspense fallback={<PageLoader />}>
-            {children}
-          </Suspense>
+        <main className="flex-1 overflow-y-auto relative z-10 pb-20 sm:pb-4">
+          {/* DemoBanner: sticky no topo se evento ativo é demo (Stripe Test Mode pattern) */}
+          <DemoBanner />
+          <div className="p-3 lg:p-4">
+            <Suspense fallback={<PageLoader />}>
+              {children}
+            </Suspense>
+          </div>
         </main>
       </div>
 
