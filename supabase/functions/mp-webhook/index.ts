@@ -43,9 +43,9 @@ async function dispararEmail(
 ): Promise<void> {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-    const serviceKey = Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
     if (!supabaseUrl || !serviceKey) {
-      console.warn('[mp-webhook] SUPABASE_URL/SERVICE_ROLE_KEY ausentes — pulando email')
+      console.warn('[mp-webhook] SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY ausentes — pulando email')
       return
     }
 
@@ -177,7 +177,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
     )
 
     // ─── 1. Idempotência: se já processamos este paymentId, encerra. ─────────

@@ -27,7 +27,7 @@ async function dispararEmail(
 ): Promise<void> {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-    const serviceKey  = Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+    const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
     if (!supabaseUrl || !serviceKey) return
 
     const resp = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
     )
 
     // Idempotência: evita processar o mesmo pagamento aprovado duas vezes
