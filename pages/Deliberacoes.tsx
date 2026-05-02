@@ -38,7 +38,7 @@ const STATUS_NEXT: Record<DeliberationStatus, DeliberationStatus | null> = {
 
 const STATUS_DESCRIPTION: Record<DeliberationStatus, string> = {
   COLETANDO:   'Jurados marcam ⭐ as apresentações em destaque durante o evento.',
-  DELIBERACAO: 'Jurados atribuem prêmios às suas marcações (página /deliberacao).',
+  DELIBERACAO: 'Jurados atribuem prêmios às suas marcações.',
   CONFERENCIA: 'Jurados veem agregado anônimo + janela curta pra ajustar.',
   LIBERADO:    'Resultados visíveis pro produtor e disponíveis pra publicação.',
 };
@@ -200,7 +200,7 @@ const Deliberacoes: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-black uppercase tracking-tighter italic text-slate-900 dark:text-white">
-            Deliberação <span className="text-[#ff0068]">de Prêmios</span>
+            Premi<span className="text-[#ff0068]">ação</span>
           </h1>
           <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">
             {event?.name ?? 'Evento ativo'}

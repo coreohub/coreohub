@@ -26,7 +26,7 @@ const EQUIPE_ROLES: {
   },
   {
     value: UserRole.MESARIO, label: 'Coordenador do Júri',
-    desc: 'Suporte à banca: verifica terminais e controla presença dos jurados. Lidera deliberação.',
+    desc: 'Suporte à banca: verifica terminais e controla presença dos jurados. Lidera a premiação.',
     icon: Headphones, color: 'text-blue-500 bg-blue-500/10 border-blue-500/20',
     preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: false, marcacao_palco: false, suporte_juri: true, inscricoes_leitura: false, triagem: false },
   },

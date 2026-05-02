@@ -70,7 +70,7 @@ const menuSections: MenuSection[] = [
       { path: '/seletiva-video',       label: 'Seletiva de Vídeo',        icon: Video          },
       { path: '/importar-regulamento', label: 'Importar Regulamento',     icon: FileSearch     },
       { path: '/apuracao',             label: 'Resultados',               icon: BarChart2      },
-      { path: '/deliberacoes',         label: 'Deliberação',              icon: Trophy         },
+      { path: '/deliberacoes',         label: 'Premiação',                icon: Trophy         },
       { path: '/manage-schedule',      label: 'Sonoplastia e Cronograma', icon: Calendar       },
       { path: '/mesa-de-som',          label: 'Mesa de Som',              icon: Music          },
       { path: '/equipe-jurados',       label: 'Jurados',                  icon: UserCheck      },
@@ -113,7 +113,7 @@ const menuSections: MenuSection[] = [
       // Coordenador do Juri — acompanhamento de jurados + deliberacao
       { path: '/suporte-juri',    label: 'Coordenador do Júri',     icon: Headphones,      roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
       // Deliberacao: ORGANIZER ja ve na secao Produtor — evita duplicar
-      { path: '/deliberacoes',    label: 'Deliberação',             icon: Trophy,          roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.COREOHUB_ADMIN] },
+      { path: '/deliberacoes',    label: 'Premiação',               icon: Trophy,          roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.COREOHUB_ADMIN] },
     ],
   },
   {

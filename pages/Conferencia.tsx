@@ -177,7 +177,7 @@ const Conferencia: React.FC = () => {
           <AlertCircle size={12} className="text-amber-600 dark:text-amber-400 shrink-0" />
           <p className="text-[10px] font-bold text-amber-700 dark:text-amber-400">
             {status === 'COLETANDO' && 'Coleta em andamento — aguarde o produtor encerrar.'}
-            {status === 'DELIBERACAO' && 'Deliberação ainda aberta — esta tela mostra o que já foi consolidado.'}
+            {status === 'DELIBERACAO' && 'Premiação ainda aberta — esta tela mostra o que já foi consolidado.'}
             {status === 'LIBERADO' && 'Resultados liberados pelo Coordenador do Júri.'}
           </p>
         </div>
@@ -192,13 +192,13 @@ const Conferencia: React.FC = () => {
               Nenhuma atribuição
             </p>
             <p className="text-[11px] text-slate-400 mt-2 font-bold">
-              Você ainda não enviou suas deliberações.
+              Você ainda não enviou suas premiações.
             </p>
             <button
               onClick={() => navigate('/deliberacao')}
               className="mt-5 px-5 py-2.5 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#d4005a] transition-all"
             >
-              Ir para deliberação
+              Ir para premiação
             </button>
           </div>
         ) : (
@@ -271,7 +271,7 @@ const Conferencia: React.FC = () => {
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-300 dark:hover:bg-slate-700 transition-all"
             >
               <Edit3 size={12} />
-              Voltar e revisar deliberação
+              Voltar e revisar premiação
             </button>
             <p className="mt-2 text-[9px] text-slate-400 font-bold">
               Você pode ajustar enquanto a janela estiver aberta

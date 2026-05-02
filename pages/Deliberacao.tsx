@@ -150,7 +150,7 @@ const Deliberacao: React.FC = () => {
         </button>
         <div className="text-center">
           <h1 className="text-sm sm:text-base font-black uppercase tracking-tighter italic text-slate-900 dark:text-white">
-            Deliberação
+            Premiação
           </h1>
           <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
             Atribua prêmios às suas marcações
@@ -165,7 +165,7 @@ const Deliberacao: React.FC = () => {
           <AlertCircle size={12} className="text-amber-600 dark:text-amber-400 shrink-0" />
           <p className="text-[10px] font-bold text-amber-700 dark:text-amber-400">
             {data.event.deliberation_status === 'COLETANDO' && 'Aguardando produtor encerrar a coleta. Você pode preparar suas atribuições.'}
-            {data.event.deliberation_status === 'CONFERENCIA' && 'Deliberação fechada. Conferência em andamento.'}
+            {data.event.deliberation_status === 'CONFERENCIA' && 'Premiação fechada. Conferência em andamento.'}
             {data.event.deliberation_status === 'LIBERADO' && 'Resultados já liberados — atribuições não podem mais ser alteradas.'}
           </p>
         </div>
@@ -295,7 +295,7 @@ const Deliberacao: React.FC = () => {
               className="px-5 py-2.5 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#d4005a] transition-all disabled:opacity-50 flex items-center gap-2"
             >
               {submitting ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-              {submitted ? 'Enviado' : 'Enviar deliberação'}
+              {submitted ? 'Enviado' : 'Enviar premiação'}
             </button>
           </div>
         </footer>

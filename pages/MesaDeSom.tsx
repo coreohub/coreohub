@@ -99,15 +99,24 @@ const MesaDeSom = () => {
   };
 
   // Constrói o texto da narração aplicando o template (entrada ou saida)
+  // + substituições fonéticas pra termos estrangeiros (Gemini detecta língua
+  // pelo conteudo do texto inteiro — palavra inglesa puxa sotaque gringo).
   const buildNarrationText = (reg: any, kind: NarrationKind = 'entrada'): string => {
     const fallback = kind === 'saida'
       ? 'Uma salva de palmas para [ESTUDIO]!'
       : 'Com a coreografia [COREOGRAFIA], recebam no palco: [ESTUDIO]';
     const tplKey = kind === 'saida' ? 'texto_ia_saida' : 'texto_ia';
     const template = (config?.[tplKey] ?? '').trim() || fallback;
-    return template
+    let texto = template
       .replaceAll('[COREOGRAFIA]', reg.nome_coreografia ?? '')
       .replaceAll('[ESTUDIO]', reg.estudio ?? '');
+    const pronuncias: { termo: string; pronuncia: string }[] = Array.isArray(config?.pronuncia_personalizada)
+      ? config.pronuncia_personalizada
+      : [];
+    pronuncias.forEach(({ termo, pronuncia }) => {
+      if (termo && pronuncia) texto = texto.replaceAll(termo, pronuncia);
+    });
+    return texto;
   };
 
   // Saida ativa? lido da config do produtor

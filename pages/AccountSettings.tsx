@@ -810,6 +810,9 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
     texto_ia_saida: 'Uma salva de palmas para [ESTUDIO]!',
     narracao_saida_ativa: false, // opt-in: maioria dos festivais BR usa só entrada + aplauso
     voice_id: null as string | null, // IA de Narração: voz Gemini (NULL = Charon default)
+    // IA de Narração: substituicoes foneticas pra termos estrangeiros
+    // (ex: "Usualdance" -> "Iuzual Dânce") aplicadas antes do TTS
+    pronuncia_personalizada: [] as { termo: string; pronuncia: string }[],
     marcar_palco_ativo: true,
     intervalo_seguranca: 3,
     tempo_marcacao_palco: 45,
@@ -946,6 +949,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
             texto_ia:             data.texto_ia              ?? flowConfig.texto_ia,
             texto_ia_saida:       data.texto_ia_saida        ?? flowConfig.texto_ia_saida,
             narracao_saida_ativa: data.narracao_saida_ativa  ?? false,
+            pronuncia_personalizada: Array.isArray(data.pronuncia_personalizada) ? data.pronuncia_personalizada : [],
             voice_id:             data.voice_id              ?? null,
             marcar_palco_ativo:   data.marcar_palco_ativo    ?? true,
             intervalo_seguranca:  data.intervalo_seguranca   ?? 3,
@@ -1016,6 +1020,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         texto_ia:             flowConfig.texto_ia,
         texto_ia_saida:       flowConfig.texto_ia_saida,
         narracao_saida_ativa: flowConfig.narracao_saida_ativa,
+        pronuncia_personalizada: flowConfig.pronuncia_personalizada,
         voice_id:             flowConfig.voice_id,
         marcar_palco_ativo:   flowConfig.marcar_palco_ativo,
         tempo_marcacao_palco: flowConfig.tempo_marcacao_palco,
@@ -2411,6 +2416,64 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                 <p className="text-[10px] text-slate-400 mt-3 italic">
                   Geradas via Google Gemini 2.5 Audio TTS, PT-BR nativo. <span className="text-emerald-500">Free tier (1M tokens/dia)</span>.
                 </p>
+              </div>
+
+              {/* Pronúncia personalizada — substituições fonéticas pra termos estrangeiros */}
+              <div className="pt-4 border-t border-slate-200 dark:border-white/10">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 block">
+                  Pronúncia Personalizada
+                </label>
+                <p className="text-xs text-slate-500 mb-3">
+                  Termos estrangeiros saem com sotaque gringo. Reescreva foneticamente. Ex: <code className="text-[#ff0068] bg-[#ff0068]/10 px-1 rounded">Usualdance</code> → <code className="text-emerald-500 bg-emerald-500/10 px-1 rounded">Iuzual Dânce</code>.
+                </p>
+                <div className="space-y-2">
+                  {flowConfig.pronuncia_personalizada.map((p, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={p.termo}
+                        onChange={e => setFlowConfig(f => ({
+                          ...f,
+                          pronuncia_personalizada: f.pronuncia_personalizada.map((x, j) => j === i ? { ...x, termo: e.target.value } : x),
+                        }))}
+                        placeholder="Termo no texto"
+                        className="flex-1 bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 text-sm"
+                      />
+                      <span className="text-slate-400 text-xs">→</span>
+                      <input
+                        type="text"
+                        value={p.pronuncia}
+                        onChange={e => setFlowConfig(f => ({
+                          ...f,
+                          pronuncia_personalizada: f.pronuncia_personalizada.map((x, j) => j === i ? { ...x, pronuncia: e.target.value } : x),
+                        }))}
+                        placeholder="Como falar (fonético)"
+                        className="flex-1 bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFlowConfig(f => ({
+                          ...f,
+                          pronuncia_personalizada: f.pronuncia_personalizada.filter((_, j) => j !== i),
+                        }))}
+                        className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all"
+                        title="Remover"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFlowConfig(f => ({
+                    ...f,
+                    pronuncia_personalizada: [...f.pronuncia_personalizada, { termo: '', pronuncia: '' }],
+                  }))}
+                  className="mt-3 flex items-center gap-1.5 px-3 py-1.5 bg-[#ff0068]/10 hover:bg-[#ff0068]/20 border border-[#ff0068]/30 rounded-xl text-[#ff0068] text-[10px] font-black uppercase tracking-widest transition-all"
+                >
+                  <Plus size={12} /> Adicionar termo
+                </button>
               </div>
             </div>
             <div className="bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 p-8 rounded-3xl flex flex-col items-center justify-center gap-3 text-center">
