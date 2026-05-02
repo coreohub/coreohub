@@ -43,7 +43,19 @@ const judgePt = {
   'header.lockNowTooltip': 'Bloquear terminal agora',
   'header.judgeLabel': 'Jurado',
   'header.judgeActive': 'Ativo',
-  'header.localeTooltip': 'Idioma',
+  'header.switchTooltip': 'Trocar jurado (sair e voltar pro login)',
+
+  // Live banner (Phase 4 — Mesa de Som ao vivo)
+  'live.label': 'AO VIVO:',
+
+  // Star / nominação (Phase 3 — deliberação)
+  'star.markTooltip': 'Marcar como destaque pra deliberação',
+  'star.removeTooltip': 'Remover marcação',
+  'star.headerOn': 'Destaque',
+  'star.headerOff': 'Marcar',
+  'star.mobileOn': 'Marcado como destaque',
+  'star.mobileOff': 'Marcar destaque',
+  'star.markedChip': 'Marcada',
 
   // Demo banner
   'demo.bannerLong': 'MODO DEMONSTRAÇÃO — dados fictícios, nenhum dado salvo no banco',
@@ -91,11 +103,18 @@ const judgePt = {
   'submitted.weightedTitle': 'Média Ponderada Final',
   'submitted.submittedAt': 'Submetido em {time}',
   'submitted.next': 'Próxima Apresentação',
+  'submitted.waitingNext': 'Aguardando próxima apresentação',
+  'submitted.averageLabel': 'Média',
+  'submitted.advanceManually': 'Avançar manualmente',
 
   // Numpad
   'numpad.label': 'Teclado',
   'numpad.decimalTooltip': 'Vírgula decimal',
   'numpad.nextField': 'Próximo Quesito',
+  'numpad.missingCriteria.one': 'Falta {count} critério',
+  'numpad.missingCriteria.other': 'Faltam {count} critérios',
+  'numpad.missingTooltip.one': 'Preencha o critério restante',
+  'numpad.missingTooltip.other': 'Preencha os {count} critérios restantes',
 
   // Errors
   'errors.saveFailed': 'Erro ao salvar avaliação.',

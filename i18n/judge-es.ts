@@ -41,7 +41,19 @@ const judgeEs: Record<JudgeDictKey, string> = {
   'header.lockNowTooltip': 'Bloquear terminal ahora',
   'header.judgeLabel': 'Jurado',
   'header.judgeActive': 'Activo',
-  'header.localeTooltip': 'Idioma',
+  'header.switchTooltip': 'Cambiar jurado (cerrar sesión y volver al login)',
+
+  // Live banner (Phase 4)
+  'live.label': 'EN VIVO:',
+
+  // Star / nominación (Phase 3)
+  'star.markTooltip': 'Marcar como destacado para deliberación',
+  'star.removeTooltip': 'Quitar marca',
+  'star.headerOn': 'Destacado',
+  'star.headerOff': 'Marcar',
+  'star.mobileOn': 'Marcado como destacado',
+  'star.mobileOff': 'Marcar destacado',
+  'star.markedChip': 'Marcado',
 
   // Demo banner
   'demo.bannerLong': 'MODO DEMOSTRACIÓN — datos ficticios, nada se guarda en la base',
@@ -89,11 +101,18 @@ const judgeEs: Record<JudgeDictKey, string> = {
   'submitted.weightedTitle': 'Promedio Ponderado Final',
   'submitted.submittedAt': 'Enviado a las {time}',
   'submitted.next': 'Siguiente Presentación',
+  'submitted.waitingNext': 'Esperando próxima presentación',
+  'submitted.averageLabel': 'Promedio',
+  'submitted.advanceManually': 'Avanzar manualmente',
 
   // Numpad
   'numpad.label': 'Teclado',
   'numpad.decimalTooltip': 'Coma decimal',
   'numpad.nextField': 'Siguiente Criterio',
+  'numpad.missingCriteria.one': 'Falta {count} criterio',
+  'numpad.missingCriteria.other': 'Faltan {count} criterios',
+  'numpad.missingTooltip.one': 'Completa el criterio restante',
+  'numpad.missingTooltip.other': 'Completa los {count} criterios restantes',
 
   // Errors
   'errors.saveFailed': 'Error al guardar la evaluación.',

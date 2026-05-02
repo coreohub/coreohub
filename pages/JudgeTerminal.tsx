@@ -1314,7 +1314,7 @@ const JudgeTerminal = () => {
             className="shrink-0 w-full bg-rose-500 hover:bg-rose-600 text-white px-3 py-1.5 flex items-center justify-center gap-2 transition-colors"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-            <span className="text-[9px] font-black uppercase tracking-widest">AO VIVO:</span>
+            <span className="text-[9px] font-black uppercase tracking-widest">{t('live.label')}</span>
             <span className="text-[10px] font-black uppercase tracking-tight truncate">{liveReg.nome_coreografia}</span>
             <ChevronRight size={12} className="shrink-0" />
           </button>
@@ -1364,7 +1364,7 @@ const JudgeTerminal = () => {
               <button
                 onClick={toggleStarCurrent}
                 disabled={isSubmitted || starringInFlight}
-                title={starred ? 'Remover marcação' : 'Marcar como destaque pra deliberação'}
+                title={starred ? t('star.removeTooltip') : t('star.markTooltip')}
                 className={`hidden lg:inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border transition-all
                   ${isSubmitted
                     ? 'bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-50 cursor-not-allowed'
@@ -1375,7 +1375,7 @@ const JudgeTerminal = () => {
               >
                 <Star size={12} className={starred ? 'fill-current' : ''} />
                 <span className="text-[8px] font-black uppercase tracking-widest">
-                  {starred ? 'Destaque' : 'Marcar'}
+                  {starred ? t('star.headerOn') : t('star.headerOff')}
                 </span>
               </button>
             );
@@ -1440,7 +1440,7 @@ const JudgeTerminal = () => {
             <button
               onClick={() => judgeSession ? handleSwitchJudge() : setShowJudgePicker(p => !p)}
               className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 rounded-xl transition-all"
-              title={judgeSession ? 'Trocar jurado (sair e voltar pro login)' : undefined}
+              title={judgeSession ? t('header.switchTooltip') : undefined}
             >
               <div className="w-6 h-6 rounded-lg bg-[#ff0068] flex items-center justify-center text-white text-[9px] font-black shrink-0">
                 {selectedJudge?.name?.[0] || 'J'}
@@ -1752,7 +1752,7 @@ const JudgeTerminal = () => {
                         }`}
                     >
                       <Star size={14} className={starred ? 'fill-current' : ''} />
-                      {starred ? 'Marcado como destaque' : 'Marcar destaque'}
+                      {starred ? t('star.mobileOn') : t('star.mobileOff')}
                     </button>
                   </div>
                 );
@@ -1774,13 +1774,13 @@ const JudgeTerminal = () => {
                   <div>
                     <h3 className="text-base md:text-lg font-black uppercase tracking-tighter italic text-emerald-600 dark:text-emerald-400 leading-none">{t('submitted.title')}</h3>
                     <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mt-1">
-                      Aguardando próxima apresentação
+                      {t('submitted.waitingNext')}
                     </p>
                   </div>
 
                   {/* Média final compacta */}
                   <div className="flex items-baseline gap-2">
-                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Média</span>
+                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">{t('submitted.averageLabel')}</span>
                     <span className={`text-3xl md:text-4xl font-black italic tabular-nums leading-none ${scoreGrade(calcWeightedAvg(), scoreScale)}`}>
                       {calcWeightedAvg()}
                     </span>
@@ -1791,7 +1791,7 @@ const JudgeTerminal = () => {
                     <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 dark:bg-white border border-slate-900 dark:border-white rounded-full">
                       <Star size={9} className="text-white dark:text-slate-900 fill-current" />
                       <span className="text-[8px] font-black uppercase tracking-widest text-white dark:text-slate-900">
-                        Marcada
+                        {t('star.markedChip')}
                       </span>
                     </div>
                   )}
@@ -1801,7 +1801,7 @@ const JudgeTerminal = () => {
                     onClick={handleAdvance}
                     className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white underline underline-offset-2 transition-colors"
                   >
-                    Avançar manualmente <ChevronRight size={10} />
+                    {t('submitted.advanceManually')} <ChevronRight size={10} />
                   </button>
                 </div>
 
@@ -1914,9 +1914,9 @@ const JudgeTerminal = () => {
                         <button
                           disabled
                           className="shrink-0 w-full flex items-center justify-center gap-2 py-2 md:py-3 rounded-lg md:rounded-xl font-black text-xs uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700 cursor-not-allowed"
-                          title={`Preencha os ${missingCount} critérios restantes`}
+                          title={t(missingCount === 1 ? 'numpad.missingTooltip.one' : 'numpad.missingTooltip.other', { count: missingCount })}
                         >
-                          Faltam {missingCount} {missingCount === 1 ? 'critério' : 'critérios'}
+                          {t(missingCount === 1 ? 'numpad.missingCriteria.one' : 'numpad.missingCriteria.other', { count: missingCount })}
                         </button>
                       );
                     }

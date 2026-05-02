@@ -41,7 +41,19 @@ const judgeEn: Record<JudgeDictKey, string> = {
   'header.lockNowTooltip': 'Lock terminal now',
   'header.judgeLabel': 'Judge',
   'header.judgeActive': 'Active',
-  'header.localeTooltip': 'Language',
+  'header.switchTooltip': 'Switch judge (sign out and back to login)',
+
+  // Live banner (Phase 4)
+  'live.label': 'LIVE:',
+
+  // Star / nomination (Phase 3)
+  'star.markTooltip': 'Mark as highlight for deliberation',
+  'star.removeTooltip': 'Remove highlight',
+  'star.headerOn': 'Highlight',
+  'star.headerOff': 'Mark',
+  'star.mobileOn': 'Marked as highlight',
+  'star.mobileOff': 'Mark highlight',
+  'star.markedChip': 'Marked',
 
   // Demo banner
   'demo.bannerLong': 'DEMO MODE — fake data, nothing saved to the database',
@@ -89,11 +101,18 @@ const judgeEn: Record<JudgeDictKey, string> = {
   'submitted.weightedTitle': 'Final Weighted Average',
   'submitted.submittedAt': 'Submitted at {time}',
   'submitted.next': 'Next Performance',
+  'submitted.waitingNext': 'Waiting for next performance',
+  'submitted.averageLabel': 'Average',
+  'submitted.advanceManually': 'Advance manually',
 
   // Numpad
   'numpad.label': 'Numpad',
   'numpad.decimalTooltip': 'Decimal point',
   'numpad.nextField': 'Next Criterion',
+  'numpad.missingCriteria.one': '{count} criterion missing',
+  'numpad.missingCriteria.other': '{count} criteria missing',
+  'numpad.missingTooltip.one': 'Fill in the remaining criterion',
+  'numpad.missingTooltip.other': 'Fill in the remaining {count} criteria',
 
   // Errors
   'errors.saveFailed': 'Failed to save evaluation.',
