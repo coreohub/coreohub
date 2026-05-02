@@ -261,11 +261,13 @@ const Schedule = () => {
   useEffect(() => {
     supabase
       .from('events')
-      .select('id,name,edition_year,start_date')
-      .order('start_date', { ascending: false })
+      .select('id,name,edition_year,start_date,created_at')
+      .order('created_at', { ascending: false })
       .then(({ data }) => {
         if (data && data.length > 0) {
           setAllEvents(data);
+          // Default = mais recente criado (consistente com MesaDeSom).
+          // Evita pegar evento futuro vazio em vez do demo recem-criado
           setSelectedEventId(prev => prev ?? data[0].id);
         } else {
           fetchData(null);

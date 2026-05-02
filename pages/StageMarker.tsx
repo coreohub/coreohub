@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, CheckCircle2, RotateCcw, AlertTriangle, Clock, Users, Music, ChevronRight, Wifi, WifiOff, Settings2, Save, Loader2 } from 'lucide-react';
+import { Play, CheckCircle2, RotateCcw, AlertTriangle, Clock, Users, Music, ChevronRight, Wifi, WifiOff, Settings2, Save, Loader2, Search, X, List } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
 
@@ -38,6 +38,9 @@ const StageMarker = () => {
   const [marcarPalcoAtivo, setMarcarPalcoAtivo] = useState(true);
   const [gatilho, setGatilho] = useState<'MANUAL_MARCADOR' | 'MANUAL_COORDENADOR' | 'AUTO_SONOPLASTA'>('MANUAL_MARCADOR');
   const [tempoMarcacao, setTempoMarcacao] = useState(45);
+  // Busca/lista de apresentacoes pra navegacao nao-sequencial
+  const [showList, setShowList] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   /* ── connectivity ── */
   useEffect(() => {
@@ -226,6 +229,14 @@ const StageMarker = () => {
           <div className={`flex items-center gap-1 ${online ? 'text-emerald-400' : 'text-slate-500'}`}>
             {online ? <Wifi size={14} /> : <WifiOff size={14} />}
           </div>
+          {/* Botao "Lista" — abre overlay com busca e navegacao nao-sequencial */}
+          <button
+            onClick={() => setShowList(true)}
+            className="p-2 rounded-xl bg-white/5 text-slate-400 hover:bg-white/10 transition-all"
+            title="Buscar coreografia / pular para outra"
+          >
+            <List size={14} />
+          </button>
           <button
             onClick={() => setShowSettings(s => !s)}
             className={`p-2 rounded-xl transition-all ${showSettings ? 'bg-white/20 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
@@ -234,6 +245,125 @@ const StageMarker = () => {
           </button>
         </div>
       </div>
+
+      {/* Overlay: busca + lista navegavel de coreografias */}
+      <AnimatePresence>
+        {showList && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start justify-center p-4 sm:p-8"
+            onClick={() => setShowList(false)}
+          >
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 20, opacity: 0 }}
+              className="w-full max-w-2xl bg-slate-900 border border-white/10 rounded-3xl overflow-hidden flex flex-col max-h-[85vh]"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header do overlay */}
+              <div className="flex items-center gap-2 p-4 border-b border-white/10">
+                <Search size={16} className="text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Buscar por coreografia ou estúdio..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  autoFocus
+                  className="flex-1 bg-transparent border-0 text-white placeholder:text-slate-500 focus:outline-none text-sm"
+                />
+                <button
+                  onClick={() => setShowList(false)}
+                  className="p-1 rounded-lg hover:bg-white/10 text-slate-400 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Lista filtrada */}
+              <div className="overflow-y-auto divide-y divide-white/5">
+                {presentations
+                  .filter(p =>
+                    !searchTerm ||
+                    p.nome_coreografia?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    p.estudio?.toLowerCase().includes(searchTerm.toLowerCase())
+                  )
+                  .map((p) => {
+                    const realIdx = presentations.findIndex(x => x.id === p.id);
+                    const isCurrent = realIdx === currentIndex;
+                    const isMarked  = realIdx < currentIndex;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => {
+                          setCurrentIndex(realIdx);
+                          setShowList(false);
+                          setSearchTerm('');
+                          // reset state machine pra nova apresentacao
+                          setState('WAITING');
+                          setRemaining(totalTime);
+                          setElapsed(0);
+                          setStartedAt(null);
+                          stopInterval();
+                        }}
+                        className={`w-full flex items-center gap-3 p-3 text-left transition-colors ${
+                          isCurrent
+                            ? 'bg-[#ff0068]/10 hover:bg-[#ff0068]/15'
+                            : 'hover:bg-white/5'
+                        }`}
+                      >
+                        {/* Status badge */}
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
+                          isMarked  ? 'bg-emerald-500/20 text-emerald-400' :
+                          isCurrent ? 'bg-[#ff0068] text-white animate-pulse' :
+                          'bg-white/5 text-slate-500 border border-white/10'
+                        }`}>
+                          {isMarked ? <CheckCircle2 size={12} /> : realIdx + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-black uppercase tracking-tight truncate ${isCurrent ? 'text-[#ff0068]' : 'text-white'}`}>
+                            {p.nome_coreografia}
+                          </p>
+                          <p className="text-[9px] text-slate-400 uppercase tracking-widest truncate">
+                            {p.estudio} · {p.estilo_danca} · {p.categoria}
+                          </p>
+                        </div>
+                        {isMarked && (
+                          <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400 shrink-0">
+                            Marcada
+                          </span>
+                        )}
+                        {isCurrent && (
+                          <span className="text-[8px] font-black uppercase tracking-widest text-[#ff0068] shrink-0">
+                            Atual
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                {presentations.filter(p =>
+                  !searchTerm ||
+                  p.nome_coreografia?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  p.estudio?.toLowerCase().includes(searchTerm.toLowerCase())
+                ).length === 0 && (
+                  <div className="p-12 text-center">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                      Nenhuma coreografia encontrada
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Rodape: contador */}
+              <div className="px-4 py-2 border-t border-white/10 bg-white/[0.02] text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                {currentIndex} marcadas · {presentations.length - currentIndex - 1} pendentes · {presentations.length} total
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Settings panel */}
       {showSettings && (
