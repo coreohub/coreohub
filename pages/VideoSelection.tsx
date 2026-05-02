@@ -16,7 +16,7 @@ interface RegWithVideo {
   nome_coreografia: string;
   estudio?: string;
   categoria?: string;
-  formacao?: string;
+  formato_participacao?: string;
   video_url?: string | null;
   video_status: VideoStatus;
   video_feedback?: string | null;
@@ -86,7 +86,7 @@ const VideoSelection: React.FC = () => {
       const [{ data: regs, error }, { data: evt }] = await Promise.all([
         supabase
           .from('registrations')
-          .select('id, nome_coreografia, estudio, categoria, formacao, video_url, video_status, video_feedback, video_submitted_at, video_fee_status, profiles(full_name)')
+          .select('id, nome_coreografia, estudio, categoria, formato_participacao, video_url, video_status, video_feedback, video_submitted_at, video_fee_status, profiles(full_name)')
           .order('video_submitted_at', { ascending: false, nullsFirst: false }),
         supabase
           .from('configuracoes')
@@ -386,7 +386,7 @@ const VideoSelection: React.FC = () => {
                 <tr key={reg.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group">
                   <td className="px-6 py-4">
                     <p className="font-black text-slate-900 dark:text-white uppercase tracking-tight text-sm">{reg.nome_coreografia}</p>
-                    <p className="text-[9px] text-[#ff0068] font-bold uppercase tracking-widest">{reg.formacao}</p>
+                    <p className="text-[9px] text-[#ff0068] font-bold uppercase tracking-widest">{reg.formato_participacao}</p>
                   </td>
                   <td className="px-6 py-4 hidden md:table-cell">
                     <p className="text-xs font-bold text-slate-600 dark:text-slate-300">{reg.profiles?.full_name ?? reg.estudio ?? '—'}</p>

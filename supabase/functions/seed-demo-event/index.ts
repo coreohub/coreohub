@@ -454,7 +454,10 @@ Deno.serve(async (req) => {
         video_submitted_at: submittedAt,
       }
     })
-    await supa.from('registrations').insert(seletivaToInsert)
+    const { error: seletivaErr } = await supa.from('registrations').insert(seletivaToInsert)
+    if (seletivaErr) {
+      console.warn('Falha ao inserir seletiva:', seletivaErr.message)
+    }
 
     // 7) Evaluations fictícias: 10 coreografias APROVADAS competitivas × 3 jurados.
     //    Variação realista: 3 top (notas 9.0-9.8), 4 médias (7.5-8.7), 3 baixas (6.5-7.5).
@@ -495,8 +498,16 @@ Deno.serve(async (req) => {
         })
       })
     })
+    let evalsInserted = 0
+    let evalsError: string | null = null
     if (evalsToInsert.length > 0) {
-      await supa.from('evaluations').insert(evalsToInsert)
+      const { error: evalErr } = await supa.from('evaluations').insert(evalsToInsert)
+      if (evalErr) {
+        evalsError = evalErr.message
+        console.warn('Falha ao inserir evaluations:', evalErr.message)
+      } else {
+        evalsInserted = evalsToInsert.length
+      }
     }
 
     return json({
@@ -504,8 +515,10 @@ Deno.serve(async (req) => {
       event_id: eventId,
       stats: {
         coreografias: totalRegs,
-        seletiva_pendentes: seletivaToInsert.length,
-        evaluations: evalsToInsert.length,
+        seletiva_pendentes: seletivaErr ? 0 : seletivaToInsert.length,
+        seletiva_error: seletivaErr?.message ?? null,
+        evaluations: evalsInserted,
+        evaluations_error: evalsError,
         jurados: JURADOS.length,
         prêmios: PREMIOS_ESPECIAIS.length,
         estilos: estilos.length,
