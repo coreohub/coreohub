@@ -3,7 +3,7 @@ import { supabase } from '../services/supabase';
 import {
   BarChart3, Download, RefreshCw, Loader2, Search,
   ChevronDown, ChevronUp, Trophy, CheckCircle2, AlertCircle,
-  Volume2, FileText, AlertTriangle,
+  Volume2, FileText, AlertTriangle, FileDown,
 } from 'lucide-react';
 
 /* ── Types ── */
@@ -77,6 +77,7 @@ const ResultsPanel = () => {
   const [filterGenre,    setFilterGenre]    = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [publishing, setPublishing] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [thresholds, setThresholds] = useState<MedalThresholds>(DEFAULT_THRESHOLDS);
   const [premiationSystem, setPremiationSystem] = useState<PremiationSystem>('THRESHOLD');
 
@@ -234,6 +235,130 @@ const ResultsPanel = () => {
     a.click(); URL.revokeObjectURL(url);
   };
 
+  /* ── PDF Export ── */
+  const exportPDF = async () => {
+    setExportingPdf(true);
+    try {
+      // Resolve evento ativo pra buscar nome + ano da edicao
+      const { resolveActiveEventId } = await import('../services/supabase');
+      const eventId = await resolveActiveEventId();
+      let eventName = 'Apuração Final';
+      let editionYear = new Date().getFullYear();
+      if (eventId) {
+        const { data: ev } = await supabase
+          .from('events')
+          .select('name, edition_year, start_date')
+          .eq('id', eventId)
+          .maybeSingle();
+        if (ev) {
+          eventName = ev.name || eventName;
+          editionYear = ev.edition_year ?? (ev.start_date ? new Date(ev.start_date).getFullYear() : editionYear);
+        }
+      }
+
+      const { default: jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
+
+      const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+
+      // Capa
+      doc.setFillColor(255, 0, 104);
+      doc.rect(0, 0, pageWidth, 50, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(28);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Apuração Final', pageWidth / 2, 25, { align: 'center' });
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text(eventName.toUpperCase(), pageWidth / 2, 35, { align: 'center' });
+      doc.text(`Edição ${editionYear}`, pageWidth / 2, 42, { align: 'center' });
+
+      doc.setTextColor(40, 40, 40);
+      doc.setFontSize(10);
+      doc.text(`Total avaliadas: ${allResults.length}`, 20, 65);
+      doc.text(`Melhor média: ${bestScore > 0 ? bestScore.toFixed(2) : '—'}`, 20, 71);
+      doc.text(`Modo de premiação: ${premiationSystem === 'RANKING' ? 'Por colocação (top 3 por categoria)' : 'Por nota mínima'}`, 20, 77);
+      if (outlierCount > 0) {
+        doc.setTextColor(200, 100, 0);
+        doc.text(`⚠ ${outlierCount} ${outlierCount === 1 ? 'coreografia com outlier' : 'coreografias com outlier'} (divergência ≥ 2.0 entre jurados)`, 20, 83);
+        doc.setTextColor(40, 40, 40);
+      }
+
+      let cursorY = 95;
+      const groups = Object.entries(groupedByGenreCat);
+
+      for (const [key, entries] of groups) {
+        // Quebra de pagina se nao cabe header + ao menos 2 linhas
+        if (cursorY > pageHeight - 50) {
+          doc.addPage();
+          cursorY = 20;
+        }
+
+        doc.setFontSize(13);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 0, 104);
+        doc.text(key, 20, cursorY);
+        doc.setTextColor(40, 40, 40);
+        cursorY += 4;
+
+        const tableData = entries.map((r, i) => {
+          const medal = resolveMedal(r.average_score, i, premiationSystem, thresholds);
+          return [
+            `${i + 1}°`,
+            r.nome_coreografia,
+            r.estudio,
+            r.average_score.toFixed(2),
+            String(r.evaluations_count),
+            medal.label,
+          ];
+        });
+
+        autoTable(doc, {
+          head: [['Pos.', 'Coreografia', 'Estúdio', 'Média', 'Jurados', 'Medalha']],
+          body: tableData,
+          startY: cursorY,
+          theme: 'striped',
+          headStyles: { fillColor: [40, 40, 40], textColor: 255, fontSize: 9, fontStyle: 'bold' },
+          bodyStyles: { fontSize: 9, textColor: 40 },
+          alternateRowStyles: { fillColor: [248, 248, 250] },
+          columnStyles: {
+            0: { cellWidth: 14, halign: 'center', fontStyle: 'bold' },
+            3: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
+            4: { cellWidth: 18, halign: 'center' },
+            5: { cellWidth: 24, halign: 'center' },
+          },
+          margin: { left: 20, right: 20 },
+        });
+
+        cursorY = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      // Rodape em todas paginas
+      const totalPages = doc.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(140, 140, 140);
+        const dateStr = `${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR').slice(0, 5)}`;
+        doc.text(`Gerado em ${dateStr} • CoreoHub`, 20, pageHeight - 8);
+        doc.text(`Página ${i} de ${totalPages}`, pageWidth - 20, pageHeight - 8, { align: 'right' });
+      }
+
+      const slug = (eventName || 'evento')
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
+      doc.save(`apuracao-${editionYear}-${slug}.pdf`);
+    } catch (err) {
+      console.error('Erro ao exportar PDF:', err);
+      alert('Falha ao gerar PDF: ' + (err instanceof Error ? err.message : 'desconhecido'));
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   /* ── Stats ── */
   const outlierCount = competitiva.filter(r => r.has_outlier).length;
   const pendingCount = allResults.filter(r => r.evaluations_count === 0).length;
@@ -262,6 +387,16 @@ const ResultsPanel = () => {
             className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-600 dark:text-slate-300 font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-white/10 transition-all disabled:opacity-40 flex items-center gap-2"
           >
             <Download size={14} /> Exportar CSV
+          </button>
+          <button
+            onClick={exportPDF}
+            disabled={exportingPdf || competitiva.length === 0}
+            className="px-4 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-700 dark:hover:bg-slate-200 transition-all disabled:opacity-40 flex items-center gap-2"
+            title="Gerar PDF formatado com ranking por categoria"
+          >
+            {exportingPdf
+              ? <><Loader2 size={14} className="animate-spin" /> Gerando...</>
+              : <><FileDown size={14} /> Exportar PDF</>}
           </button>
           <button
             onClick={handlePublish}
