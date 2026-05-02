@@ -780,6 +780,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
   const [flowConfig, setFlowConfig] = useState({
     tempo_entrada: 15,
     texto_ia: 'Com a coreografia [COREOGRAFIA], recebam no palco: [ESTUDIO]',
+    voice_id: null as string | null, // IA de Narração: voice ElevenLabs (NULL = default)
     marcar_palco_ativo: true,
     intervalo_seguranca: 3,
     tempo_marcacao_palco: 45,
@@ -914,6 +915,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
           setFlowConfig({
             tempo_entrada:        data.tempo_entrada         ?? 15,
             texto_ia:             data.texto_ia              ?? flowConfig.texto_ia,
+            voice_id:             data.voice_id              ?? null,
             marcar_palco_ativo:   data.marcar_palco_ativo    ?? true,
             intervalo_seguranca:  data.intervalo_seguranca   ?? 3,
             tempo_marcacao_palco: data.tempo_marcacao_palco  ?? 45,
@@ -981,6 +983,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         tempo_entrada:        flowConfig.tempo_entrada,
         intervalo_seguranca:  flowConfig.intervalo_seguranca,
         texto_ia:             flowConfig.texto_ia,
+        voice_id:             flowConfig.voice_id,
         marcar_palco_ativo:   flowConfig.marcar_palco_ativo,
         tempo_marcacao_palco: flowConfig.tempo_marcacao_palco,
         gatilho_marcacao:     flowConfig.gatilho_marcacao,
@@ -2279,6 +2282,26 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                 onChange={e => setFlowConfig(f => ({ ...f, texto_ia: e.target.value }))}
                 className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-5 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-medium text-sm resize-none"
               />
+
+              {/* IA de Narração — escolha de voz ElevenLabs */}
+              <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/10">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 block">
+                  Voz da narração IA
+                </label>
+                <select
+                  value={(flowConfig as any).voice_id ?? ''}
+                  onChange={e => setFlowConfig(f => ({ ...f, voice_id: e.target.value || null } as any))}
+                  className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-2.5 px-4 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all text-sm"
+                >
+                  <option value="">Otto de La Luna (épico, padrão)</option>
+                  <option value="cyD08lEy76q03ER1jZ7y">Aline Mota (locutora BR)</option>
+                  <option value="aQROLel5sQbj1vuIVi6B">Juliano Magalhães (anunciador)</option>
+                  <option value="21m00Tcm4TlvDq8ikWAM">Rachel (neutro internacional)</option>
+                </select>
+                <p className="text-[10px] text-slate-400 mt-2 italic">
+                  As narrações são geradas via ElevenLabs (qualidade profissional). Use o botão "Gerar narrações IA" na <strong>Mesa de Som</strong> antes do evento. <span className="text-[#ff0068]">Custo: $0.05/100 chars</span> (10k chars/mês grátis).
+                </p>
+              </div>
             </div>
             <div className="bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 p-8 rounded-3xl flex flex-col items-center justify-center gap-3 text-center">
               <div className="p-3 bg-slate-100 dark:bg-white/5 rounded-2xl text-slate-400">

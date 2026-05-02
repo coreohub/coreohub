@@ -1,9 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Music, Volume2, Play, Pause, SkipForward,
-  Search, Loader2, AlertCircle, Clock, Radio, StopCircle
+  Search, Loader2, AlertCircle, Clock, Radio, StopCircle,
+  Sparkles, RefreshCw, CheckCircle2,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import {
+  generateNarrationBatch, generateNarration, deleteNarration, fetchNarrationAudios,
+  type BatchItem,
+} from '../services/narrationApi';
 
 const MesaDeSom = () => {
   const [registrations, setRegistrations] = useState<any[]>([]);
@@ -12,9 +17,15 @@ const MesaDeSom = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentTrack, setCurrentTrack] = useState<any | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  // Phase 4: id do evento ativo + flag de "broadcasting" pra mostrar feedback
+  // Phase 4: id do evento ativo + flag de "broadcasting"
   const [eventId, setEventId] = useState<string | null>(null);
   const [updatingLive, setUpdatingLive] = useState(false);
+  // IA de Narração: mapa registration_id -> { audio_url, duration_seconds }
+  const [audios, setAudios] = useState<Record<string, { audio_url: string; duration_seconds: number }>>({});
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
+  // Audio element ref pra controlar playback do MP3 da narração
+  const narrationAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     fetchSchedule();
@@ -56,11 +67,99 @@ const MesaDeSom = () => {
         .single();
 
       if (cfg) setConfig(cfg);
+
+      // IA de Narração: carrega audios pre-renderizados
+      if (ev?.id) {
+        try {
+          const audioRows = await fetchNarrationAudios(ev.id);
+          const map: Record<string, any> = {};
+          audioRows.forEach((a: any) => {
+            map[a.registration_id] = { audio_url: a.audio_url, duration_seconds: a.duration_seconds };
+          });
+          setAudios(map);
+        } catch (e) {
+          console.warn('Falha ao carregar narrações pré-renderizadas:', e);
+        }
+      }
     } catch (err) {
       console.error('Erro ao buscar cronograma:', err);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Constrói o texto da narração aplicando o template em texto_ia
+  const buildNarrationText = (reg: any): string => {
+    const template = (config?.texto_ia ?? '').trim()
+      || 'Com a coreografia [COREOGRAFIA], recebam no palco: [ESTUDIO]';
+    return template
+      .replaceAll('[COREOGRAFIA]', reg.nome_coreografia ?? '')
+      .replaceAll('[ESTUDIO]', reg.estudio ?? '');
+  };
+
+  // IA de Narração — gerar todas em batch
+  const handleGenerateAll = async () => {
+    if (!eventId) { alert('Nenhum evento ativo encontrado.'); return; }
+    if (registrations.length === 0) return;
+
+    const items: BatchItem[] = registrations.map(reg => ({
+      registration_id: reg.id,
+      text: buildNarrationText(reg),
+    }));
+
+    if (!confirm(`Gerar ${items.length} narrações via IA?\n\nIsso usa créditos da ElevenLabs (~${Math.round(items.reduce((s, i) => s + i.text.length, 0) / 1000)}k caracteres). Custo estimado: $${(items.reduce((s, i) => s + i.text.length, 0) / 100000 * 5).toFixed(2)}.`)) {
+      return;
+    }
+
+    setBatchProgress({ done: 0, total: items.length });
+    try {
+      const result = await generateNarrationBatch(eventId, items, config?.voice_id);
+      // Hidrata todas em sucesso
+      const newMap = { ...audios };
+      result.results.forEach(r => {
+        if (r.ok && r.audio_url) {
+          newMap[r.registration_id] = { audio_url: r.audio_url, duration_seconds: r.duration_seconds ?? 10 };
+        }
+      });
+      setAudios(newMap);
+      alert(`✓ ${result.success}/${result.total} narrações geradas. ${result.failed > 0 ? `${result.failed} falharam — verifique no console.` : ''}`);
+      if (result.failed > 0) console.warn('Falhas:', result.results.filter(r => !r.ok));
+    } catch (e: any) {
+      alert('Erro ao gerar narrações: ' + (e?.message ?? 'desconhecido'));
+    } finally {
+      setBatchProgress(null);
+    }
+  };
+
+  // IA de Narração — gerar/regerar 1 individual
+  const handleGenerateOne = async (reg: any) => {
+    if (!eventId) return;
+    setGeneratingId(reg.id);
+    try {
+      const text = buildNarrationText(reg);
+      const result = await generateNarration(eventId, reg.id, text, config?.voice_id);
+      if (result.ok && result.audio_url) {
+        setAudios(prev => ({
+          ...prev,
+          [reg.id]: { audio_url: result.audio_url!, duration_seconds: result.duration_seconds ?? 10 },
+        }));
+      } else {
+        alert('Falha ao gerar: ' + (result.error ?? 'desconhecido'));
+      }
+    } finally {
+      setGeneratingId(null);
+    }
+  };
+
+  // IA de Narração — preview/play do audio pre-renderizado
+  const playNarration = (audio_url: string) => {
+    if (narrationAudioRef.current) {
+      narrationAudioRef.current.pause();
+      narrationAudioRef.current.src = '';
+    }
+    const audio = new Audio(audio_url);
+    narrationAudioRef.current = audio;
+    audio.play().catch(e => console.warn('Falha ao tocar narração:', e));
   };
 
   const conflicts = React.useMemo(() => {
@@ -107,31 +206,37 @@ const MesaDeSom = () => {
   }, [registrations, config?.intervalo_seguranca]);
 
   const handleAnnounce = (reg: any) => {
+    // Prioridade: audio pre-renderizado via ElevenLabs (qualidade profissional).
+    // Fallback: Web Speech API (TTS robotico nativo, gratis).
+    const pre = audios[reg.id];
+    if (pre?.audio_url) {
+      playNarration(pre.audio_url);
+      return;
+    }
+
     if (!window.speechSynthesis) {
       alert('Seu navegador não suporta a funcionalidade de narração.');
       return;
     }
-
     window.speechSynthesis.cancel();
-
-    const template = config?.texto_ia?.trim()
-      || 'Com a coreografia [COREOGRAFIA], recebam no palco: [ESTUDIO]';
-    const text = template
-      .replaceAll('[COREOGRAFIA]', reg.nome_coreografia ?? '')
-      .replaceAll('[ESTUDIO]', reg.estudio ?? '');
-
+    const text = buildNarrationText(reg);
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'pt-BR';
     utterance.rate = 0.9;
-
     window.speechSynthesis.speak(utterance);
   };
 
-  // Phase 4: marcar apresentação como AO VIVO no banco. Jurados recebem via
-  // polling/realtime e veem banner "AO VIVO" + auto-advance pos-submit.
+  // Phase 4 + IA Narração (D): clicar "Iniciar" faz 2 coisas em paralelo:
+  //   1. Toca a narração da apresentação (audio pre-renderizado se existir,
+  //      senão fallback Web Speech)
+  //   2. Marca a apresentação como AO VIVO no banco (jurados recebem)
+  // Música continua controlada offline pela mesa física do sonoplasta.
   const handlePrepare = async (reg: any) => {
     setCurrentTrack(reg);
     setIsPlaying(false);
+    // Auto-trigger da narração (D)
+    handleAnnounce(reg);
+    // Marca AO VIVO no banco (Phase 4)
     if (!eventId) return;
     setUpdatingLive(true);
     try {
@@ -182,6 +287,18 @@ const MesaDeSom = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* IA de Narração — botão "Gerar todas" antes do evento */}
+          <button
+            onClick={handleGenerateAll}
+            disabled={!!batchProgress || registrations.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 rounded-xl text-violet-600 dark:text-violet-400 text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
+            title="Gerar narrações IA pré-renderizadas pra todas as coreografias"
+          >
+            {batchProgress
+              ? <><Loader2 size={12} className="animate-spin" /> Gerando {batchProgress.done}/{batchProgress.total}...</>
+              : <><Sparkles size={12} /> Gerar narrações IA</>
+            }
+          </button>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input
@@ -269,6 +386,8 @@ const MesaDeSom = () => {
           ) : (
             filteredSchedule.map((reg, index) => {
               const regConflicts = conflicts[reg.id] || [];
+              const audio = audios[reg.id];
+              const isGeneratingThis = generatingId === reg.id;
               return (
                 <div
                   key={reg.id}
@@ -283,6 +402,13 @@ const MesaDeSom = () => {
                       <h4 className={`text-xs font-black uppercase tracking-tight truncate ${currentTrack?.id === reg.id ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>
                         {reg.nome_coreografia}
                       </h4>
+                      {/* IA Narração: badge de status do audio pre-renderizado */}
+                      {audio && (
+                        <div className="flex items-center gap-1 px-1.5 py-0.5 bg-violet-500/10 border border-violet-500/20 rounded-full" title={`Áudio IA pronto (${Math.round(audio.duration_seconds)}s)`}>
+                          <CheckCircle2 size={9} className="text-violet-500" />
+                          <span className="text-[8px] font-black text-violet-600 dark:text-violet-400 uppercase">IA</span>
+                        </div>
+                      )}
                       {regConflicts.length > 0 && (
                         <div className="relative group/conflict">
                           <div className="p-1 bg-rose-500 text-white rounded-full animate-bounce cursor-help">
@@ -301,6 +427,18 @@ const MesaDeSom = () => {
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {/* IA Narração: gerar/regerar audio individual */}
+                    <button
+                      onClick={() => handleGenerateOne(reg)}
+                      disabled={isGeneratingThis || !!batchProgress}
+                      className="p-2 text-slate-400 hover:text-violet-500 hover:bg-violet-500/10 rounded-xl transition-all disabled:opacity-50"
+                      title={audio ? 'Regerar narração IA' : 'Gerar narração IA'}
+                    >
+                      {isGeneratingThis
+                        ? <Loader2 size={16} className="animate-spin text-violet-500" />
+                        : audio ? <RefreshCw size={16} /> : <Sparkles size={16} />
+                      }
+                    </button>
                     <button
                       onClick={() => handleAnnounce(reg)}
                       className="p-2 text-slate-400 hover:text-[#ff0068] hover:bg-[#ff0068]/10 rounded-xl transition-all"
