@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   GripVertical, Sparkles, Download, Save, AlertCircle,
   CheckCircle2, Music, MusicIcon, Settings2, RefreshCw,
@@ -255,6 +256,7 @@ const SortableRow: React.FC<SortableRowProps> = ({ reg, index, conflicts }) => {
 
 // ---------- main component ----------
 const Schedule = () => {
+  const navigate = useNavigate();
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -518,6 +520,16 @@ const Schedule = () => {
           >
             {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
             {isGenerating ? 'Gerando...' : 'Gerar Ordem Inteligente'}
+          </button>
+
+          {/* Atalho pra IA de Narração — leva pra Mesa de Som onde os controles ficam */}
+          <button
+            onClick={() => navigate('/mesa-de-som')}
+            className="flex items-center gap-2 px-4 py-2 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 text-violet-600 dark:text-violet-400 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
+            title="Gerar narrações IA pra cada coreografia (vai pra Mesa de Som)"
+          >
+            <Sparkles size={12} />
+            Narrações IA
           </button>
 
           {orderChanged && (

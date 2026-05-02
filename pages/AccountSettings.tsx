@@ -2296,13 +2296,15 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                   onChange={e => setFlowConfig(f => ({ ...f, voice_id: e.target.value || null } as any))}
                   className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-2.5 px-4 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all text-sm"
                 >
-                  <option value="">Otto de La Luna (épico, padrão)</option>
-                  <option value="cyD08lEy76q03ER1jZ7y">Aline Mota (locutora BR)</option>
-                  <option value="aQROLel5sQbj1vuIVi6B">Juliano Magalhães (anunciador)</option>
-                  <option value="21m00Tcm4TlvDq8ikWAM">Rachel (neutro internacional)</option>
+                  <option value="">Charon (locutor masculino, padrão)</option>
+                  <option value="Puck">Puck (masculino jovem)</option>
+                  <option value="Fenrir">Fenrir (masculino enérgico)</option>
+                  <option value="Kore">Kore (feminina firme)</option>
+                  <option value="Leda">Leda (feminina calma)</option>
+                  <option value="Aoede">Aoede (feminina musical)</option>
                 </select>
                 <p className="text-[10px] text-slate-400 mt-2 italic">
-                  As narrações são geradas via ElevenLabs (qualidade profissional). Use o botão "Gerar narrações IA" na <strong>Mesa de Som</strong> antes do evento. <span className="text-[#ff0068]">Custo: $0.05/100 chars</span> (10k chars/mês grátis).
+                  As narrações são geradas via Google Gemini 2.5 Audio TTS (qualidade profissional, PT-BR nativo). Use o botão "Gerar narrações IA" na <strong>Mesa de Som</strong> ou em <strong>Sonoplastia & Cronograma</strong>. <span className="text-emerald-500">Free tier generoso (1M tokens/dia)</span>.
                 </p>
               </div>
             </div>
