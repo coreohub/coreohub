@@ -7,6 +7,21 @@ import { supabase } from '../services/supabase';
 const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
+
+  // #14 mudanca 2: tablet em modo Terminal nunca deve cair em /login do
+  // produtor. Se kiosk_mode ativo + tablet_token salvo, redireciona pra
+  // a tela de selecao de jurado. Equipe que precisa logar como produtor
+  // tem que sair do modo Terminal explicitamente em /judge-login/<token>.
+  useEffect(() => {
+    try {
+      const isKiosk = localStorage.getItem('coreohub_tablet_kiosk_mode') === 'true';
+      const tabletToken = localStorage.getItem('coreohub_tablet_judge_token');
+      if (isKiosk && tabletToken) {
+        navigate(`/judge-login/${tabletToken}`, { replace: true });
+      }
+    } catch { /* noop */ }
+  }, [navigate]);
+
   const [isLoading, setIsLoading] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);

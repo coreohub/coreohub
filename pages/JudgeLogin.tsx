@@ -233,6 +233,24 @@ const JudgeLogin: React.FC = () => {
           expires_at: Date.now() + SESSION_TTL_MS,
         };
         localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+
+        // #14 mudanca 1: auto-ativar modo Terminal no 1o PIN bem-sucedido
+        // se o tablet ainda nao tem kiosk e nao ha sessao Supabase do produtor.
+        // Cobre o cenario "tablet de evento entregue ao juri" sem precisar
+        // que a equipe lembre de clicar 'Configurar como Terminal'.
+        try {
+          const alreadyKiosk = localStorage.getItem(TABLET_KIOSK_KEY) === 'true';
+          if (!alreadyKiosk) {
+            // Detecta sessao Supabase (storage key 'sb-<project>-auth-token')
+            const hasProducerSession = Object.keys(localStorage).some(k =>
+              k.startsWith('sb-') && k.endsWith('-auth-token') && localStorage.getItem(k)
+            );
+            if (!hasProducerSession) {
+              localStorage.setItem(TABLET_KIOSK_KEY, 'true');
+            }
+          }
+        } catch { /* noop */ }
+
         navigate('/judge-terminal', { replace: true });
         return;
       }

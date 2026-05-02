@@ -24,6 +24,23 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body class="bg-mesh min-h-screen">
+    <!-- #14 mudança 3: redirect inline pre-React quando tablet em modo Terminal
+         abre na raiz '/'. Evita flash da raiz antes do RootRedirect rodar.
+         Roda síncrono ANTES do bundle React baixar — instantaneo no PWA. -->
+    <script>
+      (function () {
+        try {
+          var path = window.location.pathname;
+          if (path === '/' || path === '/index.html') {
+            var isKiosk = localStorage.getItem('coreohub_tablet_kiosk_mode') === 'true';
+            var token = localStorage.getItem('coreohub_tablet_judge_token');
+            if (isKiosk && token) {
+              window.location.replace('/judge-login/' + token);
+            }
+          }
+        } catch (e) { /* localStorage indisponível: deixa o React lidar */ }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="./index.tsx"></script>
 </body>

@@ -4,6 +4,7 @@ import {
   CheckCircle2, Music, MusicIcon, Settings2, RefreshCw,
   Loader2, FileArchive, Users, ChevronDown, ChevronUp, Info,
   Volume2, Play, Pause, Radio, StopCircle, AlertTriangle,
+  Layers, X, Plus, Trash2, ArrowUp, ArrowDown, Edit3,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -41,6 +42,15 @@ interface Registration {
   estilo_danca?: string;
   categoria?: string;
   classificacao_final?: string;
+  bloco_id?: string | null;
+}
+
+interface Bloco {
+  id: string;
+  event_id: string;
+  name: string;
+  ordem: number;
+  cor?: string | null;
 }
 
 // ---------- conflict detection ----------
@@ -155,6 +165,8 @@ interface SortableRowProps {
   batchInProgress: boolean;
   updatingLive: boolean;
   currentVoice: string;
+  blocos: Bloco[];
+  onAssignBloco: (regId: string, blocoId: string | null) => void;
   onGenerateOne: (reg: Registration) => void;
   onAnnounce: (reg: Registration) => void;
   onPrepare: (reg: Registration) => void;
@@ -163,6 +175,7 @@ interface SortableRowProps {
 const SortableRow: React.FC<SortableRowProps> = ({
   reg, index, conflicts,
   audioSet, saidaAtiva, isLive, isGenerating, batchInProgress, updatingLive, currentVoice,
+  blocos, onAssignBloco,
   onGenerateOne, onAnnounce, onPrepare,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -316,6 +329,23 @@ const SortableRow: React.FC<SortableRowProps> = ({
         )}
       </div>
 
+      {/* Bloco selector (Etapa 2) */}
+      {blocos.length > 0 && (
+        <select
+          value={reg.bloco_id ?? ''}
+          onChange={e => onAssignBloco(reg.id, e.target.value || null)}
+          onClick={e => e.stopPropagation()}
+          onPointerDown={e => e.stopPropagation()}
+          className="shrink-0 text-[9px] font-black uppercase tracking-widest bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 max-w-[120px] truncate"
+          title="Mover pra outro bloco"
+        >
+          <option value="">— Sem bloco</option>
+          {blocos.map(b => (
+            <option key={b.id} value={b.id}>{b.name}</option>
+          ))}
+        </select>
+      )}
+
       {/* IA Narração / announce / Iniciar */}
       <div className="flex items-center gap-1.5 shrink-0">
         <button
@@ -375,6 +405,10 @@ const Schedule = () => {
   /* Edition selector */
   const [allEvents, setAllEvents] = useState<{ id: string; name: string; edition_year?: number }[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+
+  /* Blocos (Etapa 2 da fusão) */
+  const [blocos, setBlocos] = useState<Bloco[]>([]);
+  const [showBlocosManager, setShowBlocosManager] = useState(false);
   const [eventPickerOpen, setEventPickerOpen] = useState(false);
   const eventPickerRef = useRef<HTMLDivElement | null>(null);
 
@@ -449,6 +483,18 @@ const Schedule = () => {
       const list = regs || [];
       setRegistrations(list);
       setOrderChanged(false);
+
+      // Etapa 2: blocos do cronograma
+      if (eventId) {
+        const { data: blocosData } = await supabase
+          .from('cronograma_blocos')
+          .select('*')
+          .eq('event_id', eventId)
+          .order('ordem', { ascending: true });
+        setBlocos(blocosData || []);
+      } else {
+        setBlocos([]);
+      }
 
       // Hidrata live + áudios pré-renderizados do evento
       if (eventId) {
@@ -716,6 +762,67 @@ const Schedule = () => {
     };
   }, [registrations, conflicts]);
 
+  // ---------- Blocos: CRUD ----------
+  const handleAddBloco = async () => {
+    if (!selectedEventId) return;
+    const name = prompt('Nome do bloco (ex: "Bloco 1 — Manhã"):')?.trim();
+    if (!name) return;
+    const nextOrdem = blocos.length === 0 ? 0 : Math.max(...blocos.map(b => b.ordem)) + 1;
+    const { data, error } = await supabase
+      .from('cronograma_blocos')
+      .insert({ event_id: selectedEventId, name, ordem: nextOrdem })
+      .select()
+      .single();
+    if (error) { alert('Erro ao criar bloco: ' + error.message); return; }
+    if (data) setBlocos(prev => [...prev, data].sort((a, b) => a.ordem - b.ordem));
+  };
+
+  const handleRenameBloco = async (bloco: Bloco) => {
+    const novo = prompt('Renomear bloco:', bloco.name)?.trim();
+    if (!novo || novo === bloco.name) return;
+    const { error } = await supabase
+      .from('cronograma_blocos')
+      .update({ name: novo, updated_at: new Date().toISOString() })
+      .eq('id', bloco.id);
+    if (error) { alert('Erro ao renomear: ' + error.message); return; }
+    setBlocos(prev => prev.map(b => b.id === bloco.id ? { ...b, name: novo } : b));
+  };
+
+  const handleDeleteBloco = async (bloco: Bloco) => {
+    const regsNoBloco = registrations.filter(r => r.bloco_id === bloco.id).length;
+    const msg = regsNoBloco > 0
+      ? `Deletar "${bloco.name}"? ${regsNoBloco} ${regsNoBloco === 1 ? 'coreografia ficará' : 'coreografias ficarão'} sem bloco.`
+      : `Deletar "${bloco.name}"?`;
+    if (!confirm(msg)) return;
+    const { error } = await supabase.from('cronograma_blocos').delete().eq('id', bloco.id);
+    if (error) { alert('Erro ao deletar: ' + error.message); return; }
+    setBlocos(prev => prev.filter(b => b.id !== bloco.id));
+    // Atualiza estado local — a FK ON DELETE SET NULL já cuidou do banco
+    setRegistrations(prev => prev.map(r => r.bloco_id === bloco.id ? { ...r, bloco_id: null } : r));
+  };
+
+  const handleMoveBloco = async (bloco: Bloco, direction: 'up' | 'down') => {
+    const sorted = [...blocos].sort((a, b) => a.ordem - b.ordem);
+    const idx = sorted.findIndex(b => b.id === bloco.id);
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= sorted.length) return;
+    const target = sorted[targetIdx];
+    // Swap ordem
+    const [a, b] = [bloco.ordem, target.ordem];
+    await supabase.from('cronograma_blocos').update({ ordem: b }).eq('id', bloco.id);
+    await supabase.from('cronograma_blocos').update({ ordem: a }).eq('id', target.id);
+    setBlocos(prev => prev.map(x => {
+      if (x.id === bloco.id) return { ...x, ordem: b };
+      if (x.id === target.id) return { ...x, ordem: a };
+      return x;
+    }).sort((a, b) => a.ordem - b.ordem));
+  };
+
+  const handleAssignBloco = (regId: string, blocoId: string | null) => {
+    setRegistrations(prev => prev.map(r => r.id === regId ? { ...r, bloco_id: blocoId } : r));
+    setOrderChanged(true);
+  };
+
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
@@ -731,8 +838,21 @@ const Schedule = () => {
   const handleGenerateSmart = async () => {
     setIsGenerating(true);
     await new Promise((r) => setTimeout(r, 600));
-    const sorted = generateSmartOrder([...registrations], minInterval);
-    setRegistrations(sorted);
+    // Smart order respeita blocos: roda o algoritmo dentro de cada bloco
+    // separadamente (incluindo o "sem bloco" como grupo). Coreografias
+    // nunca cruzam fronteira de bloco — produtor faz isso manualmente
+    // via dropdown na linha.
+    const sortedBlocos = [...blocos].sort((a, b) => a.ordem - b.ordem);
+    const result: Registration[] = [];
+    for (const bloco of sortedBlocos) {
+      const regsDoBloco = registrations.filter(r => r.bloco_id === bloco.id);
+      const ordered = generateSmartOrder([...regsDoBloco], minInterval);
+      result.push(...ordered);
+    }
+    const semBloco = registrations.filter(r => !r.bloco_id);
+    const orderedSemBloco = generateSmartOrder([...semBloco], minInterval);
+    result.push(...orderedSemBloco);
+    setRegistrations(result);
     setOrderChanged(true);
     setIsGenerating(false);
   };
@@ -740,15 +860,29 @@ const Schedule = () => {
   const handleSaveOrder = async () => {
     setIsSaving(true);
     try {
-      const updates = registrations.map((reg, i) => ({
-        id: reg.id,
-        ordem_apresentacao: i + 1,
-      }));
+      // Calcula ordem global respeitando blocos: blocos em ordem (bloco.ordem),
+      // dentro de cada bloco a ordem visual atual (registrations array).
+      // Coreografias sem bloco vão pro final como residuo.
+      const sortedBlocos = [...blocos].sort((a, b) => a.ordem - b.ordem);
+      const updates: { id: string; ordem_apresentacao: number; bloco_id: string | null }[] = [];
+      let globalIdx = 1;
+      for (const bloco of sortedBlocos) {
+        registrations
+          .filter(r => r.bloco_id === bloco.id)
+          .forEach(r => {
+            updates.push({ id: r.id, ordem_apresentacao: globalIdx++, bloco_id: bloco.id });
+          });
+      }
+      registrations
+        .filter(r => !r.bloco_id)
+        .forEach(r => {
+          updates.push({ id: r.id, ordem_apresentacao: globalIdx++, bloco_id: null });
+        });
 
       for (const u of updates) {
         await supabase
           .from('registrations')
-          .update({ ordem_apresentacao: u.ordem_apresentacao })
+          .update({ ordem_apresentacao: u.ordem_apresentacao, bloco_id: u.bloco_id })
           .eq('id', u.id);
       }
 
@@ -905,6 +1039,16 @@ const Schedule = () => {
             <Settings2 size={12} />
             Configurações
             {showSettings ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+          </button>
+
+          {/* Blocos — gerenciador (Etapa 2) */}
+          <button
+            onClick={() => setShowBlocosManager(true)}
+            className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-600 dark:text-amber-400 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
+            title="Criar e gerenciar blocos do cronograma (Bloco 1 - Manhã, etc)"
+          >
+            <Layers size={12} />
+            Blocos {blocos.length > 0 ? `(${blocos.length})` : ''}
           </button>
 
           <button
@@ -1174,16 +1318,20 @@ const Schedule = () => {
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
         >
-          <SortableContext
-            items={registrations.map((r) => r.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="space-y-2">
-              {registrations.map((reg, index) => (
+          {(() => {
+            // Agrupa visualmente: blocos em ordem (bloco.ordem), dentro de cada
+            // bloco SortableContext próprio (drag-drop só dentro do bloco). Sem
+            // bloco no final como secao "residuo".
+            const sortedBlocos = [...blocos].sort((a, b) => a.ordem - b.ordem);
+            let globalIdx = 0;
+            const sections: React.ReactNode[] = [];
+
+            const renderRows = (regs: Registration[], startIdx: number) =>
+              regs.map((reg, localIdx) => (
                 <SortableRow
                   key={reg.id}
                   reg={reg}
-                  index={index}
+                  index={startIdx + localIdx}
                   conflicts={conflicts[reg.id] || []}
                   audioSet={audios[reg.id]}
                   saidaAtiva={saidaAtiva}
@@ -1192,13 +1340,64 @@ const Schedule = () => {
                   batchInProgress={!!batchProgress}
                   updatingLive={updatingLive}
                   currentVoice={config?.voice_id || 'Charon'}
+                  blocos={blocos}
+                  onAssignBloco={handleAssignBloco}
                   onGenerateOne={handleGenerateOne}
                   onAnnounce={handleAnnounce}
                   onPrepare={handlePrepare}
                 />
-              ))}
-            </div>
-          </SortableContext>
+              ));
+
+            for (const bloco of sortedBlocos) {
+              const regs = registrations.filter(r => r.bloco_id === bloco.id);
+              const startIdx = globalIdx;
+              globalIdx += regs.length;
+              sections.push(
+                <div key={bloco.id} className="space-y-2">
+                  <div className="flex items-center gap-2 pt-2">
+                    <div className="h-px flex-1 bg-[#ff0068]/30" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#ff0068] px-2">
+                      {bloco.name} · {regs.length}
+                    </span>
+                    <div className="h-px flex-1 bg-[#ff0068]/30" />
+                  </div>
+                  {regs.length === 0 ? (
+                    <p className="text-center py-4 text-[9px] font-bold text-slate-400 dark:text-white/30 italic">
+                      Nenhuma coreografia atribuída a este bloco ainda
+                    </p>
+                  ) : (
+                    <SortableContext items={regs.map(r => r.id)} strategy={verticalListSortingStrategy}>
+                      {renderRows(regs, startIdx)}
+                    </SortableContext>
+                  )}
+                </div>
+              );
+            }
+
+            // Sem bloco
+            const semBloco = registrations.filter(r => !r.bloco_id);
+            if (semBloco.length > 0) {
+              const startIdx = globalIdx;
+              sections.push(
+                <div key="__sem_bloco__" className="space-y-2">
+                  {sortedBlocos.length > 0 && (
+                    <div className="flex items-center gap-2 pt-2">
+                      <div className="h-px flex-1 bg-slate-300 dark:bg-white/10" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-2">
+                        Sem bloco · {semBloco.length}
+                      </span>
+                      <div className="h-px flex-1 bg-slate-300 dark:bg-white/10" />
+                    </div>
+                  )}
+                  <SortableContext items={semBloco.map(r => r.id)} strategy={verticalListSortingStrategy}>
+                    {renderRows(semBloco, startIdx)}
+                  </SortableContext>
+                </div>
+              );
+            }
+
+            return <div className="space-y-2">{sections}</div>;
+          })()}
         </DndContext>
       )}
 
@@ -1213,6 +1412,114 @@ const Schedule = () => {
             <p className="text-[9px] text-indigo-500/70 dark:text-indigo-400/50 mt-0.5">
               Os arquivos serão renomeados no padrão: 001_Formação_Categoria_Estudio.mp3 — na ordem atual do cronograma.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Gerenciar Blocos (Etapa 2) ── */}
+      {showBlocosManager && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start justify-center p-4 sm:p-8"
+          onClick={() => setShowBlocosManager(false)}
+        >
+          <div
+            className="w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl overflow-hidden flex flex-col max-h-[85vh]"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-500/10 rounded-xl text-amber-600 dark:text-amber-400">
+                  <Layers size={18} />
+                </div>
+                <div>
+                  <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic text-base">
+                    Blocos do Cronograma
+                  </h3>
+                  <p className="text-[10px] text-slate-500 dark:text-white/40 mt-0.5">
+                    Organize as coreografias em blocos (ex: Manhã, Tarde, Final)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowBlocosManager(false)}
+                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 text-slate-500"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-5 space-y-2">
+              {blocos.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-[11px] text-slate-400 dark:text-white/40 mb-4">
+                    Nenhum bloco criado ainda. Crie blocos pra agrupar as coreografias.
+                  </p>
+                </div>
+              ) : (
+                [...blocos].sort((a, b) => a.ordem - b.ordem).map((bloco, idx, arr) => {
+                  const regsCount = registrations.filter(r => r.bloco_id === bloco.id).length;
+                  return (
+                    <div
+                      key={bloco.id}
+                      className="flex items-center gap-2 p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-2xl"
+                    >
+                      <span className="text-[10px] font-black tabular-nums text-slate-400 w-6">
+                        {idx + 1}.
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white truncate">
+                          {bloco.name}
+                        </p>
+                        <p className="text-[9px] text-slate-500 dark:text-white/40 mt-0.5">
+                          {regsCount} {regsCount === 1 ? 'coreografia' : 'coreografias'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleMoveBloco(bloco, 'up')}
+                        disabled={idx === 0}
+                        className="p-1.5 text-slate-400 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Subir"
+                      >
+                        <ArrowUp size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleMoveBloco(bloco, 'down')}
+                        disabled={idx === arr.length - 1}
+                        className="p-1.5 text-slate-400 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Descer"
+                      >
+                        <ArrowDown size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleRenameBloco(bloco)}
+                        className="p-1.5 text-slate-400 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg"
+                        title="Renomear"
+                      >
+                        <Edit3 size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteBloco(bloco)}
+                        className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg"
+                        title="Deletar"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02]">
+              <button
+                onClick={handleAddBloco}
+                disabled={!selectedEventId}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-amber-500/20 transition-all disabled:opacity-50"
+              >
+                <Plus size={14} />
+                Adicionar Bloco
+              </button>
+            </div>
           </div>
         </div>
       )}
