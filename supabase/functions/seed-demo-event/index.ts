@@ -261,7 +261,7 @@ Deno.serve(async (req) => {
       is_demo: true,
       is_public: false,
       created_by: user.id,
-      score_scale: 10, // INT (10 ou 100), NAO 'BASE_10'
+      scoring_system: 'BASE_10', // coluna real eh scoring_system [text], nao score_scale
       slug: `demo-${user.id.slice(0, 8)}`,
     }]).select('id').single()
 
@@ -308,12 +308,15 @@ Deno.serve(async (req) => {
     await supa.from('events').update({ formacoes_config: formatos }).eq('id', eventId)
 
     // 4) Inserir 3 jurados (com PINs e is_active)
+    // judges schema real (10 colunas): id, name, specialty [text], avatar_url,
+    // created_at, language, assigned_categories [jsonb], is_active, pin, created_by.
+    // NAO tem competencias_generos/competencias_formatos (eram chute).
     const judgesToInsert = JURADOS.map(j => ({
       name: j.name,
       pin: j.pin,
       is_active: true,
-      competencias_generos: j.generos,
-      competencias_formatos: FORMACOES,
+      specialty: j.generos.join(', '), // ex: "Jazz, Ballet Clássico"
+      language: 'pt-BR',
       created_by: user.id,
     }))
     await supa.from('judges').insert(judgesToInsert)
@@ -356,7 +359,7 @@ Deno.serve(async (req) => {
         tipo_apresentacao: 'Competitiva',
         estudio: estudio.nome,
         bailarinos_detalhes,
-        num_participantes: numBailarinos,
+        // num_participantes NAO existe na tabela — removido
         status,
         status_pagamento,
         valor_pago,
