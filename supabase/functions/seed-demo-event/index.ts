@@ -15,8 +15,9 @@
  * O que cria:
  *   - 1 events (is_demo=true, nome "[DEMO] CoreoHub Festival — Demonstração")
  *   - 1 configuracoes com critérios, prêmios, formações, categorias, estilos
- *   - 50 registrations distribuidas em 5 estilos × 4 categorias × 4 formacoes
- *   - 90% APROVADA, 5% PENDENTE, 5% CANCELADA
+ *   - 50 registrations APROVADAS distribuidas em 5 estilos × 4 categorias × 4 formacoes
+ *   - 20 registrations PENDENTES com vídeo submitted (pra produtor testar Seletiva)
+ *   - 30 evaluations fictícias (10 coreografias × 3 jurados) pra testar Resultados
  *   - 90% pagamento CONFIRMADO, 10% PENDENTE
  *   - ~150 bailarinos com nomes BR realistas no elenco
  *   - 3 jurados (PINs 1111, 2222, 3333) com judges_pin
@@ -140,6 +141,33 @@ const COREOGRAFIAS: CoreoSpec[] = [
   { nome: 'Funk Rio', estilo: 'Dança Urbana' },
   { nome: 'Voltage', estilo: 'Dança Urbana' },
 ]
+
+// Coreografias adicionais pra Seletiva de Vídeo (pendentes de aprovacao do produtor)
+const COREOGRAFIAS_SELETIVA: CoreoSpec[] = [
+  { nome: 'Caminhos do Sol',  estilo: 'Contemporâneo' },
+  { nome: 'Pulsar Cósmico',   estilo: 'Hip Hop' },
+  { nome: 'Aurora Boreal',    estilo: 'Ballet Clássico' },
+  { nome: 'Voos Distantes',   estilo: 'Contemporâneo' },
+  { nome: 'Reflexos da Alma', estilo: 'Jazz' },
+  { nome: 'Trilhas Urbanas',  estilo: 'Dança Urbana' },
+  { nome: 'Asas de Liberdade',estilo: 'Ballet Clássico' },
+  { nome: 'Sussurros',        estilo: 'Contemporâneo' },
+  { nome: 'Fragmentos',       estilo: 'Jazz' },
+  { nome: 'Eclipse Total',    estilo: 'Hip Hop' },
+  { nome: 'Constelação',      estilo: 'Ballet Clássico' },
+  { nome: 'Pétalas ao Vento', estilo: 'Contemporâneo' },
+  { nome: 'Marés Profundas',  estilo: 'Jazz' },
+  { nome: 'Horizonte Aberto', estilo: 'Dança Urbana' },
+  { nome: 'Lume',             estilo: 'Contemporâneo' },
+  { nome: 'Eco do Tempo',     estilo: 'Ballet Clássico' },
+  { nome: 'Travessia da Luz', estilo: 'Jazz' },
+  { nome: 'Guardiões',        estilo: 'Hip Hop' },
+  { nome: 'Beat Nação',       estilo: 'Dança Urbana' },
+  { nome: 'Lua Nova',         estilo: 'Contemporâneo' },
+]
+
+// URL placeholder pro video da Seletiva (Big Buck Bunny, vídeo de teste open-source)
+const DEMO_VIDEO_URL = 'https://www.youtube.com/watch?v=YE7VzlLtp-4'
 
 const CATEGORIAS = ['Infantil', 'Juvenil', 'Adulto', 'Profissional']
 const FORMACOES = ['Solo', 'Duo', 'Trio', 'Grupo']
@@ -331,7 +359,12 @@ Deno.serve(async (req) => {
       language: 'pt-BR',
       created_by: user.id,
     }))
-    await supa.from('judges').insert(judgesToInsert)
+    const { data: insertedJudges } = await supa
+      .from('judges')
+      .insert(judgesToInsert)
+      .select('id, pin')
+    const judgeIdByPin: Record<string, string> = {}
+    ;(insertedJudges ?? []).forEach((j: any) => { judgeIdByPin[j.pin] = j.id })
 
     // 5) Distribuir 50 coreografias (status + pagamento aleatórios conforme spec)
     // Schema real corrigido:
@@ -379,11 +412,91 @@ Deno.serve(async (req) => {
       })
     }
 
-    const { error: regErr } = await supa.from('registrations').insert(registrationsToInsert)
+    const { data: insertedRegs, error: regErr } = await supa
+      .from('registrations')
+      .insert(registrationsToInsert)
+      .select('id, nome_coreografia, status, tipo_apresentacao')
     if (regErr) {
       // Rollback: deleta evento (CASCADE limpa o resto)
       await supa.from('events').delete().eq('id', eventId)
       return json({ error: 'db_error', detail: `registrations: ${regErr.message}` }, 500)
+    }
+
+    // 6) Seletiva de Vídeo: 20 inscrições PENDENTES com vídeo submitted
+    //    pra produtor testar fluxo de aprovar/reprovar em /seletiva-video.
+    //    video_url = placeholder publico (Big Buck Bunny). O importante eh
+    //    o produtor testar os botoes de aprovar/reprovar — nao o player.
+    const submittedAt = new Date().toISOString()
+    const seletivaToInsert = COREOGRAFIAS_SELETIVA.map((coreo, i) => {
+      const formato = pick(FORMACOES)
+      const estudio = pick(ESTUDIOS)
+      const categoria = pick(CATEGORIAS)
+      const numBailarinos = formacaoSize(formato)
+      const bailarinos_detalhes = Array.from({ length: numBailarinos }, () => ({
+        full_name: randomNomeCompleto(),
+        cpf: `${Math.floor(Math.random() * 1e11)}`.padStart(11, '0'),
+      }))
+      return {
+        event_id: eventId,
+        nome_coreografia: coreo.nome,
+        estilo_danca: coreo.estilo,
+        categoria,
+        formato_participacao: formato,
+        tipo_apresentacao: 'Competitiva',
+        estudio: estudio.nome,
+        bailarinos_detalhes,
+        status: 'PENDENTE',
+        status_pagamento: 'CONFIRMADO',
+        valor_pago: formato === 'Solo' ? 80 : formato === 'Duo' ? 120 : formato === 'Trio' ? 150 : 200,
+        ordem_apresentacao: 100 + i, // separa do bloco principal
+        video_url: DEMO_VIDEO_URL,
+        video_status: 'submitted',
+        video_submitted_at: submittedAt,
+      }
+    })
+    await supa.from('registrations').insert(seletivaToInsert)
+
+    // 7) Evaluations fictícias: 10 coreografias APROVADAS competitivas × 3 jurados.
+    //    Variação realista: 3 top (notas 9.0-9.8), 4 médias (7.5-8.7), 3 baixas (6.5-7.5).
+    //    Pra produtor testar tela de Resultados sem precisar simular votação manual.
+    const aprovadasComp = (insertedRegs ?? [])
+      .filter((r: any) => r.status === 'APROVADA' && r.tipo_apresentacao === 'Competitiva')
+      .slice(0, 10)
+
+    const tiers = [
+      { range: [9.0, 9.8] }, { range: [9.0, 9.8] }, { range: [9.0, 9.8] },
+      { range: [7.5, 8.7] }, { range: [7.5, 8.7] }, { range: [7.5, 8.7] }, { range: [7.5, 8.7] },
+      { range: [6.5, 7.5] }, { range: [6.5, 7.5] }, { range: [6.5, 7.5] },
+    ]
+    const judgeIds = JURADOS.map(j => judgeIdByPin[j.pin]).filter(Boolean)
+    const criteriosNomes = CRITERIOS_PADRAO.map(c => c.name)
+    const criteriosWeights = CRITERIOS_PADRAO.map(c => ({ name: c.name, peso: c.peso }))
+    const evalsToInsert: any[] = []
+    aprovadasComp.forEach((reg: any, idx: number) => {
+      const tier = tiers[idx] ?? tiers[tiers.length - 1]
+      judgeIds.forEach(jid => {
+        const scores: Record<string, number> = {}
+        let sum = 0
+        criteriosNomes.forEach(name => {
+          const [lo, hi] = tier.range
+          const score = +(lo + Math.random() * (hi - lo)).toFixed(1)
+          scores[name] = score
+          sum += score
+        })
+        const avg = +(sum / criteriosNomes.length).toFixed(2)
+        evalsToInsert.push({
+          event_id: eventId,
+          registration_id: reg.id,
+          judge_id: jid,
+          scores,
+          criteria_weights: criteriosWeights,
+          final_weighted_average: avg,
+          submitted_at: submittedAt,
+        })
+      })
+    })
+    if (evalsToInsert.length > 0) {
+      await supa.from('evaluations').insert(evalsToInsert)
     }
 
     return json({
@@ -391,9 +504,11 @@ Deno.serve(async (req) => {
       event_id: eventId,
       stats: {
         coreografias: totalRegs,
+        seletiva_pendentes: seletivaToInsert.length,
+        evaluations: evalsToInsert.length,
         jurados: JURADOS.length,
         prêmios: PREMIOS_ESPECIAIS.length,
-        estilos: styles_config.length,
+        estilos: estilos.length,
       },
     })
   }
