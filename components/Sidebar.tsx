@@ -73,7 +73,6 @@ const menuSections: MenuSection[] = [
       { path: '/deliberacoes',         label: 'Deliberacao',              icon: Trophy         },
       { path: '/manage-schedule',      label: 'Sonoplastia e Cronograma', icon: Calendar       },
       { path: '/equipe-jurados',       label: 'Jurados',                  icon: UserCheck      },
-      { path: '/generate-narration',   label: 'Narracao IA',              icon: Tv             },
       { path: '/minha-equipe',         label: 'Minha Equipe',             icon: Users          },
       { path: '/account-settings',     label: 'Configuracoes',            icon: Settings       },
     ],
@@ -121,7 +120,6 @@ const menuSections: MenuSection[] = [
       { path: '/super-admin',        label: 'Painel Admin',  icon: ShieldCheck },
       { path: '/trilhas',            label: 'Trilhas Sonoras', icon: Music      },
       { path: '/certificados',       label: 'Certificados',  icon: Mic2        },
-      { path: '/generate-narration', label: 'Narracao IA',   icon: Tv          },
     ],
   },
 ];

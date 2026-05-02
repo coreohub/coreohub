@@ -22,7 +22,6 @@ const RegistrationGradeConfig = lazy(() => import('./pages/RegistrationGradeConf
 const Registrations            = lazy(() => import('./pages/Registrations'));
 const JudgeManagement          = lazy(() => import('./pages/JudgeManagement'));
 const Schedule                 = lazy(() => import('./pages/Schedule'));
-const AINarration              = lazy(() => import('./pages/AINarration'));
 const AIAnalysis               = lazy(() => import('./pages/AIAnalysis'));
 const CheckIn                  = lazy(() => import('./pages/CheckIn'));
 const JudgeTerminal            = lazy(() => import('./pages/JudgeTerminal'));
@@ -374,7 +373,6 @@ const App: React.FC = () => {
 
         <Route path="/criar-evento" element={<Suspense fallback={<PageLoader />}><CriarEventoGate /></Suspense>} />
         <Route path="/event-config" element={<PrivateRoute {...privateRouteProps}><RegistrationGradeConfig /></PrivateRoute>} />
-        <Route path="/generate-narration" element={<PrivateRoute {...privateRouteProps}><AINarration /></PrivateRoute>} />
         <Route path="/ai-analysis" element={<PrivateRoute {...privateRouteProps}><AIAnalysis /></PrivateRoute>} />
         <Route path="/super-admin" element={<PrivateRoute {...privateRouteProps}><SuperAdminDashboard /></PrivateRoute>} />
         <Route path="/certificados" element={<PrivateRoute {...privateRouteProps}><Certificates /></PrivateRoute>} />
