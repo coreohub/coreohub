@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   GripVertical, Sparkles, Download, Save, AlertCircle,
   CheckCircle2, Music, MusicIcon, Settings2, RefreshCw,
-  Loader2, FileArchive, Users, ChevronDown, ChevronUp, Info
+  Loader2, FileArchive, Users, ChevronDown, ChevronUp, Info,
+  Volume2, Play, Pause, Radio, StopCircle,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -13,6 +13,13 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import {
+  generateNarrationBatch, generateNarration, fetchNarrationAudios,
+  type BatchItem, type NarrationKind,
+} from '../services/narrationApi';
+
+type AudioSlot = { audio_url: string; duration_seconds: number };
+type AudioMap = Record<string, { entrada?: AudioSlot; saida?: AudioSlot }>;
 
 // ---------- types ----------
 interface Dancer {
@@ -141,9 +148,22 @@ interface SortableRowProps {
   reg: Registration;
   index: number;
   conflicts: { dancerName: string; otherIndex: number }[];
+  audioSet?: { entrada?: AudioSlot; saida?: AudioSlot };
+  saidaAtiva: boolean;
+  isLive: boolean;
+  isGenerating: boolean;
+  batchInProgress: boolean;
+  updatingLive: boolean;
+  onGenerateOne: (reg: Registration) => void;
+  onAnnounce: (reg: Registration) => void;
+  onPrepare: (reg: Registration) => void;
 }
 
-const SortableRow: React.FC<SortableRowProps> = ({ reg, index, conflicts }) => {
+const SortableRow: React.FC<SortableRowProps> = ({
+  reg, index, conflicts,
+  audioSet, saidaAtiva, isLive, isGenerating, batchInProgress, updatingLive,
+  onGenerateOne, onAnnounce, onPrepare,
+}) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: reg.id });
 
@@ -156,6 +176,9 @@ const SortableRow: React.FC<SortableRowProps> = ({ reg, index, conflicts }) => {
 
   const hasTrack = !!reg.trilha_url;
   const hasConflict = conflicts.length > 0;
+  const hasEntrada = !!audioSet?.entrada;
+  const hasSaida = !!audioSet?.saida;
+  const fullyReady = hasEntrada && (!saidaAtiva || hasSaida);
 
   return (
     <div
@@ -163,9 +186,11 @@ const SortableRow: React.FC<SortableRowProps> = ({ reg, index, conflicts }) => {
       style={style}
       className={`flex items-center gap-3 p-3 rounded-2xl border transition-all select-none
         ${isDragging ? 'shadow-2xl ring-2 ring-[#ff0068]/40' : ''}
-        ${hasConflict
-          ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-300 dark:border-rose-500/40'
-          : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/8'}
+        ${isLive
+          ? 'bg-[#ff0068]/5 border-[#ff0068]/40'
+          : hasConflict
+            ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-300 dark:border-rose-500/40'
+            : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/8'}
       `}
     >
       {/* drag handle */}
@@ -187,9 +212,21 @@ const SortableRow: React.FC<SortableRowProps> = ({ reg, index, conflicts }) => {
       {/* main info */}
       <div className="flex-1 min-w-0 space-y-0.5">
         <div className="flex items-center gap-2 flex-wrap">
-          <h4 className="text-[11px] font-black uppercase tracking-tight truncate text-slate-900 dark:text-white">
+          <h4 className={`text-[11px] font-black uppercase tracking-tight truncate ${isLive ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>
             {reg.nome_coreografia}
           </h4>
+          {hasEntrada && (
+            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-violet-500/10 border border-violet-500/20 rounded-full shrink-0" title={`Entrada IA pronta (${Math.round(audioSet!.entrada!.duration_seconds)}s)`}>
+              <CheckCircle2 size={9} className="text-violet-500" />
+              <span className="text-[8px] font-black text-violet-600 dark:text-violet-400 uppercase">E</span>
+            </div>
+          )}
+          {saidaAtiva && hasSaida && (
+            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full shrink-0" title={`Saída IA pronta (${Math.round(audioSet!.saida!.duration_seconds)}s)`}>
+              <CheckCircle2 size={9} className="text-emerald-500" />
+              <span className="text-[8px] font-black text-emerald-600 dark:text-emerald-400 uppercase">S</span>
+            </div>
+          )}
           {hasConflict && (
             <div className="relative group/tip shrink-0">
               <div className="flex items-center gap-0.5 px-1.5 py-0.5 bg-rose-500 text-white rounded-full cursor-help">
@@ -250,13 +287,46 @@ const SortableRow: React.FC<SortableRowProps> = ({ reg, index, conflicts }) => {
           </div>
         )}
       </div>
+
+      {/* IA Narração / announce / Iniciar */}
+      <div className="flex items-center gap-1.5 shrink-0">
+        <button
+          onClick={() => onGenerateOne(reg)}
+          disabled={isGenerating || batchInProgress}
+          className="p-2 text-slate-400 hover:text-violet-500 hover:bg-violet-500/10 rounded-xl transition-all disabled:opacity-50"
+          title={fullyReady ? 'Regerar narração IA' : (saidaAtiva ? 'Gerar narrações IA (entrada + saída)' : 'Gerar narração IA')}
+        >
+          {isGenerating
+            ? <Loader2 size={14} className="animate-spin text-violet-500" />
+            : fullyReady ? <RefreshCw size={14} /> : <Sparkles size={14} />}
+        </button>
+        <button
+          onClick={() => onAnnounce(reg)}
+          className="p-2 text-slate-400 hover:text-[#ff0068] hover:bg-[#ff0068]/10 rounded-xl transition-all"
+          title="Anunciar com Narração IA"
+        >
+          <Volume2 size={14} />
+        </button>
+        <button
+          onClick={() => onPrepare(reg)}
+          disabled={updatingLive}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-50 ${
+            isLive
+              ? 'bg-[#ff0068] text-white shadow-lg shadow-[#ff0068]/20'
+              : 'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-400 hover:bg-[#ff0068]/10 hover:text-[#ff0068]'
+          }`}
+          title={isLive ? 'Apresentação ao vivo pra jurados' : 'Marcar como ao vivo (jurados verão essa apresentação como ativa)'}
+        >
+          {isLive ? <Radio size={11} /> : null}
+          {isLive ? 'Ao Vivo' : 'Iniciar'}
+        </button>
+      </div>
     </div>
   );
 };
 
 // ---------- main component ----------
 const Schedule = () => {
-  const navigate = useNavigate();
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -274,6 +344,17 @@ const Schedule = () => {
   /* Edition selector */
   const [allEvents, setAllEvents] = useState<{ id: string; name: string; edition_year?: number }[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+
+  /* Narração + player (absorvido da Mesa de Som — Etapa 1) */
+  const [config, setConfig] = useState<any>(null);
+  const [currentTrack, setCurrentTrack] = useState<Registration | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [updatingLive, setUpdatingLive] = useState(false);
+  const [audios, setAudios] = useState<AudioMap>({});
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
+  const narrationAudioRef = useRef<HTMLAudioElement | null>(null);
+  const saidaAtiva = !!config?.narracao_saida_ativa;
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -319,12 +400,222 @@ const Schedule = () => {
 
       if (cfg?.intervalo_seguranca) { setMinInterval(cfg.intervalo_seguranca); setIntervaloSeguranca(cfg.intervalo_seguranca); }
       if (cfg?.tempo_entrada) setTempoEntrada(cfg.tempo_entrada);
-      setRegistrations(regs || []);
+      if (cfg) setConfig(cfg);
+      const list = regs || [];
+      setRegistrations(list);
       setOrderChanged(false);
+
+      // Hidrata live + áudios pré-renderizados do evento
+      if (eventId) {
+        const { data: ev } = await supabase
+          .from('events')
+          .select('live_registration_id')
+          .eq('id', eventId)
+          .maybeSingle();
+        if (ev?.live_registration_id) {
+          const live = list.find((r: Registration) => r.id === ev.live_registration_id);
+          setCurrentTrack(live || null);
+        } else {
+          setCurrentTrack(null);
+        }
+        try {
+          const audioRows = await fetchNarrationAudios(eventId);
+          const map: AudioMap = {};
+          audioRows.forEach((a: any) => {
+            const kind: NarrationKind = a.kind === 'saida' ? 'saida' : 'entrada';
+            if (!map[a.registration_id]) map[a.registration_id] = {};
+            map[a.registration_id][kind] = { audio_url: a.audio_url, duration_seconds: a.duration_seconds };
+          });
+          setAudios(map);
+        } catch (e) {
+          console.warn('Falha ao carregar narrações pré-renderizadas:', e);
+        }
+      } else {
+        setAudios({});
+        setCurrentTrack(null);
+      }
     } catch (err) {
       console.error('Erro ao buscar cronograma:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // ---------- narração helpers (espelhando MesaDeSom) ----------
+  const buildNarrationText = (reg: Registration, kind: NarrationKind = 'entrada'): string => {
+    const fallback = kind === 'saida'
+      ? 'Uma salva de palmas para [ESTUDIO]!'
+      : 'Com a coreografia [COREOGRAFIA], recebam no palco: [ESTUDIO]';
+    const tplKey = kind === 'saida' ? 'texto_ia_saida' : 'texto_ia';
+    const template = (config?.[tplKey] ?? '').trim() || fallback;
+    let texto = template
+      .replaceAll('[COREOGRAFIA]', reg.nome_coreografia ?? '')
+      .replaceAll('[ESTUDIO]', reg.estudio ?? '');
+    const pronuncias: { termo: string; pronuncia: string }[] = Array.isArray(config?.pronuncia_personalizada)
+      ? config.pronuncia_personalizada
+      : [];
+    pronuncias.forEach(({ termo, pronuncia }) => {
+      if (termo && pronuncia) texto = texto.replaceAll(termo, pronuncia);
+    });
+    return texto;
+  };
+
+  const playNarration = (audio_url: string) => {
+    if (narrationAudioRef.current) {
+      narrationAudioRef.current.pause();
+      narrationAudioRef.current.src = '';
+    }
+    const audio = new Audio(audio_url);
+    narrationAudioRef.current = audio;
+    audio.addEventListener('play', () => setIsPlaying(true));
+    audio.addEventListener('pause', () => setIsPlaying(false));
+    audio.addEventListener('ended', () => setIsPlaying(false));
+    audio.play().catch(e => console.warn('Falha ao tocar narração:', e));
+  };
+
+  const handleAnnounce = (reg: Registration, kind: NarrationKind = 'entrada') => {
+    const pre = audios[reg.id]?.[kind];
+    if (pre?.audio_url) {
+      playNarration(pre.audio_url);
+      return;
+    }
+    if (!window.speechSynthesis) {
+      alert('Seu navegador não suporta a funcionalidade de narração.');
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const text = buildNarrationText(reg, kind);
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'pt-BR';
+    utterance.rate = 0.9;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const togglePlayPause = () => {
+    const a = narrationAudioRef.current;
+    if (a && a.src) {
+      if (a.paused) {
+        a.play().catch(e => console.warn('Falha ao retomar narração:', e));
+      } else {
+        a.pause();
+      }
+      return;
+    }
+    if (currentTrack) handleAnnounce(currentTrack);
+  };
+
+  const handlePrepare = async (reg: Registration) => {
+    setCurrentTrack(reg);
+    setIsPlaying(false);
+    handleAnnounce(reg);
+    if (!selectedEventId) return;
+    setUpdatingLive(true);
+    try {
+      const { error } = await supabase
+        .from('events')
+        .update({
+          live_registration_id: reg.id,
+          live_started_at: new Date().toISOString(),
+        })
+        .eq('id', selectedEventId);
+      if (error) console.warn('Falha ao marcar live no banco:', error.message);
+    } finally {
+      setUpdatingLive(false);
+    }
+  };
+
+  const handleEndLive = async () => {
+    const ending = currentTrack;
+    if (saidaAtiva && ending && audios[ending.id]?.saida) {
+      handleAnnounce(ending, 'saida');
+    } else {
+      if (narrationAudioRef.current) {
+        narrationAudioRef.current.pause();
+        narrationAudioRef.current.src = '';
+      }
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+    }
+    setCurrentTrack(null);
+    setIsPlaying(false);
+    if (!selectedEventId) return;
+    setUpdatingLive(true);
+    try {
+      const { error } = await supabase
+        .from('events')
+        .update({ live_registration_id: null, live_started_at: null })
+        .eq('id', selectedEventId);
+      if (error) console.warn('Falha ao encerrar live:', error.message);
+    } finally {
+      setUpdatingLive(false);
+    }
+  };
+
+  const handleGenerateAll = async () => {
+    if (!selectedEventId) { alert('Nenhum evento selecionado.'); return; }
+    if (registrations.length === 0) return;
+
+    const items: BatchItem[] = [];
+    registrations.forEach(reg => {
+      items.push({ registration_id: reg.id, text: buildNarrationText(reg, 'entrada'), kind: 'entrada' });
+      if (saidaAtiva) {
+        items.push({ registration_id: reg.id, text: buildNarrationText(reg, 'saida'), kind: 'saida' });
+      }
+    });
+
+    const totalChars = items.reduce((s, i) => s + i.text.length, 0);
+    const tipoMsg = saidaAtiva ? `${registrations.length} entradas + ${registrations.length} saídas` : `${registrations.length} narrações`;
+    if (!confirm(`Gerar ${tipoMsg} via IA (Gemini 2.5)?\n\nVoz: ${config?.voice_id || 'Charon (locutor masculino padrão)'}\nTotal: ~${Math.round(totalChars / 1000)}k caracteres.\n\nGratuito no plano free do Gemini (1M tokens/dia).`)) {
+      return;
+    }
+
+    setBatchProgress({ done: 0, total: items.length });
+    try {
+      const result = await generateNarrationBatch(selectedEventId, items, config?.voice_id);
+      const newMap: AudioMap = { ...audios };
+      result.results.forEach(r => {
+        if (r.ok && r.audio_url) {
+          const k: NarrationKind = r.kind === 'saida' ? 'saida' : 'entrada';
+          if (!newMap[r.registration_id]) newMap[r.registration_id] = {};
+          newMap[r.registration_id][k] = { audio_url: r.audio_url, duration_seconds: r.duration_seconds ?? 10 };
+        }
+      });
+      setAudios(newMap);
+      alert(`✓ ${result.success}/${result.total} narrações geradas. ${result.failed > 0 ? `${result.failed} falharam — verifique no console.` : ''}`);
+      if (result.failed > 0) console.warn('Falhas:', result.results.filter(r => !r.ok));
+    } catch (e: any) {
+      alert('Erro ao gerar narrações: ' + (e?.message ?? 'desconhecido'));
+    } finally {
+      setBatchProgress(null);
+    }
+  };
+
+  const handleGenerateOne = async (reg: Registration) => {
+    if (!selectedEventId) return;
+    setGeneratingId(reg.id);
+    try {
+      const kinds: NarrationKind[] = saidaAtiva ? ['entrada', 'saida'] : ['entrada'];
+      let lastError: string | null = null;
+      const updates: { kind: NarrationKind; url: string; dur: number }[] = [];
+      for (const kind of kinds) {
+        const text = buildNarrationText(reg, kind);
+        const result = await generateNarration(selectedEventId, reg.id, text, config?.voice_id, kind);
+        if (result.ok && result.audio_url) {
+          updates.push({ kind, url: result.audio_url, dur: result.duration_seconds ?? 10 });
+        } else {
+          lastError = result.error ?? 'desconhecido';
+        }
+      }
+      if (updates.length) {
+        setAudios(prev => {
+          const next = { ...prev };
+          if (!next[reg.id]) next[reg.id] = {};
+          updates.forEach(u => { next[reg.id][u.kind] = { audio_url: u.url, duration_seconds: u.dur }; });
+          return next;
+        });
+      }
+      if (lastError) alert('Falha ao gerar: ' + lastError);
+    } finally {
+      setGeneratingId(null);
     }
   };
 
@@ -522,14 +813,17 @@ const Schedule = () => {
             {isGenerating ? 'Gerando...' : 'Gerar Ordem Inteligente'}
           </button>
 
-          {/* Atalho pra IA de Narração — leva pra Mesa de Som onde os controles ficam */}
+          {/* IA de Narração — gerar todas em batch */}
           <button
-            onClick={() => navigate('/mesa-de-som')}
-            className="flex items-center gap-2 px-4 py-2 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 text-violet-600 dark:text-violet-400 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
-            title="Gerar narrações IA pra cada coreografia (vai pra Mesa de Som)"
+            onClick={handleGenerateAll}
+            disabled={!!batchProgress || registrations.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 text-violet-600 dark:text-violet-400 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
+            title="Gerar narrações IA pré-renderizadas pra todas as coreografias"
           >
-            <Sparkles size={12} />
-            Narrações IA
+            {batchProgress
+              ? <><Loader2 size={12} className="animate-spin" /> Gerando {batchProgress.done}/{batchProgress.total}...</>
+              : <><Sparkles size={12} /> Gerar narrações IA</>
+            }
           </button>
 
           {orderChanged && (
@@ -655,6 +949,61 @@ const Schedule = () => {
         ))}
       </div>
 
+      {/* ── Stage / Player ao vivo ── */}
+      <div className="bg-slate-900 rounded-[2rem] p-6 border border-white/10 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-[#ff0068]/10 blur-[80px] rounded-full -mr-32 -mt-32" />
+
+        <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
+          <div className="w-24 h-24 bg-[#ff0068]/20 rounded-3xl flex items-center justify-center text-[#ff0068] shadow-inner">
+            <Music size={40} className={isPlaying ? 'animate-bounce' : ''} />
+          </div>
+
+          <div className="flex-1 text-center md:text-left space-y-2">
+            <div className="flex items-center justify-center md:justify-start gap-2">
+              <div className={`w-2 h-2 rounded-full ${currentTrack ? 'bg-rose-500 animate-pulse' : 'bg-slate-600'}`} />
+              <span className={`text-[8px] font-black uppercase tracking-[0.3em] ${currentTrack ? 'text-rose-500' : 'text-slate-400'}`}>
+                {currentTrack ? 'AO VIVO PARA JURADOS' : 'AGUARDANDO COMANDO'}
+              </span>
+            </div>
+            <h2 className="text-2xl font-black uppercase tracking-tighter italic text-white">
+              {currentTrack?.nome_coreografia || 'Nenhuma selecionada'}
+            </h2>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+              {currentTrack?.estudio || 'Clique em "Iniciar" em uma coreografia abaixo'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => currentTrack && handleAnnounce(currentTrack)}
+              disabled={!currentTrack}
+              className="p-4 bg-white/5 text-white rounded-2xl hover:bg-white/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
+              title="Anunciar com Narração IA"
+            >
+              <Volume2 size={24} className="group-hover:text-[#ff0068] transition-colors" />
+            </button>
+            <button
+              onClick={togglePlayPause}
+              disabled={!currentTrack}
+              className="w-16 h-16 bg-[#ff0068] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-[#ff0068]/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title={isPlaying ? 'Pausar narração' : 'Tocar narração'}
+            >
+              {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" className="ml-1" />}
+            </button>
+            <button
+              onClick={handleEndLive}
+              disabled={!currentTrack || updatingLive}
+              className="p-4 bg-white/5 text-white rounded-2xl hover:bg-rose-500/20 hover:text-rose-400 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              title={saidaAtiva && currentTrack && audios[currentTrack.id]?.saida
+                ? 'Encerrar com narração de saída (toca antes de zerar live)'
+                : 'Encerrar transmissão (jurados pararão de ver AO VIVO)'}
+            >
+              <StopCircle size={24} />
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* ── Download progress bar ── */}
       {isDownloading && (
         <div className="space-y-1.5">
@@ -733,6 +1082,15 @@ const Schedule = () => {
                   reg={reg}
                   index={index}
                   conflicts={conflicts[reg.id] || []}
+                  audioSet={audios[reg.id]}
+                  saidaAtiva={saidaAtiva}
+                  isLive={currentTrack?.id === reg.id}
+                  isGenerating={generatingId === reg.id}
+                  batchInProgress={!!batchProgress}
+                  updatingLive={updatingLive}
+                  onGenerateOne={handleGenerateOne}
+                  onAnnounce={handleAnnounce}
+                  onPrepare={handlePrepare}
                 />
               ))}
             </div>
