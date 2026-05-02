@@ -229,17 +229,6 @@ const StageMarker = () => {
           <div className={`flex items-center gap-1 ${online ? 'text-emerald-400' : 'text-slate-500'}`}>
             {online ? <Wifi size={14} /> : <WifiOff size={14} />}
           </div>
-          {/* Botao "Buscar" — abre overlay com busca e navegacao nao-sequencial.
-              Antes era so um icone List discreto (size 14 + bg-white/5) que
-              passava despercebido. Agora tem icone de lupa + label visivel. */}
-          <button
-            onClick={() => setShowList(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#ff0068]/10 border border-[#ff0068]/30 text-[#ff0068] hover:bg-[#ff0068]/20 transition-all"
-            title="Buscar coreografia / pular para outra"
-          >
-            <Search size={12} />
-            <span className="text-[9px] font-black uppercase tracking-widest">Buscar</span>
-          </button>
           <button
             onClick={() => setShowSettings(s => !s)}
             className={`p-2 rounded-xl transition-all ${showSettings ? 'bg-white/20 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
@@ -249,124 +238,106 @@ const StageMarker = () => {
         </div>
       </div>
 
-      {/* Overlay: busca + lista navegavel de coreografias */}
-      <AnimatePresence>
-        {showList && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start justify-center p-4 sm:p-8"
-            onClick={() => setShowList(false)}
-          >
-            <motion.div
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 20, opacity: 0 }}
-              className="w-full max-w-2xl bg-slate-900 border border-white/10 rounded-3xl overflow-hidden flex flex-col max-h-[85vh]"
-              onClick={e => e.stopPropagation()}
+      {/* Barra de busca inline — estilo Registrations (visivel sempre).
+          Foco/typing abre dropdown com lista filtrada de coreografias. */}
+      <div className="px-5 mb-3 relative">
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            onFocus={() => setShowList(true)}
+            onBlur={() => {
+              // Atraso pra permitir click registrar antes do dropdown sumir
+              setTimeout(() => setShowList(false), 150);
+            }}
+            placeholder="Buscar coreografia ou estúdio..."
+            className="w-full pl-12 pr-12 py-3 bg-white/5 border border-white/10 rounded-2xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-[#ff0068]/50 transition-colors"
+          />
+          {searchTerm && (
+            <button
+              onMouseDown={(e) => e.preventDefault()} // evita blur antes do click
+              onClick={() => setSearchTerm('')}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+              title="Limpar busca"
             >
-              {/* Header do overlay */}
-              <div className="flex items-center gap-2 p-4 border-b border-white/10">
-                <Search size={16} className="text-slate-400 shrink-0" />
-                <input
-                  type="text"
-                  placeholder="Buscar por coreografia ou estúdio..."
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  autoFocus
-                  className="flex-1 bg-transparent border-0 text-white placeholder:text-slate-500 focus:outline-none text-sm"
-                />
-                <button
-                  onClick={() => setShowList(false)}
-                  className="p-1 rounded-lg hover:bg-white/10 text-slate-400 transition-colors"
-                >
-                  <X size={16} />
-                </button>
-              </div>
+              <X size={16} />
+            </button>
+          )}
+        </div>
 
-              {/* Lista filtrada */}
+        {/* Dropdown de resultados — aparece em focus ou typing */}
+        {showList && (() => {
+          const filtered = presentations.filter(p =>
+            !searchTerm ||
+            p.nome_coreografia?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.estudio?.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+          return (
+            <div className="absolute z-30 left-5 right-5 mt-2 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[60vh]">
               <div className="overflow-y-auto divide-y divide-white/5">
-                {presentations
-                  .filter(p =>
-                    !searchTerm ||
-                    p.nome_coreografia?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    p.estudio?.toLowerCase().includes(searchTerm.toLowerCase())
-                  )
-                  .map((p) => {
-                    const realIdx = presentations.findIndex(x => x.id === p.id);
-                    const isCurrent = realIdx === currentIndex;
-                    const isMarked  = realIdx < currentIndex;
-                    return (
-                      <button
-                        key={p.id}
-                        onClick={() => {
-                          setCurrentIndex(realIdx);
-                          setShowList(false);
-                          setSearchTerm('');
-                          // reset state machine pra nova apresentacao
-                          setState('WAITING');
-                          setRemaining(totalTime);
-                          setElapsed(0);
-                          setStartedAt(null);
-                          stopInterval();
-                        }}
-                        className={`w-full flex items-center gap-3 p-3 text-left transition-colors ${
-                          isCurrent
-                            ? 'bg-[#ff0068]/10 hover:bg-[#ff0068]/15'
-                            : 'hover:bg-white/5'
-                        }`}
-                      >
-                        {/* Status badge */}
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
-                          isMarked  ? 'bg-emerald-500/20 text-emerald-400' :
-                          isCurrent ? 'bg-[#ff0068] text-white animate-pulse' :
-                          'bg-white/5 text-slate-500 border border-white/10'
-                        }`}>
-                          {isMarked ? <CheckCircle2 size={12} /> : realIdx + 1}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-xs font-black uppercase tracking-tight truncate ${isCurrent ? 'text-[#ff0068]' : 'text-white'}`}>
-                            {p.nome_coreografia}
-                          </p>
-                          <p className="text-[9px] text-slate-400 uppercase tracking-widest truncate">
-                            {p.estudio} · {p.estilo_danca} · {p.categoria}
-                          </p>
-                        </div>
-                        {isMarked && (
-                          <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400 shrink-0">
-                            Marcada
-                          </span>
-                        )}
-                        {isCurrent && (
-                          <span className="text-[8px] font-black uppercase tracking-widest text-[#ff0068] shrink-0">
-                            Atual
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                {presentations.filter(p =>
-                  !searchTerm ||
-                  p.nome_coreografia?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                  p.estudio?.toLowerCase().includes(searchTerm.toLowerCase())
-                ).length === 0 && (
-                  <div className="p-12 text-center">
+                {filtered.map((p) => {
+                  const realIdx = presentations.findIndex(x => x.id === p.id);
+                  const isCurrent = realIdx === currentIndex;
+                  const isMarked  = realIdx < currentIndex;
+                  return (
+                    <button
+                      key={p.id}
+                      onMouseDown={(e) => e.preventDefault()} // evita blur fechar antes do click
+                      onClick={() => {
+                        setCurrentIndex(realIdx);
+                        setSearchTerm('');
+                        setShowList(false);
+                        setState('WAITING');
+                        setRemaining(totalTime);
+                        setElapsed(0);
+                        setStartedAt(null);
+                        stopInterval();
+                      }}
+                      className={`w-full flex items-center gap-3 p-3 text-left transition-colors ${
+                        isCurrent ? 'bg-[#ff0068]/10 hover:bg-[#ff0068]/15' : 'hover:bg-white/5'
+                      }`}
+                    >
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
+                        isMarked  ? 'bg-emerald-500/20 text-emerald-400' :
+                        isCurrent ? 'bg-[#ff0068] text-white animate-pulse' :
+                        'bg-white/5 text-slate-500 border border-white/10'
+                      }`}>
+                        {isMarked ? <CheckCircle2 size={12} /> : realIdx + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-xs font-black uppercase tracking-tight truncate ${isCurrent ? 'text-[#ff0068]' : 'text-white'}`}>
+                          {p.nome_coreografia}
+                        </p>
+                        <p className="text-[9px] text-slate-400 uppercase tracking-widest truncate">
+                          {p.estudio} · {p.estilo_danca} · {p.categoria}
+                        </p>
+                      </div>
+                      {isMarked && (
+                        <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400 shrink-0">Marcada</span>
+                      )}
+                      {isCurrent && (
+                        <span className="text-[8px] font-black uppercase tracking-widest text-[#ff0068] shrink-0">Atual</span>
+                      )}
+                    </button>
+                  );
+                })}
+                {filtered.length === 0 && (
+                  <div className="p-8 text-center">
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
                       Nenhuma coreografia encontrada
                     </p>
                   </div>
                 )}
               </div>
-
-              {/* Rodape: contador */}
-              <div className="px-4 py-2 border-t border-white/10 bg-white/[0.02] text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+              <div className="px-4 py-2 border-t border-white/10 bg-white/[0.02] text-[9px] font-bold text-slate-400 uppercase tracking-widest shrink-0">
                 {currentIndex} marcadas · {presentations.length - currentIndex - 1} pendentes · {presentations.length} total
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </div>
+          );
+        })()}
+      </div>
 
       {/* Settings panel */}
       {showSettings && (
