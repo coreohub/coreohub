@@ -256,7 +256,6 @@ Deno.serve(async (req) => {
       description: 'Evento de demonstração do CoreoHub. Os dados aqui são fictícios e servem apenas para você explorar todas as features sem afetar dados reais.',
       start_date: startDate.toISOString().split('T')[0],
       end_date: endDate.toISOString().split('T')[0],
-      registration_deadline: regDeadline.toISOString().split('T')[0],
       city: 'São Paulo',
       state: 'SP',
       is_demo: true,
@@ -300,6 +299,9 @@ Deno.serve(async (req) => {
       formatos,
       texto_ia: 'Com a coreografia [COREOGRAFIA], recebam no palco: [ESTUDIO]',
       pin_inactivity_minutes: 5,
+      // Prazo de inscricao mora em configuracoes (NAO em events.registration_deadline)
+      prazo_inscricao: regDeadline.toISOString().split('T')[0],
+      data_evento: startDate.toISOString().split('T')[0],
     }])
 
     // Espelha formacoes_config em events (algumas telas leem dali)
