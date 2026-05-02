@@ -227,9 +227,17 @@ Deno.serve(async (req) => {
     return json({ ok: true, has_demo: !!existing, demo: existing ?? null })
   }
 
+  // PINs sentinela: judges nao tem coluna is_demo, entao identifica pelo PIN
+  const DEMO_JUDGE_PINS = ['1111', '2222', '3333']
+
   // ─── action: delete ────────────────────────────────────────────────────
   if (action === 'delete') {
     // CASCADE em events vai pegar registrations, configuracoes, etc
+    // Mas judges nao tem event_id, entao deleta pelos PINs sentinela
+    await supa.from('judges')
+      .delete()
+      .eq('created_by', user.id)
+      .in('pin', DEMO_JUDGE_PINS)
     const { error } = await supa
       .from('events')
       .delete()
@@ -241,7 +249,11 @@ Deno.serve(async (req) => {
 
   // ─── action: create ────────────────────────────────────────────────────
   if (action === 'create') {
-    // 1) Deleta demo anterior se houver (regerar)
+    // 1) Deleta demo anterior se houver (regerar) — judges + event
+    await supa.from('judges')
+      .delete()
+      .eq('created_by', user.id)
+      .in('pin', DEMO_JUDGE_PINS)
     await supa.from('events').delete().eq('created_by', user.id).eq('is_demo', true)
 
     // 2) INSERT em events

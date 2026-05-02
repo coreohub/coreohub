@@ -44,11 +44,16 @@ const MesaDeSom = () => {
 
       if (ev?.id) setEventId(ev.id);
 
-      const { data, error } = await supabase
-        .from('registrations')
-        .select('*')
-        .eq('status', 'APROVADA')
-        .order('ordem_apresentacao', { ascending: true });
+      // Filtra por event_id pra mostrar so coreografias do evento ativo
+      // (sem isso, mistura inscricoes do demo + eventos reais)
+      const { data, error } = ev?.id
+        ? await supabase
+            .from('registrations')
+            .select('*')
+            .eq('event_id', ev.id)
+            .eq('status', 'APROVADA')
+            .order('ordem_apresentacao', { ascending: true })
+        : { data: [], error: null };
 
       if (error) throw error;
       const regs = data || [];

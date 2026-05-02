@@ -12,7 +12,7 @@ import {
 
 const ROLE_LABEL: Record<string, string> = {
   COORDENADOR: 'Coordenador',
-  MESARIO:     'Mesário',
+  MESARIO:     'Coordenador do Júri',
   SONOPLASTA:  'Sonoplasta',
   RECEPCAO:    'Recepção / Palco',
   PALCO:       'Marcador de Palco',

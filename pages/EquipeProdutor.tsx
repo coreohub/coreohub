@@ -25,8 +25,8 @@ const EQUIPE_ROLES: {
     preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: true, credenciamento: true, marcacao_palco: true, suporte_juri: true, inscricoes_leitura: true, triagem: true },
   },
   {
-    value: UserRole.MESARIO, label: 'Mesário',
-    desc: 'Suporte à banca: verifica terminais e controla presença dos jurados.',
+    value: UserRole.MESARIO, label: 'Coordenador do Júri',
+    desc: 'Suporte à banca: verifica terminais e controla presença dos jurados. Lidera deliberação.',
     icon: Headphones, color: 'text-blue-500 bg-blue-500/10 border-blue-500/20',
     preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: false, marcacao_palco: false, suporte_juri: true, inscricoes_leitura: false, triagem: false },
   },
