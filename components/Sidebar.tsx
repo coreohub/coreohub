@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, Calendar,
   Music, Gavel, QrCode,
   LogOut, Award, UserCircle,
-  Ticket, Tv, Trophy,
+  Ticket, Trophy,
   BarChart2, UserCheck,
   ClipboardList, ShieldCheck, Mic2, Settings,
   Clapperboard, UserRound, Music2,
@@ -103,14 +103,16 @@ const menuSections: MenuSection[] = [
     items: [
       // Coordenador — acesso amplo
       { path: '/check-in',        label: 'Credenciamento',          icon: QrCode,          roles: [UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
-      { path: '/manage-schedule', label: 'Cronograma',              icon: Calendar,        roles: [UserRole.COORDENADOR, UserRole.MESARIO, UserRole.SONOPLASTA, UserRole.RECEPCAO, UserRole.PALCO, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
+      // Cronograma: ORGANIZER ja ve em "Sonoplastia e Cronograma" na secao Produtor — evita duplicar
+      { path: '/manage-schedule', label: 'Cronograma',              icon: Calendar,        roles: [UserRole.COORDENADOR, UserRole.MESARIO, UserRole.SONOPLASTA, UserRole.RECEPCAO, UserRole.PALCO, UserRole.STAFF, UserRole.COREOHUB_ADMIN] },
       // Credenciamento
       { path: '/check-in',        label: 'Credenciamento',          icon: QrCode,          roles: [UserRole.RECEPCAO] },
       // Marcacao de Palco
       { path: '/marcacao-palco',  label: 'Marcacao de Palco',       icon: PersonStanding,  roles: [UserRole.PALCO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
       // Coordenador do Juri — acompanhamento de jurados + deliberacao
       { path: '/suporte-juri',    label: 'Coordenador do Juri',     icon: Headphones,      roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
-      { path: '/deliberacoes',    label: 'Deliberacao',             icon: Trophy,          roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
+      // Deliberacao: ORGANIZER ja ve na secao Produtor — evita duplicar
+      { path: '/deliberacoes',    label: 'Deliberacao',             icon: Trophy,          roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.COREOHUB_ADMIN] },
     ],
   },
   {
