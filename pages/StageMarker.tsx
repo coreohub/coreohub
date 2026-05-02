@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, CheckCircle2, RotateCcw, AlertTriangle, Clock, Users, Music, ChevronRight, Wifi, WifiOff, Settings2, Save, Loader2, Search, X, List } from 'lucide-react';
+import { Play, CheckCircle2, RotateCcw, AlertTriangle, Clock, Users, Music, ChevronRight, Wifi, WifiOff, Settings2, Save, Loader2, Search, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
 
@@ -229,13 +229,16 @@ const StageMarker = () => {
           <div className={`flex items-center gap-1 ${online ? 'text-emerald-400' : 'text-slate-500'}`}>
             {online ? <Wifi size={14} /> : <WifiOff size={14} />}
           </div>
-          {/* Botao "Lista" — abre overlay com busca e navegacao nao-sequencial */}
+          {/* Botao "Buscar" — abre overlay com busca e navegacao nao-sequencial.
+              Antes era so um icone List discreto (size 14 + bg-white/5) que
+              passava despercebido. Agora tem icone de lupa + label visivel. */}
           <button
             onClick={() => setShowList(true)}
-            className="p-2 rounded-xl bg-white/5 text-slate-400 hover:bg-white/10 transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#ff0068]/10 border border-[#ff0068]/30 text-[#ff0068] hover:bg-[#ff0068]/20 transition-all"
             title="Buscar coreografia / pular para outra"
           >
-            <List size={14} />
+            <Search size={12} />
+            <span className="text-[9px] font-black uppercase tracking-widest">Buscar</span>
           </button>
           <button
             onClick={() => setShowSettings(s => !s)}
