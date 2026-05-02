@@ -262,7 +262,7 @@ Deno.serve(async (req) => {
       is_demo: true,
       is_public: false,
       created_by: user.id,
-      score_scale: 'BASE_10',
+      score_scale: 10, // INT (10 ou 100), NAO 'BASE_10'
       slug: `demo-${user.id.slice(0, 8)}`,
     }]).select('id').single()
 
@@ -270,18 +270,20 @@ Deno.serve(async (req) => {
     const eventId = ev.id as string
 
     // 3) configuracoes — critérios, prêmios, etc
-    const styles_config = [...new Set(COREOGRAFIAS.map(c => c.estilo))].map(estilo => ({
+    // Schema real: usa nomes 'estilos', 'formatos', 'categorias' (sem _config).
+    // configuracoes.id eh TEXT (nao UUID), entao convertemos.
+    const estilos = [...new Set(COREOGRAFIAS.map(c => c.estilo))].map(estilo => ({
       name: estilo,
       criterios: CRITERIOS_PADRAO,
     }))
 
-    const categories_config = CATEGORIAS.map((nome, i) => ({
+    const categorias = CATEGORIAS.map((nome, i) => ({
       name: nome,
       min: i === 0 ? 5 : i === 1 ? 12 : i === 2 ? 18 : 30,
       max: i === 0 ? 11 : i === 1 ? 17 : i === 2 ? 29 : null,
     }))
 
-    const formacoes_config = FORMACOES.map(f => ({
+    const formatos = FORMACOES.map(f => ({
       name: f,
       pricingType: f === 'Solo' ? 'FIXED' : 'PER_MEMBER',
       minMembers: formacaoSize(f) === 1 ? 1 : (f === 'Duo' ? 2 : f === 'Trio' ? 3 : 5),
@@ -293,12 +295,15 @@ Deno.serve(async (req) => {
       event_id: eventId,
       escala_notas: 'BASE_10',
       premios_especiais: PREMIOS_ESPECIAIS,
-      styles_config,
-      categories_config,
-      formacoes_config,
+      estilos,
+      categorias,
+      formatos,
       texto_ia: 'Com a coreografia [COREOGRAFIA], recebam no palco: [ESTUDIO]',
       pin_inactivity_minutes: 5,
     }])
+
+    // Espelha formacoes_config em events (algumas telas leem dali)
+    await supa.from('events').update({ formacoes_config: formatos }).eq('id', eventId)
 
     // 4) Inserir 3 jurados (com PINs e is_active)
     const judgesToInsert = JURADOS.map(j => ({
@@ -312,44 +317,48 @@ Deno.serve(async (req) => {
     await supa.from('judges').insert(judgesToInsert)
 
     // 5) Distribuir 50 coreografias (status + pagamento aleatórios conforme spec)
+    // Schema real corrigido:
+    //   - formato_participacao (nao formacao)
+    //   - bailarinos_detalhes (nao elenco)
+    //   - valor_pago (nao preco)
+    //   - status: PENDENTE | APROVADA | DESCLASSIFICADA (nao CANCELADA)
+    //   - cidade/uf NAO existem em registrations (so em events)
     const totalRegs = 50
     const registrationsToInsert: any[] = []
     for (let i = 0; i < totalRegs; i++) {
       const coreo = COREOGRAFIAS[i % COREOGRAFIAS.length]
-      const formacao = pick(FORMACOES)
+      const formato = pick(FORMACOES)
       const estudio  = pick(ESTUDIOS)
       const categoria = pick(CATEGORIAS)
-      const numBailarinos = formacaoSize(formacao)
-      const elenco = Array.from({ length: numBailarinos }, () => ({
+      const numBailarinos = formacaoSize(formato)
+      const bailarinos_detalhes = Array.from({ length: numBailarinos }, () => ({
         full_name: randomNomeCompleto(),
         cpf: `${Math.floor(Math.random() * 1e11)}`.padStart(11, '0'),
       }))
 
-      // 90% APROVADA, 5% PENDENTE, 5% CANCELADA
+      // 90% APROVADA, 5% PENDENTE, 5% DESCLASSIFICADA
       const r = Math.random()
-      const status = r < 0.9 ? 'APROVADA' : r < 0.95 ? 'PENDENTE' : 'CANCELADA'
+      const status = r < 0.9 ? 'APROVADA' : r < 0.95 ? 'PENDENTE' : 'DESCLASSIFICADA'
 
-      // 90% pagas (status_pagamento = CONFIRMADO), 10% PENDENTE (independente do status)
+      // 90% CONFIRMADO, 10% PENDENTE
       const status_pagamento = Math.random() < 0.9 ? 'CONFIRMADO' : 'PENDENTE'
 
-      const preco = formacao === 'Solo' ? 80 : formacao === 'Duo' ? 120 : formacao === 'Trio' ? 150 : 200
+      const valor_pago = formato === 'Solo' ? 80 : formato === 'Duo' ? 120 : formato === 'Trio' ? 150 : 200
 
       registrationsToInsert.push({
         event_id: eventId,
         nome_coreografia: coreo.nome,
         estilo_danca: coreo.estilo,
         categoria,
-        formacao,
+        formato_participacao: formato,
         tipo_apresentacao: 'Competitiva',
         estudio: estudio.nome,
-        cidade: estudio.cidade,
-        uf: estudio.uf,
-        elenco,
+        bailarinos_detalhes,
+        num_participantes: numBailarinos,
         status,
         status_pagamento,
-        preco,
+        valor_pago,
         ordem_apresentacao: i + 1,
-        created_by: user.id,
       })
     }
 
