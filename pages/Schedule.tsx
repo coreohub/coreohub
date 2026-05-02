@@ -505,11 +505,27 @@ const Schedule = () => {
     return texto;
   };
 
-  const playNarration = (audio_url: string) => {
+  // Para qualquer audio rolando: <Audio> ref + Web Speech.
+  // Indispensavel chamar antes de iniciar uma nova faixa pra nao misturar
+  // (rows sem audio pre-renderizado caem no Web Speech, que continua falando
+  // mesmo quando outra row pre-renderizada comeca a tocar).
+  const stopAnyAudio = () => {
     if (narrationAudioRef.current) {
       narrationAudioRef.current.pause();
       narrationAudioRef.current.src = '';
+      narrationAudioRef.current = null;
     }
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    setIsPlaying(false);
+  };
+
+  // Ao desmontar a pagina, garantir que nada continua tocando no background
+  useEffect(() => () => stopAnyAudio(), []);
+
+  const playNarration = (audio_url: string) => {
+    stopAnyAudio();
     const audio = new Audio(audio_url);
     narrationAudioRef.current = audio;
     audio.addEventListener('play', () => setIsPlaying(true));
@@ -528,7 +544,7 @@ const Schedule = () => {
       alert('Seu navegador não suporta a funcionalidade de narração.');
       return;
     }
-    window.speechSynthesis.cancel();
+    stopAnyAudio();
     const text = buildNarrationText(reg, kind);
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'pt-BR';
@@ -574,11 +590,7 @@ const Schedule = () => {
     if (saidaAtiva && ending && audios[ending.id]?.saida) {
       handleAnnounce(ending, 'saida');
     } else {
-      if (narrationAudioRef.current) {
-        narrationAudioRef.current.pause();
-        narrationAudioRef.current.src = '';
-      }
-      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      stopAnyAudio();
     }
     setCurrentTrack(null);
     setIsPlaying(false);
@@ -599,17 +611,39 @@ const Schedule = () => {
     if (!selectedEventId) { alert('Nenhum evento selecionado.'); return; }
     if (registrations.length === 0) return;
 
+    // Pula audios que ja existem com a voz atual — economiza quota Gemini
+    // e tempo do produtor (regerar 90 quando 14 ja estao prontas era desperdicio).
+    const usedVoice = config?.voice_id || 'Charon';
     const items: BatchItem[] = [];
+    let entradasNovas = 0, saidasNovas = 0, entradasPuladas = 0, saidasPuladas = 0;
     registrations.forEach(reg => {
-      items.push({ registration_id: reg.id, text: buildNarrationText(reg, 'entrada'), kind: 'entrada' });
+      const set = audios[reg.id];
+      const entradaOk = !!set?.entrada && set.entrada.voice_id === usedVoice;
+      if (!entradaOk) {
+        items.push({ registration_id: reg.id, text: buildNarrationText(reg, 'entrada'), kind: 'entrada' });
+        entradasNovas++;
+      } else entradasPuladas++;
       if (saidaAtiva) {
-        items.push({ registration_id: reg.id, text: buildNarrationText(reg, 'saida'), kind: 'saida' });
+        const saidaOk = !!set?.saida && set.saida.voice_id === usedVoice;
+        if (!saidaOk) {
+          items.push({ registration_id: reg.id, text: buildNarrationText(reg, 'saida'), kind: 'saida' });
+          saidasNovas++;
+        } else saidasPuladas++;
       }
     });
 
-    const totalChars = items.reduce((s, i) => s + i.text.length, 0);
-    const tipoMsg = saidaAtiva ? `${registrations.length} entradas + ${registrations.length} saídas` : `${registrations.length} narrações`;
-    if (!confirm(`Gerar ${tipoMsg} via IA (Gemini 2.5)?\n\nVoz: ${config?.voice_id || 'Charon (locutor masculino padrão)'}\nTotal: ~${Math.round(totalChars / 1000)}k caracteres.\n\nGratuito no plano free do Gemini (1M tokens/dia).`)) {
+    if (items.length === 0) {
+      alert('Todas as narrações já estão prontas com a voz atual.');
+      return;
+    }
+
+    const partes: string[] = [];
+    if (entradasNovas > 0) partes.push(`${entradasNovas} ${entradasNovas === 1 ? 'entrada' : 'entradas'}`);
+    if (saidasNovas > 0) partes.push(`${saidasNovas} ${saidasNovas === 1 ? 'saída' : 'saídas'}`);
+    const tipoMsg = partes.join(' + ');
+    const puladas = entradasPuladas + saidasPuladas;
+    const linhaPuladas = puladas > 0 ? `\n${puladas} já ${puladas === 1 ? 'pronta' : 'prontas'} — pulando.` : '';
+    if (!confirm(`Gerar ${tipoMsg}?\n\nVoz: ${usedVoice}${linhaPuladas}`)) {
       return;
     }
 
