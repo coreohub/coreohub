@@ -8,7 +8,7 @@ import {
   AlertCircle, Loader2, Users, User, CheckCircle,
   AlertTriangle, Info, Clapperboard, Pencil,
   Calendar, MapPin, Lock, ShieldAlert, Clock,
-  CreditCard, Star,
+  CreditCard, Star, QrCode,
 } from 'lucide-react';
 
 /* ══════════════════════════════════════════════════════════════
@@ -691,6 +691,10 @@ const MinhasCoreografias = () => {
                         <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${st.bg} ${st.text}`}>
                           {st.label}
                         </span>
+                        <button onClick={() => navigate(`/credencial/${c.id}`)}
+                          className="p-1.5 rounded-lg hover:bg-[#ff0068]/10 text-slate-400 hover:text-[#ff0068] transition-all" title="Minha credencial (QR)">
+                          <QrCode size={12} />
+                        </button>
                         <button onClick={() => openEdit(c)}
                           className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-all" title="Editar">
                           <Pencil size={12} />

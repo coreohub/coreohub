@@ -377,6 +377,7 @@ Deno.serve(async (req) => {
               eventoData,
               valorPago: grossAmount,
               appUrl,
+              registrationId,
             })
           )
         } else {

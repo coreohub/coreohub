@@ -128,6 +128,8 @@ interface RegistrantPayload {
   appUrl?: string
   /** Email do produtor — vira reply-to do email transacional */
   produtorEmail?: string
+  /** ID da registration (UUID). Usado pra montar link da credencial digital. */
+  registrationId?: string
 }
 
 function buildRegistrantConfirmation(p: RegistrantPayload) {
@@ -142,8 +144,35 @@ function buildRegistrantConfirmation(p: RegistrantPayload) {
     .filter(Boolean)
     .join('')
 
+  // Credencial digital (Backlog QR Etapa 3): bloco destacado com link pra
+  // /credencial/<id> + codigo manual de fallback (ultimos 6 chars do UUID).
+  // Sem QR inline no email — clientes de email frequentemente bloqueiam imagens
+  // por padrao, e gerar QR no backend Deno requer dep extra. Link funciona em
+  // todos clientes; usuario abre no navegador e ve o QR completo.
+  let credencialBlock = ''
+  if (p.registrationId) {
+    const credencialUrl = `${p.appUrl ?? 'https://coreohub.com'}/credencial/${p.registrationId}`
+    const fallbackCode = p.registrationId.replace(/-/g, '').slice(-6).toUpperCase()
+    credencialBlock = `
+      <div style="margin-top:24px;padding:20px;border:2px solid #ff0068;border-radius:16px;background:#fff5f8;">
+        <p style="margin:0 0 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#ff0068;">Sua credencial digital</p>
+        <p style="margin:0 0 12px;font-size:13px;line-height:1.5;color:#475569;">
+          Apresente o QR no credenciamento do evento. Acesse pelo celular pra exibir a tela com o código.
+        </p>
+        <a href="${credencialUrl}" style="display:inline-block;padding:12px 24px;background:#ff0068;color:#fff;text-decoration:none;border-radius:12px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;">
+          Acessar credencial →
+        </a>
+        <p style="margin:16px 0 0;font-size:11px;color:#64748b;">
+          Código manual (caso o QR não funcione):
+          <br>
+          <span style="display:inline-block;margin-top:6px;padding:6px 12px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;font-family:monospace;font-size:18px;font-weight:700;letter-spacing:6px;color:#0f172a;">${fallbackCode}</span>
+        </p>
+      </div>`
+  }
+
   const contentHtml = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>
+    ${credencialBlock}
     <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#475569;">
       Guarde este email como comprovante. Informações sobre horários, ordem de apresentação
       e orientações finais serão enviadas pelo produtor do evento à medida que a programação for definida.
@@ -158,7 +187,7 @@ function buildRegistrantConfirmation(p: RegistrantPayload) {
       title: 'Inscrição confirmada!',
       intro: `Olá ${escape(p.inscritoNome ?? 'bailarino(a)')}, recebemos seu pagamento e sua inscrição foi <strong>aprovada</strong>. Bora dançar!`,
       contentHtml,
-      ctaLabel: 'Ver minhas inscrições',
+      ctaLabel: p.registrationId ? 'Ver minhas inscrições' : 'Ver minhas inscrições',
       ctaUrl: `${p.appUrl ?? 'https://coreohub.com'}/minhas-coreografias`,
     }),
   }

@@ -52,6 +52,7 @@ const BattleConfig             = lazy(() => import('./pages/BattleConfig'));
 const BattleArenaLive          = lazy(() => import('./pages/BattleArenaLive'));
 const ResultsPanel             = lazy(() => import('./pages/ResultsPanel'));
 const MyResults                = lazy(() => import('./pages/MyResults'));
+const Credencial               = lazy(() => import('./pages/Credencial'));
 const MesaDeSom                = lazy(() => import('./pages/MesaDeSom'));
 const TracksManagement         = lazy(() => import('./pages/TracksManagement'));
 const Ingressos                = lazy(() => import('./pages/Ingressos'));
@@ -349,6 +350,7 @@ const App: React.FC = () => {
         <Route path="/central-de-midia" element={<PrivateRoute {...privateRouteProps}><CentralDeMidia /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute {...privateRouteProps}><Profile /></PrivateRoute>} />
         <Route path="/meus-resultados" element={<PrivateRoute {...privateRouteProps}><MyResults activeRole={activeRole!} /></PrivateRoute>} />
+        <Route path="/credencial/:registrationId" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><Credencial /></Suspense></PrivateRoute>} />
 
         <Route path="/qg-organizador" element={<PrivateRoute {...privateRouteProps}><ProducerDashboard profile={profile!} /></PrivateRoute>} />
         <Route path="/registrations" element={<PrivateRoute {...privateRouteProps}><Registrations /></PrivateRoute>} />

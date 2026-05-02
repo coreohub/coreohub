@@ -263,6 +263,7 @@ Deno.serve(async (req) => {
             valorPago:     grossAmount,
             appUrl,
             produtorEmail: produtorProfile?.email,
+            registrationId: registrationId,
           }))
         }
 
