@@ -43,8 +43,12 @@ function buildConflictMap(
   const conflictMap: Record<string, { dancerName: string; otherIndex: number }[]> = {};
   const dancerPositions: Record<string, number[]> = {};
 
+  // Helper local: fallback elenco -> bailarinos_detalhes
+  const elencoOf = (reg: any): any[] =>
+    (reg.elenco && reg.elenco.length > 0) ? reg.elenco : (reg.bailarinos_detalhes || []);
+
   registrations.forEach((reg, index) => {
-    (reg.elenco || []).forEach((dancer) => {
+    elencoOf(reg).forEach((dancer: any) => {
       const id = dancer.cpf || dancer.full_name || dancer.name;
       if (!id) return;
       if (!dancerPositions[id]) dancerPositions[id] = [];
@@ -60,9 +64,10 @@ function buildConflictMap(
       if (nxt - cur < minInterval) {
         const r1 = registrations[cur];
         const r2 = registrations[nxt];
+        const r1Elenco = elencoOf(r1);
         const dancerName =
-          r1.elenco?.find((d) => (d.cpf || d.full_name || d.name) === dancerId)?.full_name ||
-          r1.elenco?.find((d) => (d.cpf || d.full_name || d.name) === dancerId)?.name ||
+          r1Elenco.find((d: any) => (d.cpf || d.full_name || d.name) === dancerId)?.full_name ||
+          r1Elenco.find((d: any) => (d.cpf || d.full_name || d.name) === dancerId)?.name ||
           dancerId;
 
         if (!conflictMap[r1.id]) conflictMap[r1.id] = [];
@@ -78,13 +83,21 @@ function buildConflictMap(
 }
 
 // ---------- smart scheduler ----------
+// Fallback: algumas registrations usam `elenco`, outras `bailarinos_detalhes`
+// (depende de quando foi cadastrada). Sempre tentar os 2.
+const getElenco = (reg: any): any[] => {
+  return (reg.elenco && reg.elenco.length > 0)
+    ? reg.elenco
+    : (reg.bailarinos_detalhes || []);
+};
+
 function generateSmartOrder(registrations: Registration[], minInterval: number): Registration[] {
   const result: Registration[] = [];
   const remaining = [...registrations];
   const lastSeenPosition: Record<string, number> = {};
 
   while (remaining.length > 0) {
-    let bestIdx = -1;
+    let bestIdx = 0; // default 0 — se ninguem tem conflito, pega primeiro
     let bestConflicts = Infinity;
 
     for (let i = 0; i < remaining.length; i++) {
@@ -92,7 +105,7 @@ function generateSmartOrder(registrations: Registration[], minInterval: number):
       const position = result.length;
       let conflicts = 0;
 
-      (reg.elenco || []).forEach((dancer) => {
+      getElenco(reg).forEach((dancer: any) => {
         const id = dancer.cpf || dancer.full_name || dancer.name;
         if (!id) return;
         const last = lastSeenPosition[id];
@@ -108,10 +121,10 @@ function generateSmartOrder(registrations: Registration[], minInterval: number):
       }
     }
 
-    const chosen = remaining.splice(bestIdx, 0)[bestIdx];
-    remaining.splice(bestIdx, 1);
+    // BUG fix: splice(idx, 0) retorna []; correto eh splice(idx, 1)[0]
+    const chosen = remaining.splice(bestIdx, 1)[0];
 
-    (chosen.elenco || []).forEach((dancer) => {
+    getElenco(chosen).forEach((dancer: any) => {
       const id = dancer.cpf || dancer.full_name || dancer.name;
       if (id) lastSeenPosition[id] = result.length;
     });
@@ -210,13 +223,17 @@ const SortableRow: React.FC<SortableRowProps> = ({ reg, index, conflicts }) => {
         </div>
       </div>
 
-      {/* elenco count */}
-      {reg.elenco && reg.elenco.length > 0 && (
-        <div className="flex items-center gap-1 shrink-0 text-slate-400 dark:text-white/30">
-          <Users size={10} />
-          <span className="text-[9px] font-bold">{reg.elenco.length}</span>
-        </div>
-      )}
+      {/* elenco count — fallback bailarinos_detalhes (registrations criadas pela seed/vitrine) */}
+      {(() => {
+        const elencoLen = (reg.elenco && reg.elenco.length) || ((reg as any).bailarinos_detalhes?.length ?? 0);
+        if (elencoLen === 0) return null;
+        return (
+          <div className="flex items-center gap-1 shrink-0 text-slate-400 dark:text-white/30">
+            <Users size={10} />
+            <span className="text-[9px] font-bold">{elencoLen}</span>
+          </div>
+        );
+      })()}
 
       {/* track status */}
       <div className="shrink-0">
