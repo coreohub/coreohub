@@ -121,6 +121,36 @@ export const deleteNarration = async (
   }
 };
 
+export interface PreviewResult {
+  ok: boolean;
+  audio_base64?: string;
+  duration_seconds?: number;
+  kind?: NarrationKind;
+  error?: string;
+}
+
+/**
+ * Gera audio descartavel sem persistir no DB/storage. Retorna WAV inline
+ * em base64. Usado no AccountSettings pra testar template+voz+pronuncia
+ * antes de gerar narracoes do festival inteiro.
+ */
+export const previewNarration = async (
+  text: string,
+  voice_id?: string,
+  kind: NarrationKind = 'entrada',
+): Promise<PreviewResult> => {
+  const { status, data } = await callFn({
+    action: 'preview',
+    text,
+    voice_id,
+    kind,
+  });
+  if (status !== 200 || !data?.ok) {
+    return { ok: false, error: data?.error ?? `http_${status}` };
+  }
+  return data as PreviewResult;
+};
+
 /** Busca todos os audios pre-renderizados do evento (entrada + saida). */
 export const fetchNarrationAudios = async (event_id: string) => {
   const { data, error } = await supabase

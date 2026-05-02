@@ -21,6 +21,7 @@ import {
   Instagram, MessageCircle, Globe, Mail, FileText, Youtube,
 } from 'lucide-react';
 import { formatEventWhatsApp } from '../utils/formatters';
+import { previewNarration, type NarrationKind } from '../services/narrationApi';
 
 /* ── Evaluation Rules types ── */
 interface EvalCriterion { name: string; peso: number; displayName?: string; }
@@ -818,6 +819,75 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
     tempo_marcacao_palco: 45,
     gatilho_marcacao: 'MANUAL_MARCADOR' as 'MANUAL_MARCADOR' | 'MANUAL_COORDENADOR' | 'AUTO_SONOPLASTA',
   });
+
+  /* Test narration — gera entrada (+ saida se ativa) com template real
+     + voz selecionada + pronuncias, sem persistir. Cache client-side por
+     hash(voice|kind|text) pra spam-clicar nao re-gastar quota Gemini. */
+  const [previewing, setPreviewing] = useState<NarrationKind | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const previewCacheRef = React.useRef<Record<string, string>>({});
+  const previewAudioRef = React.useRef<HTMLAudioElement | null>(null);
+
+  const buildPreviewText = (kind: NarrationKind): string => {
+    const fallback = kind === 'saida'
+      ? 'Uma salva de palmas para [ESTUDIO]!'
+      : 'Com a coreografia [COREOGRAFIA], recebam no palco: [ESTUDIO]';
+    const tpl = (kind === 'saida' ? flowConfig.texto_ia_saida : flowConfig.texto_ia)?.trim() || fallback;
+    let texto = tpl
+      .replaceAll('[COREOGRAFIA]', 'Eclipse')
+      .replaceAll('[ESTUDIO]', 'Studio Demo');
+    flowConfig.pronuncia_personalizada.forEach(({ termo, pronuncia }) => {
+      if (termo && pronuncia) texto = texto.replaceAll(termo, pronuncia);
+    });
+    return texto;
+  };
+
+  const playPreviewAudio = (url: string) => new Promise<void>((resolve) => {
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      previewAudioRef.current.src = '';
+    }
+    const audio = new Audio(url);
+    previewAudioRef.current = audio;
+    audio.addEventListener('ended', () => resolve());
+    audio.addEventListener('error', () => resolve());
+    audio.play().catch(() => resolve());
+  });
+
+  const previewOne = async (kind: NarrationKind): Promise<boolean> => {
+    const text = buildPreviewText(kind);
+    const voice = flowConfig.voice_id || 'Charon';
+    const cacheKey = `${voice}|${kind}|${text}`;
+    let url = previewCacheRef.current[cacheKey];
+    if (!url) {
+      const r = await previewNarration(text, flowConfig.voice_id ?? undefined, kind);
+      if (!r.ok || !r.audio_base64) {
+        setPreviewError(`Falha (${kind}): ${r.error ?? 'desconhecido'}`);
+        return false;
+      }
+      const blob = new Blob(
+        [Uint8Array.from(atob(r.audio_base64), c => c.charCodeAt(0))],
+        { type: 'audio/wav' },
+      );
+      url = URL.createObjectURL(blob);
+      previewCacheRef.current[cacheKey] = url;
+    }
+    await playPreviewAudio(url);
+    return true;
+  };
+
+  const handleTestNarration = async () => {
+    if (previewing) return;
+    setPreviewError(null);
+    setPreviewing('entrada');
+    const ok = await previewOne('entrada');
+    if (ok && flowConfig.narracao_saida_ativa) {
+      setPreviewing('saida');
+      await new Promise(r => setTimeout(r, 600));
+      await previewOne('saida');
+    }
+    setPreviewing(null);
+  };
 
   const [toleranceRule, setToleranceRule] = useState<{ mode: 'PERCENT' | 'COUNT'; value: number; enforcement?: 'FLEXIBLE' | 'STRICT' }>({
     mode: 'PERCENT',
@@ -2305,7 +2375,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
       /* ── FLUXO DO EVENTO ── */
       case 'Fluxo do Evento':
         return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="max-w-3xl">
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-6">
               <div className="flex items-center gap-3 mb-2">
                 <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Settings size={18} /></div>
@@ -2413,9 +2483,30 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                     );
                   })}
                 </div>
-                <p className="text-[10px] text-slate-400 mt-3 italic">
-                  Geradas via Google Gemini 2.5 Audio TTS, PT-BR nativo. <span className="text-emerald-500">Free tier (1M tokens/dia)</span>.
-                </p>
+
+                {/* Testar narração completa — usa template real + voz + pronúncia */}
+                <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleTestNarration}
+                    disabled={!!previewing}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-[#ff0068]/10 hover:bg-[#ff0068]/20 border border-[#ff0068]/40 text-[#ff0068] rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-60"
+                    title={flowConfig.narracao_saida_ativa
+                      ? 'Toca entrada e depois saída usando seu template, voz e pronúncias'
+                      : 'Toca a entrada usando seu template, voz e pronúncias'}
+                  >
+                    {previewing
+                      ? <><Loader2 size={12} className="animate-spin" /> Gerando {previewing}...</>
+                      : <><Play size={12} fill="currentColor" /> Testar narração completa</>}
+                  </button>
+                  <span className="text-[10px] text-slate-400">
+                    Coreografia <span className="text-[#ff0068]">Eclipse</span> · Estúdio <span className="text-[#ff0068]">Studio Demo</span>
+                    {flowConfig.narracao_saida_ativa && ' · entrada + saída'}
+                  </span>
+                </div>
+                {previewError && (
+                  <p className="mt-2 text-[10px] text-rose-500 font-bold">{previewError}</p>
+                )}
               </div>
 
               {/* Pronúncia personalizada — substituições fonéticas pra termos estrangeiros */}
@@ -2475,15 +2566,6 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                   <Plus size={12} /> Adicionar termo
                 </button>
               </div>
-            </div>
-            <div className="bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 p-8 rounded-3xl flex flex-col items-center justify-center gap-3 text-center">
-              <div className="p-3 bg-slate-100 dark:bg-white/5 rounded-2xl text-slate-400">
-                <Clapperboard size={22} />
-              </div>
-              <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">Palco & Marcação</p>
-              <p className="text-[10px] text-slate-400 leading-relaxed">
-                As configurações de <strong>Palco & Tempos</strong> foram movidas para <strong>Sonoplastia & Cronograma</strong> e as configurações de <strong>Marcação de Palco</strong> foram movidas para <strong>Marcação de Palco</strong>.
-              </p>
             </div>
           </div>
         );

@@ -115,7 +115,50 @@ Deno.serve(async (req) => {
   try { body = await req.json() } catch { return json({ error: 'invalid_json' }, 400) }
 
   const { action, event_id } = body ?? {}
-  if (!action || !event_id) return json({ error: 'missing_fields' }, 400)
+  if (!action) return json({ error: 'missing_fields' }, 400)
+
+  // Preview: gera audio descartavel (sem persistir, sem event_id).
+  // Usado no AccountSettings pra produtor testar template+voz+pronuncia
+  // antes de gerar narracoes do festival inteiro.
+  if (action === 'preview') {
+    const { text, voice_id, kind } = body
+    if (!text || !text.trim()) return json({ error: 'empty_text' }, 400)
+    const k: 'entrada' | 'saida' = kind === 'saida' ? 'saida' : 'entrada'
+    const voice = voice_id || DEFAULT_VOICE
+    try {
+      const ttsRes = await fetch(`${GEMINI_API}/${TTS_MODEL}:generateContent?key=${geminiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: text.trim() }] }],
+          generationConfig: {
+            responseModalities: ['AUDIO'],
+            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
+          },
+        }),
+      })
+      if (!ttsRes.ok) {
+        const errText = await ttsRes.text().catch(() => '')
+        return json({ ok: false, error: `gemini_${ttsRes.status}: ${errText.slice(0, 300)}` }, 500)
+      }
+      const result = await ttsRes.json()
+      const base64Audio = result?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data
+      if (!base64Audio) return json({ ok: false, error: 'no_audio_in_response' }, 500)
+
+      const pcmBytes = base64ToBytes(base64Audio)
+      const wavBytes = pcmToWav(pcmBytes)
+      const durationSeconds = pcmBytes.length / (SAMPLE_RATE * CHANNELS * (BITS_PER_SAMPLE / 8))
+      // Re-encode WAV em base64 inline pra resposta JSON
+      let bin = ''
+      for (let i = 0; i < wavBytes.length; i++) bin += String.fromCharCode(wavBytes[i])
+      const wavBase64 = btoa(bin)
+      return json({ ok: true, audio_base64: wavBase64, duration_seconds: durationSeconds, kind: k })
+    } catch (e: any) {
+      return json({ ok: false, error: e?.message ?? 'unknown' }, 500)
+    }
+  }
+
+  if (!event_id) return json({ error: 'missing_fields' }, 400)
 
   const { data: ev } = await supa
     .from('events')
