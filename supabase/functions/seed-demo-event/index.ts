@@ -421,12 +421,9 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       // (smart default — mesmo padrão do chip "Usar página da vitrine" em
       // AccountSettings).
       website_event: `${Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'}/evento/demo-${user.id.slice(0, 8)}`,
-      // Tolerância de idade espelhada também em events (algumas telas leem dali)
-      age_reference: 'EVENT_DAY',
-      age_tolerance_mode: 'FIXED_COUNT',
-      age_tolerance_value: 1,
-      stage_marking_time_seconds: 45,
-      stage_entry_time_seconds: 15,
+      // Tolerância de idade + tempos de palco vivem em configuracoes
+      // (não em events). UI lê de lá. Removido daqui pra evitar erro
+      // de coluna inexistente no schema cache do PostgREST.
       // Politica de ingressos + lista
       politica_ingressos: 'INTERNO',
       ingressos_config: DEMO_INGRESSOS,
