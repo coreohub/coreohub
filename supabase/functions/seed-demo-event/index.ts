@@ -169,6 +169,47 @@ const COREOGRAFIAS_SELETIVA: CoreoSpec[] = [
 // URL placeholder pro video da Seletiva (Big Buck Bunny, vídeo de teste open-source)
 const DEMO_VIDEO_URL = 'https://www.youtube.com/watch?v=YE7VzlLtp-4'
 
+// Cover do evento — Unsplash CC0 dance-related (1600x900, otimizada)
+const DEMO_COVER_URL = 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=1600&q=80'
+
+// PDF placeholder pro regulamento (small public PDF de teste)
+const DEMO_REGULATION_PDF = 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
+
+// Trilhas sonoras CC0 do Pixabay (placeholder pra testar modo SISTEMA de auto-play)
+const DEMO_TRILHAS = [
+  'https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3',
+  'https://cdn.pixabay.com/audio/2024/02/27/audio_b647d31df3.mp3',
+  'https://cdn.pixabay.com/audio/2022/03/15/audio_1718e36bf8.mp3',
+  'https://cdn.pixabay.com/audio/2023/06/29/audio_af72d307ee.mp3',
+  'https://cdn.pixabay.com/audio/2022/10/16/audio_3b5f4e2fff.mp3',
+]
+
+// Patrocinadores placeholder (logos de servicos publicos genericos)
+const DEMO_PATROCINADORES = [
+  { nome: 'Prefeitura Municipal',          logo_url: 'https://via.placeholder.com/240x120/0ea5e9/ffffff?text=PREFEITURA',     link: 'https://exemplo.gov.br' },
+  { nome: 'Secretaria de Cultura',         logo_url: 'https://via.placeholder.com/240x120/8b5cf6/ffffff?text=CULTURA',        link: 'https://cultura.exemplo.gov.br' },
+  { nome: 'Studio Capital — Patrocínio',   logo_url: 'https://via.placeholder.com/240x120/ec4899/ffffff?text=STUDIO+CAPITAL', link: '' },
+  { nome: 'CoreoHub',                      logo_url: 'https://via.placeholder.com/240x120/ff0068/ffffff?text=CoreoHub',       link: 'https://coreohub.com' },
+]
+
+// Tipos de ingresso pra audiencia (politica INTERNO)
+const DEMO_INGRESSOS = [
+  { nome: 'Inteira',         preco: 30, obs: 'Acesso aos 2 dias de festival',           link: '' },
+  { nome: 'Meia-entrada',    preco: 15, obs: 'Estudante, idoso, doador de sangue',      link: '' },
+  { nome: 'Solidária',       preco: 20, obs: 'Inteira + 1kg de alimento não-perecível', link: '' },
+]
+
+// Programacao do dia
+const DEMO_PROGRAMACAO = [
+  { hora: '08:00', titulo: 'Abertura do credenciamento',   descricao: 'Retire sua credencial digital ou física na recepção do teatro.' },
+  { hora: '09:00', titulo: 'Aula gratuita aberta',         descricao: 'Workshop de Contemporâneo com a coreógrafa convidada.' },
+  { hora: '12:00', titulo: 'Pausa pra almoço',             descricao: '' },
+  { hora: '14:00', titulo: 'Bloco 1 — Manhã (Solos/Duos)', descricao: 'Início das apresentações competitivas.' },
+  { hora: '17:00', titulo: 'Intervalo',                    descricao: '' },
+  { hora: '17:30', titulo: 'Bloco 2 — Tarde (Trios/Grupos)', descricao: 'Continuação das apresentações.' },
+  { hora: '20:00', titulo: 'Premiação',                    descricao: 'Entrega de medalhas Ouro/Prata/Bronze + prêmios especiais.' },
+]
+
 const CATEGORIAS = ['Infantil', 'Juvenil', 'Adulto', 'Profissional']
 const FORMACOES = ['Solo', 'Duo', 'Trio', 'Grupo']
 
@@ -301,8 +342,25 @@ Deno.serve(async (req) => {
       is_demo: true,
       is_public: false,
       created_by: user.id,
-      scoring_system: 'BASE_10', // coluna real eh scoring_system [text], nao score_scale
+      scoring_system: 'BASE_10',
       slug: `demo-${user.id.slice(0, 8)}`,
+      // Identidade visual e contato (Leva 1)
+      cover_url: DEMO_COVER_URL,
+      location: 'Teatro Municipal de Demonstração — Av. Paulista, 1000',
+      event_time: '09:00',
+      edition_year: startDate.getFullYear(),
+      regulation_pdf_url: DEMO_REGULATION_PDF,
+      email_event: 'contato@demo-festival.com',
+      whatsapp_event: '5511987654321',
+      instagram_event: 'demofestival',
+      tiktok_event: 'demofestival',
+      youtube_event: 'https://youtube.com/@demofestival',
+      website_event: 'https://demo-festival.com',
+      // Politica de ingressos + lista
+      politica_ingressos: 'INTERNO',
+      ingressos_config: DEMO_INGRESSOS,
+      patrocinadores_config: DEMO_PATROCINADORES,
+      programacao_config: DEMO_PROGRAMACAO,
     }]).select('id').single()
 
     if (evErr || !ev) return json({ error: 'db_error', detail: evErr?.message ?? 'event' }, 500)
@@ -322,12 +380,30 @@ Deno.serve(async (req) => {
       max: i === 0 ? 11 : i === 1 ? 17 : i === 2 ? 29 : null,
     }))
 
+    // 3 lotes com virada de data pra demonstrar pricing em ondas:
+    //   1º lote (já encerrado, preço promocional)  — data_virada -10 dias atras
+    //   2º lote (vigente)                           — data_virada +10 dias
+    //   3º lote (último, preço cheio)               — data_virada +20 dias
+    const lote1Virada = new Date(today.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    const lote2Virada = new Date(today.getTime() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    const lote3Virada = new Date(today.getTime() + 20 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    const precoBase = (f: string) => f === 'Solo' ? 80 : f === 'Duo' ? 60 : 50
     const formatos = FORMACOES.map(f => ({
       name: f,
       pricingType: f === 'Solo' ? 'FIXED' : 'PER_MEMBER',
       minMembers: formacaoSize(f) === 1 ? 1 : (f === 'Duo' ? 2 : f === 'Trio' ? 3 : 5),
-      lotes: [{ data_virada: null, preco: f === 'Solo' ? 80 : f === 'Duo' ? 60 : 50 }],
+      lotes: [
+        { nome: '1º Lote (Promocional)', data_virada: lote1Virada, preco: Math.round(precoBase(f) * 0.7) },
+        { nome: '2º Lote',               data_virada: lote2Virada, preco: Math.round(precoBase(f) * 0.85) },
+        { nome: '3º Lote (Último)',      data_virada: lote3Virada, preco: precoBase(f) },
+      ],
     }))
+
+    // Pronuncia personalizada — exemplo demonstrando o feature
+    const pronunciaPersonalizada = [
+      { termo: 'CoreoHub',  pronuncia: 'Côreo Rrabe' },
+      { termo: 'Pas',       pronuncia: 'Pá' },
+    ]
 
     await supa.from('configuracoes').insert([{
       id: eventId,
@@ -338,10 +414,28 @@ Deno.serve(async (req) => {
       categorias,
       formatos,
       texto_ia: 'Com a coreografia [COREOGRAFIA], recebam no palco: [ESTUDIO]',
+      texto_ia_saida: 'Uma salva de palmas para [ESTUDIO]!',
+      narracao_saida_ativa: true,
+      voice_id: 'Kore', // voz feminina firme, boa pra apresentacao
+      pronuncia_personalizada: pronunciaPersonalizada,
       pin_inactivity_minutes: 5,
-      // Prazo de inscricao mora em configuracoes (NAO em events.registration_deadline)
       prazo_inscricao: regDeadline.toISOString().split('T')[0],
       data_evento: startDate.toISOString().split('T')[0],
+      // Premiação
+      medal_thresholds: { gold: 9.0, silver: 8.0, bronze: 7.0 },
+      premiation_system: 'THRESHOLD',
+      // Sonoplastia & Cronograma
+      tempo_entrada: 15,
+      intervalo_seguranca: 3,
+      tempo_marcacao_palco: 45,
+      gatilho_marcacao: 'MANUAL_MARCADOR',
+      marcar_palco_ativo: true,
+      modo_sonoplastia: 'MANUAL', // default; produtor troca pra SISTEMA se quiser auto-play
+      // Politica de ingressos + lista (espelha events)
+      politica_ingressos: 'INTERNO',
+      ingressos_audiencia: DEMO_INGRESSOS,
+      patrocinadores: DEMO_PATROCINADORES,
+      programacao: DEMO_PROGRAMACAO,
     }])
 
     // Espelha formacoes_config em events (algumas telas leem dali)
@@ -395,6 +489,12 @@ Deno.serve(async (req) => {
 
       const valor_pago = formato === 'Solo' ? 80 : formato === 'Duo' ? 120 : formato === 'Trio' ? 150 : 200
 
+      // Trilha sonora: 70% das APROVADAS tem trilha; resto fica pendente
+      // (pra produtor testar tela de trilhas + filtro "Sem Trilha" no Schedule).
+      const hasTrilha = status === 'APROVADA' && Math.random() < 0.7
+      const trilha_url = hasTrilha ? DEMO_TRILHAS[i % DEMO_TRILHAS.length] : null
+      const status_trilha = hasTrilha ? 'OK' : 'PENDENTE'
+
       registrationsToInsert.push({
         event_id: eventId,
         nome_coreografia: coreo.nome,
@@ -404,22 +504,54 @@ Deno.serve(async (req) => {
         tipo_apresentacao: 'Competitiva',
         estudio: estudio.nome,
         bailarinos_detalhes,
-        // num_participantes NAO existe na tabela — removido
         status,
         status_pagamento,
         valor_pago,
         ordem_apresentacao: i + 1,
+        trilha_url,
+        status_trilha,
       })
     }
 
     const { data: insertedRegs, error: regErr } = await supa
       .from('registrations')
       .insert(registrationsToInsert)
-      .select('id, nome_coreografia, status, tipo_apresentacao')
+      .select('id, nome_coreografia, status, tipo_apresentacao, formato_participacao')
     if (regErr) {
       // Rollback: deleta evento (CASCADE limpa o resto)
       await supa.from('events').delete().eq('id', eventId)
       return json({ error: 'db_error', detail: `registrations: ${regErr.message}` }, 500)
+    }
+
+    // 5b) Cronograma_blocos: 3 blocos (Manha / Tarde / Final).
+    //     Distribui as APROVADAS por formato: Solo+Duo no Manha, Trio+Grupo na Tarde.
+    //     Os "Final" recebe os 3 melhores de cada formato (escolha aleatoria pro demo).
+    let blocosCriadosOk = 0
+    try {
+      const { data: blocosInseridos } = await supa.from('cronograma_blocos').insert([
+        { event_id: eventId, name: 'Bloco 1 — Manhã (Solos & Duos)', ordem: 0, cor: '#0ea5e9' },
+        { event_id: eventId, name: 'Bloco 2 — Tarde (Trios & Grupos)', ordem: 1, cor: '#8b5cf6' },
+        { event_id: eventId, name: 'Bloco 3 — Final (Highlights)',     ordem: 2, cor: '#ec4899' },
+      ]).select('id, ordem')
+
+      if (blocosInseridos && blocosInseridos.length === 3) {
+        const blocoManha = blocosInseridos.find((b: any) => b.ordem === 0)?.id
+        const blocoTarde = blocosInseridos.find((b: any) => b.ordem === 1)?.id
+        const blocoFinal = blocosInseridos.find((b: any) => b.ordem === 2)?.id
+        const aprovadas = (insertedRegs ?? []).filter((r: any) => r.status === 'APROVADA')
+        // Pega 3 random pro Final
+        const finalPicks = pickN(aprovadas, 3).map((r: any) => r.id)
+        for (const reg of aprovadas) {
+          let blocoId = null
+          if (finalPicks.includes(reg.id)) blocoId = blocoFinal
+          else if (reg.formato_participacao === 'Solo' || reg.formato_participacao === 'Duo') blocoId = blocoManha
+          else blocoId = blocoTarde
+          await supa.from('registrations').update({ bloco_id: blocoId }).eq('id', reg.id)
+        }
+        blocosCriadosOk = blocosInseridos.length
+      }
+    } catch (e: any) {
+      console.warn('Falha ao criar/distribuir blocos:', e?.message ?? e)
     }
 
     // 6) Seletiva de Vídeo: 20 inscrições PENDENTES com vídeo submitted
@@ -477,7 +609,7 @@ Deno.serve(async (req) => {
     const evalsToInsert: any[] = []
     aprovadasComp.forEach((reg: any, idx: number) => {
       const tier = tiers[idx] ?? tiers[tiers.length - 1]
-      judgeIds.forEach(jid => {
+      judgeIds.forEach((jid, judgeIdx) => {
         const scores: Record<string, number> = {}
         let sum = 0
         criteriosNomes.forEach(name => {
@@ -487,6 +619,10 @@ Deno.serve(async (req) => {
           sum += score
         })
         const avg = +(sum / criteriosNomes.length).toFixed(2)
+        // Phase 3 deliberacao: jurados marcam estrela (highlights) nas top 3
+        // (idx 0..2). Apenas 1 dos 3 jurados marca cada uma — representa o
+        // estado realista de "alguns jurados destacaram".
+        const highlights = (idx < 3 && judgeIdx === idx % 3) ? ['DESTAQUE'] : []
         evalsToInsert.push({
           event_id: eventId,
           registration_id: reg.id,
@@ -495,6 +631,7 @@ Deno.serve(async (req) => {
           criteria_weights: criteriosWeights,
           final_weighted_average: avg,
           submitted_at: submittedAt,
+          highlights,
         })
       })
     })
@@ -522,6 +659,11 @@ Deno.serve(async (req) => {
         jurados: JURADOS.length,
         prêmios: PREMIOS_ESPECIAIS.length,
         estilos: estilos.length,
+        blocos: blocosCriadosOk,
+        trilhas_setadas: registrationsToInsert.filter(r => r.trilha_url).length,
+        ingressos: DEMO_INGRESSOS.length,
+        patrocinadores: DEMO_PATROCINADORES.length,
+        programacao_itens: DEMO_PROGRAMACAO.length,
       },
     })
   }
