@@ -39,18 +39,48 @@ const MeuIngresso: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Carga inicial + recarrega quando o token muda
   useEffect(() => {
     if (!token) { setError('Token não informado'); setLoading(false); return; }
-    (async () => {
+    let active = true;
+    const fetchTicket = async () => {
       const { data, error: rpcErr } = await supabase
         .rpc('get_audience_ticket_by_token', { p_token: token });
-      if (rpcErr) { setError(rpcErr.message); setLoading(false); return; }
+      if (!active) return;
+      if (rpcErr) {
+        // Não vazar mensagem técnica — log no console, mostra genérico
+        console.error('[MeuIngresso] RPC erro:', rpcErr);
+        setError('Ingresso não encontrado. Verifique o link recebido por email.');
+        setLoading(false);
+        return;
+      }
       const row = Array.isArray(data) ? data[0] : data;
       if (!row) { setError('Ingresso não encontrado. Verifique o link recebido por email.'); setLoading(false); return; }
       setTicket(row as Ticket);
       setLoading(false);
-    })();
+    };
+    fetchTicket();
+    return () => { active = false; };
   }, [token]);
+
+  // Polling pra atualizar status do pagamento + check-in sem F5.
+  // Real-time via Supabase channel não funciona bem aqui (tabela protegida por
+  // RLS, anon não recebe updates). Polling 5s enquanto pendente, 30s quando
+  // aprovado (pra detectar check-in feito no portão).
+  useEffect(() => {
+    if (!token || !ticket) return;
+    const isPendente = ticket.status_pagamento === 'PENDENTE';
+    const isCheckedIn = ticket.check_in_status === 'OK';
+    if (isCheckedIn) return; // estado terminal, para de pollar
+    const interval = isPendente ? 5_000 : 30_000;
+    const t = setInterval(async () => {
+      // Re-fetch silencioso
+      const { data } = await supabase.rpc('get_audience_ticket_by_token', { p_token: token });
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row) setTicket(row as Ticket);
+    }, interval);
+    return () => clearInterval(t);
+  }, [token, ticket]);
 
   // Wakelock pra tela ficar ligada quando exibindo QR
   useEffect(() => {
@@ -92,8 +122,10 @@ const MeuIngresso: React.FC = () => {
   const isCheckedIn = ticket.check_in_status === 'OK';
   const fallbackCode = ticket.id.replace(/-/g, '').slice(-6).toUpperCase();
 
+  // Bug clássico: Date('YYYY-MM-DD') interpreta como UTC e em pt-BR mostra 1 dia atras.
+  // Adicionando T12:00:00 forçamos meio-dia local, neutralizando offset de timezone.
   const eventDate = ticket.event_date
-    ? new Date(ticket.event_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+    ? new Date(ticket.event_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
     : null;
 
   return (

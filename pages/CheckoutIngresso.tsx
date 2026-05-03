@@ -143,8 +143,9 @@ export default function CheckoutIngresso() {
   const canSubmit = !!name.trim() && !!email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
     && isValidCpf(cpf) && quantity >= 1 && quantity <= effectiveMax && !paying;
 
-  const handlePay = async () => {
-    if (!event || !ticketType) return;
+  const handlePay = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!canSubmit || !event || !ticketType) return;
     setPaying(true);
     setError(null);
     try {
@@ -275,44 +276,61 @@ export default function CheckoutIngresso() {
         </div>
 
         {/* Form do comprador */}
+        <form onSubmit={handlePay} noValidate>
         <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4 space-y-3">
           <p className="text-xs font-black text-slate-300 uppercase tracking-widest mb-2">Dados do comprador</p>
 
-          <Field label="Nome completo" icon={<UserIcon size={14} />}>
+          <Field label="Nome completo" icon={<UserIcon size={14} />} htmlFor="buyer-name">
             <input
+              id="buyer-name"
+              name="name"
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="Seu nome"
+              autoComplete="name"
+              required
               className="bg-transparent w-full text-sm outline-none placeholder:text-slate-600"
             />
           </Field>
 
-          <Field label="Email" icon={<Mail size={14} />}>
+          <Field label="Email" icon={<Mail size={14} />} htmlFor="buyer-email">
             <input
+              id="buyer-email"
+              name="email"
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="seu@email.com"
+              autoComplete="email"
+              required
               className="bg-transparent w-full text-sm outline-none placeholder:text-slate-600"
             />
           </Field>
 
-          <Field label="CPF" icon={<FileText size={14} />} hint="Obrigatório por lei">
+          <Field label="CPF" icon={<FileText size={14} />} hint="Obrigatório por lei" htmlFor="buyer-cpf">
             <input
+              id="buyer-cpf"
+              name="cpf"
               value={cpf}
               onChange={e => setCpf(formatCpf(e.target.value))}
               inputMode="numeric"
               placeholder="000.000.000-00"
+              autoComplete="off"
+              required
               className="bg-transparent w-full text-sm outline-none placeholder:text-slate-600 font-mono tracking-wide"
             />
           </Field>
 
-          <Field label="Telefone (opcional)" icon={<Phone size={14} />}>
+          <Field label="Telefone (opcional)" icon={<Phone size={14} />} htmlFor="buyer-phone">
             <input
+              id="buyer-phone"
+              name="phone"
               value={phone}
               onChange={e => setPhone(formatPhone(e.target.value))}
               inputMode="tel"
+              type="tel"
               placeholder="(00) 00000-0000"
+              autoComplete="tel"
               className="bg-transparent w-full text-sm outline-none placeholder:text-slate-600 font-mono tracking-wide"
             />
           </Field>
@@ -340,21 +358,21 @@ export default function CheckoutIngresso() {
         )}
 
         {error && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-4 text-sm text-red-300 flex items-start gap-2">
+          <div role="alert" aria-live="polite" className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-4 text-sm text-red-300 flex items-start gap-2">
             <AlertCircle size={16} className="shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
         )}
 
         <button
-          type="button"
-          onClick={handlePay}
+          type="submit"
           disabled={!canSubmit}
           className="w-full py-4 bg-[#ff0068] hover:bg-[#ff0068]/90 disabled:bg-white/10 disabled:text-slate-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
         >
           {paying ? <Loader2 className="animate-spin" size={16} /> : <Ticket size={16} />}
           {paying ? 'Gerando pagamento...' : 'Continuar pro pagamento'}
         </button>
+        </form>
 
         <div className="mt-4 flex items-center justify-center gap-2 text-[10px] text-slate-500">
           <ShieldCheck size={12} className="text-emerald-400" />
@@ -370,9 +388,9 @@ export default function CheckoutIngresso() {
   );
 }
 
-function Field({ label, icon, hint, children }: { label: string; icon: React.ReactNode; hint?: string; children: React.ReactNode }) {
+function Field({ label, icon, hint, htmlFor, children }: { label: string; icon: React.ReactNode; hint?: string; htmlFor?: string; children: React.ReactNode }) {
   return (
-    <label className="block">
+    <label className="block" htmlFor={htmlFor}>
       <div className="flex items-center justify-between mb-1.5">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
         {hint && <p className="text-[9px] text-slate-500">{hint}</p>}

@@ -146,31 +146,57 @@ Deno.serve(async (req) => {
       throw new Error(`Limite de ${maxPerPurchase} ingressos por compra`)
     }
 
-    // Conta tickets já comprados por este CPF neste evento (qualquer status que não seja CANCELADO)
-    const { count: existingByCpf } = await supabase
+    // Conta tickets já comprados por este CPF neste evento.
+    // Regra: APROVADO sempre conta; PENDENTE só conta se criado < 1h atrás
+    // (evita bloquear recompra quando comprador abandonou checkout).
+    // Não previne 100% race condition de 2 requests simultâneos, mas reduz
+    // bastante a janela. Pra fix definitivo precisaria de função Postgres
+    // com lock — fica pra Tier 2.
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+
+    const { count: aprovadosByCpf } = await supabase
       .from('audience_tickets')
       .select('id', { count: 'exact', head: true })
       .eq('event_id', event_id)
       .eq('buyer_cpf', cpfLimpo)
-      .neq('status_pagamento', 'CANCELADO')
+      .eq('status_pagamento', 'APROVADO')
 
-    if ((existingByCpf ?? 0) + quantity > maxPerCpf) {
+    const { count: pendentesByCpf } = await supabase
+      .from('audience_tickets')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', event_id)
+      .eq('buyer_cpf', cpfLimpo)
+      .eq('status_pagamento', 'PENDENTE')
+      .gte('created_at', oneHourAgo)
+
+    const existingByCpf = (aprovadosByCpf ?? 0) + (pendentesByCpf ?? 0)
+
+    if (existingByCpf + quantity > maxPerCpf) {
       throw new Error(
-        `Limite de ${maxPerCpf} ingressos por CPF excedido (já tem ${existingByCpf ?? 0}, tentando comprar +${quantity})`
+        `Limite de ${maxPerCpf} ingressos por CPF excedido (já tem ${existingByCpf}, tentando comprar +${quantity})`
       )
     }
 
     // Lei 12.933: meia-entrada limite 1 por CPF por evento
     if (kind === 'meia') {
       if (quantity > 1) throw new Error('Lei 12.933: meia-entrada limite 1 por CPF')
-      const { count: meiaExisting } = await supabase
+      // Pra meia, considera APROVADO + PENDENTE recente (não pode burlar trocando email)
+      const { count: meiaAprovada } = await supabase
         .from('audience_tickets')
         .select('id', { count: 'exact', head: true })
         .eq('event_id', event_id)
         .eq('buyer_cpf', cpfLimpo)
         .eq('ticket_type_kind', 'meia')
-        .neq('status_pagamento', 'CANCELADO')
-      if ((meiaExisting ?? 0) >= 1) {
+        .eq('status_pagamento', 'APROVADO')
+      const { count: meiaPendente } = await supabase
+        .from('audience_tickets')
+        .select('id', { count: 'exact', head: true })
+        .eq('event_id', event_id)
+        .eq('buyer_cpf', cpfLimpo)
+        .eq('ticket_type_kind', 'meia')
+        .eq('status_pagamento', 'PENDENTE')
+        .gte('created_at', oneHourAgo)
+      if ((meiaAprovada ?? 0) + (meiaPendente ?? 0) >= 1) {
         throw new Error('Lei 12.933: já existe uma meia-entrada para este CPF neste evento')
       }
     }

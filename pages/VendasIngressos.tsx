@@ -80,6 +80,44 @@ const VendasIngressos: React.FC = () => {
 
   useEffect(() => { load(); }, []);
 
+  // Realtime: assina mudanças em audience_tickets do evento ativo.
+  // RLS já garante que producer só recebe eventos do próprio evento.
+  useEffect(() => {
+    let channel: any = null;
+    (async () => {
+      const eventId = await resolveActiveEventId();
+      if (!eventId) return;
+      channel = supabase
+        .channel(`audience-tickets-${eventId}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'audience_tickets',
+          filter: `event_id=eq.${eventId}`,
+        }, () => {
+          // Reload silencioso (sem flicker do Loader)
+          supabase
+            .from('audience_tickets')
+            .select('*')
+            .eq('event_id', eventId)
+            .order('created_at', { ascending: false })
+            .then(({ data }) => {
+              if (data) setRows(data as Row[]);
+            });
+        })
+        .subscribe();
+    })();
+    return () => { if (channel) supabase.removeChannel(channel); };
+  }, []);
+
+  // Recarrega quando aba volta a ficar visível (ex: produtor confere após
+  // teste de pagamento em outra aba)
+  useEffect(() => {
+    const onFocus = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onFocus);
+    return () => document.removeEventListener('visibilitychange', onFocus);
+  }, []);
+
   // ─── Métricas ─────────────────────────────────────────────────────────────
   const metrics = useMemo(() => {
     const aprovados = rows.filter(r => r.status_pagamento === 'APROVADO');
