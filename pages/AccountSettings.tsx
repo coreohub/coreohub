@@ -581,11 +581,13 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
       setCurrentUserId(user.id);
       const { data: profile } = await supabase
         .from('profiles')
-        .select('asaas_subconta_id, asaas_wallet_id, cpf_cnpj, pix_key, role')
+        .select('asaas_subconta_id, asaas_wallet_id, cpf_cnpj, pix_key, role, is_super_admin')
         .eq('id', user.id)
         .single();
       setAsaasProfile(profile);
-      setIsAdmin((profile as any)?.role === 'COREOHUB_ADMIN');
+      // Super admin (is_super_admin=true) E COREOHUB_ADMIN role ambos liberam edicao
+      // de comissao. Mesma logica de SuperAdmin.tsx:84 — alinhamento.
+      setIsAdmin(Boolean((profile as any)?.is_super_admin) || (profile as any)?.role === 'COREOHUB_ADMIN');
       const { data: events } = await supabase
         .from('events')
         .select('id, name, commission_type, commission_percent, commission_fixed, fee_mode')
