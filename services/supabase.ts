@@ -203,7 +203,7 @@ export const createRegistration = async (payload: Partial<Registration>) => {
 
 // ─── Seletiva de Vídeo ───────────────────────────────────────────────────────
 
-export type VideoStatus = 'pending' | 'submitted' | 'approved' | 'rejected' | 'conditional';
+export type VideoStatus = 'pending' | 'submitted' | 'approved' | 'rejected' | 'conditional' | 'review_later';
 export type VideoFeeStatus = 'not_required' | 'pending' | 'paid' | 'waived';
 
 /** Busca inscrições de um evento com dados de seletiva de vídeo */
@@ -236,7 +236,7 @@ export const submitVideoForSelection = async (
 /** Produtor decide sobre o vídeo enviado */
 export const reviewVideoSubmission = async (
   registrationId: string,
-  status: Extract<VideoStatus, 'approved' | 'rejected' | 'conditional'>,
+  status: Extract<VideoStatus, 'approved' | 'rejected' | 'conditional' | 'review_later'>,
   feedback?: string
 ): Promise<void> => {
   const { error } = await supabase

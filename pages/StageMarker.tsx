@@ -41,6 +41,7 @@ const StageMarker = () => {
   // Busca/lista de apresentacoes pra navegacao nao-sequencial
   const [showList, setShowList] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [listFilter, setListFilter] = useState<'todas' | 'marcadas' | 'pendentes'>('todas');
 
   /* ── connectivity ── */
   useEffect(() => {
@@ -269,13 +270,48 @@ const StageMarker = () => {
 
         {/* Dropdown de resultados — aparece em focus ou typing */}
         {showList && (() => {
-          const filtered = presentations.filter(p =>
-            !searchTerm ||
-            p.nome_coreografia?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            p.estudio?.toLowerCase().includes(searchTerm.toLowerCase())
-          );
+          const totalMarcadas = currentIndex;
+          const totalPendentes = presentations.length - currentIndex;
+          const filtered = presentations.filter(p => {
+            const realIdx = presentations.findIndex(x => x.id === p.id);
+            const isMarked = realIdx < currentIndex;
+            // Filtro de aba
+            if (listFilter === 'marcadas' && !isMarked) return false;
+            if (listFilter === 'pendentes' && isMarked) return false;
+            // Filtro de busca
+            if (searchTerm && !(
+              p.nome_coreografia?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              p.estudio?.toLowerCase().includes(searchTerm.toLowerCase())
+            )) return false;
+            return true;
+          });
           return (
             <div className="absolute z-30 left-5 right-5 mt-2 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[60vh]">
+              {/* Tabs de filtro */}
+              <div className="flex items-center gap-1 p-2 border-b border-white/10 bg-white/[0.02]">
+                {([
+                  { v: 'todas',     label: 'Todas',     count: presentations.length },
+                  { v: 'pendentes', label: 'Pendentes', count: totalPendentes },
+                  { v: 'marcadas',  label: 'Marcadas',  count: totalMarcadas },
+                ] as const).map(tab => {
+                  const active = listFilter === tab.v;
+                  return (
+                    <button
+                      key={tab.v}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => setListFilter(tab.v)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${
+                        active ? 'bg-[#ff0068] text-white shadow-lg shadow-[#ff0068]/20' : 'text-slate-400 hover:bg-white/5'
+                      }`}
+                    >
+                      {tab.label}
+                      <span className={`px-1.5 py-0.5 rounded text-[8px] ${active ? 'bg-white/20' : 'bg-white/5'}`}>
+                        {tab.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
               <div className="overflow-y-auto divide-y divide-white/5">
                 {filtered.map((p) => {
                   const realIdx = presentations.findIndex(x => x.id === p.id);

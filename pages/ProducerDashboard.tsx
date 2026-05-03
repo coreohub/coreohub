@@ -272,14 +272,14 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
   return (
     <div className="space-y-8 pb-20 animate-in fade-in duration-700">
 
-      {/* Header */}
-      <header className="flex justify-between items-start gap-4">
-        <div>
+      {/* Header — flex-col em mobile pra nao estourar layout horizontal */}
+      <header className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1">
             <div className="w-1.5 h-1.5 bg-[#ff0068] rounded-full animate-pulse shadow-[0_0_8px_#ff0068]" />
             <span className="text-[9px] font-black text-[#ff0068] uppercase tracking-[0.3em]">QG do Produtor</span>
           </div>
-          <h1 className="text-4xl font-black tracking-tighter uppercase text-slate-900 dark:text-white">
+          <h1 className="text-2xl md:text-4xl font-black tracking-tighter uppercase text-slate-900 dark:text-white">
             Dashboard <span className="text-[#ff0068] italic">Administrativo</span>
           </h1>
           {eventData?.nome_evento && (
@@ -318,20 +318,20 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
           )}
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap md:flex-nowrap md:shrink-0">
           {/* Edition selector */}
           {allEvents.length > 0 && (
-            <div className="relative">
+            <div className="relative flex-1 md:flex-none">
               <select
                 value={selectedEventId ?? ''}
                 onChange={e => setSelectedEventId(e.target.value)}
-                className="appearance-none pl-4 pr-9 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 transition-all cursor-pointer"
+                className="w-full appearance-none pl-4 pr-9 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 transition-all cursor-pointer"
               >
                 {allEvents.map(ev => (
                   <option key={ev.id} value={ev.id}>
                     {ev.edition_year ? `${ev.edition_year} — ` : ''}{ev.name}
                   </option>
-                ))}{/* badge [DEMO] já aparece no name pq o seed inclui prefixo */}
+                ))}
               </select>
               <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             </div>
@@ -339,9 +339,11 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
 
           <button
             onClick={() => navigate('/account-settings')}
-            className="flex items-center gap-2 bg-[#ff0068] text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-[#ff0068]/20 group"
+            className="flex items-center gap-2 bg-[#ff0068] text-white px-4 sm:px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-[#ff0068]/20 group whitespace-nowrap"
           >
-            <Plus size={16} className="group-hover:rotate-90 transition-transform" /> Novo Evento
+            <Plus size={16} className="group-hover:rotate-90 transition-transform" />
+            <span className="hidden sm:inline">Novo Evento</span>
+            <span className="sm:hidden">Novo</span>
           </button>
         </div>
       </header>
@@ -482,7 +484,8 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
               />
             </div>
           </div>
-          <table className="w-full text-left">
+          <div className="overflow-x-auto">
+          <table className="w-full text-left min-w-[480px]">
             <thead>
               <tr className="border-b border-slate-100 dark:border-white/5">
                 <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Grupo</th>
@@ -515,6 +518,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* Quick actions */}

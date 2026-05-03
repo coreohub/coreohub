@@ -166,7 +166,7 @@ interface SortableRowProps {
   updatingLive: boolean;
   currentVoice: string;
   blocos: Bloco[];
-  onAssignBloco: (regId: string, blocoId: string | null) => void;
+  onOpenBlocoPicker: (reg: Registration) => void;
   onGenerateOne: (reg: Registration) => void;
   onAnnounce: (reg: Registration) => void;
   onPrepare: (reg: Registration) => void;
@@ -175,7 +175,7 @@ interface SortableRowProps {
 const SortableRow: React.FC<SortableRowProps> = ({
   reg, index, conflicts,
   audioSet, saidaAtiva, isLive, isGenerating, batchInProgress, updatingLive, currentVoice,
-  blocos, onAssignBloco,
+  blocos, onOpenBlocoPicker,
   onGenerateOne, onAnnounce, onPrepare,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -329,22 +329,24 @@ const SortableRow: React.FC<SortableRowProps> = ({
         )}
       </div>
 
-      {/* Bloco selector (Etapa 2) */}
-      {blocos.length > 0 && (
-        <select
-          value={reg.bloco_id ?? ''}
-          onChange={e => onAssignBloco(reg.id, e.target.value || null)}
-          onClick={e => e.stopPropagation()}
-          onPointerDown={e => e.stopPropagation()}
-          className="shrink-0 text-[9px] font-black uppercase tracking-widest bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 max-w-[120px] truncate"
-          title="Mover pra outro bloco"
-        >
-          <option value="">— Sem bloco</option>
-          {blocos.map(b => (
-            <option key={b.id} value={b.id}>{b.name}</option>
-          ))}
-        </select>
-      )}
+      {/* Bloco picker — botao compacto que abre modal/bottomsheet com lista.
+          Substitui o select inline que estourava layout em mobile. */}
+      {blocos.length > 0 && (() => {
+        const blocoAtual = blocos.find(b => b.id === reg.bloco_id);
+        return (
+          <button
+            onClick={(e) => { e.stopPropagation(); onOpenBlocoPicker(reg); }}
+            onPointerDown={e => e.stopPropagation()}
+            title="Mover pra outro bloco"
+            className="shrink-0 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-2 py-1.5 text-slate-600 dark:text-slate-300 hover:border-[#ff0068]/40 hover:text-[#ff0068] transition-colors"
+          >
+            <Layers size={10} />
+            <span className="hidden sm:inline max-w-[80px] truncate">
+              {blocoAtual?.name ?? 'Sem bloco'}
+            </span>
+          </button>
+        );
+      })()}
 
       {/* IA Narração / announce / Iniciar */}
       <div className="flex items-center gap-1.5 shrink-0">
@@ -409,6 +411,9 @@ const Schedule = () => {
   /* Blocos (Etapa 2 da fusão) */
   const [blocos, setBlocos] = useState<Bloco[]>([]);
   const [showBlocosManager, setShowBlocosManager] = useState(false);
+  // Picker de bloco por coreografia (substitui select inline em mobile —
+  // botao na row abre bottomsheet com lista de blocos pra atribuir).
+  const [blocoPickerForReg, setBlocoPickerForReg] = useState<Registration | null>(null);
   const [eventPickerOpen, setEventPickerOpen] = useState(false);
   const eventPickerRef = useRef<HTMLDivElement | null>(null);
 
@@ -1547,7 +1552,7 @@ const Schedule = () => {
                   updatingLive={updatingLive}
                   currentVoice={config?.voice_id || 'Charon'}
                   blocos={blocos}
-                  onAssignBloco={handleAssignBloco}
+                  onOpenBlocoPicker={setBlocoPickerForReg}
                   onGenerateOne={handleGenerateOne}
                   onAnnounce={handleAnnounce}
                   onPrepare={handlePrepare}
@@ -1623,6 +1628,60 @@ const Schedule = () => {
       )}
 
       {/* ── Modal Gerenciar Blocos (Etapa 2) ── */}
+      {/* Bloco Picker — modal/bottomsheet pra atribuir coreografia a um bloco.
+          Substitui o select inline da row (que estourava layout em mobile). */}
+      {blocoPickerForReg && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setBlocoPickerForReg(null)}
+        >
+          <div
+            className="w-full max-w-md bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-white/10 rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col max-h-[80vh]"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="p-5 border-b border-slate-200 dark:border-white/10">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Mover pra outro bloco</p>
+              <p className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white truncate mt-0.5">
+                {blocoPickerForReg.nome_coreografia}
+              </p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{blocoPickerForReg.estudio}</p>
+            </div>
+            <div className="overflow-y-auto divide-y divide-slate-100 dark:divide-white/5">
+              <button
+                onClick={() => { handleAssignBloco(blocoPickerForReg.id, null); setBlocoPickerForReg(null); }}
+                className={`w-full flex items-center justify-between px-5 py-3 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-left ${!blocoPickerForReg.bloco_id ? 'bg-[#ff0068]/5' : ''}`}
+              >
+                <span className={`text-[11px] font-black uppercase tracking-widest ${!blocoPickerForReg.bloco_id ? 'text-[#ff0068]' : 'text-slate-700 dark:text-slate-300'}`}>
+                  — Sem bloco
+                </span>
+                {!blocoPickerForReg.bloco_id && <CheckCircle2 size={14} className="text-[#ff0068]" />}
+              </button>
+              {[...blocos].sort((a, b) => a.ordem - b.ordem).map(b => {
+                const active = blocoPickerForReg.bloco_id === b.id;
+                return (
+                  <button
+                    key={b.id}
+                    onClick={() => { handleAssignBloco(blocoPickerForReg.id, b.id); setBlocoPickerForReg(null); }}
+                    className={`w-full flex items-center justify-between px-5 py-3 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-left ${active ? 'bg-[#ff0068]/5' : ''}`}
+                  >
+                    <span className={`text-[11px] font-black uppercase tracking-tight truncate ${active ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>
+                      {b.name}
+                    </span>
+                    {active && <CheckCircle2 size={14} className="text-[#ff0068] shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => setBlocoPickerForReg(null)}
+              className="px-5 py-3 border-t border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
       {showBlocosManager && (
         <div
           className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start justify-center p-4 sm:p-8"
