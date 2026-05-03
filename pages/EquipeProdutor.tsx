@@ -5,7 +5,7 @@ import {
   Check, X, AlertCircle, Briefcase,
   Calendar, CreditCard, QrCode, Mic2,
   ClipboardList, Filter, ChevronDown, Star,
-  Copy, ExternalLink,
+  Copy, ExternalLink, Ticket,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
@@ -20,33 +20,33 @@ const EQUIPE_ROLES: {
 }[] = [
   {
     value: UserRole.COORDENADOR, label: 'Coordenador',
-    desc: 'Acesso amplo — cronograma, credenciamento, jurados e palco.',
+    desc: 'Acesso amplo — cronograma, credenciamento, jurados, palco e vendas.',
     icon: Shield, color: 'text-purple-500 bg-purple-500/10 border-purple-500/20',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: true, credenciamento: true, marcacao_palco: true, suporte_juri: true, inscricoes_leitura: true, triagem: true },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: true, credenciamento: true, marcacao_palco: true, suporte_juri: true, inscricoes_leitura: true, triagem: true, vendas_ingressos: true },
   },
   {
     value: UserRole.MESARIO, label: 'Coordenador do Júri',
     desc: 'Suporte à banca: verifica terminais e controla presença dos jurados. Lidera a premiação.',
     icon: Headphones, color: 'text-blue-500 bg-blue-500/10 border-blue-500/20',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: false, marcacao_palco: false, suporte_juri: true, inscricoes_leitura: false, triagem: false },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: false, marcacao_palco: false, suporte_juri: true, inscricoes_leitura: false, triagem: false, vendas_ingressos: false },
   },
   {
     value: UserRole.SONOPLASTA, label: 'Sonoplasta',
     desc: 'Opera o áudio e pode reordenar o cronograma em tempo real.',
     icon: Music2, color: 'text-amber-500 bg-amber-500/10 border-amber-500/20',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: true, credenciamento: false, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: false, triagem: false },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: true, credenciamento: false, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: false, triagem: false, vendas_ingressos: false },
   },
   {
     value: UserRole.RECEPCAO, label: 'Recepção / Palco',
-    desc: 'Acompanha o cronograma e lida com os grupos no backstage.',
+    desc: 'Acompanha o cronograma, faz check-in de público e tira dúvidas sobre vendas.',
     icon: Users, color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: true, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: true, triagem: false },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: true, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: true, triagem: false, vendas_ingressos: true },
   },
   {
     value: UserRole.PALCO, label: 'Marcador de Palco',
     desc: 'Prepara o palco entre apresentações com cronômetro dedicado.',
     icon: PersonStanding, color: 'text-[#ff0068] bg-[#ff0068]/10 border-[#ff0068]/20',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: false, marcacao_palco: true, suporte_juri: false, inscricoes_leitura: false, triagem: false },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: false, marcacao_palco: true, suporte_juri: false, inscricoes_leitura: false, triagem: false, vendas_ingressos: false },
   },
 ];
 
@@ -75,6 +75,7 @@ const PERM_GROUPS: { label: string; items: { key: PermKey; label: string; icon: 
   {
     label: 'Financeiro',
     items: [
+      { key: 'vendas_ingressos',     label: 'Painel de Vendas de Ingressos', icon: Ticket },
       { key: 'financeiro',           label: 'Dados financeiros', icon: CreditCard },
       { key: 'validar_pagamentos',   label: 'Validar pagamentos', icon: Check },
     ],

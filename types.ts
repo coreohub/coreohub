@@ -243,6 +243,7 @@ export interface PermissoesCustom {
   suporte_juri: boolean;
   inscricoes_leitura: boolean;
   triagem: boolean;
+  vendas_ingressos: boolean;
 }
 
 export const PERMISSOES_DEFAULT: PermissoesCustom = {
@@ -255,6 +256,7 @@ export const PERMISSOES_DEFAULT: PermissoesCustom = {
   suporte_juri: false,
   inscricoes_leitura: false,
   triagem: false,
+  vendas_ingressos: false,
 };
 
 export interface Profile {

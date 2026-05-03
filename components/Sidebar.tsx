@@ -57,6 +57,7 @@ const PERM_MENU: { perm: PermKey; path: string; label: string; icon: React.Eleme
   { perm: 'suporte_juri',       path: '/suporte-juri',    label: 'Coordenador do Júri', icon: Headphones    },
   { perm: 'inscricoes_leitura', path: '/registrations',   label: 'Inscrições',        icon: ClipboardList   },
   { perm: 'triagem',            path: '/registrations',   label: 'Triagem',           icon: Filter          },
+  { perm: 'vendas_ingressos',   path: '/vendas-ingressos', label: 'Vendas de Ingressos', icon: Ticket        },
   { perm: 'financeiro',         path: '/qg-organizador',  label: 'Financeiro',        icon: CreditCard      },
 ];
 
