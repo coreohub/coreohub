@@ -590,6 +590,80 @@ Deno.serve(async (req) => {
       console.warn('Falha ao definir live_registration:', e?.message ?? e)
     }
 
+    // 5e) Sistema de Deliberacao (Backlog #27): popular marcacoes_juri +
+    //     deliberations + status do evento. Permite testar /deliberacoes,
+    //     /conferencia e o gate de liberacao com dados realistas.
+    let marcacoesOk = 0
+    let deliberacoesOk = 0
+    try {
+      const aprovadas = (insertedRegs ?? []).filter((r: any) => r.status === 'APROVADA')
+      const top9 = pickN(aprovadas, Math.min(9, aprovadas.length))
+      const judgeArr = Object.values(judgeIdByPin)
+
+      // Cada jurado marca 3 coreografias diferentes (rotaciona entre top 9)
+      const marcacoesToInsert: any[] = []
+      judgeArr.forEach((jid, jIdx) => {
+        for (let i = 0; i < 3; i++) {
+          const reg = top9[(jIdx * 3 + i) % top9.length]
+          if (!reg) continue
+          marcacoesToInsert.push({
+            judge_id: jid,
+            registration_id: reg.id,
+            event_id: eventId,
+            created_by: user.id,
+          })
+        }
+      })
+      if (marcacoesToInsert.length > 0) {
+        const { error: mErr } = await supa.from('marcacoes_juri').insert(marcacoesToInsert)
+        if (!mErr) marcacoesOk = marcacoesToInsert.length
+        else console.warn('Falha ao inserir marcacoes_juri:', mErr.message)
+      }
+
+      // Atribuicoes (deliberations) — ~7 distribuidas entre os 5 premios.
+      // Cada jurado atribui 2-3 das suas marcacoes a premios diferentes.
+      const premiosArr = [
+        { id: 'tpl_bailarino', name: 'Melhor Bailarino(a)' },
+        { id: 'tpl_revelacao', name: 'Prêmio Revelação' },
+        { id: 'tpl_coreografo', name: 'Melhor Coreografia' },
+        { id: 'tpl_grupo', name: 'Melhor Grupo da Noite' },
+        { id: 'tpl_figurino', name: 'Melhor Figurino' },
+      ]
+      const delibToInsert: any[] = []
+      judgeArr.forEach((jid, jIdx) => {
+        for (let i = 0; i < 3; i++) {
+          const reg = top9[(jIdx * 3 + i) % top9.length]
+          if (!reg) continue
+          // Pula 1 das 3 atribuicoes por jurado pra mostrar estado parcial
+          if (jIdx === 1 && i === 2) continue
+          const premio = premiosArr[(jIdx + i) % premiosArr.length]
+          delibToInsert.push({
+            judge_id: jid,
+            registration_id: reg.id,
+            event_id: eventId,
+            award_id: premio.id,
+            award_name: premio.name,
+            created_by: user.id,
+          })
+        }
+      })
+      if (delibToInsert.length > 0) {
+        const { error: dErr } = await supa.from('deliberations').insert(delibToInsert)
+        if (!dErr) deliberacoesOk = delibToInsert.length
+        else console.warn('Falha ao inserir deliberations:', dErr.message)
+      }
+
+      // Avanca o evento pra fase DELIBERACAO (jurados atribuindo premios) —
+      // estado mais visualmente rico que COLETANDO. Produtor pode avancar
+      // manualmente pra CONFERENCIA e LIBERADO pra testar o flow completo.
+      await supa
+        .from('events')
+        .update({ deliberation_status: 'DELIBERACAO' })
+        .eq('id', eventId)
+    } catch (e: any) {
+      console.warn('Falha no seed de deliberation:', e?.message ?? e)
+    }
+
     // 6) Seletiva de Vídeo: 20 inscrições PENDENTES com vídeo submitted
     //    pra produtor testar fluxo de aprovar/reprovar em /seletiva-video.
     //    video_url = placeholder publico (Big Buck Bunny). O importante eh
@@ -723,6 +797,8 @@ Deno.serve(async (req) => {
         ingressos: DEMO_INGRESSOS.length,
         patrocinadores: DEMO_PATROCINADORES.length,
         programacao_itens: DEMO_PROGRAMACAO.length,
+        marcacoes_juri: marcacoesOk,
+        deliberations: deliberacoesOk,
       },
     })
   }
