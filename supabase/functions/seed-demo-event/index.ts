@@ -555,6 +555,41 @@ Deno.serve(async (req) => {
       console.warn('Falha ao criar/distribuir blocos:', e?.message ?? e)
     }
 
+    // 5c) Check-in: 30% das aprovadas ja credenciadas (status OK + timestamp).
+    //     Permite testar tela de Credenciamento com barra de progresso visual.
+    try {
+      const aprovadas = (insertedRegs ?? []).filter((r: any) => r.status === 'APROVADA')
+      const credenciadas = pickN(aprovadas, Math.floor(aprovadas.length * 0.3))
+      const checkInTime = new Date(Date.now() - Math.random() * 2 * 60 * 60 * 1000).toISOString()
+      for (const reg of credenciadas) {
+        await supa
+          .from('registrations')
+          .update({ check_in_status: 'OK', check_in_at: checkInTime })
+          .eq('id', reg.id)
+      }
+    } catch (e: any) {
+      console.warn('Falha ao popular check-ins:', e?.message ?? e)
+    }
+
+    // 5d) Live registration: marca 1 coreografia aprovada como AO VIVO.
+    //     Permite testar JudgeTerminal/Mesa/StageMarker com algo no palco
+    //     desde o primeiro acesso. Random pick pra variedade entre demos.
+    try {
+      const aprovadas = (insertedRegs ?? []).filter((r: any) => r.status === 'APROVADA')
+      if (aprovadas.length > 0) {
+        const liveReg = pick(aprovadas) as any
+        await supa
+          .from('events')
+          .update({
+            live_registration_id: liveReg.id,
+            live_started_at: new Date().toISOString(),
+          })
+          .eq('id', eventId)
+      }
+    } catch (e: any) {
+      console.warn('Falha ao definir live_registration:', e?.message ?? e)
+    }
+
     // 6) Seletiva de Vídeo: 20 inscrições PENDENTES com vídeo submitted
     //    pra produtor testar fluxo de aprovar/reprovar em /seletiva-video.
     //    video_url = placeholder publico (Big Buck Bunny). O importante eh
@@ -608,6 +643,18 @@ Deno.serve(async (req) => {
     const criteriosNomes = CRITERIOS_PADRAO.map(c => c.name)
     const criteriosWeights = CRITERIOS_PADRAO.map(c => ({ name: c.name, peso: c.peso }))
     const evalsToInsert: any[] = []
+    // Indicacao a premios especiais: distribuir nos top 3 das evaluations.
+    // Cada uma das top 3 recebe 1-2 nominations de premios diferentes,
+    // de jurados diferentes. Permite testar Coordenador do Juri / Deliberacao.
+    // Estrutura de nominations[]: [{ award_id, award_name }] (formato
+    // consagrado nas Phase 3 Edge Functions).
+    const premiosParaNomear = [
+      { id: 'tpl_bailarino', name: 'Melhor Bailarino(a)' },
+      { id: 'tpl_revelacao', name: 'Prêmio Revelação' },
+      { id: 'tpl_coreografo', name: 'Melhor Coreografia' },
+      { id: 'tpl_grupo', name: 'Melhor Grupo da Noite' },
+      { id: 'tpl_figurino', name: 'Melhor Figurino' },
+    ]
     aprovadasComp.forEach((reg: any, idx: number) => {
       const tier = tiers[idx] ?? tiers[tiers.length - 1]
       judgeIds.forEach((jid, judgeIdx) => {
@@ -620,10 +667,20 @@ Deno.serve(async (req) => {
           sum += score
         })
         const avg = +(sum / criteriosNomes.length).toFixed(2)
-        // Phase 3 deliberacao: jurados marcam estrela (highlights) nas top 3
-        // (idx 0..2). Apenas 1 dos 3 jurados marca cada uma — representa o
-        // estado realista de "alguns jurados destacaram".
+        // Phase 3 — highlights nas top 3 (1 jurado marca cada)
         const highlights = (idx < 3 && judgeIdx === idx % 3) ? ['DESTAQUE'] : []
+        // Phase 3 — nominations: top 3 recebem indicacoes em premios diferentes,
+        // de jurados rotativos. Espalha pra cobrir todos os 5 premios.
+        const nominations: { award_id: string; award_name: string }[] = []
+        if (idx < 3) {
+          // Top 3: cada uma recebe 1 nomination do (idx+judgeIdx) % 5 premio
+          const premioIdx = (idx * 3 + judgeIdx) % premiosParaNomear.length
+          nominations.push(premiosParaNomear[premioIdx])
+          // Top 1 ganha nomination extra pra Melhor Coreografia (idx=2)
+          if (idx === 0 && judgeIdx === 0) {
+            nominations.push(premiosParaNomear[2])
+          }
+        }
         evalsToInsert.push({
           event_id: eventId,
           registration_id: reg.id,
@@ -633,6 +690,7 @@ Deno.serve(async (req) => {
           final_weighted_average: avg,
           submitted_at: submittedAt,
           highlights,
+          nominations,
         })
       })
     })
