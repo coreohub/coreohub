@@ -215,9 +215,30 @@ const CATEGORIAS = ['Infantil', 'Juvenil', 'Adulto', 'Profissional']
 const FORMACOES = ['Solo', 'Duo', 'Trio', 'Grupo']
 
 const JURADOS = [
-  { name: 'Carlos Mendes', pin: '1111', generos: ['Jazz', 'Ballet Clássico'] },
-  { name: 'Juliana Silveira', pin: '2222', generos: ['Contemporâneo', 'Ballet Clássico'] },
-  { name: 'Rodrigo Souza', pin: '3333', generos: ['Hip Hop', 'Dança Urbana'] },
+  {
+    name: 'Carlos Mendes',
+    pin: '1111',
+    generos: ['Jazz', 'Ballet Clássico'],
+    mini_bio: 'Coreógrafo premiado com 25 anos de carreira. Diretor da Cia Mendes desde 2010.',
+    avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&q=80',
+    instagram: 'carlosmendes.coreografo',
+  },
+  {
+    name: 'Juliana Silveira',
+    pin: '2222',
+    generos: ['Contemporâneo', 'Ballet Clássico'],
+    mini_bio: 'Bailarina principal do Theatro Municipal de SP. Mestra em Dança Contemporânea pela UFBA.',
+    avatar_url: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=400&h=400&fit=crop&q=80',
+    instagram: 'juliana.dance',
+  },
+  {
+    name: 'Rodrigo Souza',
+    pin: '3333',
+    generos: ['Hip Hop', 'Dança Urbana'],
+    mini_bio: 'Pioneiro do Hip Hop em SP. 18 anos formando dançarinos urbanos. Battles Brasil/Itália.',
+    avatar_url: 'https://images.unsplash.com/photo-1535525153412-5a092d46317e?w=400&h=400&fit=crop&q=80',
+    instagram: 'rodrigorhip',
+  },
 ]
 
 const PREMIOS_ESPECIAIS = [
@@ -463,14 +484,19 @@ Deno.serve(async (req) => {
     await supa.from('events').update({ formacoes_config: formatos }).eq('id', eventId)
 
     // 4) Inserir 3 jurados (com PINs e is_active)
-    // judges schema real (10 colunas): id, name, specialty [text], avatar_url,
-    // created_at, language, assigned_categories [jsonb], is_active, pin, created_by.
-    // NAO tem competencias_generos/competencias_formatos (eram chute).
+    // judges schema (atualizado em 20260514): tem mini_bio, avatar_url,
+    // instagram, competencias_generos[], is_public — usados pra exibir
+    // cards profissionais na vitrine pública (Etapa 1.5).
     const judgesToInsert = JURADOS.map(j => ({
       name: j.name,
       pin: j.pin,
       is_active: true,
-      specialty: j.generos.join(', '), // ex: "Jazz, Ballet Clássico"
+      is_public: true, // vai mostrar na seção "Jurados" da vitrine pública
+      specialty: j.generos.join(', '), // legacy — mantido por compat
+      mini_bio: j.mini_bio,
+      avatar_url: j.avatar_url,
+      instagram: j.instagram,
+      competencias_generos: j.generos, // pra chips no card
       language: 'pt-BR',
       created_by: user.id,
     }))
