@@ -184,13 +184,19 @@ const DEMO_TRILHAS = [
   'https://cdn.pixabay.com/audio/2022/10/16/audio_3b5f4e2fff.mp3',
 ]
 
-// Patrocinadores placeholder (placehold.co — mais confiavel que via.placeholder
-// que tem problema de DNS/CDN intermitente)
+// Patrocinadores placeholder — variedade típica de festival real:
+// poder público (prefeitura, secretaria), patrocinador privado (estúdio,
+// loja), apoiador (lei de incentivo), mídia parceira, plataforma técnica.
+// placehold.co é mais confiável que via.placeholder.
 const DEMO_PATROCINADORES = [
-  { nome: 'Prefeitura Municipal',          logo_url: 'https://placehold.co/240x120/0ea5e9/ffffff/png?text=PREFEITURA',     link: 'https://exemplo.gov.br' },
-  { nome: 'Secretaria de Cultura',         logo_url: 'https://placehold.co/240x120/8b5cf6/ffffff/png?text=CULTURA',        link: 'https://cultura.exemplo.gov.br' },
-  { nome: 'Studio Capital — Patrocínio',   logo_url: 'https://placehold.co/240x120/ec4899/ffffff/png?text=STUDIO+CAPITAL', link: '' },
-  { nome: 'CoreoHub',                      logo_url: 'https://placehold.co/240x120/ff0068/ffffff/png?text=CoreoHub',       link: 'https://coreohub.com' },
+  { nome: 'Prefeitura Municipal',          logo_url: 'https://placehold.co/240x120/0ea5e9/ffffff/png?text=PREFEITURA',          link: 'https://exemplo.gov.br' },
+  { nome: 'Secretaria Municipal de Cultura', logo_url: 'https://placehold.co/240x120/8b5cf6/ffffff/png?text=CULTURA',          link: 'https://cultura.exemplo.gov.br' },
+  { nome: 'Lei Rouanet',                   logo_url: 'https://placehold.co/240x120/047857/ffffff/png?text=LEI+ROUANET',         link: 'https://www.gov.br/cultura' },
+  { nome: 'Studio Capital',                logo_url: 'https://placehold.co/240x120/ec4899/ffffff/png?text=STUDIO+CAPITAL',      link: '' },
+  { nome: 'Capezio',                       logo_url: 'https://placehold.co/240x120/dc2626/ffffff/png?text=CAPEZIO',              link: 'https://capezio.com.br' },
+  { nome: 'Ballet Magazine',               logo_url: 'https://placehold.co/240x120/0891b2/ffffff/png?text=BALLET+MAG',          link: '' },
+  { nome: 'Rádio Cultura FM',              logo_url: 'https://placehold.co/240x120/ea580c/ffffff/png?text=RADIO+CULTURA',       link: '' },
+  { nome: 'CoreoHub',                      logo_url: 'https://placehold.co/240x120/ff0068/ffffff/png?text=CoreoHub',             link: 'https://coreohub.com' },
 ]
 
 // Tipos de ingresso pra audiencia (politica INTERNO)
@@ -200,15 +206,21 @@ const DEMO_INGRESSOS = [
   { nome: 'Solidária',       preco: 20, obs: 'Inteira + 1kg de alimento não-perecível', link: '' },
 ]
 
-// Programacao do dia (campo canonico do AccountSettings: 'atividade', nao 'titulo')
+// Programação do dia 1 (campo canônico do AccountSettings: 'atividade').
+// Versão detalhada que serve de referência pro produtor — cobre toda a
+// rotina típica de festival: credenciamento, aula aberta, blocos por
+// formação, intervalo de almoço, premiação parcial e festa de encerramento.
 const DEMO_PROGRAMACAO = [
-  { hora: '08:00', atividade: 'Abertura do credenciamento' },
-  { hora: '09:00', atividade: 'Aula gratuita aberta — Workshop de Contemporâneo' },
-  { hora: '12:00', atividade: 'Pausa pra almoço' },
-  { hora: '14:00', atividade: 'Bloco 1 — Manhã (Solos & Duos)' },
-  { hora: '17:00', atividade: 'Intervalo' },
-  { hora: '17:30', atividade: 'Bloco 2 — Tarde (Trios & Grupos)' },
-  { hora: '20:00', atividade: 'Premiação — medalhas + prêmios especiais' },
+  { hora: '08:00', atividade: 'Abertura do credenciamento — entrega de pulseiras' },
+  { hora: '09:00', atividade: 'Aula gratuita aberta — Workshop de Contemporâneo com Juliana Silveira' },
+  { hora: '10:30', atividade: 'Bloco 1 — Solos Infantil (Ballet, Jazz e Contemporâneo)' },
+  { hora: '12:00', atividade: 'Pausa pra almoço — food trucks no pátio' },
+  { hora: '14:00', atividade: 'Bloco 2 — Solos Juvenil + Adulto + Profissional' },
+  { hora: '16:00', atividade: 'Bloco 3 — Duos & Trios (todas categorias)' },
+  { hora: '18:00', atividade: 'Intervalo + masterclass de Hip Hop com Rodrigo Souza' },
+  { hora: '19:30', atividade: 'Bloco 4 — Grupos (todas categorias)' },
+  { hora: '22:00', atividade: 'Premiação parcial — medalhas do dia + revelação' },
+  { hora: '23:00', atividade: 'Festa de encerramento do 1º dia — open bar até 1h' },
 ]
 
 const CATEGORIAS = ['Infantil', 'Juvenil', 'Adulto', 'Profissional']
@@ -348,7 +360,34 @@ Deno.serve(async (req) => {
     await supa.from('events').delete().eq('created_by', user.id).eq('is_demo', true)
 
     // 2) INSERT em events
-    const eventName = '[DEMO] CoreoHub Festival — Demonstração'
+    // Nome do festival fictício — feito pra parecer real e servir de
+    // referência pro produtor que abrir o demo. Tag [DEMO] preservada
+    // pra distinção visual + filtro is_demo no banco.
+    const eventName = '[DEMO] CoreoHub Open — Festival Nacional de Dança'
+
+    // Descrição rica que serve de modelo pro produtor real ver "como ficar"
+    // uma página de festival completa. Cobre: posicionamento, escopo,
+    // estrutura competitiva, premiação, ingressos, infraestrutura.
+    const eventDescription = `O CoreoHub Open é um festival nacional de dança que reúne bailarinos de todo o Brasil em mostra competitiva. Realizado anualmente em São Paulo, oferece um dos circuitos mais democráticos do país, com inscrições em 3 lotes de preço progressivo e categoria solidária para inclusão.
+
+📍 Estrutura
+• 5 estilos: Ballet Clássico, Jazz, Hip Hop, Contemporâneo e Dança Urbana
+• 4 categorias etárias: Infantil (5-11), Juvenil (12-17), Adulto (18-29) e Profissional (30+)
+• 4 formações: Solo, Duo, Trio e Grupo (até 50 integrantes)
+
+🏆 Premiação
+• Sistema de medalhas: Ouro (≥9.0), Prata (8.0-8.9) e Bronze (7.0-7.9)
+• 5 prêmios especiais: Melhor Bailarino(a), Revelação, Coreografia, Grupo da Noite e Figurino
+• Avaliação por banca técnica de 3 jurados de renome nacional
+
+🎟️ Ingressos para o público
+• Inteira: R$30 (acesso aos 2 dias)
+• Meia: R$15 (estudante, idoso, doador de sangue)
+• Solidária: R$20 + 1kg de alimento não-perecível
+
+🎭 Mais que uma competição: aula aberta de Contemporâneo, workshops com os jurados, espaço backstage para troca entre estúdios e festa de encerramento. Tudo em 2 dias intensos no Teatro Municipal de Demonstração.
+
+Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
     const today = new Date()
     const startDate = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000) // +30 dias
     const endDate   = new Date(today.getTime() + 32 * 24 * 60 * 60 * 1000) // +32 dias
@@ -356,7 +395,7 @@ Deno.serve(async (req) => {
 
     const { data: ev, error: evErr } = await supa.from('events').insert([{
       name: eventName,
-      description: 'Evento de demonstração do CoreoHub. Os dados aqui são fictícios e servem apenas para você explorar todas as features sem afetar dados reais.',
+      description: eventDescription,
       start_date: startDate.toISOString().split('T')[0],
       end_date: endDate.toISOString().split('T')[0],
       city: 'São Paulo',
@@ -382,6 +421,12 @@ Deno.serve(async (req) => {
       // (smart default — mesmo padrão do chip "Usar página da vitrine" em
       // AccountSettings).
       website_event: `${Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'}/evento/demo-${user.id.slice(0, 8)}`,
+      // Tolerância de idade espelhada também em events (algumas telas leem dali)
+      age_reference: 'EVENT_DAY',
+      age_tolerance_mode: 'FIXED_COUNT',
+      age_tolerance_value: 1,
+      stage_marking_time_seconds: 45,
+      stage_entry_time_seconds: 15,
       // Politica de ingressos + lista
       politica_ingressos: 'INTERNO',
       ingressos_config: DEMO_INGRESSOS,
@@ -449,7 +494,7 @@ Deno.serve(async (req) => {
       cidade_estado: 'São Paulo / SP',
       hora_evento: '09:00',
       cover_url: DEMO_COVER_URL,
-      descricao: 'Evento de demonstração do CoreoHub. Os dados aqui são fictícios e servem apenas para você explorar todas as features sem afetar dados reais.',
+      descricao: eventDescription,
       escala_notas: 'BASE_10',
       premios_especiais: PREMIOS_ESPECIAIS,
       estilos,
@@ -473,6 +518,12 @@ Deno.serve(async (req) => {
       gatilho_marcacao: 'MANUAL_MARCADOR',
       marcar_palco_ativo: true,
       modo_sonoplastia: 'MANUAL', // default; produtor troca pra SISTEMA se quiser auto-play
+      // Tolerância de idade — permite até 1 integrante 1 ano fora da faixa
+      // (regra padrão usada por festivais BR como Joinville).
+      tolerancia: 1,
+      age_reference: 'EVENT_DAY',
+      age_tolerance_mode: 'FIXED_COUNT',
+      age_tolerance_value: 1,
       // Politica de ingressos + lista (espelha events)
       politica_ingressos: 'INTERNO',
       ingressos_audiencia: DEMO_INGRESSOS,
