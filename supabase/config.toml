@@ -421,6 +421,14 @@ verify_jwt = true
 import_map = "./functions/create-payment-asaas/deno.json"
 entrypoint = "./functions/create-payment-asaas/index.ts"
 
+# Tier 1 venda de ingressos: guest checkout, verify_jwt = false. Validação
+# acontece via CPF + dígito verificador + limites antifraude no payload.
+[functions.create-audience-ticket]
+enabled = true
+verify_jwt = false
+import_map = "./functions/create-audience-ticket/deno.json"
+entrypoint = "./functions/create-audience-ticket/index.ts"
+
 # Webhook Asaas: verify_jwt = false — Asaas não envia Authorization header.
 # A autenticidade é garantida pelo campo `event` e validação do payment_id.
 [functions.asaas-webhook]

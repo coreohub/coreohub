@@ -342,6 +342,10 @@ const PublicEventPage = () => {
           }
 
           if (politica === 'INTERNO' && Array.isArray(event.ingressos_config) && event.ingressos_config.filter((t: any) => t.nome).length > 0) {
+            // Tier 1: se audience_sales_enabled = true, vendemos pelo CoreoHub
+            // (botão "Comprar" leva pra /checkout-ingresso). Senão, exibe só os
+            // tipos como informativo (ou link externo legado se cadastrado).
+            const salesEnabled = !!event.audience_sales_enabled;
             return (
               <div className="space-y-4">
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
@@ -351,27 +355,43 @@ const PublicEventPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {event.ingressos_config
                     .filter((t: any) => t.nome)
-                    .map((t: any, i: number) => (
-                      <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col gap-2 hover:border-[#ff0068]/40 transition-colors">
-                        <div className="flex items-baseline justify-between gap-2">
-                          <p className="font-black uppercase text-sm text-white">{t.nome}</p>
-                          <p className="text-[#ff0068] font-black text-lg">
-                            {Number(t.preco) > 0 ? `R$ ${Number(t.preco).toFixed(2)}` : 'Grátis'}
-                          </p>
+                    .map((t: any, originalIdx: number) => {
+                      // Idx no array original importa pro checkout (não o filtrado)
+                      const realIdx = event.ingressos_config.findIndex((x: any) => x === t);
+                      const preco = Number(t.preco ?? 0);
+                      return (
+                        <div key={realIdx} className="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col gap-2 hover:border-[#ff0068]/40 transition-colors">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <p className="font-black uppercase text-sm text-white">{t.nome}</p>
+                            <p className="text-[#ff0068] font-black text-lg">
+                              {preco > 0 ? `R$ ${preco.toFixed(2)}` : 'Grátis'}
+                            </p>
+                          </div>
+                          {t.obs && <p className="text-[10px] text-slate-400">{t.obs}</p>}
+
+                          {/* Botão de compra: prioriza checkout interno quando habilitado */}
+                          {salesEnabled && preco > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/checkout-ingresso/${idOrSlug}/${realIdx}`)}
+                              className="self-start inline-flex items-center gap-1.5 px-4 py-2 mt-2 bg-[#ff0068] text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:scale-105 transition-all"
+                            >
+                              <Ticket size={12} /> Comprar
+                            </button>
+                          )}
+                          {!salesEnabled && t.link && (
+                            <a
+                              href={t.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="self-start inline-flex items-center gap-1.5 text-[10px] font-black text-[#ff0068] uppercase tracking-widest hover:underline"
+                            >
+                              Comprar <ExternalLink size={10} />
+                            </a>
+                          )}
                         </div>
-                        {t.obs && <p className="text-[10px] text-slate-400">{t.obs}</p>}
-                        {t.link && (
-                          <a
-                            href={t.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="self-start inline-flex items-center gap-1.5 text-[10px] font-black text-[#ff0068] uppercase tracking-widest hover:underline"
-                          >
-                            Comprar <ExternalLink size={10} />
-                          </a>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                 </div>
               </div>
             );

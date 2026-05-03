@@ -22,7 +22,7 @@ const STATUS_MAP: Record<string, string> = {
 }
 
 async function dispararEmail(
-  type: 'payment_confirmed_registrant' | 'payment_confirmed_producer',
+  type: 'payment_confirmed_registrant' | 'payment_confirmed_producer' | 'audience_ticket_confirmed' | 'audience_ticket_producer',
   payload: Record<string, unknown>
 ): Promise<void> {
   try {
@@ -43,6 +43,172 @@ async function dispararEmail(
   } catch (e) {
     console.error(`[asaas-webhook] exception ao chamar send-email:`, (e as Error).message)
   }
+}
+
+// ── Handler dedicado pra audience_tickets (Tier 1 paid tickets) ─────────────
+// Atualiza o GRUPO de tickets que compartilham o mesmo payment_id (compra
+// múltipla via 1 só checkout), registra comissão e dispara emails.
+async function handleAudienceTicket(opts: {
+  supabase: any
+  payment: any
+  statusInterno: string
+  groupId: string
+}): Promise<Response> {
+  const { supabase, payment, statusInterno, groupId } = opts
+
+  const respHeaders = { ...corsHeaders, 'Content-Type': 'application/json' }
+  const respond = (body: Record<string, unknown>) =>
+    new Response(JSON.stringify(body), { status: 200, headers: respHeaders })
+
+  // Idempotência: se já registramos comissão pra este payment, ignora.
+  if (statusInterno === 'APROVADO') {
+    const { data: existing } = await supabase
+      .from('platform_commissions')
+      .select('id')
+      .eq('asaas_payment_id', String(payment.id))
+      .maybeSingle()
+    if (existing) {
+      console.log(`[asaas-webhook][audience] payment=${payment.id} já processado`)
+      return respond({ status: 'already_processed' })
+    }
+  }
+
+  // Atualiza todos os tickets que compartilham este payment_id (compra múltipla)
+  const updatePayload: Record<string, unknown> = {
+    status_pagamento: statusInterno,
+    payment_method:   payment.billingType ?? null,
+  }
+  if (statusInterno === 'APROVADO') {
+    updatePayload.paid_at = new Date().toISOString()
+  }
+
+  const { data: updatedTickets, error: updErr } = await supabase
+    .from('audience_tickets')
+    .update(updatePayload)
+    .eq('payment_id', String(payment.id))
+    .select('id, event_id, ticket_type_nome, ticket_type_kind, preco, buyer_name, buyer_email, access_token, commission_amount, producer_amount, fee_mode')
+
+  if (updErr) {
+    console.error('[asaas-webhook][audience] erro update:', updErr.message)
+  }
+
+  if (!updatedTickets?.length) {
+    // Fallback: tenta pelo grupo (pode acontecer se payment_id ainda não foi
+    // persistido por race condition no checkout)
+    const { data: fallback } = await supabase
+      .from('audience_tickets')
+      .update(updatePayload)
+      .eq('id', groupId)
+      .select('id, event_id, ticket_type_nome, ticket_type_kind, preco, buyer_name, buyer_email, access_token, commission_amount, producer_amount, fee_mode')
+    if (fallback?.length) {
+      console.log(`[asaas-webhook][audience] fallback group_id atualizou ${fallback.length} ticket(s)`)
+    } else {
+      console.error(`[asaas-webhook][audience] nenhum ticket encontrado pra payment=${payment.id} group=${groupId}`)
+      return respond({ status: 'error', reason: 'no_tickets_matched' })
+    }
+  }
+
+  const tickets = updatedTickets ?? []
+  if (statusInterno !== 'APROVADO' || tickets.length === 0) {
+    return respond({
+      status: 'ok',
+      payment_status:  payment.status,
+      internal_status: statusInterno,
+      tickets_updated: tickets.length,
+    })
+  }
+
+  // ── APROVADO: registra comissão (1 row por payment, somando o grupo) ─────
+  const eventId = tickets[0].event_id
+  const grossAmount     = Number(payment.value ?? 0)
+  const commissionTotal = tickets.reduce((s: number, t: any) => s + Number(t.commission_amount ?? 0), 0)
+  const producerTotal   = parseFloat((grossAmount - commissionTotal).toFixed(2))
+
+  const { data: eventData } = await supabase
+    .from('events')
+    .select('created_by, name, location, event_date, audience_commission_percent')
+    .eq('id', eventId)
+    .single()
+
+  const { error: commErr } = await supabase
+    .from('platform_commissions')
+    .insert({
+      event_id:          eventId,
+      producer_id:       eventData?.created_by ?? null,
+      gross_amount:      grossAmount,
+      commission_amount: parseFloat(commissionTotal.toFixed(2)),
+      net_amount:        producerTotal,
+      asaas_payment_id:  String(payment.id),
+      commission_type:   'percent',
+      audience_ticket_group_id: groupId,
+    })
+
+  if (commErr) {
+    console.error('[asaas-webhook][audience] erro inserir comissão:', commErr.message)
+  } else {
+    console.log(
+      `[asaas-webhook][audience] APROVADO | tickets=${tickets.length} bruto=R$${grossAmount}` +
+      ` comissao=R$${commissionTotal.toFixed(2)} produtor=R$${producerTotal}`
+    )
+  }
+
+  // ── Emails ──────────────────────────────────────────────────────────────
+  try {
+    const { data: produtorProfile } = eventData?.created_by
+      ? await supabase.from('profiles').select('full_name, email').eq('id', eventData.created_by).maybeSingle()
+      : { data: null } as any
+
+    const appUrl = Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'
+    const buyerName  = tickets[0].buyer_name
+    const buyerEmail = tickets[0].buyer_email
+    const ticketLinks = tickets.map((t: any) => ({
+      tipo: t.ticket_type_nome,
+      url: `${appUrl}/meu-ingresso/${t.access_token}`,
+    }))
+
+    const emailJobs: Promise<void>[] = []
+
+    if (buyerEmail) {
+      emailJobs.push(dispararEmail('audience_ticket_confirmed', {
+        buyerName,
+        buyerEmail,
+        eventoNome:  eventData?.name,
+        eventoLocal: eventData?.location,
+        eventoData:  eventData?.event_date
+          ? new Date(eventData.event_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+          : null,
+        valorPago:   grossAmount,
+        tickets:     ticketLinks,
+        appUrl,
+      }))
+    }
+
+    if (produtorProfile?.email) {
+      emailJobs.push(dispararEmail('audience_ticket_producer', {
+        produtorNome:  produtorProfile.full_name,
+        produtorEmail: produtorProfile.email,
+        eventoNome:    eventData?.name,
+        buyerName,
+        buyerEmail,
+        quantidade:    tickets.length,
+        valorBruto:    grossAmount,
+        comissao:      commissionTotal,
+        valorLiquido:  producerTotal,
+        appUrl,
+      }))
+    }
+
+    await Promise.all(emailJobs)
+  } catch (emailErr) {
+    console.error('[asaas-webhook][audience] falha bloco emails:', (emailErr as Error).message)
+  }
+
+  return respond({
+    status:          'ok',
+    payment_status:  payment.status,
+    internal_status: statusInterno,
+    tickets_updated: tickets.length,
+  })
 }
 
 Deno.serve(async (req) => {
@@ -96,11 +262,16 @@ Deno.serve(async (req) => {
       return ok({ status: 'ignored', reason: 'not_payment_event' })
     }
 
-    const registrationId: string | undefined = payment.externalReference
-    if (!registrationId) {
+    const externalRef: string | undefined = payment.externalReference
+    if (!externalRef) {
       console.error('[asaas-webhook] externalReference vazio')
       return ok({ status: 'error', reason: 'no_external_reference' })
     }
+
+    // Discriminator: "AT:<group_id>" = audience ticket; senão = registration_id legado
+    const isAudienceTicket = externalRef.startsWith('AT:')
+    const audienceGroupId  = isAudienceTicket ? externalRef.slice(3) : null
+    const registrationId   = isAudienceTicket ? null : externalRef
 
     // Defesa em profundidade contra forja de webhook (token estatico
     // pode vazar): cross-check via API Asaas. Atacante com token vazado
@@ -127,8 +298,8 @@ Deno.serve(async (req) => {
             return ok({ status: 'rejected', reason: 'status_mismatch' })
           }
           // Se externalReference da API tambem nao bater, e forja
-          if (apiPayment.externalReference && apiPayment.externalReference !== registrationId) {
-            console.error(`[asaas-webhook] externalReference mismatch payment_id=${payment.id}: webhook=${registrationId} api=${apiPayment.externalReference} — rejeitando`)
+          if (apiPayment.externalReference && apiPayment.externalReference !== externalRef) {
+            console.error(`[asaas-webhook] externalReference mismatch payment_id=${payment.id}: webhook=${externalRef} api=${apiPayment.externalReference} — rejeitando`)
             return ok({ status: 'rejected', reason: 'external_reference_mismatch' })
           }
         }
@@ -145,13 +316,25 @@ Deno.serve(async (req) => {
     const statusInterno = STATUS_MAP[payment.status] ?? 'PENDENTE'
     console.log(
       `[asaas-webhook] payment_id=${payment.id} asaas_status=${payment.status}` +
-      ` → ${statusInterno} | registration=${registrationId}`
+      ` → ${statusInterno} | ref=${externalRef} type=${isAudienceTicket ? 'audience' : 'registration'}`
     )
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
     )
+
+    // ── BRANCH: AUDIENCE TICKET ──────────────────────────────────────────────
+    if (isAudienceTicket && audienceGroupId) {
+      return await handleAudienceTicket({
+        supabase,
+        payment,
+        statusInterno,
+        groupId: audienceGroupId,
+      })
+    }
+
+    // ── BRANCH: REGISTRATION (fluxo original) ────────────────────────────────
 
     // Idempotência: evita processar o mesmo pagamento aprovado duas vezes
     if (statusInterno === 'APROVADO') {

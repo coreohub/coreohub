@@ -89,27 +89,65 @@ const CheckIn = () => {
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, check_in_status: newStatus ?? undefined, check_in_at: now ?? undefined } : i));
   };
 
-  /* ── process QR result (UUID lookup) ── */
+  /* ── process QR result (UUID lookup em registrations OU audience_tickets) ── */
   const processQrId = useCallback(async (rawId: string) => {
     const id = rawId.trim();
+
+    // 1) Tenta primeiro em registrations (inscrições) — comportamento legado
     const item = items.find(i => i.id === id);
-    if (!item) {
-      setScanResult({ type: 'error', message: 'Inscrição não encontrada.' });
+    if (item) {
+      if (item.check_in_status === 'OK') {
+        const t = item.check_in_at ? new Date(item.check_in_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+        setScanResult({ type: 'duplicate', message: `Já credenciado${t ? ' às ' + t : ''}.`, name: item.nome_coreografia });
+        return;
+      }
+      if (item.status_pagamento !== 'CONFIRMADO') {
+        setScanResult({ type: 'error', message: 'Pagamento não confirmado. Procure o coordenador.', name: item.nome_coreografia });
+        return;
+      }
+      const now = new Date().toISOString();
+      await supabase.from('registrations').update({ check_in_status: 'OK', check_in_at: now }).eq('id', id);
+      setItems(prev => prev.map(i => i.id === id ? { ...i, check_in_status: 'OK', check_in_at: now } : i));
+      setScanResult({ type: 'success', message: 'Check-in realizado!', name: item.nome_coreografia });
       return;
     }
-    if (item.check_in_status === 'OK') {
-      const t = item.check_in_at ? new Date(item.check_in_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
-      setScanResult({ type: 'duplicate', message: `Já credenciado${t ? ' às ' + t : ''}.`, name: item.nome_coreografia });
+
+    // 2) Fallback: pode ser ingresso de plateia (Tier 1)
+    const { data: ticket } = await supabase
+      .from('audience_tickets')
+      .select('id, ticket_type_nome, ticket_type_kind, buyer_name, status_pagamento, check_in_status, check_in_at')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (!ticket) {
+      setScanResult({ type: 'error', message: 'QR não encontrado (nem inscrição nem ingresso).' });
       return;
     }
-    if (item.status_pagamento !== 'CONFIRMADO') {
-      setScanResult({ type: 'error', message: 'Pagamento não confirmado. Procure o coordenador.', name: item.nome_coreografia });
+
+    if (ticket.check_in_status === 'OK') {
+      const t = ticket.check_in_at ? new Date(ticket.check_in_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+      setScanResult({ type: 'duplicate', message: `Ingresso já usado${t ? ' às ' + t : ''}.`, name: ticket.buyer_name });
+      return;
+    }
+    if (ticket.status_pagamento !== 'APROVADO' && ticket.status_pagamento !== 'CORTESIA') {
+      setScanResult({ type: 'error', message: `Pagamento ${String(ticket.status_pagamento).toLowerCase()}. Procure o coordenador.`, name: ticket.buyer_name });
       return;
     }
     const now = new Date().toISOString();
-    await supabase.from('registrations').update({ check_in_status: 'OK', check_in_at: now }).eq('id', id);
-    setItems(prev => prev.map(i => i.id === id ? { ...i, check_in_status: 'OK', check_in_at: now } : i));
-    setScanResult({ type: 'success', message: 'Check-in realizado!', name: item.nome_coreografia });
+    const { error: upErr } = await supabase
+      .from('audience_tickets')
+      .update({ check_in_status: 'OK', check_in_at: now })
+      .eq('id', id);
+    if (upErr) {
+      setScanResult({ type: 'error', message: `Falha ao marcar: ${upErr.message}`, name: ticket.buyer_name });
+      return;
+    }
+    const meiaSuffix = ticket.ticket_type_kind === 'meia' ? ' (verificar documento de meia)' : '';
+    setScanResult({
+      type: 'success',
+      message: `Ingresso ${ticket.ticket_type_nome} liberado${meiaSuffix}!`,
+      name: ticket.buyer_name,
+    });
   }, [items]);
 
   /* ── QR scanner via BarcodeDetector or fallback ── */

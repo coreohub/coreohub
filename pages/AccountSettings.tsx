@@ -668,6 +668,12 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
   const [ingressos, setIngressos]     = useState<TicketType[]>([]);
   const [politicaIngressos, setPoliticaIngressos] = useState<'NAO_DEFINIDO' | 'GRATUITO' | 'INTERNO' | 'EXTERNO'>('NAO_DEFINIDO');
   const [urlIngressosExterno, setUrlIngressosExterno] = useState<string>('');
+  // Tier 1 paid tickets (vivem em events.audience_*)
+  const [audienceSalesEnabled, setAudienceSalesEnabled] = useState<boolean>(false);
+  const [audienceCommissionPercent, setAudienceCommissionPercent] = useState<number>(10);
+  const [audienceFeeMode, setAudienceFeeMode] = useState<'repassar' | 'absorver'>('repassar');
+  const [audienceMaxPerCpf, setAudienceMaxPerCpf] = useState<number>(6);
+  const [audienceMaxPerPurchase, setAudienceMaxPerPurchase] = useState<number>(6);
   const [sponsors, setSponsors]       = useState<Sponsor[]>([]);
   const [styles,  setStyles]  = useState<string[]>(DEFAULT_MODALITIES);
   const [formats, setFormats] = useState<any[]>(DEFAULT_FORMATS);
@@ -943,7 +949,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         let data: any = null;
         if (user) {
           const { data: myEvent } = await supabase
-            .from('events').select('id, instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url')
+            .from('events').select('id, instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase')
             .eq('created_by', user.id)
             .order('created_at', { ascending: false })
             .limit(1).maybeSingle();
@@ -960,6 +966,22 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
               email_event:        myEvent.email_event ?? '',
               regulation_pdf_url: myEvent.regulation_pdf_url ?? '',
             });
+            // Tier 1: configurações de venda de ingressos (events.audience_*)
+            if (typeof (myEvent as any).audience_sales_enabled === 'boolean') {
+              setAudienceSalesEnabled((myEvent as any).audience_sales_enabled);
+            }
+            if ((myEvent as any).audience_commission_percent != null) {
+              setAudienceCommissionPercent(Number((myEvent as any).audience_commission_percent));
+            }
+            if ((myEvent as any).audience_fee_mode) {
+              setAudienceFeeMode((myEvent as any).audience_fee_mode);
+            }
+            if ((myEvent as any).audience_max_per_cpf != null) {
+              setAudienceMaxPerCpf(Number((myEvent as any).audience_max_per_cpf));
+            }
+            if ((myEvent as any).audience_max_per_purchase != null) {
+              setAudienceMaxPerPurchase(Number((myEvent as any).audience_max_per_purchase));
+            }
           }
         }
         if (!data) {
@@ -1207,6 +1229,12 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
           patrocinadores_config:   sponsors,
           is_public:               true,
           created_by:              user.id,
+          // Tier 1 paid tickets
+          audience_sales_enabled:        audienceSalesEnabled && politicaIngressos === 'INTERNO',
+          audience_commission_percent:   audienceCommissionPercent,
+          audience_fee_mode:             audienceFeeMode,
+          audience_max_per_cpf:          audienceMaxPerCpf,
+          audience_max_per_purchase:     audienceMaxPerPurchase,
         };
 
         const { data: cfgRow } = await supabase
@@ -1803,6 +1831,93 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                     </div>
                   ))
                 )}
+                  </div>
+
+                  {/* Tier 1 — Vender ingressos pelo CoreoHub */}
+                  <div className="mt-6 border-t border-slate-200 dark:border-white/10 pt-5 space-y-4">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={audienceSalesEnabled}
+                        onChange={e => setAudienceSalesEnabled(e.target.checked)}
+                        className="mt-1 w-4 h-4 accent-[#ff0068]"
+                      />
+                      <div>
+                        <p className="text-sm font-black text-slate-900 dark:text-white">
+                          Vender ingressos pelo CoreoHub
+                        </p>
+                        <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                          Quando ativo, o botão "Comprar" na vitrine pública leva pra checkout interno
+                          (PIX/cartão/boleto via Asaas). Comprador recebe ingresso digital com QR no email.
+                          Quando inativo, mostra os tipos como informativo (com link externo se cadastrado).
+                        </p>
+                      </div>
+                    </label>
+
+                    {audienceSalesEnabled && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-7">
+                        <div>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 block">
+                            Comissão da plataforma (%)
+                          </label>
+                          <input
+                            type="number"
+                            min={0} max={100} step={0.5}
+                            value={audienceCommissionPercent}
+                            onChange={e => setAudienceCommissionPercent(Number(e.target.value))}
+                            className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                          />
+                          <p className="text-[10px] text-slate-500 mt-1">Padrão: 10%. Sympla cobra 10% + 2,5% processamento; aqui só uma taxa.</p>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 block">
+                            Quem paga a taxa
+                          </label>
+                          <select
+                            value={audienceFeeMode}
+                            onChange={e => setAudienceFeeMode(e.target.value as 'repassar' | 'absorver')}
+                            className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                          >
+                            <option value="repassar">Repassar ao comprador (preço + taxa)</option>
+                            <option value="absorver">Absorver (eu pago a taxa)</option>
+                          </select>
+                          <p className="text-[10px] text-slate-500 mt-1">
+                            {audienceFeeMode === 'repassar'
+                              ? 'Comprador vê preço + taxa de serviço.'
+                              : 'Comprador vê só o preço; taxa sai do seu líquido.'}
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 block">
+                            Máx ingressos por CPF
+                          </label>
+                          <input
+                            type="number"
+                            min={1} max={50}
+                            value={audienceMaxPerCpf}
+                            onChange={e => setAudienceMaxPerCpf(Math.max(1, Number(e.target.value)))}
+                            className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                          />
+                          <p className="text-[10px] text-slate-500 mt-1">Padrão 6 (cobre família). Meia-entrada tem limite legal de 1.</p>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 block">
+                            Máx ingressos por compra
+                          </label>
+                          <input
+                            type="number"
+                            min={1} max={20}
+                            value={audienceMaxPerPurchase}
+                            onChange={e => setAudienceMaxPerPurchase(Math.max(1, Number(e.target.value)))}
+                            className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                          />
+                          <p className="text-[10px] text-slate-500 mt-1">Sympla padrão é 5. Para escolas de dança com famílias grandes, considere 6+.</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </>
               )}

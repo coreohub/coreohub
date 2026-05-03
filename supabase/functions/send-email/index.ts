@@ -376,10 +376,105 @@ function buildEventCreatedProducer(p: EventCreatedPayload) {
   }
 }
 
+// ─── Template: audience_ticket_confirmed (Tier 1 paid tickets) ──────────────
+
+interface AudienceTicketPayload {
+  buyerName?: string
+  buyerEmail: string
+  eventoNome?: string
+  eventoData?: string
+  eventoLocal?: string
+  valorPago?: number
+  tickets?: Array<{ tipo: string; url: string }>
+  appUrl?: string
+}
+
+function buildAudienceTicketConfirmation(p: AudienceTicketPayload) {
+  const tickets = Array.isArray(p.tickets) ? p.tickets : []
+  const isMulti = tickets.length > 1
+
+  const eventInfo = [
+    p.eventoNome  ? infoRow('Evento', escape(p.eventoNome)) : '',
+    p.eventoData  ? infoRow('Data',   escape(p.eventoData)) : '',
+    p.eventoLocal ? infoRow('Local',  escape(p.eventoLocal)) : '',
+    typeof p.valorPago === 'number' ? infoRow('Valor pago', escape(money(p.valorPago))) : '',
+  ].filter(Boolean).join('')
+
+  const ticketBlocks = tickets.map((t, i) => {
+    const label = isMulti ? `Ingresso ${i + 1} de ${tickets.length} — ${t.tipo}` : t.tipo
+    return `
+      <div style="margin-top:${i === 0 ? 24 : 12}px;padding:18px;border:2px solid ${BRAND_COLOR};border-radius:14px;background:#fff5f8;">
+        <p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:${BRAND_COLOR};">${escape(label)}</p>
+        <p style="margin:0 0 12px;font-size:13px;line-height:1.5;color:#475569;">
+          Apresente o QR no portão. Acesse pelo celular pra exibir a tela com o código.
+        </p>
+        <a href="${escape(t.url)}" style="display:inline-block;padding:11px 22px;background:${BRAND_COLOR};color:#fff;text-decoration:none;border-radius:10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;">
+          Acessar ingresso →
+        </a>
+      </div>`
+  }).join('')
+
+  const contentHtml = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${eventInfo}</table>
+    ${ticketBlocks}
+    <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      Guarde este email — o link de cada ingresso é seu comprovante. Se você comprou ${isMulti ? 'mais de um' : 'mais de um ingresso'}, cada pessoa precisa do seu próprio QR.
+    </p>`
+
+  return {
+    subject: `${p.eventoNome ? `[${p.eventoNome}] ` : ''}Ingresso${isMulti ? 's' : ''} confirmado${isMulti ? 's' : ''}`,
+    html: baseLayout({
+      preheader: `Pagamento aprovado. ${tickets.length} ingresso${isMulti ? 's' : ''} liberado${isMulti ? 's' : ''} pra ${p.eventoNome ?? 'o evento'}.`,
+      title: isMulti ? `${tickets.length} ingressos confirmados!` : 'Ingresso confirmado!',
+      intro: `Olá ${escape(p.buyerName ?? 'comprador(a)')}, recebemos seu pagamento e ${isMulti ? `seus ${tickets.length} ingressos foram liberados` : 'seu ingresso foi liberado'}. Bom evento!`,
+      contentHtml,
+      footerNote: 'Apresente o QR no portão. Em caso de dúvidas, responda este email.',
+    }),
+  }
+}
+
+interface AudienceProducerPayload {
+  produtorNome?: string
+  produtorEmail: string
+  eventoNome?: string
+  buyerName?: string
+  buyerEmail?: string
+  quantidade?: number
+  valorBruto?: number
+  comissao?: number
+  valorLiquido?: number
+  appUrl?: string
+}
+
+function buildAudienceProducerNotification(p: AudienceProducerPayload) {
+  const linhas = [
+    p.eventoNome ? infoRow('Evento', escape(p.eventoNome)) : '',
+    typeof p.quantidade === 'number' ? infoRow('Quantidade', String(p.quantidade)) : '',
+    p.buyerName ? infoRow('Comprador', escape(p.buyerName)) : '',
+    p.buyerEmail ? infoRow('Email', escape(p.buyerEmail)) : '',
+    typeof p.valorBruto === 'number' ? infoRow('Valor bruto', escape(money(p.valorBruto))) : '',
+    typeof p.comissao === 'number' ? infoRow('Comissão plataforma', escape(money(p.comissao))) : '',
+    typeof p.valorLiquido === 'number' ? infoRow('Valor líquido (você recebe)', `<span style="color:#16a34a;">${escape(money(p.valorLiquido))}</span>`) : '',
+  ].filter(Boolean).join('')
+
+  return {
+    subject: `Nova venda de ingresso — ${p.eventoNome ?? 'CoreoHub'}`,
+    html: baseLayout({
+      preheader: `Nova venda de ingresso de plateia em ${p.eventoNome ?? 'seu evento'}.`,
+      title: 'Nova venda de ingresso',
+      intro: `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, ${p.quantidade && p.quantidade > 1 ? `${p.quantidade} ingressos foram comprados` : 'um ingresso foi comprado'} para o seu evento.`,
+      contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>`,
+      ctaLabel: 'Ver vendas',
+      ctaUrl: `${p.appUrl ?? 'https://app.coreohub.com'}/vendas-ingressos`,
+      footerNote: 'Você está recebendo este email por ser o produtor responsável pelo evento.',
+    }),
+  }
+}
+
 // ─── Handler ────────────────────────────────────────────────────────────────
 
 interface SendEmailRequest {
-  type: 'payment_confirmed_registrant' | 'payment_confirmed_producer' | 'event_created_producer' | 'producer_welcome'
+  type: 'payment_confirmed_registrant' | 'payment_confirmed_producer' | 'event_created_producer' | 'producer_welcome' | 'audience_ticket_confirmed' | 'audience_ticket_producer'
   payload: Record<string, unknown>
 }
 
@@ -486,6 +581,25 @@ Deno.serve(async (req) => {
         const p = payload as unknown as ProducerWelcomePayload
         if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
         const tpl = buildProducerWelcome(p)
+        to = p.produtorEmail
+        subject = tpl.subject
+        html = tpl.html
+        break
+      }
+      case 'audience_ticket_confirmed': {
+        const p = payload as unknown as AudienceTicketPayload
+        if (!p.buyerEmail) throw new Error('buyerEmail é obrigatório')
+        const tpl = buildAudienceTicketConfirmation(p)
+        to = p.buyerEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        break
+      }
+      case 'audience_ticket_producer': {
+        const p = payload as unknown as AudienceProducerPayload
+        if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
+        const tpl = buildAudienceProducerNotification(p)
         to = p.produtorEmail
         subject = tpl.subject
         html = tpl.html

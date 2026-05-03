@@ -41,6 +41,9 @@ const PublicEventPage          = lazy(() => import('./pages/PublicEventPage'));
 const Festivais                = lazy(() => import('./pages/Festivais'));
 const NewRegistration          = lazy(() => import('./pages/NewRegistration'));
 const Checkout                 = lazy(() => import('./pages/Checkout'));
+const CheckoutIngresso         = lazy(() => import('./pages/CheckoutIngresso'));
+const MeuIngresso              = lazy(() => import('./pages/MeuIngresso'));
+const VendasIngressos          = lazy(() => import('./pages/VendasIngressos'));
 const PagamentoInscrito        = lazy(() => import('./pages/PagamentoInscrito'));
 const PagamentoSucesso         = lazy(() => import('./pages/PagamentoSucesso'));
 const PagamentoPendente        = lazy(() => import('./pages/PagamentoPendente'));
@@ -387,6 +390,10 @@ const App: React.FC = () => {
 
         <Route path="/festivais" element={<Suspense fallback={<PageLoader />}><Festivais /></Suspense>} />
         <Route path="/evento/:idOrSlug" element={<Suspense fallback={<PageLoader />}><PublicEventPage /></Suspense>} />
+        {/* Tier 1 paid tickets — todas públicas (guest checkout / acesso por token) */}
+        <Route path="/checkout-ingresso/:idOrSlug/:ticketTypeIdx" element={<Suspense fallback={<PageLoader />}><CheckoutIngresso /></Suspense>} />
+        <Route path="/meu-ingresso/:token" element={<Suspense fallback={<PageLoader />}><MeuIngresso /></Suspense>} />
+        <Route path="/vendas-ingressos" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><VendasIngressos /></Suspense></PrivateRoute>} />
         <Route path="/festival/:id" element={<FestivalShowcase />} />
         <Route path="/festival/:id/register" element={<PrivateRoute {...privateRouteProps}><NewRegistration /></PrivateRoute>} />
         <Route path="/festival/:id/checkout" element={<PrivateRoute {...privateRouteProps}><Checkout /></PrivateRoute>} />
