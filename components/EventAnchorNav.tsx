@@ -1,11 +1,11 @@
 /**
- * EventAnchorNav — sticky anchor menu da vitrine pública (Etapa 1.5).
+ * EventAnchorNav — anchor menu fixo da vitrine pública (Etapa 1.5).
  *
- * Padrão validado em RD Summit, Web Summit, Lollapalooza:
- * - Aparece só após rolar 80vh (não polui o hero)
- * - Background backdrop-blur com transparência
- * - Smooth scroll com offset (compensa altura do header sticky)
- * - IntersectionObserver pra highlight da seção ativa
+ * Padrão Apple/Stripe:
+ * - Sempre visível no topo (position: fixed)
+ * - Semi-transparente sobre o hero, opaco depois de rolar
+ * - Smooth scroll com offset pra compensar altura do nav
+ * - IntersectionObserver destaca a section ativa
  * - Mobile: chips horizontais com scroll lateral
  *
  * Recebe lista filtrada de seções visíveis (caller decide quais existem).
@@ -20,9 +20,7 @@ export interface AnchorSection {
 
 interface EventAnchorNavProps {
   sections: AnchorSection[];
-  /** Compat: deixa só pra não quebrar callers, mas o menu agora aparece sempre */
-  triggerSectionId?: string;
-  /** CTA opcional no canto direito (ex: botão "Comprar ingresso") */
+  /** CTA opcional no canto direito (ex: botão "Inscreva-se") */
   cta?: React.ReactNode;
 }
 
@@ -44,7 +42,9 @@ function useActiveSection(sectionIds: string[]): string | null {
             if (entry.isIntersecting) setActive(id);
           },
           {
-            // Considera "ativa" a section que tem >50% visível na metade superior
+            // rootMargin define a "viewport efetiva":
+            // - top -64px: desconta a altura do nav fixo (não conta o que está atrás dele)
+            // - bottom -50%: section vira ativa quando entra na metade superior do viewport
             rootMargin: `-${HEADER_HEIGHT}px 0px -50% 0px`,
             threshold: [0, 0.25, 0.5, 1],
           }
