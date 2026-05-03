@@ -1728,13 +1728,20 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                 </div>
               </div>
 
-              {/* Politica: 4 opcoes */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5">
+              {/* Politica: 3 opcoes (NAO_DEFINIDO escondido — só estado de DB pra eventos legados) */}
+              {politicaIngressos === 'NAO_DEFINIDO' && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 mb-3 flex items-start gap-2">
+                  <AlertCircle size={14} className="text-amber-500 mt-0.5 shrink-0" />
+                  <p className="text-[11px] text-amber-600 dark:text-amber-300 font-bold">
+                    Escolha uma opção abaixo pra que a seção de ingressos apareça na vitrine pública.
+                  </p>
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-5">
                 {([
-                  { v: 'NAO_DEFINIDO', label: 'Não definido', desc: 'Esconde a seção' },
-                  { v: 'GRATUITO',     label: 'Gratuito',      desc: 'Sem ingresso' },
-                  { v: 'INTERNO',      label: 'Lista interna', desc: 'Tipos abaixo' },
-                  { v: 'EXTERNO',      label: 'Site externo',  desc: 'Ticketeira' },
+                  { v: 'GRATUITO', label: 'Gratuito',      desc: 'Entrada livre, sem ingresso' },
+                  { v: 'INTERNO',  label: 'Vender pelo CoreoHub', desc: 'Lista de tipos abaixo, checkout interno' },
+                  { v: 'EXTERNO',  label: 'Ticketeira externa',  desc: 'Sympla, Eventbrite etc.' },
                 ] as const).map(opt => {
                   const active = politicaIngressos === opt.v;
                   return (
@@ -1781,7 +1788,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                 <>
                   <div className="flex items-center justify-end mb-3">
                     <button
-                      onClick={() => setIngressos(t => [...t, { nome: '', preco: 0, obs: '', link: '' }])}
+                      onClick={() => setIngressos(t => [...t, { nome: '', preco: 0, obs: '' }])}
                       className="flex items-center gap-1.5 px-4 py-2 bg-[#ff0068]/10 text-[#ff0068] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0068]/20"
                     >
                       <Plus size={12} /> Adicionar Tipo
@@ -1789,7 +1796,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                   </div>
                   <div className="space-y-3">
                 {ingressos.length === 0 ? (
-                  <p className="text-center text-slate-400 py-8 text-xs italic">Nenhum tipo. Ex: "Meia Entrada R$10 + 1kg de alimento" ou "Inteira R$20".</p>
+                  <p className="text-center text-slate-400 py-8 text-xs italic">Nenhum tipo. Ex: "Meia Entrada R$10" ou "Inteira R$20".</p>
                 ) : (
                   ingressos.map((item, i) => (
                     <div key={i} className="grid grid-cols-12 gap-2 items-start bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-xl p-3">
@@ -1798,7 +1805,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                         value={item.nome}
                         onChange={e => setIngressos(t => t.map((x, idx) => idx === i ? { ...x, nome: e.target.value } : x))}
                         placeholder="Nome (Ex: Meia Entrada)"
-                        className="col-span-4 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                        className="col-span-5 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
                       />
                       <input
                         type="number"
@@ -1812,15 +1819,8 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                         type="text"
                         value={item.obs ?? ''}
                         onChange={e => setIngressos(t => t.map((x, idx) => idx === i ? { ...x, obs: e.target.value } : x))}
-                        placeholder="Obs (Ex: + 1kg alimento)"
-                        className="col-span-3 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
-                      />
-                      <input
-                        type="text"
-                        value={item.link ?? ''}
-                        onChange={e => setIngressos(t => t.map((x, idx) => idx === i ? { ...x, link: e.target.value } : x))}
-                        placeholder="Link compra (opc.)"
-                        className="col-span-2 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                        placeholder="Observação (opc., ex: + 1kg alimento)"
+                        className="col-span-4 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
                       />
                       <button
                         onClick={() => setIngressos(t => t.filter((_, idx) => idx !== i))}
@@ -1858,16 +1858,28 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-7">
                         <div>
                           <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 block">
-                            Comissão da plataforma (%)
+                            Comissão da plataforma
                           </label>
-                          <input
-                            type="number"
-                            min={0} max={100} step={0.5}
-                            value={audienceCommissionPercent}
-                            onChange={e => setAudienceCommissionPercent(Number(e.target.value))}
-                            className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
-                          />
-                          <p className="text-[10px] text-slate-500 mt-1">Padrão: 10%. Sympla cobra 10% + 2,5% processamento; aqui só uma taxa.</p>
+                          {isAdmin ? (
+                            <>
+                              <input
+                                type="number"
+                                min={0} max={100} step={0.5}
+                                value={audienceCommissionPercent}
+                                onChange={e => setAudienceCommissionPercent(Number(e.target.value))}
+                                className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                              />
+                              <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 font-bold">⚙️ Admin: editável só pra você. Produtores veem como fixo.</p>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg py-2 px-3 text-slate-700 dark:text-slate-300 text-sm font-bold flex items-center justify-between">
+                                <span>{audienceCommissionPercent}% sobre cada ingresso</span>
+                                <span className="text-[9px] uppercase tracking-widest text-slate-400">Fixo</span>
+                              </div>
+                              <p className="text-[10px] text-slate-500 mt-1">Definido pela CoreoHub e não pode ser alterado.</p>
+                            </>
+                          )}
                         </div>
 
                         <div>
