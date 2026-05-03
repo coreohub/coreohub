@@ -1769,11 +1769,12 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
               )}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-5">
                 {([
-                  { v: 'GRATUITO', label: 'Gratuito',      desc: 'Entrada livre, sem ingresso' },
-                  { v: 'INTERNO',  label: 'Vender pelo CoreoHub', desc: 'Lista de tipos abaixo, checkout interno' },
-                  { v: 'EXTERNO',  label: 'Ticketeira externa',  desc: 'Sympla, Eventbrite etc.' },
+                  { v: 'GRATUITO', label: 'Gratuito',      desc: 'Entrada livre, sem ingresso',           recommended: false },
+                  { v: 'INTERNO',  label: 'Vender pelo CoreoHub', desc: 'Receba via PIX • QR digital • check-in unificado', recommended: true },
+                  { v: 'EXTERNO',  label: 'Ticketeira externa',  desc: 'Sympla, Eventbrite etc.',         recommended: false },
                 ] as const).map(opt => {
                   const active = politicaIngressos === opt.v;
+                  const recommended = opt.recommended;
                   return (
                     <button
                       key={opt.v}
@@ -1787,14 +1788,26 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                         }
                         setPoliticaIngressos(opt.v);
                       }}
-                      className={`text-left p-3 rounded-xl border transition-all ${
+                      className={`relative text-left p-3 rounded-xl border transition-all ${
                         active
-                          ? 'border-[#ff0068]/60 bg-[#ff0068]/5'
-                          : 'border-slate-200 dark:border-white/10 hover:border-[#ff0068]/30'
+                          ? recommended
+                            ? 'border-[#ff0068] bg-[#ff0068]/10 shadow-lg shadow-[#ff0068]/20 ring-1 ring-[#ff0068]/40'
+                            : 'border-[#ff0068]/60 bg-[#ff0068]/5'
+                          : recommended
+                            ? 'border-[#ff0068]/40 bg-gradient-to-br from-[#ff0068]/5 to-transparent hover:border-[#ff0068]/70 hover:shadow-md hover:shadow-[#ff0068]/10'
+                            : 'border-slate-200 dark:border-white/10 hover:border-[#ff0068]/30'
                       }`}
                     >
-                      <p className={`text-[10px] font-black uppercase tracking-tight ${active ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>{opt.label}</p>
-                      <p className="text-[9px] text-slate-400 mt-0.5">{opt.desc}</p>
+                      {/* Badge "Recomendado" no botão Vender pelo CoreoHub */}
+                      {recommended && (
+                        <span className="absolute -top-2 right-3 px-2 py-0.5 bg-[#ff0068] text-white text-[8px] font-black uppercase tracking-widest rounded-full shadow-md shadow-[#ff0068]/40">
+                          Recomendado
+                        </span>
+                      )}
+                      <p className={`text-[10px] font-black uppercase tracking-tight ${active || recommended ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>
+                        {opt.label}
+                      </p>
+                      <p className="text-[9px] text-slate-400 mt-0.5 leading-relaxed">{opt.desc}</p>
                     </button>
                   );
                 })}

@@ -356,7 +356,11 @@ Deno.serve(async (req) => {
       instagram_event: 'demofestival',
       tiktok_event: 'demofestival',
       youtube_event: 'https://youtube.com/@demofestival',
-      website_event: 'https://demo-festival.com',
+      // Site oficial: aponta pra propria vitrine pública do CoreoHub.
+      // Demonstra como produtor pode usar a página gerada como site oficial
+      // (smart default — mesmo padrão do chip "Usar página da vitrine" em
+      // AccountSettings).
+      website_event: `${Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'}/evento/demo-${user.id.slice(0, 8)}`,
       // Politica de ingressos + lista
       politica_ingressos: 'INTERNO',
       ingressos_config: DEMO_INGRESSOS,
