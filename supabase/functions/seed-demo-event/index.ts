@@ -517,10 +517,13 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       modo_sonoplastia: 'MANUAL', // default; produtor troca pra SISTEMA se quiser auto-play
       // Tolerância de idade — permite até 1 integrante 1 ano fora da faixa
       // (regra padrão usada por festivais BR como Joinville).
-      tolerancia: 1,
+      // tolerancia é jsonb — guardamos a regra completa pra UI ler.
+      tolerancia: { mode: 'FIXED_COUNT', value: 1 },
       age_reference: 'EVENT_DAY',
-      age_tolerance_mode: 'FIXED_COUNT',
-      age_tolerance_value: 1,
+      // age_tolerance_mode e age_tolerance_value foram REMOVIDOS — só
+      // existem em types.ts (RegulationExtract) mas NUNCA foram criados
+      // no banco. Tentar inseri-los fazia configuracoes insert falhar
+      // silenciosamente → premios/jurados/categorias todos sumiam.
       // Politica de ingressos + lista (espelha events)
       politica_ingressos: 'INTERNO',
       ingressos_audiencia: DEMO_INGRESSOS,
