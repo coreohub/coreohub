@@ -952,12 +952,17 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         // Fallback: row legacy id='1' (compat com outras 12 telas ainda não refatoradas).
         const { data: { user } } = await supabase.auth.getUser();
         let data: any = null;
+        // Exposto fora do `if (user)` pra ser usado no fallback do setGeneral
+        // mais abaixo (cover_url/description vêm de events quando configuracoes
+        // está vazio — caso do demo seedado).
+        let myEvent: any = null;
         if (user) {
-          const { data: myEvent } = await supabase
-            .from('events').select('id, slug, instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase')
+          const evRes = await supabase
+            .from('events').select('id, slug, name, description, cover_url, location, city, state, instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase')
             .eq('created_by', user.id)
             .order('created_at', { ascending: false })
             .limit(1).maybeSingle();
+          myEvent = evRes.data;
           if (myEvent?.id) {
             const res = await supabase.from('configuracoes').select('*').eq('id', myEvent.id).maybeSingle();
             data = res.data;
@@ -997,10 +1002,19 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         }
         setIsFirstSave(!data?.atualizado_em);
         if (data) {
+          // Fallback robusto: alguns campos vivem em DUAS tabelas (configuracoes
+          // E events) por razões legacy/multi-tenant. Quando configuracoes está
+          // vazio (ex: demo seedado, ou produtor que ainda não salvou Geral),
+          // cai pra events. Resolve gap entre seed-demo-event e UI.
+          const evt: any = (typeof myEvent !== 'undefined' ? myEvent : null) ?? {};
+          const localFromEvent = [evt.location, [evt.city, evt.state].filter(Boolean).join(' / ')]
+            .filter(Boolean)
+            .join(' — ') || '';
+          const cityStateFromEvent = [evt.city, evt.state].filter(Boolean).join(' / ');
           setGeneral({
-            eventName:          data.nome_evento      || DEFAULT_GENERAL.eventName,
-            location:           data.local_evento     || DEFAULT_GENERAL.location,
-            city:               data.cidade_estado    || DEFAULT_GENERAL.city,
+            eventName:          data.nome_evento      || evt.name        || DEFAULT_GENERAL.eventName,
+            location:           data.local_evento     || evt.location    || DEFAULT_GENERAL.location,
+            city:               data.cidade_estado    || cityStateFromEvent || DEFAULT_GENERAL.city,
             eventDate:          data.data_evento      || DEFAULT_GENERAL.eventDate,
             regDeadline:        data.prazo_inscricao  || DEFAULT_GENERAL.regDeadline,
             trackDeadline:      data.prazo_trilhas    || DEFAULT_GENERAL.trackDeadline,
@@ -1011,9 +1025,9 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
             pinInactivityMinutes: data.pin_inactivity_minutes ?? DEFAULT_GENERAL.pinInactivityMinutes,
             medalThresholds: data.medal_thresholds ?? DEFAULT_GENERAL.medalThresholds,
             premiationSystem: (data.premiation_system as 'THRESHOLD' | 'RANKING') || DEFAULT_GENERAL.premiationSystem,
-            coverUrl:    data.cover_url   ?? DEFAULT_GENERAL.coverUrl,
-            description: data.descricao   ?? DEFAULT_GENERAL.description,
-            eventTime:   data.hora_evento ?? DEFAULT_GENERAL.eventTime,
+            coverUrl:    data.cover_url   || evt.cover_url    || DEFAULT_GENERAL.coverUrl,
+            description: data.descricao   || evt.description  || DEFAULT_GENERAL.description,
+            eventTime:   data.hora_evento || DEFAULT_GENERAL.eventTime,
           });
           if (Array.isArray(data.programacao)) setProgramacao(data.programacao);
           if (Array.isArray(data.ingressos_audiencia)) setIngressos(data.ingressos_audiencia);

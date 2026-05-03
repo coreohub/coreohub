@@ -413,6 +413,15 @@ Deno.serve(async (req) => {
     await supa.from('configuracoes').insert([{
       id: eventId,
       event_id: eventId,
+      // AccountSettings hidrata cover_url/descricao/nome_evento/local_evento
+      // de configuracoes (não de events) — espelhamos aqui pra UI mostrar
+      // banner + descrição corretamente quando produtor abrir Configurações.
+      nome_evento: eventName,
+      local_evento: 'Teatro Municipal de Demonstração — Av. Paulista, 1000',
+      cidade_estado: 'São Paulo / SP',
+      hora_evento: '09:00',
+      cover_url: DEMO_COVER_URL,
+      descricao: 'Evento de demonstração do CoreoHub. Os dados aqui são fictícios e servem apenas para você explorar todas as features sem afetar dados reais.',
       escala_notas: 'BASE_10',
       premios_especiais: PREMIOS_ESPECIAIS,
       estilos,
