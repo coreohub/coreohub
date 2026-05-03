@@ -3,7 +3,7 @@ import {
   Video, RefreshCw, CheckCircle2, XCircle, AlertTriangle,
   Clock, Film, Search, X, MessageSquare, ExternalLink,
   Settings2, ToggleLeft, ToggleRight, Calendar, DollarSign,
-  Save, Info, Filter, Users, Bookmark,
+  Save, Info, Filter, Users, Star,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
@@ -40,7 +40,7 @@ const STATUS_FILTER_OPTIONS: { value: VideoStatus | 'ALL'; label: string; color:
   { value: 'approved',    label: 'Aprovados',        color: 'text-emerald-500' },
   { value: 'rejected',    label: 'Reprovados',       color: 'text-rose-500'  },
   { value: 'conditional', label: 'Condicionais',     color: 'text-purple-500'},
-  { value: 'review_later',label: 'Reavaliar depois', color: 'text-amber-400'  },
+  { value: 'review_later',label: 'Favoritos',        color: 'text-amber-400'  },
 ];
 
 const statusChip = (status: VideoStatus) => {
@@ -50,7 +50,7 @@ const statusChip = (status: VideoStatus) => {
     approved:    { label: 'Aprovado',    bg: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20', icon: CheckCircle2 },
     rejected:    { label: 'Reprovado',   bg: 'bg-rose-500/10 text-rose-500 border-rose-500/20',         icon: XCircle       },
     conditional: { label: 'Condicional', bg: 'bg-purple-500/10 text-purple-500 border-purple-500/20',  icon: AlertTriangle },
-    review_later:{ label: 'Reavaliar',   bg: 'bg-amber-400/10 text-amber-400 border-amber-400/20',    icon: Bookmark      },
+    review_later:{ label: 'Favorito',    bg: 'bg-amber-400/10 text-amber-400 border-amber-400/20',    icon: Star          },
   };
   const s = map[status];
   const Icon = s.icon;
@@ -396,7 +396,7 @@ const VideoSelection: React.FC = () => {
                   onClick={() => { setReviewing(reg); setFeedback(reg.video_feedback ?? ''); }}
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 active:scale-95 transition-all"
                 >
-                  <Video size={14} /> {reg.video_status === 'review_later' ? 'Reavaliar agora' : 'Revisar Vídeo'}
+                  <Video size={14} /> {reg.video_status === 'review_later' ? 'Avaliar Favorito' : 'Revisar Vídeo'}
                 </button>
               ) : (
                 <button
@@ -456,7 +456,7 @@ const VideoSelection: React.FC = () => {
                           onClick={() => { setReviewing(reg); setFeedback(reg.video_feedback ?? ''); }}
                           className="px-4 py-2 bg-[#ff0068]/10 text-[#ff0068] border border-[#ff0068]/20 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-[#ff0068] hover:text-white transition-all"
                         >
-                          {reg.video_status === 'review_later' ? 'Reavaliar' : 'Revisar'}
+                          {reg.video_status === 'review_later' ? 'Avaliar' : 'Revisar'}
                         </button>
                       )}
                       {(reg.video_status === 'approved' || reg.video_status === 'rejected' || reg.video_status === 'conditional') && (
@@ -582,10 +582,10 @@ const VideoSelection: React.FC = () => {
                       onClick={() => handleReview('review_later')}
                       disabled={savingReview}
                       className="flex flex-col items-center gap-2 py-4 bg-amber-400/10 border border-amber-400/20 text-amber-500 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-amber-400 hover:text-white hover:border-amber-400 transition-all disabled:opacity-50 shadow-sm"
-                      title="Salva pra revisar depois (sem decisão final ainda)"
+                      title="Marca como favorito pra avaliar depois (sem decisão final ainda)"
                     >
-                      {savingReview ? <RefreshCw size={18} className="animate-spin" /> : <Bookmark size={20} />}
-                      Reavaliar
+                      {savingReview ? <RefreshCw size={18} className="animate-spin" /> : <Star size={20} />}
+                      Favoritar
                     </button>
                     <button
                       onClick={() => handleReview('rejected')}

@@ -25,9 +25,16 @@ const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>(
-    location.state?.redirectTo ? 'signup' : 'login'
-  );
+  // Decide modo inicial pela URL (autoritativa) + redirectTo como override.
+  // Antes só olhava redirectTo, o que podia deixar o usuario em "signup"
+  // depois de logout se algum state lingerasse. Agora /login = login,
+  // /register = signup, e deep link com redirectTo defaulta pra signup
+  // (intencao de criar conta pra se inscrever no evento).
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>(() => {
+    if (location.pathname === '/register') return 'signup';
+    if (location.pathname === '/login') return 'login';
+    return location.state?.redirectTo ? 'signup' : 'login';
+  });
 
   // Suporta redirectTo via location.state (PrivateRoute) OU query string (após
   // OAuth callback do Google que perde o state mas mantém URL).
