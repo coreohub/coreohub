@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import BrandIcon from '../components/BrandIcon';
+import { EventAnchorNav, type AnchorSection } from '../components/EventAnchorNav';
+import { PessoasSection, type JudgePublic } from '../components/PessoasSection';
 
 const TikTokIcon = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
@@ -22,6 +24,7 @@ const PublicEventPage = () => {
   const [config, setConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [publicJudges, setPublicJudges] = useState<JudgePublic[]>([]);
 
   useEffect(() => {
     if (!idOrSlug) return;
@@ -60,6 +63,15 @@ const PublicEventPage = () => {
 
         setEvent(eventData);
         setConfig(cfg);
+
+        // Etapa 1.5: jurados públicos via RPC security-definer
+        // (retorna só campos seguros — sem PIN, sem token)
+        const { data: judgesData } = await supabase.rpc('get_public_judges_for_event', {
+          p_event_id: eventData.id,
+        });
+        if (Array.isArray(judgesData)) {
+          setPublicJudges(judgesData as JudgePublic[]);
+        }
       } catch (err) {
         console.error('Erro ao carregar evento:', err);
       } finally {
@@ -164,10 +176,30 @@ const PublicEventPage = () => {
     ? `${enabledAwards.length} prêmio${enabledAwards.length !== 1 ? 's' : ''}`
     : '—';
 
+  // Etapa 1.5: monta lista de sections visíveis pro anchor menu.
+  // Renderiza só seções que de fato têm conteúdo (evita item morto no menu).
+  const visibleSections: AnchorSection[] = [
+    event.description ? { id: 'sobre', label: 'Sobre' } : null,
+    Array.isArray(event.programacao_config) && event.programacao_config.length > 0
+      ? { id: 'programacao', label: 'Programação' }
+      : null,
+    // Ingressos: aparece se há tipos cadastrados OU política definida
+    (Array.isArray(event.ingressos_config) && event.ingressos_config.length > 0)
+      || event.politica_ingressos === 'GRATUITO'
+      || event.politica_ingressos === 'EXTERNO'
+      ? { id: 'ingressos', label: 'Ingressos' }
+      : null,
+    Array.isArray(event.formacoes_config) && event.formacoes_config.length > 0
+      ? { id: 'inscricoes', label: 'Inscrições' }
+      : null,
+    publicJudges.length > 0 ? { id: 'jurados', label: 'Jurados' } : null,
+    enabledAwards.length > 0 ? { id: 'premiacao', label: 'Premiação' } : null,
+  ].filter(Boolean) as AnchorSection[];
+
   return (
     <div className="min-h-screen bg-[#050505] text-white">
       {/* Hero */}
-      <div className="relative overflow-hidden">
+      <div id="hero" className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-[#ff0068]/20 via-transparent to-[#050505]" />
         {event.cover_url ? (
           <img src={event.cover_url} alt={event.name} className="w-full h-[55vh] object-cover opacity-30" />
@@ -216,6 +248,22 @@ const PublicEventPage = () => {
         </div>
       </div>
 
+      {/* Anchor menu — sticky após sair do hero */}
+      <EventAnchorNav
+        sections={visibleSections}
+        triggerSectionId="hero"
+        cta={
+          isRegistrationOpen ? (
+            <Link
+              to={`/festival/${eventId}/register`}
+              className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 bg-[#ff0068] text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all"
+            >
+              Inscrever-se <ChevronRight size={12} />
+            </Link>
+          ) : undefined
+        }
+      />
+
       {/* Content */}
       <div className="max-w-5xl mx-auto px-8 py-16 space-y-12">
         {/* Stats Row */}
@@ -262,7 +310,7 @@ const PublicEventPage = () => {
 
         {/* Description */}
         {event.description && (
-          <div className="space-y-4">
+          <div id="sobre" className="space-y-4 scroll-mt-20">
             <h2 className="text-2xl font-black uppercase tracking-tighter">Sobre o Evento</h2>
             <p className="text-slate-400 leading-relaxed whitespace-pre-line">{event.description}</p>
           </div>
@@ -270,7 +318,7 @@ const PublicEventPage = () => {
 
         {/* Programação */}
         {Array.isArray(event.programacao_config) && event.programacao_config.length > 0 && (
-          <div className="space-y-4">
+          <div id="programacao" className="space-y-4 scroll-mt-20">
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
               <Clock size={24} className="text-[#ff0068]" /> Programação
             </h2>
@@ -305,7 +353,7 @@ const PublicEventPage = () => {
 
           if (politica === 'GRATUITO') {
             return (
-              <div className="space-y-4">
+              <div id="ingressos" className="space-y-4 scroll-mt-20">
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
                   <Ticket size={24} className="text-emerald-400" /> Ingressos
                 </h2>
@@ -324,7 +372,7 @@ const PublicEventPage = () => {
 
           if (politica === 'EXTERNO' && config?.url_ingressos) {
             return (
-              <div className="space-y-4">
+              <div id="ingressos" className="space-y-4 scroll-mt-20">
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
                   <Ticket size={24} className="text-[#ff0068]" /> Ingressos
                 </h2>
@@ -354,7 +402,7 @@ const PublicEventPage = () => {
               .filter((t: any) => !salesEnabled || Number(t.preco ?? 0) > 0);
             if (visibleTypes.length === 0) return null;
             return (
-              <div className="space-y-4">
+              <div id="ingressos" className="space-y-4 scroll-mt-20">
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
                   <Ticket size={24} className="text-[#ff0068]" /> Ingressos
                 </h2>
@@ -408,7 +456,7 @@ const PublicEventPage = () => {
 
         {/* Modalities */}
         {event.formacoes_config && event.formacoes_config.length > 0 && (
-          <div className="space-y-4">
+          <div id="inscricoes" className="space-y-4 scroll-mt-20">
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
               <Music size={24} className="text-[#ff0068]" /> Inscrições disponíveis
             </h2>
@@ -447,9 +495,14 @@ const PublicEventPage = () => {
           </div>
         )}
 
+        {/* Jurados (+ Professores quando workshops entrarem) */}
+        <div className="scroll-mt-20">
+          <PessoasSection judges={publicJudges} />
+        </div>
+
         {/* Prêmios habilitados */}
         {enabledAwards.length > 0 && (
-          <div className="space-y-4">
+          <div id="premiacao" className="space-y-4 scroll-mt-20">
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
               <Trophy size={24} className="text-[#ff0068]" /> Premiação
             </h2>

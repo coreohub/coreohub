@@ -28,6 +28,7 @@ interface Judge {
   pin?: string;
   language?: string;
   is_active?: boolean;
+  is_public?: boolean;
 }
 
 const FORMATS = [
@@ -47,6 +48,7 @@ const EMPTY_JUDGE: Omit<Judge, 'id'> = {
   pin: '',
   language: 'pt-BR',
   is_active: true,
+  is_public: false,
 };
 
 const inputCls = 'w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-4 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm';
@@ -153,6 +155,7 @@ const JudgesManagement = () => {
     pin: row.pin || '',
     language: row.language || 'pt-BR',
     is_active: row.is_active ?? true,
+    is_public: row.is_public ?? false,
   });
 
   /* ── open modal ── */
@@ -251,6 +254,7 @@ const JudgesManagement = () => {
         pin: form.pin,
         language: form.language || 'pt-BR',
         is_active: form.is_active ?? true,
+        is_public: form.is_public ?? false,
       };
 
       const data = await trySaveWithPayload(payload, !editingJudge, editingJudge?.id);
@@ -672,6 +676,32 @@ const JudgesManagement = () => {
                           </button>
                         ))}
                       </div>
+                    </div>
+
+                    {/* Etapa 1.5: toggle Publicar na vitrine */}
+                    <div>
+                      <label className={labelCls}>Publicar na vitrine pública</label>
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, is_public: !f.is_public }))}
+                        className={`flex items-center justify-between gap-3 w-full px-4 py-3 rounded-xl border text-left transition-all ${
+                          form.is_public
+                            ? 'border-[#ff0068] bg-[#ff0068]/10'
+                            : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5'
+                        }`}
+                      >
+                        <div className="flex-1">
+                          <p className={`text-[11px] font-black uppercase tracking-widest ${form.is_public ? 'text-[#ff0068]' : 'text-slate-700 dark:text-slate-300'}`}>
+                            {form.is_public ? '✓ Visível pro público' : 'Oculto da vitrine'}
+                          </p>
+                          <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+                            Quando ativo, o card aparece na seção "Jurados" da página pública do evento (foto + bio + modalidades + Instagram).
+                          </p>
+                        </div>
+                        <div className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${form.is_public ? 'bg-[#ff0068] justify-end' : 'bg-slate-300 dark:bg-white/10 justify-start'}`}>
+                          <div className="w-5 h-5 bg-white rounded-full shadow" />
+                        </div>
+                      </button>
                     </div>
                   </>
                 )}
