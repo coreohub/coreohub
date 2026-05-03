@@ -189,9 +189,8 @@ const PublicEventPage = () => {
       || event.politica_ingressos === 'EXTERNO'
       ? { id: 'ingressos', label: 'Ingressos' }
       : null,
-    Array.isArray(event.formacoes_config) && event.formacoes_config.length > 0
-      ? { id: 'inscricoes', label: 'Inscrições' }
-      : null,
+    // "Inscrições" removido do anchor menu — botão CTA "INSCREVA-SE" já cobre.
+    // Anchors descrevem o festival; CTA é a ação. Semantica diferente.
     publicJudges.length > 0 ? { id: 'jurados', label: 'Jurados' } : null,
     enabledAwards.length > 0 ? { id: 'premiacao', label: 'Premiação' } : null,
   ].filter(Boolean) as AnchorSection[];
@@ -248,17 +247,17 @@ const PublicEventPage = () => {
         </div>
       </div>
 
-      {/* Anchor menu — sticky após sair do hero */}
+      {/* Anchor menu — fixed top, sempre visível, transparente sobre hero
+          e opaco depois de rolar (padrão Apple/Stripe) */}
       <EventAnchorNav
         sections={visibleSections}
-        triggerSectionId="hero"
         cta={
           isRegistrationOpen ? (
             <Link
               to={`/festival/${eventId}/register`}
               className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 bg-[#ff0068] text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all"
             >
-              Inscrever-se <ChevronRight size={12} />
+              Inscreva-se <ChevronRight size={12} />
             </Link>
           ) : undefined
         }
@@ -537,7 +536,7 @@ const PublicEventPage = () => {
                 to={`/festival/${eventId}/register`}
                 className="px-8 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30 flex items-center justify-center gap-2"
               >
-                Inscrever-se <ChevronRight size={16} />
+                Inscreva-se <ChevronRight size={16} />
               </Link>
             )}
             <Link

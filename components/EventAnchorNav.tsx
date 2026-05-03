@@ -20,7 +20,7 @@ export interface AnchorSection {
 
 interface EventAnchorNavProps {
   sections: AnchorSection[];
-  /** ID da section que dispara o sticky quando sai do viewport. Default: 'hero' */
+  /** Compat: deixa só pra não quebrar callers, mas o menu agora aparece sempre */
   triggerSectionId?: string;
   /** CTA opcional no canto direito (ex: botão "Comprar ingresso") */
   cta?: React.ReactNode;
@@ -60,35 +60,28 @@ function useActiveSection(sectionIds: string[]): string | null {
   return active;
 }
 
-/** Hook: detecta se passou da section trigger (pra mostrar/esconder o nav) */
-function useScrolledPast(triggerId: string): boolean {
+/** Hook: detecta se rolou um pouco da página (pra dar fundo opaco vs transparente) */
+function useScrolled(threshold = 80): boolean {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const el = document.getElementById(triggerId);
-    if (!el) {
-      // Se não tem trigger, ativa imediatamente
-      setScrolled(true);
-      return;
-    }
-    const obs = new IntersectionObserver(
-      ([entry]) => setScrolled(!entry.isIntersecting),
-      { threshold: 0 }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [triggerId]);
+    const onScroll = () => setScrolled(window.scrollY > threshold);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [threshold]);
 
   return scrolled;
 }
 
 export const EventAnchorNav: React.FC<EventAnchorNavProps> = ({
   sections,
-  triggerSectionId = 'hero',
   cta,
 }) => {
   const activeId = useActiveSection(sections.map(s => s.id));
-  const isVisible = useScrolledPast(triggerSectionId);
+  // Menu agora aparece SEMPRE (padrão Apple/Stripe). Quando rolou, fica
+  // mais opaco; sobre o hero, semi-transparente com backdrop-blur.
+  const scrolled = useScrolled(80);
   const navRef = useRef<HTMLElement>(null);
 
   // Smooth scroll com offset
@@ -120,14 +113,14 @@ export const EventAnchorNav: React.FC<EventAnchorNavProps> = ({
     <nav
       ref={navRef}
       aria-label="Navegação do evento"
-      className={`sticky top-0 z-40 transition-all duration-300 ${
-        isVisible
-          ? 'opacity-100 translate-y-0'
-          : 'opacity-0 -translate-y-full pointer-events-none'
-      }`}
+      className="fixed top-0 left-0 right-0 z-40 transition-all duration-300"
       style={{ height: HEADER_HEIGHT }}
     >
-      <div className="h-full bg-[#0b0b0f]/85 backdrop-blur-xl border-b border-white/10 flex items-center">
+      <div className={`h-full backdrop-blur-xl border-b flex items-center transition-colors duration-300 ${
+        scrolled
+          ? 'bg-[#0b0b0f]/90 border-white/10'
+          : 'bg-[#0b0b0f]/40 border-white/5'
+      }`}>
         <div className="max-w-5xl mx-auto w-full px-4 flex items-center gap-4">
           {/* Lista horizontal de itens (scroll lateral em mobile) */}
           <div className="flex-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none] -mx-4 px-4">
