@@ -666,6 +666,9 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
     regulation_pdf_url: '',
   });
   const [identityUploading, setIdentityUploading] = useState(false);
+  // Slug do evento ativo — usado pra montar URL da vitrine como smart default
+  // do campo "Site oficial"
+  const [activeEventSlug, setActiveEventSlug] = useState<string | null>(null);
   const [programacao, setProgramacao] = useState<ProgramItem[]>([]);
   const [ingressos, setIngressos]     = useState<TicketType[]>([]);
   const [politicaIngressos, setPoliticaIngressos] = useState<'NAO_DEFINIDO' | 'GRATUITO' | 'INTERNO' | 'EXTERNO'>('NAO_DEFINIDO');
@@ -951,13 +954,15 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         let data: any = null;
         if (user) {
           const { data: myEvent } = await supabase
-            .from('events').select('id, instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase')
+            .from('events').select('id, slug, instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase')
             .eq('created_by', user.id)
             .order('created_at', { ascending: false })
             .limit(1).maybeSingle();
           if (myEvent?.id) {
             const res = await supabase.from('configuracoes').select('*').eq('id', myEvent.id).maybeSingle();
             data = res.data;
+            // Captura slug pra suggerir URL da vitrine no campo Site oficial
+            setActiveEventSlug((myEvent as any).slug ?? myEvent.id);
             // Identidade pública: campos diretos da tabela events
             setIdentity({
               instagram_event:    myEvent.instagram_event ?? '',
@@ -1594,6 +1599,29 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                 <div>
                   <label className={label}><Globe size={11} className="inline mr-1" /> Site oficial</label>
                   <input type="text" value={identity.website_event} onChange={e => setIdentity({ ...identity, website_event: e.target.value })} placeholder="https://meufestival.com.br" className={input} />
+                  {/* Smart default: chip clicável sugerindo URL da vitrine.
+                      Não auto-preenche pra não surpreender produtor com site próprio. */}
+                  {activeEventSlug && (() => {
+                    const vitrineUrl = `${window.location.origin}/evento/${activeEventSlug}`;
+                    const alreadyUsing = identity.website_event === vitrineUrl;
+                    if (alreadyUsing) {
+                      return (
+                        <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1.5 flex items-center gap-1">
+                          ✓ Usando a página oficial da vitrine no CoreoHub
+                        </p>
+                      );
+                    }
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => setIdentity({ ...identity, website_event: vitrineUrl })}
+                        className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#ff0068]/10 hover:bg-[#ff0068]/20 text-[#ff0068] rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors"
+                        title={`Preencher com ${vitrineUrl}`}
+                      >
+                        <Globe size={10} /> Usar página da vitrine
+                      </button>
+                    );
+                  })()}
                 </div>
                 <div>
                   <label className={label}><Mail size={11} className="inline mr-1" /> E-mail de contato</label>
@@ -1750,7 +1778,15 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                     <button
                       key={opt.v}
                       type="button"
-                      onClick={() => setPoliticaIngressos(opt.v)}
+                      onClick={() => {
+                        // Smart default: ao migrar PRA "Vender pelo CoreoHub", pre-seleciona
+                        // o checkbox "Vender ingressos" abaixo (o produtor obviamente quer).
+                        // Pode desativar manualmente depois se quiser modo só informativo.
+                        if (opt.v === 'INTERNO' && politicaIngressos !== 'INTERNO') {
+                          setAudienceSalesEnabled(true);
+                        }
+                        setPoliticaIngressos(opt.v);
+                      }}
                       className={`text-left p-3 rounded-xl border transition-all ${
                         active
                           ? 'border-[#ff0068]/60 bg-[#ff0068]/5'
@@ -1801,13 +1837,13 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                   <p className="text-center text-slate-400 py-8 text-xs italic">Nenhum tipo. Ex: "Meia Entrada R$10" ou "Inteira R$20".</p>
                 ) : (
                   ingressos.map((item, i) => (
-                    <div key={i} className="grid grid-cols-12 gap-2 items-start bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-xl p-3">
+                    <div key={i} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-start bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-xl p-3">
                       <input
                         type="text"
                         value={item.nome}
                         onChange={e => setIngressos(t => t.map((x, idx) => idx === i ? { ...x, nome: e.target.value } : x))}
                         placeholder="Nome (Ex: Meia Entrada)"
-                        className="col-span-5 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                        className="sm:col-span-5 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
                       />
                       <input
                         type="number"
@@ -1815,20 +1851,23 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                         value={item.preco || ''}
                         onChange={e => setIngressos(t => t.map((x, idx) => idx === i ? { ...x, preco: Number(e.target.value) } : x))}
                         placeholder="Preço"
-                        className="col-span-2 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                        inputMode="decimal"
+                        className="sm:col-span-2 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
                       />
                       <input
                         type="text"
                         value={item.obs ?? ''}
                         onChange={e => setIngressos(t => t.map((x, idx) => idx === i ? { ...x, obs: e.target.value } : x))}
                         placeholder="Observação (opc., ex: + 1kg alimento)"
-                        className="col-span-4 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                        className="sm:col-span-4 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
                       />
                       <button
                         onClick={() => setIngressos(t => t.filter((_, idx) => idx !== i))}
-                        className="col-span-1 p-2 text-slate-400 hover:text-red-500 self-center justify-self-center"
+                        aria-label={`Remover ingresso ${item.nome || 'sem nome'}`}
+                        className="sm:col-span-1 p-2 text-slate-400 hover:text-red-500 self-center justify-self-end sm:justify-self-center inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest"
                       >
                         <Trash2 size={14} />
+                        <span className="sm:hidden">Remover</span>
                       </button>
                     </div>
                   ))
@@ -3809,11 +3848,11 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
 
       {/* Save bar — bottom-16 em mobile pra nao ficar atras do BottomNavBar (h-16 sm:hidden) */}
       <div className="fixed bottom-16 sm:bottom-0 left-0 right-0 p-4 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-white/10 z-40 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
-        <div className="max-w-5xl mx-auto flex justify-end">
+        <div className="max-w-5xl mx-auto flex justify-center">
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-3 bg-[#ff0068] text-white px-10 py-3.5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-lg shadow-[#ff0068]/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
+            className="w-full sm:w-auto flex items-center justify-center gap-3 bg-[#ff0068] text-white px-10 py-3.5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-lg shadow-[#ff0068]/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
           >
             {saving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={16} />}
             {saving ? 'Salvando...' : 'Salvar Configurações'}
