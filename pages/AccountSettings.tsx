@@ -237,8 +237,9 @@ interface SpecialAward {
 const AWARD_TEMPLATES: Omit<SpecialAward, 'enabled'>[] = [
   { id: 'tpl_bailarino',  name: 'Melhor Bailarino(a)',   isTemplate: true, formation: 'TODOS',  description: 'Destaque individual de interpretação e técnica.' },
   { id: 'tpl_revelacao',  name: 'Prêmio Revelação',      isTemplate: true, formation: 'TODOS',  description: 'Apresentação mais surpreendente da noite.' },
-  { id: 'tpl_coreografo', name: 'Melhor Coreógrafo',     isTemplate: true, formation: 'TODOS',  description: 'Reconhece o trabalho criativo de criação da coreografia.' },
+  { id: 'tpl_coreografo', name: 'Melhor Coreografia',    isTemplate: true, formation: 'TODOS',  description: 'Reconhece a obra coreográfica mais marcante.' },
   { id: 'tpl_grupo',      name: 'Melhor Grupo da Noite', isTemplate: true, formation: 'Grupo',  description: 'Prêmio exclusivo para formações em grupo.' },
+  { id: 'tpl_figurino',   name: 'Melhor Figurino',       isTemplate: true, formation: 'TODOS',  description: 'Destaque na produção visual e adequação ao tema.' },
 ];
 
 const AWARD_ICONS: Record<string, React.ElementType> = {
@@ -246,6 +247,7 @@ const AWARD_ICONS: Record<string, React.ElementType> = {
   tpl_revelacao:  Zap,
   tpl_coreografo: Crown,
   tpl_grupo:      Users,
+  tpl_figurino:   Award,
 };
 
 const customAwardIcon = (name: string): React.ElementType => {

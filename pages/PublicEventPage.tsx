@@ -172,9 +172,6 @@ const PublicEventPage = () => {
   const enabledAwards: any[] = Array.isArray(config?.premios_especiais)
     ? config.premios_especiais.filter((a: any) => a?.enabled)
     : [];
-  const premiacaoLabel = enabledAwards.length > 0
-    ? `${enabledAwards.length} prêmio${enabledAwards.length !== 1 ? 's' : ''}`
-    : '—';
 
   // Etapa 1.5: monta lista de sections visíveis pro anchor menu.
   // Renderiza só seções que de fato têm conteúdo (evita item morto no menu).
@@ -275,7 +272,11 @@ const PublicEventPage = () => {
             formatDeadline(config?.prazo_inscricao)
               ? { label: 'Inscrições até', value: formatDeadline(config?.prazo_inscricao), icon: Clock }
               : null,
-            { label: 'Premiação', value: premiacaoLabel, icon: Trophy },
+            // Esconde premiação quando nenhum prêmio está habilitado
+            // (antes mostrava "—" que parecia bug)
+            enabledAwards.length > 0
+              ? { label: 'Premiação', value: `${enabledAwards.length} prêmio${enabledAwards.length !== 1 ? 's' : ''}`, icon: Trophy }
+              : null,
           ].filter(Boolean) as { label: string; value: any; icon: any }[]).map(({ label, value, icon: Icon }) => (
             <div key={label} className="bg-white/5 border border-white/10 rounded-3xl p-6">
               <Icon size={20} className="text-[#ff0068] mb-3" />
