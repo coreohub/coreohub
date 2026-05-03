@@ -820,6 +820,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
     intervalo_seguranca: 3,
     tempo_marcacao_palco: 45,
     gatilho_marcacao: 'MANUAL_MARCADOR' as 'MANUAL_MARCADOR' | 'MANUAL_COORDENADOR' | 'AUTO_SONOPLASTA',
+    modo_sonoplastia: 'MANUAL' as 'MANUAL' | 'SISTEMA',
   });
 
   /* Test narration — gera entrada (+ saida se ativa) com template real
@@ -1038,6 +1039,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
             intervalo_seguranca:  data.intervalo_seguranca   ?? 3,
             tempo_marcacao_palco: data.tempo_marcacao_palco  ?? 45,
             gatilho_marcacao:     data.gatilho_marcacao      ?? 'MANUAL_MARCADOR',
+            modo_sonoplastia:     data.modo_sonoplastia      ?? 'MANUAL',
           });
         }
       } catch (err) {
@@ -1110,6 +1112,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         marcar_palco_ativo:   flowConfig.marcar_palco_ativo,
         tempo_marcacao_palco: flowConfig.tempo_marcacao_palco,
         gatilho_marcacao:     flowConfig.gatilho_marcacao,
+        modo_sonoplastia:     flowConfig.modo_sonoplastia,
         links,
         regras_avaliacao:    { globalRules, overrides: genreOverrides } satisfies EvalConfig,
         premios_especiais:   awards,
@@ -2450,6 +2453,52 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
               <div className="flex items-center gap-3 mb-2">
                 <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Settings size={18} /></div>
                 <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Narração IA</h3>
+              </div>
+
+              {/* Modo Sonoplastia (Backlog #29 Etapa A) */}
+              <div className="pb-4 border-b border-slate-200 dark:border-white/10">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3 block">
+                  Modo de Sonoplastia
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {([
+                    {
+                      v: 'MANUAL' as const,
+                      label: 'Manual',
+                      desc: 'Sonoplasta toca a trilha em equipamento físico. App toca só narrações.',
+                      hint: 'Padrão · festival com técnico de som',
+                    },
+                    {
+                      v: 'SISTEMA' as const,
+                      label: 'Sistema',
+                      desc: 'App toca tudo em sequência: narração → espera → trilha → narração saída.',
+                      hint: 'Eventos sem técnico · mostras escolares',
+                    },
+                  ]).map(opt => {
+                    const active = flowConfig.modo_sonoplastia === opt.v;
+                    return (
+                      <button
+                        key={opt.v}
+                        type="button"
+                        onClick={() => setFlowConfig(f => ({ ...f, modo_sonoplastia: opt.v }))}
+                        className={`text-left p-4 rounded-2xl border transition-all ${
+                          active
+                            ? 'border-[#ff0068]/60 bg-[#ff0068]/5'
+                            : 'border-slate-200 dark:border-white/10 hover:border-[#ff0068]/30'
+                        }`}
+                      >
+                        <p className={`text-[11px] font-black uppercase tracking-tight ${active ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>{opt.label}</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">{opt.desc}</p>
+                        <p className="text-[8px] text-slate-400 dark:text-white/30 uppercase tracking-widest mt-2 italic">{opt.hint}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+                {flowConfig.modo_sonoplastia === 'SISTEMA' && (
+                  <p className="mt-3 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">
+                    💡 Modo Sistema requer Wi-Fi estável no evento (a trilha é fetch da nuvem ao vivo). Considere ter o modo Manual como backup ou aguardar a Etapa B (cache offline).
+                  </p>
+                )}
               </div>
 
               {/* Narração de ENTRADA — sempre ativa */}

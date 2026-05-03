@@ -4,7 +4,7 @@ import {
   CheckCircle2, Music, MusicIcon, Settings2, RefreshCw,
   Loader2, FileArchive, Users, ChevronDown, ChevronUp, Info,
   Volume2, Play, Pause, Radio, StopCircle, AlertTriangle,
-  Layers, X, Plus, Trash2, ArrowUp, ArrowDown, Edit3,
+  Layers, X, Plus, Trash2, ArrowUp, ArrowDown, Edit3, SkipForward,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -433,7 +433,16 @@ const Schedule = () => {
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
   const narrationAudioRef = useRef<HTMLAudioElement | null>(null);
+  const trilhaAudioRef = useRef<HTMLAudioElement | null>(null);
+  const sequenceTimerRef = useRef<number | null>(null);
   const saidaAtiva = !!config?.narracao_saida_ativa;
+  // Modo MANUAL = sonoplasta toca trilha em equipamento externo (default).
+  // Modo SISTEMA = app toca sequencia narracao->wait->trilha->saida automaticamente.
+  const modoSistema = config?.modo_sonoplastia === 'SISTEMA';
+  const [playerSection, setPlayerSection] = useState<'idle' | 'entrada' | 'wait' | 'trilha' | 'saida'>('idle');
+  const [trilhaProgress, setTrilhaProgress] = useState(0);
+  const [trilhaDuration, setTrilhaDuration] = useState(0);
+  const [waitRemaining, setWaitRemaining] = useState(0);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -561,10 +570,163 @@ const Schedule = () => {
       narrationAudioRef.current.src = '';
       narrationAudioRef.current = null;
     }
+    if (trilhaAudioRef.current) {
+      trilhaAudioRef.current.pause();
+      trilhaAudioRef.current.src = '';
+      trilhaAudioRef.current = null;
+    }
+    if (sequenceTimerRef.current) {
+      clearInterval(sequenceTimerRef.current);
+      sequenceTimerRef.current = null;
+    }
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
     setIsPlaying(false);
+    setPlayerSection('idle');
+    setTrilhaProgress(0);
+    setTrilhaDuration(0);
+    setWaitRemaining(0);
+  };
+
+  // Modo SISTEMA: encadeia narracao entrada -> espera (tempo_entrada) ->
+  // trilha sonora -> narracao saida (se ativa). Cada etapa avanca via
+  // listener 'ended'. Pode ser interrompida por handleEndLive ou skip.
+  const playTrilhaWithSequence = (reg: Registration) => {
+    if (!reg.trilha_url) {
+      // Sem trilha: vai direto pra saida (ou fim)
+      if (saidaAtiva && audios[reg.id]?.saida) {
+        setPlayerSection('saida');
+        handleAnnounce(reg, 'saida');
+      } else {
+        setPlayerSection('idle');
+      }
+      return;
+    }
+    setPlayerSection('trilha');
+    const audio = new Audio(reg.trilha_url);
+    trilhaAudioRef.current = audio;
+    audio.addEventListener('loadedmetadata', () => setTrilhaDuration(audio.duration || 0));
+    audio.addEventListener('timeupdate', () => setTrilhaProgress(audio.currentTime));
+    audio.addEventListener('ended', () => {
+      // Trilha terminou: toca saida (se ativa) ou volta pra idle
+      if (saidaAtiva && audios[reg.id]?.saida) {
+        setPlayerSection('saida');
+        const audioSaida = new Audio(audios[reg.id]!.saida!.audio_url);
+        narrationAudioRef.current = audioSaida;
+        audioSaida.addEventListener('ended', () => {
+          setPlayerSection('idle');
+          setIsPlaying(false);
+        });
+        audioSaida.play().catch(e => console.warn('Falha ao tocar saida:', e));
+      } else {
+        setPlayerSection('idle');
+        setIsPlaying(false);
+      }
+    });
+    audio.play().catch(e => console.warn('Falha ao tocar trilha:', e));
+  };
+
+  const startSequenceMode = (reg: Registration) => {
+    setPlayerSection('entrada');
+    setIsPlaying(true);
+    // 1) Toca entrada. Se nao houver audio pre-renderizado, cai em Web Speech
+    //    e estima duracao com tempo_entrada como fallback (Web Speech nao
+    //    da evento 'ended' confiavel pra audios sintetizados curtos).
+    const preEntrada = audios[reg.id]?.entrada;
+    if (preEntrada?.audio_url) {
+      const audio = new Audio(preEntrada.audio_url);
+      narrationAudioRef.current = audio;
+      audio.addEventListener('ended', () => {
+        // 2) Espera (tempo_entrada segundos) com countdown visual
+        const waitSec = Math.max(0, tempoEntrada || 0);
+        if (waitSec === 0) {
+          playTrilhaWithSequence(reg);
+          return;
+        }
+        setPlayerSection('wait');
+        setWaitRemaining(waitSec);
+        let remaining = waitSec;
+        sequenceTimerRef.current = window.setInterval(() => {
+          remaining -= 1;
+          setWaitRemaining(Math.max(0, remaining));
+          if (remaining <= 0) {
+            if (sequenceTimerRef.current) {
+              clearInterval(sequenceTimerRef.current);
+              sequenceTimerRef.current = null;
+            }
+            playTrilhaWithSequence(reg);
+          }
+        }, 1000);
+      });
+      audio.play().catch(e => console.warn('Falha ao tocar entrada:', e));
+    } else {
+      // Fallback: Web Speech + timer estimado (~10s) pra avancar
+      handleAnnounce(reg, 'entrada');
+      setTimeout(() => {
+        const waitSec = Math.max(0, tempoEntrada || 0);
+        setPlayerSection('wait');
+        setWaitRemaining(waitSec);
+        let remaining = waitSec;
+        sequenceTimerRef.current = window.setInterval(() => {
+          remaining -= 1;
+          setWaitRemaining(Math.max(0, remaining));
+          if (remaining <= 0) {
+            if (sequenceTimerRef.current) {
+              clearInterval(sequenceTimerRef.current);
+              sequenceTimerRef.current = null;
+            }
+            playTrilhaWithSequence(reg);
+          }
+        }, 1000);
+      }, 10000);
+    }
+  };
+
+  // Skip da etapa atual (botao "Pular trecho" no UI). Avanca pra proxima.
+  const skipCurrentSection = () => {
+    if (!currentTrack) return;
+    if (playerSection === 'entrada' || playerSection === 'saida') {
+      if (narrationAudioRef.current) {
+        narrationAudioRef.current.pause();
+        narrationAudioRef.current.src = '';
+        narrationAudioRef.current = null;
+      }
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      if (playerSection === 'entrada') {
+        // Pula direto pra trilha
+        if (sequenceTimerRef.current) {
+          clearInterval(sequenceTimerRef.current);
+          sequenceTimerRef.current = null;
+        }
+        playTrilhaWithSequence(currentTrack);
+      } else {
+        setPlayerSection('idle');
+        setIsPlaying(false);
+      }
+    } else if (playerSection === 'wait') {
+      if (sequenceTimerRef.current) {
+        clearInterval(sequenceTimerRef.current);
+        sequenceTimerRef.current = null;
+      }
+      playTrilhaWithSequence(currentTrack);
+    } else if (playerSection === 'trilha') {
+      if (trilhaAudioRef.current) {
+        trilhaAudioRef.current.pause();
+        trilhaAudioRef.current.src = '';
+        trilhaAudioRef.current = null;
+      }
+      if (saidaAtiva && audios[currentTrack.id]?.saida) {
+        setPlayerSection('saida');
+        const audioSaida = new Audio(audios[currentTrack.id]!.saida!.audio_url);
+        narrationAudioRef.current = audioSaida;
+        audioSaida.addEventListener('ended', () => { setPlayerSection('idle'); setIsPlaying(false); });
+        audioSaida.play().catch(e => console.warn('Falha ao tocar saida:', e));
+      } else {
+        setPlayerSection('idle');
+        setIsPlaying(false);
+      }
+    }
   };
 
   // Ao desmontar a pagina, garantir que nada continua tocando no background
@@ -614,7 +776,14 @@ const Schedule = () => {
   const handlePrepare = async (reg: Registration) => {
     setCurrentTrack(reg);
     setIsPlaying(false);
-    handleAnnounce(reg);
+    if (modoSistema) {
+      // Modo SISTEMA: dispara sequencia automatica entrada->wait->trilha->saida
+      startSequenceMode(reg);
+    } else {
+      // Modo MANUAL (default): so toca a narracao de entrada; sonoplasta
+      // controla a trilha em equipamento externo.
+      handleAnnounce(reg);
+    }
     if (!selectedEventId) return;
     setUpdatingLive(true);
     try {
@@ -1218,6 +1387,33 @@ const Schedule = () => {
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
               {currentTrack?.estudio || 'Clique em "Iniciar" em uma coreografia abaixo'}
             </p>
+            {/* Indicador de secao do modo SISTEMA (auto-play sequencial) */}
+            {modoSistema && currentTrack && playerSection !== 'idle' && (
+              <div className="pt-2 space-y-1.5">
+                <div className="flex items-center gap-2 flex-wrap text-[9px] font-black uppercase tracking-widest">
+                  <span className={`px-2 py-0.5 rounded-full ${playerSection === 'entrada' ? 'bg-violet-500 text-white' : 'bg-white/5 text-slate-500'}`}>1 Narração</span>
+                  <span className={`px-2 py-0.5 rounded-full ${playerSection === 'wait' ? 'bg-amber-500 text-white' : 'bg-white/5 text-slate-500'}`}>
+                    2 Espera{playerSection === 'wait' ? ` (${waitRemaining}s)` : ''}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full ${playerSection === 'trilha' ? 'bg-[#ff0068] text-white' : 'bg-white/5 text-slate-500'}`}>3 Trilha</span>
+                  {saidaAtiva && (
+                    <span className={`px-2 py-0.5 rounded-full ${playerSection === 'saida' ? 'bg-emerald-500 text-white' : 'bg-white/5 text-slate-500'}`}>4 Saída</span>
+                  )}
+                </div>
+                {/* Barra de progresso da trilha */}
+                {playerSection === 'trilha' && trilhaDuration > 0 && (
+                  <div className="space-y-0.5">
+                    <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-full bg-[#ff0068] transition-all" style={{ width: `${(trilhaProgress / trilhaDuration) * 100}%` }} />
+                    </div>
+                    <div className="flex justify-between text-[8px] font-bold text-slate-400 tabular-nums">
+                      <span>{Math.floor(trilhaProgress / 60)}:{String(Math.floor(trilhaProgress % 60)).padStart(2, '0')}</span>
+                      <span>{Math.floor(trilhaDuration / 60)}:{String(Math.floor(trilhaDuration % 60)).padStart(2, '0')}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-4">
@@ -1237,6 +1433,16 @@ const Schedule = () => {
             >
               {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" className="ml-1" />}
             </button>
+            {/* Skip — so visivel em modo SISTEMA com sequencia rolando */}
+            {modoSistema && playerSection !== 'idle' && (
+              <button
+                onClick={skipCurrentSection}
+                className="p-4 bg-white/5 text-white rounded-2xl hover:bg-amber-500/20 hover:text-amber-400 transition-all"
+                title="Pular trecho atual e ir pra próxima etapa"
+              >
+                <SkipForward size={24} />
+              </button>
+            )}
             <button
               onClick={handleEndLive}
               disabled={!currentTrack || updatingLive}
