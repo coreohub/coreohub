@@ -496,9 +496,8 @@ const PublicEventPage = () => {
         )}
 
         {/* Jurados (+ Professores quando workshops entrarem) */}
-        <div className="scroll-mt-20">
-          <PessoasSection judges={publicJudges} />
-        </div>
+        {/* scroll-mt-20 vive dentro do PessoasSection no elemento com id="jurados" */}
+        <PessoasSection judges={publicJudges} />
 
         {/* Prêmios habilitados */}
         {enabledAwards.length > 0 && (

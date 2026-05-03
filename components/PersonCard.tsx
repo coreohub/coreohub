@@ -8,7 +8,7 @@
  * roles e exibe chip duplo "Jurada • Professora".
  */
 
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import { Instagram, Globe, Award, Music2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -40,11 +40,20 @@ export const PersonCard: React.FC<PersonCardProps> = ({ person, onClick }) => {
   const instagramHandle = person.instagram?.replace(/^@/, '').replace(/.*instagram\.com\//, '');
   const instagramUrl = instagramHandle ? `https://instagram.com/${instagramHandle}` : null;
 
+  // <div role="button"> em vez de <button> porque temos <a>s aninhados
+  // (Instagram/site) — HTML inválido ter <a> dentro de <button>.
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className="group text-left bg-white/5 border border-white/10 rounded-2xl overflow-hidden hover:border-[#ff0068]/40 transition-colors cursor-pointer"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick?.();
+        }
+      }}
+      className="group text-left bg-white/5 border border-white/10 rounded-2xl overflow-hidden hover:border-[#ff0068]/40 focus:border-[#ff0068]/60 focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40 transition-colors cursor-pointer"
     >
       {/* Foto */}
       <div className="aspect-square bg-gradient-to-br from-[#ff0068]/20 to-purple-500/20 relative overflow-hidden">
@@ -140,7 +149,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({ person, onClick }) => {
           </div>
         )}
       </div>
-    </button>
+    </div>
   );
 };
 
@@ -150,6 +159,20 @@ interface PersonModalProps {
 }
 
 export const PersonModal: React.FC<PersonModalProps> = ({ person, onClose }) => {
+  // ESC fecha o modal + lock body scroll quando aberto
+  useEffect(() => {
+    if (!person) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [person, onClose]);
+
   return (
     <AnimatePresence>
       {person && (
@@ -158,6 +181,9 @@ export const PersonModal: React.FC<PersonModalProps> = ({ person, onClose }) => 
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="person-modal-name"
           className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
         >
           <motion.div
@@ -182,7 +208,7 @@ export const PersonModal: React.FC<PersonModalProps> = ({ person, onClose }) => 
 
             <div className="p-6 space-y-4">
               <div>
-                <h2 className="text-2xl font-black uppercase tracking-tight text-white leading-tight">
+                <h2 id="person-modal-name" className="text-2xl font-black uppercase tracking-tight text-white leading-tight">
                   {person.name}
                 </h2>
                 <div className="flex gap-1 mt-2">

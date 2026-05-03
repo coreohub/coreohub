@@ -122,7 +122,7 @@ export const PessoasSection: React.FC<PessoasSectionProps> = ({ judges = [], tea
   if (people.length === 0) return null;
 
   return (
-    <div className="space-y-4" id="jurados">
+    <div id="jurados" className="space-y-4 scroll-mt-20">
       <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
         <Award size={24} className="text-[#ff0068]" /> Jurados
       </h2>
