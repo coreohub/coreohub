@@ -477,17 +477,48 @@ const PublicEventPage = () => {
                 } else if (mod.fee != null) {
                   precoExibir = Number(mod.fee);
                 }
+                const handleInscrever = () => {
+                  if (!isRegistrationOpen) return;
+                  navigate(`/festival/${eventId}/register?formacao=${encodeURIComponent(mod.name)}`);
+                };
                 return (
-                  <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-5 flex justify-between items-center">
-                    <div>
-                      <span className="font-black uppercase text-sm">{mod.name}</span>
-                      {nomeLote && (
-                        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">{nomeLote}</p>
-                      )}
+                  <div
+                    key={i}
+                    className={`group bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col gap-3 transition-all ${
+                      isRegistrationOpen
+                        ? 'hover:border-[#ff0068]/40 hover:bg-white/[0.07] cursor-pointer'
+                        : 'opacity-70'
+                    }`}
+                    onClick={handleInscrever}
+                    role={isRegistrationOpen ? 'button' : undefined}
+                    tabIndex={isRegistrationOpen ? 0 : undefined}
+                    onKeyDown={(e) => {
+                      if (isRegistrationOpen && (e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault();
+                        handleInscrever();
+                      }
+                    }}
+                  >
+                    <div className="flex justify-between items-start gap-3">
+                      <div>
+                        <span className="font-black uppercase text-sm">{mod.name}</span>
+                        {nomeLote && (
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">{nomeLote}</p>
+                        )}
+                      </div>
+                      <span className="text-[#ff0068] font-black text-sm whitespace-nowrap">
+                        {precoExibir != null && precoExibir > 0 ? `R$ ${precoExibir.toFixed(2)}` : 'Gratuito'}
+                      </span>
                     </div>
-                    <span className="text-[#ff0068] font-black text-sm">
-                      {precoExibir != null && precoExibir > 0 ? `R$ ${precoExibir.toFixed(2)}` : 'Gratuito'}
-                    </span>
+                    {isRegistrationOpen && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleInscrever(); }}
+                        className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#ff0068]/10 text-[#ff0068] rounded-lg text-[10px] font-black uppercase tracking-widest group-hover:bg-[#ff0068] group-hover:text-white transition-all"
+                      >
+                        Inscrever <ChevronRight size={12} />
+                      </button>
+                    )}
                   </div>
                 );
               })}

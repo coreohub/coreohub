@@ -1408,7 +1408,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
 
   const ActBtns = ({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) => (
     <div className="flex items-center gap-2">
-      <button onClick={onEdit}   className="p-2 text-slate-500 hover:text-white hover:bg-white/10 rounded-lg transition-all"><Pencil size={14} /></button>
+      <button onClick={onEdit}   className="p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-all"><Pencil size={14} /></button>
       <button onClick={onDelete} className="p-2 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all"><Trash2 size={14} /></button>
     </div>
   );
@@ -2193,7 +2193,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
 
                     <button
                       onClick={() => setGenreModal({ open: true, mode: 'edit-genre', genre, tempName: genre.name, tempFree: false, tempShorterTrack: false })}
-                      className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all"
+                      className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-all"
                     >
                       <Pencil size={14} />
                     </button>
@@ -2278,7 +2278,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
 
                               <button
                                 onClick={() => setGenreModal({ open: true, mode: 'edit-sub', genre, subIndex: idx, tempName: sub.name, tempFree: sub.is_categoria_livre, tempShorterTrack: sub.allow_shorter_track ?? false })}
-                                className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all"
+                                className="p-1.5 text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-all"
                               >
                                 <Pencil size={12} />
                               </button>

@@ -364,6 +364,13 @@ Deno.serve(async (req) => {
       // Politica de ingressos + lista
       politica_ingressos: 'INTERNO',
       ingressos_config: DEMO_INGRESSOS,
+      // Tier 1: ativa "Vender pelo CoreoHub" no demo pra produtor ver o
+      // botão "Comprar" funcionando. Defaults sandbox-friendly.
+      audience_sales_enabled: true,
+      audience_commission_percent: 10,
+      audience_fee_mode: 'repassar',
+      audience_max_per_cpf: 6,
+      audience_max_per_purchase: 6,
       patrocinadores_config: DEMO_PATROCINADORES,
       programacao_config: DEMO_PROGRAMACAO,
     }]).select('id').single()
