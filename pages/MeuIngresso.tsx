@@ -9,7 +9,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { QRCodeCanvas } from 'qrcode.react';
-import { ArrowLeft, Loader2, AlertCircle, Sun, Calendar, MapPin, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertCircle, Sun, Calendar, MapPin, ExternalLink, Download, Share2 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
 interface Ticket {
@@ -93,9 +93,35 @@ const MeuIngresso: React.FC = () => {
     return () => { try { wakeLock?.release(); } catch { /* ignore */ } };
   }, []);
 
+  // ─── Salvar imagem do QR (canvas → png download) ──────────────────────────
+  const handleSaveImage = () => {
+    const canvas = document.getElementById('ticket-qr') as HTMLCanvasElement | null;
+    if (!canvas) return;
+    const link = document.createElement('a');
+    link.download = `ingresso-${ticket?.event_name?.replace(/\s+/g, '-') ?? 'coreohub'}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  };
+
+  // ─── Compartilhar (Web Share API → fallback WhatsApp) ─────────────────────
+  const handleShare = async () => {
+    if (!ticket) return;
+    const url = window.location.href;
+    const text = `Meu ingresso pra ${ticket.event_name} — ${ticket.ticket_type_nome}.`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Meu ingresso CoreoHub', text, url });
+        return;
+      }
+    } catch { /* user canceled — segue pra fallback se quiser */ }
+    // Fallback: abre WhatsApp web/app com mensagem pré-preenchida
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`;
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-950">
+      <div role="status" aria-live="polite" aria-label="Carregando ingresso" className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-950">
         <Loader2 className="animate-spin text-[#ff0068]" size={32} />
       </div>
     );
@@ -218,6 +244,28 @@ const MeuIngresso: React.FC = () => {
                     Use se o leitor não reconhecer o QR
                   </p>
                 </div>
+
+                {/* Ações: salvar imagem + compartilhar (paridade com Credencial.tsx) */}
+                {!isCheckedIn && (
+                  <div className="mt-4 flex items-center gap-2 w-full">
+                    <button
+                      type="button"
+                      onClick={handleSaveImage}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
+                      aria-label="Salvar imagem do QR"
+                    >
+                      <Download size={12} /> Salvar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleShare}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-[#ff0068]/10 hover:bg-[#ff0068]/20 text-[#ff0068] rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
+                      aria-label="Compartilhar ingresso"
+                    >
+                      <Share2 size={12} /> Compartilhar
+                    </button>
+                  </div>
+                )}
               </div>
             </>
           )}

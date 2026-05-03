@@ -346,6 +346,13 @@ const PublicEventPage = () => {
             // (botão "Comprar" leva pra /checkout-ingresso). Senão, exibe só os
             // tipos como informativo (ou link externo legado se cadastrado).
             const salesEnabled = !!event.audience_sales_enabled;
+            // Quando sales habilitado, esconde tipos com preço 0 (não tem como
+            // comprar) — produtor que quer cortesia/RSVP usa Tier 2 ou GRATUITO.
+            // Quando sales desabilitado, mostra tudo (informativo).
+            const visibleTypes = (event.ingressos_config as any[])
+              .filter((t: any) => t.nome)
+              .filter((t: any) => !salesEnabled || Number(t.preco ?? 0) > 0);
+            if (visibleTypes.length === 0) return null;
             return (
               <div className="space-y-4">
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
@@ -353,8 +360,7 @@ const PublicEventPage = () => {
                 </h2>
                 <p className="text-xs text-slate-400">Para o público que vai assistir. Bailarinos inscritos não precisam comprar.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {event.ingressos_config
-                    .filter((t: any) => t.nome)
+                  {visibleTypes
                     .map((t: any, originalIdx: number) => {
                       // Idx no array original importa pro checkout (não o filtrado)
                       const realIdx = event.ingressos_config.findIndex((x: any) => x === t);

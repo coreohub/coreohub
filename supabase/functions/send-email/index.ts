@@ -381,6 +381,8 @@ function buildEventCreatedProducer(p: EventCreatedPayload) {
 interface AudienceTicketPayload {
   buyerName?: string
   buyerEmail: string
+  /** Email do produtor — vira reply-to do email transacional (comprador responde, produtor recebe) */
+  produtorEmail?: string
   eventoNome?: string
   eventoData?: string
   eventoLocal?: string
@@ -594,6 +596,7 @@ Deno.serve(async (req) => {
         subject = tpl.subject
         html = tpl.html
         festivalName = p.eventoNome
+        replyTo = p.produtorEmail   // comprador responde → produtor recebe
         break
       }
       case 'audience_ticket_producer': {

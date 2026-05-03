@@ -64,6 +64,17 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
+// Extrai IP real do request (Supabase passa via x-forwarded-for / cf-connecting-ip)
+function extractClientIp(req: Request): string {
+  const cf = req.headers.get('cf-connecting-ip')
+  if (cf) return cf
+  const xff = req.headers.get('x-forwarded-for')
+  if (xff) return xff.split(',')[0].trim()
+  const xri = req.headers.get('x-real-ip')
+  if (xri) return xri
+  return 'unknown'
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -103,11 +114,33 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
     )
 
+    // ── Rate limit por IP (anti-spam) ────────────────────────────────────────
+    // Máx 10 tentativas em 5min por IP. Chuta 429 se exceder.
+    const clientIp = extractClientIp(req)
+    if (clientIp !== 'unknown') {
+      const { data: rlData, error: rlErr } = await supabase.rpc('rate_limit_check', {
+        p_scope: 'create-audience-ticket',
+        p_identifier: clientIp,
+        p_window_seconds: 300,
+        p_max_attempts: 10,
+      })
+      if (rlErr) {
+        // Falha do rate limit não bloqueia request (defensive — banco pode estar lento)
+        console.warn('[create-audience-ticket] rate_limit_check falhou:', rlErr.message)
+      } else {
+        const row = Array.isArray(rlData) ? rlData[0] : rlData
+        if (row && row.allowed === false) {
+          console.warn(`[create-audience-ticket] rate limit excedido ip=${clientIp} attempts=${row.attempts_in_window}`)
+          return json({ error: 'Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.' }, 429)
+        }
+      }
+    }
+
     // ── Evento + tipo de ingresso ────────────────────────────────────────────
     const { data: event, error: evErr } = await supabase
       .from('events')
       .select(`
-        id, name, created_by, ingressos_config,
+        id, name, created_by, ingressos_config, event_date,
         audience_commission_percent, audience_fee_mode,
         audience_max_per_cpf, audience_max_per_purchase, audience_sales_enabled,
         politica_ingressos
@@ -121,6 +154,13 @@ Deno.serve(async (req) => {
     }
     if (event.politica_ingressos !== 'INTERNO') {
       throw new Error('Este evento não vende ingressos pela plataforma')
+    }
+    // Defesa em profundidade: backend também valida evento expirado.
+    if (event.event_date) {
+      const deadline = new Date(event.event_date + 'T23:59:59')
+      if (deadline.getTime() < Date.now()) {
+        throw new Error('Vendas encerradas: este evento já aconteceu')
+      }
     }
 
     const ingressos: any[] = Array.isArray(event.ingressos_config) ? event.ingressos_config : []
@@ -142,63 +182,10 @@ Deno.serve(async (req) => {
     const maxPerPurchase = Number(event.audience_max_per_purchase ?? 6)
     const maxPerCpf      = Number(event.audience_max_per_cpf ?? 6)
 
+    // Validação inicial de quantity (a SQL function valida limites por CPF
+    // atomicamente sob advisory lock; aqui só pré-filtra max por compra).
     if (quantity > maxPerPurchase) {
       throw new Error(`Limite de ${maxPerPurchase} ingressos por compra`)
-    }
-
-    // Conta tickets já comprados por este CPF neste evento.
-    // Regra: APROVADO sempre conta; PENDENTE só conta se criado < 1h atrás
-    // (evita bloquear recompra quando comprador abandonou checkout).
-    // Não previne 100% race condition de 2 requests simultâneos, mas reduz
-    // bastante a janela. Pra fix definitivo precisaria de função Postgres
-    // com lock — fica pra Tier 2.
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
-
-    const { count: aprovadosByCpf } = await supabase
-      .from('audience_tickets')
-      .select('id', { count: 'exact', head: true })
-      .eq('event_id', event_id)
-      .eq('buyer_cpf', cpfLimpo)
-      .eq('status_pagamento', 'APROVADO')
-
-    const { count: pendentesByCpf } = await supabase
-      .from('audience_tickets')
-      .select('id', { count: 'exact', head: true })
-      .eq('event_id', event_id)
-      .eq('buyer_cpf', cpfLimpo)
-      .eq('status_pagamento', 'PENDENTE')
-      .gte('created_at', oneHourAgo)
-
-    const existingByCpf = (aprovadosByCpf ?? 0) + (pendentesByCpf ?? 0)
-
-    if (existingByCpf + quantity > maxPerCpf) {
-      throw new Error(
-        `Limite de ${maxPerCpf} ingressos por CPF excedido (já tem ${existingByCpf}, tentando comprar +${quantity})`
-      )
-    }
-
-    // Lei 12.933: meia-entrada limite 1 por CPF por evento
-    if (kind === 'meia') {
-      if (quantity > 1) throw new Error('Lei 12.933: meia-entrada limite 1 por CPF')
-      // Pra meia, considera APROVADO + PENDENTE recente (não pode burlar trocando email)
-      const { count: meiaAprovada } = await supabase
-        .from('audience_tickets')
-        .select('id', { count: 'exact', head: true })
-        .eq('event_id', event_id)
-        .eq('buyer_cpf', cpfLimpo)
-        .eq('ticket_type_kind', 'meia')
-        .eq('status_pagamento', 'APROVADO')
-      const { count: meiaPendente } = await supabase
-        .from('audience_tickets')
-        .select('id', { count: 'exact', head: true })
-        .eq('event_id', event_id)
-        .eq('buyer_cpf', cpfLimpo)
-        .eq('ticket_type_kind', 'meia')
-        .eq('status_pagamento', 'PENDENTE')
-        .gte('created_at', oneHourAgo)
-      if ((meiaAprovada ?? 0) + (meiaPendente ?? 0) >= 1) {
-        throw new Error('Lei 12.933: já existe uma meia-entrada para este CPF neste evento')
-      }
     }
 
     // ── Calcular valores ─────────────────────────────────────────────────────
@@ -232,34 +219,49 @@ Deno.serve(async (req) => {
       throw new Error('Produtor não conectou conta Asaas. Venda indisponível.')
     }
 
-    // ── Inserir tickets PENDENTE primeiro (precisa de id pra externalReference) ─
-    // Tier 1 cobre quantity=1 inicialmente (botão "Comprar" da vitrine compra um
-    // tipo por vez). Pra suportar 2+ tickets na mesma compra, criamos N rows e
-    // todos compartilham mesmo payment_id no webhook.
-    const ticketsToInsert = Array.from({ length: quantity }).map(() => ({
-      event_id,
-      ticket_type_id: String(ticket_type_idx),
-      ticket_type_nome: String(ticketType.nome),
-      ticket_type_kind: kind,
-      preco: baseFeeUnit,
-      buyer_name: buyer.name!.trim(),
-      buyer_email: buyer.email!.trim().toLowerCase(),
-      buyer_cpf: cpfLimpo,
-      buyer_phone: buyer.phone?.replace(/\D/g, '') || null,
-      status_pagamento: 'PENDENTE',
-      commission_amount: commissionUnit,
-      producer_amount: producerUnit,
-      fee_mode: feeMode,
-    }))
+    // ── Reserva atômica via SQL function (advisory lock por CPF+evento) ─────
+    // Garante que count + insert acontecem sob lock — race condition de
+    // requests simultâneos não burla limite por CPF nem Lei 12.933.
+    const { data: reserveData, error: reserveErr } = await supabase.rpc(
+      'try_reserve_audience_tickets',
+      {
+        p_event_id:           event_id,
+        p_cpf:                cpfLimpo,
+        p_kind:               kind,
+        p_quantity:           quantity,
+        p_max_per_cpf:        maxPerCpf,
+        p_ticket_type_id:     String(ticket_type_idx),
+        p_ticket_type_nome:   String(ticketType.nome),
+        p_preco:              baseFeeUnit,
+        p_buyer_name:         buyer.name!.trim(),
+        p_buyer_email:        buyer.email!.trim().toLowerCase(),
+        p_buyer_phone:        buyer.phone?.replace(/\D/g, '') || null,
+        p_commission_amount:  commissionUnit,
+        p_producer_amount:    producerUnit,
+        p_fee_mode:           feeMode,
+      }
+    )
 
-    const { data: createdTickets, error: insErr } = await supabase
-      .from('audience_tickets')
-      .insert(ticketsToInsert)
-      .select('id, access_token')
+    if (reserveErr) {
+      console.error('[create-audience-ticket] erro RPC reserve:', reserveErr.message)
+      throw new Error(`Falha ao reservar ingresso: ${reserveErr.message}`)
+    }
 
-    if (insErr || !createdTickets?.length) {
-      console.error('[create-audience-ticket] erro insert:', insErr?.message)
-      throw new Error(`Falha ao reservar ingresso: ${insErr?.message ?? 'unknown'}`)
+    const reserveRows = (Array.isArray(reserveData) ? reserveData : []) as Array<{
+      ticket_id: string | null; access_token: string | null; error_message: string | null
+    }>
+
+    // SQL function retorna 1 row com error_message preenchido em caso de erro
+    if (reserveRows.length === 0 || (reserveRows[0].error_message && !reserveRows[0].ticket_id)) {
+      throw new Error(reserveRows[0]?.error_message ?? 'Falha ao reservar ingresso')
+    }
+
+    const createdTickets = reserveRows
+      .filter(r => r.ticket_id)
+      .map(r => ({ id: r.ticket_id!, access_token: r.access_token! }))
+
+    if (createdTickets.length === 0) {
+      throw new Error('Nenhum ticket reservado')
     }
 
     // externalReference: prefix "AT:" pro webhook discriminar audience vs registration

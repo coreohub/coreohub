@@ -172,10 +172,11 @@ async function handleAudienceTicket(opts: {
       emailJobs.push(dispararEmail('audience_ticket_confirmed', {
         buyerName,
         buyerEmail,
+        produtorEmail: produtorProfile?.email,  // pra reply-to (comprador responde, produtor recebe)
         eventoNome:  eventData?.name,
         eventoLocal: eventData?.location,
         eventoData:  eventData?.event_date
-          ? new Date(eventData.event_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+          ? new Date(eventData.event_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
           : null,
         valorPago:   grossAmount,
         tickets:     ticketLinks,

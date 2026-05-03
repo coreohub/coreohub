@@ -85,6 +85,15 @@ export default function CheckoutIngresso() {
           setError('Venda de ingressos não está disponível para este evento.');
           return;
         }
+        // Validação de evento expirado — não vende ingresso pra evento que já passou.
+        // Usa T23:59:59 do dia do evento como deadline (permite comprar até o fim do dia).
+        if (ev.event_date) {
+          const deadline = new Date(ev.event_date + 'T23:59:59');
+          if (deadline.getTime() < Date.now()) {
+            setError('Este evento já aconteceu. Vendas de ingressos encerradas.');
+            return;
+          }
+        }
         const ingressos: any[] = Array.isArray(ev.ingressos_config) ? ev.ingressos_config : [];
         const idx = parseInt(ticketTypeIdx, 10);
         const t = ingressos[idx];
