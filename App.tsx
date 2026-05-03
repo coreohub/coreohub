@@ -53,7 +53,6 @@ const BattleArenaLive          = lazy(() => import('./pages/BattleArenaLive'));
 const ResultsPanel             = lazy(() => import('./pages/ResultsPanel'));
 const MyResults                = lazy(() => import('./pages/MyResults'));
 const Credencial               = lazy(() => import('./pages/Credencial'));
-const MesaDeSom                = lazy(() => import('./pages/MesaDeSom'));
 const TracksManagement         = lazy(() => import('./pages/TracksManagement'));
 const Ingressos                = lazy(() => import('./pages/Ingressos'));
 const Live                     = lazy(() => import('./pages/Live'));
@@ -370,7 +369,6 @@ const App: React.FC = () => {
         <Route path="/marcacao-palco" element={<PrivateRoute {...privateRouteProps}><StageMarker /></PrivateRoute>} />
         <Route path="/minha-equipe" element={<PrivateRoute {...privateRouteProps}><EquipeProdutor /></PrivateRoute>} />
         <Route path="/suporte-juri" element={<PrivateRoute {...privateRouteProps}><SuporteJuri /></PrivateRoute>} />
-        <Route path="/mesa-de-som" element={<PrivateRoute {...privateRouteProps}><MesaDeSom /></PrivateRoute>} />
         <Route path="/ingressos" element={<PrivateRoute {...privateRouteProps}><Ingressos /></PrivateRoute>} />
         <Route path="/live" element={<PrivateRoute {...privateRouteProps}><Live /></PrivateRoute>} />
 

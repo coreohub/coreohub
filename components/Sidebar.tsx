@@ -72,7 +72,7 @@ const menuSections: MenuSection[] = [
       { path: '/apuracao',             label: 'Resultados',               icon: BarChart2      },
       { path: '/deliberacoes',         label: 'Premiação',                icon: Trophy         },
       { path: '/manage-schedule',      label: 'Sonoplastia e Cronograma', icon: Calendar       },
-      { path: '/mesa-de-som',          label: 'Mesa de Som',              icon: Music          },
+      { path: '/account-settings?tab=Fluxo do Evento', label: 'Narração IA', icon: Mic2          },
       { path: '/equipe-jurados',       label: 'Jurados',                  icon: UserCheck      },
       { path: '/minha-equipe',         label: 'Minha Equipe',             icon: Users          },
       { path: '/account-settings',     label: 'Configurações',            icon: Settings       },

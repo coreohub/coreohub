@@ -544,7 +544,15 @@ const EventCommissionCard: React.FC<EventCommissionCardProps> = ({ event, saving
 
 /* ════════════════════════ AccountSettings ════════════════════════ */
 const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('Geral');
+  // Permite deep-link com ?tab=<nome> pra atalhos de outras telas (ex:
+  // Sidebar -> Narração IA aponta pra ?tab=Fluxo do Evento)
+  const initialTab: TabType = (() => {
+    if (typeof window === 'undefined') return 'Geral';
+    const param = new URLSearchParams(window.location.search).get('tab');
+    if (!param) return 'Geral';
+    return (TABS.find(t => t.label === param)?.label ?? 'Geral') as TabType;
+  })();
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab);
   const [saving, setSaving]       = useState(false);
   const [success, setSuccess]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
