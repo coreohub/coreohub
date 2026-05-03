@@ -184,12 +184,13 @@ const DEMO_TRILHAS = [
   'https://cdn.pixabay.com/audio/2022/10/16/audio_3b5f4e2fff.mp3',
 ]
 
-// Patrocinadores placeholder (logos de servicos publicos genericos)
+// Patrocinadores placeholder (placehold.co — mais confiavel que via.placeholder
+// que tem problema de DNS/CDN intermitente)
 const DEMO_PATROCINADORES = [
-  { nome: 'Prefeitura Municipal',          logo_url: 'https://via.placeholder.com/240x120/0ea5e9/ffffff?text=PREFEITURA',     link: 'https://exemplo.gov.br' },
-  { nome: 'Secretaria de Cultura',         logo_url: 'https://via.placeholder.com/240x120/8b5cf6/ffffff?text=CULTURA',        link: 'https://cultura.exemplo.gov.br' },
-  { nome: 'Studio Capital — Patrocínio',   logo_url: 'https://via.placeholder.com/240x120/ec4899/ffffff?text=STUDIO+CAPITAL', link: '' },
-  { nome: 'CoreoHub',                      logo_url: 'https://via.placeholder.com/240x120/ff0068/ffffff?text=CoreoHub',       link: 'https://coreohub.com' },
+  { nome: 'Prefeitura Municipal',          logo_url: 'https://placehold.co/240x120/0ea5e9/ffffff/png?text=PREFEITURA',     link: 'https://exemplo.gov.br' },
+  { nome: 'Secretaria de Cultura',         logo_url: 'https://placehold.co/240x120/8b5cf6/ffffff/png?text=CULTURA',        link: 'https://cultura.exemplo.gov.br' },
+  { nome: 'Studio Capital — Patrocínio',   logo_url: 'https://placehold.co/240x120/ec4899/ffffff/png?text=STUDIO+CAPITAL', link: '' },
+  { nome: 'CoreoHub',                      logo_url: 'https://placehold.co/240x120/ff0068/ffffff/png?text=CoreoHub',       link: 'https://coreohub.com' },
 ]
 
 // Tipos de ingresso pra audiencia (politica INTERNO)
@@ -199,15 +200,15 @@ const DEMO_INGRESSOS = [
   { nome: 'Solidária',       preco: 20, obs: 'Inteira + 1kg de alimento não-perecível', link: '' },
 ]
 
-// Programacao do dia
+// Programacao do dia (campo canonico do AccountSettings: 'atividade', nao 'titulo')
 const DEMO_PROGRAMACAO = [
-  { hora: '08:00', titulo: 'Abertura do credenciamento',   descricao: 'Retire sua credencial digital ou física na recepção do teatro.' },
-  { hora: '09:00', titulo: 'Aula gratuita aberta',         descricao: 'Workshop de Contemporâneo com a coreógrafa convidada.' },
-  { hora: '12:00', titulo: 'Pausa pra almoço',             descricao: '' },
-  { hora: '14:00', titulo: 'Bloco 1 — Manhã (Solos/Duos)', descricao: 'Início das apresentações competitivas.' },
-  { hora: '17:00', titulo: 'Intervalo',                    descricao: '' },
-  { hora: '17:30', titulo: 'Bloco 2 — Tarde (Trios/Grupos)', descricao: 'Continuação das apresentações.' },
-  { hora: '20:00', titulo: 'Premiação',                    descricao: 'Entrega de medalhas Ouro/Prata/Bronze + prêmios especiais.' },
+  { hora: '08:00', atividade: 'Abertura do credenciamento' },
+  { hora: '09:00', atividade: 'Aula gratuita aberta — Workshop de Contemporâneo' },
+  { hora: '12:00', atividade: 'Pausa pra almoço' },
+  { hora: '14:00', atividade: 'Bloco 1 — Manhã (Solos & Duos)' },
+  { hora: '17:00', atividade: 'Intervalo' },
+  { hora: '17:30', atividade: 'Bloco 2 — Tarde (Trios & Grupos)' },
+  { hora: '20:00', atividade: 'Premiação — medalhas + prêmios especiais' },
 ]
 
 const CATEGORIAS = ['Infantil', 'Juvenil', 'Adulto', 'Profissional']
@@ -340,7 +341,7 @@ Deno.serve(async (req) => {
       city: 'São Paulo',
       state: 'SP',
       is_demo: true,
-      is_public: false,
+      is_public: true, // demo precisa ser publico pra produtor testar a vitrine
       created_by: user.id,
       scoring_system: 'BASE_10',
       slug: `demo-${user.id.slice(0, 8)}`,

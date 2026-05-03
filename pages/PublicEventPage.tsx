@@ -44,11 +44,19 @@ const PublicEventPage = () => {
           return;
         }
 
-        const { data: cfg } = await supabase
+        // Busca configuracoes do evento especifico (id=event_id da multi-tenant);
+        // fallback pra legacy id='1' apenas se nao houver row do evento.
+        const { data: cfgEvent } = await supabase
           .from('configuracoes')
           .select('*')
-          .eq('id', 1)
+          .eq('id', eventData.id)
           .maybeSingle();
+        const cfg = cfgEvent ?? await supabase
+          .from('configuracoes')
+          .select('*')
+          .eq('id', '1')
+          .maybeSingle()
+          .then(r => r.data);
 
         setEvent(eventData);
         setConfig(cfg);
@@ -379,14 +387,36 @@ const PublicEventPage = () => {
               <Music size={24} className="text-[#ff0068]" /> Inscrições disponíveis
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {event.formacoes_config.map((mod: any, i: number) => (
-                <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-5 flex justify-between items-center">
-                  <span className="font-black uppercase text-sm">{mod.name}</span>
-                  <span className="text-[#ff0068] font-black text-sm">
-                    {mod.fee ? `R$ ${Number(mod.fee).toFixed(2)}` : 'Gratuito'}
-                  </span>
-                </div>
-              ))}
+              {event.formacoes_config.map((mod: any, i: number) => {
+                // Preço a exibir: encontra o lote vigente (data_virada futura mais
+                // proxima) ou usa o ultimo se todos passaram. Fallback pra mod.fee
+                // pra eventos antigos sem lotes.
+                const today = new Date().toISOString().slice(0, 10);
+                const lotes = Array.isArray(mod.lotes) ? mod.lotes : [];
+                let precoExibir: number | null = null;
+                let nomeLote: string | null = null;
+                if (lotes.length > 0) {
+                  const vigente = lotes.find((l: any) => !l.data_virada || l.data_virada >= today);
+                  const lote = vigente ?? lotes[lotes.length - 1];
+                  precoExibir = Number(lote?.preco ?? 0);
+                  nomeLote = lote?.nome ?? null;
+                } else if (mod.fee != null) {
+                  precoExibir = Number(mod.fee);
+                }
+                return (
+                  <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-5 flex justify-between items-center">
+                    <div>
+                      <span className="font-black uppercase text-sm">{mod.name}</span>
+                      {nomeLote && (
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">{nomeLote}</p>
+                      )}
+                    </div>
+                    <span className="text-[#ff0068] font-black text-sm">
+                      {precoExibir != null && precoExibir > 0 ? `R$ ${precoExibir.toFixed(2)}` : 'Gratuito'}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
