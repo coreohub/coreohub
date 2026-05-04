@@ -24,7 +24,11 @@ COMMENT ON COLUMN judges.gender IS
   'Como o jurado prefere aparecer no card público (M=Jurado, F=Jurada, NB=Jurade). NULL = heurística pelo nome.';
 
 -- ── Atualiza RPC pra incluir gender no retorno ─────────────────────────────
-CREATE OR REPLACE FUNCTION get_public_judges_for_event(p_event_id UUID)
+-- DROP é obrigatório: Postgres não permite CREATE OR REPLACE quando o tipo
+-- de retorno muda (adicionamos `gender TEXT` ao RETURNS TABLE).
+DROP FUNCTION IF EXISTS get_public_judges_for_event(UUID);
+
+CREATE FUNCTION get_public_judges_for_event(p_event_id UUID)
 RETURNS TABLE (
   id UUID,
   name TEXT,
