@@ -9,7 +9,7 @@ import {
 import { motion } from 'motion/react';
 import BrandIcon from '../components/BrandIcon';
 import { EventAnchorNav, type AnchorSection } from '../components/EventAnchorNav';
-import { PessoasSection, type JudgePublic } from '../components/PessoasSection';
+import { PessoasSection, type JudgePublic, type WorkshopTeacherPublic } from '../components/PessoasSection';
 import { resolveLote, diffDias, formatDataBR, todayISO, type Lote } from '../utils/lotes';
 
 const TikTokIcon = ({ size = 16 }: { size?: number }) => (
@@ -26,6 +26,14 @@ const PublicEventPage = () => {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [publicJudges, setPublicJudges] = useState<JudgePublic[]>([]);
+  // Workshops Etapa 1: lista pública dos workshops do evento (publicados)
+  const [publicWorkshops, setPublicWorkshops] = useState<Array<{
+    id: string; slug: string | null; name: string; cover_url: string | null;
+    professor_name: string; professor_bio: string | null; professor_photo_url: string | null;
+    professor_instagram: string | null; professor_is_public: boolean;
+    modalidade: string | null; nivel: string; data_inicio: string;
+    duracao_minutos: number | null; preco_padrao: number; gratis_para_inscritos: boolean;
+  }>>([]);
   // Tier 2: estoque por tipo de ingresso (mapa idx → { sold, remaining, sold_out })
   const [stockByType, setStockByType] = useState<Record<string, { sold: number; remaining: number | null; sold_out: boolean }>>({});
 
@@ -74,6 +82,18 @@ const PublicEventPage = () => {
         });
         if (Array.isArray(judgesData)) {
           setPublicJudges(judgesData as JudgePublic[]);
+        }
+
+        // Workshops Etapa 1: lista pública dos workshops do festival.
+        // RLS já filtra is_published=true pra anon. Carrega só campos exibidos.
+        const { data: wsData } = await supabase
+          .from('workshops')
+          .select('id, slug, name, cover_url, professor_name, professor_bio, professor_photo_url, professor_instagram, professor_is_public, modalidade, nivel, data_inicio, duracao_minutos, preco_padrao, gratis_para_inscritos')
+          .eq('event_id', eventData.id)
+          .eq('is_published', true)
+          .order('data_inicio', { ascending: true });
+        if (Array.isArray(wsData)) {
+          setPublicWorkshops(wsData as any);
         }
 
         // Tier 2: estoque por tipo (só faz sentido pro fluxo INTERNO com sales)
@@ -236,6 +256,7 @@ const PublicEventPage = () => {
       : null,
     // "Inscrições" removido do anchor menu — botão CTA "INSCREVA-SE" já cobre.
     // Anchors descrevem o festival; CTA é a ação. Semantica diferente.
+    publicWorkshops.length > 0 ? { id: 'workshops', label: 'Workshops' } : null,
     publicJudges.length > 0 ? { id: 'jurados', label: 'Jurados' } : null,
     enabledAwards.length > 0 ? { id: 'premiacao', label: 'Premiação' } : null,
   ].filter(Boolean) as AnchorSection[];
@@ -601,9 +622,67 @@ const PublicEventPage = () => {
           </div>
         )}
 
-        {/* Jurados (+ Professores quando workshops entrarem) */}
+        {/* Workshops do evento — cards com link pra vitrine individual + checkout */}
+        {publicWorkshops.length > 0 && (
+          <div id="workshops" className="space-y-4 scroll-mt-20">
+            <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
+              <BrandIcon size={24} /> Workshops
+            </h2>
+            <p className="text-xs text-slate-400">
+              Aulas com professores convidados. Inscritos da mostra podem ter desconto ou cortesia.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {publicWorkshops.map(ws => {
+                const dataFmt = new Date(ws.data_inicio).toLocaleString('pt-BR', {
+                  weekday: 'short', day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit',
+                });
+                return (
+                  <button
+                    key={ws.id}
+                    onClick={() => navigate(`/workshop/${ws.slug ?? ws.id}`)}
+                    className="text-left bg-white/5 border border-white/10 hover:border-[#ff0068]/40 rounded-2xl overflow-hidden transition-colors group"
+                  >
+                    <div className="aspect-[16/9] bg-gradient-to-br from-[#ff0068]/20 to-purple-500/20 relative overflow-hidden">
+                      {ws.cover_url && (
+                        <img src={ws.cover_url} alt={ws.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                      )}
+                      {ws.gratis_para_inscritos && (
+                        <span className="absolute top-2 right-2 inline-flex items-center text-[9px] font-black uppercase tracking-widest bg-violet-500/90 text-white px-2 py-0.5 rounded-full">
+                          Grátis p/ inscritos
+                        </span>
+                      )}
+                    </div>
+                    <div className="p-4 space-y-1.5">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068]">{ws.modalidade ?? 'Workshop'} · {ws.nivel}</p>
+                      <h3 className="font-black uppercase tracking-tight text-white text-sm leading-tight line-clamp-2">{ws.name}</h3>
+                      <p className="text-xs text-slate-400">com {ws.professor_name}</p>
+                      <p className="text-[11px] text-slate-500">{dataFmt}{ws.duracao_minutos ? ` · ${ws.duracao_minutos}min` : ''}</p>
+                      <p className="text-sm font-black text-white pt-1">
+                        {ws.preco_padrao === 0
+                          ? 'Grátis'
+                          : Number(ws.preco_padrao).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Jurados (+ Professores: dedup automático por instagram/nome) */}
         {/* scroll-mt-20 vive dentro do PessoasSection no elemento com id="jurados" */}
-        <PessoasSection judges={publicJudges} />
+        <PessoasSection
+          judges={publicJudges}
+          teachers={publicWorkshops.filter(w => w.professor_is_public).map(w => ({
+            id: w.id,
+            professor_name: w.professor_name,
+            professor_bio: w.professor_bio,
+            professor_photo_url: w.professor_photo_url,
+            professor_instagram: w.professor_instagram,
+            modalidade: w.modalidade,
+          })) as WorkshopTeacherPublic[]}
+        />
 
         {/* Prêmios habilitados */}
         {enabledAwards.length > 0 && (

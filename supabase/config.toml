@@ -429,6 +429,15 @@ verify_jwt = false
 import_map = "./functions/create-audience-ticket/deno.json"
 entrypoint = "./functions/create-audience-ticket/index.ts"
 
+# Workshops Etapa 1: cria 1 inscrição + cobrança Asaas. verify_jwt=false (guest
+# checkout). Validação de CPF + DV + rate limit por IP no próprio código.
+# Suporta combo automático (gratuito/desconto) cruzando CPF com registrations.
+[functions.create-workshop-registration]
+enabled = true
+verify_jwt = false
+import_map = "./functions/create-workshop-registration/deno.json"
+entrypoint = "./functions/create-workshop-registration/index.ts"
+
 # Tier 2: valida cupom de plateia no checkout. verify_jwt=false (público).
 # Rate-limited 30 tentativas/5min por IP no próprio código da função.
 [functions.validate-audience-coupon]
@@ -489,6 +498,31 @@ entrypoint = "./functions/mp-webhook/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/mp-webhook/*.html" ]
+
+# POC TEMPORÁRIA — valida geração de PDF + QR via pdf-lib + qrcode (npm) no
+# Edge Runtime. verify_jwt=false pra facilitar teste manual (abrir no browser).
+# DELETAR após validação visual do PDF e antes de mergear pra main.
+[functions.poc-certificate-pdf]
+enabled = true
+verify_jwt = false
+import_map = "./functions/poc-certificate-pdf/deno.json"
+entrypoint = "./functions/poc-certificate-pdf/index.ts"
+
+# Etapa 2 Certificados — emite em lote (lazy-cache: cria rows com pdf_url=NULL,
+# PDF é gerado on-demand quando inscrito clica baixar). Producer-only.
+[functions.emit-certificates-batch]
+enabled = true
+verify_jwt = true
+import_map = "./functions/emit-certificates-batch/deno.json"
+entrypoint = "./functions/emit-certificates-batch/index.ts"
+
+# Etapa 2 Certificados — geração + cache do PDF. Producer ou inscrito vinculado.
+# pdf-lib + qrcode via npm. Verifica permissão antes de retornar signed URL.
+[functions.get-certificate-pdf]
+enabled = true
+verify_jwt = true
+import_map = "./functions/get-certificate-pdf/deno.json"
+entrypoint = "./functions/get-certificate-pdf/index.ts"
 
 # Envio de emails transacionais (Resend). Chamado internamente pelo mp-webhook
 # via service_role; verify_jwt = true garante que só chamadas autenticadas

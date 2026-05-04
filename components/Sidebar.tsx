@@ -9,7 +9,7 @@ import {
   ClipboardList, ShieldCheck, Mic2, Settings,
   Clapperboard, UserRound, Music2,
   PersonStanding, Headphones, Filter, CreditCard,
-  Video, FileSearch, Tag,
+  Video, FileSearch, Tag, GraduationCap,
 } from 'lucide-react';
 import { UserRole, Profile as UserProfile, PermissoesCustom } from '../types';
 
@@ -76,6 +76,8 @@ const menuSections: MenuSection[] = [
       { path: '/account-settings?tab=Fluxo do Evento', label: 'Narração IA', icon: Mic2          },
       { path: '/equipe-jurados',       label: 'Jurados',                  icon: UserCheck      },
       { path: '/vendas-ingressos',     label: 'Vendas de Ingressos',      icon: Ticket         },
+      { path: '/workshops-do-evento',  label: 'Workshops',                icon: GraduationCap  },
+      { path: '/certificados',         label: 'Certificados',             icon: Award          },
       { path: '/cupons',               label: 'Cupons',                   icon: Tag            },
       { path: '/minha-equipe',         label: 'Minha Equipe',             icon: Users          },
       { path: '/account-settings',     label: 'Configurações',            icon: Settings       },
@@ -91,6 +93,7 @@ const menuSections: MenuSection[] = [
       { path: '/minhas-coreografias', label: 'Minhas Coreografias',   icon: Clapperboard    },
       { path: '/central-de-midia',    label: 'Central de Mídia',      icon: Music2          },
       { path: '/meus-resultados',     label: 'Feedbacks / Resultados', icon: Trophy         },
+      { path: '/meus-certificados',   label: 'Meus Certificados',     icon: Award           },
       { path: '/ingressos',           label: 'Comprar Ingressos',     icon: Ticket          },
     ],
   },

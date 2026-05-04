@@ -22,7 +22,13 @@ const STATUS_MAP: Record<string, string> = {
 }
 
 async function dispararEmail(
-  type: 'payment_confirmed_registrant' | 'payment_confirmed_producer' | 'audience_ticket_confirmed' | 'audience_ticket_producer',
+  type:
+    | 'payment_confirmed_registrant'
+    | 'payment_confirmed_producer'
+    | 'audience_ticket_confirmed'
+    | 'audience_ticket_producer'
+    | 'workshop_registration_confirmed'
+    | 'workshop_registration_producer',
   payload: Record<string, unknown>
 ): Promise<void> {
   try {
@@ -212,6 +218,167 @@ async function handleAudienceTicket(opts: {
   })
 }
 
+// ── Handler dedicado pra workshop_registrations (Etapa 1) ──────────────────
+// Atualiza a inscrição (1 row, sem family ticket — workshop é por pessoa),
+// registra comissão e dispara emails. Compartilha lógica com handleAudienceTicket.
+async function handleWorkshopRegistration(opts: {
+  supabase: any
+  payment: any
+  statusInterno: string
+  registrationId: string
+}): Promise<Response> {
+  const { supabase, payment, statusInterno, registrationId } = opts
+
+  const respHeaders = { ...corsHeaders, 'Content-Type': 'application/json' }
+  const respond = (body: Record<string, unknown>) =>
+    new Response(JSON.stringify(body), { status: 200, headers: respHeaders })
+
+  // Idempotência: se já registramos comissão pra este payment, ignora.
+  if (statusInterno === 'APROVADO') {
+    const { data: existing } = await supabase
+      .from('platform_commissions')
+      .select('id')
+      .eq('asaas_payment_id', String(payment.id))
+      .maybeSingle()
+    if (existing) {
+      console.log(`[asaas-webhook][workshop] payment=${payment.id} já processado`)
+      return respond({ status: 'already_processed' })
+    }
+  }
+
+  const updatePayload: Record<string, unknown> = {
+    status_pagamento: statusInterno,
+    payment_method:   payment.billingType ?? null,
+  }
+  if (statusInterno === 'APROVADO') {
+    updatePayload.paid_at = new Date().toISOString()
+  }
+
+  const { data: updatedRow, error: updErr } = await supabase
+    .from('workshop_registrations')
+    .update(updatePayload)
+    .eq('id', registrationId)
+    .select(`
+      id, workshop_id, buyer_name, buyer_email, access_token,
+      commission_amount, producer_amount, fee_mode, preco_pago, is_combo
+    `)
+    .maybeSingle()
+
+  if (updErr) {
+    console.error('[asaas-webhook][workshop] erro update:', updErr.message)
+  }
+  if (!updatedRow) {
+    console.error(`[asaas-webhook][workshop] registration_id=${registrationId} não encontrada`)
+    return respond({ status: 'error', reason: 'registration_not_found' })
+  }
+
+  if (statusInterno !== 'APROVADO') {
+    return respond({
+      status: 'ok',
+      payment_status:  payment.status,
+      internal_status: statusInterno,
+      registration_id: registrationId,
+    })
+  }
+
+  // ── APROVADO: registra comissão + emails ────────────────────────────────
+  const grossAmount      = Number(payment.value ?? 0)
+  const commissionAmount = parseFloat(Number(updatedRow.commission_amount ?? 0).toFixed(2))
+  const producerAmount   = parseFloat((grossAmount - commissionAmount).toFixed(2))
+
+  const { data: workshop } = await supabase
+    .from('workshops')
+    .select('id, name, event_id, created_by, data_inicio, local, modalidade, professor_name')
+    .eq('id', updatedRow.workshop_id)
+    .single()
+
+  // Workshop pode estar atrelado a um event_id (festival pai); se não, comissão fica
+  // sem event_id. platform_commissions já permite registration_id NULL desde Tier 1.
+  const { error: commErr } = await supabase
+    .from('platform_commissions')
+    .insert({
+      event_id:                  workshop?.event_id ?? null,
+      producer_id:               workshop?.created_by ?? null,
+      gross_amount:              grossAmount,
+      commission_amount:         commissionAmount,
+      net_amount:                producerAmount,
+      asaas_payment_id:          String(payment.id),
+      commission_type:           'percent',
+      workshop_registration_id:  registrationId,
+    })
+
+  if (commErr) {
+    console.error('[asaas-webhook][workshop] erro inserir comissão:', commErr.message)
+  } else {
+    console.log(
+      `[asaas-webhook][workshop] APROVADO | reg=${registrationId} bruto=R$${grossAmount}` +
+      ` comissao=R$${commissionAmount} produtor=R$${producerAmount}`
+    )
+  }
+
+  // ── Emails ───────────────────────────────────────────────────────────────
+  try {
+    const { data: produtorProfile } = workshop?.created_by
+      ? await supabase.from('profiles').select('full_name, email').eq('id', workshop.created_by).maybeSingle()
+      : { data: null } as any
+
+    const appUrl = Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'
+    const voucherUrl = `${appUrl}/meu-workshop/${updatedRow.access_token}`
+
+    const dataInicioFmt = workshop?.data_inicio
+      ? new Date(workshop.data_inicio).toLocaleString('pt-BR', {
+          weekday: 'short', day: '2-digit', month: 'long', year: 'numeric',
+          hour: '2-digit', minute: '2-digit',
+        })
+      : null
+
+    const emailJobs: Promise<void>[] = []
+
+    if (updatedRow.buyer_email) {
+      emailJobs.push(dispararEmail('workshop_registration_confirmed', {
+        buyerName:    updatedRow.buyer_name,
+        buyerEmail:   updatedRow.buyer_email,
+        produtorEmail: produtorProfile?.email,
+        workshopNome:  workshop?.name,
+        professorNome: workshop?.professor_name,
+        modalidade:    workshop?.modalidade,
+        dataInicio:    dataInicioFmt,
+        local:         workshop?.local,
+        valorPago:     grossAmount,
+        voucherUrl,
+        isCombo:       Boolean(updatedRow.is_combo),
+        appUrl,
+      }))
+    }
+
+    if (produtorProfile?.email) {
+      emailJobs.push(dispararEmail('workshop_registration_producer', {
+        produtorNome:  produtorProfile.full_name,
+        produtorEmail: produtorProfile.email,
+        workshopNome:  workshop?.name,
+        buyerName:     updatedRow.buyer_name,
+        buyerEmail:    updatedRow.buyer_email,
+        valorBruto:    grossAmount,
+        comissao:      commissionAmount,
+        valorLiquido:  producerAmount,
+        isCombo:       Boolean(updatedRow.is_combo),
+        appUrl,
+      }))
+    }
+
+    await Promise.all(emailJobs)
+  } catch (emailErr) {
+    console.error('[asaas-webhook][workshop] falha bloco emails:', (emailErr as Error).message)
+  }
+
+  return respond({
+    status:          'ok',
+    payment_status:  payment.status,
+    internal_status: statusInterno,
+    registration_id: registrationId,
+  })
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -269,10 +436,15 @@ Deno.serve(async (req) => {
       return ok({ status: 'error', reason: 'no_external_reference' })
     }
 
-    // Discriminator: "AT:<group_id>" = audience ticket; senão = registration_id legado
+    // Discriminator do externalReference:
+    //   "AT:<group_id>"      = audience ticket (Tier 1/2 plateia)
+    //   "WS:<registration>"  = workshop registration (Etapa 1 Workshops)
+    //   <uuid>               = registration de inscrição (legado, sem prefix)
     const isAudienceTicket = externalRef.startsWith('AT:')
+    const isWorkshop       = externalRef.startsWith('WS:')
     const audienceGroupId  = isAudienceTicket ? externalRef.slice(3) : null
-    const registrationId   = isAudienceTicket ? null : externalRef
+    const workshopRegistrationId = isWorkshop ? externalRef.slice(3) : null
+    const registrationId   = (isAudienceTicket || isWorkshop) ? null : externalRef
 
     // Defesa em profundidade contra forja de webhook (token estatico
     // pode vazar): cross-check via API Asaas. Atacante com token vazado
@@ -315,9 +487,10 @@ Deno.serve(async (req) => {
     }
 
     const statusInterno = STATUS_MAP[payment.status] ?? 'PENDENTE'
+    const refType = isAudienceTicket ? 'audience' : isWorkshop ? 'workshop' : 'registration'
     console.log(
       `[asaas-webhook] payment_id=${payment.id} asaas_status=${payment.status}` +
-      ` → ${statusInterno} | ref=${externalRef} type=${isAudienceTicket ? 'audience' : 'registration'}`
+      ` → ${statusInterno} | ref=${externalRef} type=${refType}`
     )
 
     const supabase = createClient(
@@ -332,6 +505,16 @@ Deno.serve(async (req) => {
         payment,
         statusInterno,
         groupId: audienceGroupId,
+      })
+    }
+
+    // ── BRANCH: WORKSHOP REGISTRATION ────────────────────────────────────────
+    if (isWorkshop && workshopRegistrationId) {
+      return await handleWorkshopRegistration({
+        supabase,
+        payment,
+        statusInterno,
+        registrationId: workshopRegistrationId,
       })
     }
 
@@ -429,7 +612,7 @@ Deno.serve(async (req) => {
 
         const produtorProfile: any = (produtorRes as any)?.data ?? null
         const appUrl = Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'
-        const modalidade = coreo?.tipo_apresentacao ?? coreo?.formacao ?? coreo?.modalidade ?? null
+        const modalidade = coreo?.tipo_apresentacao ?? coreo?.formacao ?? null
 
         const emailJobs: Promise<void>[] = []
 

@@ -1,0 +1,805 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { supabase } from '../services/supabase';
+import {
+  Plus, Trash2, Pencil, Calendar, Clock, MapPin, Loader2, X, AlertCircle, CheckCircle,
+  GraduationCap, User, Tag, Layers, DollarSign, Users, Globe, EyeOff,
+} from 'lucide-react';
+
+type Nivel = 'iniciante' | 'intermediario' | 'avancado' | 'todos';
+type FeeMode = 'repassar' | 'absorver';
+
+interface EventOption { id: string; name: string }
+
+interface WorkshopRow {
+  id: string;
+  event_id: string | null;
+  name: string;
+  slug: string | null;
+  description: string | null;
+  cover_url: string | null;
+  professor_name: string;
+  professor_bio: string | null;
+  professor_bio_short: string | null;
+  professor_photo_url: string | null;
+  professor_instagram: string | null;
+  professor_site_url: string | null;
+  professor_is_public: boolean;
+  modalidade: string | null;
+  nivel: Nivel;
+  data_inicio: string;
+  data_fim: string | null;
+  duracao_minutos: number | null;
+  local: string | null;
+  capacidade_max: number | null;
+  preco_padrao: number;
+  preco_inscritos_mostra: number | null;
+  gratis_para_inscritos: boolean;
+  auto_detect_combo: boolean;
+  workshop_commission_percent: number;
+  workshop_fee_mode: FeeMode;
+  workshop_max_per_cpf: number;
+  is_published: boolean;
+}
+
+interface LotRow {
+  id: string;
+  workshop_id: string;
+  ordem: number;
+  nome: string;
+  preco: number;
+  preco_inscritos_mostra: number | null;
+  data_inicio: string | null;
+  data_fim: string | null;
+  quantidade_maxima: number | null;
+  is_active: boolean;
+}
+
+const NIVEIS: { value: Nivel; label: string }[] = [
+  { value: 'todos',         label: 'Todos os níveis' },
+  { value: 'iniciante',     label: 'Iniciante' },
+  { value: 'intermediario', label: 'Intermediário' },
+  { value: 'avancado',      label: 'Avançado' },
+];
+
+const fmtCurrency = (n: number) =>
+  Number(n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+const fmtDate = (iso: string | null) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
+const slugify = (s: string) =>
+  s.toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim().replace(/\s+/g, '-')
+    .slice(0, 50);
+
+// Formata Date pra value de input datetime-local
+const toInputDateTime = (iso: string | null): string => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+
+const WorkshopsManagement: React.FC = () => {
+  const [events, setEvents]                 = useState<EventOption[]>([]);
+  const [selectedScope, setSelectedScope]   = useState<string>('all'); // 'all' | event.id | 'standalone'
+  const [workshops, setWorkshops]           = useState<WorkshopRow[]>([]);
+  const [lots, setLots]                     = useState<Record<string, LotRow[]>>({});
+  const [loading, setLoading]               = useState(true);
+  const [saving, setSaving]                 = useState(false);
+  const [feedback, setFeedback]             = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
+
+  const [showModal, setShowModal]           = useState(false);
+  const [editingId, setEditingId]           = useState<string | null>(null);
+  const [showLotsModal, setShowLotsModal]   = useState<WorkshopRow | null>(null);
+
+  // ── Form de workshop ────────────────────────────────────────────────────
+  const emptyForm = {
+    event_id: '' as string | '',
+    name: '',
+    slug: '',
+    description: '',
+    cover_url: '',
+    professor_name: '',
+    professor_bio: '',
+    professor_bio_short: '',
+    professor_photo_url: '',
+    professor_instagram: '',
+    professor_site_url: '',
+    professor_is_public: true,
+    modalidade: '',
+    nivel: 'todos' as Nivel,
+    data_inicio: '',
+    data_fim: '',
+    duracao_minutos: '' as string | number,
+    local: '',
+    capacidade_max: '' as string | number,
+    preco_padrao: 0,
+    preco_inscritos_mostra: '' as string | number,
+    gratis_para_inscritos: false,
+    auto_detect_combo: true,
+    workshop_commission_percent: 10,
+    workshop_fee_mode: 'repassar' as FeeMode,
+    workshop_max_per_cpf: 4,
+    is_published: false,
+  };
+  const [form, setForm] = useState(emptyForm);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  // ── Carrega eventos do produtor ────────────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoading(false); return; }
+      const { data } = await supabase
+        .from('events')
+        .select('id, name')
+        .eq('created_by', user.id)
+        .order('created_at', { ascending: false });
+      if (data) setEvents(data);
+    })();
+  }, []);
+
+  // ── Carrega workshops + lots ────────────────────────────────────────────
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setLoading(false); return; }
+
+    let q = supabase
+      .from('workshops')
+      .select('*')
+      .eq('created_by', user.id)
+      .order('data_inicio', { ascending: true });
+
+    if (selectedScope === 'standalone') q = q.is('event_id', null);
+    else if (selectedScope !== 'all')   q = q.eq('event_id', selectedScope);
+
+    const { data: ws, error } = await q;
+    if (error) {
+      console.error(error);
+      setFeedback({ kind: 'err', msg: error.message });
+      setLoading(false);
+      return;
+    }
+    setWorkshops(ws ?? []);
+
+    // Carrega lots em batch
+    if (ws && ws.length > 0) {
+      const ids = ws.map(w => w.id);
+      const { data: lotData } = await supabase
+        .from('workshop_lots')
+        .select('*')
+        .in('workshop_id', ids)
+        .order('ordem', { ascending: true });
+      const grouped: Record<string, LotRow[]> = {};
+      (lotData ?? []).forEach(l => {
+        (grouped[l.workshop_id] ??= []).push(l);
+      });
+      setLots(grouped);
+    } else {
+      setLots({});
+    }
+    setLoading(false);
+  }, [selectedScope]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  // ── Auto-clear feedback ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (!feedback) return;
+    const t = setTimeout(() => setFeedback(null), 4500);
+    return () => clearTimeout(t);
+  }, [feedback]);
+
+  // ── Open create/edit modal ──────────────────────────────────────────────
+  const openCreate = () => {
+    setEditingId(null);
+    setForm({
+      ...emptyForm,
+      event_id: selectedScope !== 'all' && selectedScope !== 'standalone' ? selectedScope : '',
+    });
+    setFormError(null);
+    setShowModal(true);
+  };
+
+  const openEdit = (w: WorkshopRow) => {
+    setEditingId(w.id);
+    setForm({
+      event_id: w.event_id ?? '',
+      name: w.name,
+      slug: w.slug ?? '',
+      description: w.description ?? '',
+      cover_url: w.cover_url ?? '',
+      professor_name: w.professor_name,
+      professor_bio: w.professor_bio ?? '',
+      professor_bio_short: w.professor_bio_short ?? '',
+      professor_photo_url: w.professor_photo_url ?? '',
+      professor_instagram: w.professor_instagram ?? '',
+      professor_site_url: w.professor_site_url ?? '',
+      professor_is_public: w.professor_is_public,
+      modalidade: w.modalidade ?? '',
+      nivel: w.nivel,
+      data_inicio: toInputDateTime(w.data_inicio),
+      data_fim: toInputDateTime(w.data_fim),
+      duracao_minutos: w.duracao_minutos ?? '',
+      local: w.local ?? '',
+      capacidade_max: w.capacidade_max ?? '',
+      preco_padrao: w.preco_padrao,
+      preco_inscritos_mostra: w.preco_inscritos_mostra ?? '',
+      gratis_para_inscritos: w.gratis_para_inscritos,
+      auto_detect_combo: w.auto_detect_combo,
+      workshop_commission_percent: w.workshop_commission_percent,
+      workshop_fee_mode: w.workshop_fee_mode,
+      workshop_max_per_cpf: w.workshop_max_per_cpf,
+      is_published: w.is_published,
+    });
+    setFormError(null);
+    setShowModal(true);
+  };
+
+  // ── Save workshop ───────────────────────────────────────────────────────
+  const saveWorkshop = async () => {
+    if (!form.name.trim())           return setFormError('Nome do workshop é obrigatório');
+    if (!form.professor_name.trim()) return setFormError('Nome do professor é obrigatório');
+    if (!form.data_inicio)           return setFormError('Data de início é obrigatória');
+    if (Number(form.preco_padrao) < 0) return setFormError('Preço padrão inválido');
+    if (form.gratis_para_inscritos && !form.event_id) {
+      return setFormError('"Grátis para inscritos" só funciona com workshop atrelado a um evento');
+    }
+    if (form.duracao_minutos !== '' && Number(form.duracao_minutos) < 0) {
+      return setFormError('Duração inválida');
+    }
+    if (form.capacidade_max !== '' && Number(form.capacidade_max) < 1) {
+      return setFormError('Capacidade deve ser pelo menos 1');
+    }
+
+    setSaving(true);
+    setFormError(null);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSaving(false); return setFormError('Sessão expirada'); }
+
+    const payload = {
+      event_id: form.event_id || null,
+      created_by: user.id,
+      name: form.name.trim(),
+      slug: form.slug.trim() || slugify(form.name),
+      description: form.description.trim() || null,
+      cover_url: form.cover_url.trim() || null,
+      professor_name: form.professor_name.trim(),
+      professor_bio: form.professor_bio.trim() || null,
+      professor_bio_short: form.professor_bio_short.trim() || null,
+      professor_photo_url: form.professor_photo_url.trim() || null,
+      professor_instagram: form.professor_instagram.trim() || null,
+      professor_site_url: form.professor_site_url.trim() || null,
+      professor_is_public: form.professor_is_public,
+      modalidade: form.modalidade.trim() || null,
+      nivel: form.nivel,
+      data_inicio: new Date(form.data_inicio).toISOString(),
+      data_fim: form.data_fim ? new Date(form.data_fim).toISOString() : null,
+      duracao_minutos: form.duracao_minutos === '' ? null : Number(form.duracao_minutos),
+      local: form.local.trim() || null,
+      capacidade_max: form.capacidade_max === '' ? null : Number(form.capacidade_max),
+      preco_padrao: Number(form.preco_padrao),
+      preco_inscritos_mostra: form.preco_inscritos_mostra === '' ? null : Number(form.preco_inscritos_mostra),
+      gratis_para_inscritos: form.gratis_para_inscritos,
+      auto_detect_combo: form.auto_detect_combo,
+      workshop_commission_percent: Number(form.workshop_commission_percent),
+      workshop_fee_mode: form.workshop_fee_mode,
+      workshop_max_per_cpf: Number(form.workshop_max_per_cpf),
+      is_published: form.is_published,
+    };
+
+    const { error } = editingId
+      ? await supabase.from('workshops').update(payload).eq('id', editingId)
+      : await supabase.from('workshops').insert(payload);
+
+    setSaving(false);
+    if (error) {
+      setFormError(error.message);
+      return;
+    }
+    setShowModal(false);
+    setFeedback({ kind: 'ok', msg: editingId ? 'Workshop atualizado' : 'Workshop criado' });
+    refresh();
+  };
+
+  const togglePublish = async (w: WorkshopRow) => {
+    const { error } = await supabase
+      .from('workshops')
+      .update({ is_published: !w.is_published })
+      .eq('id', w.id);
+    if (error) {
+      setFeedback({ kind: 'err', msg: error.message });
+    } else {
+      setFeedback({ kind: 'ok', msg: w.is_published ? 'Workshop despublicado' : 'Workshop publicado' });
+      refresh();
+    }
+  };
+
+  const removeWorkshop = async (w: WorkshopRow) => {
+    if (!confirm(`Remover "${w.name}"? Inscrições associadas serão apagadas em cascata.`)) return;
+    const { error } = await supabase.from('workshops').delete().eq('id', w.id);
+    if (error) {
+      setFeedback({ kind: 'err', msg: error.message });
+    } else {
+      setFeedback({ kind: 'ok', msg: 'Workshop removido' });
+      refresh();
+    }
+  };
+
+  const filteredEvents = useMemo(() => events, [events]);
+
+  // ────────────────────────────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-[#0b0b0f] py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto">
+
+        {/* Header */}
+        <div className="mb-6 flex items-start justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-3">
+              <GraduationCap className="text-[#ff0068]" size={28} />
+              Workshops
+            </h1>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Crie e venda workshops independentes ou atrelados aos seus festivais. Suporta combo automático para inscritos da mostra.
+            </p>
+          </div>
+          <button
+            onClick={openCreate}
+            className="inline-flex items-center gap-2 rounded-xl bg-[#ff0068] px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] transition"
+          >
+            <Plus size={16} />
+            Novo workshop
+          </button>
+        </div>
+
+        {/* Filtro de escopo */}
+        <div className="mb-6 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-slate-500 dark:text-slate-400">Mostrar:</span>
+          <button
+            onClick={() => setSelectedScope('all')}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold transition ${selectedScope === 'all' ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900' : 'bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-white/20'}`}
+          >
+            Todos
+          </button>
+          <button
+            onClick={() => setSelectedScope('standalone')}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold transition ${selectedScope === 'standalone' ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900' : 'bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-white/20'}`}
+          >
+            Sem evento (avulsos)
+          </button>
+          {filteredEvents.map(ev => (
+            <button
+              key={ev.id}
+              onClick={() => setSelectedScope(ev.id)}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold transition ${selectedScope === ev.id ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900' : 'bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-white/20'}`}
+            >
+              {ev.name}
+            </button>
+          ))}
+        </div>
+
+        {/* Feedback */}
+        {feedback && (
+          <div className={`mb-4 rounded-xl border p-3 text-sm flex items-center gap-2 ${feedback.kind === 'ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200' : 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200'}`}>
+            {feedback.kind === 'ok' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+            {feedback.msg}
+          </div>
+        )}
+
+        {/* Lista */}
+        {loading ? (
+          <div className="flex items-center justify-center py-20"><Loader2 size={28} className="animate-spin text-[#ff0068]" /></div>
+        ) : workshops.length === 0 ? (
+          <div className="rounded-2xl border-2 border-dashed border-slate-300 dark:border-white/10 p-12 text-center">
+            <GraduationCap size={40} className="mx-auto text-slate-400 mb-3" />
+            <p className="text-slate-600 dark:text-slate-300 font-bold">Nenhum workshop ainda</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Clique em "Novo workshop" para começar.</p>
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            {workshops.map(w => {
+              const wsLots = lots[w.id] ?? [];
+              const activeLot = wsLots.find(l => l.is_active &&
+                (!l.data_inicio || new Date(l.data_inicio) <= new Date()) &&
+                (!l.data_fim     || new Date(l.data_fim)     >= new Date()));
+              const eventName = events.find(e => e.id === w.event_id)?.name;
+              return (
+                <div key={w.id} className="rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 p-5 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        {w.is_published ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full"><Globe size={10} />Publicado</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-slate-500/15 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full"><EyeOff size={10} />Rascunho</span>
+                        )}
+                        {eventName && <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">📌 {eventName}</span>}
+                        {!w.event_id && <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Avulso</span>}
+                        {w.gratis_para_inscritos && <span className="text-[10px] font-black uppercase tracking-wider bg-violet-500/15 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full">Grátis p/ inscritos</span>}
+                      </div>
+                      <h3 className="text-xl font-black text-slate-900 dark:text-white">{w.name}</h3>
+                      <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-slate-600 dark:text-slate-400">
+                        <span className="inline-flex items-center gap-1"><User size={12} />{w.professor_name}</span>
+                        {w.modalidade && <span className="inline-flex items-center gap-1"><Tag size={12} />{w.modalidade}</span>}
+                        <span className="inline-flex items-center gap-1"><Calendar size={12} />{fmtDate(w.data_inicio)}</span>
+                        {w.local && <span className="inline-flex items-center gap-1"><MapPin size={12} />{w.local}</span>}
+                        {w.duracao_minutos && <span className="inline-flex items-center gap-1"><Clock size={12} />{w.duracao_minutos} min</span>}
+                        {w.capacidade_max && <span className="inline-flex items-center gap-1"><Users size={12} />Cap: {w.capacidade_max}</span>}
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                        <span className="font-black text-slate-900 dark:text-white">{fmtCurrency(activeLot?.preco ?? w.preco_padrao)}</span>
+                        {activeLot && <span className="text-[10px] font-bold uppercase tracking-wider text-[#ff0068]">{activeLot.nome}</span>}
+                        {w.preco_inscritos_mostra != null && (
+                          <span className="text-xs text-violet-600 dark:text-violet-400">↓ {fmtCurrency(w.preco_inscritos_mostra)} p/ inscritos</span>
+                        )}
+                        <span className="text-xs text-slate-500 dark:text-slate-500">· {wsLots.length} lote(s)</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() => setShowLotsModal(w)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-white/10 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition"
+                      >
+                        <Layers size={12} />Lotes
+                      </button>
+                      <button
+                        onClick={() => togglePublish(w)}
+                        className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${w.is_published ? 'border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10' : 'bg-emerald-600 text-white hover:bg-emerald-500'}`}
+                      >
+                        {w.is_published ? <><EyeOff size={12} />Despublicar</> : <><Globe size={12} />Publicar</>}
+                      </button>
+                      <button
+                        onClick={() => openEdit(w)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-white/10 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition"
+                      >
+                        <Pencil size={12} />Editar
+                      </button>
+                      <button
+                        onClick={() => removeWorkshop(w)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 dark:border-rose-500/30 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
+                      >
+                        <Trash2 size={12} />Remover
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Modal create/edit */}
+      {showModal && (
+        <WorkshopFormModal
+          form={form}
+          setForm={setForm}
+          formError={formError}
+          saving={saving}
+          isEdit={!!editingId}
+          events={events}
+          onClose={() => setShowModal(false)}
+          onSave={saveWorkshop}
+        />
+      )}
+
+      {/* Modal de lotes */}
+      {showLotsModal && (
+        <LotsModal
+          workshop={showLotsModal}
+          onClose={() => { setShowLotsModal(null); refresh(); }}
+        />
+      )}
+    </div>
+  );
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// Modal: form de workshop
+// ════════════════════════════════════════════════════════════════════════════
+interface WorkshopFormModalProps {
+  form: any; setForm: any; formError: string | null; saving: boolean;
+  isEdit: boolean; events: EventOption[];
+  onClose: () => void; onSave: () => void;
+}
+
+const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, formError, saving, isEdit, events, onClose, onSave }) => {
+  const upd = (k: string, v: any) => setForm((p: any) => ({ ...p, [k]: v }));
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-3xl w-full p-6 my-8 shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-5">
+          <h2 className="text-xl font-black text-slate-900 dark:text-white">{isEdit ? 'Editar workshop' : 'Novo workshop'}</h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg"><X size={18} /></button>
+        </div>
+
+        {formError && (
+          <div className="mb-4 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 p-3 text-sm text-rose-700 dark:text-rose-200 flex items-center gap-2">
+            <AlertCircle size={16} />{formError}
+          </div>
+        )}
+
+        <div className="space-y-5 max-h-[70vh] overflow-y-auto pr-1">
+          {/* Vínculo com evento */}
+          <Section title="Vínculo">
+            <Field label="Evento (opcional — deixe vazio para workshop avulso)">
+              <select value={form.event_id} onChange={e => upd('event_id', e.target.value)} className="w-full rounded-lg border border-slate-200 dark:border-white/10 dark:bg-slate-800 dark:text-white px-3 py-2 text-sm">
+                <option value="">— Sem evento (avulso) —</option>
+                {events.map(ev => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
+              </select>
+            </Field>
+          </Section>
+
+          {/* Identidade */}
+          <Section title="Identidade">
+            <Field label="Nome do workshop *">
+              <input value={form.name} onChange={e => upd('name', e.target.value)} className={inputCls} placeholder="Ex: Jazz Funk Intensivo com Maria Silva" />
+            </Field>
+            <Field label="Slug (URL pública). Opcional, gerado automático.">
+              <input value={form.slug} onChange={e => upd('slug', e.target.value)} className={inputCls} placeholder="jazz-funk-intensivo" />
+            </Field>
+            <Field label="Descrição">
+              <textarea value={form.description} onChange={e => upd('description', e.target.value)} rows={3} className={inputCls} placeholder="O que o aluno vai aprender, pré-requisitos, materiais..." />
+            </Field>
+            <Field label="URL da imagem de capa">
+              <input value={form.cover_url} onChange={e => upd('cover_url', e.target.value)} className={inputCls} placeholder="https://..." />
+            </Field>
+          </Section>
+
+          {/* Professor */}
+          <Section title="Professor">
+            <Field label="Nome do professor *">
+              <input value={form.professor_name} onChange={e => upd('professor_name', e.target.value)} className={inputCls} />
+            </Field>
+            <Field label="Bio curta (140 chars — aparece em cards)">
+              <input value={form.professor_bio_short} onChange={e => upd('professor_bio_short', e.target.value)} maxLength={140} className={inputCls} />
+            </Field>
+            <Field label="Bio completa (modal)">
+              <textarea value={form.professor_bio} onChange={e => upd('professor_bio', e.target.value)} rows={3} className={inputCls} />
+            </Field>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="URL da foto"><input value={form.professor_photo_url} onChange={e => upd('professor_photo_url', e.target.value)} className={inputCls} /></Field>
+              <Field label="Instagram (ex: @maria.dance)"><input value={form.professor_instagram} onChange={e => upd('professor_instagram', e.target.value)} className={inputCls} /></Field>
+              <Field label="Site (URL)"><input value={form.professor_site_url} onChange={e => upd('professor_site_url', e.target.value)} className={inputCls} /></Field>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+              <input type="checkbox" checked={form.professor_is_public} onChange={e => upd('professor_is_public', e.target.checked)} />
+              Publicar PersonCard do professor na vitrine do evento
+            </label>
+          </Section>
+
+          {/* Atividade + Logística */}
+          <Section title="Atividade & logística">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Modalidade"><input value={form.modalidade} onChange={e => upd('modalidade', e.target.value)} className={inputCls} placeholder="Jazz, Hip-Hop, Ballet..." /></Field>
+              <Field label="Nível">
+                <select value={form.nivel} onChange={e => upd('nivel', e.target.value as Nivel)} className={inputCls}>
+                  {NIVEIS.map(n => <option key={n.value} value={n.value}>{n.label}</option>)}
+                </select>
+              </Field>
+              <Field label="Início *"><input type="datetime-local" value={form.data_inicio} onChange={e => upd('data_inicio', e.target.value)} className={inputCls} /></Field>
+              <Field label="Fim"><input type="datetime-local" value={form.data_fim} onChange={e => upd('data_fim', e.target.value)} className={inputCls} /></Field>
+              <Field label="Duração (min)"><input type="number" value={form.duracao_minutos} onChange={e => upd('duracao_minutos', e.target.value)} className={inputCls} /></Field>
+              <Field label="Capacidade máxima"><input type="number" value={form.capacidade_max} onChange={e => upd('capacidade_max', e.target.value)} className={inputCls} placeholder="vazio = ilimitado" /></Field>
+              <Field label="Local">
+                <input value={form.local} onChange={e => upd('local', e.target.value)} className={inputCls} placeholder="Estúdio X — Sala 2" />
+              </Field>
+            </div>
+          </Section>
+
+          {/* Pricing */}
+          <Section title="Preços">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Preço padrão (R$) *"><input type="number" step="0.01" value={form.preco_padrao} onChange={e => upd('preco_padrao', e.target.value)} className={inputCls} /></Field>
+              <Field label="Preço para inscritos da mostra (R$)">
+                <input type="number" step="0.01" value={form.preco_inscritos_mostra} onChange={e => upd('preco_inscritos_mostra', e.target.value)} className={inputCls} placeholder="vazio = mesmo preço" />
+              </Field>
+            </div>
+            {form.event_id && (
+              <>
+                <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                  <input type="checkbox" checked={form.gratis_para_inscritos} onChange={e => upd('gratis_para_inscritos', e.target.checked)} />
+                  Grátis para inscritos da mostra (override do preço acima)
+                </label>
+                <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+                  <input type="checkbox" checked={form.auto_detect_combo} onChange={e => upd('auto_detect_combo', e.target.checked)} className="mt-1" />
+                  <span>
+                    Detectar combo automaticamente pelo CPF (cruza com inscrições aprovadas)
+                    <span className="block text-xs text-slate-500 dark:text-slate-400">
+                      Se desligado, comprador precisa pedir desconto manualmente
+                    </span>
+                  </span>
+                </label>
+              </>
+            )}
+            <p className="text-xs text-slate-500 dark:text-slate-400 italic">
+              Lotes específicos com preços e datas ficam no botão "Lotes" depois de criar o workshop.
+            </p>
+          </Section>
+
+          {/* Comissão */}
+          <Section title="Comissão CoreoHub">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Field label="% comissão"><input type="number" step="0.01" value={form.workshop_commission_percent} onChange={e => upd('workshop_commission_percent', e.target.value)} className={inputCls} /></Field>
+              <Field label="Modo da taxa">
+                <select value={form.workshop_fee_mode} onChange={e => upd('workshop_fee_mode', e.target.value as FeeMode)} className={inputCls}>
+                  <option value="repassar">Repassar ao comprador</option>
+                  <option value="absorver">Absorver no preço</option>
+                </select>
+              </Field>
+              <Field label="Limite por CPF"><input type="number" value={form.workshop_max_per_cpf} onChange={e => upd('workshop_max_per_cpf', e.target.value)} className={inputCls} /></Field>
+            </div>
+          </Section>
+
+          {/* Publicação */}
+          <Section title="Publicação">
+            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+              <input type="checkbox" checked={form.is_published} onChange={e => upd('is_published', e.target.checked)} />
+              Publicar na vitrine pública (vendas ativas)
+            </label>
+          </Section>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-slate-200 dark:border-white/10">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10">Cancelar</button>
+          <button onClick={onSave} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[#ff0068] px-4 py-2 text-sm font-bold text-white hover:bg-[#ff1a78] disabled:opacity-50 transition">
+            {saving && <Loader2 size={14} className="animate-spin" />}
+            {isEdit ? 'Salvar alterações' : 'Criar workshop'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// Modal: gerenciar lotes do workshop
+// ════════════════════════════════════════════════════════════════════════════
+interface LotsModalProps { workshop: WorkshopRow; onClose: () => void }
+
+const LotsModal: React.FC<LotsModalProps> = ({ workshop, onClose }) => {
+  const [lots, setLotsLocal] = useState<LotRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving]   = useState(false);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('workshop_lots')
+      .select('*')
+      .eq('workshop_id', workshop.id)
+      .order('ordem', { ascending: true });
+    setLotsLocal(data ?? []);
+    setLoading(false);
+  }, [workshop.id]);
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const addLot = async () => {
+    const nextOrdem = lots.length === 0 ? 1 : Math.max(...lots.map(l => l.ordem)) + 1;
+    setSaving(true);
+    const { error } = await supabase.from('workshop_lots').insert({
+      workshop_id: workshop.id,
+      ordem: nextOrdem,
+      nome: `${nextOrdem}º lote`,
+      preco: workshop.preco_padrao,
+      is_active: true,
+    });
+    setSaving(false);
+    if (!error) refresh();
+  };
+
+  const updateLot = async (id: string, patch: Partial<LotRow>) => {
+    const { error } = await supabase.from('workshop_lots').update(patch).eq('id', id);
+    if (!error) refresh();
+  };
+
+  const removeLot = async (id: string) => {
+    if (!confirm('Remover este lote?')) return;
+    await supabase.from('workshop_lots').delete().eq('id', id);
+    refresh();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-3xl w-full p-6 my-8 shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-5">
+          <div>
+            <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2"><Layers size={20} className="text-[#ff0068]" />Lotes</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{workshop.name}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg"><X size={18} /></button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-10"><Loader2 size={24} className="animate-spin text-[#ff0068]" /></div>
+        ) : (
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            {lots.length === 0 && (
+              <p className="text-sm text-slate-500 dark:text-slate-400 italic text-center py-6">
+                Sem lotes. Sem lote ativo, o sistema usa o preço padrão do workshop ({fmtCurrency(workshop.preco_padrao)}).
+              </p>
+            )}
+            {lots.map(lot => (
+              <div key={lot.id} className="rounded-xl border border-slate-200 dark:border-white/10 p-4 bg-slate-50 dark:bg-white/5">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Lote {lot.ordem}</span>
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">
+                      <input type="checkbox" checked={lot.is_active} onChange={e => updateLot(lot.id, { is_active: e.target.checked })} />
+                      Ativo
+                    </label>
+                    <button onClick={() => removeLot(lot.id)} className="text-rose-500 hover:bg-rose-500/10 p-1 rounded">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <Field label="Nome">
+                    <input defaultValue={lot.nome} onBlur={e => updateLot(lot.id, { nome: e.target.value })} className={inputCls} />
+                  </Field>
+                  <Field label="Preço (R$)">
+                    <input type="number" step="0.01" defaultValue={lot.preco} onBlur={e => updateLot(lot.id, { preco: Number(e.target.value) })} className={inputCls} />
+                  </Field>
+                  <Field label="Preço inscritos (R$)">
+                    <input type="number" step="0.01" defaultValue={lot.preco_inscritos_mostra ?? ''} onBlur={e => updateLot(lot.id, { preco_inscritos_mostra: e.target.value === '' ? null : Number(e.target.value) })} className={inputCls} placeholder="vazio = sem desconto" />
+                  </Field>
+                  <Field label="Estoque (quantidade máx)">
+                    <input type="number" defaultValue={lot.quantidade_maxima ?? ''} onBlur={e => updateLot(lot.id, { quantidade_maxima: e.target.value === '' ? null : Number(e.target.value) })} className={inputCls} placeholder="vazio = sem limite" />
+                  </Field>
+                  <Field label="Início (vendas)">
+                    <input type="datetime-local" defaultValue={toInputDateTime(lot.data_inicio)} onBlur={e => updateLot(lot.id, { data_inicio: e.target.value ? new Date(e.target.value).toISOString() : null })} className={inputCls} />
+                  </Field>
+                  <Field label="Fim (vendas)">
+                    <input type="datetime-local" defaultValue={toInputDateTime(lot.data_fim)} onBlur={e => updateLot(lot.id, { data_fim: e.target.value ? new Date(e.target.value).toISOString() : null })} className={inputCls} />
+                  </Field>
+                </div>
+              </div>
+            ))}
+            <button
+              onClick={addLot}
+              disabled={saving}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 dark:border-white/15 px-4 py-3 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 transition disabled:opacity-50"
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              Adicionar lote
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// Helpers de UI
+// ────────────────────────────────────────────────────────────────────────────
+const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+  <div>
+    <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">{title}</h3>
+    <div className="space-y-3">{children}</div>
+  </div>
+);
+
+const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <label className="block">
+    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">{label}</span>
+    {children}
+  </label>
+);
+
+const inputCls = 'w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff0068]/30';
+
+export default WorkshopsManagement;

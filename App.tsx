@@ -45,6 +45,12 @@ const CheckoutIngresso         = lazy(() => import('./pages/CheckoutIngresso'));
 const MeuIngresso              = lazy(() => import('./pages/MeuIngresso'));
 const VendasIngressos          = lazy(() => import('./pages/VendasIngressos'));
 const Coupons                  = lazy(() => import('./pages/Coupons'));
+const WorkshopsManagement      = lazy(() => import('./pages/WorkshopsManagement'));
+const PublicWorkshopPage       = lazy(() => import('./pages/PublicWorkshopPage'));
+const CheckoutWorkshop         = lazy(() => import('./pages/CheckoutWorkshop'));
+const MeuWorkshop              = lazy(() => import('./pages/MeuWorkshop'));
+const MeusCertificados         = lazy(() => import('./pages/MeusCertificados'));
+const ValidarCertificado       = lazy(() => import('./pages/ValidarCertificado'));
 const PagamentoInscrito        = lazy(() => import('./pages/PagamentoInscrito'));
 const PagamentoSucesso         = lazy(() => import('./pages/PagamentoSucesso'));
 const PagamentoPendente        = lazy(() => import('./pages/PagamentoPendente'));
@@ -394,7 +400,15 @@ const App: React.FC = () => {
         {/* Tier 1 paid tickets — todas públicas (guest checkout / acesso por token) */}
         <Route path="/checkout-ingresso/:idOrSlug/:ticketTypeIdx" element={<Suspense fallback={<PageLoader />}><CheckoutIngresso /></Suspense>} />
         <Route path="/meu-ingresso/:token" element={<Suspense fallback={<PageLoader />}><MeuIngresso /></Suspense>} />
+        {/* Workshops Etapa 1 — todas públicas (vitrine + guest checkout + voucher por token) */}
+        <Route path="/workshop/:idOrSlug" element={<Suspense fallback={<PageLoader />}><PublicWorkshopPage /></Suspense>} />
+        <Route path="/checkout-workshop/:id" element={<Suspense fallback={<PageLoader />}><CheckoutWorkshop /></Suspense>} />
+        <Route path="/meu-workshop/:token" element={<Suspense fallback={<PageLoader />}><MeuWorkshop /></Suspense>} />
+        {/* Etapa 2 Certificados — pública (validação por hash) e privada (lista do inscrito) */}
+        <Route path="/validar-certificado/:hash" element={<Suspense fallback={<PageLoader />}><ValidarCertificado /></Suspense>} />
+        <Route path="/meus-certificados" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><MeusCertificados /></Suspense></PrivateRoute>} />
         <Route path="/vendas-ingressos" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><VendasIngressos /></Suspense></PrivateRoute>} />
+        <Route path="/workshops-do-evento" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><WorkshopsManagement /></Suspense></PrivateRoute>} />
         <Route path="/cupons"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><Coupons /></Suspense></PrivateRoute>} />
         <Route path="/festival/:id" element={<FestivalShowcase />} />
         <Route path="/festival/:id/register" element={<PrivateRoute {...privateRouteProps}><NewRegistration /></PrivateRoute>} />
