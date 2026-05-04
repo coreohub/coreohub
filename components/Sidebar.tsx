@@ -9,7 +9,7 @@ import {
   ClipboardList, ShieldCheck, Mic2, Settings,
   Clapperboard, UserRound, Music2,
   PersonStanding, Headphones, Filter, CreditCard,
-  Video, FileSearch,
+  Video, FileSearch, Tag,
 } from 'lucide-react';
 import { UserRole, Profile as UserProfile, PermissoesCustom } from '../types';
 
@@ -75,6 +75,8 @@ const menuSections: MenuSection[] = [
       { path: '/manage-schedule',      label: 'Sonoplastia e Cronograma', icon: Calendar       },
       { path: '/account-settings?tab=Fluxo do Evento', label: 'Narração IA', icon: Mic2          },
       { path: '/equipe-jurados',       label: 'Jurados',                  icon: UserCheck      },
+      { path: '/vendas-ingressos',     label: 'Vendas de Ingressos',      icon: Ticket         },
+      { path: '/cupons',               label: 'Cupons',                   icon: Tag            },
       { path: '/minha-equipe',         label: 'Minha Equipe',             icon: Users          },
       { path: '/account-settings',     label: 'Configurações',            icon: Settings       },
     ],
