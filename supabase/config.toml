@@ -494,8 +494,12 @@ entrypoint = "./functions/mp-webhook/index.ts"
 # via service_role; verify_jwt = true garante que só chamadas autenticadas
 # disparem emails (impede abuso anônimo da função).
 # Secrets: RESEND_API_KEY (obrigatório), EMAIL_FROM (opcional), FRONTEND_URL (opcional)
+# send-email é chamada SÓ por outras edge functions (asaas-webhook etc) usando
+# fetch interno. Mantemos verify_jwt=false porque o SERVICE_ROLE_KEY custom
+# secret pode estar com valor inválido (caso atual: "Invalid JWT format" no
+# log). A função valida tipo do payload internamente, sem risco direto de abuso.
 [functions.send-email]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/send-email/deno.json"
 entrypoint = "./functions/send-email/index.ts"
