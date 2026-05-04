@@ -226,6 +226,107 @@ const DEMO_PROGRAMACAO = [
 const CATEGORIAS = ['Infantil', 'Juvenil', 'Adulto', 'Profissional']
 const FORMACOES = ['Solo', 'Duo', 'Trio', 'Grupo']
 
+// ─── Workshops (Etapa 1) ──────────────────────────────────────────────────
+// Mix de workshops pra cobrir os 3 modos de pricing + standalone:
+//   1. Atrelado ao festival, pago com 2 lotes
+//   2. Atrelado, pago com desconto pra inscritos da mostra (auto_detect_combo)
+//   3. Atrelado, GRÁTIS pra inscritos (gratis_para_inscritos=true)
+//   4. Standalone (event_id=null) — workshop avulso do produtor
+const DEMO_WORKSHOPS = [
+  {
+    nome: 'Jazz Funk Intensivo',
+    slug_base: 'jazz-funk-intensivo-demo',
+    descricao: 'Workshop intensivo de Jazz Funk com base em coreografia comercial. Aquecimento, técnica e final com vídeo.',
+    cover_url: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=1200&h=675&fit=crop&q=80',
+    professor_name: 'Juliana Silveira',  // mesmo nome de jurada → testa dedup PersonCard
+    professor_bio: 'Bailarina principal do Theatro Municipal de SP. Mestra em Dança Contemporânea pela UFBA. 15 anos formando profissionais.',
+    professor_bio_short: 'Bailarina principal do Theatro Municipal de SP, Mestra em Dança Contemporânea.',
+    professor_photo_url: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=400&h=400&fit=crop&q=80',
+    professor_instagram: 'juliana.dance',
+    modalidade: 'Jazz Funk',
+    nivel: 'intermediario' as const,
+    duracao_minutos: 120,
+    capacidade_max: 30,
+    preco_padrao: 90,
+    preco_inscritos_mostra: 60,    // desconto pra inscritos
+    gratis_para_inscritos: false,
+    auto_detect_combo: true,
+    tem_lotes: true,
+    standalone: false,
+  },
+  {
+    nome: 'Hip Hop Foundations',
+    slug_base: 'hip-hop-foundations-demo',
+    descricao: 'Os fundamentos do Hip Hop pra quem quer começar do zero ou consolidar a base. Top rock, footwork e freestyle.',
+    cover_url: 'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=1200&h=675&fit=crop&q=80',
+    professor_name: 'Rodrigo Souza',     // jurado também — vai dedupar
+    professor_bio: 'Pioneiro do Hip Hop em SP. 18 anos formando dançarinos urbanos. Battles Brasil/Itália.',
+    professor_bio_short: 'Pioneiro do Hip Hop em SP, 18 anos formando dançarinos urbanos.',
+    professor_photo_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop&q=80',
+    professor_instagram: 'rodrigorhip',
+    modalidade: 'Hip Hop',
+    nivel: 'iniciante' as const,
+    duracao_minutos: 90,
+    capacidade_max: 40,
+    preco_padrao: 60,
+    preco_inscritos_mostra: null,
+    gratis_para_inscritos: true,            // grátis pra inscritos!
+    auto_detect_combo: true,
+    tem_lotes: false,
+    standalone: false,
+  },
+  {
+    nome: 'Contemporâneo: Improvisação',
+    slug_base: 'contemporaneo-improvisacao-demo',
+    descricao: 'Aula prática de improvisação contemporânea — Forsythe, Release Technique e estados expandidos do corpo.',
+    cover_url: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=1200&h=675&fit=crop&q=80',
+    professor_name: 'Ana Paula Mendes',   // só professora (não é jurada)
+    professor_bio: 'Coreógrafa e dançarina contemporânea com passagem pela Cia Deborah Colker. Doutora em Artes Cênicas (USP).',
+    professor_bio_short: 'Coreógrafa contemporânea, ex-Deborah Colker, doutora em Artes Cênicas pela USP.',
+    professor_photo_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop&q=80',
+    professor_instagram: 'anapaula.contemporaneo',
+    modalidade: 'Contemporâneo',
+    nivel: 'avancado' as const,
+    duracao_minutos: 150,
+    capacidade_max: 25,
+    preco_padrao: 120,
+    preco_inscritos_mostra: 90,
+    gratis_para_inscritos: false,
+    auto_detect_combo: true,
+    tem_lotes: false,
+    standalone: false,
+  },
+  {
+    nome: 'Ballet Repertório — La Bayadère',
+    slug_base: 'ballet-bayadere-demo',
+    descricao: 'Variação clássica do balé La Bayadère. Técnica, expressão e detalhes do repertório russo.',
+    cover_url: 'https://images.unsplash.com/photo-1535525153412-5a092d46b4ff?w=1200&h=675&fit=crop&q=80',
+    professor_name: 'Tatiana Volkova',
+    professor_bio: 'Ex-solista do Bolshoi. Atua como pedagoga e coach internacional desde 2015.',
+    professor_bio_short: 'Ex-solista do Bolshoi, pedagoga internacional.',
+    professor_photo_url: 'https://images.unsplash.com/photo-1554151228-14d9def656e4?w=400&h=400&fit=crop&q=80',
+    professor_instagram: 'tatiana.ballet',
+    modalidade: 'Ballet Clássico',
+    nivel: 'avancado' as const,
+    duracao_minutos: 180,
+    capacidade_max: 20,
+    preco_padrao: 150,
+    preco_inscritos_mostra: null,
+    gratis_para_inscritos: false,
+    auto_detect_combo: false,
+    tem_lotes: false,
+    standalone: true,                   // workshop AVULSO (sem event_id)
+  },
+]
+
+// ─── Cupons demo ──────────────────────────────────────────────────────────
+// Mix de scopes pra testar todos os fluxos
+const DEMO_COUPONS = [
+  { code: 'FAMILIA10',  scope: 'audience',  discount_type: 'percent', discount_value: 10, max_uses: 50, descricao: '10% off pra famílias na plateia' },
+  { code: 'WORKSHOP20', scope: 'workshop',  discount_type: 'percent', discount_value: 20, max_uses: 30, descricao: '20% off em workshops' },
+  { code: 'DEMO50',     scope: 'all',       discount_type: 'percent', discount_value: 50, max_uses: 5,  descricao: 'Cupom demo — 50% off em tudo (limitado)' },
+]
+
 const JURADOS = [
   {
     name: 'Carlos Mendes',
@@ -348,12 +449,28 @@ Deno.serve(async (req) => {
       .eq('created_by', userId)
       .eq('is_demo', true)
     const ids = (demoEvents ?? []).map((e: { id: string }) => e.id)
-    if (ids.length === 0) return
+    if (ids.length === 0) {
+      // Mesmo sem evento, pode haver workshop standalone + templates do produtor.
+      // Deleta órfãos pra regerar limpo.
+      await supa.from('certificate_templates').delete().eq('producer_id', userId)
+      await supa.from('workshops').delete().eq('created_by', userId)  // pega standalone (event_id=null)
+      return
+    }
     // platform_commissions: deleta linhas que apontam pros eventos demo
     await supa.from('platform_commissions').delete().in('event_id', ids)
-    // audience_tickets: tem CASCADE em events, mas deletar antes acelera +
-    // libera índices de FK
+    // audience_tickets: CASCADE em events, mas explicitar acelera + libera FK
     await supa.from('audience_tickets').delete().in('event_id', ids)
+    // ── Workshops Etapa 1: workshops têm event_id CASCADE, mas standalone (NULL)
+    //    são scopados por created_by. workshop_lots e workshop_registrations têm
+    //    CASCADE em workshops.id, então só precisamos deletar workshops.
+    await supa.from('workshops').delete().eq('created_by', userId)
+    // ── Certificados Etapa 2: certificate_templates é por producer_id (1 por type),
+    //    certificates_issued tem CASCADE em registrations / workshop_registrations.
+    //    Deletar templates e certificates_issued explicitamente garante limpeza.
+    await supa.from('certificates_issued').delete().eq('producer_id', userId)
+    await supa.from('certificate_templates').delete().eq('producer_id', userId)
+    // ── Cupons: têm event_id FK. Deletar pelos eventos demo.
+    await supa.from('coupons').delete().in('event_id', ids)
   }
 
   // ─── action: delete ────────────────────────────────────────────────────
@@ -872,10 +989,12 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
         if (idx < 3) {
           // Top 3: cada uma recebe 1 nomination do (idx+judgeIdx) % 5 premio
           const premioIdx = (idx * 3 + judgeIdx) % premiosParaNomear.length
-          nominations.push(premiosParaNomear[premioIdx])
+          const p = premiosParaNomear[premioIdx]
+          nominations.push({ award_id: p.id, award_name: p.name })
           // Top 1 ganha nomination extra pra Melhor Coreografia (idx=2)
           if (idx === 0 && judgeIdx === 0) {
-            nominations.push(premiosParaNomear[2])
+            const p2 = premiosParaNomear[2]
+            nominations.push({ award_id: p2.id, award_name: p2.name })
           }
         }
         evalsToInsert.push({
@@ -903,6 +1022,304 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       }
     }
 
+    // ─── 8) Workshops + lotes (Etapa 1) ────────────────────────────────────
+    // Cria 4 workshops com diversidade de modos. Suffix de timestamp evita
+    // colisão de slug UNIQUE quando produtor regera demo várias vezes.
+    const slugSuffix = Date.now().toString(36).slice(-5)
+    const eventDateStr = startDate.toISOString().slice(0, 10)  // YYYY-MM-DD
+    const wsBaseDate = new Date(eventDateStr + 'T09:00:00')
+    const workshopsToInsert = DEMO_WORKSHOPS.map((w, i) => {
+      const dataInicio = new Date(wsBaseDate.getTime() + i * 4 * 3600000)  // espaça 4h
+      const dataFim = new Date(dataInicio.getTime() + (w.duracao_minutos ?? 90) * 60000)
+      return {
+        event_id: w.standalone ? null : eventId,
+        created_by: user.id,
+        name: w.nome,
+        slug: `${w.slug_base}-${slugSuffix}`,
+        description: w.descricao,
+        cover_url: w.cover_url,
+        professor_name: w.professor_name,
+        professor_bio: w.professor_bio,
+        professor_bio_short: w.professor_bio_short,
+        professor_photo_url: w.professor_photo_url,
+        professor_instagram: w.professor_instagram,
+        professor_is_public: true,
+        modalidade: w.modalidade,
+        nivel: w.nivel,
+        data_inicio: dataInicio.toISOString(),
+        data_fim: dataFim.toISOString(),
+        duracao_minutos: w.duracao_minutos,
+        local: w.standalone ? 'Estúdio CoreoHub — São Paulo' : 'Sala 2 — Teatro Principal',
+        capacidade_max: w.capacidade_max,
+        preco_padrao: w.preco_padrao,
+        preco_inscritos_mostra: w.preco_inscritos_mostra,
+        gratis_para_inscritos: w.gratis_para_inscritos,
+        auto_detect_combo: w.auto_detect_combo,
+        workshop_commission_percent: 10,
+        workshop_fee_mode: 'repassar',
+        workshop_max_per_cpf: 4,
+        workshop_reservation_minutes: 10,
+        is_published: true,
+      }
+    })
+    const { data: insertedWorkshops, error: wsErr } = await supa
+      .from('workshops')
+      .insert(workshopsToInsert)
+      .select('id, name, professor_name, modalidade, data_inicio, duracao_minutos, preco_padrao, gratis_para_inscritos')
+
+    let workshopsOk = 0
+    let lotesOk = 0
+    let workshopRegsOk = 0
+    if (wsErr) {
+      console.warn('Falha ao inserir workshops:', wsErr.message)
+    } else if (insertedWorkshops && insertedWorkshops.length > 0) {
+      workshopsOk = insertedWorkshops.length
+
+      // Lotes: só pro 1º workshop (DEMO_WORKSHOPS[0].tem_lotes=true)
+      const ws0 = insertedWorkshops[0]
+      const lotsToInsert = [
+        { workshop_id: ws0.id, ordem: 1, nome: 'Pré-evento', preco: 60, preco_inscritos_mostra: 40, quantidade_maxima: 15, is_active: true },
+        { workshop_id: ws0.id, ordem: 2, nome: 'Regular',    preco: 90, preco_inscritos_mostra: 60, quantidade_maxima: null, is_active: true },
+      ]
+      const { error: lotsErr } = await supa.from('workshop_lots').insert(lotsToInsert)
+      if (lotsErr) console.warn('Falha lots:', lotsErr.message)
+      else lotesOk = lotsToInsert.length
+
+      // Workshop registrations: ~3-5 por workshop, mix de status
+      const workshopRegsToInsert: any[] = []
+      insertedWorkshops.forEach((ws: any, wsIdx: number) => {
+        const numRegs = wsIdx === 3 ? 4 : 5  // standalone tem 4, outros 5
+        for (let i = 0; i < numRegs; i++) {
+          const isFem = Math.random() < 0.7
+          const nome = randomNomeCompleto(isFem)
+          const cpf = `${Math.floor(Math.random() * 1e11)}`.padStart(11, '0')
+          const phone = `119${Math.floor(Math.random() * 1e8).toString().padStart(8, '0')}`
+          // Mix de status: 60% APROVADO (pago), 15% GRATUITO (combo grátis),
+          // 10% CORTESIA, 10% PENDENTE, 5% CANCELADO
+          const r = Math.random()
+          let status = 'APROVADO'
+          if (r < 0.05) status = 'CANCELADO'
+          else if (r < 0.15) status = 'PENDENTE'
+          else if (r < 0.25) status = 'CORTESIA'
+          else if (r < 0.40 && (DEMO_WORKSHOPS[wsIdx]?.gratis_para_inscritos)) status = 'GRATUITO'
+          // attended=true só pra APROVADO ou GRATUITO ou CORTESIA, e só pra metade
+          const isAttendable = ['APROVADO', 'GRATUITO', 'CORTESIA'].includes(status)
+          const attended = isAttendable && Math.random() < 0.7
+          const preco = status === 'GRATUITO' || status === 'CORTESIA' ? 0 : Number(DEMO_WORKSHOPS[wsIdx]?.preco_padrao ?? 0)
+          const commission = preco > 0 ? +(preco * 0.1).toFixed(2) : 0
+          workshopRegsToInsert.push({
+            workshop_id: ws.id,
+            workshop_lot_id: null,
+            lot_nome: null,
+            lot_ordem: null,
+            buyer_name: nome,
+            buyer_email: `${nome.toLowerCase().replace(/\s+/g, '.').normalize('NFD').replace(/[̀-ͯ]/g, '')}@demo.coreohub.local`,
+            buyer_cpf: cpf,
+            buyer_phone: phone,
+            user_id: null,
+            combo_registration_id: null,
+            is_combo: status === 'GRATUITO',
+            preco_base: preco,
+            preco_pago: preco,
+            status_pagamento: status,
+            commission_amount: commission,
+            producer_amount: preco - commission,
+            fee_mode: 'repassar',
+            attended,
+            attended_at: attended ? new Date().toISOString() : null,
+            paid_at: ['APROVADO', 'GRATUITO', 'CORTESIA'].includes(status) ? new Date().toISOString() : null,
+            payment_method: status === 'APROVADO' ? 'CREDIT_CARD' : null,
+          })
+        }
+      })
+      const { error: wrErr } = await supa.from('workshop_registrations').insert(workshopRegsToInsert)
+      if (wrErr) console.warn('Falha workshop_registrations:', wrErr.message)
+      else workshopRegsOk = workshopRegsToInsert.length
+    }
+
+    // ─── 9) Cupons (Tier 2 plateia + Workshops) ─────────────────────────────
+    let couponsOk = 0
+    const couponsToInsert = DEMO_COUPONS.map(c => ({
+      event_id: eventId,
+      created_by: user.id,
+      code: c.code,
+      discount_type: c.discount_type,
+      discount_value: c.discount_value,
+      max_uses: c.max_uses,
+      used_count: 0,
+      is_active: true,
+      scope: c.scope,
+    }))
+    const { error: cpErr } = await supa.from('coupons').insert(couponsToInsert)
+    if (cpErr) console.warn('Falha coupons:', cpErr.message)
+    else couponsOk = couponsToInsert.length
+
+    // ─── 10) Audience tickets demo (Tier 2 plateia) ────────────────────────
+    // ~25 tickets distribuídos entre os 3 tipos, mix de status pra dashboard.
+    let audienceTicketsOk = 0
+    const audienceTicketsToInsert: any[] = []
+    for (let i = 0; i < 25; i++) {
+      const typeIdx = i % DEMO_INGRESSOS.length
+      const t = DEMO_INGRESSOS[typeIdx]
+      const isFem = Math.random() < 0.55
+      const nome = randomNomeCompleto(isFem)
+      const cpf = `${Math.floor(Math.random() * 1e11)}`.padStart(11, '0')
+      const r = Math.random()
+      // 75% APROVADO, 10% PENDENTE, 8% CANCELADO, 5% ESTORNADO, 2% CORTESIA
+      let status = 'APROVADO'
+      if (r < 0.02) status = 'CORTESIA'
+      else if (r < 0.07) status = 'ESTORNADO'
+      else if (r < 0.15) status = 'CANCELADO'
+      else if (r < 0.25) status = 'PENDENTE'
+      const kind = t.nome.toLowerCase().includes('meia') ? 'meia'
+        : t.nome.toLowerCase().includes('solid') ? 'solidaria' : 'inteira'
+      const commission = +(Number(t.preco) * 0.1).toFixed(2)
+      audienceTicketsToInsert.push({
+        event_id: eventId,
+        ticket_type_id: String(typeIdx),
+        ticket_type_nome: t.nome,
+        ticket_type_kind: kind,
+        preco: Number(t.preco),
+        buyer_name: nome,
+        buyer_email: `${nome.toLowerCase().replace(/\s+/g, '.').normalize('NFD').replace(/[̀-ͯ]/g, '')}@demo.coreohub.local`,
+        buyer_cpf: cpf,
+        buyer_phone: null,
+        status_pagamento: status,
+        check_in_status: status === 'APROVADO' && Math.random() < 0.4 ? 'OK' : 'PENDENTE',
+        check_in_at: null,
+        commission_amount: commission,
+        producer_amount: Number(t.preco) - commission,
+        fee_mode: 'repassar',
+        paid_at: ['APROVADO', 'CORTESIA'].includes(status) ? new Date().toISOString() : null,
+        payment_method: status === 'APROVADO' ? 'PIX' : null,
+      })
+    }
+    const { error: atErr } = await supa.from('audience_tickets').insert(audienceTicketsToInsert)
+    if (atErr) console.warn('Falha audience_tickets:', atErr.message)
+    else audienceTicketsOk = audienceTicketsToInsert.length
+
+    // ─── 11) Certificate templates (Etapa 2) ───────────────────────────────
+    // 1 template por type — produtor pode editar depois pelo /certificados
+    let certTemplatesOk = 0
+    const certTemplatesToInsert = [
+      {
+        producer_id: user.id,
+        template_type: 'mostra',
+        name: 'Modelo padrão Mostra (DEMO)',
+        preset_template: 'mostra-classico',
+        background_url: null,
+        layout_json: [],
+        accent_color: '#ff0068',
+        primary_color: '#0b0b0f',
+        signature_names: ['Coordenação Artística', 'Direção do Festival'],
+        signature_urls: [],
+      },
+      {
+        producer_id: user.id,
+        template_type: 'workshop',
+        name: 'Modelo padrão Workshop (DEMO)',
+        preset_template: 'workshop-minimalista',
+        background_url: null,
+        layout_json: [],
+        accent_color: '#ff0068',
+        primary_color: '#0b0b0f',
+        signature_names: ['Coordenação Pedagógica'],
+        signature_urls: [],
+      },
+    ]
+    const { data: certTemplates, error: ctErr } = await supa
+      .from('certificate_templates')
+      .insert(certTemplatesToInsert)
+      .select('id, template_type')
+    if (ctErr) console.warn('Falha certificate_templates:', ctErr.message)
+    else certTemplatesOk = (certTemplates ?? []).length
+
+    // ─── 12) Certificates_issued (lazy: pdf_url=NULL) ──────────────────────
+    // Mostra: emite pra todas registrations APROVADAS (45 do batch acima)
+    // Workshop: emite pros workshop_registrations attended=true
+    let certsIssuedOk = 0
+    if ((certTemplates ?? []).length > 0) {
+      const tplMostra   = (certTemplates ?? []).find((t: any) => t.template_type === 'mostra')
+      const tplWorkshop = (certTemplates ?? []).find((t: any) => t.template_type === 'workshop')
+
+      const issuedToInsert: any[] = []
+
+      // Mostra: pega registrations APROVADAS do batch já criado
+      const aprovadas = (insertedRegs ?? []).filter((r: any) => r.status === 'APROVADA')
+      if (tplMostra && aprovadas.length > 0) {
+        // Recarrega com dados completos pra montar certificate_data
+        const { data: regsCompletas } = await supa
+          .from('registrations')
+          .select('id, nome_coreografia, formato_participacao, categoria, estilo_danca, estudio, classificacao_final, bailarinos_detalhes')
+          .in('id', aprovadas.map((r: any) => r.id))
+        for (const r of regsCompletas ?? []) {
+          const formato = String(r.formato_participacao ?? '').toLowerCase()
+          const isGrupo = formato.includes('grupo') || formato.includes('conjunto')
+          const bailarinos = Array.isArray(r.bailarinos_detalhes) ? r.bailarinos_detalhes : []
+          const nomes = bailarinos.map((b: any) => b?.full_name).filter(Boolean)
+          const recipient = isGrupo ? r.nome_coreografia : (nomes.length > 0 ? nomes.join(' & ') : r.nome_coreografia)
+          issuedToInsert.push({
+            template_id: tplMostra.id,
+            template_type: 'mostra',
+            registration_id: r.id,
+            workshop_registration_id: null,
+            event_id: eventId,
+            producer_id: user.id,
+            recipient_name: recipient,
+            certificate_data: {
+              evento_nome: eventName,
+              evento_data: eventDateStr,
+              evento_local: 'Teatro Municipal — São Paulo',
+              coreografia: r.nome_coreografia,
+              formato: r.formato_participacao,
+              categoria: r.categoria,
+              modalidade: r.estilo_danca,
+              estudio: r.estudio,
+              classificacao: r.classificacao_final,
+            },
+          })
+        }
+      }
+
+      // Workshop: pega workshop_registrations attended=true do batch
+      if (tplWorkshop) {
+        const { data: wsRegsAttended } = await supa
+          .from('workshop_registrations')
+          .select('id, workshop_id, buyer_name, workshops!inner(name, professor_name, modalidade, duracao_minutos, data_inicio, event_id)')
+          .eq('attended', true)
+          .eq('workshops.created_by', user.id)
+        for (const wr of (wsRegsAttended ?? []) as any[]) {
+          // Só emite cert pra workshop atrelado ao evento demo (não pra standalone — esses ficam órfãos de evento)
+          if (wr.workshops?.event_id !== eventId) continue
+          issuedToInsert.push({
+            template_id: tplWorkshop.id,
+            template_type: 'workshop',
+            registration_id: null,
+            workshop_registration_id: wr.id,
+            event_id: eventId,
+            producer_id: user.id,
+            recipient_name: wr.buyer_name,
+            certificate_data: {
+              evento_nome: eventName,
+              evento_data: eventDateStr,
+              evento_local: 'Teatro Municipal — São Paulo',
+              workshop_nome: wr.workshops?.name,
+              professor_nome: wr.workshops?.professor_name,
+              modalidade: wr.workshops?.modalidade,
+              duracao_minutos: wr.workshops?.duracao_minutos,
+              workshop_data: wr.workshops?.data_inicio,
+            },
+          })
+        }
+      }
+
+      if (issuedToInsert.length > 0) {
+        const { error: ciErr } = await supa.from('certificates_issued').insert(issuedToInsert)
+        if (ciErr) console.warn('Falha certificates_issued:', ciErr.message)
+        else certsIssuedOk = issuedToInsert.length
+      }
+    }
+
     return json({
       ok: true,
       event_id: eventId,
@@ -922,6 +1339,14 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
         programacao_itens: DEMO_PROGRAMACAO.length,
         marcacoes_juri: marcacoesOk,
         deliberations: deliberacoesOk,
+        // Etapa 1+2:
+        workshops: workshopsOk,
+        workshop_lots: lotesOk,
+        workshop_registrations: workshopRegsOk,
+        coupons: couponsOk,
+        audience_tickets: audienceTicketsOk,
+        cert_templates: certTemplatesOk,
+        certificates_issued: certsIssuedOk,
       },
     })
   }
