@@ -164,9 +164,14 @@ const MeuIngresso: React.FC = () => {
 
   // Bug clássico: Date('YYYY-MM-DD') interpreta como UTC e em pt-BR mostra 1 dia atras.
   // Adicionando T12:00:00 forçamos meio-dia local, neutralizando offset de timezone.
-  const eventDate = ticket.event_date
-    ? new Date(ticket.event_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
-    : null;
+  const eventDate = (() => {
+    if (!ticket.event_date) return null;
+    const d = new Date(ticket.event_date + 'T12:00:00');
+    const wd = new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(d).replace('.', '');
+    const cap = wd.charAt(0).toUpperCase() + wd.slice(1);
+    const date = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+    return `${cap}, ${date}`;
+  })();
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex flex-col">

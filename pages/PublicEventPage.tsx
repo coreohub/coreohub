@@ -154,7 +154,32 @@ const PublicEventPage = () => {
     if (!dateStr) return '—';
     // Parse com T12:00:00 evita shift UTC midnight → dia anterior em BRT.
     const iso = dateStr.includes('T') ? dateStr : dateStr + 'T12:00:00';
-    return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+    const d = new Date(iso);
+    const wd = new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(d).replace('.', '');
+    const cap = wd.charAt(0).toUpperCase() + wd.slice(1);
+    const date = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+    return `${cap}, ${date}`;
+  };
+
+  // Range inteligente: evita duplicar mês/ano quando aplicável.
+  // Mesmo dia: "Sáb, 03 de junho de 2026"
+  // Mesmo mês: "Sáb 03 — Seg 05 de junho de 2026"
+  // Atravessa mês: "Sex, 30 de maio — Seg, 02 de junho de 2026"
+  const formatEventRange = (start?: string, end?: string) => {
+    if (!start) return null;
+    if (!end || end === start) return formatDate(start);
+    const d1 = new Date((start.includes('T') ? start : start + 'T12:00:00'));
+    const d2 = new Date((end.includes('T') ? end : end + 'T12:00:00'));
+    const sameMonth = d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear();
+    const wd = (d: Date) => {
+      const w = new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(d).replace('.', '');
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    };
+    if (sameMonth) {
+      const startShort = `${wd(d1)} ${String(d1.getDate()).padStart(2, '0')}`;
+      return `${startShort} — ${formatDate(end)}`;
+    }
+    return `${formatDate(start)} — ${formatDate(end)}`;
   };
 
   // Formato curto com dia da semana: "Sáb, 16/06/2026"
@@ -246,8 +271,7 @@ const PublicEventPage = () => {
               {event.start_date && (
                 <div className="flex items-center gap-2 text-slate-300">
                   <Calendar size={16} className="text-[#ff0068]" />
-                  {formatDate(event.start_date)}
-                  {event.end_date && event.end_date !== event.start_date && ` — ${formatDate(event.end_date)}`}
+                  {formatEventRange(event.start_date, event.end_date)}
                 </div>
               )}
               {event.event_time && (
