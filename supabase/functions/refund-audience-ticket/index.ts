@@ -125,24 +125,9 @@ Deno.serve(async (req) => {
       groupSize = count ?? 1
     }
 
-    // ── Notifica produtor (opcional, não-bloqueante) ────────────────────────
-    try {
-      await supabase.functions.invoke('send-email', {
-        body: {
-          template: 'audience_ticket_refunded',
-          to: ticket.buyer_email,
-          data: {
-            buyer_name: ticket.buyer_name,
-            event_name: event?.name ?? '',
-            ticket_type: ticket.ticket_type_nome,
-            refund_amount: refundedAmount,
-            reason: reason ?? '',
-          },
-        },
-      })
-    } catch (e: any) {
-      console.warn('[refund-audience-ticket] envio de email falhou:', e?.message)
-    }
+    // TODO Tier 3: enviar email de estorno ao comprador. Hoje produtor avisa
+    // manualmente (template `audience_ticket_refunded` ainda não existe em
+    // send-email). Skipado intencionalmente.
 
     console.log(`[refund-audience-ticket] ok ticket=${ticket_id} group_size=${groupSize} amount=${refundedAmount}`)
 

@@ -79,6 +79,12 @@ const Coupons: React.FC = () => {
       setFormError('Percentual não pode ser maior que 100%.');
       return;
     }
+    // Cupom 100% off não funciona pra plateia (Asaas exige valor > 0).
+    // Inscrição também é problemática mas existe fluxo gratuito separado.
+    if (form.discount_type === 'percent' && form.discount_value === 100 && form.scope !== 'inscription') {
+      setFormError('Cupom 100% off não é suportado em ingressos de plateia (Asaas exige cobrança > 0). Use desconto parcial ou crie cortesia direta.');
+      return;
+    }
     setSaving(true);
     try {
       await createCoupon({

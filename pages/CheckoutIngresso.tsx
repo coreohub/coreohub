@@ -153,17 +153,12 @@ export default function CheckoutIngresso() {
   // Lei 12.933: meia tem hard limit 1
   const effectiveMax = isMeia ? 1 : maxPurchase;
 
-  useEffect(() => {
-    if (quantity > effectiveMax) setQuantity(effectiveMax);
-  }, [effectiveMax, quantity]);
-
   // ─── Cálculo de preço com fee_mode + cupom ────────────────────────────────
   const breakdown = useMemo(() => {
     if (!event || !ticketType) return null;
     const precoUnit = Number(ticketType._precoVigente ?? ticketType.preco ?? 0);
-    const discountUnit = couponApplied
-      ? Number(((couponApplied.discount) / Math.max(1, 1)).toFixed(2)) // discount já é por unit (RPC validou em cima de baseValueUnit)
-      : 0;
+    // RPC validate_audience_coupon retornou desconto em cima de baseValueUnit (preço unitário)
+    const discountUnit = couponApplied ? Number(couponApplied.discount.toFixed(2)) : 0;
     const baseUnit = Math.max(0, Number((precoUnit - discountUnit).toFixed(2)));
     const commPct = Number(event.audience_commission_percent ?? 10);
     const commUnit = Number((baseUnit * (commPct / 100)).toFixed(2));
