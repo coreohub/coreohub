@@ -99,7 +99,7 @@ export interface JudgeHighlight {
   award_name?: string | null;
 }
 
-export const submitEvaluation = async (payload: {
+export interface SubmitEvaluationPayload {
   registration_id: string;
   scores: Record<string, number>;
   criteria_weights: any[];
@@ -109,7 +109,13 @@ export const submitEvaluation = async (payload: {
   created_at: string;
   audit_log: any;
   highlights?: JudgeHighlight[];
-}) => {
+  /** Phase 5: idempotência. Outbox mantém o mesmo UUID v4 em todos os retries. */
+  client_uuid?: string;
+}
+
+export const submitEvaluation = async (
+  payload: SubmitEvaluationPayload,
+): Promise<{ deduplicated: boolean }> => {
   const { token, judge_id } = requireJudgeSession();
   const { data, status } = await callJudgeFn({
     action: 'submit-evaluation',
@@ -120,6 +126,7 @@ export const submitEvaluation = async (payload: {
   if (status !== 200 || !data?.ok) {
     throw new Error(data?.detail ?? data?.reason ?? 'failed_to_submit');
   }
+  return { deduplicated: Boolean(data.deduplicated) };
 };
 
 /**

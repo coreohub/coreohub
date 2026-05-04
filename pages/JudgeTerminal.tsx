@@ -13,6 +13,8 @@ import { useT, useLocale, setLocale } from '../hooks/useT';
 import type { JudgeDictKey } from '../i18n/judge-pt';
 import { readJudgeSession, clearJudgeSession } from './JudgeLogin';
 import { fetchTerminalData, fetchPreviousEvaluations, submitEvaluation as submitEvaluationViaApi, uploadAudio as uploadAudioViaApi } from '../services/judgeApi';
+import { enqueueEvaluation, fetchTerminalDataSWR, fetchPreviousEvaluationsSWR } from '../services/judgeApiOffline';
+import OfflineStatusBadge from '../components/OfflineStatusBadge';
 
 /** Maps the canonical PT criterion name (used as score key in DB) to a dict key. */
 const DEFAULT_CRITERION_KEYS: Record<string, JudgeDictKey> = {
@@ -407,8 +409,8 @@ const JudgeTerminal = () => {
 
       let evals: any[] = [];
       if (judgeSession) {
-        // Phase 2A: via Edge Function (não precisa de RLS de produtor)
-        evals = await fetchPreviousEvaluations(ids);
+        // Phase 2A + 5: via Edge Function com fallback IndexedDB (offline-aware)
+        evals = await fetchPreviousEvaluationsSWR(ids);
       } else {
         const { data } = await supabase
           .from('evaluations')
@@ -485,18 +487,25 @@ const JudgeTerminal = () => {
         let gData: any[] | null = null;
 
         if (judgeSession) {
-          // Phase 2A: jurado logou via PIN, sem sessão de produtor.
-          // Tudo vem da Edge Function (que valida o token + judge_id no backend).
-          const td = await fetchTerminalData();
+          // Phase 2A + 5: jurado logou via PIN. SWR contra IndexedDB cache —
+          // se offline e tem cache, hidrata na hora; network rola em background.
+          const cached = await fetchTerminalDataSWR((fresh) => {
+            // Fresh chega depois — atualiza estado quando network resolve
+            const td = fresh.data;
+            if (td.registrations) setSchedule(td.registrations);
+            if (Array.isArray(td.marcacoes)) {
+              setStarredSet(new Set(td.marcacoes.map(m => m.registration_id)));
+            }
+            setLiveRegistrationId(td.event?.live_registration_id ?? null);
+          });
+          const td = cached.data;
           jData = td.judges;
           cfg = td.config;
           sched = td.registrations;
           gData = td.event_styles;
-          // Phase 3: hidrata estrelas previamente marcadas neste evento
           if (Array.isArray(td.marcacoes) && td.marcacoes.length > 0) {
             setStarredSet(new Set(td.marcacoes.map(m => m.registration_id)));
           }
-          // Phase 4: hidrata âncora "ao vivo" da Mesa de Som
           setLiveRegistrationId(td.event?.live_registration_id ?? null);
         } else {
           // Fluxo legado: produtor/admin logado no device, queries diretas via RLS.
@@ -781,8 +790,9 @@ const JudgeTerminal = () => {
     setStarringInFlight(true);
     try {
       if (judgeSession) {
-        const { toggleStar } = await import('../services/judgeApi');
-        await toggleStar(id);
+        // Phase 5: enfileira no outbox (com colapso se já tinha pending)
+        const { enqueueStarToggle } = await import('../services/judgeApiOffline');
+        await enqueueStarToggle(id, wasStarred);
       } else if (selectedJudge) {
         // Fluxo legado: produtor logado, RLS via auth.uid()
         if (wasStarred) {
@@ -894,23 +904,12 @@ const JudgeTerminal = () => {
       // prêmio especial agora acontece pós-bloco em /deliberacao a partir das
       // marcações ⭐ (tabela marcacoes_juri).
 
-      let audioUrl: string | null = null;
-      if (rollingChunksRef.current.length > 0) {
-        const blob = new Blob(rollingChunksRef.current, { type: 'audio/webm' });
-        if (judgeSession) {
-          // Phase 2B: upload via Edge Function (sem produtor logado)
-          try {
-            audioUrl = await uploadAudioViaApi(currentPerformance.id, blob);
-          } catch (e) {
-            console.warn('Falha no upload de áudio via Edge Function:', e);
-          }
-        } else {
-          // Fluxo legado: produtor/admin tem Storage permission via RLS
-          const fn   = `feedback_${currentPerformance.id}_${selectedJudge.id}_${Date.now()}.webm`;
-          const { data: up, error: ue } = await supabase.storage.from('audio-feedbacks').upload(fn, blob);
-          if (!ue && up) audioUrl = supabase.storage.from('audio-feedbacks').getPublicUrl(fn).data.publicUrl;
-        }
-      }
+      // Phase 5: áudio vai como Blob pro outbox (best-effort, não bloqueia
+      // submit). Drainer faz upload em background; eval é patchada com
+      // audio_url quando upload completa, ou com null + flag se desistir.
+      const audioBlob: Blob | null = rollingChunksRef.current.length > 0
+        ? new Blob(rollingChunksRef.current, { type: 'audio/webm' })
+        : null;
 
       /* ── Avaliada mode: no scores, save only feedback ── */
       if (isAvaliada) {
@@ -929,15 +928,21 @@ const JudgeTerminal = () => {
           scores:                 {},
           criteria_weights:       [],
           final_weighted_average: null,
-          audio_url:              audioUrl,
           submitted_at:           now,
           created_at:             now,
           audit_log:              auditEntry,
         };
         if (judgeSession) {
-          await submitEvaluationViaApi(evalRow);
+          await enqueueEvaluation({ evalPayload: evalRow, audioBlob });
         } else {
-          const { error: evalErr } = await supabase.from('evaluations').insert([evalRow]);
+          // Fluxo legado (produtor logado): upload de áudio direto + insert
+          let audioUrl: string | null = null;
+          if (audioBlob) {
+            const fn = `feedback_${currentPerformance.id}_${selectedJudge.id}_${Date.now()}.webm`;
+            const { data: up, error: ue } = await supabase.storage.from('audio-feedbacks').upload(fn, audioBlob);
+            if (!ue && up) audioUrl = supabase.storage.from('audio-feedbacks').getPublicUrl(fn).data.publicUrl;
+          }
+          const { error: evalErr } = await supabase.from('evaluations').insert([{ ...evalRow, audio_url: audioUrl }]);
           if (evalErr) throw evalErr;
         }
         setIsSubmitted(true);
@@ -969,15 +974,20 @@ const JudgeTerminal = () => {
         scores:                 numScores,
         criteria_weights:       activeCriteria,
         final_weighted_average: weightedAvg,
-        audio_url:              audioUrl,
         submitted_at:           now,
         created_at:             now,
         audit_log:              auditEntry,
       };
       if (judgeSession) {
-        await submitEvaluationViaApi(evalRow);
+        await enqueueEvaluation({ evalPayload: evalRow, audioBlob });
       } else {
-        const { error: evalErr } = await supabase.from('evaluations').insert([evalRow]);
+        let audioUrl: string | null = null;
+        if (audioBlob) {
+          const fn = `feedback_${currentPerformance.id}_${selectedJudge.id}_${Date.now()}.webm`;
+          const { data: up, error: ue } = await supabase.storage.from('audio-feedbacks').upload(fn, audioBlob);
+          if (!ue && up) audioUrl = supabase.storage.from('audio-feedbacks').getPublicUrl(fn).data.publicUrl;
+        }
+        const { error: evalErr } = await supabase.from('evaluations').insert([{ ...evalRow, audio_url: audioUrl }]);
         if (evalErr) throw evalErr;
       }
 
@@ -1354,6 +1364,9 @@ const JudgeTerminal = () => {
 
         {/* Actions: ⭐ marcar destaque + mic + PIN lock + judge selector */}
         <div className="flex items-center gap-1.5 shrink-0">
+
+          {/* Phase 5: bolinha de status do outbox (online/offline + fila local) */}
+          {judgeSession && <OfflineStatusBadge judgeId={judgeSession.judge_id} />}
 
           {/* Phase 3: ⭐ Marcar destaque pra deliberação pós-bloco.
               Em desktop (lg+) fica aqui no header; em mobile/tablet pequeno

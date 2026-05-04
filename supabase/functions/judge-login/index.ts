@@ -325,6 +325,9 @@ Deno.serve(async (req) => {
       submitted_at:           payload.submitted_at ?? new Date().toISOString(),
       created_at:             payload.created_at ?? new Date().toISOString(),
       audit_log:              payload.audit_log ?? null,
+      // Phase 5: idempotência. Outbox do jurado mantém o mesmo UUID em todos
+      // os retries; UNIQUE INDEX no banco garante dedupe.
+      client_uuid:            payload.client_uuid ?? null,
     }
 
     if (!evalRow.registration_id) return json({ ok: false, reason: 'missing_registration' }, 400)
@@ -340,12 +343,27 @@ Deno.serve(async (req) => {
       return json({ ok: false, reason: 'registration_not_found_or_not_yours' }, 403)
     }
 
-    const { error } = await supa.from('evaluations').insert([evalRow])
-    if (error) return json({ error: 'db_error', detail: error.message }, 500)
+    // Phase 5: replay-safe insert. Se o cliente mandar client_uuid, usamos
+    // upsert com ignoreDuplicates pra detectar replay. Sem client_uuid (legacy)
+    // mantém INSERT cru — não regride comportamento atual.
+    let deduplicated = false
+    if (evalRow.client_uuid) {
+      const { data: upserted, error } = await supa
+        .from('evaluations')
+        .upsert([evalRow], { onConflict: 'client_uuid', ignoreDuplicates: true })
+        .select('id')
+      if (error) return json({ error: 'db_error', detail: error.message }, 500)
+      // ignoreDuplicates retorna [] quando bateu no UNIQUE — sinal de replay
+      deduplicated = !upserted || upserted.length === 0
+    } else {
+      const { error } = await supa.from('evaluations').insert([evalRow])
+      if (error) return json({ error: 'db_error', detail: error.message }, 500)
+    }
 
-    // Phase 2B: também aceita destaques (prêmios especiais nomeados pelo jurado)
+    // Phase 2B: também aceita destaques (prêmios especiais nomeados pelo jurado).
+    // Phase 5: pula destaques no replay pra não duplicar (insert sem client_uuid).
     const highlights = Array.isArray(payload.highlights) ? payload.highlights : []
-    if (highlights.length > 0) {
+    if (highlights.length > 0 && !deduplicated) {
       const rows = highlights
         .filter((h: any) => h && h.tipo_destaque)
         .map((h: any) => ({
@@ -361,7 +379,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json({ ok: true })
+    return json({ ok: true, deduplicated })
   }
 
   // ─── action: submit-star (toggle marcação ⭐ durante apresentação) ────────

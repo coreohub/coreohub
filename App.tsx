@@ -245,6 +245,21 @@ const App: React.FC = () => {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  // Phase 5: bootstrapa o drainer de outbox uma vez por sessão. Idempotente —
+  // chamadas extras são no-op. Lazy-import pra não inflar bundle inicial.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const mod = await import('./services/outboxDrainer');
+        if (!cancelled) mod.startDrainer();
+      } catch (e) {
+        console.warn('[Phase5] drainer falhou ao bootar:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
   const fetchConfig = async () => {
