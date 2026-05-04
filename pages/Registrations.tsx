@@ -257,15 +257,15 @@ const Registrations = () => {
             </select>
           </div>
 
-          <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 rounded-[2.5rem] overflow-hidden shadow-sm dark:shadow-2xl">
-            <table className="w-full text-left border-collapse">
+          <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 rounded-[2.5rem] overflow-x-auto shadow-sm dark:shadow-2xl">
+            <table className="w-full min-w-[640px] text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/5">
-                  <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Coreografia</th>
-                  <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Estúdio</th>
-                  <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Categoria</th>
-                  <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Pagamento</th>
-                  <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Ações</th>
+                  <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Coreografia</th>
+                  <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden md:table-cell">Estúdio</th>
+                  <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden lg:table-cell">Categoria</th>
+                  <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Pagamento</th>
+                  <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
@@ -275,17 +275,19 @@ const Registrations = () => {
                   <tr><td colSpan={5} className="py-20 text-center text-slate-500 font-black uppercase text-xs">Nenhuma inscrição encontrada</td></tr>
                 ) : filteredRegistrations.map(reg => (
                   <tr key={reg.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group">
-                    <td className="px-8 py-6">
+                    <td className="px-4 sm:px-8 py-6">
                       <p className="font-black text-slate-900 dark:text-white uppercase tracking-tight">{reg.nome_coreografia}</p>
                       <p className="text-[9px] text-[#ff0068] font-bold uppercase tracking-widest">{reg.tipo_apresentacao}</p>
+                      {/* Mostra estúdio + categoria em mobile (colunas escondidas em <md/<lg) */}
+                      <p className="text-[10px] text-slate-500 mt-1 md:hidden">{reg.estudio}{reg.categoria ? ` · ${reg.categoria}` : ''}</p>
                     </td>
-                    <td className="px-8 py-6 text-xs font-bold text-slate-600 dark:text-slate-300">{reg.estudio}</td>
-                    <td className="px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">{reg.categoria}</td>
-                    <td className="px-8 py-6 text-center">
+                    <td className="px-4 sm:px-8 py-6 text-xs font-bold text-slate-600 dark:text-slate-300 hidden md:table-cell">{reg.estudio}</td>
+                    <td className="px-4 sm:px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden lg:table-cell">{reg.categoria}</td>
+                    <td className="px-4 sm:px-8 py-6 text-center">
                       <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border ${getStatusColor(reg.status_pagamento)}`}>{reg.status_pagamento}</span>
                     </td>
-                    <td className="px-8 py-6 text-right">
-                      <div className="flex justify-end gap-2">
+                    <td className="px-4 sm:px-8 py-6 text-right">
+                      <div className="flex justify-end gap-1 sm:gap-2">
                         {reg.status_pagamento === 'PENDENTE' && <button onClick={() => setReviewingReg(reg)} className="p-2 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all" title="Validar pagamento"><DollarSign size={16} /></button>}
                         {(reg.status_pagamento === 'CONFIRMADO' || reg.status_pagamento === 'APROVADO') && (
                           <button onClick={() => handleOpenRefund(reg)} className="p-2 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-lg hover:bg-amber-500 hover:text-white transition-all" title="Reembolsar"><Undo2 size={16} /></button>

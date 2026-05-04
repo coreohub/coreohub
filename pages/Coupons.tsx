@@ -238,16 +238,16 @@ const Coupons: React.FC = () => {
           <p className="text-xs text-slate-500 mt-1">Clique em "Novo Cupom" para começar.</p>
         </div>
       ) : (
-        <div className="bg-white dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/10 overflow-hidden">
-          <table className="w-full">
+        <div className="bg-white dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/10 overflow-x-auto">
+          <table className="w-full min-w-[640px]">
             <thead>
               <tr className="bg-slate-50 dark:bg-white/5 text-left text-slate-500 text-[9px] font-black uppercase tracking-widest border-b border-slate-100 dark:border-white/5">
-                <th className="px-6 py-4">Código</th>
-                <th className="px-6 py-4">Desconto</th>
-                <th className="px-6 py-4">Uso / Limite</th>
-                <th className="px-6 py-4">Expira</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4" />
+                <th className="px-4 sm:px-6 py-4">Código</th>
+                <th className="px-4 sm:px-6 py-4">Desconto</th>
+                <th className="px-4 sm:px-6 py-4 hidden md:table-cell">Uso / Limite</th>
+                <th className="px-4 sm:px-6 py-4 hidden lg:table-cell">Expira</th>
+                <th className="px-4 sm:px-6 py-4">Status</th>
+                <th className="px-4 sm:px-6 py-4" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-white/5">
@@ -255,7 +255,7 @@ const Coupons: React.FC = () => {
                 const s = statusOf(c);
                 return (
                   <tr key={c.id} className="hover:bg-slate-50/50 dark:hover:bg-white/5 transition-colors">
-                    <td className="px-6 py-4">
+                    <td className="px-4 sm:px-6 py-4">
                       <span className="font-mono font-bold text-sm text-slate-900 dark:text-white bg-slate-100 dark:bg-white/10 px-3 py-1 rounded-lg border border-slate-200 dark:border-white/10">
                         {c.code}
                       </span>
@@ -269,8 +269,8 @@ const Coupons: React.FC = () => {
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4 font-black text-[#ff0068]">{fmtDiscount(c)}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 sm:px-6 py-4 font-black text-[#ff0068]">{fmtDiscount(c)}</td>
+                    <td className="px-4 sm:px-6 py-4 hidden md:table-cell">
                       {c.max_uses != null ? (
                         <div className="flex items-center gap-3">
                           <div className="flex-1 max-w-[100px] h-2 bg-slate-100 dark:bg-white/10 rounded-full overflow-hidden">
@@ -282,7 +282,7 @@ const Coupons: React.FC = () => {
                         <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{c.used_count} usos · ilimitado</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-xs text-slate-600 dark:text-slate-400">
+                    <td className="px-4 sm:px-6 py-4 text-xs text-slate-600 dark:text-slate-400 hidden lg:table-cell">
                       {c.expires_at ? (
                         <span className="flex items-center gap-2">
                           <Calendar size={12} className="text-slate-400" />
@@ -292,12 +292,12 @@ const Coupons: React.FC = () => {
                         <span className="text-slate-400">—</span>
                       )}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 sm:px-6 py-4">
                       <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${s.cls}`}>
                         {s.label}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-4 sm:px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={() => openEdit(c)}
