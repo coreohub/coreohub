@@ -336,10 +336,11 @@ Deno.serve(async (req) => {
       throw new Error('Nenhum ticket reservado')
     }
 
-    // externalReference: prefix "AT:" pro webhook discriminar audience vs registration
-    // Se for compra múltipla, usamos o id do PRIMEIRO ticket (webhook propaga pros demais via grupo)
-    const groupId = createdTickets[0].id
-    const externalRef = `AT:${groupId}`
+    // externalReference: prefix "AT:" pro webhook discriminar audience vs registration.
+    // Usa o id do PRIMEIRO ticket criado (webhook propaga status pros demais via payment_id).
+    // Distinto do groupId acima — esse é só o "âncora" no Asaas.
+    const externalRefId = createdTickets[0].id
+    const externalRef = `AT:${externalRefId}`
 
     // ── Criar customer Asaas ────────────────────────────────────────────────
     const asaasHeaders = {
