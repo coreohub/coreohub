@@ -336,6 +336,26 @@ Deno.serve(async (req) => {
   // PINs sentinela: judges nao tem coluna is_demo, entao identifica pelo PIN
   const DEMO_JUDGE_PINS = ['1111', '2222', '3333']
 
+  // Helper: limpa tabelas que referenciam events via FK SEM ON DELETE CASCADE.
+  // Tier 2 introduziu audience_tickets + platform_commissions com event_id FK.
+  // platform_commissions.event_id NÃO é cascade, então o DELETE de events trava
+  // se houver comissões registradas (caso comum: produtor confirmou pagamento
+  // de teste no Asaas → webhook gerou comissão).
+  const cleanupBeforeEventDelete = async (userId: string) => {
+    const { data: demoEvents } = await supa
+      .from('events')
+      .select('id')
+      .eq('created_by', userId)
+      .eq('is_demo', true)
+    const ids = (demoEvents ?? []).map((e: { id: string }) => e.id)
+    if (ids.length === 0) return
+    // platform_commissions: deleta linhas que apontam pros eventos demo
+    await supa.from('platform_commissions').delete().in('event_id', ids)
+    // audience_tickets: tem CASCADE em events, mas deletar antes acelera +
+    // libera índices de FK
+    await supa.from('audience_tickets').delete().in('event_id', ids)
+  }
+
   // ─── action: delete ────────────────────────────────────────────────────
   if (action === 'delete') {
     // CASCADE em events vai pegar registrations, configuracoes, etc
@@ -344,6 +364,7 @@ Deno.serve(async (req) => {
       .delete()
       .eq('created_by', user.id)
       .in('pin', DEMO_JUDGE_PINS)
+    await cleanupBeforeEventDelete(user.id)
     const { error } = await supa
       .from('events')
       .delete()
@@ -360,6 +381,7 @@ Deno.serve(async (req) => {
       .delete()
       .eq('created_by', user.id)
       .in('pin', DEMO_JUDGE_PINS)
+    await cleanupBeforeEventDelete(user.id)
     await supa.from('events').delete().eq('created_by', user.id).eq('is_demo', true)
 
     // 2) INSERT em events
