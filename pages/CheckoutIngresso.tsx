@@ -501,6 +501,12 @@ export default function CheckoutIngresso() {
               className="bg-transparent w-full text-sm outline-none placeholder:text-slate-600 font-mono tracking-wide"
             />
           </Field>
+          {/* Validação visível do CPF — evita botão "silenciosamente desabilitado" */}
+          {cpf.replace(/\D/g, '').length === 11 && !isValidCpf(cpf) && (
+            <p className="text-[10px] text-rose-300 -mt-2 flex items-center gap-1">
+              <AlertCircle size={10} /> CPF inválido — verifique se digitou corretamente
+            </p>
+          )}
 
           <Field label="Telefone (opcional)" icon={<Phone size={14} />} htmlFor="buyer-phone">
             <input
