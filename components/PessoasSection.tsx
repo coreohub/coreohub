@@ -16,6 +16,9 @@ import { PersonCard, PersonModal, type Person } from './PersonCard';
 export interface JudgePublic {
   id: string;
   name: string;
+  /** 'M' | 'F' | 'NB' | null — produtor define em /equipe-jurados.
+   *  null = fallback heurístico pelo nome. */
+  gender?: 'M' | 'F' | 'NB' | null;
   mini_bio?: string | null;
   avatar_url?: string | null;
   instagram?: string | null;
@@ -72,11 +75,12 @@ export const PessoasSection: React.FC<PessoasSectionProps> = ({ judges = [], tea
       map.set(key, {
         id: j.id,
         name: j.name,
+        gender: j.gender ?? null,
         bio_short: j.mini_bio,
         photo_url: j.avatar_url,
         instagram: j.instagram,
         modalidades: j.competencias_generos ?? [],
-        roles: ['jurada'],
+        roles: ['judge'],
       });
     }
 
@@ -88,8 +92,8 @@ export const PessoasSection: React.FC<PessoasSectionProps> = ({ judges = [], tea
       if (!key) continue;
       const existing = map.get(key);
       if (existing) {
-        if (!existing.roles.includes('professora')) {
-          existing.roles.push('professora');
+        if (!existing.roles.includes('teacher')) {
+          existing.roles.push('teacher');
         }
         // Se professor tem bio mais rica que jurado, sobrescreve (tipicamente
         // workshop tem bio mais completa)
@@ -107,11 +111,12 @@ export const PessoasSection: React.FC<PessoasSectionProps> = ({ judges = [], tea
         map.set(key, {
           id: t.id,
           name: t.professor_name,
+          gender: null,
           bio_short: t.professor_bio,
           photo_url: t.professor_photo_url,
           instagram: t.professor_instagram,
           modalidades: t.modalidade ? [t.modalidade] : [],
-          roles: ['professora'],
+          roles: ['teacher'],
         });
       }
     }

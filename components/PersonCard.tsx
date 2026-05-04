@@ -12,16 +12,60 @@ import React, { useEffect } from 'react';
 import { Instagram, Globe, Award, Music2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
+export type GenderRole = 'M' | 'F' | 'NB';
+
 export interface Person {
   id: string;
   name: string;
+  /** Gênero do jurado/professor pra flexionar role chip (Jurado/a/e).
+   *  Configurável pelo produtor em /equipe-jurados. Inclusivo (3 opções).
+   *  Se null/undefined, fallback heurístico pelo nome. */
+  gender?: GenderRole | null;
   bio_short?: string | null;
   bio_long?: string | null;
   photo_url?: string | null;
   instagram?: string | null;
   site_url?: string | null;
   modalidades?: string[];          // gêneros que avalia/ensina
-  roles: Array<'jurada' | 'professora'>;  // suporta múltiplos (dedup de pessoa)
+  roles: Array<'judge' | 'teacher'>;  // role interno; label é flexionado por gênero no render
+}
+
+// Heurística pt-BR (fallback): nomes terminados em 'a' são femininos com poucas exceções.
+const MALE_EXCEPTIONS = new Set([
+  'joshua', 'noah', 'isaías', 'elias', 'tobias', 'luca', 'andrea',
+]);
+const FEMALE_EXCEPTIONS = new Set([
+  'carmen', 'beatriz', 'inês', 'ines', 'ester', 'esther', 'isis', 'íris',
+  'ruth', 'mercedes', 'lurdes', 'lourdes', 'judith', 'edith',
+]);
+
+function detectGenderFromName(name: string): GenderRole {
+  const first = name.trim().split(/\s+/)[0]?.toLowerCase() ?? '';
+  if (MALE_EXCEPTIONS.has(first)) return 'M';
+  if (FEMALE_EXCEPTIONS.has(first)) return 'F';
+  return /[aã]$/i.test(first) ? 'F' : 'M';
+}
+
+/** Resolve o gênero efetivo: explícito do produtor → heurística pelo nome */
+function resolveGender(person: Person): GenderRole {
+  if (person.gender === 'M' || person.gender === 'F' || person.gender === 'NB') {
+    return person.gender;
+  }
+  return detectGenderFromName(person.name);
+}
+
+function roleLabel(role: 'judge' | 'teacher', gender: GenderRole): string {
+  if (role === 'judge') {
+    if (gender === 'F')  return 'Jurada';
+    if (gender === 'NB') return 'Jurade';
+    return 'Jurado';
+  }
+  if (role === 'teacher') {
+    if (gender === 'F')  return 'Professora';
+    if (gender === 'NB') return 'Docente';
+    return 'Professor';
+  }
+  return role;
 }
 
 interface PersonCardProps {
@@ -36,6 +80,8 @@ export const PersonCard: React.FC<PersonCardProps> = ({ person, onClick }) => {
     .slice(0, 2)
     .map(s => s[0]?.toUpperCase())
     .join('');
+
+  const gender = resolveGender(person);
 
   const instagramHandle = person.instagram?.replace(/^@/, '').replace(/.*instagram\.com\//, '');
   const instagramUrl = instagramHandle ? `https://instagram.com/${instagramHandle}` : null;
@@ -80,14 +126,14 @@ export const PersonCard: React.FC<PersonCardProps> = ({ person, onClick }) => {
             {person.name}
           </h3>
           <div className="flex flex-wrap gap-1">
-            {person.roles.includes('jurada') && (
+            {person.roles.includes('judge') && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#ff0068]/15 text-[#ff0068] text-[8px] font-black uppercase tracking-widest">
-                <Award size={9} /> Jurada
+                <Award size={9} /> {roleLabel('judge', gender)}
               </span>
             )}
-            {person.roles.includes('professora') && (
+            {person.roles.includes('teacher') && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 text-[8px] font-black uppercase tracking-widest">
-                <Music2 size={9} /> Professora
+                <Music2 size={9} /> {roleLabel('teacher', gender)}
               </span>
             )}
           </div>
@@ -159,6 +205,7 @@ interface PersonModalProps {
 }
 
 export const PersonModal: React.FC<PersonModalProps> = ({ person, onClose }) => {
+  const gender: GenderRole = person ? resolveGender(person) : 'M';
   // ESC fecha o modal + lock body scroll quando aberto
   useEffect(() => {
     if (!person) return;
@@ -212,14 +259,14 @@ export const PersonModal: React.FC<PersonModalProps> = ({ person, onClose }) => 
                   {person.name}
                 </h2>
                 <div className="flex gap-1 mt-2">
-                  {person.roles.includes('jurada') && (
+                  {person.roles.includes('judge') && (
                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[#ff0068]/15 text-[#ff0068] text-[9px] font-black uppercase tracking-widest">
-                      <Award size={10} /> Jurada
+                      <Award size={10} /> {roleLabel('judge', gender)}
                     </span>
                   )}
-                  {person.roles.includes('professora') && (
+                  {person.roles.includes('teacher') && (
                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-purple-500/15 text-purple-300 text-[9px] font-black uppercase tracking-widest">
-                      <Music2 size={10} /> Professora
+                      <Music2 size={10} /> {roleLabel('teacher', gender)}
                     </span>
                   )}
                 </div>

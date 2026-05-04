@@ -29,6 +29,8 @@ interface Judge {
   language?: string;
   is_active?: boolean;
   is_public?: boolean;
+  /** 'M' | 'F' | 'NB' — flexão da palavra "Jurado/a/e" no card público */
+  gender?: 'M' | 'F' | 'NB' | null;
 }
 
 const FORMATS = [
@@ -49,6 +51,7 @@ const EMPTY_JUDGE: Omit<Judge, 'id'> = {
   language: 'pt-BR',
   is_active: true,
   is_public: false,
+  gender: null,
 };
 
 const inputCls = 'w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-4 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm';
@@ -156,6 +159,7 @@ const JudgesManagement = () => {
     language: row.language || 'pt-BR',
     is_active: row.is_active ?? true,
     is_public: row.is_public ?? false,
+    gender: row.gender ?? null,
   });
 
   /* ── open modal ── */
@@ -255,6 +259,7 @@ const JudgesManagement = () => {
         language: form.language || 'pt-BR',
         is_active: form.is_active ?? true,
         is_public: form.is_public ?? false,
+        gender: form.gender ?? null,
       };
 
       const data = await trySaveWithPayload(payload, !editingJudge, editingJudge?.id);
@@ -675,6 +680,40 @@ const JudgesManagement = () => {
                             {label}
                           </button>
                         ))}
+                      </div>
+                    </div>
+
+                    {/* Etapa 1.5: campo Gênero — controla flexão "Jurado/a/e"
+                        no card público da vitrine. Inclusivo (M / F / NB). */}
+                    <div>
+                      <label className={labelCls}>Como aparecer no card público</label>
+                      <p className="text-[9px] text-slate-400 mb-2 ml-1">Define como a palavra "Jurado" é flexionada no chip do card. Default: detecta pelo nome.</p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {([
+                          { val: null, label: 'Auto', sub: 'Pelo nome' },
+                          { val: 'M' as const, label: 'Jurado', sub: 'Masculino' },
+                          { val: 'F' as const, label: 'Jurada', sub: 'Feminino' },
+                          { val: 'NB' as const, label: 'Jurade', sub: 'Neutro' },
+                        ]).map(opt => {
+                          const active = (form.gender ?? null) === opt.val;
+                          return (
+                            <button
+                              key={String(opt.val)}
+                              type="button"
+                              onClick={() => setForm(f => ({ ...f, gender: opt.val }))}
+                              className={`text-left p-2.5 rounded-xl border transition-all ${
+                                active
+                                  ? 'border-[#ff0068]/60 bg-[#ff0068]/10'
+                                  : 'border-slate-200 dark:border-white/10 hover:border-[#ff0068]/30'
+                              }`}
+                            >
+                              <p className={`text-[10px] font-black uppercase tracking-tight ${active ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>
+                                {opt.label}
+                              </p>
+                              <p className="text-[9px] text-slate-400 mt-0.5">{opt.sub}</p>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 

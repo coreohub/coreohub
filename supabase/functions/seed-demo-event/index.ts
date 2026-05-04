@@ -230,6 +230,7 @@ const JURADOS = [
   {
     name: 'Carlos Mendes',
     pin: '1111',
+    gender: 'M' as const,
     generos: ['Jazz', 'Ballet Clássico'],
     mini_bio: 'Coreógrafo premiado com 25 anos de carreira. Diretor da Cia Mendes desde 2010.',
     avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&q=80',
@@ -238,6 +239,7 @@ const JURADOS = [
   {
     name: 'Juliana Silveira',
     pin: '2222',
+    gender: 'F' as const,
     generos: ['Contemporâneo', 'Ballet Clássico'],
     mini_bio: 'Bailarina principal do Theatro Municipal de SP. Mestra em Dança Contemporânea pela UFBA.',
     avatar_url: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=400&h=400&fit=crop&q=80',
@@ -246,10 +248,9 @@ const JURADOS = [
   {
     name: 'Rodrigo Souza',
     pin: '3333',
+    gender: 'M' as const,
     generos: ['Hip Hop', 'Dança Urbana'],
     mini_bio: 'Pioneiro do Hip Hop em SP. 18 anos formando dançarinos urbanos. Battles Brasil/Itália.',
-    // URL anterior (1535525153412-5a092d46317e) virou 404 no Unsplash.
-    // Trocada por foto pública estável de homem com expressão profissional.
     avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop&q=80',
     instagram: 'rodrigorhip',
   },
@@ -545,6 +546,7 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       pin: j.pin,
       is_active: true,
       is_public: true, // vai mostrar na seção "Jurados" da vitrine pública
+      gender: j.gender,
       specialty: j.generos.join(', '), // legacy — mantido por compat
       mini_bio: j.mini_bio,
       avatar_url: j.avatar_url,
