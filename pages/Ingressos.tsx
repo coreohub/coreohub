@@ -31,7 +31,7 @@ const Ingressos = () => {
   return (
     <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="text-center space-y-2">
-        <h1 className="text-3xl font-black uppercase tracking-tighter italic text-slate-900 dark:text-white">
+        <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter italic text-slate-900 dark:text-white">
           Garanta seu <span className="text-[#ff0068]">Ingresso</span>
         </h1>
         <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Acesso ao Festival via CoreoHub</p>
