@@ -87,10 +87,13 @@ const MeuWorkshop: React.FC = () => {
   }, [token]);
 
   // Polling de status (5s pendente, 30s aprovado pra detectar attended)
+  // Audit T2.5: pára em estados terminais (CANCELADO/VENCIDO/ESTORNADO) — antes
+  // continuava rodando pra sempre.
   useEffect(() => {
     if (!token || !reg) return;
     const isPendente = reg.status_pagamento === 'PENDENTE';
-    if (reg.attended) return; // estado terminal
+    const isTerminal = ['CANCELADO', 'VENCIDO', 'ESTORNADO'].includes(reg.status_pagamento);
+    if (reg.attended || isTerminal) return; // estado terminal
     const interval = isPendente ? 5_000 : 30_000;
     const t = setInterval(async () => {
       const { data } = await supabase.rpc('get_workshop_registration_by_token', { p_token: token });

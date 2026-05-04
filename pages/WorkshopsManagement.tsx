@@ -70,9 +70,13 @@ const fmtDate = (iso: string | null) => {
   return d.toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
+// Combining diacritical marks (U+0300..U+036F). Escape Unicode explícito
+// pra não depender do encoding do arquivo (audit T1.6).
+const COMBINING_MARKS = new RegExp('[\\u0300-\\u036f]', 'g');
+
 const slugify = (s: string) =>
   s.toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .normalize('NFD').replace(COMBINING_MARKS, '')
     .replace(/[^a-z0-9\s-]/g, '')
     .trim().replace(/\s+/g, '-')
     .slice(0, 50);

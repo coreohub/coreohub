@@ -280,7 +280,7 @@ const Sidebar = ({ isOpen, toggle, onLogout, activeRole, profile, videoSelection
                           }`}
                         >
                           <Icon size={15} />
-                          <span className="text-[9px] font-black uppercase tracking-widest leading-tight">{item.label}</span>
+                          <span className="text-[11px] font-black uppercase tracking-widest leading-tight">{item.label}</span>
                         </Link>
                       );
                     })}
@@ -305,7 +305,7 @@ const Sidebar = ({ isOpen, toggle, onLogout, activeRole, profile, videoSelection
                   }`}
                 >
                   <UserCircle size={15} />
-                  <span className="text-[9px] font-black uppercase tracking-widest">Perfil</span>
+                  <span className="text-[11px] font-black uppercase tracking-widest">Perfil</span>
                 </Link>
               </div>
             </div>
@@ -317,7 +317,7 @@ const Sidebar = ({ isOpen, toggle, onLogout, activeRole, profile, videoSelection
               className="flex items-center gap-2.5 w-full px-3 py-2 text-slate-600 dark:text-slate-400 hover:text-rose-500 transition-all rounded-xl hover:bg-rose-500/10"
             >
               <LogOut size={16} />
-              <span className="text-[9px] font-black uppercase tracking-widest">Sair da Conta</span>
+              <span className="text-[11px] font-black uppercase tracking-widest">Sair da Conta</span>
             </button>
           </div>
         </div>

@@ -438,6 +438,15 @@ verify_jwt = false
 import_map = "./functions/create-workshop-registration/deno.json"
 entrypoint = "./functions/create-workshop-registration/index.ts"
 
+# Audit Tier 1: lookup de combo workshop com rate limit por IP. RPC
+# detect_workshop_combo foi REVOKE de anon (vetor de enumeração de CPF
+# cruzado com coreografia/estúdio — LGPD). Edge function intermedeia.
+[functions.detect-workshop-combo]
+enabled = true
+verify_jwt = false
+import_map = "./functions/detect-workshop-combo/deno.json"
+entrypoint = "./functions/detect-workshop-combo/index.ts"
+
 # Tier 2: valida cupom de plateia no checkout. verify_jwt=false (público).
 # Rate-limited 30 tentativas/5min por IP no próprio código da função.
 [functions.validate-audience-coupon]
@@ -498,15 +507,6 @@ entrypoint = "./functions/mp-webhook/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/mp-webhook/*.html" ]
-
-# POC TEMPORÁRIA — valida geração de PDF + QR via pdf-lib + qrcode (npm) no
-# Edge Runtime. verify_jwt=false pra facilitar teste manual (abrir no browser).
-# DELETAR após validação visual do PDF e antes de mergear pra main.
-[functions.poc-certificate-pdf]
-enabled = true
-verify_jwt = false
-import_map = "./functions/poc-certificate-pdf/deno.json"
-entrypoint = "./functions/poc-certificate-pdf/index.ts"
 
 # Etapa 2 Certificados — emite em lote (lazy-cache: cria rows com pdf_url=NULL,
 # PDF é gerado on-demand quando inscrito clica baixar). Producer-only.

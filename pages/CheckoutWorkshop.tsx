@@ -107,7 +107,9 @@ const CheckoutWorkshop: React.FC = () => {
     })();
   }, [id]);
 
-  // Auto-detect combo quando CPF fica válido
+  // Auto-detect combo quando CPF fica válido.
+  // Audit T2: debounce 400ms pra não disparar a cada tecla.
+  // Audit T1: chama via edge function (RPC foi REVOKE de anon — anti-enumeração CPF).
   useEffect(() => {
     if (!workshop?.id || !workshop.event_id || !workshop.auto_detect_combo) {
       setCombo(null);
@@ -119,32 +121,32 @@ const CheckoutWorkshop: React.FC = () => {
       return;
     }
     let active = true;
-    (async () => {
+    const debounce = setTimeout(async () => {
+      if (!active) return;
       setComboLoading(true);
       try {
-        const { data } = await supabase.rpc('detect_workshop_combo', {
-          p_workshop_id: workshop.id,
-          p_cpf: clean,
+        const { data, error } = await supabase.functions.invoke('detect-workshop-combo', {
+          body: { workshop_id: workshop.id, cpf: clean },
         });
-        const row = Array.isArray(data) ? data[0] : data;
-        if (active) {
-          if (row?.found) {
-            setCombo({
-              found: true,
-              registration_id: row.registration_id,
-              coreografia: row.coreografia,
-              formato: row.formato_participacao,
-              estudio: row.estudio,
-            });
-          } else {
-            setCombo({ found: false });
-          }
+        if (!active) return;
+        if (error) {
+          setCombo({ found: false });
+        } else if (data?.found) {
+          setCombo({
+            found: true,
+            registration_id: data.registration_id,
+            coreografia: data.coreografia,
+            formato: data.formato_participacao,
+            estudio: data.estudio,
+          });
+        } else {
+          setCombo({ found: false });
         }
       } finally {
         if (active) setComboLoading(false);
       }
-    })();
-    return () => { active = false; };
+    }, 400);
+    return () => { active = false; clearTimeout(debounce); };
   }, [cpf, workshop?.id, workshop?.event_id, workshop?.auto_detect_combo]);
 
   // Calcula preço
@@ -282,8 +284,6 @@ const CheckoutWorkshop: React.FC = () => {
     );
   }
 
-  const podeComprar = !error;
-
   return (
     <div className="min-h-screen bg-[#0b0b0f] text-white">
       {workshop?.cover_url && (
@@ -304,9 +304,10 @@ const CheckoutWorkshop: React.FC = () => {
         <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase mb-1">{workshop.name}</h1>
         <p className="text-sm text-slate-400 mb-6">com {workshop.professor_name}</p>
 
-        {error && podeComprar && (
-          <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3 mb-4 text-sm text-rose-200 flex items-center gap-2">
-            <AlertCircle size={16} />{error}
+        {error && (
+          <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 mb-4 text-sm text-rose-200 flex items-center gap-2">
+            <AlertCircle size={16} className="shrink-0" />
+            <span className="font-bold">{error}</span>
           </div>
         )}
 

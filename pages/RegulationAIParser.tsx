@@ -222,11 +222,15 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
           const eventStart = edited.start_date ? new Date(edited.start_date + 'T09:00:00') : new Date(Date.now() + 30 * 86400000);
           const slugSuffix = Date.now().toString(36).slice(-5);
           const wsRows = edited.workshops.map((w, i) => {
+            // Audit T1.5: âncora explícita em -03:00 (BR) pra new Date() não usar
+            // fuso do servidor JS. Quando salvar como ISO, fica determinístico.
             const dataInicio = w.data_inicio
-              ? new Date(w.data_inicio.includes('T') ? w.data_inicio : w.data_inicio + 'T09:00:00')
+              ? new Date(w.data_inicio.includes('T')
+                  ? (w.data_inicio.match(/[+-]\d{2}:?\d{2}|Z$/) ? w.data_inicio : w.data_inicio + '-03:00')
+                  : w.data_inicio + 'T09:00:00-03:00')
               : new Date(eventStart.getTime() + i * 4 * 3600000);
             const slugBase = (w.nome ?? 'workshop').toLowerCase()
-              .normalize('NFD').replace(/[̀-ͯ]/g, '')
+              .normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), '')
               .replace(/[^a-z0-9\s-]/g, '').trim()
               .replace(/\s+/g, '-').slice(0, 40);
             return {

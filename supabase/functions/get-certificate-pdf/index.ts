@@ -211,11 +211,11 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } },
     )
-    const { data: { user }, error: userErr } = await userClient.auth.getUser()
-    if (userErr || !user) throw new Error('Sessão inválida')
+    // Pode ser null se vier só com anon key (guest checkout — audit T2.3).
+    const { data: { user } } = await userClient.auth.getUser()
 
     const body = await req.json().catch(() => ({}))
-    const { certificate_id } = body as { certificate_id?: string }
+    const { certificate_id, access_token } = body as { certificate_id?: string; access_token?: string }
     if (!certificate_id) throw new Error('certificate_id obrigatório')
 
     // Carrega cert + template + verifica permissão (producer OU inscrito vinculado)
@@ -230,23 +230,47 @@ Deno.serve(async (req) => {
       .single()
     if (!cert || certErr) throw new Error('Certificado não encontrado')
 
-    // Verifica permissão
-    const isProducer = cert.producer_id === user.id
-    let isInscrito = false
-    if (!isProducer) {
+    // ── Verifica permissão (3 caminhos de auth) ───────────────────────────
+    let authorized = false
+
+    // 1. User logado producer dono do certificado
+    if (user && cert.producer_id === user.id) {
+      authorized = true
+    }
+
+    // 2. User logado inscrito vinculado (registration.user_id ou workshop_reg.user_id)
+    if (!authorized && user) {
       if (cert.registration_id) {
         const { data: r } = await supabase.from('registrations').select('user_id').eq('id', cert.registration_id).single()
-        isInscrito = r?.user_id === user.id
+        if (r?.user_id === user.id) authorized = true
       } else if (cert.workshop_registration_id) {
         const { data: wr } = await supabase.from('workshop_registrations').select('user_id').eq('id', cert.workshop_registration_id).single()
-        isInscrito = wr?.user_id === user.id
+        if (wr?.user_id === user.id) authorized = true
       }
     }
-    if (!isProducer && !isInscrito) {
-      // Permite COREOHUB_ADMIN
-      const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-      if (prof?.role !== 'COREOHUB_ADMIN') throw new Error('Sem permissão pra acessar este certificado')
+
+    // 3. Guest com access_token válido (audit T2.3): inscrito sem login
+    //    acessa próprio cert via token enviado por email. Token fica no banco
+    //    em workshop_registrations.access_token. registrations não tem access_token
+    //    público — só workshop tem essa estrutura.
+    if (!authorized && access_token) {
+      if (cert.workshop_registration_id) {
+        const { data: wr } = await supabase
+          .from('workshop_registrations')
+          .select('access_token')
+          .eq('id', cert.workshop_registration_id)
+          .single()
+        if (wr?.access_token === access_token) authorized = true
+      }
     }
+
+    // 4. COREOHUB_ADMIN
+    if (!authorized && user) {
+      const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      if (prof?.role === 'COREOHUB_ADMIN') authorized = true
+    }
+
+    if (!authorized) throw new Error('Sem permissão pra acessar este certificado')
 
     // ── CACHE HIT: já tem pdf_url ────────────────────────────────────────────
     if (cert.pdf_url && cert.pdf_storage_path) {

@@ -301,13 +301,22 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Status inicial: GRATUITO se preço final = 0 (combo grátis), senão PENDENTE
-    const isGratuito = precoPago === 0
+    // Status inicial: GRATUITO se preço final = 0 — só legítimo quando combo
+    // grátis (workshop.gratis_para_inscritos + combo válido). Cupom 100% off
+    // sozinho NÃO deveria virar GRATUITO (zera comissão da CoreoHub via brecha
+    // — audit T2.7).
+    const isComboGratis = workshop.gratis_para_inscritos && isCombo
+    const isGratuito = precoPago === 0 && isComboGratis
     const statusInicial = isGratuito ? 'GRATUITO' : 'PENDENTE'
 
-    // Se PENDENTE mas chargedAmount=0 (cupom 100% off): bloqueia (Asaas não aceita 0)
+    // Cupom 100% off sem combo grátis → cupom inválido (Asaas não aceita 0
+    // E não queremos brecha pra zerar a comissão).
+    if (!isGratuito && precoPago <= 0) {
+      throw new Error('Cupom 100% off não permitido. Use cupom com desconto parcial.')
+    }
+    // Se PENDENTE mas chargedAmount=0 (caso edge), também bloqueia.
     if (!isGratuito && chargedAmount <= 0) {
-      throw new Error('Valor final zero não suportado. Use cupom com desconto parcial.')
+      throw new Error('Valor final zero não suportado.')
     }
 
     // ── Wallet do produtor (só pra status PENDENTE) ──────────────────────────

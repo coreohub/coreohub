@@ -72,29 +72,56 @@ Deno.serve(async (req) => {
       event_id?: string; template_type?: TemplateType; workshop_id?: string
     }
 
-    if (!event_id) throw new Error('event_id obrigatório')
     if (template_type !== 'mostra' && template_type !== 'workshop') {
       throw new Error('template_type deve ser "mostra" ou "workshop"')
     }
+    // Audit T1.4: workshop standalone (event_id=null) emite por workshop_id sozinho.
+    // Mostra exige event_id sempre. Workshop pode ser event_id OU workshop_id (ou ambos).
+    if (template_type === 'mostra' && !event_id) {
+      throw new Error('event_id obrigatório pra emitir certificados de mostra')
+    }
+    if (template_type === 'workshop' && !event_id && !workshop_id) {
+      throw new Error('event_id ou workshop_id obrigatório pra emitir certificados de workshop')
+    }
 
-    // Verifica que o user é dono do evento
-    const { data: ev, error: evErr } = await supabase
-      .from('events')
-      .select('id, name, event_date, location, created_by')
-      .eq('id', event_id)
-      .single()
-    if (!ev || evErr) throw new Error('Evento não encontrado')
-    if (ev.created_by !== user.id) {
-      // Permite COREOHUB_ADMIN
+    // Resolve evento (pode ser null se workshop standalone)
+    let ev: { id: string | null; name: string | null; event_date: string | null; location: string | null; created_by: string } | null = null
+
+    if (event_id) {
+      const { data, error: evErr } = await supabase
+        .from('events')
+        .select('id, name, event_date, location, created_by')
+        .eq('id', event_id)
+        .single()
+      if (!data || evErr) throw new Error('Evento não encontrado')
+      ev = data
+    }
+
+    // Resolve owner: se workshop standalone, owner é workshops.created_by
+    let ownerId: string | null = ev?.created_by ?? null
+    if (!ownerId && workshop_id) {
+      const { data: ws } = await supabase
+        .from('workshops')
+        .select('created_by')
+        .eq('id', workshop_id)
+        .single()
+      ownerId = ws?.created_by ?? null
+    }
+    if (!ownerId) throw new Error('Não foi possível resolver dono do evento/workshop')
+
+    // Verifica permissão (dono OU COREOHUB_ADMIN)
+    if (ownerId !== user.id) {
       const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-      if (prof?.role !== 'COREOHUB_ADMIN') throw new Error('Sem permissão pra emitir certificados deste evento')
+      if (prof?.role !== 'COREOHUB_ADMIN') {
+        throw new Error('Sem permissão pra emitir certificados deste evento/workshop')
+      }
     }
 
     // Carrega template (verifica que existe pra esse type)
     const { data: tpl } = await supabase
       .from('certificate_templates')
       .select('id')
-      .eq('producer_id', ev.created_by)
+      .eq('producer_id', ownerId)
       .eq('template_type', template_type)
       .maybeSingle()
     if (!tpl) {
@@ -107,13 +134,19 @@ Deno.serve(async (req) => {
 
     // ── Branch: MOSTRA ──────────────────────────────────────────────────────
     if (template_type === 'mostra') {
+      // Validação anterior já garante que ev != null pra mostra
+      const eventName = ev!.name
+      const eventDate = ev!.event_date ? String(ev!.event_date) : null
+      const eventLocation = ev!.location
+      const eventIdSafe = ev!.id
+
       const { data: regs, error: regsErr } = await supabase
         .from('registrations')
         .select(`
           id, nome_coreografia, formato_participacao, categoria, estilo_danca,
           tipo_apresentacao, estudio, classificacao_final, valor_pago, bailarinos_detalhes
         `)
-        .eq('event_id', event_id)
+        .eq('event_id', eventIdSafe)
         .eq('status', 'APROVADA')
         .in('status_pagamento', ['APROVADO', 'CONFIRMADO'])
 
@@ -133,7 +166,6 @@ Deno.serve(async (req) => {
         }
       }
 
-      const eventDate = ev.event_date ? String(ev.event_date) : null
       const rows = (regs ?? [])
         .filter(r => !existingIds.has(r.id))
         .map(r => {
@@ -151,13 +183,13 @@ Deno.serve(async (req) => {
             template_type: 'mostra' as const,
             registration_id: r.id,
             workshop_registration_id: null,
-            event_id,
-            producer_id: ev.created_by,
+            event_id: eventIdSafe,
+            producer_id: ownerId,
             recipient_name: recipient,
             certificate_data: {
-              evento_nome: ev.name,
+              evento_nome: eventName,
               evento_data: eventDate,
-              evento_local: ev.location,
+              evento_local: eventLocation,
               coreografia: r.nome_coreografia,
               formato: r.formato_participacao,
               categoria: r.categoria,
@@ -178,13 +210,19 @@ Deno.serve(async (req) => {
 
     // ── Branch: WORKSHOP ────────────────────────────────────────────────────
     if (template_type === 'workshop') {
-      let wsQ = supabase.from('workshops').select('id, name, professor_name, modalidade, data_inicio, duracao_minutos').eq('event_id', event_id)
+      // Resolve workshops: por workshop_id (single) OU por event_id (all)
+      let wsQ = supabase.from('workshops').select('id, name, event_id, professor_name, modalidade, data_inicio, duracao_minutos, created_by')
       if (workshop_id) wsQ = wsQ.eq('id', workshop_id)
+      else if (event_id) wsQ = wsQ.eq('event_id', event_id)
       const { data: workshops, error: wsErr } = await wsQ
       if (wsErr) throw new Error(`Erro carregando workshops: ${wsErr.message}`)
       if (!workshops || workshops.length === 0) {
-        return json({ total: 0, created: 0, skipped: 0, info: 'Nenhum workshop encontrado pra este evento' })
+        return json({ total: 0, created: 0, skipped: 0, info: 'Nenhum workshop encontrado' })
       }
+
+      // Defesa em profundidade: cada workshop tem que pertencer ao ownerId
+      const alienWs = workshops.find(w => w.created_by !== ownerId)
+      if (alienWs) throw new Error('Workshop não pertence ao usuário autenticado')
 
       const wsIds = workshops.map(w => w.id)
       const { data: regs, error: regsErr } = await supabase
@@ -209,7 +247,11 @@ Deno.serve(async (req) => {
       }
 
       const wsMap = new Map(workshops.map(w => [w.id, w]))
-      const eventDate = ev.event_date ? String(ev.event_date) : null
+      // Workshop standalone: ev é null. Usa metadata do próprio workshop.
+      const eventDate = ev?.event_date ? String(ev.event_date) : null
+      const eventName = ev?.name ?? null  // null pra standalone — UI deve mostrar workshop_nome
+      const eventLocation = ev?.location ?? null
+
       const rows = (regs ?? [])
         .filter(r => !existingIds.has(r.id))
         .map(r => {
@@ -219,13 +261,14 @@ Deno.serve(async (req) => {
             template_type: 'workshop' as const,
             registration_id: null,
             workshop_registration_id: r.id,
-            event_id,
-            producer_id: ev.created_by,
+            // Workshop standalone fica com event_id NULL no certificate.
+            event_id: w.event_id ?? null,
+            producer_id: ownerId,
             recipient_name: r.buyer_name,
             certificate_data: {
-              evento_nome: ev.name,
+              evento_nome: eventName,
               evento_data: eventDate,
-              evento_local: ev.location,
+              evento_local: eventLocation,
               workshop_nome: w.name,
               professor_nome: w.professor_name,
               modalidade: w.modalidade,

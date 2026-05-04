@@ -636,6 +636,11 @@ const PublicEventPage = () => {
                 const dataFmt = new Date(ws.data_inicio).toLocaleString('pt-BR', {
                   weekday: 'short', day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit',
                 });
+                const nivelLabel = ws.nivel === 'todos' ? 'Todos os níveis'
+                  : ws.nivel === 'iniciante' ? 'Iniciante'
+                  : ws.nivel === 'intermediario' ? 'Intermediário'
+                  : ws.nivel === 'avancado' ? 'Avançado'
+                  : ws.nivel;
                 return (
                   <button
                     key={ws.id}
@@ -653,7 +658,7 @@ const PublicEventPage = () => {
                       )}
                     </div>
                     <div className="p-4 space-y-1.5">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068]">{ws.modalidade ?? 'Workshop'} · {ws.nivel}</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068]">{ws.modalidade ?? 'Workshop'} · {nivelLabel}</p>
                       <h3 className="font-black uppercase tracking-tight text-white text-sm leading-tight line-clamp-2">{ws.name}</h3>
                       <p className="text-xs text-slate-400">com {ws.professor_name}</p>
                       <p className="text-[11px] text-slate-500">{dataFmt}{ws.duracao_minutos ? ` · ${ws.duracao_minutos}min` : ''}</p>
