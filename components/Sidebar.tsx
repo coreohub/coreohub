@@ -31,10 +31,25 @@ type MenuItem = {
   roles?: UserRole[];
 };
 
+type SectionTone = 'slate' | 'pink' | 'orange' | 'emerald' | 'gray' | 'violet';
+
 type MenuSection = {
   section: string;
   roles?: UserRole[];
   items: MenuItem[];
+  /** Cor da barra vertical à esquerda do grupo (research-backed: ajuda escaneamento periférico). */
+  tone?: SectionTone;
+};
+
+// Mapeamento de tone → classes Tailwind.
+// Mantido como objeto literal pra Tailwind não dropar as classes na build (purge).
+const TONE_BAR: Record<SectionTone, string> = {
+  slate:   'bg-slate-300 dark:bg-slate-700',
+  pink:    'bg-[#ff0068]',
+  orange:  'bg-orange-400 dark:bg-orange-500',
+  emerald: 'bg-emerald-500',
+  gray:    'bg-slate-200 dark:bg-slate-800',
+  violet:  'bg-violet-400 dark:bg-violet-500',
 };
 
 const ALL_ORGANIZER = [UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN];
@@ -61,26 +76,66 @@ const PERM_MENU: { perm: PermKey; path: string; label: string; icon: React.Eleme
   { perm: 'financeiro',         path: '/qg-organizador',  label: 'Financeiro',        icon: CreditCard      },
 ];
 
+// Menu do produtor agrupado por fase do ciclo de vida do evento (Setup →
+// Operação → Bilheteria → Resultados → Sistema). Padrão research-backed
+// (Cvent/Bizzabo/Linear/Stripe) — agrupa por *quando* o produtor usa, não por
+// quem é. Cores das barras ajudam escaneamento periférico (Fitts + F-pattern).
 const menuSections: MenuSection[] = [
+  // ─── SETUP ── pré-evento, baixa frequência após config inicial ──
   {
-    section: 'Produtor',
+    section: 'Setup',
     roles: ALL_ORGANIZER,
+    tone: 'slate',
     items: [
-      { path: '/qg-organizador',       label: 'OG do Produtor',           icon: Gavel          },
-      { path: '/registrations',        label: 'Inscrições',               icon: ClipboardList  },
-      { path: '/seletiva-video',       label: 'Seletiva de Vídeo',        icon: Video          },
-      { path: '/importar-regulamento', label: 'Importar Regulamento',     icon: FileSearch     },
-      { path: '/apuracao',             label: 'Resultados',               icon: BarChart2      },
-      { path: '/deliberacoes',         label: 'Premiação',                icon: Trophy         },
-      { path: '/manage-schedule',      label: 'Sonoplastia e Cronograma', icon: Calendar       },
-      { path: '/account-settings?tab=Fluxo do Evento', label: 'Narração IA', icon: Mic2          },
-      { path: '/equipe-jurados',       label: 'Jurados',                  icon: UserCheck      },
-      { path: '/vendas-ingressos',     label: 'Vendas de Ingressos',      icon: Ticket         },
-      { path: '/workshops-do-evento',  label: 'Workshops',                icon: GraduationCap  },
-      { path: '/certificados',         label: 'Certificados',             icon: Award          },
-      { path: '/cupons',               label: 'Cupons',                   icon: Tag            },
-      { path: '/minha-equipe',         label: 'Minha Equipe',             icon: Users          },
-      { path: '/account-settings',     label: 'Configurações',            icon: Settings       },
+      { path: '/qg-organizador',       label: 'Painel',           icon: Gavel       },
+      { path: '/importar-regulamento', label: 'Regulamento',      icon: FileSearch  },
+      { path: '/equipe-jurados',       label: 'Jurados',          icon: UserCheck   },
+      { path: '/minha-equipe',         label: 'Equipe',           icon: Users       },
+    ],
+  },
+  // ─── OPERAÇÃO ── alta frequência, dia-a-dia do evento ──
+  {
+    section: 'Operação',
+    roles: ALL_ORGANIZER,
+    tone: 'pink',
+    items: [
+      { path: '/registrations',   label: 'Inscrições',        icon: ClipboardList },
+      { path: '/seletiva-video',  label: 'Seletiva de Vídeo', icon: Video         },
+      { path: '/manage-schedule', label: 'Cronograma',        icon: Calendar      },
+      { path: '/account-settings?tab=Fluxo do Evento', label: 'Narração IA', icon: Mic2 },
+      { path: '/marcacao-palco',  label: 'Marcação de Palco', icon: PersonStanding },
+    ],
+  },
+  // ─── BILHETERIA ── vendas e cupons ──
+  {
+    section: 'Bilheteria',
+    roles: ALL_ORGANIZER,
+    tone: 'orange',
+    items: [
+      { path: '/vendas-ingressos',    label: 'Vendas de Ingressos', icon: Ticket        },
+      { path: '/workshops-do-evento', label: 'Workshops',           icon: GraduationCap },
+      { path: '/cupons',              label: 'Cupons',              icon: Tag           },
+    ],
+  },
+  // ─── RESULTADOS ── pós-apresentação ──
+  {
+    section: 'Resultados',
+    roles: ALL_ORGANIZER,
+    tone: 'emerald',
+    items: [
+      { path: '/apuracao',     label: 'Apuração',     icon: BarChart2 },
+      { path: '/deliberacoes', label: 'Premiação',    icon: Trophy    },
+      { path: '/certificados', label: 'Certificados', icon: Award     },
+    ],
+  },
+  // ─── SISTEMA ── utility + config ──
+  {
+    section: 'Sistema',
+    roles: ALL_ORGANIZER,
+    tone: 'gray',
+    items: [
+      { path: '/suporte-juri',     label: 'Coordenador do Júri', icon: Headphones },
+      { path: '/account-settings', label: 'Configurações',       icon: Settings   },
     ],
   },
   {
@@ -197,38 +252,46 @@ const Sidebar = ({ isOpen, toggle, onLogout, activeRole, profile, videoSelection
           </div>
 
           <nav className="flex-1 px-3 overflow-y-auto space-y-4 pb-4">
-            {visibleSections.map((sec) => (
-              <div key={sec.section}>
-                <p className="px-3 mb-1 text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-600">
-                  {sec.section}
-                </p>
-                <div className="space-y-0.5">
-                  {sec.items.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location.pathname === item.path;
-                    return (
-                      <Link
-                        key={item.path + item.label}
-                        to={item.path}
-                        onClick={() => { if (window.innerWidth < 1024) toggle(); }}
-                        className={`flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all ${
-                          isActive
-                            ? 'bg-[#ff0068] text-white shadow-md'
-                            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'
-                        }`}
-                      >
-                        <Icon size={15} />
-                        <span className="text-[9px] font-black uppercase tracking-widest leading-tight">{item.label}</span>
-                      </Link>
-                    );
-                  })}
+            {visibleSections.map((sec) => {
+              const tone = (sec as MenuSection).tone;
+              return (
+                <div key={sec.section} className="relative">
+                  {/* Barra vertical colorida à esquerda quando o grupo tem tone (Setup/Operação/etc).
+                      Ajuda escaneamento periférico — research-backed F-pattern. */}
+                  {tone && (
+                    <div className={`absolute left-0 top-2 bottom-1 w-[3px] rounded-full ${TONE_BAR[tone]}`} aria-hidden />
+                  )}
+                  <p className={`mb-1 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-500 ${tone ? 'pl-4 pr-3' : 'px-3'}`}>
+                    {sec.section}
+                  </p>
+                  <div className={`space-y-0.5 ${tone ? 'pl-2' : ''}`}>
+                    {sec.items.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location.pathname === item.path;
+                      return (
+                        <Link
+                          key={item.path + item.label}
+                          to={item.path}
+                          onClick={() => { if (window.innerWidth < 1024) toggle(); }}
+                          className={`flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all ${
+                            isActive
+                              ? 'bg-[#ff0068] text-white shadow-md'
+                              : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'
+                          }`}
+                        >
+                          <Icon size={15} />
+                          <span className="text-[9px] font-black uppercase tracking-widest leading-tight">{item.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {/* Perfil — sempre visivel */}
             <div>
-              <p className="px-3 mb-1 text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-600">
+              <p className="px-3 mb-1 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-500">
                 Conta
               </p>
               <div className="space-y-0.5">
