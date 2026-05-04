@@ -429,6 +429,22 @@ verify_jwt = false
 import_map = "./functions/create-audience-ticket/deno.json"
 entrypoint = "./functions/create-audience-ticket/index.ts"
 
+# Tier 2: valida cupom de plateia no checkout. verify_jwt=false (público).
+# Rate-limited 30 tentativas/5min por IP no próprio código da função.
+[functions.validate-audience-coupon]
+enabled = true
+verify_jwt = false
+import_map = "./functions/validate-audience-coupon/deno.json"
+entrypoint = "./functions/validate-audience-coupon/index.ts"
+
+# Tier 2: refund de ingresso. verify_jwt=true porque requer auth do produtor
+# (ou super admin). Função revalida permissão internamente.
+[functions.refund-audience-ticket]
+enabled = true
+verify_jwt = true
+import_map = "./functions/refund-audience-ticket/deno.json"
+entrypoint = "./functions/refund-audience-ticket/index.ts"
+
 # Webhook Asaas: verify_jwt = false — Asaas não envia Authorization header.
 # A autenticidade é garantida pelo campo `event` e validação do payment_id.
 [functions.asaas-webhook]
