@@ -1371,6 +1371,8 @@ const Schedule = () => {
       </div>
 
       {/* ── Stage / Player ao vivo ── */}
+      {/* Intentional dark card: padrão "now playing" de console DJ (Spotify/Apple Music
+          mantêm dark mesmo em light mode quando representa player ao vivo). */}
       <div className="bg-slate-900 rounded-[2rem] p-6 border border-white/10 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-[#ff0068]/10 blur-[80px] rounded-full -mr-32 -mt-32" />
 

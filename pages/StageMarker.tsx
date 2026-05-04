@@ -188,6 +188,9 @@ const StageMarker = () => {
   const isWarning  = state === 'MARKING' && remaining > 0 && remaining <= 10;
 
   /* ── colors per state ── */
+  // Intentional dark kiosk: tela usada por equipe de marcação em ambiente de
+  // bastidor (luz baixa, contraste alto). Mesmo padrão do JudgeTerminal/Live.
+  // NÃO trocar pra light variant sem alinhar com produtor — quebra UX consagrada.
   const stateColor = {
     WAITING: 'from-slate-900 to-slate-950',
     MARKING: isOverTime ? 'from-rose-950 to-slate-950' : isWarning ? 'from-amber-950 to-slate-950' : 'from-slate-800 to-slate-950',

@@ -375,6 +375,8 @@ const CheckIn = () => {
             </div>
 
             {/* Manual input fallback */}
+            {/* Intentional dark: vive dentro do scanner modal (bg-black com câmera).
+                Tem que casar com o overlay escuro do BarcodeDetector. */}
             <div className="px-5 py-6 space-y-3 bg-slate-950">
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 text-center">Ou insira o código manualmente</p>
               <div className="flex gap-2">
