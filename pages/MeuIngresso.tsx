@@ -160,6 +160,11 @@ const MeuIngresso: React.FC = () => {
   const isPago = ticket.status_pagamento === 'APROVADO';
   const isPendente = ticket.status_pagamento === 'PENDENTE';
   const isCheckedIn = ticket.check_in_status === 'OK';
+  // Status terminais que invalidam o ingresso — QR não vale mais pra entrada
+  const isInvalid = ['CANCELADO', 'VENCIDO', 'ESTORNADO'].includes(ticket.status_pagamento);
+  const invalidLabel = ticket.status_pagamento === 'ESTORNADO' ? 'Estornado'
+    : ticket.status_pagamento === 'VENCIDO' ? 'Vencido'
+    : 'Cancelado';
   const fallbackCode = ticket.id.replace(/-/g, '').slice(-6).toUpperCase();
 
   // Bug clássico: Date('YYYY-MM-DD') interpreta como UTC e em pt-BR mostra 1 dia atras.
@@ -224,14 +229,20 @@ const MeuIngresso: React.FC = () => {
             );
           })()}
 
-          {/* Faixa rosa */}
-          <div className="bg-[#ff0068] px-6 py-4 flex items-center justify-between text-white">
+          {/* Faixa colorida — vermelho se inválido, rosa default */}
+          <div className={`px-6 py-4 flex items-center justify-between text-white ${
+            isInvalid ? 'bg-slate-700' : 'bg-[#ff0068]'
+          }`}>
             <div>
               <p className="text-[9px] font-black uppercase tracking-[0.3em] opacity-80">Ingresso</p>
               <p className="text-sm font-black uppercase tracking-tight italic">CoreoHub</p>
             </div>
             <div className="flex flex-col items-end gap-0.5">
-              {isCheckedIn ? (
+              {isInvalid ? (
+                <span className="text-[9px] font-black uppercase tracking-widest bg-rose-300 text-rose-900 px-2 py-0.5 rounded-full">
+                  ✕ {invalidLabel}
+                </span>
+              ) : isCheckedIn ? (
                 <span className="text-[9px] font-black uppercase tracking-widest bg-emerald-300 text-emerald-900 px-2 py-0.5 rounded-full">
                   ✓ Check-in OK
                 </span>
@@ -247,8 +258,26 @@ const MeuIngresso: React.FC = () => {
             </div>
           </div>
 
-          {/* Pagamento pendente: mostra link pra retomar checkout */}
-          {isPendente && ticket.payment_url ? (
+          {/* Status terminal inválido: ingresso não vale mais pra entrada */}
+          {isInvalid ? (
+            <div className="px-6 py-8 flex flex-col items-center text-center space-y-4">
+              <div className="inline-flex p-4 bg-rose-100 rounded-full">
+                <AlertCircle size={40} className="text-rose-600" />
+              </div>
+              <div>
+                <p className="text-base font-black uppercase tracking-tight text-slate-900">
+                  Ingresso {invalidLabel.toLowerCase()}
+                </p>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-[280px]">
+                  {ticket.status_pagamento === 'ESTORNADO'
+                    ? 'O reembolso foi processado. O QR deste ingresso não é mais válido pra entrada.'
+                    : ticket.status_pagamento === 'VENCIDO'
+                      ? 'O prazo de pagamento expirou. Faça uma nova compra se quiser participar.'
+                      : 'Este ingresso foi cancelado. Em caso de dúvidas, entre em contato com o organizador.'}
+                </p>
+              </div>
+            </div>
+          ) : isPendente && ticket.payment_url ? (
             <div className="px-6 py-8 flex flex-col items-center text-center space-y-4">
               <AlertCircle size={48} className="text-amber-500" />
               <div>
