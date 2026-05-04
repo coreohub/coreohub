@@ -7,10 +7,20 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { QRCodeCanvas } from 'qrcode.react';
-import { ArrowLeft, Loader2, AlertCircle, Sun, Calendar, MapPin, ExternalLink, Download, Share2 } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertCircle, Sun, Calendar, MapPin, ExternalLink, Download, Share2, ChevronLeft, ChevronRight, Users } from 'lucide-react';
 import { supabase } from '../services/supabase';
+
+interface Sibling {
+  id: string;
+  access_token: string;
+  ticket_type_nome: string;
+  status_pagamento: string;
+  check_in_status: string;
+  position: number;
+  total: number;
+}
 
 interface Ticket {
   id: string;
@@ -35,20 +45,23 @@ interface Ticket {
 
 const MeuIngresso: React.FC = () => {
   const { token } = useParams<{ token: string }>();
+  const navigate = useNavigate();
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [siblings, setSiblings] = useState<Sibling[]>([]);
 
   // Carga inicial + recarrega quando o token muda
   useEffect(() => {
     if (!token) { setError('Token não informado'); setLoading(false); return; }
     let active = true;
     const fetchTicket = async () => {
-      const { data, error: rpcErr } = await supabase
-        .rpc('get_audience_ticket_by_token', { p_token: token });
+      const [{ data, error: rpcErr }, sibRes] = await Promise.all([
+        supabase.rpc('get_audience_ticket_by_token', { p_token: token }),
+        supabase.rpc('get_audience_ticket_siblings', { p_token: token }),
+      ]);
       if (!active) return;
       if (rpcErr) {
-        // Não vazar mensagem técnica — log no console, mostra genérico
         console.error('[MeuIngresso] RPC erro:', rpcErr);
         setError('Ingresso não encontrado. Verifique o link recebido por email.');
         setLoading(false);
@@ -57,6 +70,7 @@ const MeuIngresso: React.FC = () => {
       const row = Array.isArray(data) ? data[0] : data;
       if (!row) { setError('Ingresso não encontrado. Verifique o link recebido por email.'); setLoading(false); return; }
       setTicket(row as Ticket);
+      if (Array.isArray(sibRes.data)) setSiblings(sibRes.data as Sibling[]);
       setLoading(false);
     };
     fetchTicket();
@@ -173,6 +187,38 @@ const MeuIngresso: React.FC = () => {
 
       <div className="flex-1 flex items-center justify-center px-4 pb-6">
         <div className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl overflow-hidden">
+          {/* Family ticket nav (Tier 2): aparece quando há múltiplos tickets na compra */}
+          {siblings.length > 1 && (() => {
+            const current = siblings.find(s => s.access_token === token);
+            const idx = current?.position ?? 1;
+            const total = current?.total ?? siblings.length;
+            const prev = siblings[idx - 2];
+            const next = siblings[idx];
+            return (
+              <div className="bg-slate-900 text-white px-4 py-2 flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
+                <button
+                  type="button"
+                  onClick={() => prev && navigate(`/meu-ingresso/${prev.access_token}`)}
+                  disabled={!prev}
+                  className="inline-flex items-center gap-1 disabled:opacity-30 hover:text-[#ff0068]"
+                >
+                  <ChevronLeft size={12} /> Anterior
+                </button>
+                <span className="inline-flex items-center gap-1.5 text-slate-300">
+                  <Users size={12} /> Ingresso {idx} de {total}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => next && navigate(`/meu-ingresso/${next.access_token}`)}
+                  disabled={!next}
+                  className="inline-flex items-center gap-1 disabled:opacity-30 hover:text-[#ff0068]"
+                >
+                  Próximo <ChevronRight size={12} />
+                </button>
+              </div>
+            );
+          })()}
+
           {/* Faixa rosa */}
           <div className="bg-[#ff0068] px-6 py-4 flex items-center justify-between text-white">
             <div>

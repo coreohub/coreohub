@@ -16,14 +16,17 @@
  *     cpf:   string,            // dígitos limpos ou formatado
  *     phone?: string,
  *   },
- *   quantity?: number            // default 1; respeita audience_max_per_purchase
+ *   quantity?:    number,        // default 1; respeita audience_max_per_purchase
+ *   coupon_code?: string         // Tier 2: cupom de plateia (scope='audience'|'both')
  * }
  *
  * Resposta sucesso (201):
  * {
- *   tickets: [{ id, access_token }],   // 1+ por compra (Tier 1: 1 ticket / chamada)
+ *   tickets: [{ id, access_token }],   // 1+ por compra (family ticket)
+ *   group_id: UUID|null,                // != null quando family ticket (qty > 1)
  *   payment_id, invoice_url,
  *   charged_amount, producer_amount, commission_amount,
+ *   discount_amount,
  *   fee_mode
  * }
  */
@@ -87,11 +90,13 @@ Deno.serve(async (req) => {
       ticket_type_idx,
       buyer,
       quantity: qtyRaw,
+      coupon_code,
     } = body as {
       event_id?: string
       ticket_type_idx?: number
       buyer?: { name?: string; email?: string; cpf?: string; phone?: string }
       quantity?: number
+      coupon_code?: string
     }
 
     // ── Validações ────────────────────────────────────────────────────────────
@@ -201,10 +206,38 @@ Deno.serve(async (req) => {
       throw new Error(`Limite de ${maxPerPurchase} ingressos por compra`)
     }
 
+    // ── Cupom de plateia (Tier 2) ────────────────────────────────────────────
+    // Validamos no servidor pra defesa em profundidade. Cliente envia código,
+    // backend recalcula desconto. used_count é incrementado dentro da RPC
+    // try_reserve_audience_tickets atomicamente.
+    let couponId: string | null = null
+    let couponCode: string | null = null
+    let discountPerTicket = 0   // desconto absoluto POR TICKET (após cálculo)
+    if (coupon_code && coupon_code.trim()) {
+      const baseValueUnit = preco // desconto calculado em cima do preço unitário
+      const { data: cv, error: cErr } = await supabase.rpc('validate_audience_coupon', {
+        p_event_id: event_id,
+        p_code: coupon_code,
+        p_base_value: baseValueUnit,
+      })
+      if (cErr) {
+        console.warn('[create-audience-ticket] erro validate_audience_coupon:', cErr.message)
+        throw new Error('Falha ao validar cupom')
+      }
+      const row = Array.isArray(cv) ? cv[0] : cv
+      if (!row || row.error_message) {
+        throw new Error(row?.error_message ?? 'Cupom inválido')
+      }
+      couponId = row.coupon_id
+      couponCode = row.code
+      discountPerTicket = parseFloat(Number(row.discount).toFixed(2))
+    }
+
     // ── Calcular valores ─────────────────────────────────────────────────────
     const commissionPercent = Number(event.audience_commission_percent ?? 10)
     const feeMode           = (event as any).audience_fee_mode ?? 'repassar'
-    const baseFeeUnit       = preco
+    const baseFeeUnit       = parseFloat((preco - discountPerTicket).toFixed(2))
+    if (baseFeeUnit < 0) throw new Error('Desconto maior que o preço base')
     const commissionUnit    = parseFloat((baseFeeUnit * (commissionPercent / 100)).toFixed(2))
 
     let chargedUnit: number
@@ -216,10 +249,16 @@ Deno.serve(async (req) => {
       chargedUnit  = baseFeeUnit
       producerUnit = parseFloat((baseFeeUnit - commissionUnit).toFixed(2))
     }
+    if (chargedUnit <= 0) {
+      // Cupom 100% off → cobrança inválida no Asaas. Bloqueamos por enquanto.
+      // (Cortesia gratuita seria um fluxo separado — Tier 3.)
+      throw new Error('Valor final zero não suportado. Use cupom com desconto parcial.')
+    }
 
     const chargedTotal    = parseFloat((chargedUnit * quantity).toFixed(2))
     const producerTotal   = parseFloat((producerUnit * quantity).toFixed(2))
     const commissionTotal = parseFloat((commissionUnit * quantity).toFixed(2))
+    const discountTotal   = parseFloat((discountPerTicket * quantity).toFixed(2))
 
     // ── Wallet do produtor ───────────────────────────────────────────────────
     const { data: producer } = await supabase
@@ -232,9 +271,18 @@ Deno.serve(async (req) => {
       throw new Error('Produtor não conectou conta Asaas. Venda indisponível.')
     }
 
+    // ── Estoque + reserva: lê config do tipo (Tier 2) ────────────────────────
+    // ingressos_config[].quantidade_total = limite total (NULL/undef = ilimitado)
+    const quantidadeTotal: number | null =
+      ticketType.quantidade_total != null && ticketType.quantidade_total > 0
+        ? Number(ticketType.quantidade_total)
+        : null
+    // Janela da reserva temporária (default 10min). Configurável no evento.
+    const reservedMinutes = Number((event as any).audience_reservation_minutes ?? 10)
+
     // ── Reserva atômica via SQL function (advisory lock por CPF+evento) ─────
     // Garante que count + insert acontecem sob lock — race condition de
-    // requests simultâneos não burla limite por CPF nem Lei 12.933.
+    // requests simultâneos não burla limite por CPF, Lei 12.933 nem estoque.
     const { data: reserveData, error: reserveErr } = await supabase.rpc(
       'try_reserve_audience_tickets',
       {
@@ -252,6 +300,12 @@ Deno.serve(async (req) => {
         p_commission_amount:  commissionUnit,
         p_producer_amount:    producerUnit,
         p_fee_mode:           feeMode,
+        // Tier 2:
+        p_quantidade_total:   quantidadeTotal,
+        p_reserved_minutes:   reservedMinutes,
+        p_coupon_id:          couponId,
+        p_coupon_code:        couponCode,
+        p_discount_per_ticket: discountPerTicket,
       }
     )
 
@@ -261,7 +315,10 @@ Deno.serve(async (req) => {
     }
 
     const reserveRows = (Array.isArray(reserveData) ? reserveData : []) as Array<{
-      ticket_id: string | null; access_token: string | null; error_message: string | null
+      ticket_id: string | null
+      access_token: string | null
+      group_id: string | null
+      error_message: string | null
     }>
 
     // SQL function retorna 1 row com error_message preenchido em caso de erro
@@ -272,6 +329,8 @@ Deno.serve(async (req) => {
     const createdTickets = reserveRows
       .filter(r => r.ticket_id)
       .map(r => ({ id: r.ticket_id!, access_token: r.access_token! }))
+
+    const groupId = reserveRows.find(r => r.group_id)?.group_id ?? null
 
     if (createdTickets.length === 0) {
       throw new Error('Nenhum ticket reservado')
@@ -364,16 +423,20 @@ Deno.serve(async (req) => {
     console.log(
       `[create-audience-ticket] ok event=${event_id} qty=${quantity} kind=${kind}` +
       ` charged=${chargedTotal} producer=${producerTotal} commission=${commissionTotal}` +
+      ` discount=${discountTotal} coupon=${couponCode ?? '-'} group=${groupId ?? 'solo'}` +
       ` payment=${payData.id}`
     )
 
     return json({
       tickets: createdTickets,
+      group_id:          groupId,
       payment_id:        payData.id,
       invoice_url:       payData.invoiceUrl,
       charged_amount:    chargedTotal,
       producer_amount:   producerTotal,
       commission_amount: commissionTotal,
+      discount_amount:   discountTotal,
+      coupon_code:       couponCode,
       fee_mode:          feeMode,
       external_reference: externalRef,
     }, 201)

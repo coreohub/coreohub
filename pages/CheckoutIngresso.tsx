@@ -16,6 +16,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { supabase, supabaseUrl } from '../services/supabase';
 import {
   Ticket, Loader2, AlertCircle, ArrowLeft, ShieldCheck, User as UserIcon, Mail, Phone, FileText, Minus, Plus,
+  Tag, X, Check,
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 import { resolveLote, todayISO, formatDataBR, diffDias, type Lote } from '../utils/lotes';
@@ -64,6 +65,12 @@ export default function CheckoutIngresso() {
   const [phone, setPhone] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [paying, setPaying] = useState(false);
+  // Tier 2: cupom + estoque
+  const [stock, setStock] = useState<{ sold: number; remaining: number | null; sold_out: boolean } | null>(null);
+  const [couponInput, setCouponInput] = useState('');
+  const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number; final_value: number } | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
 
   // ─── Hidrata evento ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -112,6 +119,16 @@ export default function CheckoutIngresso() {
         }
         setEvent(ev);
         setTicketType({ ...t, _idx: idx, _precoVigente: precoVigente, _loteVigente: r });
+
+        // Tier 2: estoque do tipo (se quantidade_total definida)
+        if (t.quantidade_total != null && Number(t.quantidade_total) > 0) {
+          const { data: stockRows } = await supabase.rpc('get_audience_stock', {
+            p_event_id: ev.id,
+            p_types: [{ id: String(idx), total: Number(t.quantidade_total) }],
+          });
+          const row = Array.isArray(stockRows) ? stockRows[0] : null;
+          if (row) setStock({ sold: row.sold, remaining: row.remaining, sold_out: row.sold_out });
+        }
       } finally {
         setLoading(false);
       }
@@ -140,26 +157,69 @@ export default function CheckoutIngresso() {
     if (quantity > effectiveMax) setQuantity(effectiveMax);
   }, [effectiveMax, quantity]);
 
-  // ─── Cálculo de preço com fee_mode ────────────────────────────────────────
+  // ─── Cálculo de preço com fee_mode + cupom ────────────────────────────────
   const breakdown = useMemo(() => {
     if (!event || !ticketType) return null;
-    const baseUnit = Number(ticketType._precoVigente ?? ticketType.preco ?? 0);
+    const precoUnit = Number(ticketType._precoVigente ?? ticketType.preco ?? 0);
+    const discountUnit = couponApplied
+      ? Number(((couponApplied.discount) / Math.max(1, 1)).toFixed(2)) // discount já é por unit (RPC validou em cima de baseValueUnit)
+      : 0;
+    const baseUnit = Math.max(0, Number((precoUnit - discountUnit).toFixed(2)));
     const commPct = Number(event.audience_commission_percent ?? 10);
     const commUnit = Number((baseUnit * (commPct / 100)).toFixed(2));
     const feeMode = event.audience_fee_mode ?? 'repassar';
     const chargedUnit = feeMode === 'repassar' ? Number((baseUnit + commUnit).toFixed(2)) : baseUnit;
     const totalCharged = Number((chargedUnit * quantity).toFixed(2));
-    const totalBase    = Number((baseUnit * quantity).toFixed(2));
+    const totalBase    = Number((precoUnit * quantity).toFixed(2));
+    const totalDiscount = Number((discountUnit * quantity).toFixed(2));
     const totalFee     = Number((commUnit * quantity).toFixed(2));
     return {
       baseUnit, commUnit, chargedUnit, feeMode,
-      totalBase, totalFee, totalCharged,
+      totalBase, totalDiscount, totalFee, totalCharged,
     };
-  }, [event, ticketType, quantity]);
+  }, [event, ticketType, quantity, couponApplied]);
+
+  // ─── Cupom: aplicar / remover ─────────────────────────────────────────────
+  const handleApplyCoupon = async () => {
+    if (!event || !ticketType || couponLoading) return;
+    const code = couponInput.trim();
+    if (!code) return;
+    setCouponError(null);
+    setCouponLoading(true);
+    try {
+      const baseValueUnit = Number(ticketType._precoVigente ?? ticketType.preco ?? 0);
+      const resp = await fetch(`${supabaseUrl}/functions/v1/validate-audience-coupon`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_id: event.id, code, base_value: baseValueUnit }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error ?? 'Cupom inválido');
+      setCouponApplied({ code: data.code, discount: data.discount, final_value: data.final_value });
+    } catch (e: any) {
+      setCouponError(e.message ?? 'Cupom inválido');
+      setCouponApplied(null);
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+  const handleRemoveCoupon = () => {
+    setCouponApplied(null);
+    setCouponInput('');
+    setCouponError(null);
+  };
+
+  // Limite de quantidade efetivo considera estoque restante
+  const stockMax = stock?.remaining ?? Infinity;
+  const finalEffectiveMax = Math.min(effectiveMax, stockMax);
+  useEffect(() => {
+    if (quantity > finalEffectiveMax) setQuantity(Math.max(1, Math.floor(finalEffectiveMax)));
+  }, [finalEffectiveMax, quantity]);
 
   // ─── Submit ────────────────────────────────────────────────────────────────
+  const isSoldOut = stock?.sold_out === true;
   const canSubmit = !!name.trim() && !!email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-    && isValidCpf(cpf) && quantity >= 1 && quantity <= effectiveMax && !paying;
+    && isValidCpf(cpf) && quantity >= 1 && quantity <= finalEffectiveMax && !paying && !isSoldOut;
 
   const handlePay = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -180,6 +240,7 @@ export default function CheckoutIngresso() {
             phone: phone.replace(/\D/g, '') || undefined,
           },
           quantity,
+          coupon_code: couponApplied?.code ?? undefined,
         }),
       });
       const data = await resp.json();
@@ -279,6 +340,19 @@ export default function CheckoutIngresso() {
             </div>
           )}
 
+          {/* Tier 2: estoque baixo / esgotado */}
+          {isSoldOut ? (
+            <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2 mb-3 flex items-center gap-2">
+              <AlertCircle size={14} className="text-rose-400 shrink-0" />
+              <p className="text-[11px] text-rose-200 font-bold">Esgotado — não há mais ingressos deste tipo.</p>
+            </div>
+          ) : stock && stock.remaining != null && stock.remaining <= 10 ? (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2 mb-3 flex items-center gap-2">
+              <AlertCircle size={14} className="text-amber-400 shrink-0" />
+              <p className="text-[11px] text-amber-200 font-bold">⚠ Últimos {stock.remaining} ingressos disponíveis</p>
+            </div>
+          ) : null}
+
           {/* Quantidade */}
           <div className="flex items-center justify-between border-t border-white/10 pt-3">
             <p className="text-xs uppercase font-black tracking-widest text-slate-400">Quantidade</p>
@@ -286,7 +360,7 @@ export default function CheckoutIngresso() {
               <button
                 type="button"
                 onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                disabled={quantity <= 1}
+                disabled={quantity <= 1 || isSoldOut}
                 className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-30 flex items-center justify-center"
               >
                 <Minus size={14} />
@@ -294,22 +368,76 @@ export default function CheckoutIngresso() {
               <span className="text-lg font-black tabular-nums w-6 text-center">{quantity}</span>
               <button
                 type="button"
-                onClick={() => setQuantity(q => Math.min(effectiveMax, q + 1))}
-                disabled={quantity >= effectiveMax}
+                onClick={() => setQuantity(q => Math.min(finalEffectiveMax, q + 1))}
+                disabled={quantity >= finalEffectiveMax || isSoldOut}
                 className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-30 flex items-center justify-center"
               >
                 <Plus size={14} />
               </button>
             </div>
           </div>
-          {effectiveMax < maxPurchase && (
+          {isMeia && (
             <p className="text-[10px] text-slate-500 text-right mt-1">
-              Limite legal de {effectiveMax} para meia-entrada.
+              Limite legal de 1 para meia-entrada.
             </p>
           )}
-          {effectiveMax === maxPurchase && (
+          {!isMeia && finalEffectiveMax < maxPurchase && stock && stock.remaining != null && (
+            <p className="text-[10px] text-slate-500 text-right mt-1">
+              Apenas {finalEffectiveMax} ingresso{finalEffectiveMax === 1 ? '' : 's'} disponíve{finalEffectiveMax === 1 ? 'l' : 'is'}.
+            </p>
+          )}
+          {!isMeia && finalEffectiveMax === maxPurchase && (
             <p className="text-[10px] text-slate-500 text-right mt-1">
               Máx. {maxPurchase} por compra.
+            </p>
+          )}
+        </div>
+
+        {/* Cupom de desconto (Tier 2) */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4">
+          <p className="text-xs font-black text-slate-300 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+            <Tag size={12} className="text-[#ff0068]" /> Cupom de desconto
+          </p>
+          {couponApplied ? (
+            <div className="flex items-center justify-between gap-3 px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
+              <div className="flex items-center gap-2 min-w-0">
+                <Check size={14} className="text-emerald-400 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs font-black uppercase tracking-widest text-emerald-300 truncate">{couponApplied.code}</p>
+                  <p className="text-[10px] text-emerald-200">−{formatBRL(couponApplied.discount)} por ingresso</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleRemoveCoupon}
+                className="p-1 rounded-lg text-slate-400 hover:text-rose-400"
+                aria-label="Remover cupom"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={couponInput}
+                onChange={e => { setCouponInput(e.target.value.toUpperCase()); if (couponError) setCouponError(null); }}
+                placeholder="EX: FAMILIA5"
+                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm font-mono font-bold uppercase outline-none focus:border-[#ff0068]/50"
+              />
+              <button
+                type="button"
+                onClick={handleApplyCoupon}
+                disabled={!couponInput.trim() || couponLoading}
+                className="px-4 py-2.5 bg-[#ff0068]/20 hover:bg-[#ff0068]/30 disabled:opacity-30 text-[#ff0068] rounded-xl text-[10px] font-black uppercase tracking-widest"
+              >
+                {couponLoading ? <Loader2 className="animate-spin" size={14} /> : 'Aplicar'}
+              </button>
+            </div>
+          )}
+          {couponError && (
+            <p className="mt-2 text-[10px] text-rose-300 flex items-center gap-1">
+              <AlertCircle size={10} /> {couponError}
             </p>
           )}
         </div>
@@ -379,6 +507,13 @@ export default function CheckoutIngresso() {
         {breakdown && (
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4 space-y-2">
             <Row label={`${quantity}× ${ticketType.nome}`} value={formatBRL(breakdown.totalBase)} />
+            {breakdown.totalDiscount > 0 && (
+              <Row
+                label={`Cupom ${couponApplied?.code ?? ''}`}
+                value={`−${formatBRL(breakdown.totalDiscount)}`}
+                hint="Aplicado por ingresso."
+              />
+            )}
             {breakdown.feeMode === 'repassar' && (
               <Row
                 label="Taxa de serviço"

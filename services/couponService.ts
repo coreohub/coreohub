@@ -18,12 +18,14 @@ export async function createCoupon(input: {
   discount_value: number;
   max_uses?: number | null;
   expires_at?: string | null;
+  scope?: 'inscription' | 'audience' | 'both';
 }): Promise<Coupon> {
   const { data, error } = await supabase
     .from('coupons')
     .insert({
       ...input,
       code: input.code.trim().toUpperCase(),
+      scope: input.scope ?? 'inscription',
     })
     .select()
     .single();
@@ -59,6 +61,7 @@ export async function validateCoupon(
     .eq('event_id', eventId)
     .eq('code', normalizedCode)
     .eq('is_active', true)
+    .in('scope', ['inscription', 'both'])
     .maybeSingle();
 
   if (error) throw error;

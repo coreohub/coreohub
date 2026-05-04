@@ -8,10 +8,10 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { supabase, resolveActiveEventId } from '../services/supabase';
+import { supabase, supabaseUrl, resolveActiveEventId } from '../services/supabase';
 import {
   Ticket, Loader2, Search, Download, ExternalLink, CheckCircle2, Clock, XCircle, RotateCcw,
-  Users, DollarSign, AlertCircle,
+  Users, DollarSign, AlertCircle, Undo2, X,
 } from 'lucide-react';
 
 interface Row {
@@ -33,6 +33,8 @@ interface Row {
   commission_amount: number | null;
   producer_amount: number | null;
   fee_mode: string | null;
+  group_id: string | null;
+  refunded_at: string | null;
   created_at: string;
 }
 
@@ -55,6 +57,11 @@ const VendasIngressos: React.FC = () => {
   const [err, setErr] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
+  // Refund modal (Tier 2)
+  const [refundTarget, setRefundTarget] = useState<Row | null>(null);
+  const [refundReason, setRefundReason] = useState('');
+  const [refundProcessing, setRefundProcessing] = useState(false);
+  const [refundError, setRefundError] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -148,6 +155,36 @@ const VendasIngressos: React.FC = () => {
       );
     });
   }, [rows, search, statusFilter]);
+
+  // ─── Refund (Tier 2) ──────────────────────────────────────────────────────
+  const handleRefund = async () => {
+    if (!refundTarget || refundProcessing) return;
+    setRefundError(null);
+    setRefundProcessing(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const resp = await fetch(`${supabaseUrl}/functions/v1/refund-audience-ticket`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({
+          ticket_id: refundTarget.id,
+          reason: refundReason.trim() || undefined,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error ?? 'Falha ao processar reembolso');
+      setRefundTarget(null);
+      setRefundReason('');
+      await load();
+    } catch (e: any) {
+      setRefundError(e.message ?? String(e));
+    } finally {
+      setRefundProcessing(false);
+    }
+  };
 
   // ─── Export CSV ───────────────────────────────────────────────────────────
   const exportCsv = () => {
@@ -282,6 +319,7 @@ const VendasIngressos: React.FC = () => {
                   <Th>Status</Th>
                   <Th>Check-in</Th>
                   <Th>Ingresso</Th>
+                  <Th>Ações</Th>
                 </tr>
               </thead>
               <tbody>
@@ -334,10 +372,109 @@ const VendasIngressos: React.FC = () => {
                         Ver <ExternalLink size={10} />
                       </a>
                     </Td>
+                    <Td>
+                      {r.status_pagamento === 'APROVADO' && !r.refunded_at && (
+                        <button
+                          onClick={() => { setRefundTarget(r); setRefundReason(''); setRefundError(null); }}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-lg text-[10px] font-black uppercase tracking-widest"
+                        >
+                          <Undo2 size={10} /> Estornar
+                        </button>
+                      )}
+                    </Td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de reembolso (Tier 2) */}
+      {refundTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white italic">
+                  Estornar ingresso
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Reembolso integral via Asaas. Operação irreversível.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRefundTarget(null)}
+                className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5"
+                disabled={refundProcessing}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-2 bg-slate-50 dark:bg-white/5 rounded-xl p-4 border border-slate-200 dark:border-white/10">
+              <div className="flex items-baseline justify-between text-sm">
+                <span className="text-slate-500">Comprador</span>
+                <span className="font-bold text-slate-900 dark:text-white">{refundTarget.buyer_name}</span>
+              </div>
+              <div className="flex items-baseline justify-between text-sm">
+                <span className="text-slate-500">Tipo</span>
+                <span className="font-bold text-slate-900 dark:text-white">{refundTarget.ticket_type_nome}</span>
+              </div>
+              <div className="flex items-baseline justify-between text-sm">
+                <span className="text-slate-500">Valor</span>
+                <span className="font-black text-[#ff0068]">{formatBRL(refundTarget.preco)}</span>
+              </div>
+              {refundTarget.group_id && (
+                <div className="mt-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-start gap-2">
+                  <AlertCircle size={12} className="text-amber-500 mt-0.5 shrink-0" />
+                  <p className="text-[10px] text-amber-700 dark:text-amber-300 font-bold leading-snug">
+                    Compra com múltiplos ingressos: o estorno cancela TODOS os ingressos da mesma compra (Asaas reembolsa o pagamento inteiro).
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
+                Motivo (opcional, será enviado ao comprador)
+              </label>
+              <textarea
+                value={refundReason}
+                onChange={e => setRefundReason(e.target.value)}
+                placeholder="Ex: cancelamento do evento, duplicidade, etc."
+                rows={3}
+                className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 resize-none"
+              />
+            </div>
+
+            {refundError && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm text-red-600 dark:text-red-300 flex items-start gap-2">
+                <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                <span>{refundError}</span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setRefundTarget(null)}
+                disabled={refundProcessing}
+                className="flex-1 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 rounded-xl text-[11px] font-black uppercase tracking-widest"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleRefund}
+                disabled={refundProcessing}
+                className="flex-1 py-3 bg-rose-500 hover:bg-rose-600 disabled:opacity-50 text-white rounded-xl text-[11px] font-black uppercase tracking-widest inline-flex items-center justify-center gap-2"
+              >
+                {refundProcessing ? <Loader2 size={14} className="animate-spin" /> : <Undo2 size={14} />}
+                {refundProcessing ? 'Processando...' : 'Estornar agora'}
+              </button>
+            </div>
           </div>
         </div>
       )}

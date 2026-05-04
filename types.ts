@@ -226,6 +226,8 @@ export interface Coupon {
   used_count: number;
   expires_at?: string | null;
   is_active: boolean;
+  /** Tier 2: 'inscription' (default), 'audience' (plateia), 'both'. */
+  scope?: 'inscription' | 'audience' | 'both';
   created_at: string;
 }
 

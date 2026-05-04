@@ -22,6 +22,7 @@ const Coupons: React.FC = () => {
   const [error, setError]                 = useState<string | null>(null);
   const [showModal, setShowModal]         = useState(false);
 
+  type Scope = 'inscription' | 'audience' | 'both';
   // Form state
   const [form, setForm] = useState({
     code:           '',
@@ -29,6 +30,7 @@ const Coupons: React.FC = () => {
     discount_value: 10,
     max_uses:       '' as string | number,
     expires_at:     '',
+    scope:          'inscription' as Scope,
   });
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -86,9 +88,10 @@ const Coupons: React.FC = () => {
         discount_value: form.discount_value,
         max_uses:       form.max_uses === '' ? null : Number(form.max_uses),
         expires_at:     form.expires_at || null,
+        scope:          form.scope,
       });
       setShowModal(false);
-      setForm({ code: '', discount_type: 'percent', discount_value: 10, max_uses: '', expires_at: '' });
+      setForm({ code: '', discount_type: 'percent', discount_value: 10, max_uses: '', expires_at: '', scope: 'inscription' });
       await refresh();
     } catch (e: any) {
       setFormError(
@@ -216,6 +219,15 @@ const Coupons: React.FC = () => {
                       <span className="font-mono font-bold text-sm text-slate-900 dark:text-white bg-slate-100 dark:bg-white/10 px-3 py-1 rounded-lg border border-slate-200 dark:border-white/10">
                         {c.code}
                       </span>
+                      {c.scope && c.scope !== 'inscription' && (
+                        <span className={`ml-2 inline-block text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${
+                          c.scope === 'audience'
+                            ? 'bg-violet-100 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400'
+                            : 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400'
+                        }`}>
+                          {c.scope === 'audience' ? 'Plateia' : 'Ambos'}
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 font-black text-[#ff0068]">{fmtDiscount(c)}</td>
                     <td className="px-6 py-4">
@@ -355,6 +367,31 @@ const Coupons: React.FC = () => {
                   />
                 </Field>
               </div>
+
+              {/* Tier 2: scope selector — em quais checkouts o cupom vale */}
+              <Field label="Aplica em">
+                <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 dark:bg-white/5 rounded-xl">
+                  {([
+                    { v: 'inscription', label: 'Inscrição' },
+                    { v: 'audience',    label: 'Plateia' },
+                    { v: 'both',        label: 'Ambos' },
+                  ] as const).map(o => (
+                    <button
+                      key={o.v}
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, scope: o.v }))}
+                      className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                        form.scope === o.v ? 'bg-[#ff0068] text-white' : 'text-slate-500'
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1.5">
+                  Plateia: bailarino inscrito compartilha pra família comprar ingresso. Inscrição: desconto na taxa de inscrição da coreografia.
+                </p>
+              </Field>
 
               {formError && (
                 <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl">

@@ -326,6 +326,8 @@ interface TicketType {
   link?: string;
   /** Modo lotes: quando presente e com 2+ itens, vence o `preco` (que vira fallback). */
   lotes?: TicketLote[];
+  /** Estoque total (Tier 2). null/undefined = ilimitado. */
+  quantidade_total?: number | null;
 }
 interface Sponsor    { nome: string; logo_url: string; link?: string }
 
@@ -689,6 +691,8 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
   const [audienceFeeMode, setAudienceFeeMode] = useState<'repassar' | 'absorver'>('repassar');
   const [audienceMaxPerCpf, setAudienceMaxPerCpf] = useState<number>(6);
   const [audienceMaxPerPurchase, setAudienceMaxPerPurchase] = useState<number>(6);
+  // Tier 2: tempo de reserva temporária (10min default)
+  const [audienceReservationMinutes, setAudienceReservationMinutes] = useState<number>(10);
   const [sponsors, setSponsors]       = useState<Sponsor[]>([]);
   const [styles,  setStyles]  = useState<string[]>(DEFAULT_MODALITIES);
   const [formats, setFormats] = useState<any[]>(DEFAULT_FORMATS);
@@ -968,7 +972,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
         let myEvent: any = null;
         if (user) {
           const evRes = await supabase
-            .from('events').select('id, slug, name, description, cover_url, location, city, state, instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase')
+            .from('events').select('id, slug, name, description, cover_url, location, city, state, instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes')
             .eq('created_by', user.id)
             .order('created_at', { ascending: false })
             .limit(1).maybeSingle();
@@ -1003,6 +1007,9 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
             }
             if ((myEvent as any).audience_max_per_purchase != null) {
               setAudienceMaxPerPurchase(Number((myEvent as any).audience_max_per_purchase));
+            }
+            if ((myEvent as any).audience_reservation_minutes != null) {
+              setAudienceReservationMinutes(Number((myEvent as any).audience_reservation_minutes));
             }
           }
         }
@@ -1266,6 +1273,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
           audience_fee_mode:             audienceFeeMode,
           audience_max_per_cpf:          audienceMaxPerCpf,
           audience_max_per_purchase:     audienceMaxPerPurchase,
+          audience_reservation_minutes:  audienceReservationMinutes,
         };
 
         const { data: cfgRow } = await supabase
@@ -2054,6 +2062,38 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                             </button>
                           </div>
                         )}
+
+                        {/* Estoque (Tier 2): limite total por tipo. NULL = ilimitado. */}
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 dark:border-white/5">
+                          <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={item.quantidade_total != null && item.quantidade_total > 0}
+                              onChange={e => updateField({
+                                quantidade_total: e.target.checked ? (item.quantidade_total || 100) : null,
+                              })}
+                              className="w-4 h-4 accent-[#ff0068]"
+                            />
+                            Limitar estoque
+                          </label>
+                          {item.quantidade_total != null && item.quantidade_total > 0 && (
+                            <>
+                              <input
+                                type="number"
+                                min={1}
+                                value={item.quantidade_total}
+                                onChange={e => updateField({ quantidade_total: Math.max(1, Number(e.target.value)) })}
+                                placeholder="Total"
+                                inputMode="numeric"
+                                className="w-24 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-1.5 px-3 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:border-[#ff0068]/50"
+                              />
+                              <span className="text-[10px] text-slate-500">ingressos no total</span>
+                            </>
+                          )}
+                          {(item.quantidade_total == null || item.quantidade_total <= 0) && (
+                            <span className="text-[10px] text-slate-500">Sem limite (ilimitado)</span>
+                          )}
+                        </div>
                       </div>
                     );
                   })
@@ -2154,6 +2194,20 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                             className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
                           />
                           <p className="text-[10px] text-slate-500 mt-1">Sympla padrão é 5. Para escolas de dança com famílias grandes, considere 6+.</p>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 block">
+                            Tempo de reserva (min)
+                          </label>
+                          <input
+                            type="number"
+                            min={1} max={60}
+                            value={audienceReservationMinutes}
+                            onChange={e => setAudienceReservationMinutes(Math.min(60, Math.max(1, Number(e.target.value))))}
+                            className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                          />
+                          <p className="text-[10px] text-slate-500 mt-1">Quanto o ingresso fica reservado pro comprador antes de auto-cancelar. Padrão 10min (Eventbrite).</p>
                         </div>
                       </div>
                     )}

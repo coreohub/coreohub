@@ -26,6 +26,8 @@ const PublicEventPage = () => {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [publicJudges, setPublicJudges] = useState<JudgePublic[]>([]);
+  // Tier 2: estoque por tipo de ingresso (mapa idx → { sold, remaining, sold_out })
+  const [stockByType, setStockByType] = useState<Record<string, { sold: number; remaining: number | null; sold_out: boolean }>>({});
 
   useEffect(() => {
     if (!idOrSlug) return;
@@ -72,6 +74,26 @@ const PublicEventPage = () => {
         });
         if (Array.isArray(judgesData)) {
           setPublicJudges(judgesData as JudgePublic[]);
+        }
+
+        // Tier 2: estoque por tipo (só faz sentido pro fluxo INTERNO com sales)
+        if (eventData.audience_sales_enabled && Array.isArray(eventData.ingressos_config)) {
+          const types = eventData.ingressos_config
+            .map((t: any, idx: number) => ({ id: String(idx), total: t.quantidade_total ?? null }))
+            .filter((t: { total: number | null }) => t.total != null);
+          if (types.length > 0) {
+            const { data: stockRows } = await supabase.rpc('get_audience_stock', {
+              p_event_id: eventData.id,
+              p_types: types,
+            });
+            if (Array.isArray(stockRows)) {
+              const map: Record<string, { sold: number; remaining: number | null; sold_out: boolean }> = {};
+              for (const r of stockRows as Array<{ ticket_type_id: string; sold: number; remaining: number | null; sold_out: boolean }>) {
+                map[String(r.ticket_type_id)] = { sold: r.sold, remaining: r.remaining, sold_out: r.sold_out };
+              }
+              setStockByType(map);
+            }
+          }
         }
       } catch (err) {
         console.error('Erro ao carregar evento:', err);
@@ -432,8 +454,17 @@ const PublicEventPage = () => {
                         : hint.dias < 1 ? 'text-rose-400'
                         : hint.dias < 7 ? 'text-amber-400'
                         : 'text-slate-500';
+                      // Tier 2: estoque
+                      const stock = stockByType[String(realIdx)];
+                      const soldOut = stock?.sold_out === true;
+                      const lowStock = stock && stock.remaining != null && stock.remaining > 0 && stock.remaining <= 10;
                       return (
-                        <div key={realIdx} className="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col gap-2 hover:border-[#ff0068]/40 transition-colors">
+                        <div
+                          key={realIdx}
+                          className={`bg-white/5 border rounded-2xl p-5 flex flex-col gap-2 transition-colors ${
+                            soldOut ? 'border-white/10 opacity-60' : 'border-white/10 hover:border-[#ff0068]/40'
+                          }`}
+                        >
                           <div className="flex items-baseline justify-between gap-2">
                             <div>
                               <p className="font-black uppercase text-sm text-white">{t.nome}</p>
@@ -441,13 +472,13 @@ const PublicEventPage = () => {
                                 <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">{nomeLote}</p>
                               )}
                             </div>
-                            <p className="text-[#ff0068] font-black text-lg">
+                            <p className={`font-black text-lg ${soldOut ? 'text-slate-500 line-through' : 'text-[#ff0068]'}`}>
                               {preco > 0 ? `R$ ${preco.toFixed(2)}` : 'Grátis'}
                             </p>
                           </div>
                           {t.obs && <p className="text-[10px] text-slate-400">{t.obs}</p>}
 
-                          {hint && (
+                          {hint && !soldOut && (
                             <p className={`text-[10px] font-bold flex items-center gap-1.5 ${hintColor}`}>
                               {hint.dias < 1
                                 ? <>⚠ Aumenta amanhã para R$ {hint.proximoPreco.toFixed(2)}</>
@@ -455,8 +486,19 @@ const PublicEventPage = () => {
                             </p>
                           )}
 
+                          {/* Estoque (Tier 2) */}
+                          {soldOut ? (
+                            <span className="inline-flex self-start items-center gap-1.5 px-3 py-1 bg-slate-700/40 text-slate-300 rounded-full text-[10px] font-black uppercase tracking-widest">
+                              Esgotado
+                            </span>
+                          ) : lowStock ? (
+                            <span className="inline-flex self-start items-center gap-1.5 text-[10px] font-black text-amber-400 uppercase tracking-widest">
+                              ⚠ Últimos {stock!.remaining}
+                            </span>
+                          ) : null}
+
                           {/* Botão de compra: prioriza checkout interno quando habilitado */}
-                          {salesEnabled && preco > 0 && (
+                          {salesEnabled && preco > 0 && !soldOut && (
                             <button
                               type="button"
                               onClick={() => navigate(`/checkout-ingresso/${idOrSlug}/${realIdx}`)}
