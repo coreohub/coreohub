@@ -64,6 +64,7 @@ const MeuWorkshop: React.FC = () => {
   const [reg, setReg] = useState<WorkshopRegistration | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
+  const [toast, setToast]     = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) { setError('Token não informado'); setLoading(false); return; }
@@ -135,9 +136,16 @@ const MeuWorkshop: React.FC = () => {
       } catch { /* ignore */ }
     } else {
       navigator.clipboard.writeText(url);
-      alert('Link copiado!');
+      setToast('Link copiado!');
     }
   };
+
+  // Auto-clear toast em 2.5s
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2500);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   if (loading) {
     return (
@@ -267,6 +275,17 @@ const MeuWorkshop: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Toast efêmero (audit Tier 3: substitui alert nativo) */}
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed left-1/2 -translate-x-1/2 bottom-8 z-50 bg-slate-900 text-white text-xs font-bold uppercase tracking-widest px-4 py-2.5 rounded-full shadow-2xl border border-white/10"
+        >
+          {toast}
+        </div>
+      )}
     </div>
   );
 };

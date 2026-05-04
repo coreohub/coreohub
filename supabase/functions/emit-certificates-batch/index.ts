@@ -131,6 +131,10 @@ Deno.serve(async (req) => {
     let total = 0
     let created = 0
     let skipped = 0
+    // Audit T3: cap de inserts por chamada pra evitar timeout do Edge Runtime
+    // (150s default) em eventos gigantes (Joinville: 1500+ inscrições). Idempotência
+    // já existe — produtor chama de novo até skipped == eligíveis pra completar.
+    const BATCH_CAP = 1000
 
     // ── Branch: MOSTRA ──────────────────────────────────────────────────────
     if (template_type === 'mostra') {
@@ -168,6 +172,7 @@ Deno.serve(async (req) => {
 
       const rows = (regs ?? [])
         .filter(r => !existingIds.has(r.id))
+        .slice(0, BATCH_CAP)  // Audit T3: cap por chamada (idempotência permite repetir)
         .map(r => {
           // recipient_name: usa nome dos bailarinos (Solo/Duo) ou nome_coreografia (Grupo)
           const formato = String(r.formato_participacao ?? '').toLowerCase()
@@ -254,6 +259,7 @@ Deno.serve(async (req) => {
 
       const rows = (regs ?? [])
         .filter(r => !existingIds.has(r.id))
+        .slice(0, BATCH_CAP)  // Audit T3: cap por chamada (idempotência permite repetir)
         .map(r => {
           const w = wsMap.get(r.workshop_id)!
           return {

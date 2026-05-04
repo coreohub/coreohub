@@ -80,6 +80,7 @@ const PublicWorkshopPage: React.FC = () => {
   const [stock, setStock]       = useState<Stock | null>(null);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
+  const [toast, setToast]       = useState<string | null>(null);
 
   useEffect(() => {
     if (!idOrSlug) return;
@@ -156,13 +157,20 @@ const PublicWorkshopPage: React.FC = () => {
     const url = window.location.href;
     if ((navigator as any).share) {
       try {
-        await (navigator as any).share({ title: workshop.name, text: `Workshop com ${workshop.professor_name}`, url });
+        await (navigator as any).share({ title: workshop?.name ?? 'Workshop', text: `Workshop com ${workshop?.professor_name ?? ''}`, url });
       } catch { /* ignore */ }
     } else {
       navigator.clipboard.writeText(url);
-      alert('Link copiado!');
+      setToast('Link copiado!');
     }
   };
+
+  // Auto-clear toast em 2.5s
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2500);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   return (
     <div className="min-h-screen bg-[#0b0b0f] text-white pb-24 sm:pb-12">
@@ -313,6 +321,17 @@ const PublicWorkshopPage: React.FC = () => {
           >
             Inscrever-se · {fmtCurrency(precoAtivo)}
           </button>
+        </div>
+      )}
+
+      {/* Toast efêmero (audit Tier 3: substitui alert nativo) */}
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed left-1/2 -translate-x-1/2 bottom-24 sm:bottom-8 z-50 bg-slate-900 text-white text-xs font-bold uppercase tracking-widest px-4 py-2.5 rounded-full shadow-2xl border border-white/10"
+        >
+          {toast}
         </div>
       )}
     </div>

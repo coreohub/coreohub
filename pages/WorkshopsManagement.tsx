@@ -408,7 +408,14 @@ const WorkshopsManagement: React.FC = () => {
           <div className="rounded-2xl border-2 border-dashed border-slate-300 dark:border-white/10 p-12 text-center">
             <GraduationCap size={40} className="mx-auto text-slate-400 mb-3" />
             <p className="text-slate-600 dark:text-slate-300 font-bold">Nenhum workshop ainda</p>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Clique em "Novo workshop" para começar.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-5">Crie seu primeiro workshop em segundos.</p>
+            <button
+              onClick={openCreate}
+              className="inline-flex items-center gap-2 rounded-xl bg-[#ff0068] px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] transition"
+            >
+              <Plus size={16} />
+              Criar primeiro workshop
+            </button>
           </div>
         ) : (
           <div className="grid gap-4">
@@ -522,12 +529,29 @@ interface WorkshopFormModalProps {
 const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, formError, saving, isEdit, events, onClose, onSave }) => {
   const upd = (k: string, v: any) => setForm((p: any) => ({ ...p, [k]: v }));
 
+  // Audit T3: ESC fecha + lock body scroll
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto" onClick={onClose}>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="workshop-form-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto"
+      onClick={onClose}
+    >
       <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-3xl w-full p-6 my-8 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between mb-5">
-          <h2 className="text-xl font-black text-slate-900 dark:text-white">{isEdit ? 'Editar workshop' : 'Novo workshop'}</h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg"><X size={18} /></button>
+          <h2 id="workshop-form-title" className="text-xl font-black text-slate-900 dark:text-white">{isEdit ? 'Editar workshop' : 'Novo workshop'}</h2>
+          <button onClick={onClose} aria-label="Fechar" className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg"><X size={18} /></button>
         </div>
 
         {formError && (
@@ -716,15 +740,32 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, onClose }) => {
     refresh();
   };
 
+  // Audit T3: ESC fecha + lock body scroll
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto" onClick={onClose}>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="workshop-lots-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto"
+      onClick={onClose}
+    >
       <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-3xl w-full p-6 my-8 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between mb-5">
           <div>
-            <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2"><Layers size={20} className="text-[#ff0068]" />Lotes</h2>
+            <h2 id="workshop-lots-title" className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2"><Layers size={20} className="text-[#ff0068]" />Lotes</h2>
             <p className="text-sm text-slate-500 dark:text-slate-400">{workshop.name}</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg"><X size={18} /></button>
+          <button onClick={onClose} aria-label="Fechar" className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg"><X size={18} /></button>
         </div>
 
         {loading ? (

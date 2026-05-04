@@ -194,9 +194,10 @@ const Certificates: React.FC = () => {
     }
   };
 
-  // Filtra presets por tipo ativo
+  // Filtra presets estritamente pelo tipo ativo (audit T3: "premium serve pra
+  // ambos" causava duplicação visual em Mostra e Workshop confundindo produtor).
   const visiblePresets = useMemo(() =>
-    PRESETS.filter(p => p.for === activeType || p.id === 'mostra-premium'), // premium serve pra ambos visualmente
+    PRESETS.filter(p => p.for === activeType),
     [activeType]);
 
   // ────────────────────────────────────────────────────────────────────────
