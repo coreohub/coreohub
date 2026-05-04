@@ -88,6 +88,62 @@ const schema = {
           required: ['name', 'description'],
         },
       },
+      // ── Item #34 do backlog (extensão pós-Workshops/Tier 2): ───────────
+      audience_tickets: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            nome:  { type: 'string' },
+            preco: { type: 'number' },
+            kind:  { type: 'string', enum: ['inteira', 'meia', 'solidaria', 'cortesia', 'outro'] },
+            obs:   { type: 'string' },
+          },
+          required: ['nome', 'preco', 'kind'],
+        },
+      },
+      workshops: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            nome:             { type: 'string' },
+            professor_nome:   { type: 'string' },
+            modalidade:       { type: 'string' },
+            nivel:            { type: 'string', enum: ['iniciante', 'intermediario', 'avancado', 'todos'] },
+            duracao_minutos:  { type: 'number' },
+            preco_padrao:     { type: 'number' },
+            capacidade_max:   { type: 'number' },
+            data_inicio:      { type: 'string' },
+            local:            { type: 'string' },
+          },
+          required: ['nome'],
+        },
+      },
+      programacao: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            hora:      { type: 'string' },
+            atividade: { type: 'string' },
+            data:      { type: 'string' },
+          },
+          required: ['hora', 'atividade'],
+        },
+      },
+      sponsors: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            nome: { type: 'string' },
+            tipo: { type: 'string', enum: ['PATROCINADOR', 'APOIO', 'REALIZACAO', 'PRODUCAO'] },
+          },
+          required: ['nome'],
+        },
+      },
+      meia_entrada_policy: { type: 'string' },
     },
     required: ['summary', 'formacoes', 'categories', 'criteria'],
   },
@@ -138,10 +194,18 @@ Deno.serve(async (req) => {
             {
               text: `Você é um especialista em regulamentos de festivais de dança brasileiros.
 O documento pode ser um REGULAMENTO PRIVADO (festival particular) ou um EDITAL público de chamamento (prefeitura, governo, fundação cultural — ex: JOMI, Bolsa Cultura, Mostras Municipais).
-Em ambos os casos, extraia APENAS os dados operacionais do festival: categorias, gêneros, formações, prazos, prêmios, critérios de avaliação, formato.
+Em ambos os casos, extraia os dados operacionais do festival.
+
+EXTRAIA TAMBÉM (campos novos):
+• audience_tickets: tipos de ingresso pra plateia. Ex "Inteira R$30", "Meia R$15 (estudante, idoso)", "Solidária R$20 + 1kg alimento". kind = inteira | meia | solidaria | cortesia | outro.
+• workshops: aulas/oficinas com professor convidado. Capture nome do workshop, professor, modalidade (Jazz/Hip Hop/etc), nível, duração em MINUTOS, preço, capacidade, data e local.
+• programacao: cronograma do dia (horários e atividades). Ex { hora: "08:00", atividade: "Credenciamento" }.
+• sponsors: patrocinadores e apoiadores. tipo = PATROCINADOR | APOIO | REALIZACAO | PRODUCAO.
+• meia_entrada_policy: descrição textual da política de meia-entrada se específica do festival (criança até X, prof. de dança grátis, etc — diferente de "Lei 12.933 padrão").
+
 IGNORE: preâmbulo legal, justificativa, base legal (lei nº, decreto), declarações exigidas, anexos administrativos, formulários em branco, contrato modelo, cronograma de execução fiscal.
-Para campos não encontrados, retorne null (nunca invente valores).
-Datas em formato ISO 8601 (YYYY-MM-DD). Tempos no formato MM:SS.`,
+Para campos não encontrados, retorne null (nunca invente valores). Arrays vazios são preferíveis a inventar items.
+Datas em formato ISO 8601 (YYYY-MM-DD ou YYYY-MM-DDTHH:MM). Tempos de apresentação no formato MM:SS.`,
             },
             { inlineData: { mimeType: 'application/pdf', data: pdf_base64 } },
           ],
@@ -153,11 +217,18 @@ Datas em formato ISO 8601 (YYYY-MM-DD). Tempos no formato MM:SS.`,
         model: 'gemini-2.5-flash',
         contents: `Você é um especialista em regulamentos de festivais de dança brasileiros.
 O texto abaixo pode ser um REGULAMENTO PRIVADO (festival particular) ou um EDITAL público de chamamento (prefeitura, governo, fundação cultural — ex: JOMI, Bolsa Cultura, Mostras Municipais).
-Em ambos os casos, extraia APENAS os dados operacionais do festival: categorias, gêneros, formações, prazos, prêmios, critérios de avaliação, formato.
+Em ambos os casos, extraia os dados operacionais do festival.
+
+EXTRAIA TAMBÉM (campos novos):
+• audience_tickets: tipos de ingresso pra plateia. Ex "Inteira R$30", "Meia R$15 (estudante, idoso)", "Solidária R$20 + 1kg alimento". kind = inteira | meia | solidaria | cortesia | outro.
+• workshops: aulas/oficinas com professor convidado. Capture nome do workshop, professor, modalidade (Jazz/Hip Hop/etc), nível, duração em MINUTOS, preço, capacidade, data e local.
+• programacao: cronograma do dia (horários e atividades). Ex { hora: "08:00", atividade: "Credenciamento" }.
+• sponsors: patrocinadores e apoiadores. tipo = PATROCINADOR | APOIO | REALIZACAO | PRODUCAO.
+• meia_entrada_policy: descrição textual da política de meia-entrada se específica do festival (criança até X, prof. de dança grátis, etc — diferente de "Lei 12.933 padrão").
+
 IGNORE: preâmbulo legal, justificativa, base legal (lei nº, decreto), declarações exigidas, anexos administrativos, formulários em branco, contrato modelo, cronograma de execução fiscal.
-Para campos não encontrados, retorne null (nunca invente valores).
-Datas devem estar no formato ISO 8601 (YYYY-MM-DD) quando possível.
-Tempos de apresentação no formato MM:SS.
+Para campos não encontrados, retorne null (nunca invente valores). Arrays vazios são preferíveis a inventar items.
+Datas em formato ISO 8601 (YYYY-MM-DD ou YYYY-MM-DDTHH:MM). Tempos de apresentação no formato MM:SS.
 
 DOCUMENTO:
 ${text}`,

@@ -23,6 +23,40 @@ export interface RegulationAnalysis {
   }[]
 }
 
+/** Tipo de ingresso pra plateia (extraído do regulamento) */
+export interface AudienceTicketExtract {
+  nome: string                                                                    // "Inteira" / "Meia" / "Solidária"
+  preco: number
+  kind: 'inteira' | 'meia' | 'solidaria' | 'cortesia' | 'outro'
+  obs: string | null                                                              // "estudante, idoso, doador..."
+}
+
+/** Workshop extraído do regulamento */
+export interface WorkshopExtract {
+  nome: string
+  professor_nome: string | null
+  modalidade: string | null                                                       // "Jazz", "Hip Hop"...
+  nivel: 'iniciante' | 'intermediario' | 'avancado' | 'todos' | null
+  duracao_minutos: number | null
+  preco_padrao: number | null
+  capacidade_max: number | null
+  data_inicio: string | null                                                       // ISO 8601 (YYYY-MM-DD ou YYYY-MM-DDTHH:MM)
+  local: string | null
+}
+
+/** Item de programação (cronograma do dia) */
+export interface ProgramacaoItem {
+  hora: string                                                                     // "08:00"
+  atividade: string
+  data: string | null                                                              // ISO YYYY-MM-DD; null se evento de 1 dia
+}
+
+/** Patrocinador / apoiador */
+export interface SponsorExtract {
+  nome: string
+  tipo: 'PATROCINADOR' | 'APOIO' | 'REALIZACAO' | 'PRODUCAO' | null
+}
+
 /** Resultado completo da extração de regulamento via IA */
 export interface RegulationExtract {
   event_name: string | null
@@ -45,6 +79,12 @@ export interface RegulationExtract {
   criteria: { name: string; weight: number; description: string }[]
   prizes: { name: string; description: string }[]
   tiebreaker_rules: string | null
+  // Item #34 do backlog (2026-05-04): extração estendida pós-Workshops/Tier 2
+  audience_tickets: AudienceTicketExtract[]
+  workshops: WorkshopExtract[]
+  programacao: ProgramacaoItem[]
+  sponsors: SponsorExtract[]
+  meia_entrada_policy: string | null
   summary: string
 }
 
@@ -57,7 +97,9 @@ function buildEmptyExtract(): RegulationExtract {
     age_tolerance_mode: null, age_tolerance_value: null,
     stage_entry_time_seconds: null, stage_marking_time_seconds: null,
     tiebreaker_rules: null, registration_lots: [],
-    categories: [], formacoes: [], criteria: [], prizes: [], summary: '',
+    categories: [], formacoes: [], criteria: [], prizes: [],
+    audience_tickets: [], workshops: [], programacao: [], sponsors: [],
+    meia_entrada_policy: null, summary: '',
   }
 }
 
@@ -83,6 +125,11 @@ function parseRawExtract(raw: any): RegulationExtract {
     formacoes:                  raw.formacoes                  ?? [],
     criteria:                   raw.criteria                   ?? [],
     prizes:                     raw.prizes                     ?? [],
+    audience_tickets:           raw.audience_tickets           ?? [],
+    workshops:                  raw.workshops                  ?? [],
+    programacao:                raw.programacao                ?? [],
+    sponsors:                   raw.sponsors                   ?? [],
+    meia_entrada_policy:        raw.meia_entrada_policy        ?? null,
     summary:                    raw.summary                    ?? '',
   }
 }

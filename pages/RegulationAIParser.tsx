@@ -173,13 +173,98 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       if (edited.stage_entry_time_seconds)  updates.stage_entry_time_seconds    = edited.stage_entry_time_seconds;
       if (edited.stage_marking_time_seconds) updates.stage_marking_time_seconds  = edited.stage_marking_time_seconds;
       if (edited.registration_lots?.length)  updates.registration_lots           = edited.registration_lots;
-      if (edited.categories_config)          updates.categories_config           = edited.categories;
-      if (edited.formacoes)                  updates.formacoes_config            = edited.formacoes;
-      if (edited.criteria_config)            updates.criteria_config             = edited.criteria;
+      if (edited.categories?.length)         updates.categories_config           = edited.categories;
+      if (edited.formacoes?.length)          updates.formacoes_config            = edited.formacoes;
+      if (edited.criteria?.length)           updates.criteria_config             = edited.criteria;
       if (edited.tiebreaker_rules)           updates.tiebreaker_rules            = edited.tiebreaker_rules;
+
+      // Item #34: 5 blocos novos extraídos pelo parser ───────────────────────
+      // programacao + sponsors + (cópia) ingressos pra plateia em configuracoes
+      if (edited.programacao?.length)  {
+        updates.programacao_config = edited.programacao;
+        updates.programacao        = edited.programacao;  // sync legacy
+      }
+      if (edited.sponsors?.length) {
+        updates.patrocinadores_config = edited.sponsors;
+        updates.patrocinadores        = edited.sponsors;  // sync legacy
+      }
+      if (edited.audience_tickets?.length) {
+        updates.ingressos_audiencia = edited.audience_tickets; // legacy em configuracoes
+      }
 
       const { updateActiveEventConfig } = await import('../services/supabase');
       await updateActiveEventConfig(updates);
+
+      // ── Atualiza events.ingressos_config (campo principal canônico) ──────
+      // ingressos_config vive em events, não em configuracoes. Precisa update direto.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: ev } = await supabase
+          .from('events')
+          .select('id')
+          .eq('created_by', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const eventId = ev?.id;
+
+        if (eventId && edited.audience_tickets?.length) {
+          await supabase
+            .from('events')
+            .update({ ingressos_config: edited.audience_tickets, audience_sales_enabled: true })
+            .eq('id', eventId);
+        }
+
+        // ── Workshops: cria 1 row por workshop extraído ───────────────────
+        // Defaults razoáveis pros campos não capturados pela IA. Produtor pode
+        // editar/publicar depois em /workshops-do-evento.
+        if (eventId && edited.workshops?.length) {
+          const eventStart = edited.start_date ? new Date(edited.start_date + 'T09:00:00') : new Date(Date.now() + 30 * 86400000);
+          const slugSuffix = Date.now().toString(36).slice(-5);
+          const wsRows = edited.workshops.map((w, i) => {
+            const dataInicio = w.data_inicio
+              ? new Date(w.data_inicio.includes('T') ? w.data_inicio : w.data_inicio + 'T09:00:00')
+              : new Date(eventStart.getTime() + i * 4 * 3600000);
+            const slugBase = (w.nome ?? 'workshop').toLowerCase()
+              .normalize('NFD').replace(/[̀-ͯ]/g, '')
+              .replace(/[^a-z0-9\s-]/g, '').trim()
+              .replace(/\s+/g, '-').slice(0, 40);
+            return {
+              event_id: eventId,
+              created_by: user.id,
+              name: w.nome,
+              slug: `${slugBase}-${slugSuffix}-${i}`,
+              description: null,
+              cover_url: null,
+              professor_name: w.professor_nome ?? '—',
+              professor_bio: null,
+              professor_bio_short: null,
+              professor_photo_url: null,
+              professor_instagram: null,
+              professor_is_public: true,
+              modalidade: w.modalidade,
+              nivel: w.nivel ?? 'todos',
+              data_inicio: dataInicio.toISOString(),
+              data_fim: null,
+              duracao_minutos: w.duracao_minutos,
+              local: w.local,
+              capacidade_max: w.capacidade_max,
+              preco_padrao: w.preco_padrao ?? 0,
+              preco_inscritos_mostra: null,
+              gratis_para_inscritos: false,
+              auto_detect_combo: true,
+              workshop_commission_percent: 10,
+              workshop_fee_mode: 'repassar',
+              workshop_max_per_cpf: 4,
+              workshop_reservation_minutes: 10,
+              is_published: false,  // produtor revisa antes de publicar
+            };
+          });
+          const { error: wsErr } = await supabase.from('workshops').insert(wsRows);
+          if (wsErr) console.warn('[RegulationAIParser] falha inserir workshops:', wsErr.message);
+        }
+      }
+
       onApply?.(edited);
       setStep('done');
     } catch (err) {
@@ -546,6 +631,168 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
                   <div key={i} className="p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl space-y-2">
                     <input className="w-full bg-transparent text-xs font-black text-slate-900 dark:text-white focus:outline-none uppercase" value={prize.name} onChange={e => { const ps = [...edited.prizes]; ps[i] = { ...ps[i], name: e.target.value }; setField('prizes', ps); }} placeholder="Nome do prêmio" />
                     <input className="w-full bg-transparent text-[10px] text-slate-500 focus:outline-none" value={prize.description} onChange={e => { const ps = [...edited.prizes]; ps[i] = { ...ps[i], description: e.target.value }; setField('prizes', ps); }} placeholder="Descrição..." />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* ── Ingressos pra plateia ── */}
+          {edited.audience_tickets?.length > 0 && (
+            <section className="space-y-4">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2 border-b border-slate-100 dark:border-white/5 pb-3">
+                <DollarSign size={12} /> Ingressos para Plateia ({edited.audience_tickets.length})
+              </h3>
+              <div className="space-y-2">
+                {edited.audience_tickets.map((t, i) => (
+                  <div key={i} className="grid grid-cols-1 sm:grid-cols-12 gap-2 p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl items-center">
+                    <input
+                      className="sm:col-span-3 bg-transparent text-sm font-black text-slate-900 dark:text-white focus:outline-none uppercase px-2"
+                      value={t.nome}
+                      onChange={e => { const arr = [...edited.audience_tickets]; arr[i] = { ...arr[i], nome: e.target.value }; setField('audience_tickets', arr); }}
+                      placeholder="Nome (ex: Inteira)"
+                    />
+                    <select
+                      className="sm:col-span-2 bg-transparent text-[9px] font-black text-slate-500 focus:outline-none uppercase px-2"
+                      value={t.kind}
+                      onChange={e => { const arr = [...edited.audience_tickets]; arr[i] = { ...arr[i], kind: e.target.value as any }; setField('audience_tickets', arr); }}
+                    >
+                      <option value="inteira">Inteira</option>
+                      <option value="meia">Meia</option>
+                      <option value="solidaria">Solidária</option>
+                      <option value="cortesia">Cortesia</option>
+                      <option value="outro">Outro</option>
+                    </select>
+                    <div className="sm:col-span-2 flex items-center gap-1 px-2">
+                      <span className="text-xs text-slate-400">R$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none flex-1 text-right"
+                        value={t.preco}
+                        onChange={e => { const arr = [...edited.audience_tickets]; arr[i] = { ...arr[i], preco: parseFloat(e.target.value) || 0 }; setField('audience_tickets', arr); }}
+                      />
+                    </div>
+                    <input
+                      className="sm:col-span-5 bg-transparent text-[11px] text-slate-500 focus:outline-none px-2"
+                      value={t.obs ?? ''}
+                      onChange={e => { const arr = [...edited.audience_tickets]; arr[i] = { ...arr[i], obs: e.target.value || null }; setField('audience_tickets', arr); }}
+                      placeholder="Observação (estudante, idoso, etc)"
+                    />
+                  </div>
+                ))}
+              </div>
+              {edited.meia_entrada_policy && (
+                <p className="text-[10px] text-slate-500 italic px-3 py-2 bg-amber-500/5 border border-amber-500/20 rounded-xl">
+                  <strong className="text-amber-600 dark:text-amber-400">Política de meia detectada:</strong> {edited.meia_entrada_policy}
+                </p>
+              )}
+            </section>
+          )}
+
+          {/* ── Workshops ── */}
+          {edited.workshops?.length > 0 && (
+            <section className="space-y-4">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2 border-b border-slate-100 dark:border-white/5 pb-3">
+                <Sparkles size={12} /> Workshops ({edited.workshops.length})
+              </h3>
+              <div className="space-y-2">
+                {edited.workshops.map((w, i) => (
+                  <div key={i} className="space-y-2 p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl">
+                    <input
+                      className="w-full bg-transparent text-sm font-black text-slate-900 dark:text-white focus:outline-none uppercase px-2"
+                      value={w.nome}
+                      onChange={e => { const arr = [...edited.workshops]; arr[i] = { ...arr[i], nome: e.target.value }; setField('workshops', arr); }}
+                      placeholder="Nome do workshop"
+                    />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input
+                        className="bg-transparent text-xs text-slate-700 dark:text-slate-200 focus:outline-none px-2"
+                        value={w.professor_nome ?? ''}
+                        onChange={e => { const arr = [...edited.workshops]; arr[i] = { ...arr[i], professor_nome: e.target.value || null }; setField('workshops', arr); }}
+                        placeholder="Professor"
+                      />
+                      <input
+                        className="bg-transparent text-xs text-slate-700 dark:text-slate-200 focus:outline-none px-2"
+                        value={w.modalidade ?? ''}
+                        onChange={e => { const arr = [...edited.workshops]; arr[i] = { ...arr[i], modalidade: e.target.value || null }; setField('workshops', arr); }}
+                        placeholder="Modalidade (Jazz, Hip Hop...)"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-slate-400">
+                      <select
+                        className="bg-transparent focus:outline-none px-2 uppercase"
+                        value={w.nivel ?? 'todos'}
+                        onChange={e => { const arr = [...edited.workshops]; arr[i] = { ...arr[i], nivel: e.target.value as any }; setField('workshops', arr); }}
+                      >
+                        <option value="todos">Todos os níveis</option>
+                        <option value="iniciante">Iniciante</option>
+                        <option value="intermediario">Intermediário</option>
+                        <option value="avancado">Avançado</option>
+                      </select>
+                      <div className="flex items-center gap-1 px-2"><Clock size={10} /><input type="number" className="w-12 bg-transparent focus:outline-none text-slate-900 dark:text-white" value={w.duracao_minutos ?? ''} onChange={e => { const arr = [...edited.workshops]; arr[i] = { ...arr[i], duracao_minutos: parseInt(e.target.value) || null }; setField('workshops', arr); }} placeholder="min" /></div>
+                      <div className="flex items-center gap-1 px-2"><DollarSign size={10} /><input type="number" step="0.01" className="w-16 bg-transparent focus:outline-none text-slate-900 dark:text-white" value={w.preco_padrao ?? ''} onChange={e => { const arr = [...edited.workshops]; arr[i] = { ...arr[i], preco_padrao: parseFloat(e.target.value) || null }; setField('workshops', arr); }} placeholder="0" /></div>
+                      <div className="flex items-center gap-1 px-2"><Users size={10} /><input type="number" className="w-12 bg-transparent focus:outline-none text-slate-900 dark:text-white" value={w.capacidade_max ?? ''} onChange={e => { const arr = [...edited.workshops]; arr[i] = { ...arr[i], capacidade_max: parseInt(e.target.value) || null }; setField('workshops', arr); }} placeholder="vagas" /></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-500 italic">Cada workshop vira uma entrada nova em <strong>Bilheteria → Workshops</strong>. Você pode editar lotes/desconto/etc depois.</p>
+            </section>
+          )}
+
+          {/* ── Programação ── */}
+          {edited.programacao?.length > 0 && (
+            <section className="space-y-4">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2 border-b border-slate-100 dark:border-white/5 pb-3">
+                <Calendar size={12} /> Programação do Dia ({edited.programacao.length})
+              </h3>
+              <div className="space-y-2">
+                {edited.programacao.map((p, i) => (
+                  <div key={i} className="grid grid-cols-12 gap-2 p-2.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl items-center">
+                    <input
+                      type="time"
+                      className="col-span-3 sm:col-span-2 bg-transparent text-sm font-black text-slate-900 dark:text-white focus:outline-none px-2 tabular-nums"
+                      value={p.hora}
+                      onChange={e => { const arr = [...edited.programacao]; arr[i] = { ...arr[i], hora: e.target.value }; setField('programacao', arr); }}
+                    />
+                    <input
+                      className="col-span-9 sm:col-span-10 bg-transparent text-xs text-slate-700 dark:text-slate-200 focus:outline-none px-2"
+                      value={p.atividade}
+                      onChange={e => { const arr = [...edited.programacao]; arr[i] = { ...arr[i], atividade: e.target.value }; setField('programacao', arr); }}
+                      placeholder="Atividade"
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* ── Patrocinadores ── */}
+          {edited.sponsors?.length > 0 && (
+            <section className="space-y-4">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2 border-b border-slate-100 dark:border-white/5 pb-3">
+                <Star size={12} /> Patrocinadores e Apoio ({edited.sponsors.length})
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {edited.sponsors.map((s, i) => (
+                  <div key={i} className="grid grid-cols-3 gap-2 p-2.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl items-center">
+                    <input
+                      className="col-span-2 bg-transparent text-xs font-black text-slate-900 dark:text-white focus:outline-none px-2 uppercase"
+                      value={s.nome}
+                      onChange={e => { const arr = [...edited.sponsors]; arr[i] = { ...arr[i], nome: e.target.value }; setField('sponsors', arr); }}
+                      placeholder="Nome"
+                    />
+                    <select
+                      className="bg-transparent text-[9px] font-black text-slate-500 focus:outline-none uppercase px-2"
+                      value={s.tipo ?? 'PATROCINADOR'}
+                      onChange={e => { const arr = [...edited.sponsors]; arr[i] = { ...arr[i], tipo: e.target.value as any }; setField('sponsors', arr); }}
+                    >
+                      <option value="PATROCINADOR">Patrocinador</option>
+                      <option value="APOIO">Apoio</option>
+                      <option value="REALIZACAO">Realização</option>
+                      <option value="PRODUCAO">Produção</option>
+                    </select>
                   </div>
                 ))}
               </div>
