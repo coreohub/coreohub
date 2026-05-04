@@ -8,7 +8,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { supabase, supabaseUrl, resolveActiveEventId } from '../services/supabase';
+import { supabase, resolveActiveEventId } from '../services/supabase';
 import {
   Ticket, Loader2, Search, Download, ExternalLink, CheckCircle2, Clock, XCircle, RotateCcw,
   Users, DollarSign, AlertCircle, Undo2, X,
@@ -163,20 +163,16 @@ const VendasIngressos: React.FC = () => {
     setRefundError(null);
     setRefundProcessing(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const resp = await fetch(`${supabaseUrl}/functions/v1/refund-audience-ticket`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
-        },
-        body: JSON.stringify({
+      // supabase.functions.invoke usa o session token do user logado (produtor)
+      // automaticamente como Authorization, e adiciona apikey.
+      const { data, error: invokeErr } = await supabase.functions.invoke('refund-audience-ticket', {
+        body: {
           ticket_id: refundTarget.id,
           reason: refundReason.trim() || undefined,
-        }),
+        },
       });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error ?? 'Falha ao processar reembolso');
+      if (invokeErr) throw new Error(invokeErr.message ?? 'Falha ao processar reembolso');
+      if (data?.error) throw new Error(data.error);
       setRefundTarget(null);
       setRefundReason('');
       await load();

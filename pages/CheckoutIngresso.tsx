@@ -13,7 +13,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { supabase, supabaseUrl } from '../services/supabase';
+import { supabase } from '../services/supabase';
 import {
   Ticket, Loader2, AlertCircle, ArrowLeft, ShieldCheck, User as UserIcon, Mail, Phone, FileText, Minus, Plus,
   Tag, X, Check,
@@ -202,13 +202,15 @@ export default function CheckoutIngresso() {
     setCouponLoading(true);
     try {
       const baseValueUnit = Number(ticketType._precoVigente ?? ticketType.preco ?? 0);
-      const resp = await fetch(`${supabaseUrl}/functions/v1/validate-audience-coupon`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_id: event.id, code, base_value: baseValueUnit }),
+      // supabase.functions.invoke adiciona apikey + Authorization automaticamente.
+      // Sem isso o roteamento Supabase rejeita antes mesmo de chegar na função
+      // → "Failed to fetch" no browser (erro de CORS preflight).
+      const { data, error: invokeErr } = await supabase.functions.invoke('validate-audience-coupon', {
+        body: { event_id: event.id, code, base_value: baseValueUnit },
       });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error ?? 'Cupom inválido');
+      if (invokeErr) throw new Error(invokeErr.message ?? 'Cupom inválido');
+      if (data?.error) throw new Error(data.error);
+      if (!data?.code) throw new Error('Cupom inválido');
       setCouponApplied({ code: data.code, discount: data.discount, final_value: data.final_value });
     } catch (e: any) {
       setCouponError(e.message ?? 'Cupom inválido');
@@ -241,10 +243,10 @@ export default function CheckoutIngresso() {
     setPaying(true);
     setError(null);
     try {
-      const resp = await fetch(`${supabaseUrl}/functions/v1/create-audience-ticket`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      // supabase.functions.invoke = adiciona apikey + Authorization (anon key)
+      // automaticamente — sem isso roteamento Supabase rejeita.
+      const { data, error: invokeErr } = await supabase.functions.invoke('create-audience-ticket', {
+        body: {
           event_id: event.id,
           ticket_type_idx: ticketType._idx,
           buyer: {
@@ -255,11 +257,11 @@ export default function CheckoutIngresso() {
           },
           quantity,
           coupon_code: couponApplied?.code ?? undefined,
-        }),
+        },
       });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error ?? 'Erro ao gerar pagamento. Tente novamente.');
-      if (!data.invoice_url) throw new Error('URL de pagamento não retornada.');
+      if (invokeErr) throw new Error(invokeErr.message ?? 'Erro ao gerar pagamento. Tente novamente.');
+      if (data?.error) throw new Error(data.error);
+      if (!data?.invoice_url) throw new Error('URL de pagamento não retornada.');
       // Redireciona pro Asaas
       window.location.href = data.invoice_url;
     } catch (err: any) {
