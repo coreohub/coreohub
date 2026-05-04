@@ -171,7 +171,22 @@ const VendasIngressos: React.FC = () => {
           reason: refundReason.trim() || undefined,
         },
       });
-      if (invokeErr) throw new Error(invokeErr.message ?? 'Falha ao processar reembolso');
+      // Quando a função retorna non-2xx com body JSON {error}, supabase-js
+      // não devolve em `data` — coloca em invokeErr.context.response. Lemos
+      // pra mostrar a mensagem real (ex: "Boleto não pode ser estornado") em
+      // vez do genérico "Edge Function returned a non-2xx status code".
+      if (invokeErr) {
+        let serverMsg: string | null = null;
+        try {
+          const ctx = (invokeErr as any).context;
+          const resp = ctx?.response;
+          if (resp && typeof resp.json === 'function') {
+            const body = await resp.json();
+            serverMsg = body?.error ?? null;
+          }
+        } catch { /* ignore */ }
+        throw new Error(serverMsg ?? invokeErr.message ?? 'Falha ao processar reembolso');
+      }
       if (data?.error) throw new Error(data.error);
       setRefundTarget(null);
       setRefundReason('');
