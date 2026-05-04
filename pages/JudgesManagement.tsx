@@ -29,8 +29,8 @@ interface Judge {
   language?: string;
   is_active?: boolean;
   is_public?: boolean;
-  /** 'M' | 'F' | 'NB' — flexão da palavra "Jurado/a/e" no card público */
-  gender?: 'M' | 'F' | 'NB' | null;
+  /** 'M' | 'F' — flexão da palavra "Jurado/Jurada" no card público */
+  gender?: 'M' | 'F' | null;
 }
 
 const FORMATS = [
@@ -688,12 +688,11 @@ const JudgesManagement = () => {
                     <div>
                       <label className={labelCls}>Como aparecer no card público</label>
                       <p className="text-[9px] text-slate-400 mb-2 ml-1">Define como a palavra "Jurado" é flexionada no chip do card. Default: detecta pelo nome.</p>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="grid grid-cols-3 gap-2">
                         {([
                           { val: null, label: 'Auto', sub: 'Pelo nome' },
                           { val: 'M' as const, label: 'Jurado', sub: 'Masculino' },
                           { val: 'F' as const, label: 'Jurada', sub: 'Feminino' },
-                          { val: 'NB' as const, label: 'Jurade', sub: 'Neutro' },
                         ]).map(opt => {
                           const active = (form.gender ?? null) === opt.val;
                           return (

@@ -16,9 +16,9 @@ import { PersonCard, PersonModal, type Person } from './PersonCard';
 export interface JudgePublic {
   id: string;
   name: string;
-  /** 'M' | 'F' | 'NB' | null — produtor define em /equipe-jurados.
+  /** 'M' | 'F' | null — produtor define em /equipe-jurados.
    *  null = fallback heurístico pelo nome. */
-  gender?: 'M' | 'F' | 'NB' | null;
+  gender?: 'M' | 'F' | null;
   mini_bio?: string | null;
   avatar_url?: string | null;
   instagram?: string | null;

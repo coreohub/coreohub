@@ -12,13 +12,13 @@ import React, { useEffect } from 'react';
 import { Instagram, Globe, Award, Music2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-export type GenderRole = 'M' | 'F' | 'NB';
+export type GenderRole = 'M' | 'F';
 
 export interface Person {
   id: string;
   name: string;
-  /** Gênero do jurado/professor pra flexionar role chip (Jurado/a/e).
-   *  Configurável pelo produtor em /equipe-jurados. Inclusivo (3 opções).
+  /** Gênero do jurado/professor pra flexionar role chip (Jurado/Jurada).
+   *  Configurável pelo produtor em /equipe-jurados.
    *  Se null/undefined, fallback heurístico pelo nome. */
   gender?: GenderRole | null;
   bio_short?: string | null;
@@ -48,23 +48,15 @@ function detectGenderFromName(name: string): GenderRole {
 
 /** Resolve o gênero efetivo: explícito do produtor → heurística pelo nome */
 function resolveGender(person: Person): GenderRole {
-  if (person.gender === 'M' || person.gender === 'F' || person.gender === 'NB') {
+  if (person.gender === 'M' || person.gender === 'F') {
     return person.gender;
   }
   return detectGenderFromName(person.name);
 }
 
 function roleLabel(role: 'judge' | 'teacher', gender: GenderRole): string {
-  if (role === 'judge') {
-    if (gender === 'F')  return 'Jurada';
-    if (gender === 'NB') return 'Jurade';
-    return 'Jurado';
-  }
-  if (role === 'teacher') {
-    if (gender === 'F')  return 'Professora';
-    if (gender === 'NB') return 'Docente';
-    return 'Professor';
-  }
+  if (role === 'judge')   return gender === 'F' ? 'Jurada'    : 'Jurado';
+  if (role === 'teacher') return gender === 'F' ? 'Professora' : 'Professor';
   return role;
 }
 
