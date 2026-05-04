@@ -318,7 +318,15 @@ const DEFAULT_GENERAL = {
 interface ProgramItem { hora: string; atividade: string }
 const DEFAULT_PROGRAMACAO: ProgramItem[] = [];
 
-interface TicketType { nome: string; preco: number; obs?: string; link?: string }
+interface TicketLote { data_virada: string | null; preco: number }
+interface TicketType {
+  nome: string;
+  preco: number;
+  obs?: string;
+  link?: string;
+  /** Modo lotes: quando presente e com 2+ itens, vence o `preco` (que vira fallback). */
+  lotes?: TicketLote[];
+}
 interface Sponsor    { nome: string; logo_url: string; link?: string }
 
 const SCORE_SCALE_OPTIONS: { id: ScoreScale; label: string; desc: string; example: string }[] = [
@@ -1865,41 +1873,190 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                 {ingressos.length === 0 ? (
                   <p className="text-center text-slate-400 py-8 text-xs italic">Nenhum tipo. Ex: "Meia Entrada R$10" ou "Inteira R$20".</p>
                 ) : (
-                  ingressos.map((item, i) => (
-                    <div key={i} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-start bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-xl p-3">
-                      <input
-                        type="text"
-                        value={item.nome}
-                        onChange={e => setIngressos(t => t.map((x, idx) => idx === i ? { ...x, nome: e.target.value } : x))}
-                        placeholder="Nome (Ex: Meia Entrada)"
-                        className="sm:col-span-5 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
-                      />
-                      <input
-                        type="number"
-                        min={0} step={0.01}
-                        value={item.preco || ''}
-                        onChange={e => setIngressos(t => t.map((x, idx) => idx === i ? { ...x, preco: Number(e.target.value) } : x))}
-                        placeholder="Preço"
-                        inputMode="decimal"
-                        className="sm:col-span-2 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
-                      />
-                      <input
-                        type="text"
-                        value={item.obs ?? ''}
-                        onChange={e => setIngressos(t => t.map((x, idx) => idx === i ? { ...x, obs: e.target.value } : x))}
-                        placeholder="Observação (opc., ex: + 1kg alimento)"
-                        className="sm:col-span-4 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
-                      />
-                      <button
-                        onClick={() => setIngressos(t => t.filter((_, idx) => idx !== i))}
-                        aria-label={`Remover ingresso ${item.nome || 'sem nome'}`}
-                        className="sm:col-span-1 p-2 text-slate-400 hover:text-red-500 self-center justify-self-end sm:justify-self-center inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest"
-                      >
-                        <Trash2 size={14} />
-                        <span className="sm:hidden">Remover</span>
-                      </button>
-                    </div>
-                  ))
+                  ingressos.map((item, i) => {
+                    const lotes = Array.isArray(item.lotes) ? item.lotes : null;
+                    // Modo lotes ativo quando lista existe E tem 2+ entradas (1+ virada de preço).
+                    // 1 lote só sem virada == modo simples (preço fixo) — mantém UX legada.
+                    const isMultiLote = !!lotes && lotes.length >= 2;
+                    const updateField = (patch: Partial<TicketType>) =>
+                      setIngressos(t => t.map((x, idx) => idx === i ? { ...x, ...patch } : x));
+                    const startLotes = () => {
+                      // Converte simples → lotes: cria 1 lote com data + 1 final (sem virada).
+                      // Mantém preço atual no lote final como ponto de partida.
+                      const today = new Date().toISOString().slice(0, 10);
+                      const precoBase = Number(item.preco ?? 0);
+                      updateField({
+                        lotes: [
+                          { data_virada: today, preco: precoBase },
+                          { data_virada: null, preco: precoBase },
+                        ],
+                      });
+                    };
+                    const stopLotes = () => {
+                      // Volta pra modo simples: usa preço do último lote como preço único.
+                      const ultimo = lotes?.[lotes.length - 1]?.preco ?? item.preco ?? 0;
+                      updateField({ lotes: undefined, preco: Number(ultimo) });
+                    };
+                    const updateLote = (loteIdx: number, patch: Partial<TicketLote>) => {
+                      const next = (lotes ?? []).map((l, idx) => idx === loteIdx ? { ...l, ...patch } : l);
+                      updateField({ lotes: next });
+                    };
+                    const addLoteIntermediario = () => {
+                      // Insere antes do último (que sempre tem data_virada=null)
+                      const today = new Date().toISOString().slice(0, 10);
+                      const next = [...(lotes ?? [])];
+                      const ultimoPreco = next[next.length - 1]?.preco ?? 0;
+                      next.splice(next.length - 1, 0, { data_virada: today, preco: ultimoPreco });
+                      updateField({ lotes: next });
+                    };
+                    const removeLote = (loteIdx: number) => {
+                      const next = (lotes ?? []).filter((_, idx) => idx !== loteIdx);
+                      // Garante que o último seja sempre "sem virada" (preço final)
+                      if (next.length > 0) next[next.length - 1] = { ...next[next.length - 1], data_virada: null };
+                      // Se sobrou só 1 lote, volta pra modo simples automaticamente
+                      if (next.length <= 1) {
+                        updateField({ lotes: undefined, preco: Number(next[0]?.preco ?? item.preco ?? 0) });
+                      } else {
+                        updateField({ lotes: next });
+                      }
+                    };
+
+                    return (
+                      <div key={i} className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-xl p-3 space-y-3">
+                        {/* Linha 1: nome + obs + delete */}
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-start">
+                          <input
+                            type="text"
+                            value={item.nome}
+                            onChange={e => updateField({ nome: e.target.value })}
+                            placeholder="Nome (Ex: Meia Entrada)"
+                            className="sm:col-span-5 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                          />
+                          <input
+                            type="text"
+                            value={item.obs ?? ''}
+                            onChange={e => updateField({ obs: e.target.value })}
+                            placeholder="Observação (opc., ex: + 1kg alimento)"
+                            className="sm:col-span-6 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                          />
+                          <button
+                            onClick={() => setIngressos(t => t.filter((_, idx) => idx !== i))}
+                            aria-label={`Remover ingresso ${item.nome || 'sem nome'}`}
+                            className="sm:col-span-1 p-2 text-slate-400 hover:text-red-500 self-center justify-self-end sm:justify-self-center inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest"
+                          >
+                            <Trash2 size={14} />
+                            <span className="sm:hidden">Remover</span>
+                          </button>
+                        </div>
+
+                        {/* Linha 2: preço (modo simples) OU editor de lotes */}
+                        {!isMultiLote ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex items-center gap-2">
+                              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Preço</label>
+                              <div className="flex items-center bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3">
+                                <span className="text-slate-400 text-sm font-bold mr-1">R$</span>
+                                <input
+                                  type="number"
+                                  min={0} step={0.01}
+                                  value={item.preco || ''}
+                                  onChange={e => updateField({ preco: Number(e.target.value) })}
+                                  placeholder="0,00"
+                                  inputMode="decimal"
+                                  className="w-24 bg-transparent text-slate-900 dark:text-white text-sm font-bold focus:outline-none"
+                                />
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={startLotes}
+                              className="ml-auto text-[10px] font-black text-[#ff0068] uppercase tracking-widest hover:underline inline-flex items-center gap-1"
+                            >
+                              <Plus size={12} /> Adicionar lote (com virada de data)
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-2 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/5 rounded-lg p-3">
+                            <div className="flex items-center justify-between">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                                Lotes — preços por período
+                              </p>
+                              <button
+                                type="button"
+                                onClick={stopLotes}
+                                className="text-[9px] text-slate-500 hover:text-red-500 uppercase font-black tracking-widest"
+                              >
+                                Voltar a preço único
+                              </button>
+                            </div>
+                            {(lotes ?? []).map((lote, loteIdx) => {
+                              const isUltimo = loteIdx === (lotes!.length - 1);
+                              return (
+                                <div key={loteIdx} className="grid grid-cols-12 gap-2 items-center">
+                                  <div className="col-span-3 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                                    {isUltimo ? 'Final' : `Lote ${loteIdx + 1}`}
+                                  </div>
+                                  <div className="col-span-5">
+                                    {isUltimo ? (
+                                      <input
+                                        type="text"
+                                        disabled
+                                        value="Sem virada (preço final)"
+                                        className="w-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-lg py-2 px-3 text-slate-400 text-xs italic cursor-not-allowed"
+                                      />
+                                    ) : (
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">até</span>
+                                        <input
+                                          type="date"
+                                          value={lote.data_virada || ''}
+                                          onChange={e => updateLote(loteIdx, { data_virada: e.target.value || null })}
+                                          className="flex-1 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-2 text-slate-900 dark:text-white font-bold text-xs focus:outline-none focus:border-[#ff0068]/50 dark:[color-scheme:dark]"
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="col-span-3">
+                                    <div className="flex items-center bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-2">
+                                      <span className="text-slate-400 text-xs font-bold mr-1">R$</span>
+                                      <input
+                                        type="number"
+                                        min={0} step={0.01}
+                                        value={lote.preco || ''}
+                                        onChange={e => updateLote(loteIdx, { preco: Number(e.target.value) })}
+                                        placeholder="0,00"
+                                        inputMode="decimal"
+                                        className="w-full bg-transparent text-slate-900 dark:text-white text-xs font-bold focus:outline-none"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="col-span-1 flex justify-end">
+                                    {!isUltimo && (
+                                      <button
+                                        type="button"
+                                        onClick={() => removeLote(loteIdx)}
+                                        aria-label={`Remover lote ${loteIdx + 1}`}
+                                        className="p-1.5 text-slate-400 hover:text-red-500"
+                                      >
+                                        <Trash2 size={12} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            <button
+                              type="button"
+                              onClick={addLoteIntermediario}
+                              className="text-[10px] font-black text-[#ff0068] uppercase tracking-widest hover:underline inline-flex items-center gap-1"
+                            >
+                              <Plus size={12} /> Adicionar lote
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
                 )}
                   </div>
 

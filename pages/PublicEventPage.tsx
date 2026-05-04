@@ -10,6 +10,7 @@ import { motion } from 'motion/react';
 import BrandIcon from '../components/BrandIcon';
 import { EventAnchorNav, type AnchorSection } from '../components/EventAnchorNav';
 import { PessoasSection, type JudgePublic } from '../components/PessoasSection';
+import { resolveLote, diffDias, formatDataBR, todayISO, type Lote } from '../utils/lotes';
 
 const TikTokIcon = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
@@ -397,9 +398,16 @@ const PublicEventPage = () => {
             // Quando sales habilitado, esconde tipos com preço 0 (não tem como
             // comprar) — produtor que quer cortesia/RSVP usa Tier 2 ou GRATUITO.
             // Quando sales desabilitado, mostra tudo (informativo).
+            const today = todayISO();
+            // Helper local: preço a exibir respeita lotes (se existirem) com fallback p/ preco
+            const precoVigenteIngresso = (t: any): number => {
+              const r = resolveLote(Array.isArray(t.lotes) ? t.lotes : null, today);
+              if (r) return Number(r.lote.preco ?? 0);
+              return Number(t.preco ?? 0);
+            };
             const visibleTypes = (event.ingressos_config as any[])
               .filter((t: any) => t.nome)
-              .filter((t: any) => !salesEnabled || Number(t.preco ?? 0) > 0);
+              .filter((t: any) => !salesEnabled || precoVigenteIngresso(t) > 0);
             if (visibleTypes.length === 0) return null;
             return (
               <div id="ingressos" className="space-y-4 scroll-mt-20">
@@ -409,19 +417,43 @@ const PublicEventPage = () => {
                 <p className="text-xs text-slate-400">Para o público que vai assistir. Bailarinos inscritos não precisam comprar.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {visibleTypes
-                    .map((t: any, originalIdx: number) => {
+                    .map((t: any) => {
                       // Idx no array original importa pro checkout (não o filtrado)
                       const realIdx = event.ingressos_config.findIndex((x: any) => x === t);
-                      const preco = Number(t.preco ?? 0);
+                      const lotes: Lote[] = Array.isArray(t.lotes) ? t.lotes : [];
+                      const r = resolveLote(lotes, today);
+                      const preco = r ? Number(r.lote.preco ?? 0) : Number(t.preco ?? 0);
+                      const nomeLote: string | null = r ? ((r.lote as any).nome ?? null) : null;
+                      const hint = r && r.proximo && r.lote.data_virada && Number(r.proximo.preco) > Number(r.lote.preco)
+                        ? { proximoPreco: Number(r.proximo.preco), dataVirada: r.lote.data_virada, dias: diffDias(today, r.lote.data_virada) }
+                        : null;
+                      const hintColor = !hint
+                        ? 'text-slate-500'
+                        : hint.dias < 1 ? 'text-rose-400'
+                        : hint.dias < 7 ? 'text-amber-400'
+                        : 'text-slate-500';
                       return (
                         <div key={realIdx} className="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col gap-2 hover:border-[#ff0068]/40 transition-colors">
                           <div className="flex items-baseline justify-between gap-2">
-                            <p className="font-black uppercase text-sm text-white">{t.nome}</p>
+                            <div>
+                              <p className="font-black uppercase text-sm text-white">{t.nome}</p>
+                              {nomeLote && (
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">{nomeLote}</p>
+                              )}
+                            </div>
                             <p className="text-[#ff0068] font-black text-lg">
                               {preco > 0 ? `R$ ${preco.toFixed(2)}` : 'Grátis'}
                             </p>
                           </div>
                           {t.obs && <p className="text-[10px] text-slate-400">{t.obs}</p>}
+
+                          {hint && (
+                            <p className={`text-[10px] font-bold flex items-center gap-1.5 ${hintColor}`}>
+                              {hint.dias < 1
+                                ? <>⚠ Aumenta amanhã para R$ {hint.proximoPreco.toFixed(2)}</>
+                                : <>⏱ Próximo: R$ {hint.proximoPreco.toFixed(2)} em {formatDataBR(hint.dataVirada)}</>}
+                            </p>
+                          )}
 
                           {/* Botão de compra: prioriza checkout interno quando habilitado */}
                           {salesEnabled && preco > 0 && (
@@ -462,32 +494,40 @@ const PublicEventPage = () => {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {event.formacoes_config.map((mod: any, i: number) => {
-                // Preço a exibir: encontra o lote vigente (data_virada futura mais
-                // proxima) ou usa o ultimo se todos passaram. Fallback pra mod.fee
-                // pra eventos antigos sem lotes.
-                const today = new Date().toISOString().slice(0, 10);
-                const lotes = Array.isArray(mod.lotes) ? mod.lotes : [];
-                let precoExibir: number | null = null;
-                let nomeLote: string | null = null;
-                if (lotes.length > 0) {
-                  const vigente = lotes.find((l: any) => !l.data_virada || l.data_virada >= today);
-                  const lote = vigente ?? lotes[lotes.length - 1];
-                  precoExibir = Number(lote?.preco ?? 0);
-                  nomeLote = lote?.nome ?? null;
-                } else if (mod.fee != null) {
-                  precoExibir = Number(mod.fee);
-                }
+                const today = todayISO();
+                const lotes: Lote[] = Array.isArray(mod.lotes) ? mod.lotes : [];
+                const r = resolveLote(lotes, today);
+                const precoExibir = r ? Number(r.lote.preco ?? 0) : (mod.fee != null ? Number(mod.fee) : null);
+                const nomeLote: string | null = r ? ((r.lote as any).nome ?? null) : null;
+                // Hint do próximo lote: só quando há próximo, com preço maior, e data limite.
+                const hint = r && r.proximo && r.lote.data_virada && Number(r.proximo.preco) > Number(r.lote.preco)
+                  ? { proximoPreco: Number(r.proximo.preco), dataVirada: r.lote.data_virada, dias: diffDias(today, r.lote.data_virada) }
+                  : null;
+                const hintColor = !hint
+                  ? 'text-slate-500'
+                  : hint.dias < 1 ? 'text-rose-400'
+                  : hint.dias < 7 ? 'text-amber-400'
+                  : 'text-slate-500';
                 return (
-                  <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-5 flex justify-between items-center">
-                    <div>
-                      <span className="font-black uppercase text-sm">{mod.name}</span>
-                      {nomeLote && (
-                        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">{nomeLote}</p>
-                      )}
+                  <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-5">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <span className="font-black uppercase text-sm">{mod.name}</span>
+                        {nomeLote && (
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">{nomeLote}</p>
+                        )}
+                      </div>
+                      <span className="text-[#ff0068] font-black text-sm">
+                        {precoExibir != null && precoExibir > 0 ? `R$ ${precoExibir.toFixed(2)}` : 'Gratuito'}
+                      </span>
                     </div>
-                    <span className="text-[#ff0068] font-black text-sm">
-                      {precoExibir != null && precoExibir > 0 ? `R$ ${precoExibir.toFixed(2)}` : 'Gratuito'}
-                    </span>
+                    {hint && (
+                      <p className={`text-[10px] font-bold mt-3 pt-3 border-t border-white/5 flex items-center gap-1.5 ${hintColor}`}>
+                        {hint.dias < 1
+                          ? <>⚠ Aumenta amanhã para R$ {hint.proximoPreco.toFixed(2)}</>
+                          : <>⏱ Próximo: R$ {hint.proximoPreco.toFixed(2)} em {formatDataBR(hint.dataVirada)}</>}
+                      </p>
+                    )}
                   </div>
                 );
               })}

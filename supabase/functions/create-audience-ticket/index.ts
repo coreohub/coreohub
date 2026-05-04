@@ -167,7 +167,20 @@ Deno.serve(async (req) => {
     const ticketType = ingressos[ticket_type_idx]
     if (!ticketType?.nome) throw new Error('Tipo de ingresso inválido')
 
-    const preco = Number(ticketType.preco ?? 0)
+    // Resolve lote vigente. Defesa em profundidade: backend recalcula, não confia
+    // no client. Lote vigente = primeiro com data_virada >= hoje (ou null).
+    // Fallback pra ticketType.preco quando não há lotes (compat com tipos antigos).
+    const lotes: Array<{ data_virada: string | null; preco: number }> =
+      Array.isArray(ticketType.lotes) ? ticketType.lotes : []
+    const todayISO = new Date().toISOString().slice(0, 10)
+    let preco: number
+    if (lotes.length > 0) {
+      const idx = lotes.findIndex(l => !l.data_virada || l.data_virada >= todayISO)
+      const lote = idx >= 0 ? lotes[idx] : lotes[lotes.length - 1]
+      preco = Number(lote?.preco ?? 0)
+    } else {
+      preco = Number(ticketType.preco ?? 0)
+    }
     if (preco <= 0) throw new Error('Preço do ingresso inválido')
 
     // Detecta kind por nome (heurística simples; produtor pode customizar via tipo explícito futuramente)

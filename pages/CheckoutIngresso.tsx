@@ -18,6 +18,7 @@ import {
   Ticket, Loader2, AlertCircle, ArrowLeft, ShieldCheck, User as UserIcon, Mail, Phone, FileText, Minus, Plus,
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
+import { resolveLote, todayISO, formatDataBR, diffDias, type Lote } from '../utils/lotes';
 
 const formatBRL = (n: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n ?? 0);
@@ -97,12 +98,20 @@ export default function CheckoutIngresso() {
         const ingressos: any[] = Array.isArray(ev.ingressos_config) ? ev.ingressos_config : [];
         const idx = parseInt(ticketTypeIdx, 10);
         const t = ingressos[idx];
-        if (!t?.nome || Number(t.preco) <= 0) {
+        if (!t?.nome) {
+          setError('Tipo de ingresso inválido.');
+          return;
+        }
+        // Resolve lote vigente (se houver lotes); senão usa preco direto
+        const lotes: Lote[] = Array.isArray(t.lotes) ? t.lotes : [];
+        const r = resolveLote(lotes);
+        const precoVigente = r ? Number(r.lote.preco ?? 0) : Number(t.preco ?? 0);
+        if (precoVigente <= 0) {
           setError('Tipo de ingresso inválido.');
           return;
         }
         setEvent(ev);
-        setTicketType({ ...t, _idx: idx });
+        setTicketType({ ...t, _idx: idx, _precoVigente: precoVigente, _loteVigente: r });
       } finally {
         setLoading(false);
       }
@@ -134,7 +143,7 @@ export default function CheckoutIngresso() {
   // ─── Cálculo de preço com fee_mode ────────────────────────────────────────
   const breakdown = useMemo(() => {
     if (!event || !ticketType) return null;
-    const baseUnit = Number(ticketType.preco ?? 0);
+    const baseUnit = Number(ticketType._precoVigente ?? ticketType.preco ?? 0);
     const commPct = Number(event.audience_commission_percent ?? 10);
     const commUnit = Number((baseUnit * (commPct / 100)).toFixed(2));
     const feeMode = event.audience_fee_mode ?? 'repassar';
@@ -235,10 +244,31 @@ export default function CheckoutIngresso() {
           <div className="flex items-baseline justify-between mb-3">
             <div>
               <p className="text-[10px] font-black text-[#ff0068] uppercase tracking-widest">{ticketType.nome}</p>
+              {ticketType._loteVigente?.lote?.nome && (
+                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">{ticketType._loteVigente.lote.nome}</p>
+              )}
               {ticketType.obs && <p className="text-xs text-slate-400 mt-0.5">{ticketType.obs}</p>}
             </div>
-            <p className="text-xl font-black text-white">{formatBRL(ticketType.preco)}</p>
+            <p className="text-xl font-black text-white">{formatBRL(ticketType._precoVigente ?? ticketType.preco)}</p>
           </div>
+
+          {/* Hint de próximo lote: cria urgência (Sympla/Eventbrite +18-25% conversão Baymard) */}
+          {(() => {
+            const r = ticketType._loteVigente;
+            if (!r?.proximo || !r.lote.data_virada) return null;
+            if (Number(r.proximo.preco) <= Number(r.lote.preco)) return null;
+            const dias = diffDias(todayISO(), r.lote.data_virada);
+            const color = dias < 1 ? 'text-rose-400 bg-rose-500/10 border-rose-500/30'
+              : dias < 7 ? 'text-amber-300 bg-amber-500/10 border-amber-500/30'
+              : 'text-slate-300 bg-white/5 border-white/10';
+            return (
+              <div className={`rounded-xl px-3 py-2 mb-3 border text-[11px] font-bold ${color}`}>
+                {dias < 1
+                  ? <>⚠ Aumenta amanhã para {formatBRL(Number(r.proximo.preco))}</>
+                  : <>⏱ Próximo lote: {formatBRL(Number(r.proximo.preco))} em {formatDataBR(r.lote.data_virada)}</>}
+              </div>
+            );
+          })()}
 
           {isMeia && (
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2 mb-3 flex items-start gap-2">
