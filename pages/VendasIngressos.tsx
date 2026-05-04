@@ -35,6 +35,7 @@ interface Row {
   fee_mode: string | null;
   group_id: string | null;
   refunded_at: string | null;
+  refund_amount: number | null;
   created_at: string;
 }
 
@@ -352,7 +353,16 @@ const VendasIngressos: React.FC = () => {
                         </p>
                       )}
                     </Td>
-                    <Td><StatusBadge status={r.status_pagamento} /></Td>
+                    <Td>
+                      <StatusBadge status={r.status_pagamento} />
+                      {r.refunded_at && (
+                        <p className="text-[9px] text-rose-500 mt-0.5">
+                          {r.group_id && r.refund_amount == null
+                            ? <>Em grupo · {formatBRL(r.preco)}</>
+                            : <>{formatBRL(Number(r.refund_amount ?? r.preco))}</>}
+                        </p>
+                      )}
+                    </Td>
                     <Td>
                       {r.check_in_status === 'OK' ? (
                         <div className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">

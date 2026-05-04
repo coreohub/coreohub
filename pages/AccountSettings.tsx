@@ -2063,37 +2063,50 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
                           </div>
                         )}
 
-                        {/* Estoque (Tier 2): limite total por tipo. NULL = ilimitado. */}
-                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 dark:border-white/5">
-                          <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={item.quantidade_total != null && item.quantidade_total > 0}
-                              onChange={e => updateField({
-                                quantidade_total: e.target.checked ? (item.quantidade_total || 100) : null,
-                              })}
-                              className="w-4 h-4 accent-[#ff0068]"
-                            />
-                            Limitar estoque
-                          </label>
-                          {item.quantidade_total != null && item.quantidade_total > 0 && (
-                            <>
-                              <input
-                                type="number"
-                                min={1}
-                                value={item.quantidade_total}
-                                onChange={e => updateField({ quantidade_total: Math.max(1, Number(e.target.value)) })}
-                                placeholder="Total"
-                                inputMode="numeric"
-                                className="w-24 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-1.5 px-3 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:border-[#ff0068]/50"
-                              />
-                              <span className="text-[10px] text-slate-500">ingressos no total</span>
-                            </>
-                          )}
-                          {(item.quantidade_total == null || item.quantidade_total <= 0) && (
-                            <span className="text-[10px] text-slate-500">Sem limite (ilimitado)</span>
-                          )}
-                        </div>
+                        {/* Estoque (Tier 2): limite total por tipo. NULL = ilimitado.
+                            Toggle ON sem valor = 0 (= ilimitado, não força). Producer digita explicitamente. */}
+                        {(() => {
+                          // toggle is "on" se: tem limite > 0 OU está em modo edição (após click)
+                          const hasLimit = item.quantidade_total != null && item.quantidade_total > 0;
+                          // edição em curso: quantidade_total === 0 (toggle clicado, valor não digitado ainda)
+                          const editing = item.quantidade_total === 0;
+                          const showInput = hasLimit || editing;
+                          return (
+                            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 dark:border-white/5">
+                              <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={showInput}
+                                  onChange={e => updateField({
+                                    quantidade_total: e.target.checked ? 0 : null,
+                                  })}
+                                  className="w-4 h-4 accent-[#ff0068]"
+                                />
+                                Limitar estoque
+                              </label>
+                              {showInput && (
+                                <>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={item.quantidade_total ?? ''}
+                                    onChange={e => updateField({ quantidade_total: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) })}
+                                    placeholder="Ex: 100"
+                                    inputMode="numeric"
+                                    autoFocus={editing}
+                                    className="w-24 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-1.5 px-3 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:border-[#ff0068]/50"
+                                  />
+                                  <span className="text-[10px] text-slate-500">
+                                    {hasLimit ? 'ingressos no total' : 'digite o total (em branco = ilimitado)'}
+                                  </span>
+                                </>
+                              )}
+                              {!showInput && (
+                                <span className="text-[10px] text-slate-500">Sem limite (ilimitado)</span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })

@@ -135,6 +135,25 @@ export default function CheckoutIngresso() {
     })();
   }, [idOrSlug, ticketTypeIdx]);
 
+  // ─── Polling de estoque a cada 30s (auditoria item 9) ────────────────────
+  // Tickets podem esgotar enquanto o usuário preenche o form. Refresh em
+  // background mantém o badge "Esgotado/Últimos N" + cap de quantity vivos.
+  useEffect(() => {
+    if (!event?.id || !ticketType?._idx == null) return;
+    const total = ticketType?.quantidade_total;
+    if (total == null || Number(total) <= 0) return;
+    const tick = async () => {
+      const { data: stockRows } = await supabase.rpc('get_audience_stock', {
+        p_event_id: event.id,
+        p_types: [{ id: String(ticketType._idx), total: Number(total) }],
+      });
+      const row = Array.isArray(stockRows) ? stockRows[0] : null;
+      if (row) setStock({ sold: row.sold, remaining: row.remaining, sold_out: row.sold_out });
+    };
+    const interval = setInterval(tick, 30_000);
+    return () => clearInterval(interval);
+  }, [event?.id, ticketType?._idx, ticketType?.quantidade_total]);
+
   // ─── Tipo (kind) e regras especiais ───────────────────────────────────────
   const kind = useMemo<string>(() => {
     if (!ticketType) return 'inteira';

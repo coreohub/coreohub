@@ -6,7 +6,7 @@ import {
 import type { Coupon } from '../types';
 import {
   Ticket, Plus, Trash2, Calendar, Users, Percent,
-  Loader2, X, AlertCircle, CheckCircle, Power, DollarSign, ChevronDown,
+  Loader2, X, AlertCircle, CheckCircle, Power, DollarSign, ChevronDown, Pencil,
 } from 'lucide-react';
 
 type DiscountType = 'percent' | 'fixed';
@@ -21,18 +21,40 @@ const Coupons: React.FC = () => {
   const [saving, setSaving]               = useState(false);
   const [error, setError]                 = useState<string | null>(null);
   const [showModal, setShowModal]         = useState(false);
+  const [editingId, setEditingId]         = useState<string | null>(null);
 
   type Scope = 'inscription' | 'audience' | 'both';
-  // Form state
-  const [form, setForm] = useState({
+  const emptyForm = {
     code:           '',
     discount_type:  'percent' as DiscountType,
     discount_value: 10,
     max_uses:       '' as string | number,
     expires_at:     '',
     scope:          'inscription' as Scope,
-  });
+  };
+  const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setFormError(null);
+    setShowModal(true);
+  };
+
+  const openEdit = (c: Coupon) => {
+    setEditingId(c.id);
+    setForm({
+      code:           c.code,
+      discount_type:  c.discount_type,
+      discount_value: c.discount_value,
+      max_uses:       c.max_uses ?? '',
+      expires_at:     c.expires_at ?? '',
+      scope:          (c.scope ?? 'inscription') as Scope,
+    });
+    setFormError(null);
+    setShowModal(true);
+  };
 
   /* ── carrega eventos do produtor ── */
   useEffect(() => {
@@ -87,17 +109,29 @@ const Coupons: React.FC = () => {
     }
     setSaving(true);
     try {
-      await createCoupon({
-        event_id:       selectedEventId,
-        code:           form.code,
-        discount_type:  form.discount_type,
-        discount_value: form.discount_value,
-        max_uses:       form.max_uses === '' ? null : Number(form.max_uses),
-        expires_at:     form.expires_at || null,
-        scope:          form.scope,
-      });
+      if (editingId) {
+        await updateCoupon(editingId, {
+          code:           form.code.trim().toUpperCase(),
+          discount_type:  form.discount_type,
+          discount_value: form.discount_value,
+          max_uses:       form.max_uses === '' ? null : Number(form.max_uses),
+          expires_at:     form.expires_at || null,
+          scope:          form.scope,
+        });
+      } else {
+        await createCoupon({
+          event_id:       selectedEventId,
+          code:           form.code,
+          discount_type:  form.discount_type,
+          discount_value: form.discount_value,
+          max_uses:       form.max_uses === '' ? null : Number(form.max_uses),
+          expires_at:     form.expires_at || null,
+          scope:          form.scope,
+        });
+      }
       setShowModal(false);
-      setForm({ code: '', discount_type: 'percent', discount_value: 10, max_uses: '', expires_at: '', scope: 'inscription' });
+      setEditingId(null);
+      setForm(emptyForm);
       await refresh();
     } catch (e: any) {
       setFormError(
@@ -172,7 +206,7 @@ const Coupons: React.FC = () => {
           )}
           <button
             disabled={!selectedEventId}
-            onClick={() => setShowModal(true)}
+            onClick={openCreate}
             className="flex items-center gap-2 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-50 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl shadow-[#ff0068]/20"
           >
             <Plus size={16} /> Novo Cupom
@@ -266,6 +300,13 @@ const Coupons: React.FC = () => {
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
+                          onClick={() => openEdit(c)}
+                          title="Editar"
+                          className="p-2 rounded-lg text-slate-400 hover:text-[#ff0068] hover:bg-[#ff0068]/10 transition-colors"
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        <button
                           onClick={() => handleToggle(c)}
                           title={c.is_active ? 'Desativar' : 'Ativar'}
                           className={`p-2 rounded-lg transition-colors ${
@@ -299,10 +340,10 @@ const Coupons: React.FC = () => {
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5">
             <div className="flex justify-between items-start">
               <div>
-                <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Novo Cupom</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Código, desconto e limites opcionais.</p>
+                <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white italic">{editingId ? 'Editar Cupom' : 'Novo Cupom'}</h3>
+                <p className="text-xs text-slate-500 mt-0.5">{editingId ? 'Mude valores, escopo ou limites.' : 'Código, desconto e limites opcionais.'}</p>
               </div>
-              <button onClick={() => { setShowModal(false); setFormError(null); }} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5">
+              <button onClick={() => { setShowModal(false); setEditingId(null); setFormError(null); }} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5">
                 <X size={18} />
               </button>
             </div>
