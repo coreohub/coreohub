@@ -248,7 +248,9 @@ const JURADOS = [
     pin: '3333',
     generos: ['Hip Hop', 'Dança Urbana'],
     mini_bio: 'Pioneiro do Hip Hop em SP. 18 anos formando dançarinos urbanos. Battles Brasil/Itália.',
-    avatar_url: 'https://images.unsplash.com/photo-1535525153412-5a092d46317e?w=400&h=400&fit=crop&q=80',
+    // URL anterior (1535525153412-5a092d46317e) virou 404 no Unsplash.
+    // Trocada por foto pública estável de homem com expressão profissional.
+    avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop&q=80',
     instagram: 'rodrigorhip',
   },
 ]
