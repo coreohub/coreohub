@@ -545,22 +545,22 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
       role="dialog"
       aria-modal="true"
       aria-labelledby="workshop-form-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4"
       onClick={onClose}
     >
-      <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-3xl w-full p-6 my-8 shadow-2xl" onClick={e => e.stopPropagation()}>
-        <div className="flex items-start justify-between mb-5">
-          <h2 id="workshop-form-title" className="text-xl font-black text-slate-900 dark:text-white">{isEdit ? 'Editar workshop' : 'Novo workshop'}</h2>
-          <button onClick={onClose} aria-label="Fechar" className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg"><X size={18} /></button>
+      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl max-w-3xl w-full shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[90vh]" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-5 pb-4 border-b border-slate-200 dark:border-white/10 shrink-0">
+          <h2 id="workshop-form-title" className="text-lg sm:text-xl font-black text-slate-900 dark:text-white truncate">{isEdit ? 'Editar workshop' : 'Novo workshop'}</h2>
+          <button onClick={onClose} aria-label="Fechar" className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg shrink-0"><X size={18} /></button>
         </div>
 
         {formError && (
-          <div className="mb-4 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 p-3 text-sm text-rose-700 dark:text-rose-200 flex items-center gap-2">
+          <div className="mx-5 sm:mx-6 mt-4 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 p-3 text-sm text-rose-700 dark:text-rose-200 flex items-center gap-2 shrink-0">
             <AlertCircle size={16} />{formError}
           </div>
         )}
 
-        <div className="space-y-5 max-h-[70vh] overflow-y-auto pr-1">
+        <div className="space-y-5 overflow-y-auto px-5 sm:px-6 py-5 flex-1">
           {/* Vínculo com evento */}
           <Section title="Vínculo">
             <Field label="Evento (opcional — deixe vazio para workshop avulso)">
@@ -681,9 +681,9 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
           </Section>
         </div>
 
-        <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-slate-200 dark:border-white/10">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10">Cancelar</button>
-          <button onClick={onSave} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[#ff0068] px-4 py-2 text-sm font-bold text-white hover:bg-[#ff1a78] disabled:opacity-50 transition">
+        <div className="flex items-center justify-end gap-3 px-5 sm:px-6 py-4 border-t border-slate-200 dark:border-white/10 shrink-0 bg-white dark:bg-slate-900">
+          <button onClick={onClose} className="px-4 py-2.5 rounded-lg text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10">Cancelar</button>
+          <button onClick={onSave} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[#ff0068] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#ff1a78] disabled:opacity-50 transition">
             {saving && <Loader2 size={14} className="animate-spin" />}
             {isEdit ? 'Salvar alterações' : 'Criar workshop'}
           </button>
@@ -756,22 +756,22 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, onClose }) => {
       role="dialog"
       aria-modal="true"
       aria-labelledby="workshop-lots-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4"
       onClick={onClose}
     >
-      <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-3xl w-full p-6 my-8 shadow-2xl" onClick={e => e.stopPropagation()}>
-        <div className="flex items-start justify-between mb-5">
-          <div>
-            <h2 id="workshop-lots-title" className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2"><Layers size={20} className="text-[#ff0068]" />Lotes</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">{workshop.name}</p>
+      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl max-w-3xl w-full shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[90vh]" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-5 pb-4 border-b border-slate-200 dark:border-white/10 shrink-0">
+          <div className="min-w-0">
+            <h2 id="workshop-lots-title" className="text-lg sm:text-xl font-black text-slate-900 dark:text-white flex items-center gap-2"><Layers size={18} className="text-[#ff0068] shrink-0" />Lotes</h2>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 truncate">{workshop.name}</p>
           </div>
-          <button onClick={onClose} aria-label="Fechar" className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg"><X size={18} /></button>
+          <button onClick={onClose} aria-label="Fechar" className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg shrink-0"><X size={18} /></button>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-10"><Loader2 size={24} className="animate-spin text-[#ff0068]" /></div>
         ) : (
-          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+          <div className="space-y-3 overflow-y-auto px-5 sm:px-6 py-5 flex-1">
             {lots.length === 0 && (
               <p className="text-sm text-slate-500 dark:text-slate-400 italic text-center py-6">
                 Sem lotes. Sem lote ativo, o sistema usa o preço padrão do workshop ({fmtCurrency(workshop.preco_padrao)}).

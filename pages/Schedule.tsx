@@ -203,7 +203,7 @@ const SortableRow: React.FC<SortableRowProps> = ({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-center gap-3 p-3 rounded-2xl border transition-all select-none
+      className={`flex flex-wrap sm:flex-nowrap items-center gap-3 p-3 rounded-2xl border transition-all select-none
         ${isDragging ? 'shadow-2xl ring-2 ring-[#ff0068]/40' : ''}
         ${isLive
           ? 'bg-[#ff0068]/5 border-[#ff0068]/40'
@@ -228,8 +228,9 @@ const SortableRow: React.FC<SortableRowProps> = ({
         </span>
       </div>
 
-      {/* main info */}
-      <div className="flex-1 min-w-0 space-y-0.5">
+      {/* main info — em mobile força wrap (basis-[calc(100%-5rem)] = larg restante depois do drag+pos),
+          empurra actions pra próxima linha. Em desktop volta a ser flex-1 inline. */}
+      <div className="basis-[calc(100%-5rem)] sm:basis-0 sm:flex-1 min-w-0 space-y-0.5">
         <div className="flex items-center gap-2 flex-wrap">
           <h4 className={`text-[11px] font-black uppercase tracking-tight truncate ${isLive ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>
             {reg.nome_coreografia}

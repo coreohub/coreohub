@@ -175,27 +175,27 @@ const Coupons: React.FC = () => {
   return (
     <div className="space-y-8 pb-20">
       {/* Header */}
-      <div className="flex justify-between items-start gap-4 flex-wrap">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
+        <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <div className="w-1.5 h-1.5 bg-[#ff0068] rounded-full animate-pulse shadow-[0_0_8px_#ff0068]" />
             <span className="text-[9px] font-black text-[#ff0068] uppercase tracking-[0.3em]">Promoções</span>
           </div>
           <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase text-slate-900 dark:text-white">
-            Cupons de <span className="text-[#ff0068] italic">Desconto</span>
+            Cupons de <span className="text-[#ff0068]">Desconto</span>
           </h1>
           <p className="text-xs text-slate-500 font-bold mt-1">
             Crie códigos promocionais para incentivar inscrições antecipadas ou recuperar leads.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 sm:shrink-0">
           {events.length > 0 && (
             <div className="relative">
               <select
                 value={selectedEventId ?? ''}
                 onChange={e => setSelectedEventId(e.target.value)}
-                className="appearance-none pl-4 pr-9 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 cursor-pointer"
+                className="w-full sm:w-auto appearance-none pl-4 pr-9 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 cursor-pointer truncate"
               >
                 {events.map(ev => (
                   <option key={ev.id} value={ev.id}>{ev.name}</option>
@@ -207,7 +207,7 @@ const Coupons: React.FC = () => {
           <button
             disabled={!selectedEventId}
             onClick={openCreate}
-            className="flex items-center gap-2 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-50 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl shadow-[#ff0068]/20"
+            className="flex items-center justify-center gap-2 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-50 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl shadow-[#ff0068]/20"
           >
             <Plus size={16} /> Novo Cupom
           </button>
@@ -336,19 +336,25 @@ const Coupons: React.FC = () => {
 
       {/* Modal criar */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white italic">{editingId ? 'Editar Cupom' : 'Novo Cupom'}</h3>
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => { setShowModal(false); setEditingId(null); setFormError(null); }}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[92vh] sm:max-h-[90vh]"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-start gap-3 px-5 sm:px-6 pt-5 pb-4 border-b border-slate-200 dark:border-white/10 shrink-0">
+              <div className="min-w-0">
+                <h3 className="text-lg sm:text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white">{editingId ? 'Editar Cupom' : 'Novo Cupom'}</h3>
                 <p className="text-xs text-slate-500 mt-0.5">{editingId ? 'Mude valores, escopo ou limites.' : 'Código, desconto e limites opcionais.'}</p>
               </div>
-              <button onClick={() => { setShowModal(false); setEditingId(null); setFormError(null); }} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5">
+              <button onClick={() => { setShowModal(false); setEditingId(null); setFormError(null); }} className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 shrink-0">
                 <X size={18} />
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto px-5 sm:px-6 py-5 flex-1">
               <Field label="Código do Cupom">
                 <input
                   type="text"
@@ -446,13 +452,15 @@ const Coupons: React.FC = () => {
                   <p className="text-xs text-red-600 dark:text-red-400">{formError}</p>
                 </div>
               )}
+            </div>
 
+            <div className="px-5 sm:px-6 py-4 border-t border-slate-200 dark:border-white/10 shrink-0 bg-white dark:bg-slate-900">
               <button
                 onClick={handleSave}
                 disabled={saving}
                 className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-50 text-white rounded-xl font-black text-sm uppercase tracking-widest transition-all"
               >
-                {saving ? <Loader2 size={16} className="animate-spin" /> : <><CheckCircle size={16} /> Criar Cupom</>}
+                {saving ? <Loader2 size={16} className="animate-spin" /> : <><CheckCircle size={16} /> {editingId ? 'Salvar alterações' : 'Criar Cupom'}</>}
               </button>
             </div>
           </div>

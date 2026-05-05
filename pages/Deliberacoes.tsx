@@ -241,7 +241,7 @@ const Deliberacoes: React.FC = () => {
 
       {/* Gate de fase */}
       <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-3xl p-5">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="min-w-0 flex-1">
             <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Fase atual</p>
             <h2 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white mt-1">
@@ -256,7 +256,7 @@ const Deliberacoes: React.FC = () => {
             <button
               onClick={advancePhase}
               disabled={advancing}
-              className="flex items-center gap-2 px-5 py-3 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#d4005a] transition-all disabled:opacity-50"
+              className="w-full sm:w-auto sm:shrink-0 inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#d4005a] transition-all disabled:opacity-50"
             >
               {advancing ? <Loader2 size={12} className="animate-spin" /> : (
                 STATUS_NEXT[status] === 'LIBERADO' ? <Unlock size={12} /> : <ChevronRight size={12} />
@@ -265,7 +265,7 @@ const Deliberacoes: React.FC = () => {
             </button>
           )}
           {status === 'LIBERADO' && (
-            <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl">
+            <div className="self-start inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl">
               <CheckCircle2 size={14} className="text-emerald-600 dark:text-emerald-400" />
               <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">Liberado</span>
             </div>
