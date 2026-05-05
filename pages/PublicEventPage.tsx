@@ -619,6 +619,15 @@ const PublicEventPage = () => {
                 );
               })}
             </div>
+            {/* CTA contextual depois da lista de preços — padrão e-commerce
+                (Eventbrite/Sympla/Doity): valor visível + ação ao lado.
+                Reduz fricção pra quem rolou até aqui pra comparar preços. */}
+            <Link
+              to={`/festival/${eventId}/register`}
+              className="mt-2 inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3.5 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-2xl text-sm font-black uppercase tracking-widest transition-all shadow-xl shadow-[#ff0068]/20"
+            >
+              Inscrever minha coreografia <ChevronRight size={16} />
+            </Link>
           </div>
         )}
 

@@ -122,7 +122,7 @@ const SeletivaInscrito: React.FC = () => {
       {/* Header */}
       <div className="flex justify-between items-start flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">
+          <h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">
             Seletiva de <span className="text-[#ff0068]">Vídeo</span>
           </h1>
           <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">

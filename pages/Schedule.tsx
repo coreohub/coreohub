@@ -1389,7 +1389,7 @@ const Schedule = () => {
                 {currentTrack ? 'AO VIVO PARA JURADOS' : 'AGUARDANDO COMANDO'}
               </span>
             </div>
-            <h2 className="text-2xl font-black uppercase tracking-tighter italic text-white">
+            <h2 className="text-2xl font-black uppercase tracking-tighter text-white">
               {currentTrack?.nome_coreografia || 'Nenhuma selecionada'}
             </h2>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">

@@ -234,7 +234,7 @@ const EquipeProdutor = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">
             Minha <span className="text-[#ff0068]">Equipe</span>
           </h1>
           <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">
@@ -423,7 +423,7 @@ const EquipeProdutor = () => {
               className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-200 dark:border-white/10 shadow-2xl overflow-y-auto max-h-[90vh]"
             >
               <div className="p-8 border-b border-slate-100 dark:border-white/5 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-900 z-10 rounded-t-[3rem]">
-                <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">
+                <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">
                   Adicionar <span className="text-[#ff0068]">Membro</span>
                 </h2>
                 <button onClick={() => setInviteOpen(false)} className="p-2 text-slate-400 hover:text-rose-500"><X size={20} /></button>
@@ -603,7 +603,7 @@ const EquipeProdutor = () => {
             >
               <div className="p-8 border-b border-slate-100 dark:border-white/5 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-900 z-10 rounded-t-[3rem]">
                 <div>
-                  <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">
+                  <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">
                     Permissões de <span className="text-[#ff0068]">Acesso</span>
                   </h2>
                   <p className="text-[9px] text-slate-400 font-bold mt-0.5 uppercase tracking-widest">{editMember.full_name}</p>

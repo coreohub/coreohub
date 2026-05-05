@@ -204,7 +204,7 @@ const Registrations = () => {
     <div className="space-y-8 animate-in fade-in duration-700 pb-20">
       <div className="flex justify-between items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">Gestão de <span className="text-[#ff0068]">Inscrições</span></h1>
+          <h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Gestão de <span className="text-[#ff0068]">Inscrições</span></h1>
           <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Controle mestre do festival</p>
         </div>
         <div className="flex gap-2 items-center">
@@ -388,7 +388,7 @@ const Registrations = () => {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setTriageAction(null)} className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" />
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative w-full max-w-sm bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-200 dark:border-white/10 overflow-hidden shadow-2xl">
               <div className="p-8 border-b border-slate-100 dark:border-white/5 flex justify-between items-center">
-                <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">
+                <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">
                   {triageAction.decision === 'APPROVE'    && <span className="text-emerald-500">Aprovar</span>}
                   {triageAction.decision === 'PENALIZE'   && <span className="text-amber-500">Penalizar</span>}
                   {triageAction.decision === 'DISQUALIFY' && <span className="text-rose-500">Desclassificar</span>}
@@ -436,7 +436,7 @@ const Registrations = () => {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setReviewingReg(null)} className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" />
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-200 dark:border-white/10 overflow-hidden shadow-2xl">
               <div className="p-8 border-b border-slate-100 dark:border-white/5 flex justify-between items-center">
-                <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">Auditoria <span className="text-[#ff0068]">Financeira</span></h2>
+                <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Auditoria <span className="text-[#ff0068]">Financeira</span></h2>
                 <button onClick={() => setReviewingReg(null)} className="p-2 text-slate-500 hover:text-rose-500"><X size={24} /></button>
               </div>
               <div className="p-8 space-y-6">

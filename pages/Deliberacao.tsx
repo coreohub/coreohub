@@ -149,7 +149,7 @@ const Deliberacao: React.FC = () => {
           <span className="text-[10px] font-black uppercase tracking-widest">Voltar ao terminal</span>
         </button>
         <div className="text-center">
-          <h1 className="text-sm sm:text-base font-black uppercase tracking-tighter italic text-slate-900 dark:text-white">
+          <h1 className="text-sm sm:text-base font-black uppercase tracking-tighter text-slate-900 dark:text-white">
             Premiação
           </h1>
           <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">

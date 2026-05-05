@@ -197,7 +197,7 @@ const VideoSelection: React.FC = () => {
       {/* Header */}
       <div className="flex justify-between items-start flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">
+          <h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">
             Seletiva de <span className="text-[#ff0068]">Vídeo</span>
           </h1>
           <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">
@@ -492,7 +492,7 @@ const VideoSelection: React.FC = () => {
               {/* Modal header */}
               <div className="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between shrink-0">
                 <div>
-                  <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">
+                  <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">
                     Revisar <span className="text-[#ff0068]">Vídeo</span>
                   </h2>
                   <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-0.5">{reviewing.nome_coreografia}</p>

@@ -141,7 +141,7 @@ const Leaderboard = () => {
             <BrandIcon size={28} />
             <div>
               <p className="text-[9px] font-black text-[#ff0068] uppercase tracking-[0.4em]">Resultados Oficiais</p>
-              <h1 className="text-2xl font-black uppercase tracking-tighter italic">
+              <h1 className="text-2xl font-black uppercase tracking-tighter">
                 {eventName || 'CoreoHub'}
               </h1>
             </div>

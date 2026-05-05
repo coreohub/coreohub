@@ -133,7 +133,7 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
   return (
     <div className="space-y-8 pb-20">
       <div>
-        <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter italic text-slate-900 dark:text-white">
+        <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
           Meus <span className="text-[#ff0068]">Resultados</span>
         </h1>
         <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">

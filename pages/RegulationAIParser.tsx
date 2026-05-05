@@ -302,7 +302,7 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">
+          <h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">
             Importar <span className="text-[#ff0068]">Regulamento ou Edital</span>
           </h1>
           <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">

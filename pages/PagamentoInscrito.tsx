@@ -208,7 +208,7 @@ const PagamentoInscrito = () => {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black uppercase tracking-tighter italic text-slate-900 dark:text-white">
+          <h1 className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
             Efetue o <span className="text-[#ff0068]">Pagamento</span>
           </h1>
           <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">

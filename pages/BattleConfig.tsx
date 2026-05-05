@@ -15,7 +15,7 @@ const BattleConfig = () => {
     <div className="max-w-5xl mx-auto space-y-10 pb-20">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-4xl font-black text-white uppercase tracking-tighter italic">
+          <h1 className="text-4xl font-black text-white uppercase tracking-tighter">
             Battle <span className="text-[#e3ff0a]">Engine</span>
           </h1>
           <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">

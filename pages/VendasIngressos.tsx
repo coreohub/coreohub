@@ -246,7 +246,7 @@ const VendasIngressos: React.FC = () => {
     <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-black uppercase tracking-tighter italic text-slate-900 dark:text-white">
+          <h1 className="text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
             Vendas de <span className="text-[#ff0068]">Ingressos</span>
           </h1>
           {eventName && <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mt-1">{eventName}</p>}

@@ -48,7 +48,7 @@ const AIAnalysis = () => {
     <div className="max-w-6xl mx-auto space-y-10 pb-20">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-4xl font-black text-white uppercase tracking-tighter italic">
+          <h1 className="text-4xl font-black text-white uppercase tracking-tighter">
             AI <span className="text-[#e3ff0a]">Performance</span> Analysis
           </h1>
           <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">
@@ -155,7 +155,7 @@ const AIAnalysis = () => {
                   <div className="absolute top-0 right-0 p-8">
                     <div className="text-right">
                       <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nota Sugerida</p>
-                      <p className="text-6xl font-black text-[#e3ff0a] tracking-tighter italic">{result.score}</p>
+                      <p className="text-6xl font-black text-[#e3ff0a] tracking-tighter">{result.score}</p>
                     </div>
                   </div>
 

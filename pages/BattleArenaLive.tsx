@@ -46,7 +46,7 @@ const BattleArenaLive = () => {
             <Swords size={48} />
           </div>
           <div>
-            <h1 className="text-6xl font-black uppercase tracking-tighter italic leading-none">
+            <h1 className="text-6xl font-black uppercase tracking-tighter leading-none">
               Arena <span className="text-[#ff0068]">Live</span>
             </h1>
             <div className="flex items-center gap-4 mt-2">
@@ -87,7 +87,7 @@ const BattleArenaLive = () => {
             <div className="absolute -bottom-6 -right-6 w-24 h-24 bg-[#ff0068] rounded-3xl flex items-center justify-center text-4xl font-black italic shadow-2xl">A</div>
           </motion.div>
           <div className="text-center space-y-2">
-            <h2 className="text-7xl font-black uppercase tracking-tighter italic text-white">{activeMatch?.p1.name}</h2>
+            <h2 className="text-7xl font-black uppercase tracking-tighter text-white">{activeMatch?.p1.name}</h2>
             <div className="flex justify-center gap-2">
               {[...Array(3)].map((_, i) => (
                 <div key={i} className={`w-12 h-3 rounded-full ${i < (activeMatch?.p1.votes || 0) ? 'bg-[#ff0068] shadow-[0_0_15px_#ff0068]' : 'bg-white/10'}`} />
@@ -111,7 +111,7 @@ const BattleArenaLive = () => {
             <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-[#e3ff0a] text-black rounded-3xl flex items-center justify-center text-4xl font-black italic shadow-2xl">B</div>
           </motion.div>
           <div className="text-center space-y-2">
-            <h2 className="text-7xl font-black uppercase tracking-tighter italic text-white">{activeMatch?.p2.name}</h2>
+            <h2 className="text-7xl font-black uppercase tracking-tighter text-white">{activeMatch?.p2.name}</h2>
             <div className="flex justify-center gap-2">
               {[...Array(3)].map((_, i) => (
                 <div key={i} className={`w-12 h-3 rounded-full ${i < (activeMatch?.p2.votes || 0) ? 'bg-[#e3ff0a] shadow-[0_0_15px_#e3ff0a]' : 'bg-white/10'}`} />
