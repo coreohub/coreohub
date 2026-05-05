@@ -78,7 +78,9 @@ const Registrations = () => {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      let regsQuery = supabase.from('registrations').select('*').order('criado_em', { ascending: false });
+      // Schema real usa created_at (não criado_em). order com coluna inexistente
+      // fazia o select falhar silently — explicação do "0 inscrições" no demo.
+      let regsQuery = supabase.from('registrations').select('*').order('created_at', { ascending: false });
       if (selectedEventId) regsQuery = regsQuery.eq('event_id', selectedEventId);
 
       const { fetchActiveEventConfig } = await import('../services/supabase');
@@ -202,19 +204,19 @@ const Registrations = () => {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-20">
-      <div className="flex justify-between items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Gestão de <span className="text-[#ff0068]">Inscrições</span></h1>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Inscrições</h1>
           <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Controle mestre do festival</p>
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:shrink-0">
           {/* Edition selector */}
           {allEvents.length > 0 && (
-            <div className="relative">
+            <div className="relative w-full sm:w-auto">
               <select
                 value={selectedEventId ?? ''}
                 onChange={e => setSelectedEventId(e.target.value)}
-                className="appearance-none pl-4 pr-9 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 transition-all cursor-pointer"
+                className="w-full sm:w-auto appearance-none pl-4 pr-9 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 transition-all cursor-pointer truncate"
               >
                 {allEvents.map(ev => (
                   <option key={ev.id} value={ev.id}>
@@ -225,12 +227,14 @@ const Registrations = () => {
               <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             </div>
           )}
-          <button onClick={fetchData} className="p-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-400 hover:text-[#ff0068] transition-all">
-            <RefreshCw size={20} className={isLoading ? 'animate-spin' : ''} />
-          </button>
-          <button className="px-6 py-3 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-[#ff0068]/20">
-            <Download size={16} className="inline mr-2" /> Exportar CSV
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={fetchData} className="p-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-400 hover:text-[#ff0068] transition-all shrink-0">
+              <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+            </button>
+            <button className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#e0005c] transition-all shadow-lg shadow-[#ff0068]/20">
+              <Download size={14} /> Exportar CSV
+            </button>
+          </div>
         </div>
       </div>
 

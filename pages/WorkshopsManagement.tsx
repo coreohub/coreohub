@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../services/supabase';
+import imageCompression from 'browser-image-compression';
 import {
   Plus, Trash2, Pencil, Calendar, Clock, MapPin, Loader2, X, AlertCircle, CheckCircle,
-  GraduationCap, User, Tag, Layers, DollarSign, Users, Globe, EyeOff,
+  GraduationCap, User, Tag, Layers, DollarSign, Users, Globe, EyeOff, Camera,
 } from 'lucide-react';
 
 type Nivel = 'iniciante' | 'intermediario' | 'avancado' | 'todos';
@@ -540,6 +541,35 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
     };
   }, [onClose]);
 
+  // Upload de foto do professor (mesmo padrão de JudgesManagement: comprime
+  // pra webp 320px e salva como base64 inline — não depende de bucket).
+  // Usado quando o professor não é jurado já cadastrado (caso comum).
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const handlePhotoUpload = async (file: File) => {
+    if (!file) return;
+    setPhotoUploading(true);
+    try {
+      const compressed = await imageCompression(file, {
+        maxSizeMB: 0.15,
+        maxWidthOrHeight: 320,
+        useWebWorker: true,
+        fileType: 'image/webp',
+      });
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(compressed);
+      });
+      upd('professor_photo_url', base64);
+    } catch (e) {
+      console.warn('Falha ao processar foto do professor:', e);
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
   return (
     <div
       role="dialog"
@@ -586,9 +616,43 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
 
           {/* Professor */}
           <Section title="Professor">
-            <Field label="Nome do professor *">
-              <input value={form.professor_name} onChange={e => upd('professor_name', e.target.value)} className={inputCls} />
-            </Field>
+            {/* Foto + nome lado a lado em desktop, empilhado em mobile.
+                Padrão JudgesManagement: avatar quadrado com Camera overlay no canto.
+                Útil quando o professor NÃO é jurado já cadastrado (não tem foto vinda dali). */}
+            <div className="flex items-start gap-4">
+              <div className="relative shrink-0">
+                <img
+                  src={form.professor_photo_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(form.professor_name || 'professor')}`}
+                  alt="avatar do professor"
+                  className="w-16 h-16 rounded-2xl object-cover bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-white/10"
+                />
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={photoUploading}
+                  className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#ff0068] text-white flex items-center justify-center shadow-lg ring-2 ring-white dark:ring-slate-900 hover:scale-110 transition-transform"
+                  title={form.professor_photo_url ? 'Trocar foto' : 'Adicionar foto'}
+                  aria-label={form.professor_photo_url ? 'Trocar foto' : 'Adicionar foto'}
+                >
+                  {photoUploading
+                    ? <Loader2 size={12} className="animate-spin" />
+                    : <Camera size={12} />
+                  }
+                </button>
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => { if (e.target.files?.[0]) handlePhotoUpload(e.target.files[0]); }}
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <Field label="Nome do professor *">
+                  <input value={form.professor_name} onChange={e => upd('professor_name', e.target.value)} className={inputCls} />
+                </Field>
+              </div>
+            </div>
             <Field label="Bio curta (140 chars — aparece em cards)">
               <input value={form.professor_bio_short} onChange={e => upd('professor_bio_short', e.target.value)} maxLength={140} className={inputCls} />
             </Field>

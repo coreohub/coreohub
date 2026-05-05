@@ -175,13 +175,16 @@ const DEMO_COVER_URL = 'https://images.unsplash.com/photo-1508700115892-45ecd05a
 // PDF placeholder pro regulamento (small public PDF de teste)
 const DEMO_REGULATION_PDF = 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
 
-// Trilhas sonoras CC0 do Pixabay (placeholder pra testar modo SISTEMA de auto-play)
+// Trilhas sonoras de demonstração — SoundHelix tem URLs estáveis há 15+ anos,
+// é o padrão em audio players HTML5 (referenciado pela MDN/W3C). CDNs Pixabay
+// e Free Music Archive mudam URLs e quebram demos depois de meses.
 const DEMO_TRILHAS = [
-  'https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3',
-  'https://cdn.pixabay.com/audio/2024/02/27/audio_b647d31df3.mp3',
-  'https://cdn.pixabay.com/audio/2022/03/15/audio_1718e36bf8.mp3',
-  'https://cdn.pixabay.com/audio/2023/06/29/audio_af72d307ee.mp3',
-  'https://cdn.pixabay.com/audio/2022/10/16/audio_3b5f4e2fff.mp3',
+  'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+  'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
+  'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
+  'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3',
+  'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3',
+  'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3',
 ]
 
 // Patrocinadores placeholder — variedade típica de festival real:

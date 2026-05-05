@@ -21,31 +21,31 @@ const EQUIPE_ROLES: {
   {
     value: UserRole.COORDENADOR, label: 'Coordenador',
     desc: 'Acesso amplo — cronograma, credenciamento, jurados, palco e vendas.',
-    icon: Shield, color: 'text-purple-500 bg-purple-500/10 border-purple-500/20',
+    icon: Shield, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
     preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: true, credenciamento: true, marcacao_palco: true, suporte_juri: true, inscricoes_leitura: true, triagem: true, vendas_ingressos: true },
   },
   {
     value: UserRole.MESARIO, label: 'Coordenador do Júri',
     desc: 'Suporte à banca: verifica terminais e controla presença dos jurados. Lidera a premiação.',
-    icon: Headphones, color: 'text-blue-500 bg-blue-500/10 border-blue-500/20',
+    icon: Headphones, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
     preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: false, marcacao_palco: false, suporte_juri: true, inscricoes_leitura: false, triagem: false, vendas_ingressos: false },
   },
   {
     value: UserRole.SONOPLASTA, label: 'Sonoplasta',
     desc: 'Opera o áudio e pode reordenar o cronograma em tempo real.',
-    icon: Music2, color: 'text-amber-500 bg-amber-500/10 border-amber-500/20',
+    icon: Music2, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
     preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: true, credenciamento: false, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: false, triagem: false, vendas_ingressos: false },
   },
   {
     value: UserRole.RECEPCAO, label: 'Recepção / Palco',
     desc: 'Acompanha o cronograma, faz check-in de público e tira dúvidas sobre vendas.',
-    icon: Users, color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
+    icon: Users, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
     preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: true, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: true, triagem: false, vendas_ingressos: true },
   },
   {
     value: UserRole.PALCO, label: 'Marcador de Palco',
     desc: 'Prepara o palco entre apresentações com cronômetro dedicado.',
-    icon: PersonStanding, color: 'text-[#ff0068] bg-[#ff0068]/10 border-[#ff0068]/20',
+    icon: PersonStanding, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
     preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: false, marcacao_palco: true, suporte_juri: false, inscricoes_leitura: false, triagem: false, vendas_ingressos: false },
   },
 ];
