@@ -36,17 +36,16 @@
 
 import React, { useState } from 'react';
 
-// TODO: Substituir pelo ID oficial fornecido pela Asaas durante a homologação.
-// Enquanto não chegar, a imagem 404 e o componente cai no TextFallback abaixo
-// (que NÃO é adaptação do selo — é nota textual mínima de cumprimento).
-const ASAAS_BADGE_ID = 'XXXX';
+// ID oficial fornecido pela Asaas durante a homologação BaaS (2026-05-04).
+// Versionado aqui pra fácil rotacionamento se a Asaas mudar a integração.
+const ASAAS_BADGE_ID = 'd58edae9-a53c-4ab3-9e71-a4e04d8a8b15';
 const ASAAS_BADGE_BASE = 'https://baas.asaas.com/selos';
 const ASAAS_HOME = 'https://asaas.com';
 
 const URL_BY_THEME = {
   positive: `${ASAAS_BADGE_BASE}/Servicos_financeiros_Asaas-Reduzida-Positivo.svg?id=${ASAAS_BADGE_ID}`,
-  mono:     `${ASAAS_BADGE_BASE}/Servicos_financeiros_Asaas-Reduzida-Mono.svg?id=${ASAAS_BADGE_ID}`,
-  negative: `${ASAAS_BADGE_BASE}/Servicos_financeiros_Asaas-Reduzida-Negativo.svg?id=${ASAAS_BADGE_ID}`,
+  mono:     `${ASAAS_BADGE_BASE}/Servicos_financeiros_Asaas-Reduzida-Negativo-Preto.svg?id=${ASAAS_BADGE_ID}`,
+  negative: `${ASAAS_BADGE_BASE}/Servicos_financeiros_Asaas-Reduzida-Negativo-Branco.svg?id=${ASAAS_BADGE_ID}`,
 } as const;
 
 type AsaasBadgeTheme = keyof typeof URL_BY_THEME;

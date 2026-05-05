@@ -99,10 +99,10 @@ function baseLayout(opts: {
           <td style="padding:8px 32px 28px;text-align:center;">
             <!-- Selo Asaas — exigência regulatória do BaaS (Resolução Conjunta nº 16/2025 BCB).
                  Obrigatório em e-mails conforme Playbook Asaas.
-                 TODO: trocar id=XXXX pelo ID oficial fornecido pela Asaas. -->
+                 ID oficial: d58edae9-a53c-4ab3-9e71-a4e04d8a8b15 -->
             <a href="https://asaas.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">
               <img
-                src="https://baas.asaas.com/selos/Servicos_financeiros_Asaas-Reduzida-Positivo.svg?id=XXXX"
+                src="https://baas.asaas.com/selos/Servicos_financeiros_Asaas-Reduzida-Positivo.svg?id=d58edae9-a53c-4ab3-9e71-a4e04d8a8b15"
                 alt="Selo Serviços Financeiros Asaas"
                 width="160"
                 height="48"
