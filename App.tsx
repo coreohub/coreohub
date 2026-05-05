@@ -6,6 +6,7 @@ import { supabase } from './services/supabase';
 import { getOrCreateProfile } from './services/profileService';
 import Sidebar from './components/Sidebar';
 import DemoBanner from './components/DemoBanner';
+import InstallAppBanner from './components/InstallAppBanner';
 import Header from './components/Header';
 import BottomNavBar from './components/BottomNavBar';
 
@@ -216,6 +217,9 @@ const PrivateLayout: React.FC<{
         <main className="flex-1 overflow-y-auto relative z-10 pb-20 sm:pb-4">
           {/* DemoBanner: sticky no topo se evento ativo é demo (Stripe Test Mode pattern) */}
           <DemoBanner />
+          {/* InstallAppBanner: aparece após 2ª sessão (não first-load) — research
+              Pinterest mostra que prompt cedo demais tem 91% dismiss rate. */}
+          <InstallAppBanner />
           <div className="p-3 lg:p-4">
             <Suspense fallback={<PageLoader />}>
               {children}

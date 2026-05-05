@@ -18,9 +18,10 @@ import {
   Calendar, CalendarDays, CalendarRange,
   CreditCard, CheckCircle, AlertCircle, ExternalLink, Percent, Hash,
   Image as ImageIcon, Upload, Play, Pause, Volume2,
-  Instagram, MessageCircle, Globe, Mail, FileText, Youtube,
+  Instagram, MessageCircle, Globe, Mail, FileText, Youtube, Smartphone,
 } from 'lucide-react';
 import { formatEventWhatsApp } from '../utils/formatters';
+import InstallPWAButton from '../components/InstallPWAButton';
 import { previewNarration, type NarrationKind } from '../services/narrationApi';
 
 /* ── Evaluation Rules types ── */
@@ -2342,6 +2343,22 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     </button>
                   );
                 })}
+              </div>
+            </div>
+
+            {/* Instalar como app — sempre disponível pro produtor (Linear/Figma pattern) */}
+            <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-6 rounded-3xl">
+              <div className="flex items-start gap-4">
+                <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068] shrink-0">
+                  <Smartphone size={18} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white">Instalar como app</h3>
+                  <p className="text-xs text-slate-500 mt-1 mb-3">
+                    Acesso rápido na tela inicial — funciona offline-first e abre direto sem barra do navegador.
+                  </p>
+                  <InstallPWAButton />
+                </div>
               </div>
             </div>
 

@@ -11,6 +11,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { QRCodeCanvas } from 'qrcode.react';
 import { ArrowLeft, Loader2, AlertCircle, Sun, Calendar, MapPin, ExternalLink, Download, Share2, ChevronLeft, ChevronRight, Users } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import InstallPWAButton from '../components/InstallPWAButton';
 
 interface Sibling {
   id: string;
@@ -344,6 +345,19 @@ const MeuIngresso: React.FC = () => {
                     >
                       <Share2 size={12} /> Compartilhar
                     </button>
+                  </div>
+                )}
+
+                {/* Convite pra instalar o app — aparece só se o navegador suporta
+                    (Chrome/Android) ou se é iOS Safari (mostra instruções). Padrão
+                    Strava/Sympla: oferece app no momento de maior engajamento
+                    (logo após receber o ingresso). */}
+                {!isCheckedIn && (
+                  <div className="mt-3 pt-3 border-t border-slate-100 flex flex-col items-center gap-1.5">
+                    <p className="text-[10px] text-slate-500 text-center">
+                      Acesso rápido ao seu ingresso
+                    </p>
+                    <InstallPWAButton />
                   </div>
                 )}
               </div>
