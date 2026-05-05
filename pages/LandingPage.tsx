@@ -267,6 +267,51 @@ const LandingPage = () => {
         }
       />
 
+      {/* ─── 5.5 EM CAMPO (foto produto-em-uso) ──────────────────────────────────────────────── */}
+      <section className="relative overflow-hidden border-t border-white/5">
+        {/* Wrapper full-bleed com imagem cinematográfica */}
+        <div className="relative w-full h-[70vh] md:h-[85vh] min-h-[500px] max-h-[800px]">
+          <img
+            src="https://i.imgur.com/hGkjZ6J.jpg"
+            alt="Jurado avaliando uma apresentação ao vivo num festival CoreoHub: tablet em mãos exibindo o terminal, microfone para feedback de áudio, palco iluminado ao fundo"
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="lazy"
+          />
+
+          {/* Gradient overlay pra legibilidade do texto */}
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-950/60 via-transparent to-transparent" />
+
+          {/* Badge AO VIVO no canto superior */}
+          <div className="absolute top-6 right-6 md:top-10 md:right-10">
+            <div className="inline-flex items-center gap-2 px-3 py-2 bg-rose-500/20 border border-rose-500/40 backdrop-blur-md rounded-full">
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-white">
+                Ao vivo · 3 jurados conectados
+              </span>
+            </div>
+          </div>
+
+          {/* Headline no rodapé da imagem */}
+          <div className="absolute inset-x-0 bottom-0 px-6 pb-12 md:pb-20">
+            <div className="max-w-5xl mx-auto">
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">
+                Em campo
+              </p>
+              <h2 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tighter uppercase leading-[0.95] max-w-3xl">
+                Não é mockup.<br />
+                <span className="text-[#ff0068]">É como funciona</span><br />
+                no seu festival.
+              </h2>
+              <p className="text-slate-300 text-base md:text-xl max-w-2xl mt-6 leading-relaxed">
+                Tablet em mãos, microfone no áudio, palco rolando.
+                Banca avalia em tempo real — mesmo se a rede do ginásio cair.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ─── 6. Vitrine vende sozinha ──────────────────────────────────────────────── */}
       <FeatureSection
         kicker="Um link, mil ações"
