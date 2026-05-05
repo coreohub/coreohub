@@ -582,9 +582,6 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
             <Field label="Descrição">
               <textarea value={form.description} onChange={e => upd('description', e.target.value)} rows={3} className={inputCls} placeholder="O que o aluno vai aprender, pré-requisitos, materiais..." />
             </Field>
-            <Field label="URL da imagem de capa">
-              <input value={form.cover_url} onChange={e => upd('cover_url', e.target.value)} className={inputCls} placeholder="https://..." />
-            </Field>
           </Section>
 
           {/* Professor */}
@@ -598,11 +595,9 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
             <Field label="Bio completa (modal)">
               <textarea value={form.professor_bio} onChange={e => upd('professor_bio', e.target.value)} rows={3} className={inputCls} />
             </Field>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="URL da foto"><input value={form.professor_photo_url} onChange={e => upd('professor_photo_url', e.target.value)} className={inputCls} /></Field>
-              <Field label="Instagram (ex: @maria.dance)"><input value={form.professor_instagram} onChange={e => upd('professor_instagram', e.target.value)} className={inputCls} /></Field>
-              <Field label="Site (URL)"><input value={form.professor_site_url} onChange={e => upd('professor_site_url', e.target.value)} className={inputCls} /></Field>
-            </div>
+            <Field label="Instagram (ex: @maria.dance)">
+              <input value={form.professor_instagram} onChange={e => upd('professor_instagram', e.target.value)} className={inputCls} />
+            </Field>
             <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
               <input type="checkbox" checked={form.professor_is_public} onChange={e => upd('professor_is_public', e.target.checked)} />
               Publicar PersonCard do professor na vitrine do evento
@@ -658,10 +653,9 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
             </p>
           </Section>
 
-          {/* Comissão */}
-          <Section title="Comissão CoreoHub">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Field label="% comissão"><input type="number" step="0.01" value={form.workshop_commission_percent} onChange={e => upd('workshop_commission_percent', e.target.value)} className={inputCls} /></Field>
+          {/* Limites & taxas (comissão CoreoHub fica fora — só super admin edita) */}
+          <Section title="Limites & taxas">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Modo da taxa">
                 <select value={form.workshop_fee_mode} onChange={e => upd('workshop_fee_mode', e.target.value as FeeMode)} className={inputCls}>
                   <option value="repassar">Repassar ao comprador</option>

@@ -542,9 +542,9 @@ const StageMarker = () => {
               key="start"
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
               onClick={handleStart}
-              className="w-full py-6 bg-[#ff0068] text-white rounded-3xl font-black text-lg uppercase tracking-widest shadow-2xl shadow-[#ff0068]/30 hover:scale-[1.02] active:scale-[0.98] transition-transform flex items-center justify-center gap-3"
+              className="w-full py-4 bg-[#ff0068] text-white rounded-2xl font-black text-base uppercase tracking-widest shadow-xl shadow-[#ff0068]/30 hover:scale-[1.02] active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
             >
-              <Play size={24} fill="white" /> Iniciar Marcação
+              <Play size={18} fill="white" /> Iniciar Marcação
             </motion.button>
           )}
 
@@ -552,9 +552,9 @@ const StageMarker = () => {
             <motion.div key="marking-btns" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-3">
               <button
                 onClick={handleReady}
-                className="w-full py-6 bg-emerald-500 text-white rounded-3xl font-black text-lg uppercase tracking-widest shadow-2xl shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-transform flex items-center justify-center gap-3"
+                className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black text-base uppercase tracking-widest shadow-xl shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
               >
-                <CheckCircle2 size={24} /> Palco Pronto
+                <CheckCircle2 size={18} /> Palco Pronto
               </button>
               <button
                 onClick={handleCancel}

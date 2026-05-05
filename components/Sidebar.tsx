@@ -102,7 +102,7 @@ const menuSections: MenuSection[] = [
       { path: '/registrations',   label: 'Inscrições',        icon: ClipboardList },
       { path: '/seletiva-video',  label: 'Seletiva de Vídeo', icon: Video         },
       { path: '/manage-schedule', label: 'Cronograma',        icon: Calendar      },
-      { path: '/account-settings?tab=Fluxo do Evento', label: 'Narração IA', icon: Mic2 },
+      { path: '/narracao-ia', label: 'Narração IA', icon: Mic2 },
       { path: '/marcacao-palco',  label: 'Marcação de Palco', icon: PersonStanding },
     ],
   },

@@ -157,6 +157,15 @@ const Auth = () => {
       <div className="absolute -top-24 -left-24 w-96 h-96 bg-[#ff0068]/10 blur-[120px] rounded-full animate-pulse" />
       <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-[#ff0068]/10 blur-[120px] rounded-full" />
 
+      {/* Voltar pra site institucional — escape route padrão Stripe/GitHub/Vercel */}
+      <a
+        href="https://coreohub.com"
+        className="absolute top-5 left-5 z-20 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 hover:text-[#ff0068] transition-colors"
+      >
+        <ArrowRight size={12} className="rotate-180" />
+        Voltar para coreohub.com
+      </a>
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

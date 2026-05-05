@@ -555,10 +555,20 @@ const EventCommissionCard: React.FC<EventCommissionCardProps> = ({ event, saving
 };
 
 /* ════════════════════════ AccountSettings ════════════════════════ */
-const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
+interface AccountSettingsProps {
+  onSaveSuccess?: () => void;
+  /** Quando passado, fixa a tab inicial e esconde a barra de tabs (rota dedicada
+      tipo /narracao-ia que reusa esta tela com escopo focado). */
+  forcedTab?: TabType;
+  /** Label alternativo pro header da página (ex: "Narração IA" em vez de "Configurações"). */
+  pageLabel?: string;
+}
+
+const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSettingsProps) => {
   // Permite deep-link com ?tab=<nome> pra atalhos de outras telas (ex:
   // Sidebar -> Narração IA aponta pra ?tab=Fluxo do Evento)
   const initialTab: TabType = (() => {
+    if (forcedTab) return forcedTab;
     if (typeof window === 'undefined') return 'Geral';
     const param = new URLSearchParams(window.location.search).get('tab');
     if (!param) return 'Geral';
@@ -4054,7 +4064,17 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-32 text-slate-900 dark:text-white">
 
-      {/* Tab bar */}
+      {/* Header customizado quando rota dedicada (ex: /narracao-ia) */}
+      {pageLabel && (
+        <div>
+          <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
+            {pageLabel}
+          </h1>
+        </div>
+      )}
+
+      {/* Tab bar — escondida em rotas dedicadas (forcedTab fixo) */}
+      {!forcedTab && (
       <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden backdrop-blur-xl shadow-sm sticky top-0 z-20">
         <div className="flex overflow-x-auto no-scrollbar">
           {TABS.map(({ label: tab }) => (
@@ -4073,6 +4093,7 @@ const AccountSettings = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
           ))}
         </div>
       </div>
+      )}
 
       {/* Content */}
       <AnimatePresence mode="wait">

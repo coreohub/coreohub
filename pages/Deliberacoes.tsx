@@ -198,11 +198,11 @@ const Deliberacoes: React.FC = () => {
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter italic text-slate-900 dark:text-white">
-            Premi<span className="text-[#ff0068]">ação</span>
+        <div className="min-w-0">
+          <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
+            Premiação
           </h1>
-          <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">
+          <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1 truncate">
             {event?.name ?? 'Evento ativo'}
           </p>
         </div>

@@ -382,6 +382,9 @@ const App: React.FC = () => {
         <Route path="/apuracao" element={<PrivateRoute {...privateRouteProps}><ResultsPanel /></PrivateRoute>} />
         <Route path="/equipe-jurados" element={<PrivateRoute {...privateRouteProps}><JudgesManagement /></PrivateRoute>} />
         <Route path="/account-settings" element={<PrivateRoute {...privateRouteProps}><AccountSettings onSaveSuccess={fetchConfig} /></PrivateRoute>} />
+        {/* Narração IA: atalho dedicado em vez de aba dentro de Configurações.
+            Reusa AccountSettings com tab pré-selecionada e label customizado. */}
+        <Route path="/narracao-ia" element={<PrivateRoute {...privateRouteProps}><AccountSettings onSaveSuccess={fetchConfig} forcedTab="Fluxo do Evento" pageLabel="Narração IA" /></PrivateRoute>} />
 
         <Route path="/judge-terminal" element={<JudgeTerminalRoute privateRouteProps={privateRouteProps} />} />
         <Route path="/deliberacao" element={<JudgeStandaloneRoute><Deliberacao /></JudgeStandaloneRoute>} />

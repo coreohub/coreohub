@@ -561,16 +561,19 @@ const JudgesManagement = () => {
                           alt="avatar"
                           className="w-16 h-16 rounded-2xl object-cover bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-white/10"
                         />
+                        {/* Camera overlay sempre visível em mobile (touch não tem hover).
+                            Padrão LinkedIn/Twitter/iOS Photos: ícone com badge no canto. */}
                         <button
                           type="button"
                           onClick={() => avatarInputRef.current?.click()}
                           disabled={avatarUploading}
-                          className="absolute inset-0 rounded-2xl bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                          title="Trocar foto"
+                          className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#ff0068] text-white flex items-center justify-center shadow-lg ring-2 ring-white dark:ring-slate-900 hover:scale-110 transition-transform"
+                          title={form.avatar_url ? 'Trocar foto' : 'Adicionar foto'}
+                          aria-label={form.avatar_url ? 'Trocar foto' : 'Adicionar foto'}
                         >
                           {avatarUploading
-                            ? <Loader2 size={16} className="text-white animate-spin" />
-                            : <Camera size={16} className="text-white" />
+                            ? <Loader2 size={12} className="animate-spin" />
+                            : <Camera size={12} />
                           }
                         </button>
                         <input
@@ -593,29 +596,8 @@ const JudgesManagement = () => {
                       </div>
                     </div>
 
-                    {/* Avatar upload button */}
-                    <div>
-                      <label className={labelCls}>Foto de Perfil</label>
-                      <button
-                        type="button"
-                        onClick={() => avatarInputRef.current?.click()}
-                        disabled={avatarUploading}
-                        className="w-full flex items-center justify-center gap-2 py-3 px-4 border-2 border-dashed border-slate-300 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 hover:border-[#ff0068]/50 hover:text-[#ff0068] transition-all disabled:opacity-60"
-                      >
-                        {avatarUploading
-                          ? <><Loader2 size={14} className="animate-spin" />Enviando foto...</>
-                          : <><Upload size={14} />{form.avatar_url ? 'Trocar foto' : 'Selecionar foto'}</>
-                        }
-                      </button>
-                      {form.avatar_url && (
-                        <p className="text-[9px] text-emerald-600 dark:text-emerald-400 ml-1 mt-1 flex items-center gap-1">
-                          <CheckCircle2 size={10} /> Foto enviada com sucesso
-                        </p>
-                      )}
-                      {!form.avatar_url && (
-                        <p className="text-[9px] text-slate-400 ml-1 mt-1">Deixe sem foto para usar avatar automático gerado pelo nome.</p>
-                      )}
-                    </div>
+                    {/* Botão "Trocar foto" duplicado removido — Camera overlay no canto
+                        da foto cumpre a função (padrão LinkedIn/Twitter/iOS Photos). */}
 
                     <div>
                       <label className={labelCls}>Especialidade / Mini-Bio (máx. 2 linhas)</label>
