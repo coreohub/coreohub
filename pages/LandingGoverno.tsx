@@ -113,6 +113,30 @@ const LandingGoverno: React.FC = () => {
         </div>
       </section>
 
+      {/* ─── 1.5 FOTO INSTITUCIONAL ──────────────────────────────────────────────── */}
+      <section className="relative w-full h-[55vh] md:h-[65vh] min-h-[400px] max-h-[600px] overflow-hidden border-t border-white/5">
+        <img
+          src="https://i.imgur.com/kpBd1Iw.jpg"
+          alt="Equipe de gestão pública analisando dados de mostra cultural"
+          className="absolute inset-0 w-full h-full object-cover"
+          loading="lazy"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/50 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 px-6 pb-12 md:pb-16">
+          <div className="max-w-5xl mx-auto">
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Decisão técnica respaldada</p>
+            <h2 className="text-3xl md:text-5xl font-black tracking-tighter uppercase leading-[0.95] max-w-3xl">
+              Sua equipe analisa.<br />
+              <span className="text-[#ff0068]">Procuradoria aprova.</span>
+            </h2>
+            <p className="text-slate-300 text-base md:text-lg max-w-2xl mt-4 leading-relaxed">
+              Documentação técnica completa, conformidade auditável e termo de referência modelo —
+              tudo o que sua área jurídica precisa pra anexar ao processo administrativo.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* ─── 2. CASOS DE USO ──────────────────────────────────────────────── */}
       <section className="px-6 py-24 lg:py-32 border-t border-white/5">
         <div className="max-w-6xl mx-auto">
@@ -130,26 +154,39 @@ const LandingGoverno: React.FC = () => {
                 icon: Users,
                 title: 'JOMI · Jogos da Melhor Idade',
                 body: 'Mostras culturais e modalidades de dança nas fases municipais, regionais e estaduais. Categorias por idade, classificação por município, relatório consolidado para a coordenadoria.',
+                image: 'https://i.imgur.com/KGtRNzX.jpg',
+                imageAlt: 'Idosos participando de mostra cultural pública',
               },
               {
                 icon: Building2,
                 title: 'Mostras Municipais de Dança',
                 body: 'Festivais abertos da prefeitura com inscrição gratuita ou simbólica. Vitrine pública, programação, certificado oficial automatizado e relatório de prestação de contas.',
+                image: null,
+                imageAlt: '',
               },
               {
                 icon: Award,
                 title: 'Mostras Estaduais',
                 body: 'Eventos de grande porte com banca técnica, deliberação coletiva e publicação oficial dos resultados em portal próprio. Suporta múltiplas modalidades simultâneas.',
+                image: null,
+                imageAlt: '',
               },
             ].map((c, i) => {
               const Icon = c.icon;
               return (
-                <div key={i} className="bg-white/5 border border-white/10 rounded-3xl p-6">
-                  <div className="w-12 h-12 rounded-xl bg-[#ff0068]/10 border border-[#ff0068]/20 flex items-center justify-center mb-4">
-                    <Icon size={20} className="text-[#ff0068]" />
+                <div key={i} className="bg-white/5 border border-white/10 rounded-3xl overflow-hidden flex flex-col">
+                  {c.image && (
+                    <div className="aspect-[16/10] bg-slate-900 overflow-hidden">
+                      <img src={c.image} alt={c.imageAlt} className="w-full h-full object-cover" loading="lazy" />
+                    </div>
+                  )}
+                  <div className="p-6 flex-1">
+                    <div className="w-12 h-12 rounded-xl bg-[#ff0068]/10 border border-[#ff0068]/20 flex items-center justify-center mb-4">
+                      <Icon size={20} className="text-[#ff0068]" />
+                    </div>
+                    <h3 className="text-base font-black uppercase tracking-tight text-white mb-2">{c.title}</h3>
+                    <p className="text-sm text-slate-400 leading-relaxed">{c.body}</p>
                   </div>
-                  <h3 className="text-base font-black uppercase tracking-tight text-white mb-2">{c.title}</h3>
-                  <p className="text-sm text-slate-400 leading-relaxed">{c.body}</p>
                 </div>
               );
             })}

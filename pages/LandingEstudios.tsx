@@ -157,6 +157,31 @@ const LandingEstudios: React.FC = () => {
         </div>
       </section>
 
+      {/* ─── 2.5 FOTO DA DIRETORA ──────────────────────────────────────────────── */}
+      <section className="relative w-full h-[60vh] md:h-[75vh] min-h-[450px] max-h-[700px] overflow-hidden border-t border-white/5">
+        <img
+          src="https://i.imgur.com/ETyu0L8.jpg"
+          alt="Diretora de estúdio supervisionando ensaio com tablet em mãos"
+          className="absolute inset-0 w-full h-full object-cover"
+          loading="lazy"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 px-6 pb-12 md:pb-20">
+          <div className="max-w-5xl mx-auto">
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Sua noite de volta</p>
+            <h2 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tighter uppercase leading-[0.95] max-w-3xl">
+              O palco é seu.<br />
+              <span className="text-[#ff0068]">A operação é nossa.</span>
+            </h2>
+            <p className="text-slate-300 text-base md:text-xl max-w-2xl mt-6 leading-relaxed">
+              Você dirige o ensaio. CoreoHub vende ingresso, monta programação,
+              gera certificado e libera você pra fazer o que ninguém mais sabe:
+              transformar criança em bailarina.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* ─── 3. SOLUÇÃO ──────────────────────────────────────────────── */}
       <section className="relative px-6 py-24 lg:py-32 border-t border-white/5 overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,0,104,0.08),transparent_70%)]" />
@@ -206,40 +231,22 @@ const LandingEstudios: React.FC = () => {
           'Reembolso 1 clique se cliente desistir',
         ]}
         mockup={
-          <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-            <div className="bg-slate-950 px-4 py-2 border-b border-white/10 flex items-center gap-2">
-              <div className="flex gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-rose-500/40" />
-                <div className="w-2.5 h-2.5 rounded-full bg-amber-500/40" />
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/40" />
-              </div>
-              <div className="flex-1 mx-3 px-3 py-1 bg-white/5 rounded text-[10px] text-slate-500 font-mono truncate">
-                app.coreohub.com/evento/cia-etoile-2026
-              </div>
-            </div>
-            <div className="p-5 space-y-4">
-              <div>
-                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#ff0068]">Espetáculo de fim de ano</p>
-                <p className="text-2xl font-black uppercase tracking-tighter text-white mt-1 leading-none">CIA ÉTOILE 2026</p>
-                <p className="text-[10px] text-slate-400 mt-2">Sáb 13 dez · 19h · Teatro Municipal</p>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { label: 'Inteira', val: 'R$ 40' },
-                  { label: 'Meia', val: 'R$ 20' },
-                  { label: 'Solidária', val: 'R$ 25 + 1kg' },
-                ].map((r, i) => (
-                  <div key={i} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-center">
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{r.label}</p>
-                    <p className="text-sm font-black text-[#ff0068] mt-0.5">{r.val}</p>
-                  </div>
-                ))}
-              </div>
-              <button className="w-full bg-[#ff0068] text-white text-xs font-black uppercase tracking-widest py-3 rounded-xl">
-                Comprar ingresso
-              </button>
-            </div>
-          </div>
+          <figure className="relative rounded-2xl overflow-hidden aspect-[4/5] bg-slate-900 shadow-2xl">
+            <img
+              src="https://i.imgur.com/10ufINO.jpg"
+              alt="Família comprando ingresso pelo celular"
+              className="w-full h-full object-cover"
+              loading="lazy"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
+            <figcaption className="absolute bottom-0 left-0 right-0 p-5">
+              <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-1">Reunidos no sofá</p>
+              <p className="text-white text-base font-bold leading-snug">
+                Avó, mãe e filha escolhendo poltrona junto.<br />
+                Família compra em segundos, sem grupo de WhatsApp confuso.
+              </p>
+            </figcaption>
+          </figure>
         }
       />
 
@@ -573,7 +580,15 @@ const LandingEstudios: React.FC = () => {
 
       {/* ─── 12. CTA FINAL ──────────────────────────────────────────────── */}
       <section className="relative px-6 py-24 lg:py-32 overflow-hidden border-t border-white/5">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,0,104,0.18),transparent_70%)]" />
+        {/* Background fullbleed: foto do palco com bailarinos, overlay escuro pra texto legível */}
+        <img
+          src="https://i.imgur.com/iYXGr0x.jpg"
+          alt="Palco do espetáculo de dança com bailarinos em pose final"
+          className="absolute inset-0 w-full h-full object-cover"
+          loading="lazy"
+        />
+        <div className="absolute inset-0 bg-slate-950/80" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,0,104,0.25),transparent_70%)]" />
         <div className="relative max-w-4xl mx-auto text-center">
           <Heart size={28} className="text-[#ff0068] mx-auto mb-6" />
           <h2 className="text-5xl md:text-7xl font-black tracking-tighter uppercase leading-[0.95] mb-6">

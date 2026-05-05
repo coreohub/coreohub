@@ -312,6 +312,47 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* ─── 5.6 Galeria "Quem usa" — 2 fotos lado a lado ──────────────────────────────────────────────── */}
+      <section className="px-6 py-16 lg:py-24 border-t border-white/5">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-12">
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Quem está por trás</p>
+            <h2 className="text-3xl md:text-5xl font-black tracking-tighter uppercase">
+              Produtores brasileiros<br />
+              <span className="text-[#ff0068]">deixaram a planilha pra trás.</span>
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <figure className="relative rounded-2xl overflow-hidden aspect-[4/3] bg-slate-900">
+              <img
+                src="https://i.imgur.com/oE8vBcp.jpg"
+                alt="Produtor acompanhando festival ao vivo pelo tablet"
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
+              <figcaption className="absolute bottom-0 left-0 right-0 p-5">
+                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-1">Direção</p>
+                <p className="text-white text-sm font-bold">Dashboard ao vivo na palma da mão — sem voltar pra trás-cena pra checar planilha.</p>
+              </figcaption>
+            </figure>
+            <figure className="relative rounded-2xl overflow-hidden aspect-[4/3] bg-slate-900">
+              <img
+                src="https://i.imgur.com/pywXpKV.jpg"
+                alt="Equipe de produção coordenando bastidores"
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
+              <figcaption className="absolute bottom-0 left-0 right-0 p-5">
+                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-1">Bastidores</p>
+                <p className="text-white text-sm font-bold">Coordenadora e marcador trocando ideia em segundos — porque o app já avisou tudo.</p>
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
       {/* ─── 6. Vitrine vende sozinha ──────────────────────────────────────────────── */}
       <FeatureSection
         kicker="Um link, mil ações"
