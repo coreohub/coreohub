@@ -769,6 +769,7 @@ const LandingPage = () => {
             <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-x-6 gap-y-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
               <a href="https://app.coreohub.com/festivais"    className="hover:text-[#ff0068]">Festivais ativos</a>
               <a href="https://app.coreohub.com/login"        className="hover:text-[#ff0068]">Entrar</a>
+              <Link to="/estudios"                             className="hover:text-[#ff0068]">Para estúdios</Link>
               <Link to="/governo"                              className="hover:text-[#ff0068]">Para o setor público</Link>
               <a href="mailto:contato@coreohub.com"           className="hover:text-[#ff0068]">contato@coreohub.com</a>
               <a href="https://wa.me/5517997936169"
