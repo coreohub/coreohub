@@ -264,7 +264,7 @@ const SuporteJuri = () => {
             <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] mb-0.5">Próxima na fila</p>
             <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight">{currentPresentation || '—'}</p>
             {currentStyle && <p className="text-[9px] text-slate-400 uppercase font-bold tracking-widest">{currentStyle}</p>}
-            <p className="text-[8px] text-slate-400 mt-1 italic">Mesa de Som ainda não iniciou transmissão</p>
+            <p className="text-xs text-slate-500 mt-1 italic">Mesa de Som ainda não iniciou transmissão</p>
           </div>
         </div>
       ) : null}

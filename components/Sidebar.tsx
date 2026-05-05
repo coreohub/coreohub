@@ -244,14 +244,9 @@ const Sidebar = ({ isOpen, toggle, onLogout, activeRole, profile, videoSelection
       {isOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden" onClick={toggle} />}
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-950 transform transition-transform duration-300 lg:relative lg:translate-x-0 border-r border-slate-200 dark:border-white/10 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex flex-col h-full">
-          <div className="p-5 flex items-center gap-3">
-            <div className="bg-[#ff0068] p-1.5 rounded-lg text-white shadow-[0_0_15px_rgba(255,0,104,0.3)]">
-              <Music size={16} />
-            </div>
-            <span className="tracking-tighter uppercase font-black text-base text-slate-900 dark:text-white">Coreo<span className="text-[#ff0068]">Hub</span></span>
-          </div>
-
-          <nav className="flex-1 px-3 overflow-y-auto space-y-4 pb-4">
+          {/* Branding removido — Header.tsx já mostra avatar+nome CoreoHub.
+              Sidebar começa direto na navegação pra evitar duplicação visual. */}
+          <nav className="flex-1 px-3 pt-4 overflow-y-auto space-y-4 pb-4">
             {visibleSections.map((sec) => {
               const tone = (sec as MenuSection).tone;
               return (

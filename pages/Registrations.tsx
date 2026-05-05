@@ -170,7 +170,16 @@ const Registrations = () => {
       .map(r => ({ ...r, _violation: checkViolation(r) }));
   }, [registrations, toleranceRule, ageRefMode, ageRefFixed, eventDate]); // eslint-disable-line
 
-  useEffect(() => { fetchData(); }, [selectedEventId]); // eslint-disable-line
+  // Só dispara fetchData quando selectedEventId já resolveu — antes disso, o
+  // primeiro fetch trazia TODOS os registros (sem filter), depois o segundo
+  // fetch filtrava por evento e zerava se não batesse. Daí o flash "aparece
+  // e some". Solução: aguardar resolução do evento ativo, evita 2 requests
+  // e o flicker do estado intermediário.
+  useEffect(() => {
+    if (selectedEventId) fetchData();
+    // Se allEvents resolveu vazio (produtor sem eventos), libera o loading
+    else if (allEvents.length > 0 && !selectedEventId) setIsLoading(false);
+  }, [selectedEventId, allEvents.length]); // eslint-disable-line
 
   useEffect(() => {
     let result = registrations;

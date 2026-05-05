@@ -1299,7 +1299,7 @@ const Schedule = () => {
                 onChange={e => setTempoEntrada(Number(e.target.value))}
                 className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl py-2.5 px-4 text-slate-900 dark:text-white font-bold text-sm focus:outline-none focus:border-[#ff0068]/50"
               />
-              <p className="text-[8px] text-slate-400 dark:text-white/30 flex items-center gap-1">
+              <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
                 <Info size={9} />
                 Tempo para a coreografia entrar e se posicionar no palco
               </p>
@@ -1316,7 +1316,7 @@ const Schedule = () => {
                 onChange={e => setIntervaloSeguranca(Number(e.target.value))}
                 className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl py-2.5 px-4 text-slate-900 dark:text-white font-bold text-sm focus:outline-none focus:border-[#ff0068]/50"
               />
-              <p className="text-[8px] text-slate-400 dark:text-white/30 flex items-center gap-1">
+              <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
                 <Info size={9} />
                 Tempo mínimo de descanso entre duas apresentações consecutivas
               </p>
@@ -1339,7 +1339,7 @@ const Schedule = () => {
                 {intervaloSeguranca} <span className="text-[9px] text-slate-400 font-bold">apres.</span>
               </span>
             </div>
-            <p className="text-[8px] text-slate-400 dark:text-white/30 flex items-center gap-1">
+            <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
               <Info size={9} />
               O mesmo bailarino não pode aparecer em duas coreografias dentro desse intervalo
             </p>

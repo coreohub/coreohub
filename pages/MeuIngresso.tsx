@@ -320,7 +320,7 @@ const MeuIngresso: React.FC = () => {
                   <p className="text-2xl font-black tracking-[0.4em] text-slate-900 tabular-nums">
                     {fallbackCode}
                   </p>
-                  <p className="text-[8px] text-slate-400 mt-1 italic">
+                  <p className="text-xs text-slate-500 mt-1 italic">
                     Use se o leitor não reconhecer o QR
                   </p>
                 </div>

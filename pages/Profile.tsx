@@ -553,7 +553,7 @@ const MeuPerfil = () => {
               <p className="text-[9px] text-rose-500 font-bold mt-1">CPF inválido — verifique os dígitos</p>
             )}
             {docStatus(form.document) !== 'invalid' && (
-              <p className="text-[8px] text-slate-400 mt-1">
+              <p className="text-xs text-slate-500 mt-1">
                 Usado para emissão de certificados e futura integração financeira.
               </p>
             )}

@@ -473,7 +473,7 @@ const MeuElenco = () => {
                 </div>
                 {formErrors.cpf
                   ? <p className="text-[9px] text-rose-500 font-bold mt-1">{formErrors.cpf}</p>
-                  : <p className="text-[8px] text-slate-400 mt-1">Validação automática — algoritmo oficial da Receita Federal</p>
+                  : <p className="text-xs text-slate-500 mt-1">Validação automática — algoritmo oficial da Receita Federal</p>
                 }
               </div>
 

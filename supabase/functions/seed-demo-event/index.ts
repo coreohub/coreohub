@@ -1383,7 +1383,9 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
     for (const s of staffSpec) {
       const email = `staff-${s.role.toLowerCase()}-${userIdShortStaff}@coreohub-demo.local`
       try {
-        const { data: created, error: cuErr } = await supa.auth.admin.createUser({
+        // Recover path: se cleanup anterior deixou auth.user órfão (sem profile),
+        // o createUser falha com email-exists. Tenta achar e deletar pra recriar limpo.
+        let { data: created, error: cuErr } = await supa.auth.admin.createUser({
           email,
           password: crypto.randomUUID(),
           email_confirm: true,
@@ -1393,11 +1395,29 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
             is_demo: true,
           },
         })
+        if (cuErr && cuErr.message?.toLowerCase().includes('already')) {
+          console.warn(`[demo-team] ${s.role} já existia em auth.users — limpando órfão`)
+          try {
+            const { data: list } = await supa.auth.admin.listUsers({ page: 1, perPage: 200 })
+            const orphan = list?.users?.find(u => u.email === email)
+            if (orphan) {
+              await supa.auth.admin.deleteUser(orphan.id)
+              const retry = await supa.auth.admin.createUser({
+                email, password: crypto.randomUUID(), email_confirm: true,
+                user_metadata: { full_name: s.full_name, demo_creator_id: user.id, is_demo: true },
+              })
+              created = retry.data; cuErr = retry.error
+            }
+          } catch (e) {
+            console.warn(`[demo-team] falha no recover de ${s.role}:`, e)
+          }
+        }
         if (cuErr || !created?.user) {
-          console.warn(`Falha criando staff ${s.role}:`, cuErr?.message)
+          console.warn(`[demo-team] FALHOU createUser ${s.role}:`, cuErr?.message ?? 'sem user')
           continue
         }
         // Trigger handle_new_user já criou profile com role=USER. UPDATE pra papel real.
+        // service_role bypassa o trigger protect_profiles_privileged_columns.
         const { error: upErr } = await supa
           .from('profiles')
           .update({
@@ -1409,9 +1429,10 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
           })
           .eq('id', created.user.id)
         if (upErr) {
-          console.warn(`Falha update profile ${s.role}:`, upErr.message)
+          console.warn(`[demo-team] FALHOU update profile ${s.role}:`, upErr.message)
           continue
         }
+        console.log(`[demo-team] OK ${s.role} criado: ${created.user.id}`)
         teamOk++
       } catch (e) {
         console.warn(`Exceção criando staff ${s.role}:`, e)

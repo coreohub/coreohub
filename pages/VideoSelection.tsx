@@ -557,43 +557,55 @@ const VideoSelection: React.FC = () => {
                   />
                 </div>
 
-                {/* Decision buttons */}
+                {/* Decision buttons — cada um com label + sub-explicação visível
+                    (em mobile tooltip não funciona; mostrar texto direto evita
+                    confusão no que cada decisão faz). */}
                 <div className="space-y-2">
-                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Decisão</p>
+                  <p className="text-xs font-black text-slate-500 uppercase tracking-widest">Decisão</p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <button
                       onClick={() => handleReview('approved')}
                       disabled={savingReview}
-                      className="flex flex-col items-center gap-2 py-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-500 hover:text-white hover:border-emerald-500 transition-all disabled:opacity-50 shadow-sm"
+                      className="flex flex-col items-center gap-2 py-4 px-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-2xl font-black uppercase tracking-widest hover:bg-emerald-500 hover:text-white hover:border-emerald-500 transition-all disabled:opacity-50 shadow-sm"
                     >
                       {savingReview ? <RefreshCw size={18} className="animate-spin" /> : <CheckCircle2 size={20} />}
-                      Aprovar
+                      <span className="text-[10px]">Aprovar</span>
+                      <span className="text-[9px] font-medium normal-case tracking-normal opacity-80 text-center leading-tight">
+                        Vai pro evento
+                      </span>
                     </button>
                     <button
                       onClick={() => handleReview('conditional')}
                       disabled={savingReview}
-                      className="flex flex-col items-center gap-2 py-4 bg-purple-500/10 border border-purple-500/20 text-purple-500 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-purple-500 hover:text-white hover:border-purple-500 transition-all disabled:opacity-50 shadow-sm"
-                      title="Aprovado, mas com pendências (ex: trocar trilha, ajustar enquadramento)"
+                      className="flex flex-col items-center gap-2 py-4 px-2 bg-purple-500/10 border border-purple-500/20 text-purple-500 rounded-2xl font-black uppercase tracking-widest hover:bg-purple-500 hover:text-white hover:border-purple-500 transition-all disabled:opacity-50 shadow-sm"
                     >
                       {savingReview ? <RefreshCw size={18} className="animate-spin" /> : <AlertTriangle size={20} />}
-                      Condicional
+                      <span className="text-[10px]">Condicional</span>
+                      <span className="text-[9px] font-medium normal-case tracking-normal opacity-80 text-center leading-tight">
+                        Aprova com pendência
+                      </span>
                     </button>
                     <button
                       onClick={() => handleReview('review_later')}
                       disabled={savingReview}
-                      className="flex flex-col items-center gap-2 py-4 bg-amber-400/10 border border-amber-400/20 text-amber-500 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-amber-400 hover:text-white hover:border-amber-400 transition-all disabled:opacity-50 shadow-sm"
-                      title="Marca como favorito pra avaliar depois (sem decisão final ainda)"
+                      className="flex flex-col items-center gap-2 py-4 px-2 bg-amber-400/10 border border-amber-400/20 text-amber-500 rounded-2xl font-black uppercase tracking-widest hover:bg-amber-400 hover:text-white hover:border-amber-400 transition-all disabled:opacity-50 shadow-sm"
                     >
                       {savingReview ? <RefreshCw size={18} className="animate-spin" /> : <Star size={20} />}
-                      Favoritar
+                      <span className="text-[10px]">Favoritar</span>
+                      <span className="text-[9px] font-medium normal-case tracking-normal opacity-80 text-center leading-tight">
+                        Revisar depois
+                      </span>
                     </button>
                     <button
                       onClick={() => handleReview('rejected')}
                       disabled={savingReview}
-                      className="flex flex-col items-center gap-2 py-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white hover:border-rose-500 transition-all disabled:opacity-50 shadow-sm"
+                      className="flex flex-col items-center gap-2 py-4 px-2 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-2xl font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white hover:border-rose-500 transition-all disabled:opacity-50 shadow-sm"
                     >
                       {savingReview ? <RefreshCw size={18} className="animate-spin" /> : <XCircle size={20} />}
-                      Reprovar
+                      <span className="text-[10px]">Reprovar</span>
+                      <span className="text-[9px] font-medium normal-case tracking-normal opacity-80 text-center leading-tight">
+                        Não entra no evento
+                      </span>
                     </button>
                   </div>
                 </div>
