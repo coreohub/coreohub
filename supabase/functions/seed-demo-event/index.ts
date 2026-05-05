@@ -471,6 +471,21 @@ Deno.serve(async (req) => {
     await supa.from('certificate_templates').delete().eq('producer_id', userId)
     // ── Cupons: têm event_id FK. Deletar pelos eventos demo.
     await supa.from('coupons').delete().in('event_id', ids)
+    // ── Demo team: 3 staff fakes criados via auth.admin. Identificados por
+    //    email pattern `*-${userIdShort}@coreohub-demo.local`. Deletar do
+    //    auth.users CASCADE pra profiles (FK em auth.users.id).
+    const userIdShort = userId.slice(0, 8)
+    const { data: staffProfiles } = await supa
+      .from('profiles')
+      .select('id')
+      .like('email', `%-${userIdShort}@coreohub-demo.local`)
+    for (const p of (staffProfiles ?? []) as Array<{ id: string }>) {
+      try {
+        await supa.auth.admin.deleteUser(p.id)
+      } catch (e) {
+        console.warn(`Falha ao deletar staff demo ${p.id}:`, e)
+      }
+    }
   }
 
   // ─── action: delete ────────────────────────────────────────────────────
@@ -622,7 +637,11 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       { termo: 'Pas',       pronuncia: 'Pá' },
     ]
 
-    await supa.from('configuracoes').insert([{
+    // UPSERT em vez de INSERT: trigger AFTER INSERT em events cria row vazia em
+    // configuracoes com id=event_id, e INSERT cego falhava silenciosamente em
+    // PK conflict — perdia premios_especiais, ingressos, programacao etc, e
+    // por isso /premiacao mostrava "PRÊMIOS 0".
+    await supa.from('configuracoes').upsert([{
       id: eventId,
       event_id: eventId,
       // AccountSettings hidrata cover_url/descricao/nome_evento/local_evento
@@ -671,7 +690,7 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       ingressos_audiencia: DEMO_INGRESSOS,
       patrocinadores: DEMO_PATROCINADORES,
       programacao: DEMO_PROGRAMACAO,
-    }])
+    }], { onConflict: 'id' })
 
     // Espelha formacoes_config em events (algumas telas leem dali)
     await supa.from('events').update({ formacoes_config: formatos }).eq('id', eventId)
@@ -893,12 +912,17 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
         else console.warn('Falha ao inserir deliberations:', dErr.message)
       }
 
-      // Avanca o evento pra fase DELIBERACAO (jurados atribuindo premios) —
-      // estado mais visualmente rico que COLETANDO. Produtor pode avancar
-      // manualmente pra CONFERENCIA e LIBERADO pra testar o flow completo.
+      // Avanca o evento DIRETO pra LIBERADO pra que /premiacao e /apuracao
+      // mostrem o ciclo completo (com premios atribuidos visiveis ao produtor).
+      // User pode reverter manualmente pra COLETANDO/DELIBERACAO/CONFERENCIA
+      // pra testar fases anteriores.
       await supa
         .from('events')
-        .update({ deliberation_status: 'DELIBERACAO' })
+        .update({
+          deliberation_status: 'LIBERADO',
+          deliberation_released_at: new Date().toISOString(),
+          deliberation_released_by: user.id,
+        })
         .eq('id', eventId)
     } catch (e: any) {
       console.warn('Falha no seed de deliberation:', e?.message ?? e)
@@ -1320,10 +1344,82 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       }
     }
 
+    // ─── 12) Demo team — 3 staff fakes pra popular /minha-equipe ───────────
+    // Cria 3 auth.users via admin API com metadata flag pra cleanup. Email
+    // pattern dedicado (`-${userIdShort}@coreohub-demo.local`) garante que
+    // o delete bate só nos staffs DESTE produtor demo.
+    let teamOk = 0
+    const userIdShortStaff = user.id.slice(0, 8)
+    const STAFF_PERMS_DEFAULT = {
+      financeiro: false, validar_pagamentos: false,
+      cronograma_leitura: true, cronograma_editar: false,
+      credenciamento: false, marcacao_palco: false,
+      suporte_juri: false, inscricoes_leitura: false,
+      triagem: false, vendas_ingressos: false,
+    }
+    const staffSpec: Array<{ role: string; full_name: string; cargo: string; perms: Record<string, boolean> }> = [
+      {
+        role: 'COORDENADOR',
+        full_name: 'Renata Lopes',
+        cargo: 'Coordenadora geral [DEMO]',
+        perms: { ...STAFF_PERMS_DEFAULT, cronograma_editar: true, credenciamento: true, marcacao_palco: true, suporte_juri: true, inscricoes_leitura: true, triagem: true, vendas_ingressos: true },
+      },
+      {
+        role: 'SONOPLASTA',
+        full_name: 'Bruno Yamada',
+        cargo: 'Sonoplasta [DEMO]',
+        perms: { ...STAFF_PERMS_DEFAULT, cronograma_editar: true },
+      },
+      {
+        role: 'PALCO',
+        full_name: 'Camila Tavares',
+        cargo: 'Marcadora de palco [DEMO]',
+        perms: { ...STAFF_PERMS_DEFAULT, marcacao_palco: true },
+      },
+    ]
+    for (const s of staffSpec) {
+      const email = `staff-${s.role.toLowerCase()}-${userIdShortStaff}@coreohub-demo.local`
+      try {
+        const { data: created, error: cuErr } = await supa.auth.admin.createUser({
+          email,
+          password: crypto.randomUUID(),
+          email_confirm: true,
+          user_metadata: {
+            full_name: s.full_name,
+            demo_creator_id: user.id,
+            is_demo: true,
+          },
+        })
+        if (cuErr || !created?.user) {
+          console.warn(`Falha criando staff ${s.role}:`, cuErr?.message)
+          continue
+        }
+        // Trigger handle_new_user já criou profile com role=USER. UPDATE pra papel real.
+        const { error: upErr } = await supa
+          .from('profiles')
+          .update({
+            role: s.role,
+            cargo: s.cargo,
+            permissoes_custom: s.perms,
+            full_name: s.full_name,
+            email,
+          })
+          .eq('id', created.user.id)
+        if (upErr) {
+          console.warn(`Falha update profile ${s.role}:`, upErr.message)
+          continue
+        }
+        teamOk++
+      } catch (e) {
+        console.warn(`Exceção criando staff ${s.role}:`, e)
+      }
+    }
+
     return json({
       ok: true,
       event_id: eventId,
       stats: {
+        team: teamOk,
         coreografias: totalRegs,
         seletiva_pendentes: seletivaErr ? 0 : seletivaToInsert.length,
         seletiva_error: seletivaErr?.message ?? null,

@@ -63,6 +63,8 @@ const VendasIngressos: React.FC = () => {
   const [refundReason, setRefundReason] = useState('');
   const [refundProcessing, setRefundProcessing] = useState(false);
   const [refundError, setRefundError] = useState<string | null>(null);
+  // Detail drawer (Stripe Dashboard pattern: row click → side sheet com detalhes)
+  const [detailRow, setDetailRow] = useState<Row | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -336,7 +338,11 @@ const VendasIngressos: React.FC = () => {
               </thead>
               <tbody>
                 {filtered.map(r => (
-                  <tr key={r.id} className="border-b border-slate-100 dark:border-white/5 last:border-b-0 hover:bg-slate-50 dark:hover:bg-white/5">
+                  <tr
+                    key={r.id}
+                    className="border-b border-slate-100 dark:border-white/5 last:border-b-0 hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer"
+                    onClick={() => setDetailRow(r)}
+                  >
                     <Td>
                       <p className="text-xs text-slate-700 dark:text-slate-300">
                         {new Date(r.created_at).toLocaleDateString('pt-BR')}
@@ -346,7 +352,7 @@ const VendasIngressos: React.FC = () => {
                       </p>
                     </Td>
                     <Td>
-                      <p className="font-bold text-slate-900 dark:text-white">{r.buyer_name}</p>
+                      <p className="font-bold text-slate-900 dark:text-white hover:text-[#ff0068]">{r.buyer_name}</p>
                       <p className="text-[10px] text-slate-500">{r.buyer_email}</p>
                       <p className="text-[10px] text-slate-400 font-mono">{formatCpf(r.buyer_cpf)}</p>
                     </Td>
@@ -388,6 +394,7 @@ const VendasIngressos: React.FC = () => {
                         href={`/meu-ingresso/${r.access_token}`}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
                         className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#ff0068] hover:underline"
                       >
                         Ver <ExternalLink size={10} />
@@ -396,7 +403,7 @@ const VendasIngressos: React.FC = () => {
                     <Td>
                       {r.status_pagamento === 'APROVADO' && !r.refunded_at && (
                         <button
-                          onClick={() => { setRefundTarget(r); setRefundReason(''); setRefundError(null); }}
+                          onClick={(e) => { e.stopPropagation(); setRefundTarget(r); setRefundReason(''); setRefundError(null); }}
                           className="inline-flex items-center gap-1 px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-lg text-[10px] font-black uppercase tracking-widest"
                         >
                           <Undo2 size={10} /> Estornar
@@ -499,9 +506,140 @@ const VendasIngressos: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Drawer de detalhes do comprador (Stripe Dashboard pattern: side sheet
+          em desktop, bottom sheet em mobile). Abre ao clicar em qualquer linha. */}
+      {detailRow && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center sm:justify-end animate-in fade-in duration-200"
+          onClick={() => setDetailRow(null)}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 w-full sm:max-w-md sm:h-screen rounded-t-3xl sm:rounded-none sm:rounded-l-3xl shadow-2xl overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 px-5 py-4 flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Detalhes do ingresso</p>
+                <h3 className="text-base font-black tracking-tight text-slate-900 dark:text-white truncate">
+                  {detailRow.buyer_name}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailRow(null)}
+                className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10 shrink-0"
+                aria-label="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-5">
+              <Section title="Comprador">
+                <Field label="Nome" value={detailRow.buyer_name} />
+                <Field label="E-mail" value={detailRow.buyer_email} mono />
+                <Field label="CPF" value={formatCpf(detailRow.buyer_cpf)} mono />
+                {detailRow.buyer_phone && <Field label="Telefone" value={detailRow.buyer_phone} mono />}
+              </Section>
+
+              <Section title="Ingresso">
+                <Field label="Tipo" value={detailRow.ticket_type_nome + (detailRow.ticket_type_kind === 'meia' ? ' (meia)' : '')} />
+                <Field label="Valor pago" value={formatBRL(detailRow.preco)} highlight />
+                {detailRow.producer_amount != null && (
+                  <Field label="Líquido (você)" value={formatBRL(Number(detailRow.producer_amount))} />
+                )}
+                {detailRow.commission_amount != null && (
+                  <Field label="Comissão CoreoHub" value={formatBRL(Number(detailRow.commission_amount))} />
+                )}
+                {detailRow.fee_mode && (
+                  <Field label="Modo" value={detailRow.fee_mode === 'repassar' ? 'Repassar (comprador paga)' : 'Absorver (você paga)'} />
+                )}
+              </Section>
+
+              <Section title="Status">
+                <div className="flex items-center justify-between py-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Pagamento</span>
+                  <StatusBadge status={detailRow.status_pagamento} />
+                </div>
+                {detailRow.payment_method && (
+                  <Field label="Método" value={detailRow.payment_method} />
+                )}
+                {detailRow.paid_at && (
+                  <Field label="Pago em" value={new Date(detailRow.paid_at).toLocaleString('pt-BR')} />
+                )}
+                <Field
+                  label="Check-in"
+                  value={
+                    detailRow.check_in_status === 'OK' && detailRow.check_in_at
+                      ? `OK · ${new Date(detailRow.check_in_at).toLocaleString('pt-BR')}`
+                      : 'Pendente'
+                  }
+                />
+              </Section>
+
+              {detailRow.refunded_at && (
+                <Section title="Estorno">
+                  <Field label="Em" value={new Date(detailRow.refunded_at).toLocaleString('pt-BR')} />
+                  {detailRow.refund_amount != null && (
+                    <Field label="Valor" value={formatBRL(Number(detailRow.refund_amount))} />
+                  )}
+                </Section>
+              )}
+
+              <Section title="Datas">
+                <Field label="Compra criada" value={new Date(detailRow.created_at).toLocaleString('pt-BR')} />
+              </Section>
+
+              <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                <a
+                  href={`/meu-ingresso/${detailRow.access_token}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[11px] font-black uppercase tracking-widest"
+                >
+                  Ver ingresso público <ExternalLink size={12} />
+                </a>
+                {detailRow.status_pagamento === 'APROVADO' && !detailRow.refunded_at && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRefundTarget(detailRow);
+                      setRefundReason('');
+                      setRefundError(null);
+                      setDetailRow(null);
+                    }}
+                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] font-black uppercase tracking-widest"
+                  >
+                    <Undo2 size={12} /> Estornar
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+  <div>
+    <h4 className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">{title}</h4>
+    <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl divide-y divide-slate-200 dark:divide-white/10">
+      {children}
+    </div>
+  </div>
+);
+
+const Field: React.FC<{ label: string; value: string; mono?: boolean; highlight?: boolean }> = ({ label, value, mono, highlight }) => (
+  <div className="flex items-start justify-between gap-3 px-3 py-2">
+    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 shrink-0">{label}</span>
+    <span className={`text-xs text-right break-all ${mono ? 'font-mono' : ''} ${highlight ? 'font-black tabular-nums text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-300'}`}>
+      {value}
+    </span>
+  </div>
+);
 
 const Th: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <th className="px-4 py-3 text-[9px] font-black uppercase tracking-widest text-slate-500">{children}</th>

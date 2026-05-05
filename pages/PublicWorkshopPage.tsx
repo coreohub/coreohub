@@ -124,6 +124,14 @@ const PublicWorkshopPage: React.FC = () => {
     return () => clearInterval(t);
   }, [workshop?.id]);
 
+  // Auto-clear toast em 2.5s. PRECISA ficar antes de qualquer early-return
+  // pra não violar Rules of Hooks (todo hook chamado em todo render).
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center">
@@ -164,13 +172,6 @@ const PublicWorkshopPage: React.FC = () => {
       setToast('Link copiado!');
     }
   };
-
-  // Auto-clear toast em 2.5s
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 2500);
-    return () => clearTimeout(t);
-  }, [toast]);
 
   return (
     <div className="min-h-screen bg-[#0b0b0f] text-white pb-24 sm:pb-12">
