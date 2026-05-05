@@ -18,6 +18,8 @@ import CentralDeMidia from './pages/CentralDeMidia';
 import Profile from './pages/Profile';
 import Auth from './pages/Auth';
 import LandingPage from './pages/LandingPage';
+const LandingGoverno  = lazy(() => import('./pages/LandingGoverno'));
+const PropostaGoverno = lazy(() => import('./pages/PropostaGoverno'));
 
 // Páginas secundárias — lazy loading para reduzir bundle inicial
 const RegistrationGradeConfig = lazy(() => import('./pages/RegistrationGradeConfig'));
@@ -367,6 +369,9 @@ const App: React.FC = () => {
         <Route path="/" element={<RootRedirect />} />
         {/* Sales page nova (preview) — acesse via /lp pra ver sem afetar a home */}
         <Route path="/lp" element={<LandingPage />} />
+        {/* Setor público: landing dedicada + PDF técnico imprimível */}
+        <Route path="/governo" element={<Suspense fallback={<PageLoader />}><LandingGoverno /></Suspense>} />
+        <Route path="/governo/proposta" element={<Suspense fallback={<PageLoader />}><PropostaGoverno /></Suspense>} />
         <Route path="/login" element={<Auth />} />
         <Route path="/register" element={<Auth />} />
         <Route path="/judge-login" element={<Suspense fallback={<PageLoader />}><JudgeLogin /></Suspense>} />

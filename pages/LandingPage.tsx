@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   ChevronRight, Sparkles, FileText, Wifi, Link as LinkIcon, DollarSign,
   Trophy, Shield, Award, GraduationCap, Mic2, Check, X, ChevronDown,
@@ -758,7 +758,7 @@ const LandingPage = () => {
       {/* ─── FOOTER ──────────────────────────────────────────────── */}
       <footer className="px-6 py-12 border-t border-white/5">
         <div className="max-w-5xl mx-auto">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div className="flex items-center gap-3">
               <img src="/coreohub-avatar.png" alt="CoreoHub" className="w-10 h-10" />
               <div>
@@ -766,10 +766,14 @@ const LandingPage = () => {
                 <p className="text-[10px] text-slate-500">Gestão Inteligente para Festivais de Dança</p>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-6 text-[10px] font-black uppercase tracking-widest text-slate-400">
-              <a href="https://app.coreohub.com/festivais" className="hover:text-[#ff0068]">Festivais ativos</a>
-              <a href="https://app.coreohub.com/login"     className="hover:text-[#ff0068]">Entrar</a>
-              <a href="mailto:contato@coreohub.com"        className="hover:text-[#ff0068]">Contato</a>
+            <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-x-6 gap-y-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+              <a href="https://app.coreohub.com/festivais"    className="hover:text-[#ff0068]">Festivais ativos</a>
+              <a href="https://app.coreohub.com/login"        className="hover:text-[#ff0068]">Entrar</a>
+              <Link to="/governo"                              className="hover:text-[#ff0068]">Para o setor público</Link>
+              <a href="mailto:contato@coreohub.com"           className="hover:text-[#ff0068]">contato@coreohub.com</a>
+              <a href="https://wa.me/5517997936169"
+                 target="_blank" rel="noopener noreferrer"
+                 className="hover:text-[#ff0068]">+55 17 99793-6169</a>
             </div>
           </div>
           <p className="text-[10px] text-slate-600 text-center mt-8">
