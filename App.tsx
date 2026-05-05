@@ -361,6 +361,8 @@ const App: React.FC = () => {
     <Router>
       <Routes>
         <Route path="/" element={<RootRedirect />} />
+        {/* Sales page nova (preview) — acesse via /lp pra ver sem afetar a home */}
+        <Route path="/lp" element={<LandingPage />} />
         <Route path="/login" element={<Auth />} />
         <Route path="/register" element={<Auth />} />
         <Route path="/judge-login" element={<Suspense fallback={<PageLoader />}><JudgeLogin /></Suspense>} />
