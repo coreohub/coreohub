@@ -106,8 +106,9 @@ const SealImage: React.FC<{
   }
 
   // 'auto': renderiza positive em light mode e negative em dark mode via classes
-  // Tailwind. Ambas as <img> são montadas; CSS esconde a inativa (display:none
-  // não dispara request, browsers modernos esperam o seletor de visibilidade).
+  // Tailwind. Importante: NÃO usar style={{display:'inline-block'}} inline porque
+  // CSS inline tem maior especificidade que classes — sobrescreveria dark:hidden
+  // e os 2 selos apareceriam juntos no dark mode (bug observado em produção).
   if (theme === 'auto') {
     return (
       <>
@@ -116,8 +117,7 @@ const SealImage: React.FC<{
           alt={ALT_TEXT}
           width={width}
           height={height}
-          className="dark:hidden"
-          style={{ display: 'inline-block' }}
+          className="inline-block dark:hidden"
           onError={() => setErrored(true)}
         />
         <img
@@ -138,7 +138,7 @@ const SealImage: React.FC<{
       alt={ALT_TEXT}
       width={width}
       height={height}
-      style={{ display: 'inline-block' }}
+      className="inline-block"
       onError={() => setErrored(true)}
     />
   );
