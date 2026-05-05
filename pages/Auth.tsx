@@ -331,9 +331,11 @@ const Auth = () => {
               </div>
 
               {/* Selo Asaas — exigência regulatória do BaaS (Resolução Conjunta nº 16/2025).
-                  Obrigatório em telas de cadastro/login conforme Playbook Asaas. */}
+                  Obrigatório em telas de cadastro/login conforme Playbook Asaas.
+                  theme='auto' alterna entre positive (light) e negative (dark)
+                  conforme o toggle de tema da app — Auth tem ambos. */}
               <div className="flex justify-center pt-2">
-                <AsaasBadge variant="compact" theme="negative" />
+                <AsaasBadge variant="compact" />
               </div>
             </div>
           </div>

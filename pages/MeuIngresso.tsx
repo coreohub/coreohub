@@ -425,10 +425,11 @@ const MeuIngresso: React.FC = () => {
           </div>
 
           {/* Selo Asaas — exigência regulatória do BaaS. Comprovante de pagamento
-              é ponto de contato obrigatório conforme Playbook Asaas. */}
-          <div className="px-6 py-4 bg-white border-t border-slate-100 flex flex-col items-center gap-2">
-            <AsaasBadge variant="compact" theme="positive" />
-            <p className="text-[9px] text-slate-400 text-center max-w-md leading-relaxed">
+              é ponto de contato obrigatório conforme Playbook Asaas.
+              theme='auto' acompanha toggle de dark mode da app. */}
+          <div className="px-6 py-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-white/10 flex flex-col items-center gap-2">
+            <AsaasBadge variant="compact" />
+            <p className="text-[9px] text-slate-400 dark:text-slate-500 text-center max-w-md leading-relaxed">
               Pagamento processado pelo ASAAS GESTÃO FINANCEIRA S.A., instituição de pagamento
               autorizada pelo Banco Central do Brasil.
             </p>

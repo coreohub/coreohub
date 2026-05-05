@@ -573,7 +573,8 @@ export default function CheckoutIngresso() {
         <div className="mt-4 flex items-center justify-center gap-2 text-[10px] text-slate-500">
           <ShieldCheck size={12} className="text-emerald-400" />
           Pagamento seguro processado por
-          <AsaasBadge />
+          {/* Página tem fundo dark fixo (bg-[#0b0b0f]) — força negative independente do tema da app */}
+          <AsaasBadge theme="negative" />
         </div>
 
         <p className="text-[10px] text-slate-500 text-center mt-3 leading-relaxed">
