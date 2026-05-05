@@ -38,59 +38,28 @@ const Leaderboard = () => {
   const fetchLeaderboard = async () => {
     setLoading(true);
     try {
-      // Busca avaliações com média por inscrição
-      const { data: evals, error } = await supabase
-        .from('evaluations')
-        .select(`
-          registration_id,
-          final_weighted_average,
-          registrations!inner(
-            nome_coreografia,
-            estudio,
-            estilo_danca,
-            categoria,
-            status,
-            event_id
-          )
-        `)
-        .not('registrations.event_id', 'is', null);
-
+      // Leaderboard é página PÚBLICA (sem auth). Usa RPC security-definer
+      // (get_public_leaderboard) em vez de SELECT direto na tabela evaluations
+      // — RLS bloqueia anon de ler notas, mas a RPC encapsula só os campos
+      // agregados (média + rank) e gateia por deliberation_status='LIBERADO'.
+      if (!eventId) {
+        setEntries([]); setFiltered([]); setLoading(false); return;
+      }
+      const { data: rows, error } = await supabase.rpc('get_public_leaderboard', {
+        p_event_id: eventId,
+      });
       if (error) throw error;
 
-      // Filtra pelo evento se tiver ID
-      const relevantEvals = eventId
-        ? (evals || []).filter((e: any) => e.registrations?.event_id === eventId)
-        : (evals || []);
-
-      // Agrega médias por registration_id
-      const grouped: Record<string, any> = {};
-      relevantEvals.forEach((e: any) => {
-        const rid = e.registration_id;
-        if (!grouped[rid]) {
-          grouped[rid] = {
-            registration_id: rid,
-            nome_coreografia: e.registrations?.nome_coreografia || '—',
-            estudio: e.registrations?.estudio || '—',
-            estilo_danca: e.registrations?.estilo_danca || '—',
-            categoria: e.registrations?.categoria || '—',
-            scores: [],
-          };
-        }
-        if (e.final_weighted_average != null) {
-          grouped[rid].scores.push(Number(e.final_weighted_average));
-        }
-      });
-
-      const result: LeaderboardEntry[] = Object.values(grouped)
-        .map((g: any) => ({
-          ...g,
-          average_score: g.scores.length > 0
-            ? g.scores.reduce((a: number, b: number) => a + b, 0) / g.scores.length
-            : 0,
-          evaluations_count: g.scores.length,
-        }))
-        .sort((a, b) => b.average_score - a.average_score)
-        .map((e, i) => ({ ...e, rank: i + 1 }));
+      const result: LeaderboardEntry[] = (rows ?? []).map((r: any) => ({
+        registration_id: r.registration_id,
+        nome_coreografia: r.nome_coreografia ?? '—',
+        estudio: r.estudio ?? '—',
+        estilo_danca: r.estilo_danca ?? '—',
+        categoria: r.categoria ?? '—',
+        average_score: Number(r.average_score),
+        evaluations_count: Number(r.evaluations_count),
+        rank: Number(r.rank),
+      }));
 
       setEntries(result);
       setFiltered(result);
