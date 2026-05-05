@@ -88,10 +88,30 @@ function baseLayout(opts: {
           </td>
         </tr>
         <tr>
-          <td style="padding:20px 32px 28px;border-top:1px solid #e5e7eb;">
+          <td style="padding:20px 32px 8px;border-top:1px solid #e5e7eb;">
             <p style="margin:0;font-size:11px;line-height:1.6;color:#94a3b8;">
               ${footerNote ?? 'Este é um email automático. Em caso de dúvidas, responda esta mensagem.'}<br />
               © ${new Date().getFullYear()} CoreoHub. Todos os direitos reservados.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 32px 28px;text-align:center;">
+            <!-- Selo Asaas — exigência regulatória do BaaS (Resolução Conjunta nº 16/2025 BCB).
+                 Obrigatório em e-mails conforme Playbook Asaas.
+                 TODO: trocar id=XXXX pelo ID oficial fornecido pela Asaas. -->
+            <a href="https://asaas.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">
+              <img
+                src="https://baas.asaas.com/selos/Servicos_financeiros_Asaas-Reduzida-Positivo.svg?id=XXXX"
+                alt="Selo Serviços Financeiros Asaas"
+                width="160"
+                height="48"
+                style="display:inline-block;border:0;outline:none;text-decoration:none;"
+              />
+            </a>
+            <p style="margin:8px 0 0;font-size:10px;line-height:1.5;color:#94a3b8;">
+              Pagamentos processados pelo ASAAS GESTÃO FINANCEIRA S.A.,<br />
+              instituição de pagamento autorizada pelo Banco Central do Brasil.
             </p>
           </td>
         </tr>

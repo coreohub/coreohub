@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Sparkles, Loader2, Mail, Lock, ArrowRight, ShieldCheck, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
+import AsaasBadge from '../components/AsaasBadge';
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -327,6 +328,12 @@ const Auth = () => {
               <div className="flex items-center gap-2 text-slate-300 dark:text-slate-700">
                 <ShieldCheck size={14} />
                 <span className="text-[8px] font-black uppercase tracking-[0.2em]">Ambiente Seguro & Criptografado</span>
+              </div>
+
+              {/* Selo Asaas — exigência regulatória do BaaS (Resolução Conjunta nº 16/2025).
+                  Obrigatório em telas de cadastro/login conforme Playbook Asaas. */}
+              <div className="flex justify-center pt-2">
+                <AsaasBadge variant="compact" theme="negative" />
               </div>
             </div>
           </div>

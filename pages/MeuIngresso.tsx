@@ -12,6 +12,7 @@ import { QRCodeCanvas } from 'qrcode.react';
 import { ArrowLeft, Loader2, AlertCircle, Sun, Calendar, MapPin, ExternalLink, Download, Share2, ChevronLeft, ChevronRight, Users } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import InstallPWAButton from '../components/InstallPWAButton';
+import AsaasBadge from '../components/AsaasBadge';
 
 interface Sibling {
   id: string;
@@ -420,6 +421,16 @@ const MeuIngresso: React.FC = () => {
           <div className="px-6 py-3 bg-slate-50 border-t border-slate-100">
             <p className="text-[9px] text-slate-400 text-center leading-relaxed">
               Este ingresso é nominativo. Apresente o QR no portão. Em caso de dúvidas, entre em contato com o organizador.
+            </p>
+          </div>
+
+          {/* Selo Asaas — exigência regulatória do BaaS. Comprovante de pagamento
+              é ponto de contato obrigatório conforme Playbook Asaas. */}
+          <div className="px-6 py-4 bg-white border-t border-slate-100 flex flex-col items-center gap-2">
+            <AsaasBadge variant="compact" theme="positive" />
+            <p className="text-[9px] text-slate-400 text-center max-w-md leading-relaxed">
+              Pagamento processado pelo ASAAS GESTÃO FINANCEIRA S.A., instituição de pagamento
+              autorizada pelo Banco Central do Brasil.
             </p>
           </div>
         </div>

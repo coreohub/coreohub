@@ -7,6 +7,7 @@ import { getOrCreateProfile } from './services/profileService';
 import Sidebar from './components/Sidebar';
 import DemoBanner from './components/DemoBanner';
 import InstallAppBanner from './components/InstallAppBanner';
+import AsaasBadge from './components/AsaasBadge';
 import Header from './components/Header';
 import BottomNavBar from './components/BottomNavBar';
 
@@ -228,6 +229,16 @@ const PrivateLayout: React.FC<{
               {children}
             </Suspense>
           </div>
+          {/* Selo Asaas — exigência regulatória do BaaS (Resolução Conjunta nº
+              16/2025 BCB). Visível em todas as telas privadas pra cumprir a
+              obrigatoriedade de identificação clara do prestador financeiro. */}
+          <footer className="px-4 py-6 border-t border-slate-200 dark:border-white/5 bg-white dark:bg-slate-950 flex flex-col items-center gap-2">
+            <AsaasBadge variant="compact" />
+            <p className="text-[9px] text-slate-400 text-center max-w-md leading-relaxed">
+              Pagamentos processados pelo ASAAS GESTÃO FINANCEIRA S.A., instituição de pagamento
+              autorizada pelo Banco Central do Brasil.
+            </p>
+          </footer>
         </main>
       </div>
 

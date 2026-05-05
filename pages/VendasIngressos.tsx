@@ -13,6 +13,7 @@ import {
   Ticket, Loader2, Search, Download, ExternalLink, CheckCircle2, Clock, XCircle, RotateCcw,
   Users, DollarSign, AlertCircle, Undo2, X,
 } from 'lucide-react';
+import AsaasBadge from '../components/AsaasBadge';
 
 interface Row {
   id: string;
@@ -414,6 +415,12 @@ const VendasIngressos: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Selo Asaas — listagem de cobrança/extrato é ponto obrigatório
+              conforme Playbook Asaas (Resolução Conjunta nº 16/2025 BCB). */}
+          <div className="px-4 py-4 border-t border-slate-200 dark:border-white/10 flex items-center justify-center">
+            <AsaasBadge variant="compact" />
           </div>
         </div>
       )}
