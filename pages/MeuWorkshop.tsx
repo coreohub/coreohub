@@ -14,6 +14,7 @@ import {
   CheckCircle, Clock, ExternalLink, Sparkles, User as UserIcon,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import AsaasBadge from '../components/AsaasBadge';
 
 interface WorkshopRegistration {
   id: string;
@@ -263,6 +264,16 @@ const MeuWorkshop: React.FC = () => {
             </button>
           </div>
         )}
+
+        {/* Selo Asaas — comprovante de pagamento de workshop é ponto obrigatório
+            conforme Playbook Asaas (Resolução Conjunta nº 16/2025 BCB). */}
+        <div className="mt-4 pt-4 border-t border-white/10 flex flex-col items-center gap-2">
+          <AsaasBadge variant="compact" theme="negative" />
+          <p className="text-[9px] text-slate-400 text-center max-w-md leading-relaxed">
+            Pagamento processado pelo ASAAS GESTÃO FINANCEIRA S.A., instituição de pagamento
+            autorizada pelo Banco Central do Brasil.
+          </p>
+        </div>
 
         {isTerminal && (
           <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-4 text-sm text-rose-200 mt-4">
