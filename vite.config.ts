@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
           // Em dev fica desabilitado por default pra não atrapalhar HMR.
           devOptions: { enabled: false },
           // Activos extras incluídos no precache (cobertura offline-first).
-          includeAssets: ['coreohub-avatar.png', 'CoreoHub - Avatar.png'],
+          includeAssets: ['coreohub-avatar.png'],
           manifest: {
             name: 'CoreoHub',
             short_name: 'CoreoHub',
