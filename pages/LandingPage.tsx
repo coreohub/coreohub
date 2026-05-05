@@ -25,72 +25,73 @@ const LandingPage = () => {
     <div className="min-h-screen bg-slate-950 text-white selection:bg-[#ff0068]/30 overflow-x-hidden">
 
       {/* ─── 1. HERO ──────────────────────────────────────────────── */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center px-6 text-center pt-20">
+      <section className="relative min-h-screen flex flex-col px-6 pt-24 pb-12 overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(255,0,104,0.18),transparent_60%)]" />
         <div className="absolute -top-40 -left-40 w-[500px] h-[500px] bg-[#ff0068]/10 blur-[140px] rounded-full" />
         <div className="absolute -bottom-40 -right-40 w-[500px] h-[500px] bg-purple-700/10 blur-[140px] rounded-full" />
 
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="relative z-10 max-w-5xl space-y-8"
-        >
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full backdrop-blur-xl">
-            <Sparkles size={12} className="text-[#ff0068]" />
-            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300">
-              Para festivais e mostras de dança
-            </span>
-          </div>
-
-          <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter uppercase leading-[0.92]">
-            O festival dos seus sonhos<br />
-            cabe num <span className="text-[#ff0068]">único link.</span>
-          </h1>
-
-          <p className="text-slate-300 text-lg md:text-2xl font-medium max-w-3xl mx-auto leading-relaxed">
-            Inscrições, jurados, palco, ingressos e certificados em uma plataforma só.
-            <br className="hidden md:block" />
-            <span className="text-slate-400">Você foca na arte. CoreoHub cuida da operação.</span>
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
-            <button
-              onClick={() => navigate('/criar-evento')}
-              className="group relative px-8 py-5 bg-[#ff0068] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_20px_60px_rgba(255,0,104,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-transform"
-            >
-              <span className="relative z-10 flex items-center gap-2">
-                Criar meu festival grátis <ChevronRight size={18} />
+        {/* Conteúdo central */}
+        <div className="relative z-10 flex-1 flex items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="max-w-5xl text-center space-y-8"
+          >
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full backdrop-blur-xl">
+              <Sparkles size={12} className="text-[#ff0068]" />
+              <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300">
+                Para festivais e mostras de dança
               </span>
-            </button>
-            <button
-              onClick={() => navigate('/festivais')}
-              className="px-8 py-5 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-white/10 transition-all"
-            >
-              Ver festivais ativos →
-            </button>
-          </div>
+            </div>
 
-          <p className="text-xs text-slate-500 pt-2">
-            Sem cartão de crédito · Sem mensalidade · Você só paga quando vende
-          </p>
-        </motion.div>
+            <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter uppercase leading-[0.92]">
+              O festival dos seus sonhos<br />
+              cabe num <span className="text-[#ff0068]">único link.</span>
+            </h1>
 
-        {/* Stats abaixo do hero */}
-        <div className="absolute bottom-8 left-0 right-0 px-6">
-          <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-white/5 pt-8">
-            {[
-              { val: '10%', label: 'Comissão única' },
-              { val: '0', label: 'Mensalidade' },
-              { val: '30s', label: 'Pra publicar evento' },
-              { val: '24/7', label: 'Funciona offline' },
-            ].map((s, i) => (
-              <div key={i} className="text-center">
-                <p className="text-2xl md:text-4xl font-black text-white tracking-tighter">{s.val}</p>
-                <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mt-1">{s.label}</p>
-              </div>
-            ))}
-          </div>
+            <p className="text-slate-300 text-lg md:text-2xl font-medium max-w-3xl mx-auto leading-relaxed">
+              Inscrições, jurados, palco, ingressos e certificados em uma plataforma só.
+              <br className="hidden md:block" />
+              <span className="text-slate-400">Você foca na arte. CoreoHub cuida da operação.</span>
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
+              <button
+                onClick={() => navigate('/criar-evento')}
+                className="group relative px-8 py-5 bg-[#ff0068] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_20px_60px_rgba(255,0,104,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-transform"
+              >
+                <span className="relative z-10 flex items-center gap-2">
+                  Criar meu festival grátis <ChevronRight size={18} />
+                </span>
+              </button>
+              <button
+                onClick={() => navigate('/festivais')}
+                className="px-8 py-5 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-white/10 transition-all"
+              >
+                Ver festivais ativos →
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Sem cartão de crédito · Sem mensalidade · Você só paga quando vende
+            </p>
+          </motion.div>
+        </div>
+
+        {/* Stats no rodapé do hero — flexbox normal, sem absolute */}
+        <div className="relative z-10 max-w-5xl mx-auto w-full grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-white/5 pt-8 mt-12">
+          {[
+            { val: '10%', label: 'Comissão única' },
+            { val: '0', label: 'Mensalidade' },
+            { val: '30s', label: 'Pra publicar evento' },
+            { val: '24/7', label: 'Funciona offline' },
+          ].map((s, i) => (
+            <div key={i} className="text-center">
+              <p className="text-2xl md:text-4xl font-black text-white tracking-tighter">{s.val}</p>
+              <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mt-1">{s.label}</p>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -411,42 +412,42 @@ const LandingPage = () => {
                   </th>
                   <th className="py-4 px-3 text-center">
                     <div className="inline-flex flex-col items-center">
-                      <span className="text-xs font-bold text-slate-400">DanceDigital</span>
-                      <span className="text-[9px] text-slate-500">R$ 290+/mês</span>
+                      <span className="text-xs font-bold text-slate-400">Sistemas dedicados</span>
+                      <span className="text-[9px] text-slate-500">R$ 290 a R$ 990/mês</span>
                     </div>
                   </th>
                   <th className="py-4 px-3 text-center">
                     <div className="inline-flex flex-col items-center">
-                      <span className="text-xs font-bold text-slate-400">FestivalOnline</span>
-                      <span className="text-[9px] text-slate-500">R$ 590+/mês</span>
-                    </div>
-                  </th>
-                  <th className="py-4 px-3 text-center">
-                    <div className="inline-flex flex-col items-center">
-                      <span className="text-xs font-bold text-slate-400">Sympla</span>
+                      <span className="text-xs font-bold text-slate-400">Marketplace genérico</span>
                       <span className="text-[9px] text-slate-500">7-12% + taxa fixa</span>
+                    </div>
+                  </th>
+                  <th className="py-4 px-3 text-center">
+                    <div className="inline-flex flex-col items-center">
+                      <span className="text-xs font-bold text-slate-400">Planilha + Pix</span>
+                      <span className="text-[9px] text-slate-500">Você é o sistema</span>
                     </div>
                   </th>
                 </tr>
               </thead>
               <tbody className="text-sm">
                 {[
-                  { f: 'IA configura festival pelo PDF',           c: true,  d: false, fo: false, s: false },
-                  { f: 'Júri avaliando offline (Wi-Fi caiu)',       c: true,  d: false, fo: false, s: false },
-                  { f: 'Áudio de feedback do jurado',              c: true,  d: false, fo: true,  s: false },
-                  { f: 'Narração IA com voz profissional',         c: true,  d: false, fo: false, s: false },
-                  { f: 'Workshops + ingressos no mesmo carrinho',  c: true,  d: false, fo: false, s: true  },
-                  { f: 'Certificado com QR de validação',          c: true,  d: true,  fo: true,  s: false },
-                  { f: 'Vitrine pública pronta como site',         c: true,  d: true,  fo: true,  s: true  },
-                  { f: 'Equipe com permissões granulares',         c: true,  d: false, fo: true,  s: false },
-                  { f: 'Sem mensalidade',                          c: true,  d: false, fo: false, s: true  },
+                  { f: 'IA configura festival pelo PDF',           c: true,  d: false, m: false, p: false },
+                  { f: 'Júri avaliando offline (Wi-Fi caiu)',       c: true,  d: false, m: false, p: false },
+                  { f: 'Áudio de feedback do jurado',              c: true,  d: false, m: false, p: false },
+                  { f: 'Narração IA com voz profissional',         c: true,  d: false, m: false, p: false },
+                  { f: 'Workshops + ingressos no mesmo carrinho',  c: true,  d: false, m: true,  p: false },
+                  { f: 'Certificado com QR de validação',          c: true,  d: true,  m: false, p: false },
+                  { f: 'Vitrine pública pronta como site',         c: true,  d: true,  m: true,  p: false },
+                  { f: 'Equipe com permissões granulares',         c: true,  d: true,  m: false, p: false },
+                  { f: 'Sem mensalidade',                          c: true,  d: false, m: true,  p: true  },
                 ].map((row, i) => (
                   <tr key={i} className="border-b border-white/5">
                     <td className="py-3 pr-4 text-slate-300">{row.f}</td>
-                    <td className="py-3 px-3 text-center">{row.c  ? <Check size={16} className="inline text-emerald-400" /> : <X size={16} className="inline text-rose-500" />}</td>
-                    <td className="py-3 px-3 text-center">{row.d  ? <Check size={16} className="inline text-slate-400" />  : <X size={16} className="inline text-rose-500/60" />}</td>
-                    <td className="py-3 px-3 text-center">{row.fo ? <Check size={16} className="inline text-slate-400" />  : <X size={16} className="inline text-rose-500/60" />}</td>
-                    <td className="py-3 px-3 text-center">{row.s  ? <Check size={16} className="inline text-slate-400" />  : <X size={16} className="inline text-rose-500/60" />}</td>
+                    <td className="py-3 px-3 text-center">{row.c ? <Check size={16} className="inline text-emerald-400" /> : <X size={16} className="inline text-rose-500" />}</td>
+                    <td className="py-3 px-3 text-center">{row.d ? <Check size={16} className="inline text-slate-400" />  : <X size={16} className="inline text-rose-500/60" />}</td>
+                    <td className="py-3 px-3 text-center">{row.m ? <Check size={16} className="inline text-slate-400" />  : <X size={16} className="inline text-rose-500/60" />}</td>
+                    <td className="py-3 px-3 text-center">{row.p ? <Check size={16} className="inline text-slate-400" />  : <X size={16} className="inline text-rose-500/60" />}</td>
                   </tr>
                 ))}
               </tbody>
@@ -454,7 +455,7 @@ const LandingPage = () => {
           </div>
 
           <p className="text-[9px] text-slate-500 text-center mt-6 italic">
-            Comparação baseada em informações públicas dos sites dos concorrentes em 2026. Faltou algo? Avise — atualizamos.
+            Comparação por categoria. Sistemas dedicados = especialistas em festivais (mensalidade). Marketplace genérico = plataformas de eventos não-especializadas. Planilha + Pix = o jeito artesanal.
           </p>
         </div>
       </section>
