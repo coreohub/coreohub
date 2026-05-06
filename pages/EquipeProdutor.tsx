@@ -22,31 +22,31 @@ const EQUIPE_ROLES: {
     value: UserRole.COORDENADOR, label: 'Coordenador',
     desc: 'Acesso amplo — cronograma, credenciamento, jurados, palco e vendas.',
     icon: Shield, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: true, credenciamento: true, marcacao_palco: true, suporte_juri: true, inscricoes_leitura: true, triagem: true, seletiva_video: true, vendas_ingressos: true },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: true, credenciamento: true, marcacao_palco: true, suporte_juri: true, inscricoes_leitura: true, triagem: true, seletiva_video: true, vendas_ingressos: true, gerenciar_cupons: true, gerenciar_workshops: true, emitir_certificados: true, resultados_leitura: true },
   },
   {
     value: UserRole.MESARIO, label: 'Coordenador do Júri',
     desc: 'Suporte à banca: verifica terminais e controla presença dos jurados. Lidera a premiação.',
     icon: Headphones, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: false, marcacao_palco: false, suporte_juri: true, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: false, marcacao_palco: false, suporte_juri: true, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: true },
   },
   {
     value: UserRole.SONOPLASTA, label: 'Sonoplasta',
     desc: 'Opera o áudio e pode reordenar o cronograma em tempo real.',
     icon: Music2, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: true, credenciamento: false, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: true, credenciamento: false, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: false },
   },
   {
     value: UserRole.RECEPCAO, label: 'Recepção / Palco',
     desc: 'Acompanha o cronograma, faz check-in de público e tira dúvidas sobre vendas.',
     icon: Users, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: true, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: true, triagem: false, seletiva_video: false, vendas_ingressos: true },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: true, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: true, triagem: false, seletiva_video: false, vendas_ingressos: true, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: false },
   },
   {
     value: UserRole.PALCO, label: 'Marcador de Palco',
     desc: 'Prepara o palco entre apresentações com cronômetro dedicado.',
     icon: PersonStanding, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: false, marcacao_palco: true, suporte_juri: false, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: false, marcacao_palco: true, suporte_juri: false, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: false },
   },
 ];
 
@@ -74,9 +74,23 @@ const PERM_GROUPS: { label: string; items: { key: PermKey; label: string; icon: 
     ],
   },
   {
+    label: 'Bilheteria',
+    items: [
+      { key: 'vendas_ingressos',    label: 'Vendas de Ingressos',  icon: Ticket },
+      { key: 'gerenciar_cupons',    label: 'Gerenciar Cupons',     icon: Filter },
+      { key: 'gerenciar_workshops', label: 'Gerenciar Workshops',  icon: Calendar },
+    ],
+  },
+  {
+    label: 'Resultados & Certificados',
+    items: [
+      { key: 'resultados_leitura',  label: 'Apuração & Premiação (leitura)', icon: Star },
+      { key: 'emitir_certificados', label: 'Emitir Certificados',  icon: Star },
+    ],
+  },
+  {
     label: 'Financeiro',
     items: [
-      { key: 'vendas_ingressos',     label: 'Painel de Vendas de Ingressos', icon: Ticket },
       { key: 'financeiro',           label: 'Dados financeiros', icon: CreditCard },
       { key: 'validar_pagamentos',   label: 'Validar pagamentos', icon: Check },
     ],

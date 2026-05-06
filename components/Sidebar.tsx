@@ -73,7 +73,11 @@ const PERM_MENU: { perm: PermKey; path: string; label: string; icon: React.Eleme
   { perm: 'inscricoes_leitura', path: '/registrations',   label: 'Inscrições',          icon: ClipboardList   },
   { perm: 'triagem',            path: '/registrations',   label: 'Triagem',             icon: Filter          },
   { perm: 'seletiva_video',     path: '/seletiva-video',  label: 'Seletiva de Vídeo',   icon: Video           },
+  { perm: 'gerenciar_workshops', path: '/workshops-do-evento', label: 'Workshops',       icon: GraduationCap   },
   { perm: 'vendas_ingressos',   path: '/vendas-ingressos', label: 'Vendas de Ingressos', icon: Ticket          },
+  { perm: 'gerenciar_cupons',   path: '/cupons',          label: 'Cupons',              icon: Tag             },
+  { perm: 'resultados_leitura', path: '/apuracao',        label: 'Apuração',            icon: BarChart2       },
+  { perm: 'emitir_certificados', path: '/certificados',   label: 'Certificados',        icon: Award           },
   { perm: 'financeiro',         path: '/qg-organizador',  label: 'Financeiro',          icon: CreditCard      },
 ];
 

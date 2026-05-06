@@ -249,6 +249,17 @@ export interface PermissoesCustom {
    *  pra coordenador/staff aprovar/rejeitar coreografias antes do evento. */
   seletiva_video: boolean;
   vendas_ingressos: boolean;
+  /** Gerenciar cupons de desconto (criar/editar/desativar). Útil pra
+   *  coordenador criar cupons promocionais por escola/grupo. */
+  gerenciar_cupons: boolean;
+  /** Gerenciar workshops do evento (criar/editar, gerenciar inscrições). */
+  gerenciar_workshops: boolean;
+  /** Emitir e gerenciar certificados em batch após o evento. Útil pra
+   *  staff/secretária responder dúvidas dos inscritos. */
+  emitir_certificados: boolean;
+  /** Leitura de Apuração + Premiação. Coordenador/Mesário acompanha
+   *  resultados durante e após o evento (read-only). */
+  resultados_leitura: boolean;
 }
 
 export const PERMISSOES_DEFAULT: PermissoesCustom = {
@@ -263,6 +274,10 @@ export const PERMISSOES_DEFAULT: PermissoesCustom = {
   triagem: false,
   seletiva_video: false,
   vendas_ingressos: false,
+  gerenciar_cupons: false,
+  gerenciar_workshops: false,
+  emitir_certificados: false,
+  resultados_leitura: false,
 };
 
 export interface Profile {
