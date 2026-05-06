@@ -617,6 +617,17 @@ Deno.serve(async (req) => {
         const emailJobs: Promise<void>[] = []
 
         if (inscritoProfile?.email) {
+          // Q2.5 — checa se inscrito ainda não verificou e-mail. Se não,
+          // o template inclui bloco pedindo confirmação (necessária pra
+          // baixar certificado depois). Best-effort — falha não bloqueia email.
+          let emailUnverified = false
+          if (coreo?.user_id) {
+            try {
+              const { data: { user: authUser } } = await supabase.auth.admin.getUserById(coreo.user_id)
+              emailUnverified = !!authUser && !authUser.email_confirmed_at
+            } catch { /* ignora — assume verified */ }
+          }
+
           emailJobs.push(dispararEmail('payment_confirmed_registrant', {
             inscritoNome:  inscritoProfile.full_name,
             inscritoEmail: inscritoProfile.email,
@@ -631,6 +642,7 @@ Deno.serve(async (req) => {
             appUrl,
             produtorEmail: produtorProfile?.email,
             registrationId: registrationId,
+            emailUnverified,
           }))
         }
 

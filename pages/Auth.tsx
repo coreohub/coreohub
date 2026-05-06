@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Sparkles, Loader2, Mail, Lock, ArrowRight, ShieldCheck, Zap } from 'lucide-react';
+import { Sparkles, Loader2, Mail, Lock, ArrowRight, ShieldCheck, Zap, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
 import AsaasBadge from '../components/AsaasBadge';
+import { suggestEmail } from '../utils/mailcheck';
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -44,6 +45,9 @@ const Auth = () => {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null);
+  const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
   const passwordRef = useRef<HTMLInputElement>(null);
 
   // Quando o login vem de um deep link de festival, mostra contexto do evento
@@ -113,10 +117,16 @@ const Auth = () => {
     }
   };
 
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    setEmailSuggestion(suggestEmail(value));
+  };
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+    setRecoveryNotice(null);
 
     try {
       if (authMode === 'login') {
@@ -126,20 +136,33 @@ const Auth = () => {
         });
         if (error) throw error;
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: {
               full_name: email.split('@')[0],
-            }
-          }
+            },
+            // Após confirmar, redireciona pra dashboard (ou redirectTo se vier de checkout).
+            emailRedirectTo: `${window.location.origin}${redirectTo || '/dashboard'}`,
+          },
         });
-        if (error) throw error;
-        if (authMode === 'signup') {
-          setError('Conta criada! Verifique seu e-mail para confirmar (se necessário) ou faça login.');
-          setIsLoading(false);
+        if (signUpError) throw signUpError;
+
+        // Padrão Stripe/Sympla: tenta logar imediatamente após criar conta.
+        // Se confirmação de e-mail está OFF (Supabase config), entra direto.
+        // Se ON, signIn falha com "Email not confirmed" — aí avisamos sem bloquear UX.
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (!signInError) {
+          // SIGNED_IN listener no useEffect já navega pra dashboard.
+          return;
         }
+        if (signInError.message?.toLowerCase().includes('email not confirmed')) {
+          setRecoveryNotice('Conta criada! Confirme seu e-mail pra ativar o acesso. Já enviamos o link.');
+          setIsLoading(false);
+          return;
+        }
+        throw signInError;
       }
     } catch (err: any) {
       let message = 'Erro na autenticação. Verifique suas credenciais.';
@@ -149,6 +172,32 @@ const Auth = () => {
 
       setError(message);
       setIsLoading(false);
+    }
+  };
+
+  /**
+   * Magic link como recovery — Q2.6 da pesquisa de mercado. Padrão Stripe:
+   * envia link por e-mail que loga + vai pra reset de senha. Não é fluxo
+   * de signup, é só recuperação.
+   */
+  const handlePasswordRecovery = async () => {
+    setError(null);
+    setRecoveryNotice(null);
+    if (!email) {
+      setError('Digite seu e-mail antes de recuperar a senha.');
+      return;
+    }
+    setRecoveryLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/login`,
+      });
+      if (error) throw error;
+      setRecoveryNotice('Link de recuperação enviado pro seu e-mail. Verifique também a caixa de spam.');
+    } catch (err: any) {
+      setError(err.message ?? 'Não foi possível enviar o link de recuperação.');
+    } finally {
+      setRecoveryLoading(false);
     }
   };
 
@@ -235,6 +284,17 @@ const Auth = () => {
                   {error}
                 </motion.div>
               )}
+              {recoveryNotice && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl text-emerald-600 dark:text-emerald-400 text-[11px] font-bold text-center flex items-start gap-2"
+                >
+                  <CheckCircle size={14} className="shrink-0 mt-0.5" />
+                  <span>{recoveryNotice}</span>
+                </motion.div>
+              )}
             </AnimatePresence>
 
             <form onSubmit={handleAuth} className="space-y-5">
@@ -248,11 +308,21 @@ const Auth = () => {
                     type="email"
                     required
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => handleEmailChange(e.target.value)}
                     placeholder="seu@email.com"
                     className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl py-3 pl-12 pr-6 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-[#ff0068]/50 focus:bg-white dark:focus:bg-white/10 transition-all font-bold shadow-sm"
                   />
                 </div>
+                {/* Mailcheck: sugestão de typo (gmial.com → gmail.com). Padrão Mailcheck.js. */}
+                {emailSuggestion && (
+                  <button
+                    type="button"
+                    onClick={() => { setEmail(emailSuggestion); setEmailSuggestion(null); }}
+                    className="ml-4 text-[10px] text-amber-600 dark:text-amber-400 font-bold hover:underline text-left"
+                  >
+                    Você quis dizer <span className="text-[#ff0068] font-black">{emailSuggestion}</span>?
+                  </button>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -317,13 +387,29 @@ const Auth = () => {
               </button>
             </div>
 
-            <div className="pt-4 flex flex-col items-center gap-6">
+            <div className="pt-4 flex flex-col items-center gap-3">
               <button
                 onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
                 className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-[#ff0068] transition-colors"
               >
                 {authMode === 'login' ? 'Não tem conta? Criar Nova Conta' : 'Já tem conta? Entrar'}
               </button>
+
+              {/* Esqueci a senha — magic link como recovery (não signup).
+                  Padrão Stripe Q2.6 da pesquisa de mercado. */}
+              {authMode === 'login' && (
+                <button
+                  type="button"
+                  onClick={handlePasswordRecovery}
+                  disabled={recoveryLoading}
+                  className="text-[10px] font-bold text-slate-400 hover:text-[#ff0068] transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  {recoveryLoading && <Loader2 size={10} className="animate-spin" />}
+                  Esqueci a senha — receber link por e-mail
+                </button>
+              )}
+
+              <div className="h-3" />
 
               <div className="flex items-center gap-2 text-slate-300 dark:text-slate-700">
                 <ShieldCheck size={14} />

@@ -7,6 +7,7 @@ import { getOrCreateProfile } from './services/profileService';
 import Sidebar from './components/Sidebar';
 import DemoBanner from './components/DemoBanner';
 import InstallAppBanner from './components/InstallAppBanner';
+import EmailVerifyBanner from './components/EmailVerifyBanner';
 import AsaasBadge from './components/AsaasBadge';
 import Header from './components/Header';
 import BottomNavBar from './components/BottomNavBar';
@@ -221,6 +222,9 @@ const PrivateLayout: React.FC<{
         <main className="flex-1 overflow-y-auto relative z-10 pb-20 sm:pb-4">
           {/* DemoBanner: sticky no topo se evento ativo é demo (Stripe Test Mode pattern) */}
           <DemoBanner />
+          {/* EmailVerifyBanner: padrão Stripe/Linear — sinaliza email não
+              confirmado sem bloquear. Some quando user verifica ou dispensa por 24h. */}
+          <EmailVerifyBanner />
           {/* InstallAppBanner: aparece após 2ª sessão (não first-load) — research
               Pinterest mostra que prompt cedo demais tem 91% dismiss rate. */}
           <InstallAppBanner />

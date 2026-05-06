@@ -150,6 +150,10 @@ interface RegistrantPayload {
   produtorEmail?: string
   /** ID da registration (UUID). Usado pra montar link da credencial digital. */
   registrationId?: string
+  /** Q2.5 — quando true, inclui bloco no email pedindo confirmação de e-mail
+   *  pra desbloquear download de certificado. Aproveita momento de open-rate alto
+   *  pós-pagamento. Padrão Stripe/Sympla — verificação lazy. */
+  emailUnverified?: boolean
 }
 
 function buildRegistrantConfirmation(p: RegistrantPayload) {
@@ -190,9 +194,31 @@ function buildRegistrantConfirmation(p: RegistrantPayload) {
       </div>`
   }
 
+  // Q2.5 — bloco de verificação de e-mail (aparece só se emailUnverified=true).
+  // Padrão Stripe/Sympla: aproveita momento alto de open-rate pós-pagamento
+  // pra capturar a verificação que destrava certificado depois.
+  let verifyBlock = ''
+  if (p.emailUnverified) {
+    const dashboardUrl = `${p.appUrl ?? 'https://coreohub.com'}/meus-certificados`
+    verifyBlock = `
+      <div style="margin-top:16px;padding:16px;border:1px solid #fde68a;border-radius:12px;background:#fffbeb;">
+        <p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#b45309;">
+          ⚠ Confirme seu e-mail
+        </p>
+        <p style="margin:0 0 10px;font-size:13px;line-height:1.5;color:#78350f;">
+          Pra baixar seu certificado depois do festival, confirme seu e-mail. Já enviamos um link separado —
+          procure por "Confirme sua conta CoreoHub" na sua caixa de entrada.
+        </p>
+        <a href="${dashboardUrl}" style="display:inline-block;padding:8px 16px;background:#f59e0b;color:#fff;text-decoration:none;border-radius:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;">
+          Acessar meus certificados
+        </a>
+      </div>`
+  }
+
   const contentHtml = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>
     ${credencialBlock}
+    ${verifyBlock}
     <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#475569;">
       Guarde este email como comprovante. Informações sobre horários, ordem de apresentação
       e orientações finais serão enviadas pelo produtor do evento à medida que a programação for definida.

@@ -38,9 +38,13 @@ const MeusCertificados: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
+  const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
+  const [resending, setResending] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    setEmailVerified(!!user?.email_confirmed_at);
     const { data, error } = await supabase.rpc('list_my_certificates');
     if (error) {
       setFeedback({ kind: 'err', msg: error.message });
@@ -52,6 +56,28 @@ const MeusCertificados: React.FC = () => {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  /** Q2.4 — bloqueio de download sem e-mail verificado.
+   * Certificado tem validade pública (QR + nome). Garantir que o nome bate
+   * com identidade verificada é razoável aqui — diferente de checkout puro. */
+  const handleResendVerify = async () => {
+    setResending(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) throw new Error('Usuário sem e-mail.');
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: user.email,
+        options: { emailRedirectTo: `${window.location.origin}/meus-certificados` },
+      });
+      if (error) throw error;
+      setFeedback({ kind: 'ok', msg: 'Link de verificação reenviado pro seu e-mail.' });
+    } catch (e: any) {
+      setFeedback({ kind: 'err', msg: e.message ?? 'Erro ao reenviar.' });
+    } finally {
+      setResending(false);
+    }
+  };
+
   useEffect(() => {
     if (!feedback) return;
     const t = setTimeout(() => setFeedback(null), 4500);
@@ -59,6 +85,10 @@ const MeusCertificados: React.FC = () => {
   }, [feedback]);
 
   const downloadPdf = async (cert: MyCert) => {
+    if (emailVerified === false) {
+      setFeedback({ kind: 'err', msg: 'Confirme seu e-mail antes de baixar o certificado. Enviamos o link pra você.' });
+      return;
+    }
     setDownloading(cert.id);
     try {
       const { data, error } = await supabase.functions.invoke('get-certificate-pdf', {
@@ -109,6 +139,31 @@ const MeusCertificados: React.FC = () => {
           <div className={`mb-4 rounded-xl border p-3 text-sm flex items-center gap-2 ${feedback.kind === 'ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200' : 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200'}`}>
             {feedback.kind === 'ok' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
             {feedback.msg}
+          </div>
+        )}
+
+        {/* Q2.4 — bloqueio só pra ações sensíveis. Mostra aviso quando user
+            tem certificado disponível mas não verificou e-mail. */}
+        {emailVerified === false && certs.length > 0 && (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex items-start gap-2 flex-1 min-w-0">
+              <AlertCircle size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-sm font-black text-amber-800 dark:text-amber-200">
+                  Confirme seu e-mail pra baixar certificado
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                  O nome no certificado precisa bater com a identidade verificada — exigência pra validade pública.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleResendVerify}
+              disabled={resending}
+              className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+            >
+              {resending ? <Loader2 size={12} className="animate-spin" /> : 'Reenviar link'}
+            </button>
           </div>
         )}
 
