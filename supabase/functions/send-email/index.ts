@@ -17,8 +17,14 @@
  *   Authorization: Bearer <service_role_key>   (ou anon se chamado do frontend)
  *   Content-Type: application/json
  *
- *   { "type": "payment_confirmed_registrant", "payload": { ...campos do template } }
- *   { "type": "payment_confirmed_producer",   "payload": { ...campos do template } }
+ *   { "type": "payment_confirmed_registrant",       "payload": { ... } }
+ *   { "type": "payment_confirmed_producer",         "payload": { ... } }
+ *   { "type": "audience_ticket_confirmed",          "payload": { ... } }
+ *   { "type": "audience_ticket_producer",           "payload": { ... } }
+ *   { "type": "workshop_registration_confirmed",    "payload": { ... } }
+ *   { "type": "workshop_registration_producer",     "payload": { ... } }
+ *   { "type": "event_created_producer",             "payload": { ... } }
+ *   { "type": "producer_welcome",                   "payload": { ... } }
  */
 
 const corsHeaders = {
@@ -519,10 +525,131 @@ function buildAudienceProducerNotification(p: AudienceProducerPayload) {
   }
 }
 
+// ─── Templates: workshop_registration_confirmed + workshop_registration_producer
+// Backlog item: faltava implementação. Webhook já disparava, edge function só
+// logava warning. Workshops ja existem como entidade desde Etapa 1 (2026-05-04).
+
+interface WorkshopConfirmedPayload {
+  buyerName?: string
+  buyerEmail: string
+  /** Email do produtor — vira reply-to */
+  produtorEmail?: string
+  workshopNome?: string
+  professorNome?: string
+  modalidade?: string
+  dataInicio?: string  // já formatada em PT-BR pelo caller
+  local?: string
+  valorPago?: number
+  /** URL pública do voucher (/meu-workshop/<token>) — onde o aluno acessa QR */
+  voucherUrl?: string
+  /** Workshop comprado em combo com inscrição da mostra (gratuito ou desconto). */
+  isCombo?: boolean
+  appUrl?: string
+}
+
+function buildWorkshopRegistrationConfirmation(p: WorkshopConfirmedPayload) {
+  const linhas = [
+    p.workshopNome  ? infoRow('Workshop',  escape(p.workshopNome))  : '',
+    p.professorNome ? infoRow('Professor(a)', escape(p.professorNome)) : '',
+    p.modalidade    ? infoRow('Modalidade', escape(p.modalidade))    : '',
+    p.dataInicio    ? infoRow('Data',       escape(p.dataInicio))    : '',
+    p.local         ? infoRow('Local',      escape(p.local))         : '',
+    typeof p.valorPago === 'number' && p.valorPago > 0
+      ? infoRow('Valor pago', escape(money(p.valorPago)))
+      : (p.isCombo ? infoRow('Valor', '<span style="color:#16a34a;font-weight:700;">Combo grátis (já incluso na inscrição)</span>') : ''),
+  ].filter(Boolean).join('')
+
+  // Bloco do voucher destacado (igual à credencial digital — link com QR).
+  let voucherBlock = ''
+  if (p.voucherUrl) {
+    voucherBlock = `
+      <div style="margin-top:24px;padding:20px;border:2px solid ${BRAND_COLOR};border-radius:16px;background:#fff5f8;">
+        <p style="margin:0 0 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:${BRAND_COLOR};">Seu voucher do workshop</p>
+        <p style="margin:0 0 12px;font-size:13px;line-height:1.5;color:#475569;">
+          Apresente o QR no credenciamento da aula. Acesse pelo celular pra exibir a tela com o código.
+        </p>
+        <a href="${escape(p.voucherUrl)}" style="display:inline-block;padding:12px 24px;background:${BRAND_COLOR};color:#fff;text-decoration:none;border-radius:12px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;">
+          Acessar voucher →
+        </a>
+      </div>`
+  }
+
+  const contentHtml = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>
+    ${voucherBlock}
+    <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      Guarde este email como comprovante. Em caso de dúvidas sobre horário ou material da aula, responda este email pra falar diretamente com a produção.
+    </p>`
+
+  const subjectPrefix = p.workshopNome ? `[${p.workshopNome}] ` : ''
+  return {
+    subject: `${subjectPrefix}Inscrição confirmada${p.isCombo ? ' (combo)' : ''}`,
+    html: baseLayout({
+      preheader: `Sua vaga no workshop ${p.workshopNome ?? ''} está garantida.`,
+      title: p.isCombo ? 'Workshop liberado!' : 'Inscrição confirmada!',
+      intro: `Olá ${escape(p.buyerName ?? 'aluno(a)')}, ${p.isCombo
+        ? `seu acesso ao workshop foi liberado como combo da sua inscrição na mostra.`
+        : `recebemos seu pagamento e sua vaga no workshop está garantida.`} Bora dançar!`,
+      contentHtml,
+      ctaLabel: 'Acessar meu workshop',
+      ctaUrl: p.voucherUrl ?? `${p.appUrl ?? 'https://coreohub.com'}/meus-workshops`,
+    }),
+  }
+}
+
+interface WorkshopProducerPayload {
+  produtorNome?: string
+  produtorEmail: string
+  workshopNome?: string
+  buyerName?: string
+  buyerEmail?: string
+  valorBruto?: number
+  comissao?: number
+  valorLiquido?: number
+  isCombo?: boolean
+  appUrl?: string
+}
+
+function buildWorkshopProducerNotification(p: WorkshopProducerPayload) {
+  const linhas = [
+    p.workshopNome ? infoRow('Workshop', escape(p.workshopNome)) : '',
+    p.buyerName    ? infoRow('Aluno(a)', escape(p.buyerName))    : '',
+    p.buyerEmail   ? infoRow('Email',    escape(p.buyerEmail))   : '',
+    p.isCombo
+      ? infoRow('Modalidade', '<span style="color:#7c3aed;font-weight:700;">Combo grátis (vinculado à inscrição da mostra)</span>')
+      : (typeof p.valorBruto === 'number' ? infoRow('Valor bruto', escape(money(p.valorBruto))) : ''),
+    !p.isCombo && typeof p.comissao === 'number'     ? infoRow('Comissão plataforma', escape(money(p.comissao)))                                                                       : '',
+    !p.isCombo && typeof p.valorLiquido === 'number' ? infoRow('Valor líquido (você recebe)', `<span style="color:#16a34a;">${escape(money(p.valorLiquido))}</span>`)                  : '',
+  ].filter(Boolean).join('')
+
+  return {
+    subject: `Nova inscrição em workshop — ${p.workshopNome ?? 'CoreoHub'}`,
+    html: baseLayout({
+      preheader: `Nova inscrição de aluno em ${p.workshopNome ?? 'seu workshop'}.`,
+      title: 'Nova inscrição em workshop',
+      intro: `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, ${p.isCombo
+        ? `um aluno foi liberado como combo grátis no seu workshop (vinculado à inscrição na mostra).`
+        : `um aluno comprou vaga no seu workshop.`}`,
+      contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>`,
+      ctaLabel: 'Ver inscrições',
+      ctaUrl: `${p.appUrl ?? 'https://app.coreohub.com'}/workshops-do-evento`,
+      footerNote: 'Você está recebendo este email por ser o produtor responsável pelo workshop.',
+    }),
+  }
+}
+
 // ─── Handler ────────────────────────────────────────────────────────────────
 
 interface SendEmailRequest {
-  type: 'payment_confirmed_registrant' | 'payment_confirmed_producer' | 'event_created_producer' | 'producer_welcome' | 'audience_ticket_confirmed' | 'audience_ticket_producer'
+  type:
+    | 'payment_confirmed_registrant'
+    | 'payment_confirmed_producer'
+    | 'event_created_producer'
+    | 'producer_welcome'
+    | 'audience_ticket_confirmed'
+    | 'audience_ticket_producer'
+    | 'workshop_registration_confirmed'
+    | 'workshop_registration_producer'
   payload: Record<string, unknown>
 }
 
@@ -649,6 +776,26 @@ Deno.serve(async (req) => {
         const p = payload as unknown as AudienceProducerPayload
         if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
         const tpl = buildAudienceProducerNotification(p)
+        to = p.produtorEmail
+        subject = tpl.subject
+        html = tpl.html
+        break
+      }
+      case 'workshop_registration_confirmed': {
+        const p = payload as unknown as WorkshopConfirmedPayload
+        if (!p.buyerEmail) throw new Error('buyerEmail é obrigatório')
+        const tpl = buildWorkshopRegistrationConfirmation(p)
+        to = p.buyerEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.workshopNome
+        replyTo = p.produtorEmail   // aluno responde → produtor recebe
+        break
+      }
+      case 'workshop_registration_producer': {
+        const p = payload as unknown as WorkshopProducerPayload
+        if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
+        const tpl = buildWorkshopProducerNotification(p)
         to = p.produtorEmail
         subject = tpl.subject
         html = tpl.html
