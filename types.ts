@@ -245,6 +245,9 @@ export interface PermissoesCustom {
   suporte_juri: boolean;
   inscricoes_leitura: boolean;
   triagem: boolean;
+  /** Triagem de vídeos enviados pelos inscritos (Seletiva). Permite delegar
+   *  pra coordenador/staff aprovar/rejeitar coreografias antes do evento. */
+  seletiva_video: boolean;
   vendas_ingressos: boolean;
 }
 
@@ -258,6 +261,7 @@ export const PERMISSOES_DEFAULT: PermissoesCustom = {
   suporte_juri: false,
   inscricoes_leitura: false,
   triagem: false,
+  seletiva_video: false,
   vendas_ingressos: false,
 };
 

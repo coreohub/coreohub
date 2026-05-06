@@ -3483,7 +3483,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 </p>
                 <div className="space-y-2">
                   {flowConfig.pronuncia_personalizada.map((p, i) => (
-                    <div key={i} className="flex items-center gap-2">
+                    <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 sm:p-0 border sm:border-0 border-slate-200 dark:border-white/10 rounded-xl">
                       <input
                         type="text"
                         value={p.termo}
@@ -3492,9 +3492,10 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                           pronuncia_personalizada: f.pronuncia_personalizada.map((x, j) => j === i ? { ...x, termo: e.target.value } : x),
                         }))}
                         placeholder="Termo no texto"
-                        className="flex-1 bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 text-sm"
+                        className="min-w-0 flex-1 bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 text-sm"
                       />
-                      <span className="text-slate-400 text-xs">→</span>
+                      <span className="hidden sm:inline text-slate-400 text-xs shrink-0">→</span>
+                      <span className="sm:hidden text-[9px] font-black uppercase tracking-widest text-slate-400">Pronúncia ↓</span>
                       <input
                         type="text"
                         value={p.pronuncia}
@@ -3503,7 +3504,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                           pronuncia_personalizada: f.pronuncia_personalizada.map((x, j) => j === i ? { ...x, pronuncia: e.target.value } : x),
                         }))}
                         placeholder="Como falar (fonético)"
-                        className="flex-1 bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 text-sm"
+                        className="min-w-0 flex-1 bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 text-sm"
                       />
                       <button
                         type="button"
@@ -3511,7 +3512,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                           ...f,
                           pronuncia_personalizada: f.pronuncia_personalizada.filter((_, j) => j !== i),
                         }))}
-                        className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all"
+                        aria-label={`Remover pronúncia "${p.termo || 'item'}"`}
+                        className="p-2.5 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all self-end sm:self-auto"
                         title="Remover"
                       >
                         <Trash2 size={14} />

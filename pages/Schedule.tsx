@@ -1216,20 +1216,23 @@ const Schedule = () => {
             {showSettings ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
           </button>
 
-          {/* Blocos — gerenciador (Etapa 2) */}
+          {/* Blocos — gerenciador (Etapa 2). Padronizado pra outline neutro. */}
           <button
             onClick={() => setShowBlocosManager(true)}
-            className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-600 dark:text-amber-400 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
+            className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:border-slate-400 dark:hover:border-white/20 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
             title="Criar e gerenciar blocos do cronograma (Bloco 1 - Manhã, etc)"
           >
             <Layers size={12} />
-            Blocos {blocos.length > 0 ? `(${blocos.length})` : ''}
+            Blocos
+            {blocos.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/10 text-slate-500 text-[8px] tabular-nums">{blocos.length}</span>
+            )}
           </button>
 
           <button
             onClick={handleGenerateSmart}
             disabled={isGenerating || isLoading}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-indigo-600/20 transition-all disabled:opacity-60"
+            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:border-slate-400 dark:hover:border-white/20 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-60"
           >
             {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
             {isGenerating ? 'Gerando...' : 'Gerar Ordem Inteligente'}
@@ -1239,7 +1242,7 @@ const Schedule = () => {
           <button
             onClick={handleGenerateAll}
             disabled={!!batchProgress || registrations.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 text-violet-600 dark:text-violet-400 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:border-slate-400 dark:hover:border-white/20 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
             title="Gerar narrações IA pré-renderizadas pra todas as coreografias"
           >
             {batchProgress
@@ -1252,7 +1255,7 @@ const Schedule = () => {
             <button
               onClick={handleSaveOrder}
               disabled={isSaving}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-emerald-600/20 transition-all disabled:opacity-60"
+              className="flex items-center gap-2 px-4 py-2 bg-[#ff0068] hover:bg-[#d4005a] text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 transition-all disabled:opacity-60"
             >
               {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
               {isSaving ? 'Salvando...' : 'Salvar Ordem'}
@@ -1262,7 +1265,7 @@ const Schedule = () => {
           <button
             onClick={handleDownloadZip}
             disabled={isDownloading || stats.withTrack === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-[#ff0068] hover:bg-[#d4005a] text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 transition-all disabled:opacity-60"
+            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:border-slate-400 dark:hover:border-white/20 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-60"
           >
             {isDownloading
               ? <><Loader2 size={12} className="animate-spin" />{downloadProgress}%</>

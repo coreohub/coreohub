@@ -66,14 +66,15 @@ const ALL_EQUIPE = [
 // Mapeamento permissão → item de menu (usado para membros com permissoes_custom)
 type PermKey = keyof PermissoesCustom;
 const PERM_MENU: { perm: PermKey; path: string; label: string; icon: React.ElementType }[] = [
-  { perm: 'cronograma_leitura', path: '/manage-schedule', label: 'Cronograma',        icon: Calendar        },
-  { perm: 'credenciamento',     path: '/check-in',        label: 'Credenciamento',    icon: QrCode          },
-  { perm: 'marcacao_palco',     path: '/marcacao-palco',  label: 'Marcação de Palco', icon: PersonStanding  },
-  { perm: 'suporte_juri',       path: '/suporte-juri',    label: 'Coordenador do Júri', icon: Headphones    },
-  { perm: 'inscricoes_leitura', path: '/registrations',   label: 'Inscrições',        icon: ClipboardList   },
-  { perm: 'triagem',            path: '/registrations',   label: 'Triagem',           icon: Filter          },
-  { perm: 'vendas_ingressos',   path: '/vendas-ingressos', label: 'Vendas de Ingressos', icon: Ticket        },
-  { perm: 'financeiro',         path: '/qg-organizador',  label: 'Financeiro',        icon: CreditCard      },
+  { perm: 'cronograma_leitura', path: '/manage-schedule', label: 'Cronograma',          icon: Calendar        },
+  { perm: 'credenciamento',     path: '/check-in',        label: 'Credenciamento',      icon: QrCode          },
+  { perm: 'marcacao_palco',     path: '/marcacao-palco',  label: 'Marcação de Palco',   icon: PersonStanding  },
+  { perm: 'suporte_juri',       path: '/suporte-juri',    label: 'Coordenador do Júri', icon: Headphones      },
+  { perm: 'inscricoes_leitura', path: '/registrations',   label: 'Inscrições',          icon: ClipboardList   },
+  { perm: 'triagem',            path: '/registrations',   label: 'Triagem',             icon: Filter          },
+  { perm: 'seletiva_video',     path: '/seletiva-video',  label: 'Seletiva de Vídeo',   icon: Video           },
+  { perm: 'vendas_ingressos',   path: '/vendas-ingressos', label: 'Vendas de Ingressos', icon: Ticket          },
+  { perm: 'financeiro',         path: '/qg-organizador',  label: 'Financeiro',          icon: CreditCard      },
 ];
 
 // Menu do produtor agrupado por fase do ciclo de vida do evento (Setup →
