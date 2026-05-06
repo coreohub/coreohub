@@ -84,6 +84,42 @@ const validCPF = (v: string) => {
   return r === parseInt(d[10]);
 };
 
+/** Calcula idade na data de referência. Mesma lógica do MinhasCoreografias.tsx legacy. */
+const calcAgeOnDate = (dob: string, refDateStr: string): number => {
+  if (!dob) return 0;
+  if (!refDateStr) {
+    const today = new Date();
+    const birth = new Date(dob);
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+    return age;
+  }
+  const birth = new Date(dob + 'T00:00:00');
+  const ref   = new Date(refDateStr + 'T00:00:00');
+  let age = ref.getFullYear() - birth.getFullYear();
+  const m = ref.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && ref.getDate() < birth.getDate())) age--;
+  return age;
+};
+
+/** Resolve a data de referência conforme modo configurado pelo produtor.
+ *  EVENT_DAY: dia do evento. YEAR_END: 31/12 do ano. FIXED_DATE: data fixa. */
+const resolveRefDate = (
+  mode: 'EVENT_DAY' | 'YEAR_END' | 'FIXED_DATE' | undefined,
+  fixedDate: string | null,
+  eventDate: string | null,
+): string => {
+  if (mode === 'YEAR_END') {
+    const year = eventDate
+      ? new Date(eventDate + 'T12:00:00').getFullYear()
+      : new Date().getFullYear();
+    return `${year}-12-31`;
+  }
+  if (mode === 'FIXED_DATE' && fixedDate) return fixedDate;
+  return eventDate || new Date().toISOString().slice(0, 10);
+};
+
 const InscricaoWizard: React.FC = () => {
   const { idOrSlug, modalidade } = useParams<{ idOrSlug: string; modalidade: string }>();
   const navigate = useNavigate();
@@ -95,6 +131,16 @@ const InscricaoWizard: React.FC = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
+
+  // Configuração de tolerância e referência de idade do produtor (mesmo modelo
+  // do MinhasCoreografias.tsx legacy). Default flexível 20% se config faltar.
+  const [toleranceRule, setToleranceRule] = useState<{
+    mode: 'PERCENT' | 'COUNT';
+    value: number;
+    enforcement: 'FLEXIBLE' | 'STRICT';
+  }>({ mode: 'PERCENT', value: 20, enforcement: 'FLEXIBLE' });
+  const [ageRefMode, setAgeRefMode] = useState<'EVENT_DAY' | 'YEAR_END' | 'FIXED_DATE'>('EVENT_DAY');
+  const [ageRefFixedDate, setAgeRefFixedDate] = useState<string>('');
 
   const [data, setData] = useState<WizardData>({
     nome_coreografia: '',
@@ -126,7 +172,7 @@ const InscricaoWizard: React.FC = () => {
 
       const { data: ev, error: evErr } = await supabase
         .from('events')
-        .select('id, name, formacoes_config, registration_start_date, registration_end_date')
+        .select('id, name, formacoes_config, registration_start_date, registration_end_date, start_date, event_date')
         .eq(filterCol, idOrSlug)
         .maybeSingle();
 
@@ -161,10 +207,23 @@ const InscricaoWizard: React.FC = () => {
         .maybeSingle();
 
       const [{ data: cfg }, { data: legacy }] = await Promise.all([
-        supabase.from('configuracoes').select('categorias, estilos').eq('event_id', ev.id).maybeSingle(),
-        supabase.from('configuracoes').select('categorias, estilos').eq('id', '1').maybeSingle(),
+        supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date').eq('event_id', ev.id).maybeSingle(),
+        supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date').eq('id', '1').maybeSingle(),
       ]);
       const finalCfg = cfg && (cfg.categorias || cfg.estilos) ? cfg : legacy;
+
+      // Aplica regra de tolerância e modo de referência etária do produtor.
+      // Mesma estrutura usada em MinhasCoreografias.tsx — ref date conforme
+      // ageRefMode + cálculo idade individual + violation enforcement.
+      if (finalCfg?.tolerancia) {
+        setToleranceRule({
+          mode:        finalCfg.tolerancia.mode ?? 'PERCENT',
+          value:       Number(finalCfg.tolerancia.value ?? 20),
+          enforcement: finalCfg.tolerancia.enforcement ?? 'FLEXIBLE',
+        });
+      }
+      if (finalCfg?.age_reference) setAgeRefMode(finalCfg.age_reference);
+      if (finalCfg?.age_reference_date) setAgeRefFixedDate(finalCfg.age_reference_date);
 
       // A3: se config retorna null/vazia em both event + legacy, usuário ficaria
       // preso no Passo 1 com dropdowns vazios sem mensagem. Bloqueia explicitamente.
@@ -212,6 +271,50 @@ const InscricaoWizard: React.FC = () => {
     typeof s === 'string' ? { name: s } : { name: s.name ?? '' }
   ).filter((s: any) => s.name);
 
+  // Categoria selecionada (resolve min_age/max_age pra checagem etária).
+  const categoriaSelecionada = useMemo(() => {
+    return categorias.find(c => c.name === data.categoria) ?? null;
+  }, [categorias, data.categoria]);
+
+  // Data de referência pra cálculo de idade. Usa age_reference do produtor
+  // (EVENT_DAY/YEAR_END/FIXED_DATE) sobre a data do evento.
+  const refDate = useMemo(() => {
+    const eventDate = event?.event_date ?? event?.start_date ?? null;
+    return resolveRefDate(ageRefMode, ageRefFixedDate || null, eventDate);
+  }, [event, ageRefMode, ageRefFixedDate]);
+
+  // Status de tolerância: quantos bailarinos estão fora da faixa, % do total,
+  // se viola a regra do produtor. Mesma estrutura do MinhasCoreografias.tsx.
+  const toleranceStatus = useMemo(() => {
+    if (!categoriaSelecionada || data.bailarinos.length === 0) {
+      return { violates: false, outCount: 0, totalCount: 0, pct: 0, limitLabel: '', outNames: [] as string[] };
+    }
+    const minAge = Number(categoriaSelecionada.min_age ?? 0);
+    const maxAge = Number(categoriaSelecionada.max_age ?? 99);
+    const validBailarinos = data.bailarinos.filter(b => !!b.data_nascimento);
+    const outOfRange = validBailarinos.filter(b => {
+      const age = calcAgeOnDate(b.data_nascimento, refDate);
+      return age < minAge || age > maxAge;
+    });
+    const outCount = outOfRange.length;
+    const totalCount = validBailarinos.length;
+    const pct = totalCount > 0 ? (outCount / totalCount) * 100 : 0;
+
+    let violates = false;
+    let limitLabel = '';
+    if (toleranceRule.mode === 'PERCENT') {
+      violates = pct > toleranceRule.value;
+      limitLabel = `${toleranceRule.value}%`;
+    } else {
+      violates = outCount > toleranceRule.value;
+      limitLabel = `${toleranceRule.value} pessoa(s)`;
+    }
+    return {
+      violates, outCount, totalCount, pct, limitLabel,
+      outNames: outOfRange.map(b => b.nome.trim() || 'sem nome'),
+    };
+  }, [categoriaSelecionada, data.bailarinos, refDate, toleranceRule]);
+
   // ─── Validação por passo ─────────────────────────────────────────────────
   const validateStep = (s: number): string | null => {
     if (s === 0) {
@@ -229,6 +332,11 @@ const InscricaoWizard: React.FC = () => {
         if (!b.nome.trim())          return `Bailarino ${i + 1}: informe o nome.`;
         if (!validCPF(b.cpf))        return `Bailarino ${i + 1}: CPF inválido.`;
         if (!b.data_nascimento)      return `Bailarino ${i + 1}: informe a data de nascimento.`;
+      }
+      // Tolerância: STRICT bloqueia, FLEXIBLE deixa passar (mas grava flag em event_data
+      // pra produtor ver no painel — mesma regra do MinhasCoreografias.tsx legacy).
+      if (toleranceRule.enforcement === 'STRICT' && toleranceStatus.violates) {
+        return `Tolerância excedida: ${toleranceStatus.outCount} bailarino(s) fora da faixa "${data.categoria}". Limite do evento: até ${toleranceStatus.limitLabel}.`;
       }
     }
     if (s === 2) {
@@ -306,6 +414,17 @@ const InscricaoWizard: React.FC = () => {
             estudio_nome:     data.estudio_nome.trim() || null,
             trilha_obs:       data.trilha_obs.trim() || null,
             wizard_version:   'PR-B-2026-05-06',
+            // Flag pra produtor ver no painel (legacy MinhasCoreografias).
+            // Só salva quando há violação real — caso contrário, null.
+            tolerance_violation: toleranceStatus.violates ? {
+              out_count:    toleranceStatus.outCount,
+              total_count:  toleranceStatus.totalCount,
+              pct:          Math.round(toleranceStatus.pct * 10) / 10,
+              limit_label:  toleranceStatus.limitLabel,
+              mode:         toleranceRule.mode,
+              flagged_at:   new Date().toISOString(),
+              source:       'wizard',
+            } : null,
           },
         })
         .select('id')
@@ -576,6 +695,37 @@ const InscricaoWizard: React.FC = () => {
             <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
               💡 CPF é usado pra emitir o certificado individual de cada bailarino.
             </p>
+
+            {/* Alerta de tolerância de idade — categoria escolhida vs idade real
+                dos bailarinos preenchidos. Cor varia: âmbar = dentro do limite
+                de tolerância (FLEXIBLE), vermelho = excede limite (STRICT bloqueia). */}
+            {categoriaSelecionada && toleranceStatus.outCount > 0 && (
+              <div
+                className={`p-4 rounded-2xl border ${
+                  toleranceStatus.violates
+                    ? 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300'
+                    : 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300'
+                }`}
+              >
+                <p className="text-[11px] font-black uppercase tracking-widest mb-1.5">
+                  {toleranceStatus.violates ? '⚠ Tolerância excedida' : '⚠ Bailarino(s) fora da faixa etária'}
+                </p>
+                <p className="text-[11px] leading-relaxed">
+                  {toleranceStatus.outCount} de {toleranceStatus.totalCount} bailarino(s)
+                  {toleranceStatus.outNames.length <= 3 && (
+                    <> (<strong>{toleranceStatus.outNames.join(', ')}</strong>)</>
+                  )}{' '}
+                  fora da faixa <strong>{categoriaSelecionada.name}</strong> ({categoriaSelecionada.min_age}–{(categoriaSelecionada.max_age ?? 99) >= 99 ? '+' : categoriaSelecionada.max_age} anos).
+                </p>
+                <p className="text-[10px] mt-2 leading-relaxed">
+                  {toleranceStatus.violates
+                    ? toleranceRule.enforcement === 'STRICT'
+                      ? `Excede o limite do produtor (${toleranceStatus.limitLabel}). Não é possível avançar — escolha outra categoria ou ajuste o elenco.`
+                      : `Excede o limite (${toleranceStatus.limitLabel}). A inscrição vai ser sinalizada pra produção revisar.`
+                    : `Dentro do limite de tolerância (${toleranceStatus.limitLabel}) — inscrição segue normal.`}
+                </p>
+              </div>
+            )}
           </div>
         )}
 
