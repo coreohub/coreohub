@@ -602,7 +602,9 @@ const PublicEventPage = () => {
                   : hint.dias < 7 ? 'text-amber-400'
                   : 'text-slate-500';
 
-                const targetUrl = `/festival/${eventId}/register?modalidade=${encodeURIComponent(mod.name)}`;
+                // PR-B: usa rota nova do wizard de 4 passos. PrivateRoute
+                // redireciona pra login se necessário (preservando redirectTo).
+                const targetUrl = `/festival/${idOrSlug}/inscrever/${encodeURIComponent(mod.name)}`;
 
                 return (
                   <Link

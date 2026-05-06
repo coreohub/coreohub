@@ -46,6 +46,7 @@ const FestivalShowcase         = lazy(() => import('./pages/FestivalShowcase'));
 const PublicEventPage          = lazy(() => import('./pages/PublicEventPage'));
 const Festivais                = lazy(() => import('./pages/Festivais'));
 const NewRegistration          = lazy(() => import('./pages/NewRegistration'));
+const InscricaoWizard          = lazy(() => import('./pages/InscricaoWizard'));
 const Checkout                 = lazy(() => import('./pages/Checkout'));
 const CheckoutIngresso         = lazy(() => import('./pages/CheckoutIngresso'));
 const MeuIngresso              = lazy(() => import('./pages/MeuIngresso'));
@@ -459,6 +460,7 @@ const App: React.FC = () => {
         <Route path="/cupons"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><Coupons /></Suspense></PrivateRoute>} />
         <Route path="/festival/:id" element={<FestivalShowcase />} />
         <Route path="/festival/:id/register" element={<PrivateRoute {...privateRouteProps}><NewRegistration /></PrivateRoute>} />
+        <Route path="/festival/:idOrSlug/inscrever/:modalidade" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><InscricaoWizard /></Suspense></PrivateRoute>} />
         <Route path="/festival/:id/checkout" element={<PrivateRoute {...privateRouteProps}><Checkout /></PrivateRoute>} />
         <Route path="/pagamento"             element={<PrivateRoute {...privateRouteProps}><PagamentoInscrito /></PrivateRoute>} />
         <Route path="/pagamento/sucesso"     element={<PrivateRoute {...privateRouteProps}><PagamentoSucesso /></PrivateRoute>} />
