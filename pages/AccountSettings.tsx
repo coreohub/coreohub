@@ -435,6 +435,151 @@ const SUBGENRE_SUGGESTIONS: Record<string, string[]> = {
   ],
 };
 
+/* ─── Presets de gêneros baseados em regulamentos reais (FDJ Joinville,
+   Passo de Arte, JOPEF, HHI Brasil, Dreamfest K-Pop). Auditoria 2026-05-06.
+   Cada preset cria gêneros pai + subgêneros via createGenre/addSubgenre.
+   Importante: "Clássico" no mercado BR = SÓ Ballet. Jazz/Sapateado/Contemporâneo
+   são FAMÍLIAS PRÓPRIAS (FDJ §4.7 e §4.8). Não agrupar dentro de "clássicos". ─── */
+type GenrePreset = {
+  id: string;
+  label: string;
+  description: string;
+  source: string;
+  genres: { name: string; sub_types: string[] }[];
+};
+
+const GENRE_PRESETS: GenrePreset[] = [
+  {
+    id: 'multistilo',
+    label: 'Carregar estilos de festival multistilo',
+    description: 'Padrão FDJ Joinville / Passo de Arte — cobre 90% dos festivais BR.',
+    source: 'FDJ §4.1-4.11',
+    genres: [
+      { name: 'Clássico de Repertório', sub_types: ['Variação Solo', 'Pas de Deux', 'Grand Pas', 'Dança a Caráter'] },
+      { name: 'Neoclássico',            sub_types: [] },
+      { name: 'Contemporâneo',          sub_types: ['Dança-Teatro', 'Moderno (Graham/Limón/Cunningham)'] },
+      { name: 'Jazz',                   sub_types: ['Jazz Musical', 'Modern Jazz', 'Lyrical Jazz', 'Broadway Jazz'] },
+      { name: 'Sapateado',              sub_types: ['Americano', 'Irlandês'] },
+      { name: 'Danças Urbanas',         sub_types: ['Hip-hop', 'Breaking', 'Locking', 'Popping', 'House', 'Waacking', 'Voguing', 'Krumping'] },
+      { name: 'Danças Populares Brasileiras', sub_types: [] },
+      { name: 'Danças Populares Internacionais', sub_types: [] },
+      { name: 'Dança de Salão',         sub_types: ['Forró', 'Zouk', 'Salsa', 'Lindy Hop', 'Samba de Gafieira'] },
+      { name: 'Estilo Livre',           sub_types: [] },
+    ],
+  },
+  {
+    id: 'ballet',
+    label: 'Carregar estilos de ballet/clássico',
+    description: 'Padrão YAGP / Joinville Ballet — concurso técnico de ballet puro.',
+    source: 'YAGP 2026 + FDJ §4.1-4.2',
+    genres: [
+      { name: 'Clássico de Repertório', sub_types: ['Variação Solo', 'Pas de Deux', 'Grand Pas', 'Dança a Caráter'] },
+      { name: 'Neoclássico',            sub_types: [] },
+      { name: 'Clássico Livre',         sub_types: [] },
+    ],
+  },
+  {
+    id: 'urbanos',
+    label: 'Carregar estilos urbanos',
+    description: 'Padrão HHI Brasil / FIH2 Curitiba — festival de danças urbanas.',
+    source: 'FDJ §4.6 + HHI/FIH2',
+    genres: [
+      { name: 'Hip-hop',     sub_types: ['MegaCrew (15-40)', 'Crew (5-8)'] },
+      { name: 'Breaking',    sub_types: ['Bboys 3v3', 'Solo'] },
+      { name: 'Locking',     sub_types: ['1v1', 'Crew'] },
+      { name: 'Popping',     sub_types: ['1v1', 'Crew'] },
+      { name: 'House',       sub_types: [] },
+      { name: 'Waacking',    sub_types: [] },
+      { name: 'Voguing',     sub_types: [] },
+      { name: 'Krumping',    sub_types: [] },
+      { name: 'All Styles',  sub_types: ['1v1'] },
+      { name: 'Estilo Livre', sub_types: [] },
+    ],
+  },
+  {
+    id: 'kpop',
+    label: 'Carregar estilos K-Pop',
+    description: 'Padrão Dreamfest / Anime Friends Maru Dance Challenge.',
+    source: 'Dreamfest + Anime Friends',
+    genres: [
+      { name: 'K-Pop Cover',              sub_types: ['Solo', 'Group (6-9)'] },
+      { name: 'K-Pop Performance/Creative', sub_types: ['Solo', 'Group'] },
+    ],
+  },
+  {
+    id: 'populares',
+    label: 'Carregar estilos populares e folclóricos',
+    description: 'Festival de dança popular, folclórica ou de salão.',
+    source: 'FDJ §4.4-4.5/§4.11 + SC Dança',
+    genres: [
+      { name: 'Danças Populares Brasileiras', sub_types: [] },
+      { name: 'Danças Populares Internacionais', sub_types: [] },
+      { name: 'Danças Folclóricas',           sub_types: [] },
+      { name: 'Dança de Salão',               sub_types: ['Forró', 'Zouk', 'Salsa', 'Lindy Hop', 'Samba de Gafieira'] },
+      { name: 'Flamenco',                     sub_types: [] },
+      { name: 'Dança do Ventre',              sub_types: [] },
+      { name: 'Country',                      sub_types: [] },
+    ],
+  },
+];
+
+/* Hints de overlap pra evitar erros típicos no preenchimento.
+   Baseados em regulamentos FDJ §4.7, §4.6, SC Dança. */
+const GENRE_OVERLAP_HINTS = [
+  { keyword: 'lyrical',  hint: 'Lyrical é subgênero de Jazz (não de Contemporâneo). Padrão FDJ §4.7.' },
+  { keyword: 'funk',     hint: 'Funk vai em Danças Urbanas (não em Populares). Padrão FDJ §4.6.' },
+  { keyword: 'caráter',  hint: 'Dança a Caráter pertence ao Repertório (não a Populares). Padrão FDJ.' },
+  { keyword: 'gaúcho',   hint: 'Sapateado Gaúcho/Folclórico vai em Populares (não em Sapateado).' },
+];
+
+/* Presets de faixa etária — auditoria 2026-05-06.
+   3 modelos cobrem 90% dos festivais BR/intl. */
+type AgePreset = {
+  id: string;
+  label: string;
+  description: string;
+  categories: { name: string; min: number; max: number }[];
+};
+
+const AGE_PRESETS: AgePreset[] = [
+  {
+    id: 'usualdance',
+    label: 'Carregar faixas Usualdance/K-pop (3 faixas)',
+    description: 'Modelo enxuto — Infantil/Júnior/Avançado.',
+    categories: [
+      { name: 'Infantil', min: 7,  max: 11 },
+      { name: 'Júnior',   min: 12, max: 15 },
+      { name: 'Avançado', min: 16, max: 99 },
+    ],
+  },
+  {
+    id: 'fad',
+    label: 'Carregar faixas FAD-style (2 faixas)',
+    description: 'Modelo Festival de Joinville — Júnior até 17, Sênior 18+.',
+    categories: [
+      { name: 'Júnior', min: 7,  max: 17 },
+      { name: 'Sênior', min: 18, max: 99 },
+    ],
+  },
+  {
+    id: 'tradicional',
+    label: 'Carregar faixas tradicionais (7 faixas)',
+    description: 'Modelo Passo de Arte / Dançarte — Baby a Sênior.',
+    categories: [
+      { name: 'Baby',      min: 4,  max: 6  },
+      { name: 'Pré-Mirim', min: 7,  max: 9  },
+      { name: 'Mirim',     min: 10, max: 12 },
+      { name: 'Infantil',  min: 13, max: 14 },
+      { name: 'Juvenil',   min: 15, max: 17 },
+      { name: 'Adulto',    min: 18, max: 29 },
+      { name: 'Sênior',    min: 30, max: 99 },
+    ],
+  },
+];
+
+/* 4 níveis técnicos fixos quando o produtor habilita o eixo. */
+const NIVEIS_TECNICOS = ['Iniciante', 'Intermediário', 'Avançado', 'Profissional'] as const;
+
 /* ─── shared input style ─── */
 const input = 'w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-5 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm dark:[color-scheme:dark]';
 const label = 'block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5 ml-1';
@@ -713,6 +858,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   // Slug do evento ativo — usado pra montar URL da vitrine como smart default
   // do campo "Site oficial"
   const [activeEventSlug, setActiveEventSlug] = useState<string | null>(null);
+  const [activeEventId,   setActiveEventId]   = useState<string | null>(null);
   const [programacao, setProgramacao] = useState<ProgramItem[]>([]);
   const [ingressos, setIngressos]     = useState<TicketType[]>([]);
   const [politicaIngressos, setPoliticaIngressos] = useState<'NAO_DEFINIDO' | 'GRATUITO' | 'INTERNO' | 'EXTERNO'>('NAO_DEFINIDO');
@@ -729,6 +875,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [styles,  setStyles]  = useState<string[]>(DEFAULT_MODALITIES);
   const [formats, setFormats] = useState<any[]>(DEFAULT_FORMATS);
   const [categories, setCategories] = useState<any[]>(DEFAULT_CATEGORIES);
+  const [aceitaDancaInclusiva, setAceitaDancaInclusiva] = useState<boolean>(false);
+  const [nivelTecnicoEnabled,  setNivelTecnicoEnabled]  = useState<boolean>(false);
   const [links,   setLinks]   = useState<any[]>([]);
 
   /* ── Gêneros (Eixo Técnico) ── */
@@ -736,6 +884,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [genresLoading, setGenresLoading] = useState(false);
   const [genresError,   setGenresError]   = useState<string | null>(null);
   const [expandedGenre, setExpandedGenre] = useState<string | null>(null);
+  const [genreLoadingPreset, setGenreLoadingPreset] = useState<string | null>(null);
+  const [agePresetLoading,   setAgePresetLoading]   = useState<string | null>(null);
 
   const [addingSuggestion, setAddingSuggestion] = useState<string | null>(null);
 
@@ -1014,6 +1164,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             data = res.data;
             // Captura slug pra suggerir URL da vitrine no campo Site oficial
             setActiveEventSlug((myEvent as any).slug ?? myEvent.id);
+            setActiveEventId(myEvent.id);
             // Identidade pública: campos diretos da tabela events
             setIdentity({
               instagram_event:    myEvent.instagram_event ?? '',
@@ -1095,6 +1246,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           setStyles(data.estilos?.length    ? data.estilos    : DEFAULT_MODALITIES);
           setFormats(data.formatos?.length ? data.formatos.map(migrateFormat) : DEFAULT_FORMATS);
           setCategories(data.categorias?.length ? data.categorias : DEFAULT_CATEGORIES);
+          setAceitaDancaInclusiva(!!data.aceita_danca_inclusiva);
+          setNivelTecnicoEnabled(!!data.nivel_tecnico_enabled);
           setLinks(data.links || []);
           if (data.tolerancia) setToleranceRule(data.tolerancia);
           if (data.age_reference) setAgeReference(data.age_reference as 'EVENT_DAY' | 'YEAR_END' | 'FIXED_DATE');
@@ -1199,6 +1352,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         estilos:             styles,
         formatos:            formats,
         categorias:          categories,
+        aceita_danca_inclusiva: aceitaDancaInclusiva,
+        nivel_tecnico_enabled:  nivelTecnicoEnabled,
         tolerancia:          toleranceRule,
         age_reference:       ageReference,
         age_reference_date:  ageReference === 'FIXED_DATE' ? (ageRefDate || null) : null,
@@ -2384,6 +2539,82 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               </div>
             </div>
 
+            {/* Eixos opcionais — Dança Inclusiva (transversal) + Nível Técnico
+                (4 níveis fixos quando ON). Auditoria de mercado 2026-05-06: FAD/YAGP
+                NÃO usam nível técnico, JOPEF/VIBE usam — fica opcional. */}
+            <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Award size={18} /></div>
+                <div>
+                  <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Eixos Opcionais</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Recursos extras que adicionam camadas de classificação ou inclusão.
+                  </p>
+                </div>
+              </div>
+
+              {/* Dança Inclusiva (PCD) — toggle transversal */}
+              <button
+                onClick={() => setAceitaDancaInclusiva(v => !v)}
+                className={`w-full flex items-start gap-3 p-4 rounded-2xl border transition-all text-left ${
+                  aceitaDancaInclusiva
+                    ? 'border-[#ff0068] bg-[#ff0068]/5'
+                    : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
+                }`}
+              >
+                <div className={`shrink-0 mt-0.5 ${aceitaDancaInclusiva ? 'text-[#ff0068]' : 'text-slate-400 dark:text-slate-500'}`}>
+                  {aceitaDancaInclusiva ? <CheckSquare size={18} /> : <Square size={18} />}
+                </div>
+                <div className="min-w-0">
+                  <p className={`text-[11px] font-black uppercase tracking-widest ${
+                    aceitaDancaInclusiva ? 'text-[#ff0068]' : 'text-slate-700 dark:text-slate-200'
+                  }`}>
+                    Aceitar inscrições de Dança Inclusiva (PCD)
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                    Toggle transversal — bailarinos PCD podem se inscrever em qualquer estilo.
+                    A inscrição ganha indicador "Inclusiva" pra adaptações de palco e avaliação.
+                    Padrão Santa Catarina Dança.
+                  </p>
+                </div>
+              </button>
+
+              {/* Nível técnico — toggle + lista fixa */}
+              <button
+                onClick={() => setNivelTecnicoEnabled(v => !v)}
+                className={`w-full flex items-start gap-3 p-4 rounded-2xl border transition-all text-left ${
+                  nivelTecnicoEnabled
+                    ? 'border-[#ff0068] bg-[#ff0068]/5'
+                    : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
+                }`}
+              >
+                <div className={`shrink-0 mt-0.5 ${nivelTecnicoEnabled ? 'text-[#ff0068]' : 'text-slate-400 dark:text-slate-500'}`}>
+                  {nivelTecnicoEnabled ? <CheckSquare size={18} /> : <Square size={18} />}
+                </div>
+                <div className="min-w-0">
+                  <p className={`text-[11px] font-black uppercase tracking-widest ${
+                    nivelTecnicoEnabled ? 'text-[#ff0068]' : 'text-slate-700 dark:text-slate-200'
+                  }`}>
+                    Habilitar nível técnico
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                    Adiciona o eixo "Nível Técnico" no checkout — coreógrafo escolhe entre
+                    Iniciante / Intermediário / Avançado / Profissional. Útil pra separar
+                    competição entre escolas amadoras e companhias profissionais. Padrão JOPEF/VIBE.
+                  </p>
+                  {nivelTecnicoEnabled && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {NIVEIS_TECNICOS.map(n => (
+                        <span key={n} className="px-2 py-1 rounded-md bg-[#ff0068]/10 text-[#ff0068] text-[9px] font-black uppercase tracking-widest">
+                          {n}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </button>
+            </div>
+
             {/* Instalar como app — sempre disponível pro produtor (Linear/Figma pattern) */}
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-6 rounded-3xl">
               <div className="flex items-start gap-4">
@@ -2424,6 +2655,79 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 <Plus size={14} /> Novo Gênero
               </button>
             </div>
+
+            {/* Presets de gêneros (auditoria 2026-05-06: pesquisados em 10
+                regulamentos reais — FDJ Joinville, Passo de Arte, JOPEF, HHI,
+                Dreamfest etc). Adicionam sem duplicar — produtor pode editar
+                ou remover individualmente depois. */}
+            <details className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 group">
+              <summary className="cursor-pointer flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-[#ff0068] list-none">
+                <Plus size={14} className="transition-transform group-open:rotate-45" />
+                Carregar presets de festivais
+                <span className="text-slate-400 normal-case font-bold tracking-normal text-xs ml-2">
+                  — começa rápido com gêneros pré-configurados
+                </span>
+              </summary>
+              <div className="mt-4 space-y-2">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Cada preset adiciona gêneros + modalidades sem duplicar o que já existe.
+                  Você pode editar ou remover qualquer item depois.
+                </p>
+                {GENRE_PRESETS.map(preset => (
+                  <button
+                    key={preset.id}
+                    disabled={genreLoadingPreset === preset.id}
+                    onClick={async () => {
+                      if (!activeEventId) { alert('Selecione um evento ativo antes.'); return; }
+                      setGenreLoadingPreset(preset.id);
+                      try {
+                        const existing = new Set(genres.map(g => g.name.trim().toLowerCase()));
+                        let created = 0;
+                        let skipped = 0;
+                        for (const g of preset.genres) {
+                          if (existing.has(g.name.trim().toLowerCase())) { skipped++; continue; }
+                          const subs = g.sub_types.map(name => ({ name, is_categoria_livre: false }));
+                          const newGenre = await createGenre(activeEventId, g.name, subs);
+                          setGenres(prev => [...prev, newGenre]);
+                          created++;
+                        }
+                        alert(`Preset "${preset.label}" aplicado: ${created} gênero(s) novo(s)${skipped > 0 ? `, ${skipped} já existia(m)` : ''}.`);
+                      } catch (e: any) {
+                        alert('Erro ao aplicar preset: ' + e.message);
+                      } finally {
+                        setGenreLoadingPreset(null);
+                      }
+                    }}
+                    className="w-full text-left flex items-start gap-3 p-3 rounded-xl border border-slate-200 dark:border-white/10 hover:border-[#ff0068]/40 hover:bg-[#ff0068]/5 transition-all disabled:opacity-50"
+                  >
+                    <div className="shrink-0 mt-0.5 text-[#ff0068]">
+                      {genreLoadingPreset === preset.id ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white">
+                        {preset.label}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                        {preset.description}
+                      </p>
+                      <p className="text-[9px] text-slate-400 dark:text-slate-500 mt-1 font-bold uppercase tracking-widest">
+                        Inclui: {preset.genres.map(g => g.name).join(' · ')}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+                <div className="mt-3 p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-1.5">
+                    💡 Cuidado com overlaps comuns
+                  </p>
+                  <ul className="text-[11px] text-slate-600 dark:text-slate-400 space-y-1 leading-relaxed">
+                    {GENRE_OVERLAP_HINTS.map(h => (
+                      <li key={h.keyword}>• {h.hint}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </details>
 
             {genresLoading && (
               <div className="flex items-center justify-center py-16 text-slate-400">
@@ -2808,6 +3112,53 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             {/* ── Faixas Etárias ── */}
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
             <CRUDHeader title="Faixas Etárias" onAdd={openAdd} />
+
+            {/* Presets de faixa etária (auditoria 2026-05-06: Usualdance,
+                FAD-style e Tradicional cobrem 90% dos festivais BR). */}
+            <details className="mb-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 group">
+              <summary className="cursor-pointer flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-[#ff0068] list-none">
+                <Plus size={14} className="transition-transform group-open:rotate-45" />
+                Carregar presets de faixas
+              </summary>
+              <div className="mt-3 space-y-2">
+                {AGE_PRESETS.map(preset => (
+                  <button
+                    key={preset.id}
+                    disabled={agePresetLoading === preset.id}
+                    onClick={() => {
+                      setAgePresetLoading(preset.id);
+                      try {
+                        const existing = new Set(categories.map((c: any) => c.name.trim().toLowerCase()));
+                        const toAdd = preset.categories
+                          .filter(c => !existing.has(c.name.trim().toLowerCase()))
+                          .map(c => ({ id: Date.now() + Math.floor(Math.random() * 1000), ...c }));
+                        if (toAdd.length === 0) {
+                          alert('Todas as faixas deste preset já existem.');
+                          return;
+                        }
+                        setCategories([...categories, ...toAdd]);
+                        alert(`Preset aplicado: ${toAdd.length} faixa(s) adicionada(s). Não esqueça de salvar.`);
+                      } finally {
+                        setAgePresetLoading(null);
+                      }
+                    }}
+                    className="w-full text-left flex items-start gap-3 p-3 rounded-xl border border-slate-200 dark:border-white/10 hover:border-[#ff0068]/40 hover:bg-[#ff0068]/5 transition-all disabled:opacity-50"
+                  >
+                    <div className="shrink-0 mt-0.5 text-[#ff0068]">
+                      {agePresetLoading === preset.id ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white">{preset.label}</p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">{preset.description}</p>
+                      <p className="text-[9px] text-slate-400 dark:text-slate-500 mt-1 font-bold">
+                        {preset.categories.map(c => `${c.name} ${c.min}-${c.max >= 99 ? '+' : c.max}`).join(' · ')}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </details>
+
             <div className="space-y-3">
               {categories.map(c => (
                 <Row key={c.id}>
