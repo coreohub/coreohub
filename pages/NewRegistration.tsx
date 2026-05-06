@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { ChevronRight, Loader2, Music2, Users, User, AlertCircle } from 'lucide-react';
 
@@ -9,6 +9,10 @@ const label = 'block text-[10px] font-black uppercase tracking-widest text-slate
 const NewRegistration = () => {
   const { id: eventId } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Modalidade pré-selecionada via query string (entry point modalidade-first
+  // dos cards da vitrine pública). Aplicado quando formacoes_config carrega.
+  const preselectedModalidade = new URLSearchParams(location.search).get('modalidade');
 
   const [event, setEvent] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -63,10 +67,20 @@ const NewRegistration = () => {
       if (evErr || !ev) { setError('Evento não encontrado.'); setLoading(false); return; }
       setEvent(ev);
       setConfig(configFinal);
+
+      // Aplica modalidade pré-selecionada (case-insensitive contra formacoes_config).
+      // Vem dos cards clicáveis na vitrine pública — entry point modalidade-first.
+      if (preselectedModalidade && Array.isArray(ev.formacoes_config)) {
+        const match = ev.formacoes_config.find((m: any) =>
+          m.name?.trim().toLowerCase() === preselectedModalidade.trim().toLowerCase()
+        );
+        if (match) setForm(f => ({ ...f, formacao: match.name }));
+      }
+
       setLoading(false);
     };
     load();
-  }, [eventId, navigate]);
+  }, [eventId, navigate, preselectedModalidade]);
 
   const formacoes: any[] = event?.formacoes_config ?? [];
   const categories: any[] = config?.categorias ?? [];

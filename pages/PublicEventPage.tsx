@@ -573,12 +573,19 @@ const PublicEventPage = () => {
           return null;
         })()}
 
-        {/* Modalities */}
+        {/* Modalities — entry point modalidade-first.
+            Cada card vira botão clicável que pré-seleciona a modalidade
+            no fluxo de inscrição via ?modalidade=<nome>. Padrão Sympla/Eventbrite:
+            usuário declara intenção (modalidade) antes de logar/preencher dados.
+            Reduz fricção do passo "Complete seu perfil" obrigatório. */}
         {event.formacoes_config && event.formacoes_config.length > 0 && (
           <div id="inscricoes" className="space-y-4 scroll-mt-20">
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
               <Music size={24} className="text-[#ff0068]" /> Inscrições disponíveis
             </h2>
+            <p className="text-xs text-slate-400 -mt-2">
+              Escolha a modalidade pra começar sua inscrição.
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {event.formacoes_config.map((mod: any, i: number) => {
                 const today = todayISO();
@@ -586,7 +593,6 @@ const PublicEventPage = () => {
                 const r = resolveLote(lotes, today);
                 const precoExibir = r ? Number(r.lote.preco ?? 0) : (mod.fee != null ? Number(mod.fee) : null);
                 const nomeLote: string | null = r ? ((r.lote as any).nome ?? null) : null;
-                // Hint do próximo lote: só quando há próximo, com preço maior, e data limite.
                 const hint = r && r.proximo && r.lote.data_virada && Number(r.proximo.preco) > Number(r.lote.preco)
                   ? { proximoPreco: Number(r.proximo.preco), dataVirada: r.lote.data_virada, dias: diffDias(today, r.lote.data_virada) }
                   : null;
@@ -595,39 +601,67 @@ const PublicEventPage = () => {
                   : hint.dias < 1 ? 'text-rose-400'
                   : hint.dias < 7 ? 'text-amber-400'
                   : 'text-slate-500';
+
+                const targetUrl = `/festival/${eventId}/register?modalidade=${encodeURIComponent(mod.name)}`;
+
                 return (
-                  <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-5">
+                  <Link
+                    key={i}
+                    to={isRegistrationOpen ? targetUrl : '#'}
+                    aria-disabled={!isRegistrationOpen}
+                    onClick={e => { if (!isRegistrationOpen) e.preventDefault(); }}
+                    className={`block bg-white/5 border border-white/10 rounded-2xl p-5 transition-all group ${
+                      isRegistrationOpen
+                        ? 'hover:border-[#ff0068]/50 hover:bg-[#ff0068]/5 cursor-pointer'
+                        : 'opacity-60 cursor-not-allowed'
+                    }`}
+                  >
                     <div className="flex justify-between items-center">
-                      <div>
+                      <div className="min-w-0">
                         <span className="font-black uppercase text-sm">{mod.name}</span>
                         {nomeLote && (
                           <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">{nomeLote}</p>
                         )}
                       </div>
-                      <span className="text-[#ff0068] font-black text-sm">
-                        {precoExibir != null && precoExibir > 0 ? `R$ ${precoExibir.toFixed(2)}` : 'Gratuito'}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[#ff0068] font-black text-sm">
+                          {precoExibir != null && precoExibir > 0 ? `R$ ${precoExibir.toFixed(2)}` : 'Gratuito'}
+                        </span>
+                        {isRegistrationOpen && (
+                          <ChevronRight size={16} className="text-slate-500 group-hover:text-[#ff0068] group-hover:translate-x-0.5 transition-all" />
+                        )}
+                      </div>
                     </div>
-                    {hint && (
+                    {!isRegistrationOpen && (
+                      <p className="text-[10px] font-black uppercase tracking-widest text-amber-400 mt-3 pt-3 border-t border-white/5">
+                        Inscrições encerradas ou ainda não abertas
+                      </p>
+                    )}
+                    {hint && isRegistrationOpen && (
                       <p className={`text-[10px] font-bold mt-3 pt-3 border-t border-white/5 flex items-center gap-1.5 ${hintColor}`}>
                         {hint.dias < 1
                           ? <>⚠ Aumenta amanhã para R$ {hint.proximoPreco.toFixed(2)}</>
                           : <>⏱ Próximo: R$ {hint.proximoPreco.toFixed(2)} em {formatDataBR(hint.dataVirada)}</>}
                       </p>
                     )}
-                  </div>
+                    {isRegistrationOpen && (
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 group-hover:text-[#ff0068] mt-3 pt-3 border-t border-white/5 transition-colors">
+                        Inscrever {mod.name.toLowerCase()} →
+                      </p>
+                    )}
+                  </Link>
                 );
               })}
             </div>
-            {/* CTA contextual depois da lista de preços — padrão e-commerce
-                (Eventbrite/Sympla/Doity): valor visível + ação ao lado.
-                Reduz fricção pra quem rolou até aqui pra comparar preços. */}
-            <Link
-              to={`/festival/${eventId}/register`}
-              className="mt-2 inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3.5 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-2xl text-sm font-black uppercase tracking-widest transition-all shadow-xl shadow-[#ff0068]/20"
-            >
-              Inscrever minha coreografia <ChevronRight size={16} />
-            </Link>
+            {/* CTA fallback — pra quem ainda não escolheu modalidade. */}
+            {isRegistrationOpen && (
+              <Link
+                to={`/festival/${eventId}/register`}
+                className="mt-2 inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3.5 bg-transparent border border-[#ff0068]/30 hover:bg-[#ff0068]/10 text-[#ff0068] rounded-2xl text-sm font-black uppercase tracking-widest transition-all"
+              >
+                Ver todas e escolher depois <ChevronRight size={16} />
+              </Link>
+            )}
           </div>
         )}
 
