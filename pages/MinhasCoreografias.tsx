@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import SystemErrorBanner from '../components/SystemErrorBanner';
 import { getGenres } from '../services/genreService';
 import { EventStyle } from '../types';
 import {
@@ -592,22 +593,10 @@ const MinhasCoreografias = () => {
   ══════════════════════════════════════════════════════════ */
   if (tableError) {
     return (
-      <div className="max-w-2xl mx-auto mt-10 p-6 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-2xl">
-        <div className="flex items-center gap-3 mb-3">
-          <AlertTriangle className="text-amber-500 shrink-0" size={20} />
-          <h2 className="font-black uppercase tracking-tight text-amber-700 dark:text-amber-400">Tabela não encontrada</h2>
-        </div>
-        <p className="text-sm text-amber-700 dark:text-amber-300 mb-4">
-          Execute o SQL abaixo no <strong>Editor SQL</strong> do Supabase:
-        </p>
-        <pre className="bg-black/10 dark:bg-black/40 p-4 rounded-xl text-xs text-amber-800 dark:text-amber-200 overflow-x-auto whitespace-pre-wrap font-mono select-all">
-          {SETUP_SQL}
-        </pre>
-        <button onClick={() => { setTableError(false); fetchAll(); }}
-          className="mt-4 flex items-center gap-2 px-4 py-2.5 bg-amber-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-amber-600 transition-all">
-          <Loader2 size={12} /> Verificar Novamente
-        </button>
-      </div>
+      <SystemErrorBanner
+        message="Não conseguimos carregar suas coreografias agora. Se o problema persistir, fale com nosso suporte."
+        onRetry={() => { setTableError(false); fetchAll(); }}
+      />
     );
   }
 
@@ -692,16 +681,19 @@ const MinhasCoreografias = () => {
                           {st.label}
                         </span>
                         <button onClick={() => navigate(`/credencial/${c.id}`)}
-                          className="p-1.5 rounded-lg hover:bg-[#ff0068]/10 text-slate-400 hover:text-[#ff0068] transition-all" title="Minha credencial (QR)">
-                          <QrCode size={12} />
+                          aria-label={`Ver QR da credencial de ${c.nome}`}
+                          className="p-2.5 rounded-lg hover:bg-[#ff0068]/10 text-slate-400 hover:text-[#ff0068] transition-all" title="Minha credencial (QR)">
+                          <QrCode size={14} />
                         </button>
                         <button onClick={() => openEdit(c)}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-all" title="Editar">
-                          <Pencil size={12} />
+                          aria-label={`Editar coreografia ${c.nome}`}
+                          className="p-2.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-all" title="Editar">
+                          <Pencil size={14} />
                         </button>
                         <button onClick={() => setConfirmDel(c.id)}
-                          className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-500/10 text-slate-400 hover:text-rose-500 transition-all" title="Remover">
-                          <Trash2 size={12} />
+                          aria-label={`Remover coreografia ${c.nome}`}
+                          className="p-2.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-500/10 text-slate-400 hover:text-rose-500 transition-all" title="Remover">
+                          <Trash2 size={14} />
                         </button>
                       </div>
                     </div>

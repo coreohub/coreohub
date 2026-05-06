@@ -31,31 +31,33 @@ const Ingressos: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { setLoading(false); return; }
-
-        const { data: regs } = await supabase
-          .from('registrations')
-          .select('event_id')
-          .eq('user_id', user.id);
-
-        const eventIds = Array.from(new Set((regs ?? []).map(r => r.event_id).filter(Boolean)));
-        if (eventIds.length === 0) { setLoading(false); return; }
-
-        const [{ data: evs }, { data: cfgs }] = await Promise.all([
+        // Q12 fix: descopular de registrations. Antes, lista só vinha pra quem
+        // já era inscrito como competidor — SPECTATOR nunca via nada.
+        // Agora: lista TODOS eventos com venda aberta (INTERNO ou EXTERNO),
+        // independente do user ter coreografia inscrita.
+        const [{ data: evs, error: evErr }, { data: cfgs }] = await Promise.all([
           supabase
             .from('events')
             .select('id,name,start_date,location,politica_ingressos,audience_sales_enabled')
-            .in('id', eventIds),
-          supabase.from('configuracoes').select('event_id,url_ingressos').in('event_id', eventIds),
+            .in('politica_ingressos', ['INTERNO', 'EXTERNO'])
+            .order('start_date', { ascending: true }),
+          supabase.from('configuracoes').select('event_id,url_ingressos'),
         ]);
+        if (evErr) throw evErr;
 
         const cfgByEvent = new Map((cfgs ?? []).map((c: any) => [c.event_id, c]));
-        const merged: EventSummary[] = (evs ?? []).map((e: any) => ({
-          ...e,
-          url_ingressos: cfgByEvent.get(e.id)?.url_ingressos ?? null,
-        }));
-        merged.sort((a, b) => (a.start_date ?? '').localeCompare(b.start_date ?? ''));
+        const merged: EventSummary[] = (evs ?? [])
+          .map((e: any) => ({
+            ...e,
+            url_ingressos: cfgByEvent.get(e.id)?.url_ingressos ?? null,
+          }))
+          // Filtra: INTERNO precisa de audience_sales_enabled OU EXTERNO precisa de url_ingressos
+          .filter((e: EventSummary) => {
+            if (e.politica_ingressos === 'INTERNO') return e.audience_sales_enabled === true;
+            if (e.politica_ingressos === 'EXTERNO') return !!e.url_ingressos;
+            return false;
+          });
+
         setEvents(merged);
       } catch (e: any) {
         setError(e.message ?? 'Erro ao carregar eventos.');
@@ -77,10 +79,10 @@ const Ingressos: React.FC = () => {
     <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="text-center space-y-2">
         <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
-          <span className="text-[#ff0068]">Ingressos</span>
+          Comprar <span className="text-[#ff0068]">Ingresso</span>
         </h1>
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">
-          Garanta sua entrada nos festivais
+        <p className="text-xs font-bold uppercase tracking-[0.25em] text-slate-500">
+          Festivais com vendas abertas pra plateia
         </p>
       </div>
 
@@ -97,18 +99,17 @@ const Ingressos: React.FC = () => {
           </div>
           <div className="space-y-2">
             <h2 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white">
-              Nenhum festival ainda
+              Nenhum festival com ingressos abertos
             </h2>
             <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
-              Você ainda não está inscrito em nenhum festival. Quando se inscrever em um evento,
-              os ingressos disponíveis aparecerão aqui.
+              Quando algum festival abrir vendas de ingresso pra plateia, ele vai aparecer aqui.
             </p>
           </div>
           <Link
             to="/festivais"
             className="inline-flex items-center gap-2 px-5 py-3 bg-[#ff0068] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all"
           >
-            <Search size={14} /> Ver festivais disponíveis
+            <Search size={14} /> Ver todos os festivais
           </Link>
         </div>
       ) : (

@@ -9,6 +9,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import {
   Award, GraduationCap, Loader2, Download, ExternalLink, AlertCircle, CheckCircle, Calendar,
@@ -124,18 +125,17 @@ const MeusCertificados: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#0b0b0f] py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
+          Meus <span className="text-[#ff0068]">Certificados</span>
+        </h1>
+        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">
+          Mostras e workshops que você participou
+        </p>
+      </div>
 
-        <div className="mb-6">
-          <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-3">
-            <Award className="text-[#ff0068]" size={28} />
-            Meus certificados
-          </h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Certificados de mostras e workshops que você participou. Baixe quando quiser.
-          </p>
-        </div>
+      <div>
 
         {feedback && (
           <div className={`mb-4 rounded-xl border p-3 text-sm flex items-center gap-2 ${feedback.kind === 'ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200' : 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200'}`}>
@@ -172,12 +172,20 @@ const MeusCertificados: React.FC = () => {
         {loading ? (
           <div className="flex items-center justify-center py-20"><Loader2 size={28} className="animate-spin text-[#ff0068]" /></div>
         ) : certs.length === 0 ? (
-          <div className="rounded-2xl border-2 border-dashed border-slate-300 dark:border-white/10 p-12 text-center">
-            <Award size={40} className="mx-auto text-slate-400 mb-3" />
-            <p className="text-slate-600 dark:text-slate-300 font-bold">Nenhum certificado disponível ainda</p>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Os certificados aparecem aqui depois que o produtor do evento emitir.
-            </p>
+          <div className="rounded-2xl border-2 border-dashed border-slate-300 dark:border-white/10 p-12 text-center space-y-4">
+            <Award size={40} className="mx-auto text-slate-400" />
+            <div>
+              <p className="text-slate-600 dark:text-slate-300 font-bold">Nenhum certificado ainda</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+                Os certificados aparecem aqui depois que o produtor do evento emitir e processar suas inscrições.
+              </p>
+            </div>
+            <Link
+              to="/minhas-coreografias"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#ff0068] text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all"
+            >
+              Ver minhas coreografias
+            </Link>
           </div>
         ) : (
           <div className="grid gap-3">

@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { UserRole } from '../types';
-import { Trophy, Star, Music, Loader2, Volume2, Award, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trophy, Star, Music, Loader2, Volume2, Award, ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface MyResultsProps {
@@ -45,10 +46,15 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+  // UX#12: erro silencioso virou erro visível.
+  const [error, setError] = useState<string | null>(null);
+  // UX#12: ref único pro Audio pra cleanup correto (antes vazava ao trocar de áudio rapidamente).
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const fetchMyResults = async () => {
       setLoading(true);
+      setError(null);
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
@@ -98,8 +104,9 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
         );
 
         setRegistrations(withEvals);
-      } catch (err) {
+      } catch (err: any) {
         console.error('MyResults error:', err);
+        setError(err?.message ?? 'Erro ao carregar seus resultados.');
       } finally {
         setLoading(false);
       }
@@ -108,14 +115,30 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
     fetchMyResults();
   }, []);
 
+  // UX#12: cleanup do áudio ao desmontar (antes vazava listener).
+  useEffect(() => () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+      audioRef.current = null;
+    }
+  }, []);
+
   const playAudio = (url: string) => {
+    // Pausa qualquer áudio anterior (evita reproduções sobrepostas ao clicar várias vezes)
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+      audioRef.current = null;
+    }
     if (playingAudio === url) {
       setPlayingAudio(null);
       return;
     }
     setPlayingAudio(url);
     const audio = new Audio(url);
-    audio.play();
+    audioRef.current = audio;
+    audio.play().catch(() => setPlayingAudio(null));
     audio.onended = () => setPlayingAudio(null);
   };
 
@@ -141,13 +164,27 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
         </p>
       </div>
 
+      {error && (
+        <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl text-sm text-rose-600 dark:text-rose-400">
+          {error}
+        </div>
+      )}
+
       {registrations.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 gap-6 text-center">
           <Music size={64} className="text-slate-300 dark:text-slate-700" />
           <div>
-            <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">Nenhuma inscrição encontrada</h2>
-            <p className="text-slate-500 text-sm mt-2">Suas inscrições em festivais aparecerão aqui.</p>
+            <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">Nenhum resultado ainda</h2>
+            <p className="text-slate-500 text-sm mt-2 max-w-md">
+              Quando você tiver inscrições avaliadas em festivais, as notas e feedback aparecem aqui.
+            </p>
           </div>
+          <Link
+            to="/festivais"
+            className="inline-flex items-center gap-2 px-5 py-3 bg-[#ff0068] text-white rounded-xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all"
+          >
+            <Search size={14} /> Ver festivais disponíveis
+          </Link>
         </div>
       ) : (
         <div className="space-y-4">
@@ -227,7 +264,8 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
                                   {ev.audio_url && (
                                     <button
                                       onClick={() => playAudio(ev.audio_url!)}
-                                      className={`p-2 rounded-xl transition-all ${playingAudio === ev.audio_url ? 'bg-[#ff0068] text-white' : 'bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-[#ff0068]'}`}
+                                      aria-label={playingAudio === ev.audio_url ? 'Pausar comentário em áudio' : 'Reproduzir comentário em áudio do jurado'}
+                                      className={`p-2.5 rounded-xl transition-all ${playingAudio === ev.audio_url ? 'bg-[#ff0068] text-white' : 'bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-[#ff0068]'}`}
                                     >
                                       <Volume2 size={14} />
                                     </button>

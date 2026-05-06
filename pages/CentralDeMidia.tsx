@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import SystemErrorBanner from '../components/SystemErrorBanner';
 import { getAllGenres } from '../services/genreService';
 import { EventStyle } from '../types';
 import {
@@ -500,29 +501,13 @@ const CentralDeMidia = () => {
   const enviadas  = coreografias.filter(c => !!c.trilha_url).length;
   const pendentes = total - enviadas;
 
-  // ── Setup banner ──
+  // ── Erro de sistema (substituiu banner SQL bruto) ──
   if (!tableReady) {
     return (
-      <div className="max-w-2xl mx-auto mt-10 p-6 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-2xl">
-        <div className="flex items-center gap-3 mb-3">
-          <AlertTriangle className="text-amber-500 shrink-0" size={20} />
-          <h2 className="font-black uppercase tracking-tight text-amber-700 dark:text-amber-400">
-            Configuração necessária
-          </h2>
-        </div>
-        <p className="text-sm text-amber-700 dark:text-amber-300 mb-4">
-          Execute o SQL abaixo no <strong>Editor SQL</strong> do Supabase para habilitar os campos de áudio:
-        </p>
-        <pre className="bg-black/10 dark:bg-black/40 p-4 rounded-xl text-xs text-amber-800 dark:text-amber-200 overflow-x-auto whitespace-pre-wrap font-mono select-all">
-          {SETUP_SQL}
-        </pre>
-        <button
-          onClick={() => { setTableReady(true); fetchAll(); }}
-          className="mt-4 flex items-center gap-2 px-4 py-2.5 bg-amber-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-amber-600 transition-all"
-        >
-          <RefreshCw size={12} /> Verificar Novamente
-        </button>
-      </div>
+      <SystemErrorBanner
+        message="Não conseguimos carregar suas trilhas agora. Se o problema persistir, fale com nosso suporte."
+        onRetry={() => { setTableReady(true); fetchAll(); }}
+      />
     );
   }
 

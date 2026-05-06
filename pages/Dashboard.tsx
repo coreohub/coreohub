@@ -43,15 +43,19 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
   const navigate = useNavigate();
   const [coreografias, setCoreografias] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // UX#12: erro silencioso virou erro visível.
+  const [error, setError] = useState<string | null>(null);
   const isInscrito = INSCRITO_ROLES.has(activeRole);
 
   useEffect(() => {
     const fetchCoreografias = async () => {
-      const { data } = await supabase
+      setError(null);
+      const { data, error: err } = await supabase
         .from('registrations')
         .select('id, status, trilha_url, nome:nome_coreografia, formacao:formato_participacao, categoria_nome:categoria, estilo_nome:estilo_danca')
         .eq('user_id', profile.id)
         .order('criado_em', { ascending: false });
+      if (err) setError('Não foi possível carregar suas inscrições. Recarregue a página em instantes.');
       if (data) setCoreografias(data);
       setLoading(false);
     };
@@ -85,7 +89,7 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
             {config?.nome_evento || 'Festival Ativo'}
           </span>
           <h1 className="text-2xl font-black tracking-tighter uppercase">
-            Olá, {profile.full_name?.split(' ')[0]}
+            Olá, {profile.full_name?.split(' ')[0] || profile.email?.split('@')[0] || 'pessoa'}
           </h1>
         </div>
         <button
@@ -95,6 +99,13 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
           <Plus size={14} /> Nova Inscrição
         </button>
       </div>
+
+      {/* UX#12: erro silencioso virou visível pra usuário não ficar com tela em branco. */}
+      {error && (
+        <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl text-sm text-rose-600 dark:text-rose-400">
+          {error}
+        </div>
+      )}
 
       {/* ── Guia de Inscrição (apenas inscritos) ── */}
       {isInscrito && (

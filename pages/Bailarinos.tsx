@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../services/supabase';
+import SystemErrorBanner from '../components/SystemErrorBanner';
 import {
   Users, Plus, Search, Pencil, Trash2, X,
   CheckCircle, AlertCircle, Loader2, ShieldCheck,
@@ -194,29 +195,13 @@ const MeuElenco = () => {
     b.cpf.includes(search.replace(/\D/g, ''))
   );
 
-  /* ── Setup SQL banner ── */
+  /* ── Erro de sistema (substituiu banner SQL bruto que era ação de admin) ── */
   if (tableError) {
     return (
-      <div className="max-w-2xl mx-auto mt-10 p-6 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-2xl">
-        <div className="flex items-center gap-3 mb-3">
-          <AlertTriangle className="text-amber-500 shrink-0" size={20} />
-          <h2 className="font-black uppercase tracking-tight text-amber-700 dark:text-amber-400">
-            Tabela não encontrada
-          </h2>
-        </div>
-        <p className="text-sm text-amber-700 dark:text-amber-300 mb-4">
-          Execute o SQL abaixo no <strong>Editor SQL</strong> do seu projeto Supabase para criar a tabela de elenco:
-        </p>
-        <pre className="bg-black/10 dark:bg-black/40 p-4 rounded-xl text-xs text-amber-800 dark:text-amber-200 overflow-x-auto whitespace-pre-wrap font-mono select-all">
-          {SETUP_SQL}
-        </pre>
-        <button
-          onClick={() => { setTableError(false); fetchElenco(); }}
-          className="mt-4 flex items-center gap-2 px-4 py-2.5 bg-amber-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-amber-600 transition-all"
-        >
-          <Loader2 size={12} /> Verificar Novamente
-        </button>
-      </div>
+      <SystemErrorBanner
+        message="Não conseguimos carregar seu elenco agora. Se o problema persistir, fale com nosso suporte."
+        onRetry={() => { setTableError(false); fetchElenco(); }}
+      />
     );
   }
 
@@ -322,6 +307,10 @@ const MeuElenco = () => {
                     <span className="flex items-center gap-1 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
                       <Calendar size={9} /> {formatDate(b.data_nascimento)}
                     </span>
+                    {/* UX#12: idade visível também em mobile (era hidden sm:block) — informação crítica pra elegibilidade etária */}
+                    <span className="flex items-center gap-1 text-[9px] font-bold text-[#ff0068] uppercase tracking-widest sm:hidden">
+                      {age} anos
+                    </span>
                   </div>
                 </div>
 
@@ -336,15 +325,17 @@ const MeuElenco = () => {
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => handleEdit(b)}
-                      className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-all"
+                      aria-label={`Editar bailarino ${b.nome}`}
+                      className="p-2.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-all"
                     >
-                      <Pencil size={13} />
+                      <Pencil size={14} />
                     </button>
                     <button
                       onClick={() => setConfirmDelete(b.id)}
-                      className="p-2 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-500/10 text-slate-400 hover:text-rose-500 transition-all"
+                      aria-label={`Remover bailarino ${b.nome}`}
+                      className="p-2.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-500/10 text-slate-400 hover:text-rose-500 transition-all"
                     >
-                      <Trash2 size={13} />
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
