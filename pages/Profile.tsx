@@ -23,11 +23,11 @@ const validateCPF = (cpf: string): boolean => {
   return r === parseInt(d[10]);
 };
 
-const docStatus = (raw: string): 'valid' | 'invalid' | 'neutral' => {
+const docStatus = (raw: string, allowCnpj = true): 'valid' | 'invalid' | 'neutral' => {
   const d = raw.replace(/\D/g, '');
   if (d.length === 0) return 'neutral';
   if (d.length === 11) return validateCPF(raw) ? 'valid' : 'invalid';
-  if (d.length === 14) return 'valid'; // CNPJ — format check only (full validation optional)
+  if (d.length === 14) return allowCnpj ? 'valid' : 'invalid';
   return 'neutral';
 };
 
@@ -233,9 +233,11 @@ const MeuPerfil = () => {
     }
   };
 
+  const isProducer = profile?.role === 'ORGANIZER' || profile?.role === 'COREOHUB_ADMIN';
+
   const handleSave = async () => {
-    if (docStatus(form.document) === 'invalid') {
-      setError('CPF inválido. Corrija antes de salvar.');
+    if (docStatus(form.document, isProducer) === 'invalid') {
+      setError(isProducer ? 'CPF/CNPJ inválido. Corrija antes de salvar.' : 'CPF inválido. Corrija antes de salvar.');
       return;
     }
     setSaving(true);
@@ -528,33 +530,46 @@ const MeuPerfil = () => {
         </div>
         <div className="p-5 space-y-4">
           <div>
-            <label className={labelClass}><CreditCard size={10} /> CPF / CNPJ</label>
+            <label className={labelClass}>
+              <CreditCard size={10} /> {isProducer ? 'CPF / CNPJ' : 'CPF'}
+            </label>
             <div className="relative">
               <input type="text" value={form.document}
-                onChange={e => set('document')(maskDoc(e.target.value))}
-                placeholder="000.000.000-00 ou 00.000.000/0001-00"
-                maxLength={18}
+                onChange={e => {
+                  const masked = maskDoc(e.target.value);
+                  // Inscrito: limita a 11 dígitos (CPF). Produtor: aceita até 14 (CNPJ).
+                  const digits = masked.replace(/\D/g, '');
+                  if (!isProducer && digits.length > 11) return;
+                  set('document')(masked);
+                }}
+                placeholder={isProducer ? '000.000.000-00 ou 00.000.000/0001-00' : '000.000.000-00'}
+                maxLength={isProducer ? 18 : 14}
+                inputMode="numeric"
                 className={`${inputClass()} pr-10 ${
-                  docStatus(form.document) === 'invalid'
+                  docStatus(form.document, isProducer) === 'invalid'
                     ? 'border-rose-400 focus:border-rose-400'
-                    : docStatus(form.document) === 'valid'
+                    : docStatus(form.document, isProducer) === 'valid'
                       ? 'border-emerald-400 focus:border-emerald-400'
                       : ''
                 }`}
               />
-              {docStatus(form.document) === 'valid' && (
+              {docStatus(form.document, isProducer) === 'valid' && (
                 <CheckCircle size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 pointer-events-none" />
               )}
-              {docStatus(form.document) === 'invalid' && (
+              {docStatus(form.document, isProducer) === 'invalid' && (
                 <XCircle size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-rose-500 pointer-events-none" />
               )}
             </div>
-            {docStatus(form.document) === 'invalid' && (
-              <p className="text-[9px] text-rose-500 font-bold mt-1">CPF inválido — verifique os dígitos</p>
+            {docStatus(form.document, isProducer) === 'invalid' && (
+              <p className="text-[9px] text-rose-500 font-bold mt-1">
+                {isProducer ? 'CPF/CNPJ inválido — verifique os dígitos' : 'CPF inválido — verifique os dígitos'}
+              </p>
             )}
-            {docStatus(form.document) !== 'invalid' && (
+            {docStatus(form.document, isProducer) !== 'invalid' && (
               <p className="text-xs text-slate-500 mt-1">
-                Usado para emissão de certificados e futura integração financeira.
+                {isProducer
+                  ? 'Usado para emissão de certificados e integração financeira.'
+                  : 'Usado para emissão de certificados em seu nome.'}
               </p>
             )}
           </div>

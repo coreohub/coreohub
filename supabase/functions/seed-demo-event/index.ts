@@ -1168,7 +1168,6 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
     let couponsOk = 0
     const couponsToInsert = DEMO_COUPONS.map(c => ({
       event_id: eventId,
-      created_by: user.id,
       code: c.code,
       discount_type: c.discount_type,
       discount_value: c.discount_value,

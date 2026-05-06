@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Download, X, Copy, Check } from 'lucide-react';
+import { usePWAInstall } from '../hooks/usePWAInstall';
 
 /**
  * Botão discreto pra instalar o CoreoHub como PWA.
@@ -17,11 +18,6 @@ import { Download, X, Copy, Check } from 'lucide-react';
 
 const DISMISS_KEY = 'coreohub_install_dismissed_at';
 const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
 
 const isStandalone = () =>
   typeof window !== 'undefined' &&
@@ -51,7 +47,7 @@ const wasDismissedRecently = () => {
 };
 
 export const InstallPWAButton: React.FC<{ className?: string }> = ({ className = '' }) => {
-  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const { installPrompt, promptInstall } = usePWAInstall();
   const [showHint, setShowHint] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [urlCopied, setUrlCopied] = useState(false);
@@ -59,27 +55,13 @@ export const InstallPWAButton: React.FC<{ className?: string }> = ({ className =
   useEffect(() => {
     if (isStandalone() || wasDismissedRecently()) {
       setHidden(true);
-      return;
     }
-    const onPrompt = (e: Event) => {
-      e.preventDefault();
-      setInstallPrompt(e as BeforeInstallPromptEvent);
-    };
-    window.addEventListener('beforeinstallprompt', onPrompt);
-    return () => window.removeEventListener('beforeinstallprompt', onPrompt);
   }, []);
 
   const handleInstall = async () => {
-    if (installPrompt) {
-      await installPrompt.prompt();
-      const choice = await installPrompt.userChoice;
-      if (choice.outcome === 'accepted') setHidden(true);
-      setInstallPrompt(null);
-    } else {
-      // Sem prompt nativo (iOS Safari, Chrome sem heurística disparada, etc.)
-      // Mostra instruções manuais.
-      setShowHint(true);
-    }
+    const outcome = await promptInstall();
+    if (outcome === 'accepted') setHidden(true);
+    if (outcome === null) setShowHint(true);
   };
 
   const handleDismiss = () => {

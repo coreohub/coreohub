@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Download, X, Smartphone } from 'lucide-react';
+import { usePWAInstall } from '../hooks/usePWAInstall';
 
 /**
  * Banner persistente fino que aparece no topo do PrivateLayout sugerindo
@@ -20,11 +21,6 @@ const SESSION_TS_KEY    = 'coreohub_last_session_at';
 const DISMISS_KEY       = 'coreohub_install_banner_dismissed_at';
 const DISMISS_TTL_MS    = 30 * 24 * 60 * 60 * 1000;
 const SESSION_GAP_MS    = 30 * 60 * 1000; // 30min gap = nova sessão
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
 
 const isStandalone = () =>
   typeof window !== 'undefined' &&
@@ -68,30 +64,18 @@ const trackSession = (): number => {
 const InstallAppBanner: React.FC = () => {
   const [show, setShow] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
-  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const { promptInstall } = usePWAInstall();
 
   useEffect(() => {
     if (isStandalone() || wasDismissed()) return;
     const sessions = trackSession();
     if (sessions >= 2) setShow(true);
-
-    const onPrompt = (e: Event) => {
-      e.preventDefault();
-      setInstallPrompt(e as BeforeInstallPromptEvent);
-    };
-    window.addEventListener('beforeinstallprompt', onPrompt);
-    return () => window.removeEventListener('beforeinstallprompt', onPrompt);
   }, []);
 
   const handleInstall = async () => {
-    if (installPrompt) {
-      await installPrompt.prompt();
-      const choice = await installPrompt.userChoice;
-      if (choice.outcome === 'accepted') setShow(false);
-      setInstallPrompt(null);
-    } else {
-      setShowInstructions(true);
-    }
+    const outcome = await promptInstall();
+    if (outcome === 'accepted') setShow(false);
+    if (outcome === null) setShowInstructions(true);
   };
 
   const handleDismiss = () => {

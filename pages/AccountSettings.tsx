@@ -289,10 +289,31 @@ const TABS: { label: TabType; icon: React.ElementType }[] = [
 ];
 
 const TIPOS_APRESENTACAO_OPTIONS = [
-  { id: 'Competitiva',           label: 'Mostra Competitiva' },
-  { id: 'Avaliada',              label: 'Mostra Avaliada (Não Competitiva)' },
-  { id: 'Ranking',               label: 'Ranking por Médias' },
-  { id: 'Batalhas',              label: 'Torneio de Batalhas' },
+  {
+    id: 'Competitiva',
+    label: 'Mostra Competitiva',
+    description: 'Festival com prêmios e ranking final por categoria.',
+  },
+  {
+    id: 'Avaliada',
+    label: 'Mostra Avaliada',
+    description: 'Avaliação técnica com feedback dos jurados, sem competição.',
+  },
+  {
+    id: 'Ranking',
+    label: 'Ranking por Médias',
+    description: 'Soma de médias premia melhor escola/coreógrafo do festival.',
+  },
+  {
+    id: 'Batalhas',
+    label: 'Torneio de Batalhas',
+    description: 'Hip-hop, breaking ou freestyle em formato eliminatório 1v1.',
+  },
+  {
+    id: 'Espetaculo',
+    label: 'Espetáculo de Dança',
+    description: 'Recital, mostra de fim de ano ou apresentação de estúdio sem competição.',
+  },
 ];
 
 type ScoreScale = 'BASE_10' | 'BASE_100';
@@ -1739,21 +1760,21 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   <p className="text-center text-slate-400 py-8 text-xs italic">Nenhum bloco. Clique em "Adicionar Bloco" — Ex: "18h Solenidade", "19h Mostra de Dança", "21h Premiação".</p>
                 ) : (
                   programacao.map((item, i) => (
-                    <div key={i} className="flex gap-2 items-center bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-xl p-3">
+                    <div key={i} className="flex flex-col sm:flex-row gap-2 sm:items-center bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-xl p-3">
                       <input
                         type="time"
                         value={item.hora}
                         onChange={e => setProgramacao(p => p.map((x, idx) => idx === i ? { ...x, hora: e.target.value } : x))}
-                        className="w-28 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50 dark:[color-scheme:dark]"
+                        className="w-full sm:w-28 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50 dark:[color-scheme:dark]"
                       />
                       <input
                         type="text"
                         value={item.atividade}
                         onChange={e => setProgramacao(p => p.map((x, idx) => idx === i ? { ...x, atividade: e.target.value } : x))}
                         placeholder="Ex: Solenidade da Sapatilha de Pontas"
-                        className="flex-1 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                        className="min-w-0 flex-1 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
                       />
-                      <div className="flex flex-col gap-0.5 shrink-0">
+                      <div className="flex sm:flex-col items-center sm:items-stretch justify-end gap-0.5 shrink-0">
                         <button
                           onClick={() => setProgramacao(p => {
                             if (i === 0) return p;
@@ -1762,9 +1783,10 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                             return next;
                           })}
                           disabled={i === 0}
-                          className="p-1 text-slate-400 hover:text-[#ff0068] disabled:opacity-20"
+                          className="p-1.5 text-slate-400 hover:text-[#ff0068] disabled:opacity-20"
+                          aria-label="Mover bloco pra cima"
                         >
-                          <ArrowUp size={12} />
+                          <ArrowUp size={14} />
                         </button>
                         <button
                           onClick={() => setProgramacao(p => {
@@ -1774,17 +1796,19 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                             return next;
                           })}
                           disabled={i === programacao.length - 1}
-                          className="p-1 text-slate-400 hover:text-[#ff0068] disabled:opacity-20"
+                          className="p-1.5 text-slate-400 hover:text-[#ff0068] disabled:opacity-20"
+                          aria-label="Mover bloco pra baixo"
                         >
-                          <ArrowDown size={12} />
+                          <ArrowDown size={14} />
+                        </button>
+                        <button
+                          onClick={() => setProgramacao(p => p.filter((_, idx) => idx !== i))}
+                          className="p-2 text-slate-400 hover:text-red-500 ml-auto sm:ml-0"
+                          aria-label="Remover bloco"
+                        >
+                          <Trash2 size={14} />
                         </button>
                       </div>
-                      <button
-                        onClick={() => setProgramacao(p => p.filter((_, idx) => idx !== i))}
-                        className="p-2 text-slate-400 hover:text-red-500 shrink-0"
-                      >
-                        <Trash2 size={14} />
-                      </button>
                     </div>
                   ))
                 )}
@@ -2319,27 +2343,41 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               </div>
             </div>
 
-            {/* Tipos de Apresentação */}
+            {/* Formato do Evento */}
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
-              <div className="flex items-center gap-3 mb-6">
+              <div className="flex items-center gap-3 mb-2">
                 <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Clapperboard size={18} /></div>
-                <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Tipos de Apresentação Permitidos</h3>
+                <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Formato do Evento</h3>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <p className="text-xs text-slate-500 mb-6 ml-12">
+                Selecione um ou mais formatos. Define como o app trata avaliação, premiação e exibição pra inscritos.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {TIPOS_APRESENTACAO_OPTIONS.map(opt => {
                   const active = general.tipos_apresentacao.includes(opt.id);
                   return (
                     <button
                       key={opt.id}
                       onClick={() => toggleTipo(opt.id)}
-                      className={`flex items-center gap-3 p-4 rounded-2xl border transition-all text-left ${
+                      className={`flex items-start gap-3 p-4 rounded-2xl border transition-all text-left ${
                         active
-                          ? 'border-[#ff0068] bg-[#ff0068]/5 text-[#ff0068]'
-                          : 'border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-white/20'
+                          ? 'border-[#ff0068] bg-[#ff0068]/5'
+                          : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
                       }`}
                     >
-                      {active ? <CheckSquare size={18} /> : <Square size={18} />}
-                      <span className="text-[11px] font-black uppercase tracking-widest">{opt.label}</span>
+                      <div className={`shrink-0 mt-0.5 ${active ? 'text-[#ff0068]' : 'text-slate-400 dark:text-slate-500'}`}>
+                        {active ? <CheckSquare size={18} /> : <Square size={18} />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className={`text-[11px] font-black uppercase tracking-widest ${
+                          active ? 'text-[#ff0068]' : 'text-slate-700 dark:text-slate-200'
+                        }`}>
+                          {opt.label}
+                        </p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                          {opt.description}
+                        </p>
+                      </div>
                     </button>
                   );
                 })}

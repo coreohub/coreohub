@@ -233,7 +233,7 @@ const PrivateLayout: React.FC<{
               16/2025 BCB). Visível em todas as telas privadas pra cumprir a
               obrigatoriedade de identificação clara do prestador financeiro. */}
           <footer className="px-4 py-6 border-t border-slate-200 dark:border-white/5 bg-white dark:bg-slate-950 flex flex-col items-center gap-2">
-            <AsaasBadge variant="compact" />
+            <AsaasBadge variant="compact" width={120} height={36} />
             <p className="text-[9px] text-slate-400 text-center max-w-md leading-relaxed">
               Pagamentos processados pelo ASAAS GESTÃO FINANCEIRA S.A., instituição de pagamento
               autorizada pelo Banco Central do Brasil.

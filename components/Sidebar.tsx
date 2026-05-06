@@ -169,10 +169,10 @@ const menuSections: MenuSection[] = [
       { path: '/manage-schedule', label: 'Cronograma',              icon: Calendar,        roles: [UserRole.COORDENADOR, UserRole.MESARIO, UserRole.SONOPLASTA, UserRole.RECEPCAO, UserRole.PALCO, UserRole.STAFF, UserRole.COREOHUB_ADMIN] },
       // Credenciamento
       { path: '/check-in',        label: 'Credenciamento',          icon: QrCode,          roles: [UserRole.RECEPCAO] },
-      // Marcacao de Palco
-      { path: '/marcacao-palco',  label: 'Marcação de Palco',       icon: PersonStanding,  roles: [UserRole.PALCO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
-      // Coordenador do Juri — acompanhamento de jurados + deliberacao
-      { path: '/suporte-juri',    label: 'Coordenador do Júri',     icon: Headphones,      roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
+      // Marcacao de Palco — ORGANIZER ja ve em "Operação"; COREOHUB_ADMIN tem acesso via outras vias
+      { path: '/marcacao-palco',  label: 'Marcação de Palco',       icon: PersonStanding,  roles: [UserRole.PALCO, UserRole.COORDENADOR, UserRole.STAFF] },
+      // Coordenador do Juri — ORGANIZER ja ve em "Sistema"; evita duplicar
+      { path: '/suporte-juri',    label: 'Coordenador do Júri',     icon: Headphones,      roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF] },
       // Deliberacao: ORGANIZER ja ve na secao Produtor — evita duplicar
       { path: '/deliberacoes',    label: 'Premiação',               icon: Trophy,          roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.COREOHUB_ADMIN] },
     ],
