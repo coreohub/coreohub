@@ -132,6 +132,17 @@ const InscricaoWizard: React.FC = () => {
 
       if (evErr || !ev) { setError('Evento não encontrado.'); setLoading(false); return; }
 
+      // A2: valida que a modalidade da URL existe nas formacoes_config do evento.
+      // Sem isso, salvaria string crua em formato_participacao (modalidade fantasma).
+      const modalidadeMatch = (ev.formacoes_config ?? []).find((m: any) =>
+        m.name?.trim().toLowerCase() === modalidade.trim().toLowerCase()
+      );
+      if (!modalidadeMatch) {
+        setError(`Modalidade "${modalidade}" não está disponível neste evento. Volte e escolha uma modalidade da lista.`);
+        setLoading(false);
+        return;
+      }
+
       const isOpen = (() => {
         const now = new Date();
         const s = ev.registration_start_date ? new Date(ev.registration_start_date) : null;
@@ -153,7 +164,19 @@ const InscricaoWizard: React.FC = () => {
         supabase.from('configuracoes').select('categorias, estilos').eq('event_id', ev.id).maybeSingle(),
         supabase.from('configuracoes').select('categorias, estilos').eq('id', '1').maybeSingle(),
       ]);
-      setConfig(cfg && (cfg.categorias || cfg.estilos) ? cfg : legacy);
+      const finalCfg = cfg && (cfg.categorias || cfg.estilos) ? cfg : legacy;
+
+      // A3: se config retorna null/vazia em both event + legacy, usuário ficaria
+      // preso no Passo 1 com dropdowns vazios sem mensagem. Bloqueia explicitamente.
+      const hasCategorias = Array.isArray(finalCfg?.categorias) && finalCfg.categorias.length > 0;
+      const hasEstilos    = Array.isArray(finalCfg?.estilos)    && finalCfg.estilos.length    > 0;
+      if (!hasCategorias || !hasEstilos) {
+        setError('Este evento ainda não tem categorias ou estilos configurados. Contate o produtor antes de tentar se inscrever.');
+        setLoading(false);
+        return;
+      }
+
+      setConfig(finalCfg);
       setEvent(ev);
 
       if (profile?.full_name) {
@@ -251,6 +274,12 @@ const InscricaoWizard: React.FC = () => {
       if (elencoErr) throw new Error('Erro ao criar elenco: ' + elencoErr.message);
 
       const bailarinosDetalhes = (elencoCreated ?? []).map(b => ({ id: b.id, nome: b.nome }));
+      const createdElencoIds   = (elencoCreated ?? []).map(b => b.id);
+
+      // M2: salva metadados legacy (event_nome, mod_fee) em event_data pra
+      // compat com MinhasCoreografias.tsx que lê esses campos pra exibir.
+      const firstLote = (formacao?.lotes ?? [])[0];
+      const modFee = firstLote?.preco ?? formacao?.fee ?? formacao?.base_fee ?? 0;
 
       // 2) Cria registration. Status AGUARDANDO_PAGAMENTO — Checkout completa.
       const { data: reg, error: regErr } = await supabase
@@ -270,6 +299,8 @@ const InscricaoWizard: React.FC = () => {
           criado_em:            new Date().toISOString(),
           data_inscricao:       new Date().toISOString(),
           event_data: {
+            event_nome:       event.name ?? '',
+            mod_fee:          Number(modFee) || 0,
             duracao_minutos:  data.duracao_minutos ? Number(data.duracao_minutos) : null,
             coreografo_nome:  data.coreografo_nome.trim(),
             estudio_nome:     data.estudio_nome.trim() || null,
@@ -279,7 +310,15 @@ const InscricaoWizard: React.FC = () => {
         })
         .select('id')
         .single();
-      if (regErr || !reg) throw regErr ?? new Error('Erro ao criar inscrição.');
+
+      // A1: rollback do elenco criado se registration falha. Sem isso, próxima
+      // tentativa cria duplicatas no cadastro pessoal do user.
+      if (regErr || !reg) {
+        if (createdElencoIds.length > 0) {
+          await supabase.from('elenco').delete().in('id', createdElencoIds);
+        }
+        throw regErr ?? new Error('Erro ao criar inscrição.');
+      }
 
       // 3) Redireciona pra Checkout existente — reusa integração Asaas/cupom/etc.
       navigate(`/festival/${event.id}/checkout?registration_id=${reg.id}`);

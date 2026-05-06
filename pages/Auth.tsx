@@ -135,6 +135,8 @@ const Auth = () => {
           password,
         });
         if (error) throw error;
+        // A4: safety timeout — SIGNED_IN listener navega; se falhar, libera o spinner.
+        setTimeout(() => setIsLoading(false), 5000);
       } else {
         const { error: signUpError } = await supabase.auth.signUp({
           email,
@@ -155,6 +157,9 @@ const Auth = () => {
         const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (!signInError) {
           // SIGNED_IN listener no useEffect já navega pra dashboard.
+          // A4: safety timeout — se navigate falhar (rota destino com RLS error
+          // ou redirect loop), libera o spinner em 5s pra usuário não travar.
+          setTimeout(() => setIsLoading(false), 5000);
           return;
         }
         if (signInError.message?.toLowerCase().includes('email not confirmed')) {

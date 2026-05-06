@@ -85,7 +85,9 @@ const MeusCertificados: React.FC = () => {
   }, [feedback]);
 
   const downloadPdf = async (cert: MyCert) => {
-    if (emailVerified === false) {
+    // M3: cobre null (loading) E false. Evita bypass por click rápido antes
+    // de getUser concluir. Backend (get-certificate-pdf) deve garantir bloqueio.
+    if (!emailVerified) {
       setFeedback({ kind: 'err', msg: 'Confirme seu e-mail antes de baixar o certificado. Enviamos o link pra você.' });
       return;
     }

@@ -34,17 +34,40 @@ const EmailVerifyBanner: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+
+    const refresh = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (cancelled || !user) return;
+      if (cancelled) return;
+      if (!user) {
+        setNeedsVerify(false);
+        setEmail(null);
+        return;
+      }
       // email_confirmed_at é null pra signups por email/senha sem confirmação.
       // OAuth (Google) já vem confirmed.
       if (!user.email_confirmed_at) {
         setNeedsVerify(true);
         setEmail(user.email ?? null);
+      } else {
+        setNeedsVerify(false);
+        setEmail(null);
       }
-    })();
-    return () => { cancelled = true; };
+    };
+
+    refresh();
+
+    // A5: escuta updates de auth (verificação em outra aba, refresh de token,
+    // signOut/signIn) pra não exigir reload da página pra atualizar o banner.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+        refresh();
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleResend = async () => {
