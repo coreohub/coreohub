@@ -334,10 +334,10 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
               <select
                 value={selectedEventId ?? ''}
                 onChange={e => setSelectedEventId(e.target.value)}
-                className="w-full appearance-none pl-4 pr-9 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 transition-all cursor-pointer"
+                className="w-full appearance-none pl-4 pr-9 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 transition-all cursor-pointer dark:[color-scheme:dark]"
               >
                 {allEvents.map(ev => (
-                  <option key={ev.id} value={ev.id}>
+                  <option key={ev.id} value={ev.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
                     {ev.edition_year ? `${ev.edition_year} — ` : ''}{ev.name}
                   </option>
                 ))}
