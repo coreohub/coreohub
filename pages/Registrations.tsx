@@ -63,16 +63,24 @@ const Registrations = () => {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase
-      .from('events')
-      .select('id,name,edition_year,start_date')
-      .order('start_date', { ascending: false })
-      .then(({ data }) => {
-        if (data && data.length > 0) {
-          setAllEvents(data);
-          setSelectedEventId(prev => prev ?? data[0].id);
-        }
-      });
+    // Default do dropdown: prioriza evento DEMO quando existir + ordena por
+    // created_at (alinhado com DemoBanner). Antes ordenava por start_date,
+    // o que descoordenava: banner mostrava demo mas dropdown ficava no
+    // evento real do user → tela "0 inscrições" enganosa.
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from('events')
+        .select('id,name,edition_year,start_date,is_demo,created_at')
+        .eq('created_by', user.id)
+        .order('created_at', { ascending: false });
+      if (data && data.length > 0) {
+        setAllEvents(data);
+        const demo = data.find(e => (e as any).is_demo);
+        setSelectedEventId(prev => prev ?? (demo?.id ?? data[0].id));
+      }
+    })();
   }, []);
 
   const fetchData = async () => {

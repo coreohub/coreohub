@@ -63,12 +63,14 @@ const Coupons: React.FC = () => {
       if (!user) return;
       const { data } = await supabase
         .from('events')
-        .select('id, name')
+        .select('id, name, is_demo')
         .eq('created_by', user.id)
         .order('created_at', { ascending: false });
       if (data && data.length > 0) {
         setEvents(data);
-        setSelectedEventId(prev => prev ?? data[0].id);
+        // Prioriza evento demo no default (alinhado com DemoBanner).
+        const demo = data.find(e => (e as any).is_demo);
+        setSelectedEventId(prev => prev ?? (demo?.id ?? data[0].id));
       } else {
         setLoading(false);
       }

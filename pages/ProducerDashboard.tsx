@@ -131,18 +131,27 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
   const [asaasConnected, setAsaasConnected] = useState(false);
 
   useEffect(() => {
-    supabase
-      .from('events')
-      .select('id,name,slug,is_public,edition_year,start_date,formacoes_config')
-      .order('start_date', { ascending: false })
-      .then(({ data }) => {
-        if (data && data.length > 0) {
-          setAllEvents(data);
-          setSelectedEventId(prev => prev ?? data[0].id);
-        } else {
-          setLoading(false);
-        }
-      });
+    // Mesma regra do Registrations.tsx: prioriza demo + ordena por created_at
+    // (alinhado com DemoBanner). Antes start_date desc descoordenava em modo demo.
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+      const { data } = await supabase
+        .from('events')
+        .select('id,name,slug,is_public,edition_year,start_date,formacoes_config,is_demo,created_at')
+        .eq('created_by', user.id)
+        .order('created_at', { ascending: false });
+      if (data && data.length > 0) {
+        setAllEvents(data);
+        const demo = data.find(e => (e as any).is_demo);
+        setSelectedEventId(prev => prev ?? (demo?.id ?? data[0].id));
+      } else {
+        setLoading(false);
+      }
+    })();
 
     supabase
       .from('profiles')
