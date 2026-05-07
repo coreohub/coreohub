@@ -228,7 +228,11 @@ const Credenciais: React.FC = () => {
             eventName,
             mode,
           });
-          const fileName = `credenciais-${mode === 'A6' ? 'a6' : 'pimaco-6280'}-${printJob.length}.pdf`;
+          // Filename amigável pra ordenar na pasta. Sanitiza caracteres
+          // inválidos em filesystems (\ / : * ? " < > |) trocando por '-'.
+          const tipoLabel = mode === 'A6' ? 'A6 cordão' : 'Adesivo';
+          const sanitizedEvent = eventName.replace(/[\\/:*?"<>|]+/g, '-').trim();
+          const fileName = `CoreoHub - Credenciais ${tipoLabel} (${printJob.length}) - ${sanitizedEvent}.pdf`;
           // Anchor programmatic com target=_blank — passa em popup blockers que
           // recusam window.open() async. Browser que recusar abrir em aba cai
           // no download fallback automaticamente (depende da configuração).
