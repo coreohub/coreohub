@@ -33,11 +33,15 @@ const A4_H = 297;
 const A6_W = 105;
 const A6_H = 148.5;
 
+// Specs oficiais Pimaco 6280 (A4): 14 etiquetas (2 col × 7 linhas).
+// Inclui gap vertical de 3.4mm — sem isso, etiquetas grudam e sobra
+// margem inferior gigante (~53mm em vez de ~26mm padrão).
 const PIMACO_MARGIN_TOP = 12.7;
-const PIMACO_MARGIN_LEFT = 4.5;
-const PIMACO_LABEL_W = 99;
-const PIMACO_LABEL_H = 33;
-const PIMACO_GAP_X = 2.5;
+const PIMACO_MARGIN_LEFT = 4.65;
+const PIMACO_LABEL_W = 99.1;
+const PIMACO_LABEL_H = 33.9;
+const PIMACO_GAP_X = 3.81;
+const PIMACO_GAP_Y = 3.4;
 const PIMACO_COLS = 2;
 const PIMACO_ROWS = 7;
 const PIMACO_PER_PAGE = PIMACO_COLS * PIMACO_ROWS;
@@ -210,7 +214,7 @@ export const generateCredentialPdf = (params: {
       const col = slot % PIMACO_COLS;
       const row = Math.floor(slot / PIMACO_COLS);
       const x0 = PIMACO_MARGIN_LEFT + col * (PIMACO_LABEL_W + PIMACO_GAP_X);
-      const y0 = PIMACO_MARGIN_TOP + row * PIMACO_LABEL_H;
+      const y0 = PIMACO_MARGIN_TOP + row * (PIMACO_LABEL_H + PIMACO_GAP_Y);
       const qr = qrDataUrls[item.id];
       if (!qr) return;
       drawPimacoLabel(doc, item, qr, x0, y0, eventName);
