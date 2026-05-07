@@ -35,8 +35,14 @@ const CheckIn = () => {
   const [filterTab, setFilterTab] = useState<FilterTab>('TODOS');
 
   /* QR scanner */
+  type ScanKind = 'INSCRITO' | 'INGRESSO' | 'WORKSHOP' | 'EQUIPE' | 'JURADO';
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [scanResult, setScanResult] = useState<{ type: 'success' | 'error' | 'duplicate'; message: string; name?: string } | null>(null);
+  const [scanResult, setScanResult] = useState<{
+    type: 'success' | 'error' | 'duplicate';
+    message: string;
+    name?: string;
+    kind?: ScanKind;
+  } | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanLoopRef = useRef<number | null>(null);
@@ -89,65 +95,158 @@ const CheckIn = () => {
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, check_in_status: newStatus ?? undefined, check_in_at: now ?? undefined } : i));
   };
 
-  /* ── process QR result (UUID lookup em registrations OU audience_tickets) ── */
+  /* ── process QR result — tenta resolver em 5 tipos (registration → ticket
+        → workshop → profile staff → judge). Primeiro hit ganha. ── */
+  const STAFF_ROLES = ['STAFF', 'MESARIO', 'SONOPLASTA', 'RECEPCAO', 'PALCO', 'COORDENADOR'];
+  const formatTime = (iso: string) =>
+    new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
   const processQrId = useCallback(async (rawId: string) => {
     const id = rawId.trim();
+    if (!id) {
+      setScanResult({ type: 'error', message: 'QR vazio.' });
+      return;
+    }
 
-    // 1) Tenta primeiro em registrations (inscrições) — comportamento legado
+    // 1) Inscrição (registrations.id)
     const item = items.find(i => i.id === id);
     if (item) {
       if (item.check_in_status === 'OK') {
-        const t = item.check_in_at ? new Date(item.check_in_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
-        setScanResult({ type: 'duplicate', message: `Já credenciado${t ? ' às ' + t : ''}.`, name: item.nome_coreografia });
+        const t = item.check_in_at ? formatTime(item.check_in_at) : '';
+        setScanResult({ type: 'duplicate', message: `Já credenciado${t ? ' às ' + t : ''}.`, name: item.nome_coreografia, kind: 'INSCRITO' });
         return;
       }
       if (item.status_pagamento !== 'CONFIRMADO') {
-        setScanResult({ type: 'error', message: 'Pagamento não confirmado. Procure o coordenador.', name: item.nome_coreografia });
+        setScanResult({ type: 'error', message: 'Pagamento não confirmado. Procure o coordenador.', name: item.nome_coreografia, kind: 'INSCRITO' });
         return;
       }
       const now = new Date().toISOString();
       await supabase.from('registrations').update({ check_in_status: 'OK', check_in_at: now }).eq('id', id);
       setItems(prev => prev.map(i => i.id === id ? { ...i, check_in_status: 'OK', check_in_at: now } : i));
-      setScanResult({ type: 'success', message: 'Check-in realizado!', name: item.nome_coreografia });
+      setScanResult({ type: 'success', message: 'Check-in realizado!', name: item.nome_coreografia, kind: 'INSCRITO' });
       return;
     }
 
-    // 2) Fallback: pode ser ingresso de plateia (Tier 1)
+    // 2) Ingresso plateia (audience_tickets.id)
     const { data: ticket } = await supabase
       .from('audience_tickets')
       .select('id, ticket_type_nome, ticket_type_kind, buyer_name, status_pagamento, check_in_status, check_in_at')
       .eq('id', id)
       .maybeSingle();
-
-    if (!ticket) {
-      setScanResult({ type: 'error', message: 'QR não encontrado (nem inscrição nem ingresso).' });
+    if (ticket) {
+      if (ticket.check_in_status === 'OK') {
+        const t = ticket.check_in_at ? formatTime(ticket.check_in_at) : '';
+        setScanResult({ type: 'duplicate', message: `Ingresso já usado${t ? ' às ' + t : ''}.`, name: ticket.buyer_name, kind: 'INGRESSO' });
+        return;
+      }
+      if (ticket.status_pagamento !== 'APROVADO' && ticket.status_pagamento !== 'CORTESIA') {
+        setScanResult({ type: 'error', message: `Pagamento ${String(ticket.status_pagamento).toLowerCase()}. Procure o coordenador.`, name: ticket.buyer_name, kind: 'INGRESSO' });
+        return;
+      }
+      const now = new Date().toISOString();
+      const { error: upErr } = await supabase
+        .from('audience_tickets')
+        .update({ check_in_status: 'OK', check_in_at: now })
+        .eq('id', id);
+      if (upErr) {
+        setScanResult({ type: 'error', message: `Falha ao marcar: ${upErr.message}`, name: ticket.buyer_name, kind: 'INGRESSO' });
+        return;
+      }
+      const meiaSuffix = ticket.ticket_type_kind === 'meia' ? ' (verificar documento de meia)' : '';
+      setScanResult({
+        type: 'success',
+        message: `Ingresso ${ticket.ticket_type_nome} liberado${meiaSuffix}!`,
+        name: ticket.buyer_name,
+        kind: 'INGRESSO',
+      });
       return;
     }
 
-    if (ticket.check_in_status === 'OK') {
-      const t = ticket.check_in_at ? new Date(ticket.check_in_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
-      setScanResult({ type: 'duplicate', message: `Ingresso já usado${t ? ' às ' + t : ''}.`, name: ticket.buyer_name });
+    // 3) Workshop (workshop_registrations.access_token)
+    const { data: ws } = await supabase
+      .from('workshop_registrations')
+      .select('id, buyer_name, attended, attended_at, status_pagamento, workshops(name)')
+      .eq('access_token', id)
+      .maybeSingle();
+    if (ws) {
+      const wsAny = ws as any;
+      const workshopName = Array.isArray(wsAny.workshops) ? wsAny.workshops[0]?.name : wsAny.workshops?.name;
+      if (ws.attended) {
+        const t = ws.attended_at ? formatTime(ws.attended_at) : '';
+        setScanResult({ type: 'duplicate', message: `Workshop já marcado${t ? ' às ' + t : ''}.`, name: ws.buyer_name, kind: 'WORKSHOP' });
+        return;
+      }
+      if (!['APROVADO', 'CORTESIA', 'GRATUITO'].includes(String(ws.status_pagamento))) {
+        setScanResult({ type: 'error', message: `Pagamento ${String(ws.status_pagamento).toLowerCase()}. Procure o coordenador.`, name: ws.buyer_name, kind: 'WORKSHOP' });
+        return;
+      }
+      const now = new Date().toISOString();
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error: upErr } = await supabase
+        .from('workshop_registrations')
+        .update({ attended: true, attended_at: now, attended_by: user?.id ?? null })
+        .eq('id', ws.id);
+      if (upErr) {
+        setScanResult({ type: 'error', message: `Falha ao marcar: ${upErr.message}`, name: ws.buyer_name, kind: 'WORKSHOP' });
+        return;
+      }
+      setScanResult({ type: 'success', message: `${workshopName ?? 'Workshop'} — presença marcada!`, name: ws.buyer_name, kind: 'WORKSHOP' });
       return;
     }
-    if (ticket.status_pagamento !== 'APROVADO' && ticket.status_pagamento !== 'CORTESIA') {
-      setScanResult({ type: 'error', message: `Pagamento ${String(ticket.status_pagamento).toLowerCase()}. Procure o coordenador.`, name: ticket.buyer_name });
+
+    // 4) Equipe (profiles.id com role staff/coordenador)
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id, full_name, role, cargo, last_checkin_at')
+      .eq('id', id)
+      .maybeSingle();
+    if (profile && STAFF_ROLES.includes(String(profile.role))) {
+      const isCoord = profile.role === 'COORDENADOR';
+      if (profile.last_checkin_at) {
+        const t = formatTime(profile.last_checkin_at);
+        setScanResult({ type: 'duplicate', message: `Já registrado às ${t}.`, name: profile.full_name, kind: 'EQUIPE' });
+        return;
+      }
+      const now = new Date().toISOString();
+      const { error: upErr } = await supabase
+        .from('profiles')
+        .update({ last_checkin_at: now })
+        .eq('id', id);
+      if (upErr) {
+        setScanResult({ type: 'error', message: `Falha ao marcar: ${upErr.message}`, name: profile.full_name, kind: 'EQUIPE' });
+        return;
+      }
+      const label = profile.cargo || (isCoord ? 'Coordenação' : 'Equipe');
+      setScanResult({ type: 'success', message: `${label} chegou!`, name: profile.full_name, kind: 'EQUIPE' });
       return;
     }
-    const now = new Date().toISOString();
-    const { error: upErr } = await supabase
-      .from('audience_tickets')
-      .update({ check_in_status: 'OK', check_in_at: now })
-      .eq('id', id);
-    if (upErr) {
-      setScanResult({ type: 'error', message: `Falha ao marcar: ${upErr.message}`, name: ticket.buyer_name });
+
+    // 5) Jurado (judges.id)
+    const { data: judge } = await supabase
+      .from('judges')
+      .select('id, name, last_checkin_at')
+      .eq('id', id)
+      .maybeSingle();
+    if (judge) {
+      if (judge.last_checkin_at) {
+        const t = formatTime(judge.last_checkin_at);
+        setScanResult({ type: 'duplicate', message: `Jurado já registrado às ${t}.`, name: judge.name, kind: 'JURADO' });
+        return;
+      }
+      const now = new Date().toISOString();
+      const { error: upErr } = await supabase
+        .from('judges')
+        .update({ last_checkin_at: now })
+        .eq('id', id);
+      if (upErr) {
+        setScanResult({ type: 'error', message: `Falha ao marcar: ${upErr.message}`, name: judge.name, kind: 'JURADO' });
+        return;
+      }
+      setScanResult({ type: 'success', message: 'Jurado registrado!', name: judge.name, kind: 'JURADO' });
       return;
     }
-    const meiaSuffix = ticket.ticket_type_kind === 'meia' ? ' (verificar documento de meia)' : '';
-    setScanResult({
-      type: 'success',
-      message: `Ingresso ${ticket.ticket_type_nome} liberado${meiaSuffix}!`,
-      name: ticket.buyer_name,
-    });
+
+    setScanResult({ type: 'error', message: 'QR não reconhecido (inscrição, ingresso, workshop, equipe ou jurado).' });
   }, [items]);
 
   /* ── QR scanner via BarcodeDetector or fallback ── */
@@ -415,6 +514,15 @@ const CheckIn = () => {
               {scanResult.type === 'duplicate' && <Clock         size={24} className="text-white shrink-0 mt-0.5" />}
               {scanResult.type === 'error'     && <AlertCircle   size={24} className="text-white shrink-0 mt-0.5" />}
               <div className="flex-1">
+                {scanResult.kind && (
+                  <span className="inline-block text-[8px] font-black uppercase tracking-widest bg-white/25 text-white px-1.5 py-0.5 rounded mb-1">
+                    {scanResult.kind === 'INSCRITO' ? 'Inscrito'
+                      : scanResult.kind === 'INGRESSO' ? 'Ingresso'
+                      : scanResult.kind === 'WORKSHOP' ? 'Workshop'
+                      : scanResult.kind === 'EQUIPE' ? 'Equipe'
+                      : 'Jurado'}
+                  </span>
+                )}
                 {scanResult.name && (
                   <p className="text-white font-black text-sm uppercase tracking-tight leading-tight">{scanResult.name}</p>
                 )}
