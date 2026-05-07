@@ -401,7 +401,7 @@ const MeuIngresso: React.FC = () => {
                   Meia-entrada
                 </p>
                 <p className="text-[10px] text-amber-700 leading-snug">
-                  Apresente documento que comprove o benefício no portão (ID estudantil, ID jovem, idoso, PCD).
+                  Apresente documento que comprove o benefício na entrada (ID estudantil, ID jovem, idoso, PCD).
                 </p>
               </div>
             )}
@@ -420,7 +420,7 @@ const MeuIngresso: React.FC = () => {
 
           <div className="px-6 py-3 bg-slate-50 border-t border-slate-100">
             <p className="text-[9px] text-slate-400 text-center leading-relaxed">
-              Este ingresso é nominativo. Apresente o QR no portão. Em caso de dúvidas, entre em contato com o organizador.
+              Este ingresso é nominativo. Apresente o QR na entrada. Em caso de dúvidas, entre em contato com o organizador.
             </p>
           </div>
 

@@ -284,7 +284,7 @@ const PublicEventPage = () => {
             <motion.h1
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-5xl lg:text-7xl font-black uppercase tracking-tighter italic leading-none mb-4"
+              className="text-3xl sm:text-5xl lg:text-7xl font-black uppercase tracking-tighter italic leading-none mb-4"
             >
               {event.name}
             </motion.h1>

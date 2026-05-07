@@ -351,7 +351,7 @@ export default function CheckoutIngresso() {
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2 mb-3 flex items-start gap-2">
               <AlertCircle size={14} className="text-amber-400 mt-0.5 shrink-0" />
               <p className="text-[11px] text-amber-200">
-                <strong>Lei 12.933:</strong> meia-entrada é nominativa e limitada a 1 por CPF. No portão, apresente documento que comprove o benefício (ID estudantil, ID jovem, idoso, PCD).
+                <strong>Lei 12.933:</strong> meia-entrada é nominativa e limitada a 1 por CPF. Na entrada, apresente documento que comprove o benefício (ID estudantil, ID jovem, idoso, PCD).
               </p>
             </div>
           )}

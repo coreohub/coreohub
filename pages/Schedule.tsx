@@ -7,7 +7,7 @@ import {
   Layers, X, Plus, Trash2, ArrowUp, ArrowDown, Edit3, SkipForward,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, closestCenter, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
 import {
   arrayMove, SortableContext, verticalListSortingStrategy, useSortable
 } from '@dnd-kit/sortable';
@@ -450,7 +450,14 @@ const Schedule = () => {
   const [trilhaDuration, setTrilhaDuration] = useState(0);
   const [waitRemaining, setWaitRemaining] = useState(0);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  // PointerSensor: desktop (mouse). TouchSensor: mobile/tablet — sem ele,
+  // arrastar não funciona em celular. delay=200ms evita disparar drag em
+  // tap/scroll comum. KeyboardSensor: a11y (espaço pra pegar, setas pra mover).
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 5 } }),
+    useSensor(KeyboardSensor),
+  );
 
   useEffect(() => {
     supabase

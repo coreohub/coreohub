@@ -23,7 +23,10 @@ const Registrations = () => {
 
   const handleOpenRefund = (reg: any) => {
     setRefundModal(reg);
-    setRefundAmount('');
+    // Pré-preenche com valor pago (padrão Mercado Pago/Stripe). Produtor edita
+    // pra reembolso parcial. Tenta valor_total → valor_pago (legacy) → vazio.
+    const valorPago = reg?.valor_total ?? reg?.valor_pago ?? null;
+    setRefundAmount(valorPago != null && Number(valorPago) > 0 ? String(valorPago) : '');
     setRefundReason('');
     setRefundError(null);
   };
@@ -500,16 +503,21 @@ const Registrations = () => {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Valor a reembolsar (opcional)</label>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Valor a reembolsar</label>
                   <input
                     type="number"
                     min={0}
                     step={0.01}
                     value={refundAmount}
                     onChange={e => setRefundAmount(e.target.value)}
-                    placeholder="Em branco = reembolso total"
+                    placeholder="0,00"
                     className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500/50"
                   />
+                  {(refundModal?.valor_total ?? refundModal?.valor_pago) != null && (
+                    <p className="text-[10px] text-slate-500 mt-1.5">
+                      Pago: <strong className="text-slate-700 dark:text-slate-300">R$ {Number(refundModal?.valor_total ?? refundModal?.valor_pago).toFixed(2)}</strong>. Edite pra reembolsar parcialmente.
+                    </p>
+                  )}
                 </div>
 
                 <div>

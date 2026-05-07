@@ -460,7 +460,7 @@ function buildAudienceTicketConfirmation(p: AudienceTicketPayload) {
       <div style="margin-top:${i === 0 ? 24 : 12}px;padding:18px;border:2px solid ${BRAND_COLOR};border-radius:14px;background:#fff5f8;">
         <p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:${BRAND_COLOR};">${escape(label)}</p>
         <p style="margin:0 0 12px;font-size:13px;line-height:1.5;color:#475569;">
-          Apresente o QR no portão. Acesse pelo celular pra exibir a tela com o código.
+          Apresente o QR na entrada. Acesse pelo celular pra exibir a tela com o código.
         </p>
         <a href="${escape(t.url)}" style="display:inline-block;padding:11px 22px;background:${BRAND_COLOR};color:#fff;text-decoration:none;border-radius:10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;">
           Acessar ingresso →
@@ -482,7 +482,7 @@ function buildAudienceTicketConfirmation(p: AudienceTicketPayload) {
       title: isMulti ? `${tickets.length} ingressos confirmados!` : 'Ingresso confirmado!',
       intro: `Olá ${escape(p.buyerName ?? 'comprador(a)')}, recebemos seu pagamento e ${isMulti ? `seus ${tickets.length} ingressos foram liberados` : 'seu ingresso foi liberado'}. Bom evento!`,
       contentHtml,
-      footerNote: 'Apresente o QR no portão. Em caso de dúvidas, responda este email.',
+      footerNote: 'Apresente o QR na entrada. Em caso de dúvidas, responda este email.',
     }),
   }
 }

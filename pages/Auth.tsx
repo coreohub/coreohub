@@ -100,6 +100,10 @@ const Auth = () => {
   }, [navigate, redirectTo]);
 
   const handleGoogleSignIn = async () => {
+    // Guard contra duplo-click: signInWithOAuth dispara redirect imediato.
+    // Click 2x rápido criava 2 state tokens — Supabase rejeitava com
+    // "Invalid state" no callback. Bloqueia durante isLoading/isAuthenticating.
+    if (isLoading || isAuthenticating) return;
     setError(null);
     setIsLoading(true);
     try {
