@@ -180,9 +180,16 @@ export const generateCredentialPdf = (params: {
   qrDataUrls: Record<string, string>;
   eventName: string;
   mode: 'A6' | 'PIMACO_6280';
+  /** Embutido como title do PDF — vira o filename quando o user salva
+      pelo menu interno do PDF viewer (ex: ícone de download dentro do
+      iframe). Sem isso, o browser usa o UUID do blob URL. */
+  pdfTitle?: string;
 }): jsPDF => {
-  const { items, qrDataUrls, eventName, mode } = params;
+  const { items, qrDataUrls, eventName, mode, pdfTitle } = params;
   const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+  if (pdfTitle) {
+    doc.setProperties({ title: pdfTitle });
+  }
 
   if (mode === 'A6') {
     items.forEach((item, i) => {

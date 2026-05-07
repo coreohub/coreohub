@@ -251,17 +251,21 @@ const Credenciais: React.FC = () => {
             if (canvas) qrDataUrls[item.id] = canvas.toDataURL('image/png');
           }
           const eventName = events.find(e => e.id === selectedEventId)?.name ?? 'Evento';
-          const doc = generateCredentialPdf({
-            items: printJob,
-            qrDataUrls,
-            eventName,
-            mode,
-          });
           // Filename amigável pra ordenar na pasta. Sanitiza caracteres
           // inválidos em filesystems (\ / : * ? " < > |) trocando por '-'.
           const tipoLabel = mode === 'A6' ? 'A6 cordão' : 'Adesivo';
           const sanitizedEvent = eventName.replace(/[\\/:*?"<>|]+/g, '-').trim();
           const fileName = `CoreoHub - Credenciais ${tipoLabel} (${printJob.length}) - ${sanitizedEvent}.pdf`;
+          const doc = generateCredentialPdf({
+            items: printJob,
+            qrDataUrls,
+            eventName,
+            mode,
+            // Embute filename como metadado do PDF — usado quando o user
+            // salva pelo menu interno do PDF viewer (ícone download do
+            // iframe), garantindo nome consistente com o anchor download.
+            pdfTitle: fileName.replace(/\.pdf$/, ''),
+          });
           const blob = doc.output('blob');
           const url = URL.createObjectURL(blob);
 
@@ -407,33 +411,6 @@ const Credenciais: React.FC = () => {
         </div>
       </div>
 
-      {/* Como imprimir — dicas FORA do modal, no fluxo da página.
-          Aparece depois do modo de impressão pra orientar o produtor
-          antes de clicar Pré-visualizar/Baixar PDF. Conteúdo muda
-          conforme o modo selecionado. */}
-      <div className="bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded-3xl p-5 sm:p-6">
-        <div className="flex items-center gap-2 mb-3">
-          <Info size={14} className="text-amber-500 shrink-0" />
-          <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">Como imprimir</p>
-        </div>
-        <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-[12px] text-slate-700 dark:text-slate-300 leading-relaxed">
-          <li>• Imprima em <strong>100%</strong> — desmarque "Ajustar à página" / "Fit to page"</li>
-          <li>• Papel <strong>A4</strong> (210×297mm)</li>
-          <li>• Margens <strong>padrão</strong> — não ajustar</li>
-          {mode === 'A6' ? (
-            <>
-              <li>• Papel <strong>cartão 250g</strong> recomendado (papelaria comum)</li>
-              <li>• 4 credenciais por folha · cortar nas linhas pontilhadas · furar pro cordão</li>
-            </>
-          ) : (
-            <>
-              <li>• Folha <strong>Pimaco 6280</strong> (ou similar 99×33mm) — 14 etiquetas/A4</li>
-              <li>• Cole em credencial pré-impressa de gráfica</li>
-            </>
-          )}
-        </ul>
-      </div>
-
       {/* Lista */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 overflow-hidden">
         <div className="px-5 py-3 flex items-center justify-between border-b border-slate-200 dark:border-white/10">
@@ -554,11 +531,37 @@ const Credenciais: React.FC = () => {
                 <X size={18} />
               </button>
             </div>
-            <iframe
-              src={`${previewUrl}#view=FitH`}
-              className="flex-1 w-full bg-slate-100 dark:bg-slate-950 min-h-[50vh]"
-              title="Pré-visualização do PDF"
-            />
+            <div className="flex-1 flex flex-col sm:flex-row min-h-0 overflow-hidden">
+              <iframe
+                src={`${previewUrl}#view=FitH`}
+                className="flex-1 w-full bg-slate-100 dark:bg-slate-950 min-h-[50vh] sm:min-h-0"
+                title="Pré-visualização do PDF"
+              />
+              {/* Sidebar 'Como imprimir' — só aparece em sm+ pra não roubar
+                  vertical do iframe em mobile. */}
+              <aside className="hidden sm:flex sm:flex-col w-[260px] shrink-0 border-l border-slate-200 dark:border-white/10 bg-amber-50/40 dark:bg-amber-500/5 p-5 overflow-y-auto">
+                <div className="flex items-center gap-2 mb-3">
+                  <Info size={14} className="text-amber-500 shrink-0" />
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">Como imprimir</p>
+                </div>
+                <ul className="space-y-2.5 text-[12px] text-slate-700 dark:text-slate-300 leading-relaxed">
+                  <li>• Imprima em <strong>100%</strong> — desmarque "Ajustar à página" / "Fit to page"</li>
+                  <li>• Papel <strong>A4</strong> (210×297mm)</li>
+                  <li>• Margens <strong>padrão</strong> — não ajustar</li>
+                  {previewMode === 'A6' ? (
+                    <>
+                      <li>• Papel <strong>cartão 250g</strong> recomendado</li>
+                      <li>• 4 credenciais por folha · cortar nas linhas pontilhadas · furar pro cordão</li>
+                    </>
+                  ) : (
+                    <>
+                      <li>• Folha <strong>Pimaco 6280</strong> (ou similar 99×33mm)</li>
+                      <li>• Cole em credencial pré-impressa de gráfica</li>
+                    </>
+                  )}
+                </ul>
+              </aside>
+            </div>
             <div className="px-5 sm:px-6 py-4 border-t border-slate-200 dark:border-white/10 flex items-center justify-end gap-3">
               <button
                 onClick={closePreview}
