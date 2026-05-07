@@ -269,7 +269,7 @@ const Credenciais: React.FC = () => {
   const totalSelected = selected.size;
 
   return (
-    <div className="space-y-6 pb-20 animate-in fade-in duration-700">
+    <div className="space-y-6 pb-32 sm:pb-28 animate-in fade-in duration-700">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase text-slate-900 dark:text-white">
@@ -289,7 +289,7 @@ const Credenciais: React.FC = () => {
             >
               {events.map(ev => (
                 <option key={ev.id} value={ev.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
-                  {ev.is_demo ? '[DEMO] ' : ''}{ev.name}{ev.edition_year ? ` · ${ev.edition_year}` : ''}
+                  {ev.name}{ev.edition_year ? ` · ${ev.edition_year}` : ''}
                 </option>
               ))}
             </select>
@@ -297,14 +297,15 @@ const Credenciais: React.FC = () => {
           </div>
         ) : events.length === 1 ? (
           <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 shrink-0">
-            {events[0].is_demo ? '[DEMO] ' : ''}{events[0].name}
+            {events[0].name}
             {events[0].edition_year ? ` · ${events[0].edition_year}` : ''}
           </div>
         ) : null}
       </div>
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-2">
+      {/* Tabs — em mobile vira scroll horizontal pra caber em 1 linha (padrão
+          iOS/Material). Em sm+ usa flex-wrap. */}
+      <div className="flex gap-2 overflow-x-auto sm:flex-wrap sm:overflow-visible -mx-4 px-4 sm:mx-0 sm:px-0 pb-1 sm:pb-0">
         {TAB_DEFS.map(({ key, label, icon: Icon }) => {
           const count = tabsItems[key].length;
           const isActive = tab === key;
@@ -312,7 +313,7 @@ const Credenciais: React.FC = () => {
             <button
               key={key}
               onClick={() => setTab(key)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
                 isActive
                   ? 'bg-[#ff0068] text-white shadow-md'
                   : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:border-[#ff0068]/40'
@@ -328,6 +329,40 @@ const Credenciais: React.FC = () => {
             </button>
           );
         })}
+      </div>
+
+      {/* Modo de impressão — antes da lista pra ficar sempre visível
+          (vai junto com o botão sticky bottom). */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 p-5 space-y-4">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Modo de impressão</p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <button
+            onClick={() => setMode('A6')}
+            className={`text-left p-4 rounded-2xl border-2 transition-all ${
+              mode === 'A6'
+                ? 'border-[#ff0068] bg-[#ff0068]/5'
+                : 'border-slate-200 dark:border-white/10 hover:border-[#ff0068]/40'
+            }`}
+          >
+            <p className="text-sm font-black text-slate-900 dark:text-white">Credencial completa A6 (cordão)</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+              105×148mm · 4 por A4 · imprime em papel cartão 250g, corta, fura, passa cordão.
+            </p>
+          </button>
+          <button
+            onClick={() => setMode('PIMACO_6280')}
+            className={`text-left p-4 rounded-2xl border-2 transition-all ${
+              mode === 'PIMACO_6280'
+                ? 'border-[#ff0068] bg-[#ff0068]/5'
+                : 'border-slate-200 dark:border-white/10 hover:border-[#ff0068]/40'
+            }`}
+          >
+            <p className="text-sm font-black text-slate-900 dark:text-white">Adesivo Pimaco 6280</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+              99×33mm · 14 por A4 · cola em credencial pré-impressa de gráfica.
+            </p>
+          </button>
+        </div>
       </div>
 
       {/* Lista */}
@@ -387,54 +422,32 @@ const Credenciais: React.FC = () => {
         )}
       </div>
 
-      {/* Modo + Imprimir */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 p-5 space-y-4">
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Modo de impressão</p>
-        <div className="grid sm:grid-cols-2 gap-3">
-          <button
-            onClick={() => setMode('A6')}
-            className={`text-left p-4 rounded-2xl border-2 transition-all ${
-              mode === 'A6'
-                ? 'border-[#ff0068] bg-[#ff0068]/5'
-                : 'border-slate-200 dark:border-white/10 hover:border-[#ff0068]/40'
-            }`}
-          >
-            <p className="text-sm font-black text-slate-900 dark:text-white">Credencial completa A6 (cordão)</p>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-              105×148mm · 4 por A4 · imprime em papel cartão 250g, corta, fura, passa cordão.
+      {/* Sticky bottom action bar — sempre visível durante scroll. Em mobile
+          posiciona acima do BottomNavBar (que tem 64px de altura). */}
+      <div className="fixed left-0 right-0 bottom-16 sm:bottom-0 lg:left-64 z-40 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-t border-slate-200 dark:border-white/10">
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-3">
+          <div className="flex flex-col min-w-0 flex-1 sm:flex-none">
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 leading-tight truncate">
+              Modo · {mode === 'A6' ? 'A6 cordão' : 'Pimaco 6280'}
             </p>
-          </button>
-          <button
-            onClick={() => setMode('PIMACO_6280')}
-            className={`text-left p-4 rounded-2xl border-2 transition-all ${
-              mode === 'PIMACO_6280'
-                ? 'border-[#ff0068] bg-[#ff0068]/5'
-                : 'border-slate-200 dark:border-white/10 hover:border-[#ff0068]/40'
-            }`}
-          >
-            <p className="text-sm font-black text-slate-900 dark:text-white">Adesivo Pimaco 6280</p>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-              99×33mm · 14 por A4 · cola em credencial pré-impressa de gráfica.
+            <p className="text-[10px] font-black text-slate-700 dark:text-slate-300 tabular-nums">
+              {totalSelected} {totalSelected === 1 ? 'selecionado' : 'selecionados'}
             </p>
+          </div>
+          <button
+            onClick={handlePrint}
+            disabled={totalSelected === 0 || printing}
+            className="shrink-0 sm:ml-auto flex items-center justify-center gap-2 px-5 py-3 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 hover:scale-[1.01] active:scale-[0.99] transition-transform disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+          >
+            {printing ? (
+              <><Loader2 size={14} className="animate-spin" /> Gerando PDF…</>
+            ) : totalSelected === 0 ? (
+              <><Printer size={14} /> Selecione 1+</>
+            ) : (
+              <><Printer size={14} /> Imprimir ({totalSelected})</>
+            )}
           </button>
         </div>
-
-        <button
-          onClick={handlePrint}
-          disabled={totalSelected === 0 || printing}
-          className="w-full flex items-center justify-center gap-2 px-5 py-3.5 bg-[#ff0068] text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 hover:scale-[1.01] active:scale-[0.99] transition-transform disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
-        >
-          {printing ? (
-            <><Loader2 size={14} className="animate-spin" /> Gerando PDF…</>
-          ) : totalSelected === 0 ? (
-            <><Printer size={14} /> Selecione pelo menos 1</>
-          ) : (
-            <><Printer size={14} /> Imprimir ({totalSelected} {totalSelected === 1 ? 'credencial' : 'credenciais'})</>
-          )}
-        </button>
-        <p className="text-[10px] text-slate-400 text-center">
-          O PDF abre em nova aba pra revisão antes de mandar pra impressora.
-        </p>
       </div>
 
       {/* Hidden offscreen QR canvases — capturados pelo gerador de PDF */}
