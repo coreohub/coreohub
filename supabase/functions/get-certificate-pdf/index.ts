@@ -171,8 +171,10 @@ async function generatePdf(ctx: {
   page.drawText('Verifique a autenticidade:', { x: W - qrSize - 60, y: 50, size: 7, font: helvetica, color: rgb(0.4, 0.4, 0.45) })
   page.drawText(`Código: ${ctx.hash.slice(0, 8).toUpperCase()}`, { x: W - qrSize - 60, y: 38, size: 7, font: helveticaBold, color: rgb(0.04, 0.04, 0.06) })
 
-  // Assinaturas (só linhas com nomes — assinaturas embutidas como imagem fica pra v2)
-  const sigNames: string[] = Array.isArray(ctx.template?.signature_names) ? ctx.template.signature_names : []
+  // Assinaturas: linha + nome em negro + função/cargo em itálico colorido
+  // (nova estrutura pareada signature_names + signature_titles, 2026-05-07).
+  const sigNames: string[]  = Array.isArray(ctx.template?.signature_names)  ? ctx.template.signature_names  : []
+  const sigTitles: string[] = Array.isArray(ctx.template?.signature_titles) ? ctx.template.signature_titles : []
   const sigCount = Math.min(sigNames.length, 3)
   if (sigCount > 0) {
     const sigGap = 220
@@ -180,9 +182,14 @@ async function generatePdf(ctx: {
     for (let i = 0; i < sigCount; i++) {
       const cx = startX + i * sigGap
       page.drawLine({ start: { x: cx, y: 110 }, end: { x: cx + 200, y: 110 }, thickness: 0.8, color: rgb(0.04, 0.04, 0.06) })
-      const name = sigNames[i] ?? ''
-      const nameW = helvetica.widthOfTextAtSize(name, 10)
-      page.drawText(name, { x: cx + (200 - nameW) / 2, y: 95, size: 10, font: helvetica, color: rgb(0.4, 0.4, 0.45) })
+      const name  = sigNames[i] ?? ''
+      const title = sigTitles[i] ?? ''
+      const nameW = helveticaBold.widthOfTextAtSize(name, 10)
+      page.drawText(name, { x: cx + (200 - nameW) / 2, y: 95, size: 10, font: helveticaBold, color: rgb(0.04, 0.04, 0.06) })
+      if (title) {
+        const titleW = helvetica.widthOfTextAtSize(title, 8)
+        page.drawText(title, { x: cx + (200 - titleW) / 2, y: 82, size: 8, font: helvetica, color: rgb(0.6, 0.6, 0.65) })
+      }
     }
   }
 

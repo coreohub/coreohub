@@ -7,7 +7,10 @@
  *     que cria N rows em `certificates_issued` com pdf_url=NULL.
  *   • PDFs são gerados sob demanda quando inscrito clica "Baixar".
  *
- * 3 templates pré-prontos: classico, minimalista, premium.
+ * Auditoria 2026-05-07: simplificado pra 2 templates (classico + workshop).
+ * Antes tinha 3 (mostra-classico/mostra-premium/workshop-minimalista) —
+ * mostra-premium duplicava visual e confundia produtor. Aceita os nomes
+ * legados pra retrocompat (mostra-premium → classico no save).
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -24,13 +27,17 @@ interface CertTemplate {
   producer_id: string;
   template_type: TemplateType;
   name: string;
-  preset_template: 'mostra-classico' | 'workshop-minimalista' | 'mostra-premium' | 'custom';
+  /** Compat: aceita os nomes legados (mostra-classico, mostra-premium,
+   * workshop-minimalista) mas no save sempre normaliza pra 'classico' ou
+   * 'workshop'. */
+  preset_template: 'classico' | 'workshop' | 'mostra-classico' | 'workshop-minimalista' | 'mostra-premium' | 'custom';
   background_url: string | null;
   layout_json: any[];
   font_family_default: string;
   primary_color: string;
   accent_color: string;
   signature_names: string[];
+  signature_titles: string[];
   signature_urls: string[];
 }
 
@@ -38,11 +45,19 @@ interface EventOption { id: string; name: string }
 
 interface BatchResult { total: number; created: number; skipped: number }
 
+// 2 templates ativos. Os legados (mostra-classico, mostra-premium,
+// workshop-minimalista) caem em 'classico' ou 'workshop' no save.
 const PRESETS = [
-  { id: 'mostra-classico',       label: 'Mostra Clássico',     desc: 'Borda dupla rosa, fundo creme, texto centralizado',  for: 'mostra'   as TemplateType },
-  { id: 'workshop-minimalista',  label: 'Workshop Minimalista', desc: 'Linhas finas, tipografia clean, foco no nome',       for: 'workshop' as TemplateType },
-  { id: 'mostra-premium',        label: 'Mostra Premium',       desc: 'Gradiente CoreoHub, selo dourado, layout corporativo', for: 'mostra' as TemplateType },
+  { id: 'classico', label: 'Clássico', desc: 'Borda dupla rosa, fundo creme, texto centralizado. Padrão pra mostras competitivas.', for: 'mostra'   as TemplateType },
+  { id: 'workshop', label: 'Workshop', desc: 'Linhas finas, tipografia clean, foco no nome do aluno.',                              for: 'workshop' as TemplateType },
 ];
+
+/** Normaliza preset legado pro novo nome. */
+const normalizePreset = (p?: string | null): 'classico' | 'workshop' | 'custom' => {
+  if (p === 'mostra-classico' || p === 'mostra-premium' || p === 'classico') return 'classico';
+  if (p === 'workshop-minimalista' || p === 'workshop') return 'workshop';
+  return 'custom';
+};
 
 const Certificates: React.FC = () => {
   const [activeType, setActiveType] = useState<TemplateType>('mostra');
@@ -54,11 +69,12 @@ const Certificates: React.FC = () => {
 
   // Form state (controlled)
   const [formName, setFormName]     = useState('');
-  const [formPreset, setFormPreset] = useState<CertTemplate['preset_template']>('mostra-classico');
+  const [formPreset, setFormPreset] = useState<'classico' | 'workshop' | 'custom'>('classico');
   const [formBgUrl, setFormBgUrl]   = useState('');
   const [formAccent, setFormAccent] = useState('#ff0068');
   const [formPrimary, setFormPrimary] = useState('#0b0b0f');
   const [formSigs, setFormSigs]     = useState<string[]>([]);
+  const [formTitles, setFormTitles] = useState<string[]>([]);
 
   // Emit batch state
   const [events, setEvents]                 = useState<EventOption[]>([]);
@@ -87,20 +103,25 @@ const Certificates: React.FC = () => {
     if (tpl) {
       setTemplate(tpl as CertTemplate);
       setFormName(tpl.name ?? '');
-      setFormPreset(tpl.preset_template ?? (activeType === 'workshop' ? 'workshop-minimalista' : 'mostra-classico'));
+      setFormPreset(normalizePreset(tpl.preset_template));
       setFormBgUrl(tpl.background_url ?? '');
       setFormAccent(tpl.accent_color ?? '#ff0068');
       setFormPrimary(tpl.primary_color ?? '#0b0b0f');
-      setFormSigs(Array.isArray(tpl.signature_names) ? tpl.signature_names : []);
+      const names = Array.isArray(tpl.signature_names) ? tpl.signature_names : [];
+      const titles = Array.isArray(tpl.signature_titles) ? tpl.signature_titles : [];
+      setFormSigs(names);
+      // Pareia com names: se titles tem menos itens, completa com '' pra alinhar.
+      setFormTitles(names.map((_, i) => titles[i] ?? ''));
     } else {
       setTemplate(null);
       // Defaults
       setFormName(`Modelo padrão ${activeType === 'workshop' ? 'Workshop' : 'Mostra'}`);
-      setFormPreset(activeType === 'workshop' ? 'workshop-minimalista' : 'mostra-classico');
+      setFormPreset(activeType === 'workshop' ? 'workshop' : 'classico');
       setFormBgUrl('');
       setFormAccent('#ff0068');
       setFormPrimary('#0b0b0f');
       setFormSigs([]);
+      setFormTitles([]);
     }
 
     // Eventos do produtor (pra emitir batch)
@@ -144,6 +165,13 @@ const Certificates: React.FC = () => {
   const saveTemplate = async () => {
     if (!userId) return;
     setSaving(true);
+    // Filtra signatários vazios + pareia titles. Se nome em branco, descarta
+    // o índice todo (não envia title órfão).
+    const validSigs: { name: string; title: string }[] = [];
+    formSigs.forEach((name, i) => {
+      if (name.trim()) validSigs.push({ name: name.trim(), title: (formTitles[i] ?? '').trim() });
+    });
+
     const payload: Partial<CertTemplate> = {
       producer_id: userId,
       template_type: activeType,
@@ -152,7 +180,8 @@ const Certificates: React.FC = () => {
       background_url: formBgUrl.trim() || null,
       accent_color: formAccent,
       primary_color: formPrimary,
-      signature_names: formSigs.filter(Boolean),
+      signature_names:  validSigs.map(s => s.name),
+      signature_titles: validSigs.map(s => s.title),
       // layout_json: deixamos vazio → edge function usa DEFAULT_LAYOUT do preset
       layout_json: [],
     };
@@ -291,25 +320,49 @@ const Certificates: React.FC = () => {
 
               {/* Assinaturas */}
               <Card title="Assinaturas (rodapé)">
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Até 3 assinaturas — só os nomes (linha de assinatura é desenhada acima).</p>
-                <div className="space-y-2">
-                  {formSigs.map((s, i) => (
-                    <div key={i} className="flex items-stretch gap-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                  Até 3 assinaturas. Adicione o <strong>nome</strong> e a <strong>função/cargo</strong> de cada signatário (ex: "Maria Silva" — "Diretora Artística").
+                </p>
+                <div className="space-y-3">
+                  {formSigs.map((nome, i) => (
+                    <div key={i} className="flex flex-col sm:flex-row gap-2 p-3 sm:p-0 border sm:border-0 border-slate-200 dark:border-white/10 rounded-xl">
                       <input
-                        value={s}
+                        value={nome}
                         onChange={e => {
                           const next = [...formSigs]; next[i] = e.target.value; setFormSigs(next);
                         }}
-                        placeholder="Ex: Coordenação Artística"
-                        className={inputCls}
+                        placeholder="Nome completo"
+                        className={`${inputCls} min-w-0 flex-1`}
                       />
-                      <button onClick={() => setFormSigs(formSigs.filter((_, idx) => idx !== i))} className="px-3 rounded-lg border border-rose-200 dark:border-rose-500/30 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10">
+                      <input
+                        value={formTitles[i] ?? ''}
+                        onChange={e => {
+                          const next = [...formTitles];
+                          // Garante que o array de titles tem o mesmo tamanho de sigs
+                          while (next.length < formSigs.length) next.push('');
+                          next[i] = e.target.value;
+                          setFormTitles(next);
+                        }}
+                        placeholder="Função / cargo (ex: Diretor)"
+                        className={`${inputCls} min-w-0 flex-1`}
+                      />
+                      <button
+                        onClick={() => {
+                          setFormSigs(formSigs.filter((_, idx) => idx !== i));
+                          setFormTitles(formTitles.filter((_, idx) => idx !== i));
+                        }}
+                        aria-label={`Remover assinatura ${i + 1}`}
+                        className="p-2.5 sm:px-3 rounded-lg border border-rose-200 dark:border-rose-500/30 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 self-end sm:self-auto"
+                      >
                         <Trash2 size={14} />
                       </button>
                     </div>
                   ))}
                   {formSigs.length < 3 && (
-                    <button onClick={() => setFormSigs([...formSigs, ''])} className="w-full inline-flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 dark:border-white/15 px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 transition">
+                    <button
+                      onClick={() => { setFormSigs([...formSigs, '']); setFormTitles([...formTitles, '']); }}
+                      className="w-full inline-flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 dark:border-white/15 px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 transition"
+                    >
                       <FileSignature size={12} />Adicionar assinatura
                     </button>
                   )}
@@ -328,34 +381,65 @@ const Certificates: React.FC = () => {
 
             {/* Coluna 3: Preview + Emitir */}
             <div className="space-y-6">
-              {/* Preview aproximado (renderização CSS, não PDF) */}
-              <Card title="Preview">
+              {/* Preview WYSIWYG com dados de exemplo (padrão Sympla/Even3).
+                  Renderização CSS — PDF final tem QR + assinatura digital. */}
+              <Card title="Preview ao vivo">
                 <div
                   className="aspect-[297/210] rounded-md border-2 relative overflow-hidden flex items-center justify-center"
                   style={{
-                    background: formPreset === 'mostra-premium'
-                      ? `linear-gradient(135deg, ${formAccent}15, #f8fafc)`
-                      : '#fefdf6',
+                    background: '#fefdf6',
                     borderColor: formAccent,
                   }}
                 >
                   {formBgUrl && formPreset === 'custom' && (
-                    <img src={formBgUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                    <img src={formBgUrl} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" />
                   )}
                   <div className="absolute inset-2 border" style={{ borderColor: formAccent, borderWidth: 0.5 }} />
-                  <div className="relative text-center px-4">
+                  <div className="relative text-center px-3 sm:px-4 w-full">
                     <p className="font-black tracking-tighter" style={{ color: formPrimary, fontSize: 'clamp(10px, 3vw, 22px)' }}>CERTIFICADO</p>
                     <p className="text-[7px] font-bold uppercase tracking-widest mt-1" style={{ color: formAccent }}>
                       {activeType === 'workshop' ? 'DE PARTICIPAÇÃO EM WORKSHOP' : 'DE PARTICIPAÇÃO'}
                     </p>
-                    <p className="italic text-[8px] mt-3 text-slate-500">Certificamos que</p>
-                    <p className="font-black tracking-tight mt-1" style={{ color: formPrimary, fontSize: 'clamp(8px, 2.5vw, 18px)' }}>NOME DO PARTICIPANTE</p>
-                    <p className="text-[7px] mt-2 text-slate-500">participou do evento</p>
-                    <p className="font-black mt-1" style={{ color: formAccent, fontSize: 'clamp(7px, 1.8vw, 12px)' }}>NOME DO EVENTO</p>
+                    <p className="italic text-[8px] mt-2 text-slate-500">Certificamos que</p>
+                    <p className="font-black tracking-tight mt-0.5" style={{ color: formPrimary, fontSize: 'clamp(8px, 2.5vw, 16px)' }}>
+                      Maria Silva Oliveira
+                    </p>
+                    <p className="text-[7px] mt-1.5 text-slate-500">
+                      {activeType === 'workshop'
+                        ? 'participou do workshop'
+                        : 'participou da coreografia'}
+                    </p>
+                    <p className="font-black" style={{ color: formAccent, fontSize: 'clamp(7px, 1.8vw, 11px)' }}>
+                      {activeType === 'workshop' ? '"Hip-hop Fundamentos"' : '"Renascer"'}
+                    </p>
+                    <p className="text-[6px] mt-1 text-slate-500">
+                      {activeType === 'workshop'
+                        ? 'no Festival CoreoHub Demo · 06 de junho de 2026'
+                        : 'no Festival CoreoHub Demo · Solo · Ballet Clássico · Juvenil'}
+                    </p>
+
+                    {/* Assinaturas — pareadas com cargo se houver */}
+                    {formSigs.filter(Boolean).length > 0 && (
+                      <div className="mt-3 sm:mt-4 flex justify-center gap-3 sm:gap-6">
+                        {formSigs.map((nome, i) => nome && (
+                          <div key={i} className="text-center">
+                            <div className="border-t mx-auto" style={{ borderColor: formPrimary, width: 'clamp(40px, 12vw, 80px)' }} />
+                            <p className="font-bold mt-0.5" style={{ color: formPrimary, fontSize: 'clamp(6px, 1.5vw, 9px)' }}>
+                              {nome}
+                            </p>
+                            {formTitles[i] && (
+                              <p className="italic" style={{ color: formAccent, fontSize: 'clamp(5px, 1.2vw, 7px)' }}>
+                                {formTitles[i]}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 italic mt-2">
-                  Preview aproximado. PDF final é gerado pelo servidor com QR de validação.
+                  Preview com dados de exemplo. PDF final terá nome real do inscrito + QR de validação no rodapé.
                 </p>
               </Card>
 
@@ -377,7 +461,7 @@ const Certificates: React.FC = () => {
                 <button
                   onClick={emitBatch}
                   disabled={!selectedEvent || emitting || !template?.id}
-                  className="w-full mt-3 inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50 transition"
+                  className="w-full mt-3 inline-flex items-center justify-center gap-2 rounded-xl bg-[#ff0068] hover:bg-[#d4005a] px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#ff0068]/20 disabled:opacity-50 transition"
                 >
                   {emitting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                   Emitir certificados
