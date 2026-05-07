@@ -216,11 +216,12 @@ const Coupons: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats — cards neutros com ícone rosa (padrão Linear). Antes usava
+          3 cores (indigo/emerald/amber) sem semântica clara — só informativo. */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard icon={Ticket}  label="Cupons Ativos"   value={totalActive} tone="indigo" />
-        <StatCard icon={Users}   label="Total de Usos"   value={totalUses}   tone="emerald" />
-        <StatCard icon={Percent} label="Cupons Criados"  value={coupons.length} tone="amber" />
+        <StatCard icon={Ticket}  label="Cupons Ativos"   value={totalActive} />
+        <StatCard icon={Users}   label="Total de Usos"   value={totalUses}   />
+        <StatCard icon={Percent} label="Cupons Criados"  value={coupons.length} />
       </div>
 
       {/* Lista */}
@@ -479,15 +480,10 @@ const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, 
   </div>
 );
 
-const StatCard: React.FC<{ icon: any; label: string; value: number; tone: 'indigo' | 'emerald' | 'amber' }> = ({ icon: Icon, label, value, tone }) => {
-  const tones = {
-    indigo:  'bg-[#ff0068]/10 text-[#ff0068] border-[#ff0068]/20',
-    emerald: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-    amber:   'bg-amber-500/10 text-amber-500 border-amber-500/20',
-  };
+const StatCard: React.FC<{ icon: any; label: string; value: number }> = ({ icon: Icon, label, value }) => {
   return (
     <div className="bg-white dark:bg-white/5 p-5 rounded-3xl border border-slate-200 dark:border-white/5">
-      <div className={`w-10 h-10 rounded-xl border flex items-center justify-center mb-3 ${tones[tone]}`}>
+      <div className="w-10 h-10 rounded-xl bg-[#ff0068]/10 text-[#ff0068] border border-[#ff0068]/20 flex items-center justify-center mb-3">
         <Icon size={18} />
       </div>
       <h3 className="text-slate-500 text-[8px] font-black uppercase tracking-[0.2em]">{label}</h3>

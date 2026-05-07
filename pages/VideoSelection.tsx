@@ -349,9 +349,9 @@ const VideoSelection: React.FC = () => {
             <button
               key={opt.value}
               onClick={() => setStatusFilter(opt.value)}
-              className={`flex items-center gap-1.5 px-4 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all border ${statusFilter === opt.value ? 'bg-[#ff0068] text-white border-[#ff0068] shadow-lg shadow-[#ff0068]/20' : `bg-white dark:bg-slate-900/50 border-slate-200 dark:border-white/10 ${opt.color}`}`}
+              className={`flex items-center gap-1.5 px-4 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all border ${statusFilter === opt.value ? 'bg-[#ff0068] text-white border-[#ff0068] shadow-lg shadow-[#ff0068]/20' : 'bg-white dark:bg-slate-900/50 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-white/20'}`}
             >
-              <Filter size={10} /> {opt.label}
+              <Filter size={10} className={statusFilter === opt.value ? '' : opt.color} /> {opt.label}
             </button>
           ))}
         </div>
@@ -563,47 +563,49 @@ const VideoSelection: React.FC = () => {
                 <div className="space-y-2">
                   <p className="text-xs font-black text-slate-500 uppercase tracking-widest">Decisão</p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {/* Padrão Linear/Stripe: outline neutro + ícone semântico
+                        colorido. Hover destaca com cor solid pra reforçar ação. */}
                     <button
                       onClick={() => handleReview('approved')}
                       disabled={savingReview}
-                      className="flex flex-col items-center gap-2 py-4 px-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-2xl font-black uppercase tracking-widest hover:bg-emerald-500 hover:text-white hover:border-emerald-500 transition-all disabled:opacity-50 shadow-sm"
+                      className="flex flex-col items-center gap-2 py-4 px-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 rounded-2xl font-black uppercase tracking-widest hover:bg-emerald-500 hover:text-white hover:border-emerald-500 transition-all disabled:opacity-50"
                     >
-                      {savingReview ? <RefreshCw size={18} className="animate-spin" /> : <CheckCircle2 size={20} />}
+                      {savingReview ? <RefreshCw size={18} className="animate-spin" /> : <CheckCircle2 size={20} className="text-emerald-500 group-hover:text-white" />}
                       <span className="text-[10px]">Aprovar</span>
-                      <span className="text-[9px] font-medium normal-case tracking-normal opacity-80 text-center leading-tight">
+                      <span className="text-[9px] font-medium normal-case tracking-normal opacity-70 text-center leading-tight">
                         Vai pro evento
                       </span>
                     </button>
                     <button
                       onClick={() => handleReview('conditional')}
                       disabled={savingReview}
-                      className="flex flex-col items-center gap-2 py-4 px-2 bg-purple-500/10 border border-purple-500/20 text-purple-500 rounded-2xl font-black uppercase tracking-widest hover:bg-purple-500 hover:text-white hover:border-purple-500 transition-all disabled:opacity-50 shadow-sm"
+                      className="flex flex-col items-center gap-2 py-4 px-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 rounded-2xl font-black uppercase tracking-widest hover:bg-purple-500 hover:text-white hover:border-purple-500 transition-all disabled:opacity-50"
                     >
-                      {savingReview ? <RefreshCw size={18} className="animate-spin" /> : <AlertTriangle size={20} />}
+                      {savingReview ? <RefreshCw size={18} className="animate-spin" /> : <AlertTriangle size={20} className="text-purple-500" />}
                       <span className="text-[10px]">Condicional</span>
-                      <span className="text-[9px] font-medium normal-case tracking-normal opacity-80 text-center leading-tight">
+                      <span className="text-[9px] font-medium normal-case tracking-normal opacity-70 text-center leading-tight">
                         Aprova com pendência
                       </span>
                     </button>
                     <button
                       onClick={() => handleReview('review_later')}
                       disabled={savingReview}
-                      className="flex flex-col items-center gap-2 py-4 px-2 bg-amber-400/10 border border-amber-400/20 text-amber-500 rounded-2xl font-black uppercase tracking-widest hover:bg-amber-400 hover:text-white hover:border-amber-400 transition-all disabled:opacity-50 shadow-sm"
+                      className="flex flex-col items-center gap-2 py-4 px-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 rounded-2xl font-black uppercase tracking-widest hover:bg-amber-500 hover:text-white hover:border-amber-500 transition-all disabled:opacity-50"
                     >
-                      {savingReview ? <RefreshCw size={18} className="animate-spin" /> : <Star size={20} />}
+                      {savingReview ? <RefreshCw size={18} className="animate-spin" /> : <Star size={20} className="text-amber-500" />}
                       <span className="text-[10px]">Favoritar</span>
-                      <span className="text-[9px] font-medium normal-case tracking-normal opacity-80 text-center leading-tight">
+                      <span className="text-[9px] font-medium normal-case tracking-normal opacity-70 text-center leading-tight">
                         Revisar depois
                       </span>
                     </button>
                     <button
                       onClick={() => handleReview('rejected')}
                       disabled={savingReview}
-                      className="flex flex-col items-center gap-2 py-4 px-2 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-2xl font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white hover:border-rose-500 transition-all disabled:opacity-50 shadow-sm"
+                      className="flex flex-col items-center gap-2 py-4 px-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 rounded-2xl font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white hover:border-rose-500 transition-all disabled:opacity-50"
                     >
-                      {savingReview ? <RefreshCw size={18} className="animate-spin" /> : <XCircle size={20} />}
+                      {savingReview ? <RefreshCw size={18} className="animate-spin" /> : <XCircle size={20} className="text-rose-500" />}
                       <span className="text-[10px]">Reprovar</span>
-                      <span className="text-[9px] font-medium normal-case tracking-normal opacity-80 text-center leading-tight">
+                      <span className="text-[9px] font-medium normal-case tracking-normal opacity-70 text-center leading-tight">
                         Não entra no evento
                       </span>
                     </button>
