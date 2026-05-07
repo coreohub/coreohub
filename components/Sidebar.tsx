@@ -68,6 +68,7 @@ type PermKey = keyof PermissoesCustom;
 const PERM_MENU: { perm: PermKey; path: string; label: string; icon: React.ElementType }[] = [
   { perm: 'cronograma_leitura', path: '/manage-schedule', label: 'Cronograma',          icon: Calendar        },
   { perm: 'credenciamento',     path: '/check-in',        label: 'Credenciamento',      icon: QrCode          },
+  { perm: 'credenciamento',     path: '/credenciais',     label: 'Credenciais',         icon: QrCode          },
   { perm: 'marcacao_palco',     path: '/marcacao-palco',  label: 'Marcação de Palco',   icon: PersonStanding  },
   { perm: 'suporte_juri',       path: '/suporte-juri',    label: 'Coordenador do Júri', icon: Headphones      },
   { perm: 'inscricoes_leitura', path: '/registrations',   label: 'Inscrições',          icon: ClipboardList   },
@@ -109,6 +110,7 @@ const menuSections: MenuSection[] = [
       { path: '/manage-schedule', label: 'Cronograma',        icon: Calendar      },
       { path: '/narracao-ia', label: 'Narração IA', icon: Mic2 },
       { path: '/marcacao-palco',  label: 'Marcação de Palco', icon: PersonStanding },
+      { path: '/credenciais',     label: 'Credenciais',       icon: QrCode        },
     ],
   },
   // ─── BILHETERIA ── vendas e cupons ──
