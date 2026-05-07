@@ -221,10 +221,6 @@ export const generateCredentialPdf = (params: {
     });
   }
 
-  // autoPrint: ao abrir o PDF baixado em qualquer reader (browser/Adobe),
-  // o diálogo de impressão é disparado automaticamente. Pula 1 clique
-  // (Ctrl+P) na UX final do produtor.
-  doc.autoPrint();
   return doc;
 };
 
