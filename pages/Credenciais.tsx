@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import {
   Loader2, Printer, Users, Gavel, GraduationCap, Sparkles,
-  ClipboardList, ChevronDown,
+  ClipboardList, ChevronDown, Eye, X, Download,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import {
@@ -46,7 +46,10 @@ const Credenciais: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [printJob, setPrintJob] = useState<CredentialItem[] | null>(null);
+  const [printAction, setPrintAction] = useState<'preview' | 'download'>('download');
   const [printing, setPrinting] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewFileName, setPreviewFileName] = useState<string>('');
 
   /* ── Eventos do produtor ── */
   useEffect(() => {
@@ -198,13 +201,35 @@ const Credenciais: React.FC = () => {
     });
   };
 
-  /* ── Imprimir: monta itens + dispara render hidden ── */
-  const handlePrint = () => {
+  /* ── Pré-visualizar e Imprimir: ambos passam pelo mesmo pipeline,
+        diferenciados pelo printAction. ── */
+  const triggerPrintJob = (action: 'preview' | 'download') => {
     const all = tabsItems.TODOS;
     const items = all.filter(i => selected.has(i.id));
     if (items.length === 0) return;
     setPrinting(true);
+    setPrintAction(action);
     setPrintJob(items);
+  };
+  const handlePrint = () => triggerPrintJob('download');
+  const handlePreview = () => triggerPrintJob('preview');
+
+  const closePreview = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setPreviewFileName('');
+  };
+
+  const downloadFromPreview = () => {
+    if (!previewUrl) return;
+    const a = document.createElement('a');
+    a.href = previewUrl;
+    a.download = previewFileName;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Não revoga aqui — modal continua aberto pro user revisar.
   };
 
   /* ── Após render do hidden container, captura QRs e gera PDF ──
@@ -233,20 +258,27 @@ const Credenciais: React.FC = () => {
           const tipoLabel = mode === 'A6' ? 'A6 cordão' : 'Adesivo';
           const sanitizedEvent = eventName.replace(/[\\/:*?"<>|]+/g, '-').trim();
           const fileName = `CoreoHub - Credenciais ${tipoLabel} (${printJob.length}) - ${sanitizedEvent}.pdf`;
-          // Anchor programmatic com target=_blank — passa em popup blockers que
-          // recusam window.open() async. Browser que recusar abrir em aba cai
-          // no download fallback automaticamente (depende da configuração).
           const blob = doc.output('blob');
           const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.target = '_blank';
-          a.rel = 'noopener';
-          a.download = fileName;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          setTimeout(() => URL.revokeObjectURL(url), 60_000);
+
+          if (printAction === 'preview') {
+            // Revoga url anterior se existir (caso de cliques sucessivos).
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+            setPreviewUrl(url);
+            setPreviewFileName(fileName);
+          } else {
+            // Anchor programático — passa em popup blockers que recusam
+            // window.open() async.
+            const a = document.createElement('a');
+            a.href = url;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 60_000);
+          }
         } catch (e) {
           console.error('Erro ao gerar PDF:', e);
           alert('Erro ao gerar PDF. Veja o console.');
@@ -348,9 +380,9 @@ const Credenciais: React.FC = () => {
                 : 'border-slate-200 dark:border-white/10 hover:border-[#ff0068]/40'
             }`}
           >
-            <p className="text-sm font-black text-slate-900 dark:text-white">Credencial completa A6 (cordão)</p>
+            <p className="text-sm font-black text-slate-900 dark:text-white">A6 cordão</p>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-              105×148mm · 4 por A4 · imprime em papel cartão 250g, corta, fura, passa cordão.
+              105×148mm · 4 por folha A4 · papel cartão 250g · você corta e fura
             </p>
           </button>
           <button
@@ -361,9 +393,9 @@ const Credenciais: React.FC = () => {
                 : 'border-slate-200 dark:border-white/10 hover:border-[#ff0068]/40'
             }`}
           >
-            <p className="text-sm font-black text-slate-900 dark:text-white">Adesivo Pimaco 6280</p>
+            <p className="text-sm font-black text-slate-900 dark:text-white">Adesivo 99×33mm</p>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-              99×33mm · 14 por A4 · cola em credencial pré-impressa de gráfica.
+              14 por folha A4 (Pimaco 6280 ou similar) · cola em credencial pré-impressa
             </p>
           </button>
         </div>
@@ -439,9 +471,18 @@ const Credenciais: React.FC = () => {
             </p>
           </div>
           <button
+            onClick={handlePreview}
+            disabled={totalSelected === 0 || printing}
+            className="shrink-0 sm:ml-auto flex items-center justify-center gap-2 px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:border-[#ff0068]/40 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Pré-visualizar antes de baixar"
+          >
+            <Eye size={14} />
+            <span className="hidden sm:inline">Pré-visualizar</span>
+          </button>
+          <button
             onClick={handlePrint}
             disabled={totalSelected === 0 || printing}
-            className="shrink-0 sm:ml-auto flex items-center justify-center gap-2 px-5 py-3 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 hover:scale-[1.01] active:scale-[0.99] transition-transform disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+            className="shrink-0 flex items-center justify-center gap-2 px-5 py-3 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 hover:scale-[1.01] active:scale-[0.99] transition-transform disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
           >
             {printing ? (
               <><Loader2 size={14} className="animate-spin" /> Gerando PDF…</>
@@ -453,6 +494,49 @@ const Credenciais: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Modal de pré-visualização do PDF — iframe nativo do browser pra
+          renderizar o PDF gerado em memória. User confirma antes de baixar. */}
+      {previewUrl && (
+        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-5xl max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-white/10 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Pré-visualização</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-white truncate" title={previewFileName}>
+                  {previewFileName}
+                </p>
+              </div>
+              <button
+                onClick={closePreview}
+                className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors shrink-0"
+                title="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <iframe
+              src={previewUrl}
+              className="flex-1 w-full bg-slate-100 dark:bg-slate-950 min-h-[50vh]"
+              title="Pré-visualização do PDF"
+            />
+            <div className="px-5 sm:px-6 py-4 border-t border-slate-200 dark:border-white/10 flex items-center justify-end gap-3">
+              <button
+                onClick={closePreview}
+                className="px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+              >
+                Fechar
+              </button>
+              <button
+                onClick={downloadFromPreview}
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 hover:scale-[1.01] active:scale-[0.99] transition-transform"
+              >
+                <Download size={14} /> Baixar e imprimir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hidden offscreen QR canvases — capturados pelo gerador de PDF */}
       {printJob && (
