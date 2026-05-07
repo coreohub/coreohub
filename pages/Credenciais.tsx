@@ -298,22 +298,38 @@ const Credenciais: React.FC = () => {
     setPrintJob(items);
   };
 
-  /* ── Item-exemplo do preview inline. Se houver seleção, usa o
-        primeiro item selecionado da tab Todos. Senão, mostra um
-        placeholder pra ilustrar o layout sem dado real. ── */
-  const previewItem: CredentialItem = useMemo(() => {
-    const all = tabsItems.TODOS;
-    const firstSelected = all.find(i => selected.has(i.id));
-    if (firstSelected) return firstSelected;
-    return {
-      id: 'preview-placeholder',
-      type: 'INSCRITO',
-      name: 'Maria Silva',
-      subtitle: 'Studio Pulse',
-      category: 'Solo · Juvenil',
-      qrValue: 'preview-uuid-9999-9999-9999-999999999999',
-    };
+  /* ── Itens do preview inline: renderiza TODOS os selecionados em
+        folhas A4. Limite de segurança pra performance — 200 QR
+        canvases simultâneos pesaria. Acima do limite, trunca o
+        preview mas o PDF gera todos. Placeholder quando vazio. ── */
+  const PREVIEW_PLACEHOLDER: CredentialItem = {
+    id: 'preview-placeholder',
+    type: 'INSCRITO',
+    name: 'Maria Silva',
+    subtitle: 'Studio Pulse',
+    category: 'Solo · Juvenil',
+    qrValue: 'preview-uuid-9999-9999-9999-999999999999',
+  };
+  const MAX_PREVIEW_ITEMS = 30;
+
+  const previewItems: CredentialItem[] = useMemo(() => {
+    const all = tabsItems.TODOS.filter(i => selected.has(i.id));
+    return all.length > 0 ? all : [PREVIEW_PLACEHOLDER];
   }, [tabsItems, selected]);
+
+  const previewSheets: CredentialItem[][] = useMemo(() => {
+    const perSheet = mode === 'A6' ? 4 : 14;
+    const visible = previewItems.slice(0, MAX_PREVIEW_ITEMS);
+    const sheets: CredentialItem[][] = [];
+    for (let i = 0; i < visible.length; i += perSheet) {
+      sheets.push(visible.slice(i, i + perSheet));
+    }
+    return sheets;
+  }, [previewItems, mode]);
+
+  const totalSheets = Math.ceil(previewItems.length / (mode === 'A6' ? 4 : 14));
+  const previewTruncated = previewItems.length > MAX_PREVIEW_ITEMS;
+  const isPlaceholder = previewItems[0]?.id === 'preview-placeholder';
 
   const previewEventName = events.find(e => e.id === selectedEventId)?.name ?? 'Evento';
 
@@ -479,30 +495,53 @@ const Credenciais: React.FC = () => {
         </div>
       </div>
 
-      {/* Pré-visualização inline — espelho HTML/CSS de 1 credencial.
-          Padrão Avery/Pimaco Online: ver layout sem gerar PDF, com avisos
-          de impressão claros pra evitar desperdício de papel. */}
+      {/* Pré-visualização inline — TODAS as credenciais selecionadas em
+          HTML/CSS, agrupadas por folha A4. Mantém as dicas de impressão
+          ao lado pra evitar desperdício de papel. */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 p-5 sm:p-6">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
             Pré-visualização · {mode === 'A6' ? 'A6 cordão' : 'Adesivo 99×33mm'}
           </p>
           <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500">
-            {previewItem.id === 'preview-placeholder'
-              ? 'Exemplo · selecione um item pra usar dados reais'
-              : `Mostrando: ${previewItem.name}`}
+            {isPlaceholder
+              ? 'Exemplo · selecione itens pra usar dados reais'
+              : `${previewItems.length} ${previewItems.length === 1 ? 'credencial' : 'credenciais'} · ${totalSheets} ${totalSheets === 1 ? 'folha' : 'folhas'}`}
           </span>
         </div>
-        <div className="grid lg:grid-cols-[auto,1fr] gap-6 items-start">
-          {/* Mockup */}
-          <div className="flex justify-center bg-slate-100 dark:bg-slate-950/50 rounded-2xl p-6">
-            {mode === 'A6'
-              ? <A6PreviewCard item={previewItem} eventName={previewEventName} />
-              : <PimacoPreviewCard item={previewItem} eventName={previewEventName} />
-            }
+        <div className="grid lg:grid-cols-[1fr,260px] gap-6 items-start">
+          {/* Mockup das folhas */}
+          <div className="bg-slate-100 dark:bg-slate-950/50 rounded-2xl p-4 sm:p-6 max-h-[65vh] overflow-y-auto space-y-6">
+            {previewSheets.map((sheetItems, idx) => (
+              <div key={idx} className="space-y-3">
+                {!isPlaceholder && (
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                    Folha {idx + 1} de {totalSheets}
+                  </p>
+                )}
+                {mode === 'A6' ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 justify-items-center">
+                    {sheetItems.map(item => (
+                      <A6PreviewCard key={item.id} item={item} eventName={previewEventName} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-2 flex flex-col items-center">
+                    {sheetItems.map(item => (
+                      <PimacoPreviewCard key={item.id} item={item} eventName={previewEventName} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            {previewTruncated && (
+              <div className="text-center text-[10px] font-black uppercase tracking-widest text-slate-400 py-3 border-t border-slate-200 dark:border-white/10">
+                Mostrando {MAX_PREVIEW_ITEMS} de {previewItems.length} · todas vão no PDF
+              </div>
+            )}
           </div>
           {/* Dicas de impressão */}
-          <div className="space-y-3">
+          <div className="space-y-3 lg:sticky lg:top-4">
             <div className="flex items-center gap-2">
               <Info size={14} className="text-amber-500 shrink-0" />
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Como imprimir</p>
