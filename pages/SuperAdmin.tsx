@@ -8,8 +8,9 @@ import {
 import {
   Crown, DollarSign, Users, Calendar, TrendingUp, Loader2,
   AlertCircle, Mail, Copy, Trash2, Plus, X, Check, Lock, Unlock,
-  ExternalLink, BarChart3, Download,
+  ExternalLink, BarChart3, Download, Eye,
 } from 'lucide-react';
+import { startImpersonate } from '../services/impersonateService';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 interface ProducerRow {
@@ -70,6 +71,27 @@ const SuperAdmin = () => {
   const [inviteError, setInviteError]         = useState<string | null>(null);
   const [copiedToken, setCopiedToken]         = useState<string | null>(null);
   const [editingCommission, setEditingCommission] = useState<{ id: string; value: string } | null>(null);
+
+  /* Impersonate ('Visualizar como Produtor') */
+  const [impersonatingId, setImpersonatingId] = useState<string | null>(null);
+
+  const handleImpersonate = async (p: ProducerRow) => {
+    if (impersonatingId) return;
+    if (!confirm(
+      `Visualizar o app como "${p.full_name ?? p.email}"?\n\n` +
+      `Você verá tudo na perspectiva desse produtor (eventos, equipe, finanças). ` +
+      `Suas ações ficam registradas como sendo dele — use só pra suporte/diagnóstico.`
+    )) return;
+    setImpersonatingId(p.id);
+    try {
+      await startImpersonate(p.id);
+      // Reload é obrigatório pra todos os hooks/queries reagirem ao auth.uid() novo.
+      window.location.replace('/qg-organizador');
+    } catch (e: any) {
+      alert(`Erro ao iniciar visualização: ${e?.message ?? 'erro desconhecido'}`);
+      setImpersonatingId(null);
+    }
+  };
 
   /* Verificação de acesso */
   useEffect(() => {
@@ -703,13 +725,23 @@ const SuperAdmin = () => {
                           }
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() => handleToggleBlock(p)}
-                            className={`p-2 rounded-lg transition-colors ${p.is_blocked ? 'text-emerald-500 hover:bg-emerald-500/10' : 'text-rose-500 hover:bg-rose-500/10'}`}
-                            title={p.is_blocked ? 'Desbloquear' : 'Bloquear'}
-                          >
-                            {p.is_blocked ? <Unlock size={14} /> : <Lock size={14} />}
-                          </button>
+                          <div className="flex justify-end gap-1">
+                            <button
+                              onClick={() => handleImpersonate(p)}
+                              disabled={impersonatingId !== null}
+                              className="p-2 rounded-lg text-amber-500 hover:bg-amber-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                              title="Visualizar como este produtor"
+                            >
+                              {impersonatingId === p.id ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />}
+                            </button>
+                            <button
+                              onClick={() => handleToggleBlock(p)}
+                              className={`p-2 rounded-lg transition-colors ${p.is_blocked ? 'text-emerald-500 hover:bg-emerald-500/10' : 'text-rose-500 hover:bg-rose-500/10'}`}
+                              title={p.is_blocked ? 'Desbloquear' : 'Bloquear'}
+                            >
+                              {p.is_blocked ? <Unlock size={14} /> : <Lock size={14} />}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

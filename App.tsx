@@ -8,6 +8,7 @@ import Sidebar from './components/Sidebar';
 import DemoBanner from './components/DemoBanner';
 import InstallAppBanner from './components/InstallAppBanner';
 import EmailVerifyBanner from './components/EmailVerifyBanner';
+import ImpersonateBanner from './components/ImpersonateBanner';
 import AsaasBadge from './components/AsaasBadge';
 import Header from './components/Header';
 import BottomNavBar from './components/BottomNavBar';
@@ -222,6 +223,10 @@ const PrivateLayout: React.FC<{
         />
         {/* pb-20 no mobile para não sobrepor o BottomNavBar */}
         <main className="flex-1 overflow-y-auto relative z-10 pb-20 sm:pb-4">
+          {/* ImpersonateBanner: sticky topo quando super admin está
+              "Visualizando como Produtor". Z-index alto pra ficar sobre
+              outros banners. Some automaticamente quando não está impersonando. */}
+          <ImpersonateBanner />
           {/* DemoBanner: sticky no topo se evento ativo é demo (Stripe Test Mode pattern) */}
           <DemoBanner />
           {/* EmailVerifyBanner: padrão Stripe/Linear — sinaliza email não
