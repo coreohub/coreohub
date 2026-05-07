@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import {
   Loader2, Printer, Users, Gavel, GraduationCap, Sparkles,
-  ClipboardList, ChevronDown, Eye, X, Download,
+  ClipboardList, ChevronDown, Info,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import {
@@ -28,6 +28,97 @@ const TYPE_DOT: Record<CredentialType, string> = {
   COORDENADOR: 'bg-violet-600',
 };
 
+// Hex das mesmas 4 cores — usado no mockup HTML do preview pra
+// espelhar visualmente o que sai no PDF (TYPE_COLOR em credencialPdf.ts).
+const TYPE_HEX: Record<CredentialType, string> = {
+  INSCRITO:    '#ff0068',
+  STAFF:       '#2563eb',
+  JURADO:      '#d4a017',
+  COORDENADOR: '#7c3aed',
+};
+
+const TYPE_LABEL: Record<CredentialType, string> = {
+  INSCRITO:    'INSCRITO',
+  STAFF:       'EQUIPE',
+  JURADO:      'JURADO',
+  COORDENADOR: 'COORDENAÇÃO',
+};
+
+/* ── Preview cards HTML/CSS (espelho visual do PDF) ─────────────── */
+
+const A6PreviewCard: React.FC<{ item: CredentialItem; eventName: string }> = ({ item, eventName }) => {
+  const color = TYPE_HEX[item.type];
+  return (
+    <div
+      className="bg-white shadow-2xl rounded-md overflow-hidden flex flex-col"
+      style={{ width: 220, aspectRatio: '105 / 148' }}
+    >
+      {/* Topo branco com marca de furo */}
+      <div className="h-[10%] flex items-center justify-center">
+        <div className="w-2 h-2 rounded-full border border-slate-400" />
+      </div>
+      {/* Faixa colorida com CREDENCIAL + evento */}
+      <div className="px-3 py-2 text-white text-center" style={{ backgroundColor: color }}>
+        <p className="text-[7px] font-black uppercase tracking-[0.2em] opacity-90">Credencial</p>
+        <p className="text-[9px] font-black uppercase tracking-tight truncate">{eventName}</p>
+      </div>
+      {/* Nome + subtitle + category */}
+      <div className="flex-1 flex flex-col items-center justify-center px-3 py-2 text-center gap-0.5">
+        <p className="text-[12px] font-black text-slate-900 uppercase tracking-tight leading-tight">{item.name}</p>
+        {item.subtitle && <p className="text-[9px] text-slate-600">{item.subtitle}</p>}
+        {item.category && <p className="text-[8px] text-slate-500">{item.category}</p>}
+      </div>
+      {/* QR */}
+      <div className="flex justify-center pb-2">
+        <div className="bg-white p-1 border border-slate-200 rounded">
+          <QRCodeCanvas value={item.qrValue} size={64} level="H" fgColor="#000000" bgColor="#ffffff" marginSize={0} />
+        </div>
+      </div>
+      {/* Badge tipo */}
+      <div className="px-2 pb-2">
+        <div
+          className="rounded text-white text-center py-1"
+          style={{ backgroundColor: color }}
+        >
+          <p className="text-[8px] font-black uppercase tracking-[0.2em]">{TYPE_LABEL[item.type]}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const PimacoPreviewCard: React.FC<{ item: CredentialItem; eventName: string }> = ({ item, eventName }) => {
+  const color = TYPE_HEX[item.type];
+  return (
+    <div
+      className="bg-white shadow-2xl rounded-md overflow-hidden flex"
+      style={{ width: 360, aspectRatio: '99 / 33' }}
+    >
+      {/* Faixa colorida lateral */}
+      <div className="w-2 shrink-0" style={{ backgroundColor: color }} />
+      {/* Texto */}
+      <div className="flex-1 px-3 py-1.5 flex flex-col justify-center min-w-0">
+        <div className="flex items-center gap-2 mb-0.5">
+          <p className="text-[12px] font-black text-slate-900 uppercase tracking-tight truncate">{item.name}</p>
+          <span
+            className="shrink-0 text-white text-[7px] font-black uppercase tracking-[0.15em] px-1.5 py-0.5 rounded"
+            style={{ backgroundColor: color }}
+          >
+            {TYPE_LABEL[item.type]}
+          </span>
+        </div>
+        {item.subtitle && <p className="text-[9px] text-slate-600 truncate">{item.subtitle}</p>}
+        {item.category && <p className="text-[8px] text-slate-500 truncate">{item.category}</p>}
+        <p className="text-[7px] text-slate-400 truncate mt-auto">{eventName}</p>
+      </div>
+      {/* QR */}
+      <div className="shrink-0 flex items-center justify-center pr-2">
+        <QRCodeCanvas value={item.qrValue} size={68} level="H" fgColor="#000000" bgColor="#ffffff" marginSize={0} />
+      </div>
+    </div>
+  );
+};
+
 const STAFF_ROLES = ['STAFF', 'MESARIO', 'SONOPLASTA', 'RECEPCAO', 'PALCO'];
 const COORD_ROLES = ['COORDENADOR'];
 
@@ -46,10 +137,7 @@ const Credenciais: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [printJob, setPrintJob] = useState<CredentialItem[] | null>(null);
-  const [printAction, setPrintAction] = useState<'preview' | 'download'>('download');
   const [printing, setPrinting] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewFileName, setPreviewFileName] = useState<string>('');
 
   /* ── Eventos do produtor ── */
   useEffect(() => {
@@ -201,36 +289,33 @@ const Credenciais: React.FC = () => {
     });
   };
 
-  /* ── Pré-visualizar e Imprimir: ambos passam pelo mesmo pipeline,
-        diferenciados pelo printAction. ── */
-  const triggerPrintJob = (action: 'preview' | 'download') => {
+  /* ── Imprimir: dispara render hidden + gera PDF + baixa ── */
+  const handlePrint = () => {
     const all = tabsItems.TODOS;
     const items = all.filter(i => selected.has(i.id));
     if (items.length === 0) return;
     setPrinting(true);
-    setPrintAction(action);
     setPrintJob(items);
   };
-  const handlePrint = () => triggerPrintJob('download');
-  const handlePreview = () => triggerPrintJob('preview');
 
-  const closePreview = () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null);
-    setPreviewFileName('');
-  };
+  /* ── Item-exemplo do preview inline. Se houver seleção, usa o
+        primeiro item selecionado da tab Todos. Senão, mostra um
+        placeholder pra ilustrar o layout sem dado real. ── */
+  const previewItem: CredentialItem = useMemo(() => {
+    const all = tabsItems.TODOS;
+    const firstSelected = all.find(i => selected.has(i.id));
+    if (firstSelected) return firstSelected;
+    return {
+      id: 'preview-placeholder',
+      type: 'INSCRITO',
+      name: 'Maria Silva',
+      subtitle: 'Studio Pulse',
+      category: 'Solo · Juvenil',
+      qrValue: 'preview-uuid-9999-9999-9999-999999999999',
+    };
+  }, [tabsItems, selected]);
 
-  const downloadFromPreview = () => {
-    if (!previewUrl) return;
-    const a = document.createElement('a');
-    a.href = previewUrl;
-    a.download = previewFileName;
-    a.rel = 'noopener';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    // Não revoga aqui — modal continua aberto pro user revisar.
-  };
+  const previewEventName = events.find(e => e.id === selectedEventId)?.name ?? 'Evento';
 
   /* ── Após render do hidden container, captura QRs e gera PDF ──
      2 RAFs aninhados pra garantir que o React commit + paint do canvas
@@ -260,25 +345,18 @@ const Credenciais: React.FC = () => {
           const fileName = `CoreoHub - Credenciais ${tipoLabel} (${printJob.length}) - ${sanitizedEvent}.pdf`;
           const blob = doc.output('blob');
           const url = URL.createObjectURL(blob);
-
-          if (printAction === 'preview') {
-            // Revoga url anterior se existir (caso de cliques sucessivos).
-            if (previewUrl) URL.revokeObjectURL(previewUrl);
-            setPreviewUrl(url);
-            setPreviewFileName(fileName);
-          } else {
-            // Anchor programático — passa em popup blockers que recusam
-            // window.open() async.
-            const a = document.createElement('a');
-            a.href = url;
-            a.target = '_blank';
-            a.rel = 'noopener';
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(url), 60_000);
-          }
+          // Anchor programático com download — passa em popup blockers
+          // que recusam window.open() async. Browser abre o PDF na barra
+          // de downloads; clicar no arquivo abre na sua aba/reader nativo.
+          const a = document.createElement('a');
+          a.href = url;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 60_000);
         } catch (e) {
           console.error('Erro ao gerar PDF:', e);
           alert('Erro ao gerar PDF. Veja o console.');
@@ -401,6 +479,54 @@ const Credenciais: React.FC = () => {
         </div>
       </div>
 
+      {/* Pré-visualização inline — espelho HTML/CSS de 1 credencial.
+          Padrão Avery/Pimaco Online: ver layout sem gerar PDF, com avisos
+          de impressão claros pra evitar desperdício de papel. */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 p-5 sm:p-6">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+            Pré-visualização · {mode === 'A6' ? 'A6 cordão' : 'Adesivo 99×33mm'}
+          </p>
+          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500">
+            {previewItem.id === 'preview-placeholder'
+              ? 'Exemplo · selecione um item pra usar dados reais'
+              : `Mostrando: ${previewItem.name}`}
+          </span>
+        </div>
+        <div className="grid lg:grid-cols-[auto,1fr] gap-6 items-start">
+          {/* Mockup */}
+          <div className="flex justify-center bg-slate-100 dark:bg-slate-950/50 rounded-2xl p-6">
+            {mode === 'A6'
+              ? <A6PreviewCard item={previewItem} eventName={previewEventName} />
+              : <PimacoPreviewCard item={previewItem} eventName={previewEventName} />
+            }
+          </div>
+          {/* Dicas de impressão */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Info size={14} className="text-amber-500 shrink-0" />
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Como imprimir</p>
+            </div>
+            <ul className="space-y-2 text-[12px] text-slate-600 dark:text-slate-400 leading-relaxed">
+              <li>• Imprima em <strong className="text-slate-900 dark:text-white">100%</strong> — desmarque "Ajustar à página" / "Fit to page"</li>
+              <li>• Papel <strong className="text-slate-900 dark:text-white">A4</strong> (210×297mm)</li>
+              <li>• Margens <strong className="text-slate-900 dark:text-white">padrão</strong> da impressora — não ajustar</li>
+              {mode === 'A6' ? (
+                <>
+                  <li>• Papel <strong className="text-slate-900 dark:text-white">cartão 250g</strong> recomendado (papelaria comum)</li>
+                  <li>• 4 credenciais por folha · cortar nas linhas pontilhadas · furar pro cordão</li>
+                </>
+              ) : (
+                <>
+                  <li>• Folha <strong className="text-slate-900 dark:text-white">Pimaco 6280</strong> (ou similar 99×33mm) — 14 etiquetas/A4</li>
+                  <li>• Cole em credencial pré-impressa de gráfica</li>
+                </>
+              )}
+            </ul>
+          </div>
+        </div>
+      </div>
+
       {/* Lista */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 overflow-hidden">
         <div className="px-5 py-3 flex items-center justify-between border-b border-slate-200 dark:border-white/10">
@@ -471,72 +597,20 @@ const Credenciais: React.FC = () => {
             </p>
           </div>
           <button
-            onClick={handlePreview}
-            disabled={totalSelected === 0 || printing}
-            className="shrink-0 sm:ml-auto flex items-center justify-center gap-2 px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:border-[#ff0068]/40 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Pré-visualizar antes de baixar"
-          >
-            <Eye size={14} />
-            <span className="hidden sm:inline">Pré-visualizar</span>
-          </button>
-          <button
             onClick={handlePrint}
             disabled={totalSelected === 0 || printing}
-            className="shrink-0 flex items-center justify-center gap-2 px-5 py-3 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 hover:scale-[1.01] active:scale-[0.99] transition-transform disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+            className="shrink-0 sm:ml-auto flex items-center justify-center gap-2 px-5 py-3 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 hover:scale-[1.01] active:scale-[0.99] transition-transform disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
           >
             {printing ? (
               <><Loader2 size={14} className="animate-spin" /> Gerando PDF…</>
             ) : totalSelected === 0 ? (
               <><Printer size={14} /> Selecione 1+</>
             ) : (
-              <><Printer size={14} /> Imprimir ({totalSelected})</>
+              <><Printer size={14} /> Baixar PDF ({totalSelected})</>
             )}
           </button>
         </div>
       </div>
-
-      {/* Modal de pré-visualização do PDF — iframe nativo do browser pra
-          renderizar o PDF gerado em memória. User confirma antes de baixar. */}
-      {previewUrl && (
-        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-5xl max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-white/10 flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Pré-visualização</p>
-                <p className="text-sm font-bold text-slate-900 dark:text-white truncate" title={previewFileName}>
-                  {previewFileName}
-                </p>
-              </div>
-              <button
-                onClick={closePreview}
-                className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors shrink-0"
-                title="Fechar"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <iframe
-              src={previewUrl}
-              className="flex-1 w-full bg-slate-100 dark:bg-slate-950 min-h-[50vh]"
-              title="Pré-visualização do PDF"
-            />
-            <div className="px-5 sm:px-6 py-4 border-t border-slate-200 dark:border-white/10 flex items-center justify-end gap-3">
-              <button
-                onClick={closePreview}
-                className="px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
-              >
-                Fechar
-              </button>
-              <button
-                onClick={downloadFromPreview}
-                className="flex items-center gap-2 px-5 py-2.5 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 hover:scale-[1.01] active:scale-[0.99] transition-transform"
-              >
-                <Download size={14} /> Baixar e imprimir
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Hidden offscreen QR canvases — capturados pelo gerador de PDF */}
       {printJob && (
