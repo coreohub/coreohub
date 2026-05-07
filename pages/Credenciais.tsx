@@ -531,36 +531,30 @@ const Credenciais: React.FC = () => {
                 <X size={18} />
               </button>
             </div>
-            <div className="flex-1 flex flex-col sm:flex-row min-h-0 overflow-hidden">
-              <iframe
-                src={`${previewUrl}#view=FitH`}
-                className="flex-1 w-full bg-slate-100 dark:bg-slate-950 min-h-[50vh] sm:min-h-0"
-                title="Pré-visualização do PDF"
-              />
-              {/* Sidebar 'Como imprimir' — só aparece em sm+ pra não roubar
-                  vertical do iframe em mobile. */}
-              <aside className="hidden sm:flex sm:flex-col w-[260px] shrink-0 border-l border-slate-200 dark:border-white/10 bg-amber-50/40 dark:bg-amber-500/5 p-5 overflow-y-auto">
-                <div className="flex items-center gap-2 mb-3">
-                  <Info size={14} className="text-amber-500 shrink-0" />
-                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">Como imprimir</p>
+            <iframe
+              src={`${previewUrl}#view=FitH`}
+              className="flex-1 w-full bg-slate-100 dark:bg-slate-950 min-h-[50vh]"
+              title="Pré-visualização do PDF"
+            />
+            {/* Faixa horizontal de dicas — entre iframe e botões. Mantém o
+                iframe em largura cheia (sem sidebar comprimindo) e fornece
+                orientação de impressão just-in-time. */}
+            <div className="px-5 sm:px-6 py-3 border-t border-slate-200 dark:border-white/10 bg-amber-50/40 dark:bg-amber-500/5">
+              <div className="flex items-start gap-2.5">
+                <Info size={13} className="text-amber-500 shrink-0 mt-0.5" />
+                <div className="text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed flex flex-wrap items-baseline gap-x-1">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 mr-1">Como imprimir</span>
+                  <span>
+                    Imprima em <strong className="text-slate-900 dark:text-white">100%</strong> (sem "Ajustar à página") ·
+                    Papel <strong className="text-slate-900 dark:text-white">A4</strong> ·
+                    Margens <strong className="text-slate-900 dark:text-white">padrão</strong>
+                    {previewMode === 'A6'
+                      ? <> · Papel <strong className="text-slate-900 dark:text-white">cartão 250g</strong> · Cortar nas linhas pontilhadas e furar pro cordão</>
+                      : <> · Folha <strong className="text-slate-900 dark:text-white">Pimaco 6280</strong> ou similar · Cole em credencial pré-impressa</>
+                    }
+                  </span>
                 </div>
-                <ul className="space-y-2.5 text-[12px] text-slate-700 dark:text-slate-300 leading-relaxed">
-                  <li>• Imprima em <strong>100%</strong> — desmarque "Ajustar à página" / "Fit to page"</li>
-                  <li>• Papel <strong>A4</strong> (210×297mm)</li>
-                  <li>• Margens <strong>padrão</strong> — não ajustar</li>
-                  {previewMode === 'A6' ? (
-                    <>
-                      <li>• Papel <strong>cartão 250g</strong> recomendado</li>
-                      <li>• 4 credenciais por folha · cortar nas linhas pontilhadas · furar pro cordão</li>
-                    </>
-                  ) : (
-                    <>
-                      <li>• Folha <strong>Pimaco 6280</strong> (ou similar 99×33mm)</li>
-                      <li>• Cole em credencial pré-impressa de gráfica</li>
-                    </>
-                  )}
-                </ul>
-              </aside>
+              </div>
             </div>
             <div className="px-5 sm:px-6 py-4 border-t border-slate-200 dark:border-white/10 flex items-center justify-end gap-3">
               <button
