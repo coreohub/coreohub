@@ -4,6 +4,7 @@ import imageCompression from 'browser-image-compression';
 import {
   Plus, Trash2, Pencil, Calendar, Clock, MapPin, Loader2, X, AlertCircle, CheckCircle,
   GraduationCap, User, Tag, Layers, DollarSign, Users, Globe, EyeOff, Camera,
+  ShoppingCart, Mail, RefreshCw, UserCheck, Search,
 } from 'lucide-react';
 
 type Nivel = 'iniciante' | 'intermediario' | 'avancado' | 'todos';
@@ -104,6 +105,7 @@ const WorkshopsManagement: React.FC = () => {
   const [showModal, setShowModal]           = useState(false);
   const [editingId, setEditingId]           = useState<string | null>(null);
   const [showLotsModal, setShowLotsModal]   = useState<WorkshopRow | null>(null);
+  const [showBuyersModal, setShowBuyersModal] = useState<WorkshopRow | null>(null);
 
   // ── Form de workshop ────────────────────────────────────────────────────
   const emptyForm = {
@@ -467,6 +469,12 @@ const WorkshopsManagement: React.FC = () => {
                         <Layers size={12} />Lotes
                       </button>
                       <button
+                        onClick={() => setShowBuyersModal(w)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-white/10 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition"
+                      >
+                        <ShoppingCart size={12} />Compradores
+                      </button>
+                      <button
                         onClick={() => togglePublish(w)}
                         className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${w.is_published ? 'border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10' : 'bg-emerald-600 text-white hover:bg-emerald-500'}`}
                       >
@@ -514,6 +522,309 @@ const WorkshopsManagement: React.FC = () => {
           onClose={() => { setShowLotsModal(null); refresh(); }}
         />
       )}
+
+      {/* Modal de compradores */}
+      {showBuyersModal && (
+        <BuyersModal
+          workshop={showBuyersModal}
+          onClose={() => setShowBuyersModal(null)}
+        />
+      )}
+    </div>
+  );
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// Modal: lista de compradores do workshop
+// ════════════════════════════════════════════════════════════════════════════
+interface BuyerRow {
+  id: string;
+  buyer_name: string;
+  buyer_email: string;
+  buyer_cpf: string;
+  buyer_phone: string | null;
+  preco_pago: number;
+  status_pagamento: 'PENDENTE' | 'APROVADO' | 'CANCELADO' | 'VENCIDO' | 'ESTORNADO' | 'CORTESIA' | 'GRATUITO';
+  payment_method: string | null;
+  paid_at: string | null;
+  is_combo: boolean;
+  attended: boolean;
+  attended_at: string | null;
+  created_at: string;
+  refunded_at: string | null;
+  refund_amount: number | null;
+  lot_nome: string | null;
+}
+
+const onlyDigits = (v: string) => v.replace(/\D/g, '');
+const maskCPF = (v: string) => {
+  const d = onlyDigits(v).slice(0, 11);
+  return d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+};
+
+const STATUS_LABEL: Record<BuyerRow['status_pagamento'], { label: string; cls: string }> = {
+  APROVADO:  { label: 'Aprovado',  cls: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20' },
+  PENDENTE:  { label: 'Pendente',  cls: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20' },
+  CANCELADO: { label: 'Cancelado', cls: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20' },
+  VENCIDO:   { label: 'Vencido',   cls: 'bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20' },
+  ESTORNADO: { label: 'Estornado', cls: 'bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20' },
+  CORTESIA:  { label: 'Cortesia',  cls: 'bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/20' },
+  GRATUITO:  { label: 'Grátis',    cls: 'bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/20' },
+};
+
+const BuyersModal: React.FC<{ workshop: WorkshopRow; onClose: () => void }> = ({ workshop, onClose }) => {
+  const [buyers, setBuyers] = useState<BuyerRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | BuyerRow['status_pagamento']>('ALL');
+  const [marking, setMarking] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('workshop_registrations')
+      .select('id, buyer_name, buyer_email, buyer_cpf, buyer_phone, preco_pago, status_pagamento, payment_method, paid_at, is_combo, attended, attended_at, created_at, refunded_at, refund_amount, lot_nome')
+      .eq('workshop_id', workshop.id)
+      .order('created_at', { ascending: false });
+    if (error) {
+      setFeedback({ kind: 'err', msg: error.message });
+    } else {
+      setBuyers((data ?? []) as BuyerRow[]);
+    }
+    setLoading(false);
+  }, [workshop.id]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  useEffect(() => {
+    if (!feedback) return;
+    const t = setTimeout(() => setFeedback(null), 4000);
+    return () => clearTimeout(t);
+  }, [feedback]);
+
+  const filtered = useMemo(() => {
+    let list = buyers;
+    if (statusFilter !== 'ALL') list = list.filter(b => b.status_pagamento === statusFilter);
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(b =>
+        b.buyer_name.toLowerCase().includes(q) ||
+        b.buyer_email.toLowerCase().includes(q) ||
+        onlyDigits(b.buyer_cpf).includes(onlyDigits(q))
+      );
+    }
+    return list;
+  }, [buyers, statusFilter, search]);
+
+  const stats = useMemo(() => ({
+    total: buyers.length,
+    aprovados: buyers.filter(b => b.status_pagamento === 'APROVADO').length,
+    pendentes: buyers.filter(b => b.status_pagamento === 'PENDENTE').length,
+    presentes: buyers.filter(b => b.attended).length,
+    receita: buyers.filter(b => b.status_pagamento === 'APROVADO').reduce((a, b) => a + Number(b.preco_pago || 0), 0),
+  }), [buyers]);
+
+  // Marca presença (pré-requisito pra emitir certificado).
+  const toggleAttended = async (buyer: BuyerRow) => {
+    setMarking(buyer.id);
+    try {
+      const newVal = !buyer.attended;
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from('workshop_registrations')
+        .update({
+          attended: newVal,
+          attended_at: newVal ? new Date().toISOString() : null,
+          attended_by: newVal ? user?.id ?? null : null,
+        })
+        .eq('id', buyer.id);
+      if (error) throw error;
+      setBuyers(prev => prev.map(b => b.id === buyer.id
+        ? { ...b, attended: newVal, attended_at: newVal ? new Date().toISOString() : null }
+        : b));
+      setFeedback({ kind: 'ok', msg: newVal ? 'Presença marcada' : 'Presença removida' });
+    } catch (e: any) {
+      setFeedback({ kind: 'err', msg: e.message ?? 'Erro ao marcar presença' });
+    } finally {
+      setMarking(null);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-4xl max-h-[92vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-white/10">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black text-[#ff0068] uppercase tracking-[0.3em]">Compradores</p>
+            <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white truncate">{workshop.name}</h3>
+          </div>
+          <button onClick={onClose} aria-label="Fechar" className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Stats */}
+        <div className="px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-white/10 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Total</p>
+            <p className="text-xl font-black text-slate-900 dark:text-white tabular-nums">{stats.total}</p>
+          </div>
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Aprovados</p>
+            <p className="text-xl font-black text-emerald-600 dark:text-emerald-400 tabular-nums">{stats.aprovados}</p>
+          </div>
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Presentes</p>
+            <p className="text-xl font-black text-slate-900 dark:text-white tabular-nums">
+              {stats.presentes} <span className="text-xs text-slate-500 font-bold">/{stats.aprovados}</span>
+            </p>
+          </div>
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Receita</p>
+            <p className="text-xl font-black text-slate-900 dark:text-white tabular-nums">
+              {stats.receita.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </p>
+          </div>
+        </div>
+
+        {/* Search + filtro */}
+        <div className="px-5 sm:px-6 py-3 border-b border-slate-200 dark:border-white/10 flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar por nome, e-mail ou CPF…"
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value as any)}
+            className="px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white outline-none dark:[color-scheme:dark]"
+          >
+            <option value="ALL"        className="bg-white dark:bg-slate-900">Todos</option>
+            <option value="APROVADO"   className="bg-white dark:bg-slate-900">Aprovados</option>
+            <option value="PENDENTE"   className="bg-white dark:bg-slate-900">Pendentes</option>
+            <option value="ESTORNADO"  className="bg-white dark:bg-slate-900">Estornados</option>
+            <option value="CORTESIA"   className="bg-white dark:bg-slate-900">Cortesia</option>
+            <option value="GRATUITO"   className="bg-white dark:bg-slate-900">Grátis (combo)</option>
+          </select>
+          <button
+            onClick={refresh}
+            aria-label="Recarregar"
+            className="p-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-500 hover:text-[#ff0068]"
+          >
+            <RefreshCw size={14} />
+          </button>
+        </div>
+
+        {feedback && (
+          <div className={`mx-5 sm:mx-6 mt-3 p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${
+            feedback.kind === 'ok'
+              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20'
+              : 'bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20'
+          }`}>
+            {feedback.kind === 'ok' ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
+            {feedback.msg}
+          </div>
+        )}
+
+        {/* Lista */}
+        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-4">
+          {loading ? (
+            <div className="flex justify-center py-12"><Loader2 size={28} className="animate-spin text-[#ff0068]" /></div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-16">
+              <ShoppingCart size={32} className="text-slate-300 dark:text-slate-700 mx-auto mb-3" />
+              <p className="text-sm font-bold text-slate-500">
+                {buyers.length === 0 ? 'Nenhum comprador ainda' : 'Nenhum resultado'}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filtered.map(b => {
+                const status = STATUS_LABEL[b.status_pagamento];
+                return (
+                  <div key={b.id} className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className={`inline-flex items-center text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${status.cls}`}>
+                            {status.label}
+                          </span>
+                          {b.is_combo && (
+                            <span className="inline-flex items-center text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20">
+                              Combo
+                            </span>
+                          )}
+                          {b.attended && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                              <UserCheck size={9} /> Presente
+                            </span>
+                          )}
+                          {b.lot_nome && (
+                            <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">{b.lot_nome}</span>
+                          )}
+                        </div>
+                        <p className="text-sm font-black text-slate-900 dark:text-white truncate">{b.buyer_name}</p>
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500 mt-0.5">
+                          <span className="inline-flex items-center gap-1"><Mail size={10} />{b.buyer_email}</span>
+                          <span>CPF {maskCPF(b.buyer_cpf)}</span>
+                          {b.buyer_phone && <span>{b.buyer_phone}</span>}
+                          <span>{new Date(b.created_at).toLocaleDateString('pt-BR')}</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-black text-slate-900 dark:text-white tabular-nums">
+                          {Number(b.preco_pago).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </p>
+                        {b.payment_method && (
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">{b.payment_method}</p>
+                        )}
+                        {b.refunded_at && (
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-rose-500 mt-0.5">
+                            Estornado{b.refund_amount != null && ` R$ ${Number(b.refund_amount).toFixed(2)}`}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Ações */}
+                    {(b.status_pagamento === 'APROVADO' || b.status_pagamento === 'GRATUITO' || b.status_pagamento === 'CORTESIA') && !b.refunded_at && (
+                      <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-slate-200 dark:border-white/10">
+                        <button
+                          onClick={() => toggleAttended(b)}
+                          disabled={marking === b.id}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 ${
+                            b.attended
+                              ? 'bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-200 hover:bg-slate-200'
+                              : 'bg-[#ff0068] text-white hover:bg-[#d4005a]'
+                          }`}
+                        >
+                          {marking === b.id
+                            ? <Loader2 size={12} className="animate-spin" />
+                            : <UserCheck size={12} />}
+                          {b.attended ? 'Remover presença' : 'Marcar presente'}
+                        </button>
+                        <a
+                          href={`mailto:${b.buyer_email}?subject=${encodeURIComponent(`[${workshop.name}] Sobre seu workshop`)}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 dark:border-white/10 rounded-lg text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#ff0068] transition-all"
+                        >
+                          <Mail size={12} /> Email
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
