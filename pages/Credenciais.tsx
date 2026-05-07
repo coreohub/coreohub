@@ -46,7 +46,10 @@ const Credenciais: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [printJob, setPrintJob] = useState<CredentialItem[] | null>(null);
-  const [printAction, setPrintAction] = useState<'preview' | 'download'>('download');
+  // 'preview' = modal com iframe (desktop)
+  // 'preview-newtab' = abre PDF em nova aba (mobile — iframe não renderiza)
+  // 'download' = baixa direto via anchor com filename
+  const [printAction, setPrintAction] = useState<'preview' | 'preview-newtab' | 'download'>('download');
   const [printing, setPrinting] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewFileName, setPreviewFileName] = useState<string>('');
@@ -206,8 +209,9 @@ const Credenciais: React.FC = () => {
   };
 
   /* ── Pré-visualizar e Imprimir: ambos passam pelo mesmo pipeline,
-        diferenciados pelo printAction. ── */
-  const triggerPrintJob = (action: 'preview' | 'download') => {
+        diferenciados pelo printAction. Em mobile, preview abre em nova
+        aba (iframe não renderiza PDF em Android Chrome / iOS Safari). ── */
+  const triggerPrintJob = (action: 'preview' | 'preview-newtab' | 'download') => {
     const all = tabsItems.TODOS;
     const items = all.filter(i => selected.has(i.id));
     if (items.length === 0) return;
@@ -216,7 +220,12 @@ const Credenciais: React.FC = () => {
     setPrintJob(items);
   };
   const handlePrint = () => triggerPrintJob('download');
-  const handlePreview = () => triggerPrintJob('preview');
+  const handlePreview = () => {
+    // Mobile: PDF em iframe não renderiza — usa reader nativo do sistema
+    // via nova aba. Desktop: modal com iframe (funciona bem).
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+    triggerPrintJob(isMobile ? 'preview-newtab' : 'preview');
+  };
 
   const closePreview = () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -270,15 +279,28 @@ const Credenciais: React.FC = () => {
           const url = URL.createObjectURL(blob);
 
           if (printAction === 'preview') {
-            // Revoga url anterior se existir (caso de cliques sucessivos).
+            // Modal desktop com iframe. Revoga url anterior se existir
+            // (caso de cliques sucessivos).
             if (previewUrl) URL.revokeObjectURL(previewUrl);
             setPreviewUrl(url);
             setPreviewFileName(fileName);
             setPreviewCount(printJob.length);
             setPreviewMode(mode);
+          } else if (printAction === 'preview-newtab') {
+            // Mobile: abre o PDF em nova aba pra usar o reader nativo do
+            // sistema (iframe não renderiza PDF em Android/iOS). Sem
+            // download attribute — quer só visualizar, não salvar.
+            const a = document.createElement('a');
+            a.href = url;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 60_000);
           } else {
-            // Anchor programático — passa em popup blockers que recusam
-            // window.open() async.
+            // Download direto. Anchor programático passa em popup blockers
+            // que recusam window.open() async.
             const a = document.createElement('a');
             a.href = url;
             a.target = '_blank';
