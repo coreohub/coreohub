@@ -69,7 +69,10 @@ const drawA6Card = (
   doc.setLineWidth(0.2);
   doc.circle(x0 + A6_W / 2, y0 + 8, 1.8);
 
-  const stripeH = 22;
+  // stripeH 28mm (era 22) acomoda nome do evento em até 2 linhas. Sobra
+  // de espaço entre categoria e QR (~35mm no original) compensa o ganho
+  // de altura — resto do card desce 6mm via cy = stripeY + stripeH + 12.
+  const stripeH = 28;
   const stripeY = y0 + 14;
   doc.setFillColor(color.r, color.g, color.b);
   doc.rect(x0, stripeY, A6_W, stripeH, 'F');
@@ -78,8 +81,19 @@ const drawA6Card = (
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.text('CREDENCIAL', x0 + A6_W / 2, stripeY + 7, { align: 'center' });
+
+  // Quebra automática em até 2 linhas (splitTextToSize respeita limite
+  // de largura). Se nome curto, fica em 1 linha (jspdf não força
+  // quebra desnecessária). Se passa de 2 linhas, trunca a 2ª com '…'.
   doc.setFontSize(13);
-  doc.text(fitText(doc, eventName.toUpperCase(), A6_W - 10), x0 + A6_W / 2, stripeY + 16, { align: 'center' });
+  const eventLines: string[] = doc.splitTextToSize(eventName.toUpperCase(), A6_W - 10);
+  const linesToShow = eventLines.slice(0, 2);
+  if (eventLines.length > 2) {
+    linesToShow[1] = fitText(doc, linesToShow[1] + ' …', A6_W - 10);
+  }
+  linesToShow.forEach((line, i) => {
+    doc.text(line, x0 + A6_W / 2, stripeY + 15 + i * 6, { align: 'center' });
+  });
 
   let cy = stripeY + stripeH + 12;
   doc.setTextColor(20, 20, 20);
