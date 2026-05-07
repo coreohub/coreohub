@@ -43,10 +43,12 @@ export async function startImpersonate(
     }),
   );
 
-  // Troca pelo session do target via OTP
+  // Troca o hashed_token (gerado via admin.generateLink no backend) pelo
+  // session do target. supabase-js v2 espera 'token_hash' (não 'token')
+  // pra hash de magic link admin-generated. Formato com 'token' é só pra
+  // OTP numérico de 6 dígitos enviado por email/SMS.
   const { error: verifyErr } = await supabase.auth.verifyOtp({
-    email: target.email,
-    token: token_hash,
+    token_hash,
     type: 'magiclink',
   });
   if (verifyErr) {
