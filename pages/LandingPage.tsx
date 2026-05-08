@@ -951,9 +951,14 @@ const LandingPage = () => {
 
               <div className="space-y-5 text-slate-300 text-base md:text-lg leading-relaxed">
                 <p>
-                  Há mais de 20 anos eu vivo as danças urbanas — pisei em palco no Brasil, Portugal, Equador,
-                  França e Argentina, e produzi muito festival com planilha, comprovante de Pix e
+                  Há mais de 25 anos eu vivo as danças urbanas — pisei em palco no Brasil, Portugal, Equador,
+                  França e Argentina, e produzi festival com planilha, comprovante de Pix e
                   Photoshop até as 2 da manhã.
+                </p>
+                <p>
+                  Hoje produzo o <span className="text-white font-bold">Usualdance Festival</span>, produzi o{' '}
+                  <span className="text-white font-bold">Gravidade Festival</span> e fiz parte da equipe do{' '}
+                  <span className="text-white font-bold">FIH2</span> — o maior evento de danças urbanas da América Latina.
                 </p>
                 <p>
                   CoreoHub nasceu da dor que eu mesmo tive. Não é software de quem viu o festival de longe —
