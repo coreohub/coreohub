@@ -4,8 +4,8 @@ import {
   ChevronRight, Sparkles, FileText, Wifi, Link as LinkIcon, DollarSign,
   Trophy, Shield, Award, GraduationCap, Mic2, Check, X, ChevronDown,
   Zap, Users, Clock, AlertTriangle, ArrowRight,
-  Video, CalendarClock, Globe, IdCard, QrCode,
-  Smartphone, Share2, Mail, Play, MapPin, Search,
+  CalendarClock, Globe, IdCard, QrCode,
+  Smartphone, Share2, Mail, MapPin, Search,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { supabase } from '../services/supabase';
@@ -272,40 +272,13 @@ const LandingPage = () => {
           'Notificação automática pro inscrito (passou / não passou)',
         ]}
         mockup={
-          <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between p-3 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <Video size={14} className="text-[#ff0068]" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Seletiva 2026 · Ballet Adulto</span>
-              </div>
-              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400">38 / 64 avaliados</span>
-            </div>
-            <div className="p-4 space-y-2">
-              {[
-                { name: 'Lago dos Cisnes Moderno', studio: 'Cia Étoile', status: 'classificada', tone: 'emerald' },
-                { name: 'Carmen Reinventada',      studio: 'Studio Versátil', status: 'classificada', tone: 'emerald' },
-                { name: 'Bolero em 7/8',           studio: 'Núcleo Contemp.', status: 'avaliando', tone: 'amber' },
-                { name: 'Réquiem',                 studio: 'Cia Versus', status: 'não classificada', tone: 'rose' },
-              ].map((v, i) => (
-                <div key={i} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-lg p-2.5">
-                  <div className="relative w-12 h-9 bg-slate-950 rounded overflow-hidden flex items-center justify-center shrink-0">
-                    <Play size={14} className="text-white/70" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-white truncate">{v.name}</p>
-                    <p className="text-[10px] text-slate-500 truncate">{v.studio}</p>
-                  </div>
-                  <span className={`text-[9px] font-black uppercase tracking-widest shrink-0 ${
-                    v.tone === 'emerald' ? 'text-emerald-400' :
-                    v.tone === 'amber' ? 'text-amber-400' : 'text-rose-400'
-                  }`}>{v.status}</span>
-                </div>
-              ))}
-            </div>
-            <div className="px-4 pb-4 pt-1 border-t border-white/10 flex items-center justify-between">
-              <span className="text-[10px] text-slate-500">Encerra em 3 dias</span>
-              <span className="text-[10px] font-black uppercase tracking-widest text-[#ff0068]">Cronograma será atualizado</span>
-            </div>
+          <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-slate-900">
+            <img
+              src="/screenshots/seletiva-revisar.png"
+              alt="Tela de revisão de vídeo da seletiva no CoreoHub: player, dados do inscrito e botões de decisão (Aprovar, Condicional, Favoritar, Reprovar)"
+              className="w-full h-auto block"
+              loading="lazy"
+            />
           </div>
         }
       />
@@ -708,13 +681,8 @@ const LandingPage = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
-              {
-                icon: IdCard,
-                title: 'Credenciais físicas em PDF',
-                body: 'Imprime A6 com cordão (24 por A4) ou adesivos Pimaco 6280 prontos pra colar. Foto, nome, função e QR — sai direto no offset da gráfica do bairro.',
-              },
               {
                 icon: QrCode,
                 title: 'Check-in QR pra 5 perfis',
@@ -740,6 +708,33 @@ const LandingPage = () => {
           </div>
         </div>
       </section>
+
+      {/* ─── 9.6 CREDENCIAIS FÍSICAS ──────────────────────────────────────────────── */}
+      <FeatureSection
+        kicker="Credenciais físicas em PDF"
+        title={<>Imprime no <span className="text-[#ff0068]">offset</span> da esquina.<br />Cola na credencial.</>}
+        body="Selecione os inscritos, escolha o modo de impressão (A6 com cordão ou adesivo Pimaco 6280) e o sistema gera o PDF pronto pra gráfica. Foto, nome, função e QR de check-in — tudo organizado nas margens exatas do papel."
+        bullets={[
+          'Modo A6 cordão: 4 credenciais por folha A4 em papel cartão 250g',
+          'Modo Pimaco 6280: adesivos prontos pra colar em credencial pré-impressa',
+          'Tipos suportados: inscrito, workshop, equipe e jurados',
+          'Cor automática por tipo (rosa, azul, dourado, roxo)',
+        ]}
+        mockup={
+          <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-slate-900">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-white/10 bg-slate-950">
+              <IdCard size={14} className="text-[#ff0068]" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pré-visualização · 7 adesivos · Pimaco 6280</span>
+            </div>
+            <img
+              src="/screenshots/credenciais-pdf.png"
+              alt="Pré-visualização do PDF gerado pelo CoreoHub: adesivos Pimaco 6280 com nome, estúdio, categoria e QR code"
+              className="w-full h-auto block"
+              loading="lazy"
+            />
+          </div>
+        }
+      />
 
       {/* ─── 9.7 NARRAÇÃO IA ──────────────────────────────────────────────── */}
       <FeatureSection
