@@ -4,6 +4,8 @@ import {
   ChevronRight, Sparkles, FileText, Wifi, Link as LinkIcon, DollarSign,
   Trophy, Shield, Award, GraduationCap, Mic2, Check, X, ChevronDown,
   Zap, Users, Clock, AlertTriangle, ArrowRight,
+  Video, CalendarClock, Globe, IdCard, QrCode,
+  Smartphone, Share2, Mail, Play,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -267,6 +269,56 @@ const LandingPage = () => {
         }
       />
 
+      {/* ─── 5.4 SELETIVA DE VÍDEO ──────────────────────────────────────────────── */}
+      <FeatureSection
+        kicker="Banca pré-evento"
+        title={<>Pré-classifica por <span className="text-[#ff0068]">vídeo</span>.<br />Cronograma só com quem passou.</>}
+        body="Bailarino envia o vídeo direto no formulário de inscrição. Júri assiste e classifica antes do festival, do próprio tablet, sem precisar de dia extra de eliminatórias. No dia, o cronograma já vem filtrado só com os classificados — você economiza palco, banca e horário."
+        bullets={[
+          'Vídeo enviado no cadastro (link YouTube ou upload direto)',
+          'Júri pré-classifica remoto, na semana antes do evento',
+          'Cronograma do dia mostra só os classificados — zero retrabalho',
+          'Notificação automática pro inscrito (passou / não passou)',
+        ]}
+        mockup={
+          <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <Video size={14} className="text-[#ff0068]" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Seletiva 2026 · Ballet Adulto</span>
+              </div>
+              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400">38 / 64 avaliados</span>
+            </div>
+            <div className="p-4 space-y-2">
+              {[
+                { name: 'Lago dos Cisnes Moderno', studio: 'Cia Étoile', status: 'classificada', tone: 'emerald' },
+                { name: 'Carmen Reinventada',      studio: 'Studio Versátil', status: 'classificada', tone: 'emerald' },
+                { name: 'Bolero em 7/8',           studio: 'Núcleo Contemp.', status: 'avaliando', tone: 'amber' },
+                { name: 'Réquiem',                 studio: 'Cia Versus', status: 'não classificada', tone: 'rose' },
+              ].map((v, i) => (
+                <div key={i} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-lg p-2.5">
+                  <div className="relative w-12 h-9 bg-slate-950 rounded overflow-hidden flex items-center justify-center shrink-0">
+                    <Play size={14} className="text-white/70" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-white truncate">{v.name}</p>
+                    <p className="text-[10px] text-slate-500 truncate">{v.studio}</p>
+                  </div>
+                  <span className={`text-[9px] font-black uppercase tracking-widest shrink-0 ${
+                    v.tone === 'emerald' ? 'text-emerald-400' :
+                    v.tone === 'amber' ? 'text-amber-400' : 'text-rose-400'
+                  }`}>{v.status}</span>
+                </div>
+              ))}
+            </div>
+            <div className="px-4 pb-4 pt-1 border-t border-white/10 flex items-center justify-between">
+              <span className="text-[10px] text-slate-500">Encerra em 3 dias</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-[#ff0068]">Cronograma será atualizado</span>
+            </div>
+          </div>
+        }
+      />
+
       {/* ─── 5.5 EM CAMPO (foto produto-em-uso) ──────────────────────────────────────────────── */}
       <section className="relative overflow-hidden border-t border-white/5">
         {/* Wrapper full-bleed com imagem cinematográfica */}
@@ -360,8 +412,10 @@ const LandingPage = () => {
         body="Bailarino clica no Instagram, encontra a página completa do festival: regulamento, jurados, preços, programação. Inscreve, paga (cartão, Pix, boleto), recebe ingresso, baixa certificado, vê resultado — sem você apertar 1 botão."
         bullets={[
           'Vitrine pública linda em /festival/<seu-evento> (também serve de site oficial)',
-          'Checkout com lotes progressivos, cupons e meia-entrada',
+          'Lotes progressivos (early-bird, último lote) com data ou esgotamento',
+          'Cupons com escopo: só inscrição, só ingresso, ou ambos',
           'Workshops + ingresso de plateia no mesmo carrinho',
+          'Reembolso em 1 clique — sem chamado, sem planilha',
           'Certificado com QR code de validação pública',
         ]}
         mockup={
@@ -398,6 +452,63 @@ const LandingPage = () => {
               <button className="w-full bg-[#ff0068] text-white text-xs font-black uppercase tracking-widest py-3 rounded-xl">
                 Inscrever minha coreografia
               </button>
+            </div>
+          </div>
+        }
+      />
+
+      {/* ─── 6.5 CRONOGRAMA INTELIGENTE ──────────────────────────────────────────────── */}
+      <FeatureSection
+        reverse
+        kicker="Conflito? Antes de acontecer."
+        title={<>Bailarina em <span className="text-[#ff0068]">5 coreografias</span>?<br />Sistema calcula o intervalo.</>}
+        body="O cronograma identifica quando o mesmo bailarino aparece em apresentações próximas e respeita um intervalo mínimo pra troca de figurino. Se há conflito, ele alerta antes de você publicar — não na frente do público. Reordena com 1 toque, sem refazer planilha."
+        bullets={[
+          'Detecta bailarinos em múltiplas coreografias (solo, duo, grupo)',
+          'Calcula intervalo mínimo entre apresentações da mesma pessoa',
+          'Aviso visual antes de publicar — não no dia, no meio do festival',
+          'Drag-to-reorder respeitando blocos do regulamento',
+        ]}
+        mockup={
+          <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <CalendarClock size={14} className="text-[#ff0068]" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cronograma · Sáb 06 jun</span>
+              </div>
+              <span className="text-[9px] font-black uppercase tracking-widest text-amber-400">1 conflito detectado</span>
+            </div>
+            <div className="p-4 space-y-2">
+              {[
+                { hour: '14:32', name: 'Lago dos Cisnes Moderno', who: 'Júlia Marques (solo)', tone: 'ok' },
+                { hour: '14:35', name: 'Carmen Reinventada',      who: 'Júlia + Cia Étoile',  tone: 'ok' },
+                { hour: '14:38', name: 'Bolero em 7/8',           who: 'Júlia (duo c/ Pedro)', tone: 'warn' },
+                { hour: '14:51', name: 'Réquiem',                 who: 'Cia Versus',           tone: 'ok' },
+              ].map((p, i) => (
+                <div key={i} className={`flex items-center gap-3 rounded-lg p-2.5 border ${
+                  p.tone === 'warn'
+                    ? 'bg-amber-500/10 border-amber-500/30'
+                    : 'bg-white/5 border-white/10'
+                }`}>
+                  <span className={`text-[10px] font-mono font-black tabular-nums shrink-0 ${
+                    p.tone === 'warn' ? 'text-amber-400' : 'text-slate-400'
+                  }`}>{p.hour}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-white truncate">{p.name}</p>
+                    <p className="text-[10px] text-slate-500 truncate">{p.who}</p>
+                  </div>
+                  {p.tone === 'warn' && (
+                    <AlertTriangle size={14} className="text-amber-400 shrink-0" />
+                  )}
+                </div>
+              ))}
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 flex items-start gap-2 mt-3">
+                <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-tight text-amber-400">Intervalo de 6min</p>
+                  <p className="text-[10px] text-slate-300 mt-0.5">Júlia precisa de 12min entre coreografias. Reordenar?</p>
+                </div>
+              </div>
             </div>
           </div>
         }
@@ -520,6 +631,9 @@ const LandingPage = () => {
                 {[
                   { f: 'IA configura festival pelo PDF',           c: true,  d: false, m: false, p: false },
                   { f: 'Júri avaliando offline (Wi-Fi caiu)',       c: true,  d: false, m: false, p: false },
+                  { f: 'Seletiva de vídeo integrada',              c: true,  d: false, m: false, p: false },
+                  { f: 'Cronograma com detecção de conflitos',     c: true,  d: false, m: false, p: false },
+                  { f: 'Júri multi-idioma (PT/EN/ES)',             c: true,  d: false, m: false, p: false },
                   { f: 'Áudio de feedback do jurado',              c: true,  d: false, m: false, p: false },
                   { f: 'Narração IA com voz profissional',         c: true,  d: false, m: false, p: false },
                   { f: 'Workshops + ingressos no mesmo carrinho',  c: true,  d: false, m: true,  p: false },
@@ -592,6 +706,59 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* ─── 9.5 DIA DO EVENTO ──────────────────────────────────────────────── */}
+      <section className="px-6 py-24 lg:py-32 border-t border-white/5">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-16">
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Dia do evento</p>
+            <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase">
+              Operação física,<br />
+              <span className="text-[#ff0068]">sem operador.</span>
+            </h2>
+            <p className="text-slate-300 text-lg max-w-2xl mx-auto leading-relaxed mt-6">
+              Credenciais impressas, check-in na entrada, palco rolando e voz anunciando.
+              Tudo o que antes precisava de 4 pessoas no Excel, hoje sai sozinho.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {[
+              {
+                icon: IdCard,
+                title: 'Credenciais físicas em PDF',
+                body: 'Imprime A6 com cordão (24 por A4) ou adesivos Pimaco 6280 prontos pra colar. Foto, nome, função e QR — sai direto no offset da gráfica do bairro.',
+              },
+              {
+                icon: QrCode,
+                title: 'Check-in QR pra 5 perfis',
+                body: 'Inscrito, ingresso de plateia, workshop, equipe e jurado — tudo num único leitor. Aponta a câmera, sistema reconhece o tipo e libera o que precisa.',
+              },
+              {
+                icon: Clock,
+                title: 'Marcação de palco com cronômetro',
+                body: 'Cronômetro respeita o tempo do regulamento. Marcador clica "Pronto" e cronograma anda sozinho. Atraso fica visível pra todo mundo na hora.',
+              },
+              {
+                icon: Mic2,
+                title: 'Narração com voz profissional',
+                body: 'Voz ElevenLabs anuncia abertura, transição e encerramento. Geração em lote antes do evento, fallback se cair. Sem locutor cobrando cachê.',
+              },
+            ].map((f, i) => {
+              const Icon = f.icon;
+              return (
+                <div key={i} className="bg-white/5 border border-white/10 rounded-3xl p-6 hover:border-[#ff0068]/30 transition-all">
+                  <div className="w-12 h-12 rounded-xl bg-[#ff0068]/10 border border-[#ff0068]/20 flex items-center justify-center mb-4">
+                    <Icon size={22} className="text-[#ff0068]" />
+                  </div>
+                  <h3 className="text-lg font-black uppercase tracking-tight text-white mb-2">{f.title}</h3>
+                  <p className="text-sm text-slate-400 leading-relaxed">{f.body}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
       {/* ─── 10. FEATURES GRID (resto que vale destaque) ──────────────────────────────────────────────── */}
       <section className="px-6 py-24 lg:py-32 border-t border-white/5 bg-gradient-to-b from-transparent via-[#ff0068]/[0.02] to-transparent">
         <div className="max-w-5xl mx-auto">
@@ -605,12 +772,15 @@ const LandingPage = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
-              { icon: Mic2,          title: 'Narração IA',           body: 'Voz profissional ElevenLabs anuncia cada coreografia. Geração em lote antes do evento, fallback se cair.' },
-              { icon: GraduationCap, title: 'Workshops integrados',  body: 'Vende workshop como entidade própria, com lotes, professor e desconto pra inscritos da mostra.' },
-              { icon: Award,         title: 'Certificados em massa', body: 'Emite tudo de uma vez ao final. Inscrito baixa quando quiser, com QR de validação pública.' },
-              { icon: Shield,        title: 'Equipe sob controle',   body: 'Coordenador, Sonoplasta, Recepção, Marcador. Cada um vê só o que precisa. Você dorme em paz.' },
-              { icon: Trophy,        title: 'Premiação configurável',body: 'Sistema por nota mínima (Ouro/Prata/Bronze) ou por colocação (1º/2º/3º). Mude num clique.' },
-              { icon: Clock,         title: 'Marcação de palco',     body: 'Cronômetro respeita o tempo do regulamento. Marcador clica "Pronto" e cronograma anda sozinho.' },
+              { icon: GraduationCap, title: 'Workshops integrados',     body: 'Vende workshop como entidade própria, com lotes, professor e combo pra inscritos da mostra. Presença por QR libera certificado.' },
+              { icon: Award,         title: 'Certificados em massa',    body: 'Mostra competitiva + workshop, dois templates. Lazy-cache: o PDF só é gerado quando o inscrito baixa. QR de validação pública.' },
+              { icon: Shield,        title: 'Equipe sob controle',      body: 'Coordenador, Sonoplasta, Recepção, Marcador, Mesário, Coordenador do Júri. Cada um vê só o que precisa. Você dorme em paz.' },
+              { icon: Trophy,        title: 'Premiação configurável',   body: 'Por nota mínima (Ouro/Prata/Bronze), por colocação (1º/2º/3º) ou prêmios especiais com deliberação da banca. Mude num clique.' },
+              { icon: Share2,        title: 'Leaderboard público',      body: 'Resultado oficial em link compartilhável: capa, medalhistas por categoria e exportação PDF. Bailarino reposta no story.' },
+              { icon: Globe,         title: 'Júri em 3 idiomas',        body: 'Jurado escolhe PT, EN ou ES no PIN — termos técnicos traduzidos. Pronto pra evento internacional sem refazer banca.' },
+              { icon: Smartphone,    title: 'PWA instalável',           body: 'Bailarino, jurado e equipe instalam o app pelo navegador, sem app store. Ícone na home, abre offline, atualiza sozinho.' },
+              { icon: Mail,          title: '8 e-mails automáticos',    body: 'Pagamento confirmado, ingresso enviado, presença registrada, certificado disponível, resultado publicado. Zero copy-paste.' },
+              { icon: Sparkles,      title: 'Modo demo recriável',      body: 'Festival completo (50 inscrições, workshops, júri, equipe) clonável em 1 clique. Treina equipe sem sujar dados reais.' },
             ].map((f, i) => {
               const Icon = f.icon;
               return (
@@ -640,7 +810,7 @@ const LandingPage = () => {
           <p className="text-slate-300 text-lg max-w-2xl mx-auto mb-8 leading-relaxed">
             Acessa nosso evento de demonstração ao vivo: festival completo com 50 inscrições,
             150 bailarinos fictícios, 3 jurados com PIN, workshops, ingressos e resultados publicados.
-            Navega como se fosse seu evento.
+            Recriável em 1 clique — testa, brinca, quebra. Sem sujar dados reais.
           </p>
           <button
             onClick={() => navigate('/festivais')}
