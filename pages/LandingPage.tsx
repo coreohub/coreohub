@@ -69,7 +69,7 @@ const LandingPage = () => {
       <section className="relative min-h-screen flex flex-col px-6 pt-24 pb-12 overflow-hidden">
         {/* Foto de fundo — palco em ação */}
         <img
-          src="/hero-festival.jpg"
+          src="/hero-festival.png"
           alt=""
           aria-hidden="true"
           className="absolute inset-0 w-full h-full object-cover object-center opacity-40"
