@@ -86,15 +86,16 @@ const LandingPage = () => {
               </span>
             </div>
 
-            <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter uppercase leading-[0.92]">
-              O festival dos seus sonhos<br />
-              cabe num <span className="text-[#ff0068]">único link.</span>
+            <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tighter uppercase leading-[0.95]">
+              A primeira <span className="text-[#ff0068]">IA</span> que monta<br />
+              seu festival de dança<br />
+              em <span className="text-[#ff0068]">30 segundos.</span>
             </h1>
 
             <p className="text-slate-300 text-lg md:text-2xl font-medium max-w-3xl mx-auto leading-relaxed">
-              Inscrições, jurados, palco, ingressos e certificados em uma plataforma só.
+              Cole o regulamento. Inscrições, banca, palco, ingressos e certificados num link só.
               <br className="hidden md:block" />
-              <span className="text-slate-400">Você foca na arte. CoreoHub cuida da operação.</span>
+              <span className="text-slate-400">Você produz arte. CoreoHub cuida do resto.</span>
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
@@ -106,16 +107,18 @@ const LandingPage = () => {
                   Criar meu festival grátis <ChevronRight size={18} />
                 </span>
               </button>
-              <button
-                onClick={() => navigate('/festivais')}
-                className="px-8 py-5 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-white/10 transition-all"
+              <a
+                href="https://wa.me/5517997936169?text=Ol%C3%A1%2C%20Gostaria%20de%20Falar%20sobre%20a%20CoreoHub"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-8 py-5 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2"
               >
-                Ver festivais ativos →
-              </button>
+                Falar no WhatsApp →
+              </a>
             </div>
 
             <p className="text-xs text-slate-500">
-              Sem cartão de crédito · Sem mensalidade · Você só paga quando vende
+              Sem mensalidade · Sem planilha · Sem locutor · Você só paga quando vende
             </p>
           </motion.div>
         </div>
@@ -141,22 +144,20 @@ const LandingPage = () => {
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-rose-400 mb-3">
-              Você reconhece esses pesadelos?
+              Reconhece a rotina?
             </p>
             <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase">
-              Festival não é improviso.<br />
-              <span className="text-rose-400">Mas todo mundo improvisa.</span>
+              Você queria produzir arte.<br />
+              <span className="text-rose-400">Hoje produz planilha.</span>
             </h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
-              { title: 'Wi-Fi do ginásio cai no meio da apuração', body: 'Jurado perde nota, banca para, produtor vira saco de pancada na frente de 500 pais.' },
               { title: 'Inscrição cobrada no Pix manual', body: 'Bailarino paga, manda print, você confere planilha, esquece de aprovar. 3 horas por dia checando comprovantes.' },
-              { title: 'Resultado sai 3 dias depois', body: 'Você ainda calculando médias na planilha enquanto bailarinos enchem seu DM. Reputação queimando junto.' },
               { title: 'Regulamento que ninguém lê', body: 'Você escreve, ninguém abre, todo mundo manda DM perguntando o mesmo. Suporte virou seu trabalho de tempo integral.' },
+              { title: 'Resultado sai 3 dias depois', body: 'Você ainda calculando médias na planilha enquanto bailarinos enchem seu DM. Reputação queimando junto.' },
               { title: 'Certificado feito no Photoshop', body: 'Você fica até 2h da manhã substituindo nome em template. Pra um festival de 200 bailarinos. Todo ano.' },
-              { title: 'Equipe com acesso total ao painel', body: 'Sua recepcionista vê dinheiro, sua marcadora bagunça cronograma, você nunca dorme sem medo.' },
             ].map((p, i) => (
               <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:border-rose-500/30 transition-colors">
                 <div className="flex items-start gap-3">
@@ -187,13 +188,14 @@ const LandingPage = () => {
             <span className="text-[#ff0068]">numa plataforma só.</span>
           </h2>
           <p className="text-slate-300 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
-            CoreoHub é o sistema operacional do seu festival. IA configura o evento em 30 segundos.
-            Júri avalia mesmo offline. Bailarino se inscreve, paga e baixa certificado num único link.
+            A CoreoHub é o sistema operacional do seu festival.{' '}
+            <span className="text-white font-bold">A IA configura o evento em 30 segundos.</span>{' '}
+            Bailarino se inscreve, paga e baixa certificado num único link.
             Você vê tudo em tempo real, no celular ou no computador.
           </p>
 
           {/* Fluxo visual */}
-          <div className="mt-16 grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div className="mt-16 grid grid-cols-5 gap-2 md:gap-3">
             {[
               { icon: FileText, label: 'PDF do regulamento' },
               { icon: Sparkles, label: 'IA configura' },
@@ -203,14 +205,13 @@ const LandingPage = () => {
             ].map((step, i) => {
               const Icon = step.icon;
               return (
-                <React.Fragment key={i}>
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="w-14 h-14 rounded-2xl bg-[#ff0068]/10 border border-[#ff0068]/30 flex items-center justify-center">
-                      <Icon size={22} className="text-[#ff0068]" />
-                    </div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-300 text-center">{step.label}</p>
+                <div key={i} className="flex flex-col items-center gap-2">
+                  <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-[#ff0068]/10 border border-[#ff0068]/30 flex items-center justify-center">
+                    <Icon size={18} className="text-[#ff0068] md:hidden" />
+                    <Icon size={22} className="text-[#ff0068] hidden md:block" />
                   </div>
-                </React.Fragment>
+                  <p className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-slate-300 text-center leading-tight">{step.label}</p>
+                </div>
               );
             })}
           </div>
@@ -223,7 +224,7 @@ const LandingPage = () => {
         title={<>Cole o PDF do <span className="text-[#ff0068]">regulamento</span>.<br />Festival pronto pra publicar.</>}
         body="Nossa IA lê o regulamento (ou edital público de governo) e extrai TUDO: categorias, formações, lotes de preço, prêmios, critérios, tolerâncias. Em 30 segundos você está revisando, não digitando."
         bullets={[
-          'Reconhece edital JOMI, Bolsa Cultura, mostras municipais',
+          'Reconhece editais públicos, regulamentos próprios e mostras municipais',
           'Extrai ingressos, workshops, programação e patrocinadores',
           'Separa preâmbulo legal do que importa pra você',
           'Você revisa e publica — sem decifrar PDF de 40 páginas',
@@ -232,7 +233,7 @@ const LandingPage = () => {
           <div className="bg-slate-900 border border-white/10 rounded-2xl p-5 space-y-3 shadow-2xl">
             <div className="flex items-center gap-2 pb-3 border-b border-white/10">
               <FileText size={14} className="text-[#ff0068]" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">regulamento-jomi-2026.pdf</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">regulamento-seu-festival-2026.pdf</span>
             </div>
             {[
               { label: 'Categorias detectadas', value: 'Infantil · Juvenil · Adulto · Profissional', color: 'emerald' },
@@ -259,64 +260,15 @@ const LandingPage = () => {
         }
       />
 
-      {/* ─── 5. Banca offline ──────────────────────────────────────────────── */}
-      <FeatureSection
-        reverse
-        kicker="Único do mercado"
-        title={<>Wi-Fi caiu? <span className="text-[#ff0068]">Festival não para.</span></>}
-        body="Jurado avalia no tablet. Sistema salva localmente. Quando rede voltar, sincroniza sozinho. Nunca perde uma nota — mesmo que o ginásio fique offline o evento inteiro. É o único sistema do mercado brasileiro com isso."
-        bullets={[
-          'Login do jurado por PIN de 4 dígitos (sem senha, sem login social)',
-          'Tablet vira terminal kiosk — instala como app, abre no PIN automaticamente',
-          'Áudio de até 30 minutos por avaliação (com waveform real)',
-          'Indicador visual de fila pendente — jurado sabe se há nota não enviada',
-        ]}
-        mockup={
-          <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between p-3 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-rose-400">Ao Vivo</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/10 border border-amber-500/30">
-                  <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
-                  <span className="text-[9px] font-black text-amber-400">2 sincronizando</span>
-                </div>
-              </div>
-            </div>
-            <div className="p-5 space-y-4">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Coreografia atual</p>
-                <p className="text-lg font-black uppercase tracking-tight text-white mt-1">Lago dos Cisnes Moderno</p>
-                <p className="text-[10px] text-slate-400">Ballet · Adulto · Solo</p>
-              </div>
-              <div className="grid grid-cols-5 gap-1.5">
-                {['Performance', 'Técnica', 'Música', 'Criatividade', 'Figurino'].map((c, i) => (
-                  <div key={i} className="bg-white/5 border border-white/10 rounded-lg p-2 text-center">
-                    <p className="text-[8px] font-black uppercase tracking-widest text-slate-500">{c}</p>
-                    <p className="text-lg font-black tabular-nums text-white mt-1">{[9.2, 8.8, 9.0, 9.1, 8.5][i]}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="pt-2 flex items-center justify-between">
-                <span className="text-[10px] text-slate-500">Média ponderada</span>
-                <span className="text-2xl font-black text-[#ff0068] tabular-nums">8.92</span>
-              </div>
-            </div>
-          </div>
-        }
-      />
-
       {/* ─── 5.4 SELETIVA DE VÍDEO ──────────────────────────────────────────────── */}
       <FeatureSection
-        kicker="Banca pré-evento"
-        title={<>Pré-classifica por <span className="text-[#ff0068]">vídeo</span>.<br />Cronograma só com quem passou.</>}
-        body="Bailarino envia o vídeo direto no formulário de inscrição. Júri assiste e classifica antes do festival, do próprio tablet, sem precisar de dia extra de eliminatórias. No dia, o cronograma já vem filtrado só com os classificados — você economiza palco, banca e horário."
+        kicker="Seletiva de Vídeo"
+        title={<>Seletiva por <span className="text-[#ff0068]">vídeo</span>.<br />Cronograma só com quem passou.</>}
+        body="Bailarino envia o vídeo direto no formulário de inscrição. A banca avalia pelo tablet, antes do festival começar — sem precisar de dia extra de eliminatórias. No dia, o cronograma já vem filtrado só com os classificados: você economiza palco, banca e horário."
         bullets={[
           'Vídeo enviado no cadastro (link YouTube ou upload direto)',
-          'Júri pré-classifica remoto, na semana antes do evento',
-          'Cronograma do dia mostra só os classificados — zero retrabalho',
+          'Banca avalia pelo tablet, na semana antes do festival',
+          'Cronograma do dia já vem filtrado com os classificados',
           'Notificação automática pro inscrito (passou / não passou)',
         ]}
         mockup={
@@ -373,12 +325,12 @@ const LandingPage = () => {
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
           <div className="absolute inset-0 bg-gradient-to-r from-slate-950/60 via-transparent to-transparent" />
 
-          {/* Badge AO VIVO no canto superior */}
-          <div className="absolute top-6 right-6 md:top-10 md:right-10">
+          {/* Badge no canto superior esquerdo — pequeno, fora da imagem do tablet */}
+          <div className="absolute top-6 left-6 md:top-10 md:left-10 max-w-[260px]">
             <div className="inline-flex items-center gap-2 px-3 py-2 bg-rose-500/20 border border-rose-500/40 backdrop-blur-md rounded-full">
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-white">
-                Ao vivo · 3 jurados conectados
+              <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-white whitespace-nowrap">
+                Banca avalia no tablet em tempo real
               </span>
             </div>
           </div>
@@ -394,10 +346,6 @@ const LandingPage = () => {
                 <span className="text-[#ff0068]">É como funciona</span><br />
                 no seu festival.
               </h2>
-              <p className="text-slate-300 text-base md:text-xl max-w-2xl mt-6 leading-relaxed">
-                Tablet em mãos, microfone no áudio, palco rolando.
-                Banca avalia em tempo real — mesmo se a rede do ginásio cair.
-              </p>
             </div>
           </div>
         </div>
@@ -760,7 +708,7 @@ const LandingPage = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {[
               {
                 icon: IdCard,
@@ -777,11 +725,6 @@ const LandingPage = () => {
                 title: 'Marcação de palco com cronômetro',
                 body: 'Cronômetro respeita o tempo do regulamento. Marcador clica "Pronto" e cronograma anda sozinho. Atraso fica visível pra todo mundo na hora.',
               },
-              {
-                icon: Mic2,
-                title: 'Narração com voz profissional',
-                body: 'Voz ElevenLabs anuncia abertura, transição e encerramento. Geração em lote antes do evento, fallback se cair. Sem locutor cobrando cachê.',
-              },
             ].map((f, i) => {
               const Icon = f.icon;
               return (
@@ -797,6 +740,63 @@ const LandingPage = () => {
           </div>
         </div>
       </section>
+
+      {/* ─── 9.7 NARRAÇÃO IA ──────────────────────────────────────────────── */}
+      <FeatureSection
+        reverse
+        kicker="Sem locutor cobrando cachê"
+        title={<>Voz <span className="text-[#ff0068]">profissional</span> anuncia<br />cada coreografia.</>}
+        body="A IA gera a narração de abertura, transição e encerramento com voz natural em português. Geração em lote antes do evento, fallback automático se a internet cair. Acabou ficar refém de locutor cobrando cachê — e acabou microfone do produtor estourando ao vivo."
+        bullets={[
+          'Voz natural em português, ritmo de locutor profissional',
+          'Lê nome do bailarino, coreografia, categoria e estúdio',
+          'Geração em lote antes do festival — pronto pra rodar offline',
+          'Customize abertura, transições e encerramento separadamente',
+        ]}
+        mockup={
+          <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <Mic2 size={14} className="text-[#ff0068]" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Narração · Bloco 03</span>
+              </div>
+              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400">12 / 38 geradas</span>
+            </div>
+            <div className="p-4 space-y-3">
+              {[
+                { tag: 'Abertura', text: 'A próxima coreografia... Lago dos Cisnes Moderno.', dur: '0:14' },
+                { tag: 'Transição', text: 'Aplausos pra Cia Étoile. Em seguida...', dur: '0:08' },
+                { tag: 'Encerramento', text: 'Encerramos o bloco infantil. Voltamos em 15 minutos.', dur: '0:11' },
+              ].map((n, i) => (
+                <div key={i} className="bg-white/5 border border-white/10 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-[#ff0068]">{n.tag}</span>
+                    <span className="text-[10px] text-slate-500 font-mono tabular-nums">{n.dur}</span>
+                  </div>
+                  <p className="text-xs text-slate-300 italic mb-2 leading-relaxed">"{n.text}"</p>
+                  {/* Waveform fake */}
+                  <div className="flex items-center gap-0.5 h-6">
+                    {Array.from({ length: 32 }).map((_, j) => {
+                      const h = ((j * 7 + i * 11) % 100) / 100;
+                      return (
+                        <div
+                          key={j}
+                          className="flex-1 bg-[#ff0068]/40 rounded-full"
+                          style={{ height: `${20 + h * 80}%` }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="px-4 pb-4 border-t border-white/10 pt-3 flex items-center justify-between">
+              <span className="text-[10px] text-slate-500">Voz: pt-BR · masculina</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Cache offline ativo</span>
+            </div>
+          </div>
+        }
+      />
 
       {/* ─── 10. FEATURES GRID (resto que vale destaque) ──────────────────────────────────────────────── */}
       <section className="px-6 py-24 lg:py-32 border-t border-white/5 bg-gradient-to-b from-transparent via-[#ff0068]/[0.02] to-transparent">
@@ -841,21 +841,21 @@ const LandingPage = () => {
         <div className="max-w-4xl mx-auto text-center bg-gradient-to-br from-[#ff0068]/15 via-white/5 to-purple-700/10 border border-[#ff0068]/20 rounded-3xl p-10 lg:p-16">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#ff0068]/10 border border-[#ff0068]/30 rounded-full mb-6">
             <Zap size={12} className="text-[#ff0068]" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-[#ff0068]">Sem cadastro pra ver</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-[#ff0068]">Festival demo navegável</span>
           </div>
           <h2 className="text-3xl md:text-5xl font-black tracking-tighter uppercase mb-4">
-            Veja funcionando antes de criar conta.
+            Crie sua conta e<br />navegue por um festival completo.
           </h2>
           <p className="text-slate-300 text-lg max-w-2xl mx-auto mb-8 leading-relaxed">
-            Acessa nosso evento de demonstração ao vivo: festival completo com 50 inscrições,
+            Ao criar conta, você ganha acesso a um evento demo com 50 inscrições,
             150 bailarinos fictícios, 3 jurados com PIN, workshops, ingressos e resultados publicados.
             Recriável em 1 clique — testa, brinca, quebra. Sem sujar dados reais.
           </p>
           <button
-            onClick={() => navigate('/festivais')}
+            onClick={() => navigate('/criar-evento')}
             className="inline-flex items-center gap-2 px-8 py-4 bg-white text-slate-950 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-slate-100 active:scale-95 transition-all"
           >
-            Abrir demo agora <ArrowRight size={18} />
+            Criar conta e abrir o demo <ArrowRight size={18} />
           </button>
         </div>
       </section>
@@ -926,7 +926,7 @@ const LandingPage = () => {
               <div className="relative aspect-square rounded-3xl overflow-hidden bg-gradient-to-br from-[#ff0068]/30 via-purple-700/20 to-slate-900 border border-white/10">
                 {/* Placeholder até receber foto real — substituir src abaixo */}
                 <img
-                  src="/ticko-bboy.jpg"
+                  src="/tickobboy.jpg.jpeg"
                   alt="Ticko Bboy, fundador do CoreoHub"
                   className="w-full h-full object-cover"
                   loading="lazy"
@@ -974,50 +974,6 @@ const LandingPage = () => {
                 </p>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── 12. DEPOIMENTOS (placeholder pra trocar) ──────────────────────────────────────────────── */}
-      <section className="px-6 py-24 lg:py-32 border-t border-white/5">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-12">
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Quem usa, fala</p>
-            <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase">
-              Produtores que dormem<br />a noite inteira.
-            </h2>
-            <p className="text-[10px] text-amber-400 font-black uppercase tracking-widest mt-4 italic">
-              ⚠ Exemplos · troque por depoimentos reais antes de publicar
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              {
-                name: 'Mariana Lopes',
-                role: 'Cia Étoile · Rio de Janeiro',
-                quote: 'Antes eu passava 2 dias depois do festival fechando planilha de notas. Agora o resultado sai 10 minutos depois da última apresentação. Só consegui dormir cedo de novo por causa disso.',
-              },
-              {
-                name: 'Renato Ferraz',
-                role: 'Festival Nordeste em Movimento',
-                quote: 'Wi-Fi do ginásio caiu duas vezes no segundo dia. Antes seria caos. CoreoHub manteve a banca avaliando e quando voltou, sincronizou tudo. Nem o público percebeu.',
-              },
-              {
-                name: 'Camila Tavares',
-                role: 'Mostra Municipal Sorocaba',
-                quote: 'Colei o edital da prefeitura no parser. Em 30 segundos tinha categoria, formação, prêmio, tudo configurado. Economizei 4 horas só nesse setup.',
-              },
-            ].map((t, i) => (
-              <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-6">
-                <Sparkles size={16} className="text-[#ff0068] mb-3" />
-                <p className="text-slate-200 text-sm leading-relaxed mb-6">"{t.quote}"</p>
-                <div className="pt-4 border-t border-white/10">
-                  <p className="text-sm font-black uppercase tracking-tight text-white">{t.name}</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">{t.role}</p>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       </section>
