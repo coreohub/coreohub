@@ -289,8 +289,8 @@ const LandingPage = () => {
         <div className="relative w-full h-[70vh] md:h-[85vh] min-h-[500px] max-h-[800px]">
           <img
             src="https://i.imgur.com/hGkjZ6J.jpg"
-            alt="Jurado avaliando uma apresentação ao vivo num festival CoreoHub: tablet em mãos exibindo o terminal, microfone para feedback de áudio, palco iluminado ao fundo"
-            className="absolute inset-0 w-full h-full object-cover"
+            alt="Jurada avaliando uma apresentação ao vivo num festival CoreoHub: tablet em mãos exibindo o terminal, microfone para feedback de áudio, palco iluminado ao fundo"
+            className="absolute inset-0 w-full h-full object-cover object-[70%_center] md:object-center"
             loading="lazy"
           />
 
@@ -298,12 +298,12 @@ const LandingPage = () => {
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
           <div className="absolute inset-0 bg-gradient-to-r from-slate-950/60 via-transparent to-transparent" />
 
-          {/* Badge no canto superior esquerdo — pequeno, fora da imagem do tablet */}
-          <div className="absolute top-6 left-6 md:top-10 md:left-10 max-w-[260px]">
+          {/* Badge AO VIVO no canto superior esquerdo */}
+          <div className="absolute top-6 left-6 md:top-10 md:left-10">
             <div className="inline-flex items-center gap-2 px-3 py-2 bg-rose-500/20 border border-rose-500/40 backdrop-blur-md rounded-full">
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-              <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-white whitespace-nowrap">
-                Banca avalia no tablet em tempo real
+              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-white">
+                Ao vivo · 3 jurados conectados
               </span>
             </div>
           </div>
@@ -315,9 +315,8 @@ const LandingPage = () => {
                 Em campo
               </p>
               <h2 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tighter uppercase leading-[0.95] max-w-3xl">
-                Não é mockup.<br />
-                <span className="text-[#ff0068]">É como funciona</span><br />
-                no seu festival.
+                Banca avalia no tablet<br />
+                em <span className="text-[#ff0068]">tempo real.</span>
               </h2>
             </div>
           </div>
