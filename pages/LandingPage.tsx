@@ -1,27 +1,66 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   ChevronRight, Sparkles, FileText, Wifi, Link as LinkIcon, DollarSign,
   Trophy, Shield, Award, GraduationCap, Mic2, Check, X, ChevronDown,
   Zap, Users, Clock, AlertTriangle, ArrowRight,
   Video, CalendarClock, Globe, IdCard, QrCode,
-  Smartphone, Share2, Mail, Play,
+  Smartphone, Share2, Mail, Play, MapPin, Search,
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { supabase } from '../services/supabase';
 
 const PINK = '#ff0068';
+
+interface FestivalAtivo {
+  id: string;
+  slug: string | null;
+  name: string;
+  cover_url: string | null;
+  start_date: string | null;
+  city: string | null;
+  state: string | null;
+}
 
 const LandingPage = () => {
   const navigate = useNavigate();
   const [calcInscricoes, setCalcInscricoes] = useState(200);
   const [calcTicket, setCalcTicket] = useState(150);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [festivaisAtivos, setFestivaisAtivos] = useState<FestivalAtivo[]>([]);
+
+  useEffect(() => {
+    const fetchAtivos = async () => {
+      const today = new Date().toISOString().slice(0, 10);
+      try {
+        const { data, error } = await supabase
+          .from('events')
+          .select('id, slug, name, cover_url, start_date, city, state, is_demo')
+          .eq('is_public', true)
+          .eq('is_demo', false)
+          .gte('start_date', today)
+          .order('start_date', { ascending: true })
+          .limit(8);
+        if (error) throw error;
+        setFestivaisAtivos((data ?? []) as FestivalAtivo[]);
+      } catch (err) {
+        console.error('[LP] erro ao buscar festivais ativos:', err);
+      }
+    };
+    fetchAtivos();
+  }, []);
 
   const calcReceita = calcInscricoes * calcTicket;
   const calcComissao = calcReceita * 0.10;
   const calcLiquido = calcReceita - calcComissao;
   const fmtBRL = (n: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(n);
+
+  const fmtFestivalDate = (d?: string | null) => {
+    if (!d) return 'Em breve';
+    const dt = new Date(d + 'T12:00:00');
+    return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-white selection:bg-[#ff0068]/30 overflow-x-hidden">
@@ -821,6 +860,119 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* ─── 11.5 FESTIVAIS ATIVOS (condicional — só renderiza com 3+ eventos) ──────────────────────────────────────────────── */}
+      {festivaisAtivos.length >= 3 && (
+        <section className="px-6 py-24 lg:py-32 border-t border-white/5">
+          <div className="max-w-6xl mx-auto">
+            <div className="text-center mb-12">
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Acontecendo agora</p>
+              <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase">
+                Festivais ativos<br />
+                <span className="text-[#ff0068]">no CoreoHub.</span>
+              </h2>
+              <p className="text-slate-300 text-lg max-w-2xl mx-auto leading-relaxed mt-6">
+                Eventos com inscrições abertas neste momento — não é mockup, é a vitrine pública dos produtores que já estão rodando.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {festivaisAtivos.slice(0, 8).map((f) => (
+                <Link
+                  key={f.id}
+                  to={`/evento/${f.slug ?? f.id}`}
+                  className="group relative rounded-2xl overflow-hidden bg-slate-900 border border-white/10 hover:border-[#ff0068]/40 transition-all aspect-[3/4]"
+                >
+                  {f.cover_url ? (
+                    <img
+                      src={f.cover_url}
+                      alt={f.name}
+                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 bg-gradient-to-br from-[#ff0068]/20 via-purple-700/10 to-slate-900" />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/50 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-4">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] mb-1">
+                      {fmtFestivalDate(f.start_date)}
+                      {f.city && ` · ${f.city}${f.state ? `/${f.state}` : ''}`}
+                    </p>
+                    <p className="text-sm font-black uppercase tracking-tight text-white leading-tight line-clamp-2">{f.name}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+
+            <div className="text-center mt-10">
+              <button
+                onClick={() => navigate('/festivais')}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-white/10 transition-all"
+              >
+                Ver todos os festivais <ArrowRight size={14} />
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ─── 11.7 FEITO POR QUEM DANÇA (founder manifesto) ──────────────────────────────────────────────── */}
+      <section className="relative px-6 py-24 lg:py-32 border-t border-white/5 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_30%,rgba(255,0,104,0.08),transparent_70%)]" />
+        <div className="relative max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-10 lg:gap-14 items-center">
+            {/* Foto */}
+            <div className="lg:col-span-2">
+              <div className="relative aspect-square rounded-3xl overflow-hidden bg-gradient-to-br from-[#ff0068]/30 via-purple-700/20 to-slate-900 border border-white/10">
+                {/* Placeholder até receber foto real — substituir src abaixo */}
+                <img
+                  src="/ticko-bboy.jpg"
+                  alt="Ticko Bboy, fundador do CoreoHub"
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <span className="text-7xl font-black tracking-tighter text-white/20">TB</span>
+                </div>
+                <div className="absolute bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-slate-950/90 to-transparent">
+                  <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#ff0068]">Fundador</p>
+                  <p className="text-lg font-black uppercase tracking-tight text-white mt-1">Ticko Bboy</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Manifesto */}
+            <div className="lg:col-span-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Por trás do CoreoHub</p>
+              <h2 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter uppercase leading-[0.95] mb-8">
+                Feito por <span className="text-[#ff0068]">quem dança.</span>
+              </h2>
+
+              <div className="space-y-5 text-slate-300 text-base md:text-lg leading-relaxed">
+                <p>
+                  Há mais de 20 anos eu vivo as danças urbanas — pisei em palco no Brasil, Portugal, Equador,
+                  França e Argentina, e produzi muito festival com planilha, comprovante de Pix e
+                  Photoshop até as 2 da manhã.
+                </p>
+                <p>
+                  CoreoHub nasceu da dor que eu mesmo tive. Não é software de quem viu o festival de longe —
+                  é a ferramenta que eu queria ter tido em cada evento que produzi.
+                </p>
+              </div>
+
+              <div className="mt-8 pt-6 border-t border-white/10">
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  <span className="text-white font-bold">Ticko Bboy</span> — empreendedor cultural, dançarino e MBA em Dança.
+                  Fundador da <span className="text-white">Usualdance</span> e do CoreoHub.
+                  Atua como ponte entre culturas urbanas, formação artística e o mercado da dança.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ─── 12. DEPOIMENTOS (placeholder pra trocar) ──────────────────────────────────────────────── */}
       <section className="px-6 py-24 lg:py-32 border-t border-white/5">
         <div className="max-w-5xl mx-auto">
@@ -924,6 +1076,81 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* ─── 13.5 BAILARINO PROCURANDO FESTIVAL (lado demanda) ──────────────────────────────────────────────── */}
+      <section className="relative px-6 py-24 lg:py-32 border-t border-white/5 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(124,58,237,0.12),transparent_60%)]" />
+        <div className="relative max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-purple-400 mb-3">Pra quem dança</p>
+              <h2 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter uppercase leading-[0.95] mb-6">
+                Procurando festival<br />pra <span className="text-[#ff0068]">se inscrever?</span>
+              </h2>
+              <p className="text-slate-300 text-lg leading-relaxed mb-6">
+                Vitrine nacional de festivais com inscrições abertas — filtra por estado, mês e modalidade.
+                Cadastra, paga e baixa o certificado num único link, do celular.
+              </p>
+              <ul className="space-y-3 mb-8">
+                {[
+                  'Inscrição direta em 4 cliques (sem planilha, sem boleto manual)',
+                  'Solo, Duo, Trio ou Grupo — escolhe a modalidade no site',
+                  'Recebe credencial com QR pra check-in na entrada',
+                  'Certificado com validação pública, baixa quando quiser',
+                ].map((b, i) => (
+                  <li key={i} className="flex items-start gap-3 text-slate-300">
+                    <Check size={16} className="text-purple-400 shrink-0 mt-1" />
+                    <span className="text-sm leading-relaxed">{b}</span>
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => navigate('/festivais')}
+                className="inline-flex items-center gap-2 px-8 py-4 bg-purple-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_20px_60px_rgba(124,58,237,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-transform"
+              >
+                <Search size={16} />
+                Encontrar meu festival
+              </button>
+            </div>
+
+            <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 shadow-2xl">
+              <div className="flex items-center gap-2 pb-4 border-b border-white/10 mb-4">
+                <Search size={14} className="text-purple-400" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Buscar festivais</span>
+              </div>
+              <div className="space-y-3">
+                <div className="bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 flex items-center gap-2">
+                  <MapPin size={14} className="text-slate-500 shrink-0" />
+                  <span className="text-xs text-slate-300">São Paulo</span>
+                  <span className="ml-auto text-[9px] font-black uppercase tracking-widest text-purple-400">SP</span>
+                </div>
+                <div className="bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 flex items-center gap-2">
+                  <CalendarClock size={14} className="text-slate-500 shrink-0" />
+                  <span className="text-xs text-slate-300">Junho · Julho · Agosto</span>
+                </div>
+                <div className="bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 flex items-center gap-2">
+                  <Users size={14} className="text-slate-500 shrink-0" />
+                  <span className="text-xs text-slate-300">Solo · Duo · Grupo</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  {[
+                    { name: 'Festival Nordeste', city: 'Recife/PE', date: '12 jun' },
+                    { name: 'Mostra Sul', city: 'Curitiba/PR', date: '24 jun' },
+                    { name: 'CoreoHub Open', city: 'São Paulo/SP', date: '06 jun' },
+                    { name: 'JOMI 2026', city: 'Goiânia/GO', date: '15 jul' },
+                  ].map((f, i) => (
+                    <div key={i} className="bg-white/5 border border-white/10 rounded-lg p-2.5">
+                      <p className="text-[10px] font-black uppercase tracking-tight text-white truncate">{f.name}</p>
+                      <p className="text-[9px] text-slate-500 truncate mt-0.5">{f.city}</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] mt-1">{f.date}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ─── 14. CTA FINAL ──────────────────────────────────────────────── */}
       <section className="relative px-6 py-24 lg:py-32 overflow-hidden border-t border-white/5">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,0,104,0.18),transparent_70%)]" />
@@ -967,30 +1194,62 @@ const LandingPage = () => {
       </section>
 
       {/* ─── FOOTER ──────────────────────────────────────────────── */}
-      <footer className="px-6 py-12 border-t border-white/5">
-        <div className="max-w-5xl mx-auto">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <img src="/coreohub-avatar.png" alt="CoreoHub" className="w-10 h-10" />
-              <div>
-                <p className="text-base font-black uppercase tracking-tighter text-white">CoreoHub</p>
-                <p className="text-[10px] text-slate-500">Gestão Inteligente para Festivais de Dança</p>
+      <footer className="px-6 py-16 border-t border-white/5">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
+            <div className="md:col-span-2">
+              <div className="flex items-center gap-3 mb-4">
+                <img src="/coreohub-avatar.png" alt="CoreoHub" className="w-10 h-10" />
+                <div>
+                  <p className="text-base font-black uppercase tracking-tighter text-white">CoreoHub</p>
+                  <p className="text-[10px] text-slate-500">Gestão Inteligente para Festivais de Dança</p>
+                </div>
               </div>
+              <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
+                Sistema operacional pra festivais e mostras de dança. Inscrições, jurados, palco,
+                ingressos e certificados num único link.
+              </p>
             </div>
-            <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-x-6 gap-y-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
-              <a href="https://app.coreohub.com/festivais"    className="hover:text-[#ff0068]">Festivais ativos</a>
-              <a href="https://app.coreohub.com/login"        className="hover:text-[#ff0068]">Entrar</a>
-              <Link to="/estudios"                             className="hover:text-[#ff0068]">Para estúdios</Link>
-              <Link to="/governo"                              className="hover:text-[#ff0068]">Para o setor público</Link>
-              <a href="mailto:contato@coreohub.com"           className="hover:text-[#ff0068]">contato@coreohub.com</a>
-              <a href="https://wa.me/5517997936169"
-                 target="_blank" rel="noopener noreferrer"
-                 className="hover:text-[#ff0068]">+55 17 99793-6169</a>
+
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-300 mb-4">Produto</p>
+              <ul className="space-y-2 text-[11px] text-slate-400">
+                <li><a href="https://app.coreohub.com/festivais" className="hover:text-[#ff0068]">Festivais ativos</a></li>
+                <li><a href="https://app.coreohub.com/criar-evento" className="hover:text-[#ff0068]">Criar meu festival</a></li>
+                <li><a href="https://app.coreohub.com/login" className="hover:text-[#ff0068]">Entrar</a></li>
+                <li><Link to="/estudios" className="hover:text-[#ff0068]">Para estúdios</Link></li>
+                <li><Link to="/governo" className="hover:text-[#ff0068]">Para o setor público</Link></li>
+              </ul>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-300 mb-4">Contato</p>
+              <ul className="space-y-2 text-[11px] text-slate-400">
+                <li><a href="mailto:contato@coreohub.com" className="hover:text-[#ff0068]">contato@coreohub.com</a></li>
+                <li>
+                  <a href="https://wa.me/5517997936169" target="_blank" rel="noopener noreferrer" className="hover:text-[#ff0068]">
+                    +55 17 99793-6169
+                  </a>
+                </li>
+                <li>
+                  <a href="https://instagram.com/coreohub" target="_blank" rel="noopener noreferrer" className="hover:text-[#ff0068]">
+                    @coreohub
+                  </a>
+                </li>
+              </ul>
             </div>
           </div>
-          <p className="text-[10px] text-slate-600 text-center mt-8">
-            © {new Date().getFullYear()} CoreoHub. Todos os direitos reservados.
-          </p>
+
+          <div className="border-t border-white/5 pt-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="text-[10px] text-slate-500 leading-relaxed">
+              <p className="font-bold text-slate-400 uppercase tracking-widest text-[9px] mb-1">CoreoHub Tecnologia LTDA</p>
+              <p>CNPJ: 00.000.000/0001-00 · São José do Rio Preto/SP</p>
+              <p className="mt-1">Pagamentos processados pela Asaas IP S.A. (CNPJ 19.540.550/0001-21), instituição de pagamento autorizada pelo Banco Central.</p>
+            </div>
+            <p className="text-[10px] text-slate-600 shrink-0">
+              © {new Date().getFullYear()} CoreoHub. Todos os direitos reservados.
+            </p>
+          </div>
         </div>
       </footer>
     </div>
