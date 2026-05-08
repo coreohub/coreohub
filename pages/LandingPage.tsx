@@ -67,7 +67,17 @@ const LandingPage = () => {
 
       {/* ─── 1. HERO ──────────────────────────────────────────────── */}
       <section className="relative min-h-screen flex flex-col px-6 pt-24 pb-12 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(255,0,104,0.18),transparent_60%)]" />
+        {/* Foto de fundo — palco em ação */}
+        <img
+          src="/hero-festival.jpg"
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover object-center opacity-40"
+        />
+        {/* Overlay escuro pra garantir contraste com a tipografia */}
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/85 via-slate-950/75 to-slate-950" />
+        {/* Glow rosa da marca (preserva identidade) */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(255,0,104,0.22),transparent_60%)]" />
         <div className="absolute -top-40 -left-40 w-[500px] h-[500px] bg-[#ff0068]/10 blur-[140px] rounded-full" />
         <div className="absolute -bottom-40 -right-40 w-[500px] h-[500px] bg-purple-700/10 blur-[140px] rounded-full" />
 
