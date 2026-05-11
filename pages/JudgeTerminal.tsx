@@ -2036,7 +2036,7 @@ const JudgeTerminal = () => {
      Permite testar o layout em mobile / tablet / desktop sem DevTools,
      útil pra apresentar o terminal pra clientes ou validar responsividade. */
   const demoToolbar = isDemoMode ? (
-    <div className="fixed top-4 right-4 z-50 flex items-center gap-1.5 px-1.5 py-1.5 bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl">
+    <div className="fixed bottom-24 right-6 md:bottom-6 md:right-6 z-50 flex items-center gap-1.5 px-1.5 py-1.5 bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl">
       {([
         { id: 'mobile',  Icon: Smartphone, label: 'Mobile'  },
         { id: 'tablet',  Icon: Tablet,     label: 'Tablet'  },
