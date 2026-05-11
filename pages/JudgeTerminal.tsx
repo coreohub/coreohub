@@ -315,11 +315,14 @@ const JudgeTerminal = () => {
      If the judge has no genres configured, all performances are shown.
      If genres are set, only performances of matching styles appear. ── */
   const filteredSchedule = useMemo(() => {
+    // Demo mode bypassa filtro de gênero: estilos do DEMO_SCHEDULE são fixos
+    // e não correspondem ao perfil real do jurado logado.
+    if (isDemoMode) return schedule;
     const genres: string[] = selectedJudge?.competencias_generos ?? [];
     if (genres.length === 0) return schedule;
     const norm = (s: string) => s?.toLowerCase().trim() ?? '';
     return schedule.filter(p => genres.some(g => norm(g) === norm(p.estilo_danca)));
-  }, [schedule, selectedJudge]);
+  }, [schedule, selectedJudge, isDemoMode]);
 
   const currentPerformance = filteredSchedule[currentIndex];
   const allDone            = currentIndex >= filteredSchedule.length && filteredSchedule.length > 0;
@@ -1072,10 +1075,19 @@ const JudgeTerminal = () => {
     setAwardsConfig(DEMO_AWARDS);
     setStarredSet(new Set());
     setIsDemoMode(true);
+    setPreviewDevice('desktop');
     setIsSubmitted(false);
     setSubmittedAt(null);
     setTieWarning(null);
     setShowDemoTutorial(false);
+  };
+
+  const exitDemo = () => {
+    setSchedule([]);
+    setCurrentIndex(0);
+    setIsDemoMode(false);
+    setPreviewDevice(null);
+    setIsSubmitted(false);
   };
 
   /* ── Advance to next performance (after reviewing submitted state) ── */
@@ -2020,15 +2032,58 @@ const JudgeTerminal = () => {
     </div>
   );
 
+  /* ── Demo preview toolbar (só visível em isDemoMode) ───────────────────
+     Permite testar o layout em mobile / tablet / desktop sem DevTools,
+     útil pra apresentar o terminal pra clientes ou validar responsividade. */
+  const demoToolbar = isDemoMode ? (
+    <div className="fixed top-4 right-4 z-50 flex items-center gap-1.5 px-1.5 py-1.5 bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl">
+      {([
+        { id: 'mobile',  Icon: Smartphone, label: 'Mobile'  },
+        { id: 'tablet',  Icon: Tablet,     label: 'Tablet'  },
+        { id: 'desktop', Icon: Monitor,    label: 'Desktop' },
+      ] as const).map(({ id, Icon, label }) => (
+        <button
+          key={id}
+          onClick={() => setPreviewDevice(id)}
+          title={label}
+          className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all ${
+            previewDevice === id
+              ? 'bg-[#ff0068] text-white shadow-lg shadow-[#ff0068]/30'
+              : 'text-slate-300 hover:bg-white/10 hover:text-white'
+          }`}
+        >
+          <Icon size={16} />
+        </button>
+      ))}
+      <div className="w-px h-6 bg-white/10 mx-1" />
+      <button
+        onClick={exitDemo}
+        title="Sair do modo demo"
+        className="px-3 h-9 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-slate-300 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all"
+      >
+        <LogOut size={14} />
+        Sair
+      </button>
+    </div>
+  ) : null;
+
   if (showDeviceWrapper) {
     return (
-      <div className="h-full flex items-center justify-center bg-slate-900/60 dark:bg-black/70 overflow-auto p-4">
-        {terminalNode}
-      </div>
+      <>
+        <div className="h-full flex items-center justify-center bg-slate-900/60 dark:bg-black/70 overflow-auto p-4">
+          {terminalNode}
+        </div>
+        {demoToolbar}
+      </>
     );
   }
 
-  return terminalNode;
+  return (
+    <>
+      {terminalNode}
+      {demoToolbar}
+    </>
+  );
 };
 
 export default JudgeTerminal;
