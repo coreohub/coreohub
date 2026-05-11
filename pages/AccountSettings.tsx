@@ -6,7 +6,7 @@ import {
   addSubgenre, editSubgenre, removeSubgenre,
 } from '../services/genreService';
 import { EventStyle, Subgenre } from '../types';
-import { maskCpfCnpj, unmaskCpfCnpj, maskMoeda, parseMoeda, maskData, parseDataISO, calcIdade, validateCpf, validateCnpj, maskedChange } from '../utils/masks';
+import { maskCpfCnpj, unmaskCpfCnpj, maskMoeda, parseMoeda, maskData, parseDataISO, calcIdade, validateCpf, validateCnpj, maskedChange, formatPrecoBR, parsePrecoBR } from '../utils/masks';
 import AsaasBadge from '../components/AsaasBadge';
 import DemoSettingsTab from '../components/DemoSettingsTab';
 import {
@@ -731,6 +731,37 @@ interface AccountSettingsProps {
   /** Label alternativo pro header da página (ex: "Narração IA" em vez de "Configurações"). */
   pageLabel?: string;
 }
+
+/** Input de preço em BRL com prefixo "R$" e formato 1.234,56 ao perder foco.
+ *  State local guarda o que o user digita, normaliza no blur via parsePrecoBR. */
+const PrecoInput: React.FC<{
+  value: number;
+  onChange: (n: number) => void;
+  className?: string;
+}> = ({ value, onChange, className }) => {
+  const [draft, setDraft] = React.useState<string>(value ? formatPrecoBR(value) : '');
+  React.useEffect(() => {
+    setDraft(value ? formatPrecoBR(value) : '');
+  }, [value]);
+  return (
+    <div className="relative">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold pointer-events-none">R$</span>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={() => {
+          const num = parsePrecoBR(draft);
+          onChange(num);
+          setDraft(num ? formatPrecoBR(num) : '');
+        }}
+        placeholder="0,00"
+        className={className}
+      />
+    </div>
+  );
+};
 
 const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSettingsProps) => {
   // Permite deep-link com ?tab=<nome> pra atalhos de outras telas (ex:
@@ -3070,7 +3101,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         {i > 0 && <div className="w-px h-8 bg-slate-200 dark:bg-white/10" />}
                         <div className="text-center">
                           <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Lote {i + 1}</p>
-                          <p className={`font-black ${i === 0 ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>R$ {lote.preco}</p>
+                          <p className={`font-black ${i === 0 ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>R$ {formatPrecoBR(Number(lote.preco) || 0)}</p>
                           <p className="text-[9px] text-slate-400 mt-0.5">
                             {lote.data_virada ? `até ${lote.data_virada}` : 'até prazo final'}
                           </p>
@@ -4547,8 +4578,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
-                          <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">Preço (R$)</label>
-                          <input type="number" min={0} value={lote.preco || ''} onChange={e => updateLote(i, { preco: Number(e.target.value) })} className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 font-bold text-sm" />
+                          <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">Preço</label>
+                          <PrecoInput
+                            value={Number(lote.preco) || 0}
+                            onChange={n => updateLote(i, { preco: n })}
+                            className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2 pl-9 pr-3 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 font-bold text-sm"
+                          />
                         </div>
                         <div>
                           <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">

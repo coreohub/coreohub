@@ -57,6 +57,35 @@ export function parseMoeda(masked: string): number {
   return parseInt(digits, 10) / 100;
 }
 
+/** 1234.56 → "1.234,56" (sem prefixo R$, pra usar em inputs com prefixo separado).
+ *  Usado em campos onde o user digita preço fixo (não centavos progressivos). */
+export function formatPrecoBR(num: number): string {
+  if (!num || isNaN(num)) return '';
+  return new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(num);
+}
+
+/** Parser tolerante: aceita "1.234,56", "1234,56", "1234.56", "1234" e converte
+ *  pro número em reais. Útil em onBlur quando o user pode digitar livremente. */
+export function parsePrecoBR(str: string): number {
+  if (!str) return 0;
+  // Remove tudo que não é dígito, ponto ou vírgula
+  const cleaned = str.replace(/[^\d.,]/g, '').trim();
+  if (!cleaned) return 0;
+  // Se tem vírgula, ela é o separador decimal — remove pontos (milhar) e troca vírgula por ponto
+  let normalized: string;
+  if (cleaned.includes(',')) {
+    normalized = cleaned.replace(/\./g, '').replace(',', '.');
+  } else {
+    // Sem vírgula: assume ponto como decimal (formato US "1234.56") ou inteiro
+    normalized = cleaned;
+  }
+  const num = parseFloat(normalized);
+  return isNaN(num) ? 0 : num;
+}
+
 /** "01011990" → "01/01/1990". Limita a 8 dígitos. */
 export function maskData(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 8);
