@@ -196,7 +196,18 @@ const PrivateLayout: React.FC<{
 
   // Telas ao vivo / operacionais onde o selo Asaas no rodapé não faz sentido
   // (não há pagamento envolvido, e a presença do logo polui a experiência).
-  const HIDE_ASAAS_FOOTER_ROUTES = ['/judge-terminal'];
+  const HIDE_ASAAS_FOOTER_ROUTES = [
+    '/judge-terminal',
+    '/deliberacao',
+    '/conferencia',
+    '/judge-practice',
+    '/suporte-juri',
+    '/marcacao-palco',
+    '/check-in',
+    '/credenciais',
+    '/narracao-ia',
+    '/live',
+  ];
   const hideAsaasFooter = HIDE_ASAAS_FOOTER_ROUTES.some(r => location.pathname.startsWith(r));
 
   const handleLogout = async () => {
