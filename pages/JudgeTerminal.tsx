@@ -1298,7 +1298,7 @@ const JudgeTerminal = () => {
 
   const terminalNode = (
     <div
-      className={`relative flex flex-col bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-3xl overflow-hidden select-none border border-slate-200 dark:border-slate-700 lg:max-w-7xl lg:mx-auto lg:w-full ${activeDeviceClass}`}
+      className={`relative flex flex-col bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-3xl overflow-hidden select-none border border-slate-200 dark:border-slate-700 lg:max-w-[1280px] lg:mx-auto lg:w-full ${activeDeviceClass} ${!previewDevice ? 'lg:max-h-[820px] lg:my-6 lg:shadow-2xl' : ''}`}
       onPointerMove={handleActivity}
       onKeyDown={handleActivity}
       onClick={handleActivity}
@@ -1738,7 +1738,7 @@ const JudgeTerminal = () => {
               {/* Criteria list — 2-col em mobile/tablet (cabe mais criterio
                   em landscape compacto, alinhado com numpad), 1-col so em
                   desktop (lg+) onde sobra largura. */}
-              <div className="flex-1 px-2 py-2 grid grid-cols-2 gap-1 content-start lg:grid-cols-1 lg:content-stretch lg:auto-rows-fr">
+              <div className="flex-1 px-2 py-2 grid grid-cols-2 gap-1 content-start lg:grid-cols-1 lg:content-start lg:auto-rows-min">
                 {activeCriteria.map((criterion, i) => {
                     const isActive = activeField === criterion.name;
                     const val      = scores[criterion.name] || '';
