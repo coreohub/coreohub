@@ -134,6 +134,34 @@ export function parseDataISO(masked: string): string | null {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+/** Máscara MM:SS pra duração de coreografia/trilha.
+ *  Trata os dígitos da direita pra esquerda — os últimos 2 são segundos.
+ *  "" → "" · "1" → "1" · "12" → "12" · "123" → "1:23" · "1234" → "12:34" */
+export function maskTempo(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, digits.length - 2)}:${digits.slice(-2)}`;
+}
+
+/** "03:54" → 234 segundos. Retorna 0 se inválido. Aceita também "3:54". */
+export function parseTempoSegundos(masked: string): number {
+  if (!masked) return 0;
+  const m = masked.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return 0;
+  const min = parseInt(m[1], 10);
+  const sec = parseInt(m[2], 10);
+  if (sec >= 60) return 0; // segundos > 59 inválido
+  return min * 60 + sec;
+}
+
+/** 234 → "03:54" (sempre com 2 dígitos no minuto e segundo). */
+export function formatTempo(seconds: number): string {
+  if (!seconds || isNaN(seconds) || seconds < 0) return '';
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 /** Calcula idade em anos a partir de "1990-01-01". */
 export function calcIdade(iso: string): number {
   const [y, m, d] = iso.split('-').map(Number);

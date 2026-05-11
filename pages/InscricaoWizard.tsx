@@ -25,6 +25,21 @@ import {
   ChevronLeft, ChevronRight, Loader2, Music2, User, Users, Upload,
   AlertCircle, CheckCircle, Plus, Trash2, ArrowRight,
 } from 'lucide-react';
+import { maskTempo, parseTempoSegundos, formatTempo, maskedChange } from '../utils/masks';
+
+/** Lê a duração de um arquivo de áudio em segundos via HTML5 Audio API.
+ *  Retorna 0 se não conseguir ler (formato inválido, arquivo corrompido). */
+const readAudioDuration = (file: File): Promise<number> =>
+  new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const audio = new Audio(url);
+    audio.addEventListener('loadedmetadata', () => {
+      const dur = isFinite(audio.duration) ? Math.round(audio.duration) : 0;
+      URL.revokeObjectURL(url);
+      resolve(dur);
+    });
+    audio.addEventListener('error', () => { URL.revokeObjectURL(url); resolve(0); });
+  });
 
 const inputCls = 'w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-5 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm dark:[color-scheme:dark]';
 const labelCls = 'block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5 ml-1';
@@ -159,6 +174,7 @@ const InscricaoWizard: React.FC = () => {
   const [trilhaFileName, setTrilhaFileName] = useState<string | null>(null);
   const [trilhaUploading, setTrilhaUploading] = useState(false);
   const [trilhaError, setTrilhaError] = useState<string | null>(null);
+  const [trilhaDurationSeconds, setTrilhaDurationSeconds] = useState<number | null>(null);
 
   const handleTrilhaUpload = async (file: File | null) => {
     if (!file || !userId) return;
@@ -174,6 +190,10 @@ const InscricaoWizard: React.FC = () => {
     }
     setTrilhaUploading(true);
     try {
+      // Lê duração via HTML5 Audio API — pré-preenche o campo de duração
+      // da coreografia se ainda estiver vazio (user pode editar pra menor).
+      const durationSec = await readAudioDuration(file);
+
       // Se já havia trilha enviada (path interno, não URL externa), deleta o
       // arquivo antigo pra não acumular órfão no storage quando user troca.
       const pathAntigo = data.trilha_url;
@@ -188,8 +208,18 @@ const InscricaoWizard: React.FC = () => {
         .from('trilhas')
         .upload(path, file, { cacheControl: '3600', upsert: false });
       if (upErr) throw upErr;
-      setData(d => ({ ...d, trilha_url: path, trilha_pendente: false }));
+
+      setData(d => ({
+        ...d,
+        trilha_url: path,
+        trilha_pendente: false,
+        // Auto-fill duração da coreografia com a da trilha quando vazia.
+        // Trilha e coreografia são conceitos distintos (trilha pode ter intro/outro),
+        // mas começar com o valor exato do arquivo evita erro de digitação.
+        duracao_minutos: d.duracao_minutos || (durationSec > 0 ? formatTempo(durationSec) : ''),
+      }));
       setTrilhaFileName(file.name);
+      setTrilhaDurationSeconds(durationSec > 0 ? durationSec : null);
     } catch (e: any) {
       setTrilhaError(e?.message ?? 'Erro ao enviar trilha.');
     } finally {
@@ -384,7 +414,12 @@ const InscricaoWizard: React.FC = () => {
       if (!data.nome_coreografia.trim()) return 'Informe o nome da coreografia.';
       if (!data.estilo_danca)              return 'Selecione o estilo.';
       if (!data.categoria)                 return 'Selecione a categoria etária.';
-      if (data.duracao_minutos && Number(data.duracao_minutos) <= 0) return 'Duração inválida.';
+      if (data.duracao_minutos) {
+        const sec = parseTempoSegundos(data.duracao_minutos);
+        if (sec <= 0)        return 'Duração inválida. Use o formato MM:SS (ex: 03:45).';
+        if (sec < 30)        return 'Duração muito curta. Mínimo: 00:30.';
+        if (sec > 30 * 60)   return 'Duração muito longa. Máximo: 30:00.';
+      }
       if (!data.coreografo_nome.trim())    return 'Informe o nome do coreógrafo.';
     }
     if (s === 1) {
@@ -479,30 +514,41 @@ const InscricaoWizard: React.FC = () => {
           bailarinos_detalhes:  bailarinosDetalhes,
           trilha_url:           data.trilha_pendente ? null : (data.trilha_url || null),
           status_trilha:        data.trilha_pendente || !data.trilha_url ? 'PENDENTE' : 'ENVIADA',
+          // Duração do arquivo de áudio em si (extraída via HTML5 Audio API).
+          // Distinto de event_data.duracao_segundos (duração da COREOGRAFIA).
+          duracao_trilha_segundos: trilhaDurationSeconds ?? null,
           status:               'AGUARDANDO_PAGAMENTO',
           status_pagamento:     'PENDENTE',
           criado_em:            new Date().toISOString(),
           data_inscricao:       new Date().toISOString(),
-          event_data: {
-            event_nome:       event.name ?? '',
-            mod_fee:          Number(modFee) || 0,
-            duracao_minutos:  data.duracao_minutos ? Number(data.duracao_minutos) : null,
-            coreografo_nome:  data.coreografo_nome.trim(),
-            estudio_nome:     data.estudio_nome.trim() || null,
-            trilha_obs:       data.trilha_obs.trim() || null,
-            wizard_version:   'PR-B-2026-05-06',
-            // Flag pra produtor ver no painel (legacy MinhasCoreografias).
-            // Só salva quando há violação real — caso contrário, null.
-            tolerance_violation: toleranceStatus.violates ? {
-              out_count:    toleranceStatus.outCount,
-              total_count:  toleranceStatus.totalCount,
-              pct:          Math.round(toleranceStatus.pct * 10) / 10,
-              limit_label:  toleranceStatus.limitLabel,
-              mode:         toleranceRule.mode,
-              flagged_at:   new Date().toISOString(),
-              source:       'wizard',
-            } : null,
-          },
+          event_data: (() => {
+            const duracaoSec = data.duracao_minutos ? parseTempoSegundos(data.duracao_minutos) : 0;
+            return {
+              event_nome:       event.name ?? '',
+              mod_fee:          Number(modFee) || 0,
+              // Duração da COREOGRAFIA em segundos (precisão exata).
+              duracao_segundos: duracaoSec || null,
+              // Legacy: mantém duracao_minutos em decimal pra compat com
+              // MinhasCoreografias.tsx que lê esse campo. Pode ser removido
+              // quando todas as views forem migradas pra duracao_segundos.
+              duracao_minutos:  duracaoSec ? Math.round((duracaoSec / 60) * 100) / 100 : null,
+              coreografo_nome:  data.coreografo_nome.trim(),
+              estudio_nome:     data.estudio_nome.trim() || null,
+              trilha_obs:       data.trilha_obs.trim() || null,
+              wizard_version:   'PR-B-2026-05-08',
+              // Flag pra produtor ver no painel (legacy MinhasCoreografias).
+              // Só salva quando há violação real — caso contrário, null.
+              tolerance_violation: toleranceStatus.violates ? {
+                out_count:    toleranceStatus.outCount,
+                total_count:  toleranceStatus.totalCount,
+                pct:          Math.round(toleranceStatus.pct * 10) / 10,
+                limit_label:  toleranceStatus.limitLabel,
+                mode:         toleranceRule.mode,
+                flagged_at:   new Date().toISOString(),
+                source:       'wizard',
+              } : null,
+            };
+          })(),
         })
         .select('id')
         .single();
@@ -655,23 +701,19 @@ const InscricaoWizard: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className={labelCls}>Duração (minutos)</label>
+                <label className={labelCls}>Duração (MM:SS)</label>
                 <input
-                  type="number"
-                  min={1}
-                  max={30}
-                  step={0.5}
+                  type="text"
+                  inputMode="numeric"
                   value={data.duracao_minutos}
-                  onChange={e => {
-                    const v = e.target.value;
-                    // Limita a 30 minutos (limite universal de festivais)
-                    if (v && Number(v) > 30) return;
-                    setData(d => ({ ...d, duracao_minutos: v }));
-                  }}
-                  placeholder="Ex: 3"
+                  onChange={e => maskedChange(e, maskTempo, v => setData(d => ({ ...d, duracao_minutos: v })))}
+                  placeholder="Ex: 03:45"
+                  maxLength={5}
                   className={inputCls}
                 />
-                <p className="text-[9px] text-slate-400 mt-1">Máx. 30 minutos</p>
+                <p className="text-[9px] text-slate-400 mt-1">
+                  Formato minuto:segundo. Máx. 30:00.
+                </p>
               </div>
 
               <div>
