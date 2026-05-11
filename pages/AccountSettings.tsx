@@ -835,6 +835,10 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         .eq('id', currentUserId!)
         .single();
       setAsaasProfile(profile);
+      if (data.recovered) {
+        // Não é erro — só info pro produtor saber que reaproveitamos a subconta dele.
+        setAsaasFormError('✓ Reconectamos sua subconta existente. Os dados antigos foram preservados.');
+      }
     } catch (err: any) {
       setAsaasFormError(err.message);
     } finally {
@@ -3735,12 +3739,25 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         />
                       </div>
 
-                      {asaasFormError && (
-                        <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl">
-                          <AlertCircle size={14} className="text-red-500 shrink-0" />
-                          <p className="text-[10px] text-red-600 dark:text-red-400">{asaasFormError}</p>
-                        </div>
-                      )}
+                      {asaasFormError && (() => {
+                        const isSuccess = asaasFormError.startsWith('✓');
+                        return (
+                          <div className={`flex items-center gap-2 p-3 border rounded-xl ${
+                            isSuccess
+                              ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20'
+                              : 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20'
+                          }`}>
+                            {isSuccess
+                              ? <CheckCircle size={14} className="text-emerald-500 shrink-0" />
+                              : <AlertCircle size={14} className="text-red-500 shrink-0" />}
+                            <p className={`text-[10px] ${
+                              isSuccess
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-red-600 dark:text-red-400'
+                            }`}>{asaasFormError}</p>
+                          </div>
+                        );
+                      })()}
 
                       <button
                         onClick={handleConnectAsaas}
