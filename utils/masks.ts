@@ -136,11 +136,16 @@ export function parseDataISO(masked: string): string | null {
 
 /** Máscara MM:SS pra duração de coreografia/trilha.
  *  Trata os dígitos da direita pra esquerda — os últimos 2 são segundos.
- *  "" → "" · "1" → "1" · "12" → "12" · "123" → "1:23" · "1234" → "12:34" */
+ *  Cap em 59 segundos pra impedir input visualmente inválido como "15:99".
+ *  "" → "" · "1" → "1" · "12" → "12" · "123" → "1:23" · "1234" → "12:34"
+ *  "1599" → "15:59" (cap nos segundos) */
 export function maskTempo(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 4);
   if (digits.length <= 2) return digits;
-  return `${digits.slice(0, digits.length - 2)}:${digits.slice(-2)}`;
+  const min = digits.slice(0, digits.length - 2);
+  let sec = digits.slice(-2);
+  if (parseInt(sec, 10) > 59) sec = '59';
+  return `${min}:${sec}`;
 }
 
 /** "03:54" → 234 segundos. Retorna 0 se inválido. Aceita também "3:54". */
@@ -154,11 +159,14 @@ export function parseTempoSegundos(masked: string): number {
   return min * 60 + sec;
 }
 
-/** 234 → "03:54" (sempre com 2 dígitos no minuto e segundo). */
+/** 234 → "03:54" (sempre com 2 dígitos no minuto e segundo).
+ *  Arredonda os segundos TOTAIS antes de dividir pra evitar overflow no
+ *  carry — ex.: 119.5s sem isso viraria "01:60" em vez de "02:00". */
 export function formatTempo(seconds: number): string {
   if (!seconds || isNaN(seconds) || seconds < 0) return '';
-  const m = Math.floor(seconds / 60);
-  const s = Math.round(seconds % 60);
+  const total = Math.round(seconds);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 

@@ -28,17 +28,27 @@ import {
 import { maskTempo, parseTempoSegundos, formatTempo, maskedChange } from '../utils/masks';
 
 /** Lê a duração de um arquivo de áudio em segundos via HTML5 Audio API.
- *  Retorna 0 se não conseguir ler (formato inválido, arquivo corrompido). */
+ *  Retorna 0 se não conseguir ler (formato inválido, arquivo corrompido).
+ *  Tem timeout de 10s — alguns browsers não disparam 'error' em codecs raros
+ *  (WebM Opus em Safari, etc.) e a Promise nunca resolveria. */
 const readAudioDuration = (file: File): Promise<number> =>
   new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     const audio = new Audio(url);
-    audio.addEventListener('loadedmetadata', () => {
-      const dur = isFinite(audio.duration) ? Math.round(audio.duration) : 0;
+    let finished = false;
+    const done = (dur: number) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeoutId);
       URL.revokeObjectURL(url);
       resolve(dur);
+    };
+    const timeoutId = setTimeout(() => done(0), 10000);
+    audio.addEventListener('loadedmetadata', () => {
+      const dur = isFinite(audio.duration) ? Math.round(audio.duration) : 0;
+      done(dur);
     });
-    audio.addEventListener('error', () => { URL.revokeObjectURL(url); resolve(0); });
+    audio.addEventListener('error', () => done(0));
   });
 
 const inputCls = 'w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-5 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm dark:[color-scheme:dark]';
@@ -231,6 +241,7 @@ const InscricaoWizard: React.FC = () => {
     if (!data.trilha_url || data.trilha_url.startsWith('http')) {
       setData(d => ({ ...d, trilha_url: '' }));
       setTrilhaFileName(null);
+      setTrilhaDurationSeconds(null);
       return;
     }
     try {
@@ -238,6 +249,7 @@ const InscricaoWizard: React.FC = () => {
     } catch (_e) { /* best-effort */ }
     setData(d => ({ ...d, trilha_url: '' }));
     setTrilhaFileName(null);
+    setTrilhaDurationSeconds(null);
   };
 
   // ─── Load event + config + user ──────────────────────────────────────────
