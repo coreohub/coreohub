@@ -58,30 +58,53 @@ export function parseMoeda(masked: string): number {
 }
 
 /** 1234.56 → "1.234,56" (sem prefixo R$, pra usar em inputs com prefixo separado).
- *  Usado em campos onde o user digita preço fixo (não centavos progressivos). */
+ *  Usado em campos onde o user digita preço fixo (não centavos progressivos).
+ *  Diferente de retornar "" pra 0: contextos de reuso podem precisar do "0,00"
+ *  explícito (ex.: input pré-preenchido). Filtros de "Grátis" devem ser feitos
+ *  no chamador via `preco > 0`. */
 export function formatPrecoBR(num: number): string {
-  if (!num || isNaN(num)) return '';
+  if (num == null || isNaN(num)) return '';
   return new Intl.NumberFormat('pt-BR', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(num);
 }
 
-/** Parser tolerante: aceita "1.234,56", "1234,56", "1234.56", "1234" e converte
- *  pro número em reais. Útil em onBlur quando o user pode digitar livremente. */
+/** Parser tolerante pro padrão BR. Aceita variações comuns:
+ *  - "1.234,56" → 1234.56 (BR padrão)
+ *  - "1234,56"  → 1234.56
+ *  - "1.234"    → 1234.00 (interpreta ponto como milhar — padrão Sympla)
+ *  - "1234.56"  → 1234.56 (US-style, único ponto com 1-2 dígitos depois)
+ *  - "1234"     → 1234.00
+ *  - "1.234.567,89" → 1234567.89 (múltiplos milhares)
+ *  Usado em onBlur quando o user pode digitar livremente. */
 export function parsePrecoBR(str: string): number {
   if (!str) return 0;
-  // Remove tudo que não é dígito, ponto ou vírgula
   const cleaned = str.replace(/[^\d.,]/g, '').trim();
   if (!cleaned) return 0;
-  // Se tem vírgula, ela é o separador decimal — remove pontos (milhar) e troca vírgula por ponto
+
   let normalized: string;
   if (cleaned.includes(',')) {
+    // Vírgula é decimal: remove pontos (milhar) e troca vírgula por ponto
     normalized = cleaned.replace(/\./g, '').replace(',', '.');
+  } else if (cleaned.includes('.')) {
+    // Sem vírgula mas com ponto: ambíguo entre US-decimal e BR-milhar.
+    // Múltiplos pontos = milhar sempre ("1.234.567" → 1234567).
+    // Um único ponto: olha a parte depois.
+    //   - 3 dígitos depois ("1.234") = milhar BR → 1234
+    //   - 1-2 dígitos depois ("1234.56", "12.34") = decimal → mantém
+    //   - 4+ dígitos depois ("1.23456") = decimal (não-padrão mas mantém)
+    const parts = cleaned.split('.');
+    if (parts.length > 2) {
+      normalized = cleaned.replace(/\./g, '');
+    } else {
+      const after = parts[1];
+      normalized = after.length === 3 ? cleaned.replace('.', '') : cleaned;
+    }
   } else {
-    // Sem vírgula: assume ponto como decimal (formato US "1234.56") ou inteiro
     normalized = cleaned;
   }
+
   const num = parseFloat(normalized);
   return isNaN(num) ? 0 : num;
 }

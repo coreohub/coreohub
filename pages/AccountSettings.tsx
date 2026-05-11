@@ -733,14 +733,15 @@ interface AccountSettingsProps {
 }
 
 /** Detecta o mínimo de participantes fixo baseado no nome do formato.
- *  Solo/Individual = 1, Duo/Dueto = 2, Trio = 3. Outros nomes retornam null
- *  (formato livre, user define quantos mínimo). Convenção universal de
- *  festivais de dança — não faz sentido "Solo com 4 pessoas". */
+ *  Convenção universal de festivais de dança — não faz sentido "Solo com 4 pessoas". */
 const detectarMinFixo = (nome: string | undefined): number | null => {
   const n = (nome || '').toLowerCase().trim();
   if (/^(solo|individual)$/.test(n)) return 1;
   if (/^(duo|dueto|duet[oa])$/.test(n)) return 2;
   if (/^trio$/.test(n)) return 3;
+  if (/^(quarteto|quartet[oa])$/.test(n)) return 4;
+  if (/^(quinteto|quintet[oa])$/.test(n)) return 5;
+  if (/^(sexteto|sextet[oa])$/.test(n)) return 6;
   return null;
 };
 
@@ -761,6 +762,7 @@ const PrecoInput: React.FC<{
       <input
         type="text"
         inputMode="decimal"
+        maxLength={20}
         value={draft}
         onChange={e => setDraft(e.target.value)}
         onBlur={() => {
@@ -1684,6 +1686,25 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       // independente do que estava no state, força o valor canônico.
       const minFixo = detectarMinFixo(clean.name);
       if (minFixo !== null) clean.minMembers = minFixo;
+
+      // Valida lotes: todos os intermediários (exceto o último) PRECISAM ter
+      // data_virada preenchida. Sem isso, o lote vira "fantasma" — vitrine não
+      // mostra o próximo lote e o produtor não percebe.
+      const lotes = Array.isArray(clean.lotes) ? clean.lotes : [];
+      if (lotes.length > 1) {
+        const indicesSemVirada: number[] = [];
+        for (let i = 0; i < lotes.length - 1; i++) {
+          if (!lotes[i].data_virada) indicesSemVirada.push(i + 1);
+        }
+        if (indicesSemVirada.length > 0) {
+          alert(
+            `Preencha a data "Vira em" do${indicesSemVirada.length > 1 ? 's' : ''} Lote ${indicesSemVirada.join(', ')} antes de salvar. ` +
+            `Apenas o último lote (até prazo final) pode ficar sem data.`
+          );
+          return;
+        }
+      }
+
       if (modalMode === 'add') setFormats([...formats, { ...clean, id: Date.now() }]);
       else setFormats(formats.map(f => f.id === editingId ? { ...clean, id: editingId } : f));
     }
