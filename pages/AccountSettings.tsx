@@ -4498,9 +4498,16 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           setTempValue((v: any) => ({ ...v, lotes: next }));
         };
         const addLote = () => {
-          // novo lote vai pro penúltimo (último é sempre o "até prazo final")
+          // O lote atualmente "último" (até prazo final, sem data_virada) ganha
+          // uma data_virada vazia pra virar intermediário. O novo lote entra no
+          // fim do array assumindo o papel de "último" (até prazo final).
+          // Assim Lote 1 original mantém seu preço e o novo aparece como Lote N.
           const next = [...lotes];
-          next.splice(next.length - 1, 0, { data_virada: '', preco: 0 });
+          const lastIdx = next.length - 1;
+          if (lastIdx >= 0) {
+            next[lastIdx] = { ...next[lastIdx], data_virada: next[lastIdx].data_virada ?? '' };
+          }
+          next.push({ data_virada: null, preco: 0 });
           setTempValue((v: any) => ({ ...v, lotes: next }));
         };
         const removeLote = (idx: number) => {
