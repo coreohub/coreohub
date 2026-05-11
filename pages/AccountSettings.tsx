@@ -6,7 +6,7 @@ import {
   addSubgenre, editSubgenre, removeSubgenre,
 } from '../services/genreService';
 import { EventStyle, Subgenre } from '../types';
-import { maskCpfCnpj, unmaskCpfCnpj, maskMoeda, parseMoeda, maskData, parseDataISO, calcIdade } from '../utils/masks';
+import { maskCpfCnpj, unmaskCpfCnpj, maskMoeda, parseMoeda, maskData, parseDataISO, calcIdade, validateCpf, validateCnpj, maskedChange } from '../utils/masks';
 import AsaasBadge from '../components/AsaasBadge';
 import DemoSettingsTab from '../components/DemoSettingsTab';
 import {
@@ -795,6 +795,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     const isCpf  = cpfCnpjDigits.length === 11;
     if (!cpfCnpjDigits)                  { setAsaasFormError('Informe seu CPF ou CNPJ.'); return; }
     if (!isCpf && !isCnpj)               { setAsaasFormError('CPF deve ter 11 dígitos ou CNPJ deve ter 14 dígitos.'); return; }
+    if (isCpf  && !validateCpf(cpfCnpjDigits))  { setAsaasFormError('CPF inválido. Confira os dígitos.'); return; }
+    if (isCnpj && !validateCnpj(cpfCnpjDigits)) { setAsaasFormError('CNPJ inválido. Confira os dígitos.'); return; }
     if (!asaasForm.pix_key.trim())       { setAsaasFormError('Informe sua chave PIX para receber os repasses.'); return; }
     const incomeNum = parseMoeda(asaasForm.income_value);
     if (!incomeNum || incomeNum <= 0)    { setAsaasFormError('Informe sua renda mensal ou faturamento.'); return; }
@@ -3645,12 +3647,34 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">CPF ou CNPJ</label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">CPF ou CNPJ</label>
+                          {(() => {
+                            const dig = unmaskCpfCnpj(asaasForm.cpf_cnpj);
+                            if (dig.length === 11) {
+                              const ok = validateCpf(dig);
+                              return (
+                                <span className={`text-[9px] font-black uppercase tracking-widest ${ok ? 'text-emerald-500 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'}`}>
+                                  {ok ? '✓ CPF válido' : '✗ CPF inválido'}
+                                </span>
+                              );
+                            }
+                            if (dig.length === 14) {
+                              const ok = validateCnpj(dig);
+                              return (
+                                <span className={`text-[9px] font-black uppercase tracking-widest ${ok ? 'text-emerald-500 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'}`}>
+                                  {ok ? '✓ CNPJ válido' : '✗ CNPJ inválido'}
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
                         <input
                           type="text"
                           inputMode="numeric"
                           value={asaasForm.cpf_cnpj}
-                          onChange={e => setAsaasForm(f => ({ ...f, cpf_cnpj: maskCpfCnpj(e.target.value) }))}
+                          onChange={e => maskedChange(e, maskCpfCnpj, v => setAsaasForm(f => ({ ...f, cpf_cnpj: v })))}
                           placeholder="000.000.000-00 ou 00.000.000/0001-00"
                           maxLength={18}
                           className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
@@ -3663,7 +3687,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                             type="text"
                             inputMode="numeric"
                             value={asaasForm.birth_date}
-                            onChange={e => setAsaasForm(f => ({ ...f, birth_date: maskData(e.target.value) }))}
+                            onChange={e => maskedChange(e, maskData, v => setAsaasForm(f => ({ ...f, birth_date: v })))}
                             placeholder="DD/MM/AAAA"
                             maxLength={10}
                             className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
@@ -3694,7 +3718,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                           type="text"
                           inputMode="numeric"
                           value={asaasForm.income_value}
-                          onChange={e => setAsaasForm(f => ({ ...f, income_value: maskMoeda(e.target.value) }))}
+                          onChange={e => maskedChange(e, maskMoeda, v => setAsaasForm(f => ({ ...f, income_value: v })))}
                           placeholder="R$ 0,00"
                           className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
                         />
