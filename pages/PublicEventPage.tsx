@@ -10,7 +10,7 @@ import { motion } from 'motion/react';
 import BrandIcon from '../components/BrandIcon';
 import { EventAnchorNav, type AnchorSection } from '../components/EventAnchorNav';
 import { PessoasSection, type JudgePublic, type WorkshopTeacherPublic } from '../components/PessoasSection';
-import { resolveLote, diffDias, formatDataBR, todayISO, type Lote } from '../utils/lotes';
+import { resolveLote, diffDias, formatDataBRComDia, todayISO, type Lote } from '../utils/lotes';
 
 const TikTokIcon = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
@@ -494,11 +494,6 @@ const PublicEventPage = () => {
                       const hint = r && r.proximo && r.lote.data_virada && Number(r.proximo.preco) > Number(r.lote.preco)
                         ? { proximoPreco: Number(r.proximo.preco), dataVirada: r.lote.data_virada, dias: diffDias(today, r.lote.data_virada) }
                         : null;
-                      const hintColor = !hint
-                        ? 'text-slate-500'
-                        : hint.dias < 1 ? 'text-rose-400'
-                        : hint.dias < 7 ? 'text-amber-400'
-                        : 'text-slate-500';
                       // Tier 2: estoque
                       const stock = stockByType[String(realIdx)];
                       const soldOut = stock?.sold_out === true;
@@ -524,10 +519,10 @@ const PublicEventPage = () => {
                           {t.obs && <p className="text-[10px] text-slate-400">{t.obs}</p>}
 
                           {hint && !soldOut && (
-                            <p className={`text-[10px] font-bold flex items-center gap-1.5 ${hintColor}`}>
+                            <p className="text-[10px] font-bold text-[#ff0068]">
                               {hint.dias < 1
-                                ? <>⚠ Aumenta amanhã para R$ {hint.proximoPreco.toFixed(2)}</>
-                                : <>⏱ Próximo: R$ {hint.proximoPreco.toFixed(2)} em {formatDataBR(hint.dataVirada)}</>}
+                                ? <>Sobe pra R$ {hint.proximoPreco.toFixed(2)} amanhã</>
+                                : <>Sobe pra R$ {hint.proximoPreco.toFixed(2)} em {formatDataBRComDia(hint.dataVirada)}</>}
                             </p>
                           )}
 
@@ -596,11 +591,6 @@ const PublicEventPage = () => {
                 const hint = r && r.proximo && r.lote.data_virada && Number(r.proximo.preco) > Number(r.lote.preco)
                   ? { proximoPreco: Number(r.proximo.preco), dataVirada: r.lote.data_virada, dias: diffDias(today, r.lote.data_virada) }
                   : null;
-                const hintColor = !hint
-                  ? 'text-slate-500'
-                  : hint.dias < 1 ? 'text-rose-400'
-                  : hint.dias < 7 ? 'text-amber-400'
-                  : 'text-slate-500';
 
                 // PR-B: usa rota nova do wizard de 4 passos. PrivateRoute
                 // redireciona pra login se necessário (preservando redirectTo).
@@ -640,10 +630,10 @@ const PublicEventPage = () => {
                       </p>
                     )}
                     {hint && isRegistrationOpen && (
-                      <p className={`text-[10px] font-bold mt-3 pt-3 border-t border-white/5 flex items-center gap-1.5 ${hintColor}`}>
+                      <p className="text-[10px] font-bold mt-3 pt-3 border-t border-white/5 text-[#ff0068]">
                         {hint.dias < 1
-                          ? <>⚠ Aumenta amanhã para R$ {hint.proximoPreco.toFixed(2)}</>
-                          : <>⏱ Próximo: R$ {hint.proximoPreco.toFixed(2)} em {formatDataBR(hint.dataVirada)}</>}
+                          ? <>Sobe pra R$ {hint.proximoPreco.toFixed(2)} amanhã</>
+                          : <>Sobe pra R$ {hint.proximoPreco.toFixed(2)} em {formatDataBRComDia(hint.dataVirada)}</>}
                       </p>
                     )}
                     {isRegistrationOpen && (

@@ -60,3 +60,14 @@ export function formatDataBR(iso: string): string {
   const [, m, d] = iso.split('-');
   return `${d}/${m}`;
 }
+
+/** "2026-06-30" → "Sáb, 30/jun" — prefixa weekday curto + mês abreviado.
+ *  Padrão usado em datas públicas (vitrine, ingresso, virada de lote). */
+export function formatDataBRComDia(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  // T12:00:00 evita shift de timezone (UTC midnight vira dia anterior em BRT).
+  const date = new Date(y, m - 1, d, 12, 0, 0);
+  const weekdayMap = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const monthMap   = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  return `${weekdayMap[date.getDay()]}, ${String(d).padStart(2, '0')}/${monthMap[m - 1]}`;
+}

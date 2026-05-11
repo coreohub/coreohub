@@ -162,7 +162,10 @@ const InscricaoWizard: React.FC = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         // Q2 padrão Sympla: redireciona pra login preservando rota de retorno.
-        navigate(`/login?redirectTo=${encodeURIComponent(`/festival/${idOrSlug}/inscrever/${modalidade}`)}`);
+        // CRÍTICO: modalidade vem decoded do useParams (ex.: "Conjunto/Grupo");
+        // re-encoda pra não virar 2 path segments no callback do OAuth.
+        const redirectPath = `/festival/${idOrSlug}/inscrever/${encodeURIComponent(modalidade)}`;
+        navigate(`/login?redirectTo=${encodeURIComponent(redirectPath)}`);
         return;
       }
       setUserId(user.id);
@@ -176,7 +179,14 @@ const InscricaoWizard: React.FC = () => {
         .eq(filterCol, idOrSlug)
         .maybeSingle();
 
-      if (evErr || !ev) { setError('Evento não encontrado.'); setLoading(false); return; }
+      // Separa erro de busca (RLS, network) de "não achou" pra debug futuro.
+      if (evErr) {
+        console.error('[InscricaoWizard] erro ao buscar evento:', evErr);
+        setError(`Erro ao buscar evento: ${evErr.message}`);
+        setLoading(false);
+        return;
+      }
+      if (!ev) { setError('Evento não encontrado.'); setLoading(false); return; }
 
       // A2: valida que a modalidade da URL existe nas formacoes_config do evento.
       // Sem isso, salvaria string crua em formato_participacao (modalidade fantasma).
