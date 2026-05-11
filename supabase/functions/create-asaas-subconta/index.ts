@@ -23,7 +23,55 @@ Deno.serve(async (req) => {
     )
     if (authErr || !user) throw new Error('Não autorizado')
 
-    const { cpf_cnpj, pix_key, company_type, income_value, birth_date } = await req.json()
+    const { cpf_cnpj, pix_key, company_type, income_value, birth_date, action } = await req.json()
+
+    const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
+    const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+
+    // ─── ACTION: update_pix — trocar apenas a chave PIX, sem mexer no KYC ───
+    // Lê apiKey da subconta do profile, registra nova chave no Asaas e atualiza Supabase.
+    if (action === 'update_pix') {
+      if (!pix_key) throw new Error('Chave PIX é obrigatória')
+      const { data: prof, error: profErr } = await supabase
+        .from('profiles')
+        .select('asaas_subconta_id, asaas_api_key, asaas_wallet_id')
+        .eq('id', user.id)
+        .single()
+      if (profErr || !prof?.asaas_subconta_id) {
+        throw new Error('Você não tem subconta configurada. Configure uma primeiro.')
+      }
+      if (!prof.asaas_api_key) {
+        throw new Error('Não conseguimos atualizar sua chave PIX automaticamente. Entre em contato com o suporte: contato@coreohub.com')
+      }
+      const key = String(pix_key).trim()
+      const onlyDigits = key.replace(/\D/g, '')
+      let pixType = 'EVP'
+      let pixKey: string | undefined
+      if (key.includes('@'))                              { pixType = 'EMAIL'; pixKey = key }
+      else if (onlyDigits.length === 14)                  { pixType = 'CNPJ';  pixKey = onlyDigits }
+      else if (onlyDigits.length === 11)                  { pixType = 'PHONE'; pixKey = `+55${onlyDigits}` }
+      else if (onlyDigits.length === 13 && onlyDigits.startsWith('55')) { pixType = 'PHONE'; pixKey = `+${onlyDigits}` }
+
+      const pixRes = await fetch(`${ASAAS_BASE_URL}/pix/addressKeys`, {
+        method: 'POST',
+        headers: { 'access_token': prof.asaas_api_key, 'Content-Type': 'application/json' },
+        body: JSON.stringify(pixType === 'EVP' ? { type: pixType } : { type: pixType, key: pixKey }),
+      })
+      if (!pixRes.ok) {
+        const pixErr = await pixRes.json().catch(() => ({}))
+        const msg = pixErr.errors?.[0]?.description ?? 'Erro ao registrar nova chave PIX no Asaas'
+        throw new Error(msg)
+      }
+
+      await supabase.from('profiles').update({ pix_key: key }).eq('id', user.id)
+
+      return new Response(
+        JSON.stringify({ success: true, action: 'update_pix' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // ─── ACTION default: criar subconta (ou recuperar se já existir) ────────
     if (!cpf_cnpj) throw new Error('CPF/CNPJ é obrigatório')
     if (!pix_key)  throw new Error('Chave PIX é obrigatória')
     if (!income_value || Number(income_value) <= 0) throw new Error('Renda/faturamento é obrigatório')
@@ -48,8 +96,6 @@ Deno.serve(async (req) => {
       throw new Error('Perfil incompleto. Preencha nome e email antes de continuar.')
     }
 
-    const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
-    const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
     const cpfLimpo = cpf_cnpj.replace(/\D/g, '')
 
     const subcontaRes = await fetch(`${ASAAS_BASE_URL}/accounts`, {

@@ -759,6 +759,10 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [asaasLoading, setAsaasLoading]         = useState(false);
   const [asaasForm, setAsaasForm]               = useState({ cpf_cnpj: '', pix_key: '', company_type: 'MEI', income_value: '', birth_date: '' });
   const [asaasFormError, setAsaasFormError]     = useState<string | null>(null);
+  const [editingPix, setEditingPix]             = useState(false);
+  const [newPixKey, setNewPixKey]               = useState('');
+  const [updatingPix, setUpdatingPix]           = useState(false);
+  const [pixUpdateError, setPixUpdateError]     = useState<string | null>(null);
   const [currentUserId, setCurrentUserId]       = useState<string | null>(null);
   const [mpEvents, setMpEvents]                 = useState<any[]>([]);
   const [savingCommission, setSavingCommission] = useState<string | null>(null);
@@ -843,6 +847,38 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       setAsaasFormError(err.message);
     } finally {
       setAsaasLoading(false);
+    }
+  };
+
+  const handleUpdatePixKey = async () => {
+    setPixUpdateError(null);
+    if (!newPixKey.trim()) { setPixUpdateError('Informe a nova chave PIX.'); return; }
+    setUpdatingPix(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('https://ghpltzzijlvykiytwslu.supabase.co/functions/v1/create-asaas-subconta', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ action: 'update_pix', pix_key: newPixKey.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Erro ao atualizar chave PIX.');
+      // Refresca profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('asaas_subconta_id, asaas_wallet_id, cpf_cnpj, pix_key')
+        .eq('id', currentUserId!)
+        .single();
+      setAsaasProfile(profile);
+      setEditingPix(false);
+      setNewPixKey('');
+    } catch (err: any) {
+      setPixUpdateError(err.message);
+    } finally {
+      setUpdatingPix(false);
     }
   };
 
@@ -3615,18 +3651,64 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       <div className="flex-1 min-w-0">
                         <p className="font-black text-sm text-emerald-700 dark:text-emerald-400 uppercase tracking-tight">Conta Configurada</p>
                         <p className="text-[10px] text-emerald-600 dark:text-emerald-500 mt-0.5">
-                          Chave PIX: <span className="font-bold">{asaasProfile.pix_key}</span>
-                          {asaasProfile.cpf_cnpj && <> · CPF/CNPJ: {asaasProfile.cpf_cnpj}</>}
+                          Chave PIX: <span className="font-bold break-all">{asaasProfile.pix_key}</span>
+                          {asaasProfile.cpf_cnpj && <> · CPF/CNPJ: <span className="font-bold">{maskCpfCnpj(asaasProfile.cpf_cnpj)}</span></>}
                         </p>
                       </div>
-                      <button
-                        onClick={handleDisconnectAsaas}
-                        disabled={asaasLoading}
-                        className="shrink-0 px-4 py-2 rounded-xl border border-red-200 dark:border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-500/10 transition-all disabled:opacity-50"
-                      >
-                        {asaasLoading ? <Loader2 size={12} className="animate-spin" /> : 'Remover'}
-                      </button>
+                      <div className="shrink-0 flex items-center gap-2">
+                        <button
+                          onClick={() => { setEditingPix(true); setNewPixKey(asaasProfile?.pix_key ?? ''); setPixUpdateError(null); }}
+                          disabled={asaasLoading || editingPix}
+                          className="px-4 py-2 rounded-xl border border-emerald-300 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-100 dark:hover:bg-emerald-500/10 transition-all disabled:opacity-50"
+                        >
+                          Trocar PIX
+                        </button>
+                        <button
+                          onClick={handleDisconnectAsaas}
+                          disabled={asaasLoading || editingPix}
+                          className="px-4 py-2 rounded-xl border border-red-200 dark:border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-500/10 transition-all disabled:opacity-50"
+                        >
+                          {asaasLoading ? <Loader2 size={12} className="animate-spin" /> : 'Remover'}
+                        </button>
+                      </div>
                     </div>
+                    {editingPix && (
+                      <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 space-y-3">
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">Nova chave PIX</label>
+                        <input
+                          type="text"
+                          value={newPixKey}
+                          onChange={e => setNewPixKey(e.target.value)}
+                          placeholder="CPF, e-mail, telefone ou chave aleatória"
+                          className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                        />
+                        <p className="text-[9px] text-slate-400">
+                          A nova chave será registrada na sua subconta Asaas. Seu CPF/CNPJ e demais dados de cadastro permanecem inalterados.
+                        </p>
+                        {pixUpdateError && (
+                          <div className="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg">
+                            <AlertCircle size={12} className="text-red-500 shrink-0" />
+                            <p className="text-[10px] text-red-600 dark:text-red-400">{pixUpdateError}</p>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handleUpdatePixKey}
+                            disabled={updatingPix}
+                            className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-50 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+                          >
+                            {updatingPix ? <Loader2 size={12} className="animate-spin" /> : <><CheckCircle size={12} /> Salvar nova chave</>}
+                          </button>
+                          <button
+                            onClick={() => { setEditingPix(false); setNewPixKey(''); setPixUpdateError(null); }}
+                            disabled={updatingPix}
+                            className="px-4 py-2.5 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-300 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-50 dark:hover:bg-white/5 transition-all"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-2xl">
                       <AlertCircle size={16} className="text-blue-500 shrink-0 mt-0.5" />
                       <p className="text-[10px] text-blue-700 dark:text-blue-400">
