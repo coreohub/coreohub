@@ -1497,8 +1497,18 @@ const JudgeTerminal = () => {
               className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 rounded-xl transition-all"
               title={judgeSession ? t('header.switchTooltip') : undefined}
             >
-              <div className="w-6 h-6 rounded-lg bg-[#ff0068] flex items-center justify-center text-white text-[9px] font-black shrink-0">
-                {selectedJudge?.name?.[0] || 'J'}
+              {/* Avatar: foto do jurado se houver, fallback DiceBear (mesmo do JudgeLogin) */}
+              <div className="w-6 h-6 rounded-lg overflow-hidden shrink-0 bg-[#ff0068] flex items-center justify-center text-white text-[9px] font-black">
+                {selectedJudge ? (
+                  <img
+                    src={(selectedJudge as any).avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(selectedJudge.name)}`}
+                    alt={selectedJudge.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                ) : (
+                  'J'
+                )}
               </div>
               <div className="text-left hidden sm:block">
                     <p className="text-[9px] font-black uppercase text-slate-900 dark:text-white leading-tight">{judgeDisplayName(selectedJudge?.name)}</p>
