@@ -1432,31 +1432,9 @@ const JudgeTerminal = () => {
           {/* Phase 5: bolinha de status do outbox (online/offline + fila local) */}
           {judgeSession && <OfflineStatusBadge judgeId={judgeSession.judge_id} />}
 
-          {/* Phase 3: ⭐ Marcar destaque pra deliberação pós-bloco.
-              Em desktop (lg+) fica aqui no header; em mobile/tablet pequeno
-              vai pra um botão grande abaixo dos critérios (ergonomia polegar). */}
-          {currentPerformance && (() => {
-            const starred = starredSet.has(currentPerformance.id);
-            return (
-              <button
-                onClick={toggleStarCurrent}
-                disabled={isSubmitted || starringInFlight}
-                title={starred ? t('star.removeTooltip') : t('star.markTooltip')}
-                className={`hidden lg:inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border transition-all
-                  ${isSubmitted
-                    ? 'bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-50 cursor-not-allowed'
-                    : starred
-                      ? 'bg-slate-900 dark:bg-white border-slate-900 dark:border-white text-white dark:text-slate-900 shadow-sm'
-                      : 'bg-white dark:bg-white/5 border-slate-300 dark:border-white/20 text-slate-600 dark:text-slate-300 hover:border-slate-500 dark:hover:border-white/50'
-                  }`}
-              >
-                <Star size={12} className={starred ? 'fill-current' : ''} />
-                <span className="text-[8px] font-black uppercase tracking-widest">
-                  {starred ? t('star.headerOn') : t('star.headerOff')}
-                </span>
-              </button>
-            );
-          })()}
+          {/* Botão MARCAR foi movido pro rodapé do painel de critérios em
+              todas as resoluções — mais ergonômico (perto da área de trabalho)
+              e libera espaço no header pra status passivo. */}
 
           {/* Mic compacto inline — substitui o card grande do rodapé */}
           <button
@@ -1809,14 +1787,13 @@ const JudgeTerminal = () => {
                   })}
               </div>
 
-              {/* Phase 3: ⭐ Marcar destaque (visível só em mobile/tablet pequeno).
-                  Em lg+ o botão fica no header. Aqui embaixo do painel de critérios
-                  pra ergonomia (polegar alcança facil em landscape mobile/tablet),
-                  com destaque visual pra não esquecer durante apresentação. */}
+              {/* Phase 3: ⭐ Marcar destaque (em todas as resoluções).
+                  Aqui embaixo do painel de critérios pra ergonomia (perto
+                  dos quesitos sendo avaliados em vez de no header de status). */}
               {currentPerformance && (() => {
                 const starred = starredSet.has(currentPerformance.id);
                 return (
-                  <div className="lg:hidden px-2 py-2 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950">
+                  <div className="px-2 py-2 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950">
                     <button
                       onClick={toggleStarCurrent}
                       disabled={isSubmitted || starringInFlight}
