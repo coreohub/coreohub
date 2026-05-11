@@ -11,6 +11,15 @@ import BrandIcon from '../components/BrandIcon';
 import { EventAnchorNav, type AnchorSection } from '../components/EventAnchorNav';
 import { PessoasSection, type JudgePublic, type WorkshopTeacherPublic } from '../components/PessoasSection';
 import { resolveLote, diffDias, formatDataBRComDia, todayISO, type Lote } from '../utils/lotes';
+import { formatPrecoBR } from '../utils/masks';
+
+/** Deriva nome do lote pelo índice/posição. Lote único → null (não mostra label).
+ *  Múltiplos lotes → "Lote N" para intermediários, "Último Lote" pro final. */
+const nomeDoLote = (lotes: Lote[], idx: number): string | null => {
+  if (lotes.length <= 1) return null;
+  if (idx === lotes.length - 1) return 'Último Lote';
+  return `Lote ${idx + 1}`;
+};
 
 const TikTokIcon = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
@@ -490,7 +499,7 @@ const PublicEventPage = () => {
                       const lotes: Lote[] = Array.isArray(t.lotes) ? t.lotes : [];
                       const r = resolveLote(lotes, today);
                       const preco = r ? Number(r.lote.preco ?? 0) : Number(t.preco ?? 0);
-                      const nomeLote: string | null = r ? ((r.lote as any).nome ?? null) : null;
+                      const nomeLote: string | null = r ? nomeDoLote(lotes, r.idx) : null;
                       const hint = r && r.proximo && r.lote.data_virada && Number(r.proximo.preco) > Number(r.lote.preco)
                         ? { proximoPreco: Number(r.proximo.preco), dataVirada: r.lote.data_virada, dias: diffDias(today, r.lote.data_virada) }
                         : null;
@@ -513,7 +522,7 @@ const PublicEventPage = () => {
                               )}
                             </div>
                             <p className={`font-black text-lg ${soldOut ? 'text-slate-500 line-through' : 'text-[#ff0068]'}`}>
-                              {preco > 0 ? `R$ ${preco.toFixed(2)}` : 'Grátis'}
+                              {preco > 0 ? `R$ ${formatPrecoBR(preco)}` : 'Grátis'}
                             </p>
                           </div>
                           {t.obs && <p className="text-[10px] text-slate-400">{t.obs}</p>}
@@ -521,8 +530,8 @@ const PublicEventPage = () => {
                           {hint && !soldOut && (
                             <p className="text-[10px] font-bold text-[#ff0068]">
                               {hint.dias < 1
-                                ? <>Sobe pra R$ {hint.proximoPreco.toFixed(2)} amanhã</>
-                                : <>Sobe pra R$ {hint.proximoPreco.toFixed(2)} em {formatDataBRComDia(hint.dataVirada)}</>}
+                                ? <>Sobe pra R$ {formatPrecoBR(hint.proximoPreco)} amanhã</>
+                                : <>Sobe pra R$ {formatPrecoBR(hint.proximoPreco)} em {formatDataBRComDia(hint.dataVirada)}</>}
                             </p>
                           )}
 
@@ -587,7 +596,7 @@ const PublicEventPage = () => {
                 const lotes: Lote[] = Array.isArray(mod.lotes) ? mod.lotes : [];
                 const r = resolveLote(lotes, today);
                 const precoExibir = r ? Number(r.lote.preco ?? 0) : (mod.fee != null ? Number(mod.fee) : null);
-                const nomeLote: string | null = r ? ((r.lote as any).nome ?? null) : null;
+                const nomeLote: string | null = r ? nomeDoLote(lotes, r.idx) : null;
                 const hint = r && r.proximo && r.lote.data_virada && Number(r.proximo.preco) > Number(r.lote.preco)
                   ? { proximoPreco: Number(r.proximo.preco), dataVirada: r.lote.data_virada, dias: diffDias(today, r.lote.data_virada) }
                   : null;
@@ -617,7 +626,7 @@ const PublicEventPage = () => {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-[#ff0068] font-black text-sm">
-                          {precoExibir != null && precoExibir > 0 ? `R$ ${precoExibir.toFixed(2)}` : 'Gratuito'}
+                          {precoExibir != null && precoExibir > 0 ? `R$ ${formatPrecoBR(precoExibir)}` : 'Gratuito'}
                         </span>
                         {isRegistrationOpen && (
                           <ChevronRight size={16} className="text-slate-500 group-hover:text-[#ff0068] group-hover:translate-x-0.5 transition-all" />
@@ -632,8 +641,8 @@ const PublicEventPage = () => {
                     {hint && isRegistrationOpen && (
                       <p className="text-[10px] font-bold mt-3 pt-3 border-t border-white/5 text-[#ff0068]">
                         {hint.dias < 1
-                          ? <>Sobe pra R$ {hint.proximoPreco.toFixed(2)} amanhã</>
-                          : <>Sobe pra R$ {hint.proximoPreco.toFixed(2)} em {formatDataBRComDia(hint.dataVirada)}</>}
+                          ? <>Sobe pra R$ {formatPrecoBR(hint.proximoPreco)} amanhã</>
+                          : <>Sobe pra R$ {formatPrecoBR(hint.proximoPreco)} em {formatDataBRComDia(hint.dataVirada)}</>}
                       </p>
                     )}
                     {isRegistrationOpen && (
