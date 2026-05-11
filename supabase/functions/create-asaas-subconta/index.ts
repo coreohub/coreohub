@@ -86,22 +86,38 @@ Deno.serve(async (req) => {
 
       console.log(`[create-asaas-subconta] subconta duplicada detectada (${errMsg}) — tentando recuperar via GET`)
 
-      // Busca por CPF/CNPJ — mais único que email
-      const listUrl = `${ASAAS_BASE_URL}/accounts?cpfCnpj=${cpfLimpo}&limit=1`
-      const listRes = await fetch(listUrl, {
-        method: 'GET',
-        headers: { 'access_token': ASAAS_API_KEY },
-      })
-      const listData = await listRes.json()
-
-      if (!listRes.ok || !Array.isArray(listData.data) || listData.data.length === 0) {
-        console.error('[create-asaas-subconta] subconta duplicada mas não recuperável:', listData)
-        throw new Error(
-          'Você já tem uma subconta cadastrada com esse CPF/CNPJ, mas não conseguimos recuperá-la automaticamente. Entre em contato com o suporte: contato@coreohub.com'
+      // Tenta 3 estratégias: por email, por CPF/CNPJ, e por busca geral (mais lenta).
+      // O Asaas valida duplicidade em vários campos — qual deles bateu varia.
+      const tryLookup = async (params: string, label: string): Promise<any | null> => {
+        const url = `${ASAAS_BASE_URL}/accounts?${params}&limit=10`
+        console.log(`[create-asaas-subconta] ${label}: GET ${url}`)
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: { 'access_token': ASAAS_API_KEY },
+        })
+        const data = await res.json()
+        console.log(`[create-asaas-subconta] ${label} resposta: status=${res.status} count=${Array.isArray(data?.data) ? data.data.length : 'N/A'}`)
+        if (!res.ok || !Array.isArray(data.data) || data.data.length === 0) return null
+        // Match exato por CPF ou email — em caso de múltiplas subcontas no resultado
+        const match = data.data.find((a: any) =>
+          (a.cpfCnpj && a.cpfCnpj.replace(/\D/g, '') === cpfLimpo) ||
+          (a.email && a.email.toLowerCase() === email.toLowerCase())
         )
+        return match ?? data.data[0]
       }
 
-      const existing = listData.data[0]
+      let existing: any = null
+      // 1) Por email (mais comum quando o erro é "email já em uso")
+      existing = await tryLookup(`email=${encodeURIComponent(email)}`, 'lookup por email')
+      // 2) Por CPF/CNPJ
+      if (!existing) existing = await tryLookup(`cpfCnpj=${cpfLimpo}`, 'lookup por cpfCnpj')
+
+      if (!existing) {
+        console.error('[create-asaas-subconta] subconta duplicada mas não recuperável. email:', email, 'cpf:', cpfLimpo)
+        throw new Error(
+          `${errMsg || 'Conflito detectado'} Não conseguimos recuperar a subconta existente automaticamente. Entre em contato com o suporte: contato@coreohub.com`
+        )
+      }
       // GET /accounts não retorna apiKey/accessToken — vai recorrer ao que estiver
       // no Supabase. Se também estiver null lá, registro de PIX vai falhar (warn).
       subcontaData = {
