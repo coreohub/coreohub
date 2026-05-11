@@ -173,9 +173,13 @@ const InscricaoWizard: React.FC = () => {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
       const filterCol = isUuid ? 'id' : 'slug';
 
+      // Nota: registration_start_date/end_date ainda não existem como coluna
+      // no DB (declaradas em types.ts mas sem migration). Não incluir no select
+      // pra não disparar "column does not exist". Quando a feature de janela
+      // de inscrições for criada, adicionar a migration e voltar aqui.
       const { data: ev, error: evErr } = await supabase
         .from('events')
-        .select('id, name, formacoes_config, registration_start_date, registration_end_date, start_date, event_date')
+        .select('id, name, formacoes_config, start_date, event_date')
         .eq(filterCol, idOrSlug)
         .maybeSingle();
 
@@ -199,15 +203,9 @@ const InscricaoWizard: React.FC = () => {
         return;
       }
 
-      const isOpen = (() => {
-        const now = new Date();
-        const s = ev.registration_start_date ? new Date(ev.registration_start_date) : null;
-        const e = ev.registration_end_date ? new Date(ev.registration_end_date) : null;
-        if (s && now < s) return false;
-        if (e && now > e) return false;
-        return true;
-      })();
-      if (!isOpen) { setError('Inscrições deste evento estão fechadas.'); setLoading(false); return; }
+      // Janela de inscrições (registration_start_date/end_date) ainda não
+      // está implementada no DB. Quando estiver, restaurar a checagem aqui.
+      // Por ora, qualquer evento publicado e visível aceita inscrição.
 
       // Pré-popula coreógrafo com nome do user (ele loga, ele inscreve, aparece no recibo).
       const { data: profile } = await supabase
