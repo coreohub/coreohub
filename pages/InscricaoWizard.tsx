@@ -174,6 +174,14 @@ const InscricaoWizard: React.FC = () => {
     }
     setTrilhaUploading(true);
     try {
+      // Se já havia trilha enviada (path interno, não URL externa), deleta o
+      // arquivo antigo pra não acumular órfão no storage quando user troca.
+      const pathAntigo = data.trilha_url;
+      if (pathAntigo && !pathAntigo.startsWith('http')) {
+        try { await supabase.storage.from('trilhas').remove([pathAntigo]); }
+        catch (_e) { /* best-effort, não bloqueia upload novo */ }
+      }
+
       const ext = (file.name.split('.').pop() || 'mp3').toLowerCase();
       const path = `${userId}/${event?.id ?? 'evento'}_${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage
@@ -387,11 +395,17 @@ const InscricaoWizard: React.FC = () => {
         if (!b.nome.trim())          return `Bailarino ${i + 1}: informe o nome.`;
         if (!validCPF(b.cpf))        return `Bailarino ${i + 1}: CPF inválido.`;
         if (!b.data_nascimento)      return `Bailarino ${i + 1}: informe a data de nascimento.`;
-        // Range plausível pra nascimento: 1900 até hoje. type="date" tem min/max
-        // mas alguns browsers aceitam ano de 6 dígitos no input — validamos aqui.
-        const ano = parseInt(b.data_nascimento.slice(0, 4), 10);
+        // Regex estrita YYYY-MM-DD (4 dígitos no ano exatamente). type="date" tem
+        // min/max mas browsers permissivos aceitam ano de 5-6 dígitos; bloqueamos aqui.
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(b.data_nascimento)) {
+          return `Bailarino ${i + 1}: data de nascimento inválida.`;
+        }
+        const [anoStr, mesStr, diaStr] = b.data_nascimento.split('-');
+        const ano = parseInt(anoStr, 10);
+        const mes = parseInt(mesStr, 10);
+        const dia = parseInt(diaStr, 10);
         const anoAtual = new Date().getFullYear();
-        if (isNaN(ano) || ano < 1900 || ano > anoAtual) {
+        if (ano < 1900 || ano > anoAtual || mes < 1 || mes > 12 || dia < 1 || dia > 31) {
           return `Bailarino ${i + 1}: data de nascimento inválida.`;
         }
       }
@@ -872,6 +886,9 @@ const InscricaoWizard: React.FC = () => {
                       <Loader2 size={28} className="text-[#ff0068] mx-auto animate-spin" />
                       <p className="text-[11px] font-black uppercase tracking-widest text-[#ff0068] mt-3">
                         Enviando trilha…
+                      </p>
+                      <p className="text-[10px] text-slate-500 mt-1.5">
+                        Pode demorar alguns minutos em conexão lenta. Não feche a aba.
                       </p>
                     </>
                   ) : (
