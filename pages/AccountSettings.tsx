@@ -732,6 +732,18 @@ interface AccountSettingsProps {
   pageLabel?: string;
 }
 
+/** Detecta o mínimo de participantes fixo baseado no nome do formato.
+ *  Solo/Individual = 1, Duo/Dueto = 2, Trio = 3. Outros nomes retornam null
+ *  (formato livre, user define quantos mínimo). Convenção universal de
+ *  festivais de dança — não faz sentido "Solo com 4 pessoas". */
+const detectarMinFixo = (nome: string | undefined): number | null => {
+  const n = (nome || '').toLowerCase().trim();
+  if (/^(solo|individual)$/.test(n)) return 1;
+  if (/^(duo|dueto|duet[oa])$/.test(n)) return 2;
+  if (/^trio$/.test(n)) return 3;
+  return null;
+};
+
 /** Input de preço em BRL com prefixo "R$" e formato 1.234,56 ao perder foco.
  *  State local guarda o que o user digita, normaliza no blur via parsePrecoBR. */
 const PrecoInput: React.FC<{
@@ -1668,6 +1680,10 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const handleModalSubmit = () => {
     if (activeTab === 'Formações') {
       const { price_lote1, price_lote2, data_virada, ...clean } = tempValue;
+      // Garante minMembers correto baseado no nome (Solo=1, Duo=2, Trio=3) —
+      // independente do que estava no state, força o valor canônico.
+      const minFixo = detectarMinFixo(clean.name);
+      if (minFixo !== null) clean.minMembers = minFixo;
       if (modalMode === 'add') setFormats([...formats, { ...clean, id: Date.now() }]);
       else setFormats(formats.map(f => f.id === editingId ? { ...clean, id: editingId } : f));
     }
@@ -4549,11 +4565,29 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           setTempValue((v: any) => ({ ...v, lotes: next }));
         };
 
+        const minFixo = detectarMinFixo(tempValue.name);
+        const isMinTravado = minFixo !== null;
+        const minExibir = isMinTravado ? minFixo : (tempValue.minMembers || 1);
+
         return (
           <div className="space-y-4">
             <div>
               <label className={label}>Nome do Formato</label>
-              <input type="text" value={tempValue.name || ''} onChange={e => setTempValue((v: any) => ({ ...v, name: e.target.value }))} placeholder="Ex: Solo, Duo, Grupo..." className={input} />
+              <input
+                type="text"
+                value={tempValue.name || ''}
+                onChange={e => {
+                  const novoNome = e.target.value;
+                  const novoMin = detectarMinFixo(novoNome);
+                  setTempValue((v: any) => ({
+                    ...v,
+                    name: novoNome,
+                    ...(novoMin !== null ? { minMembers: novoMin } : {}),
+                  }));
+                }}
+                placeholder="Ex: Solo, Duo, Grupo..."
+                className={input}
+              />
             </div>
 
             <div>
@@ -4613,7 +4647,19 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               </div>
               <div>
                 <label className={label}>Mín. de Participantes</label>
-                <input type="number" min={1} value={tempValue.minMembers || 1} onChange={e => setTempValue((v: any) => ({ ...v, minMembers: Number(e.target.value) }))} className={input} />
+                <input
+                  type="number"
+                  min={1}
+                  value={minExibir}
+                  onChange={e => setTempValue((v: any) => ({ ...v, minMembers: Number(e.target.value) }))}
+                  disabled={isMinTravado}
+                  className={`${input} ${isMinTravado ? 'opacity-60 cursor-not-allowed' : ''}`}
+                />
+                {isMinTravado && (
+                  <p className="text-[9px] text-slate-400 mt-1 italic">
+                    Formato "{tempValue.name}" sempre tem {minFixo} pessoa{minFixo! > 1 ? 's' : ''}.
+                  </p>
+                )}
               </div>
             </div>
           </div>
