@@ -6,6 +6,7 @@ import {
   addSubgenre, editSubgenre, removeSubgenre,
 } from '../services/genreService';
 import { EventStyle, Subgenre } from '../types';
+import { maskCpfCnpj, unmaskCpfCnpj, maskMoeda, parseMoeda, maskData, parseDataISO, calcIdade } from '../utils/masks';
 import AsaasBadge from '../components/AsaasBadge';
 import DemoSettingsTab from '../components/DemoSettingsTab';
 import {
@@ -756,7 +757,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   } | null>(null);
   const [isAdmin, setIsAdmin]                   = useState(false);
   const [asaasLoading, setAsaasLoading]         = useState(false);
-  const [asaasForm, setAsaasForm]               = useState({ cpf_cnpj: '', pix_key: '', company_type: 'MEI', income_value: '' });
+  const [asaasForm, setAsaasForm]               = useState({ cpf_cnpj: '', pix_key: '', company_type: 'MEI', income_value: '', birth_date: '' });
   const [asaasFormError, setAsaasFormError]     = useState<string | null>(null);
   const [currentUserId, setCurrentUserId]       = useState<string | null>(null);
   const [mpEvents, setMpEvents]                 = useState<any[]>([]);
@@ -789,10 +790,24 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
   const handleConnectAsaas = async () => {
     setAsaasFormError(null);
-    if (!asaasForm.cpf_cnpj.trim()) { setAsaasFormError('Informe seu CPF ou CNPJ.'); return; }
-    if (!asaasForm.pix_key.trim())  { setAsaasFormError('Informe sua chave PIX para receber os repasses.'); return; }
-    const incomeNum = parseFloat(asaasForm.income_value.replace(/[^\d.,]/g, '').replace(',', '.'));
-    if (!incomeNum || incomeNum <= 0) { setAsaasFormError('Informe sua renda mensal ou faturamento.'); return; }
+    const cpfCnpjDigits = unmaskCpfCnpj(asaasForm.cpf_cnpj);
+    const isCnpj = cpfCnpjDigits.length === 14;
+    const isCpf  = cpfCnpjDigits.length === 11;
+    if (!cpfCnpjDigits)                  { setAsaasFormError('Informe seu CPF ou CNPJ.'); return; }
+    if (!isCpf && !isCnpj)               { setAsaasFormError('CPF deve ter 11 dígitos ou CNPJ deve ter 14 dígitos.'); return; }
+    if (!asaasForm.pix_key.trim())       { setAsaasFormError('Informe sua chave PIX para receber os repasses.'); return; }
+    const incomeNum = parseMoeda(asaasForm.income_value);
+    if (!incomeNum || incomeNum <= 0)    { setAsaasFormError('Informe sua renda mensal ou faturamento.'); return; }
+
+    // Data de nascimento — obrigatória só pra CPF (exigência KYC do Asaas).
+    let birthDateISO: string | null = null;
+    if (isCpf) {
+      if (!asaasForm.birth_date.trim()) { setAsaasFormError('Informe sua data de nascimento.'); return; }
+      birthDateISO = parseDataISO(asaasForm.birth_date);
+      if (!birthDateISO)                { setAsaasFormError('Data de nascimento inválida. Use o formato DD/MM/AAAA.'); return; }
+      if (calcIdade(birthDateISO) < 18) { setAsaasFormError('É necessário ter 18 anos ou mais para abrir conta de recebimento.'); return; }
+    }
+
     setAsaasLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -803,10 +818,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           'Authorization': `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify({
-          cpf_cnpj:     asaasForm.cpf_cnpj,
+          cpf_cnpj:     cpfCnpjDigits,
           pix_key:      asaasForm.pix_key,
-          company_type: asaasForm.cpf_cnpj.replace(/\D/g, '').length === 14 ? asaasForm.company_type : undefined,
+          company_type: isCnpj ? asaasForm.company_type : undefined,
           income_value: incomeNum,
+          birth_date:   birthDateISO, // null pra CNPJ
         }),
       });
       const data = await res.json();
@@ -3632,13 +3648,30 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">CPF ou CNPJ</label>
                         <input
                           type="text"
+                          inputMode="numeric"
                           value={asaasForm.cpf_cnpj}
-                          onChange={e => setAsaasForm(f => ({ ...f, cpf_cnpj: e.target.value }))}
+                          onChange={e => setAsaasForm(f => ({ ...f, cpf_cnpj: maskCpfCnpj(e.target.value) }))}
                           placeholder="000.000.000-00 ou 00.000.000/0001-00"
+                          maxLength={18}
                           className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
                         />
                       </div>
-                      {asaasForm.cpf_cnpj.replace(/\D/g, '').length === 14 && (
+                      {unmaskCpfCnpj(asaasForm.cpf_cnpj).length === 11 && (
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Data de nascimento</label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={asaasForm.birth_date}
+                            onChange={e => setAsaasForm(f => ({ ...f, birth_date: maskData(e.target.value) }))}
+                            placeholder="DD/MM/AAAA"
+                            maxLength={10}
+                            className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                          />
+                          <p className="text-[9px] text-slate-400 mt-1">Exigido pelo Asaas para validação de identidade (KYC).</p>
+                        </div>
+                      )}
+                      {unmaskCpfCnpj(asaasForm.cpf_cnpj).length === 14 && (
                         <div>
                           <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Tipo de empresa</label>
                           <select
@@ -3655,14 +3688,14 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       )}
                       <div>
                         <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
-                          {asaasForm.cpf_cnpj.replace(/\D/g, '').length === 14 ? 'Faturamento mensal estimado (R$)' : 'Renda mensal (R$)'}
+                          {unmaskCpfCnpj(asaasForm.cpf_cnpj).length === 14 ? 'Faturamento mensal estimado' : 'Renda mensal'}
                         </label>
                         <input
                           type="text"
-                          inputMode="decimal"
+                          inputMode="numeric"
                           value={asaasForm.income_value}
-                          onChange={e => setAsaasForm(f => ({ ...f, income_value: e.target.value }))}
-                          placeholder="Ex: 5000"
+                          onChange={e => setAsaasForm(f => ({ ...f, income_value: maskMoeda(e.target.value) }))}
+                          placeholder="R$ 0,00"
                           className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
                         />
                         <p className="text-[9px] text-slate-400 mt-1">Exigido pelo Asaas para validação cadastral. Use uma estimativa.</p>

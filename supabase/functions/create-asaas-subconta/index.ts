@@ -23,10 +23,18 @@ Deno.serve(async (req) => {
     )
     if (authErr || !user) throw new Error('Não autorizado')
 
-    const { cpf_cnpj, pix_key, company_type, income_value } = await req.json()
+    const { cpf_cnpj, pix_key, company_type, income_value, birth_date } = await req.json()
     if (!cpf_cnpj) throw new Error('CPF/CNPJ é obrigatório')
     if (!pix_key)  throw new Error('Chave PIX é obrigatória')
     if (!income_value || Number(income_value) <= 0) throw new Error('Renda/faturamento é obrigatório')
+
+    const cpfLimpoCheck = String(cpf_cnpj).replace(/\D/g, '')
+    if (cpfLimpoCheck.length === 11 && !birth_date) {
+      throw new Error('Data de nascimento é obrigatória para CPF (exigência KYC do Asaas)')
+    }
+    if (birth_date && !/^\d{4}-\d{2}-\d{2}$/.test(birth_date)) {
+      throw new Error('Data de nascimento deve estar no formato YYYY-MM-DD')
+    }
 
     const { data: profile } = await supabase
       .from('profiles')
@@ -56,6 +64,8 @@ Deno.serve(async (req) => {
         cpfCnpj:     cpfLimpo,
         incomeValue: Number(income_value),
         ...(cpfLimpo.length === 14 && company_type ? { companyType: company_type } : {}),
+        // birthDate: YYYY-MM-DD — obrigatório pra CPF (KYC Asaas/BCB).
+        ...(cpfLimpo.length === 11 && birth_date ? { birthDate: birth_date } : {}),
       }),
     })
 
