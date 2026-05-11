@@ -155,6 +155,53 @@ const InscricaoWizard: React.FC = () => {
     trilha_obs: '',
   });
 
+  // ─── Upload de trilha (Supabase Storage bucket 'trilhas') ─────────────────
+  const [trilhaFileName, setTrilhaFileName] = useState<string | null>(null);
+  const [trilhaUploading, setTrilhaUploading] = useState(false);
+  const [trilhaError, setTrilhaError] = useState<string | null>(null);
+
+  const handleTrilhaUpload = async (file: File | null) => {
+    if (!file || !userId) return;
+    setTrilhaError(null);
+    if (file.size > 30 * 1024 * 1024) {
+      setTrilhaError('Arquivo muito grande. Máximo: 30 MB.');
+      return;
+    }
+    const allowed = ['audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-wav', 'audio/x-m4a', 'audio/aac', 'audio/ogg'];
+    if (!allowed.includes(file.type) && !/\.(mp3|m4a|wav|aac|ogg)$/i.test(file.name)) {
+      setTrilhaError('Formato não suportado. Use MP3, M4A, WAV, AAC ou OGG.');
+      return;
+    }
+    setTrilhaUploading(true);
+    try {
+      const ext = (file.name.split('.').pop() || 'mp3').toLowerCase();
+      const path = `${userId}/${event?.id ?? 'evento'}_${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('trilhas')
+        .upload(path, file, { cacheControl: '3600', upsert: false });
+      if (upErr) throw upErr;
+      setData(d => ({ ...d, trilha_url: path, trilha_pendente: false }));
+      setTrilhaFileName(file.name);
+    } catch (e: any) {
+      setTrilhaError(e?.message ?? 'Erro ao enviar trilha.');
+    } finally {
+      setTrilhaUploading(false);
+    }
+  };
+
+  const handleTrilhaRemove = async () => {
+    if (!data.trilha_url || data.trilha_url.startsWith('http')) {
+      setData(d => ({ ...d, trilha_url: '' }));
+      setTrilhaFileName(null);
+      return;
+    }
+    try {
+      await supabase.storage.from('trilhas').remove([data.trilha_url]);
+    } catch (_e) { /* best-effort */ }
+    setData(d => ({ ...d, trilha_url: '' }));
+    setTrilhaFileName(null);
+  };
+
   // ─── Load event + config + user ──────────────────────────────────────────
   useEffect(() => {
     if (!idOrSlug || !modalidade) return;
@@ -340,6 +387,13 @@ const InscricaoWizard: React.FC = () => {
         if (!b.nome.trim())          return `Bailarino ${i + 1}: informe o nome.`;
         if (!validCPF(b.cpf))        return `Bailarino ${i + 1}: CPF inválido.`;
         if (!b.data_nascimento)      return `Bailarino ${i + 1}: informe a data de nascimento.`;
+        // Range plausível pra nascimento: 1900 até hoje. type="date" tem min/max
+        // mas alguns browsers aceitam ano de 6 dígitos no input — validamos aqui.
+        const ano = parseInt(b.data_nascimento.slice(0, 4), 10);
+        const anoAtual = new Date().getFullYear();
+        if (isNaN(ano) || ano < 1900 || ano > anoAtual) {
+          return `Bailarino ${i + 1}: data de nascimento inválida.`;
+        }
       }
       // Tolerância: STRICT bloqueia, FLEXIBLE deixa passar (mas grava flag em event_data
       // pra produtor ver no painel — mesma regra do MinhasCoreografias.tsx legacy).
@@ -348,9 +402,10 @@ const InscricaoWizard: React.FC = () => {
       }
     }
     if (s === 2) {
-      if (!data.trilha_pendente && data.trilha_url && !/^https?:\/\//.test(data.trilha_url)) {
-        return 'Link da trilha precisa começar com http:// ou https://';
-      }
+      // Trilha agora é upload direto pro bucket "trilhas".
+      // Validação: ou tem arquivo enviado (trilha_url = path interno),
+      // ou marcou "anexar depois" (trilha_pendente=true).
+      // Nada obrigatório aqui — o user pode pular se quiser anexar depois.
     }
     return null;
   };
@@ -590,11 +645,19 @@ const InscricaoWizard: React.FC = () => {
                 <input
                   type="number"
                   min={1}
+                  max={30}
+                  step={0.5}
                   value={data.duracao_minutos}
-                  onChange={e => setData(d => ({ ...d, duracao_minutos: e.target.value }))}
+                  onChange={e => {
+                    const v = e.target.value;
+                    // Limita a 30 minutos (limite universal de festivais)
+                    if (v && Number(v) > 30) return;
+                    setData(d => ({ ...d, duracao_minutos: v }));
+                  }}
                   placeholder="Ex: 3"
                   className={inputCls}
                 />
+                <p className="text-[9px] text-slate-400 mt-1">Máx. 30 minutos</p>
               </div>
 
               <div>
@@ -683,6 +746,8 @@ const InscricaoWizard: React.FC = () => {
                     <input
                       type="date"
                       value={b.data_nascimento}
+                      min="1900-01-01"
+                      max={new Date().toISOString().slice(0, 10)}
                       onChange={e => setData(d => ({ ...d, bailarinos: d.bailarinos.map((x, idx) => idx === i ? { ...x, data_nascimento: e.target.value } : x) }))}
                       className={inputCls}
                     />
@@ -745,41 +810,96 @@ const InscricaoWizard: React.FC = () => {
               <h2 className="font-black uppercase tracking-tight text-slate-900 dark:text-white">Trilha sonora</h2>
             </div>
 
-            <div>
-              <label className={labelCls}>Link da trilha (Google Drive, WeTransfer, Dropbox)</label>
-              <input
-                type="url"
-                value={data.trilha_url}
-                disabled={data.trilha_pendente}
-                onChange={e => setData(d => ({ ...d, trilha_url: e.target.value }))}
-                placeholder="https://drive.google.com/..."
-                className={`${inputCls} ${data.trilha_pendente ? 'opacity-50 cursor-not-allowed' : ''}`}
-              />
-              <p className="text-[10px] text-slate-500 mt-1.5 ml-1">
-                Configure o link como público ou com permissão de "qualquer pessoa com o link".
-              </p>
-            </div>
+            {/* Estado 1: trilha pendente (vai anexar depois) */}
+            {data.trilha_pendente ? (
+              <div className="border border-[#ff0068]/30 bg-[#ff0068]/5 rounded-2xl p-5 flex items-start gap-3">
+                <div className="shrink-0 w-10 h-10 rounded-xl bg-[#ff0068]/10 flex items-center justify-center">
+                  <Upload size={18} className="text-[#ff0068]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[#ff0068]">
+                    Você vai anexar depois
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                    Acesse "Minhas coreografias" pra enviar antes do prazo do evento.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setData(d => ({ ...d, trilha_pendente: false }))}
+                  className="shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-[#ff0068] underline"
+                >
+                  Mudei de ideia
+                </button>
+              </div>
+            ) : data.trilha_url && !data.trilha_url.startsWith('http') ? (
+              /* Estado 2: trilha já enviada */
+              <div className="border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/5 rounded-2xl p-5 flex items-start gap-3">
+                <div className="shrink-0 w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                  <CheckCircle size={18} className="text-emerald-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+                    Trilha enviada
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug truncate">
+                    {trilhaFileName ?? data.trilha_url.split('/').pop()}
+                  </p>
+                </div>
+                <button
+                  onClick={handleTrilhaRemove}
+                  className="shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-rose-500 underline"
+                >
+                  Trocar
+                </button>
+              </div>
+            ) : (
+              /* Estado 3: nenhuma escolha ainda — drop zone + botão alternativo */
+              <div className="space-y-3">
+                <label className={`block border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer ${
+                  trilhaUploading
+                    ? 'border-[#ff0068]/30 bg-[#ff0068]/5'
+                    : 'border-slate-300 dark:border-white/15 hover:border-[#ff0068]/50 hover:bg-[#ff0068]/5'
+                }`}>
+                  <input
+                    type="file"
+                    accept="audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/x-m4a,audio/aac,audio/ogg,.mp3,.m4a,.wav,.aac,.ogg"
+                    onChange={e => handleTrilhaUpload(e.target.files?.[0] ?? null)}
+                    disabled={trilhaUploading}
+                    className="hidden"
+                  />
+                  {trilhaUploading ? (
+                    <>
+                      <Loader2 size={28} className="text-[#ff0068] mx-auto animate-spin" />
+                      <p className="text-[11px] font-black uppercase tracking-widest text-[#ff0068] mt-3">
+                        Enviando trilha…
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={28} className="text-slate-400 mx-auto" />
+                      <p className="text-[11px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 mt-3">
+                        Clique pra escolher a trilha
+                      </p>
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        MP3, M4A, WAV, AAC ou OGG · máx. 30 MB
+                      </p>
+                    </>
+                  )}
+                </label>
 
-            <button
-              onClick={() => setData(d => ({ ...d, trilha_pendente: !d.trilha_pendente, trilha_url: !d.trilha_pendente ? '' : d.trilha_url }))}
-              className={`w-full flex items-start gap-3 p-4 rounded-2xl border transition-all text-left ${
-                data.trilha_pendente
-                  ? 'border-[#ff0068] bg-[#ff0068]/5'
-                  : 'border-slate-200 dark:border-white/10'
-              }`}
-            >
-              <div className={`shrink-0 mt-0.5 w-4 h-4 rounded border-2 ${data.trilha_pendente ? 'border-[#ff0068] bg-[#ff0068]' : 'border-slate-300 dark:border-white/30'}`}>
-                {data.trilha_pendente && <CheckCircle size={12} className="text-white -m-px" />}
+                {trilhaError && (
+                  <p className="text-[10px] text-rose-500 dark:text-rose-400 px-1">{trilhaError}</p>
+                )}
+
+                <button
+                  onClick={() => setData(d => ({ ...d, trilha_pendente: true, trilha_url: '' }))}
+                  disabled={trilhaUploading}
+                  className="w-full py-2.5 rounded-xl border-2 border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-white/30 hover:text-slate-700 dark:hover:text-slate-200 transition-all disabled:opacity-50"
+                >
+                  Anexar depois
+                </button>
               </div>
-              <div className="min-w-0">
-                <p className={`text-[11px] font-black uppercase tracking-widest ${data.trilha_pendente ? 'text-[#ff0068]' : 'text-slate-700 dark:text-slate-200'}`}>
-                  Vou anexar a trilha depois
-                </p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-                  Acesse "Minhas coreografias" pra anexar antes do prazo do evento.
-                </p>
-              </div>
-            </button>
+            )}
 
             <div>
               <label className={labelCls}>Observações pro operador de som (opcional)</label>
@@ -829,7 +949,7 @@ const InscricaoWizard: React.FC = () => {
                   {data.trilha_pendente
                     ? '⏳ Anexar depois'
                     : data.trilha_url
-                      ? '✅ Link enviado'
+                      ? '✅ Enviada'
                       : '⏳ Não enviada'}
                 </span>
               </div>
@@ -845,8 +965,9 @@ const InscricaoWizard: React.FC = () => {
         )}
       </div>
 
-      {/* Barra de navegação fixa embaixo ──────────────────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-white/5 px-4 py-3 z-20">
+      {/* Barra de navegação fixa embaixo — em mobile fica acima do BottomNavBar
+          (que tem h-16 no app) pra Voltar/Próximo nunca sumir atrás do menu. */}
+      <div className="fixed bottom-16 sm:bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-white/5 px-4 py-3 z-30">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
           <button
             onClick={back}
