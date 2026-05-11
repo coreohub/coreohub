@@ -1002,6 +1002,58 @@ const JudgeTerminal = () => {
     }
   };
 
+  /* ── Physical keyboard / numpad input ────────────────────────────────
+     Espelha o numpad on-screen pra teclados físicos (notebook do júri).
+     Pattern stateRef + fnRef pra evitar re-add do listener a cada digit. */
+  const kbStateRef = useRef({ activeField, isSubmitted, isLastField, isAllFilled });
+  kbStateRef.current = { activeField, isSubmitted, isLastField, isAllFilled };
+  const kbFnRef = useRef({ handleKey, handleNext, handleFinish });
+  kbFnRef.current = { handleKey, handleNext, handleFinish };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const s = kbStateRef.current;
+      const fn = kbFnRef.current;
+      if (!s.activeField || s.isSubmitted) return;
+
+      // Não intercepta quando o foco está num input/textarea (PIN, feedback texto, etc.)
+      const target = e.target as HTMLElement | null;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable) return;
+
+      // Dígitos 0-9 (cobre top row e Numpad — event.key é igual em ambos)
+      if (e.key >= '0' && e.key <= '9') {
+        e.preventDefault();
+        fn.handleKey(e.key);
+        return;
+      }
+      // Decimal: ponto, vírgula ou NumpadDecimal
+      if (e.key === '.' || e.key === ',' || e.code === 'NumpadDecimal') {
+        e.preventDefault();
+        fn.handleKey('.');
+        return;
+      }
+      // Apagar último dígito
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault();
+        fn.handleKey('del');
+        return;
+      }
+      // Próximo critério ou enviar nota
+      if (e.key === 'Enter' || e.code === 'NumpadEnter') {
+        e.preventDefault();
+        if (s.isLastField && s.isAllFilled) {
+          fn.handleFinish();
+        } else {
+          fn.handleNext();
+        }
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   /* ── Demo mode ── */
   const activateDemo = () => setShowDemoTutorial(true);
 
