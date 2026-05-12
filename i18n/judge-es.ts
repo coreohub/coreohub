@@ -42,6 +42,15 @@ const judgeEs: Record<JudgeDictKey, string> = {
   'header.judgeLabel': 'Jurado',
   'header.judgeActive': 'Activo',
   'header.switchTooltip': 'Cambiar jurado (cerrar sesión y volver al login)',
+  'header.moreTooltip': 'Más opciones',
+
+  // Jump-to (item 38)
+  'jumpTo.title': 'Saltar a presentación',
+  'jumpTo.label': 'Número de orden',
+  'jumpTo.placeholder': 'Ej.: 12',
+  'jumpTo.cta': 'Ir',
+  'jumpTo.notFound': 'Presentación #{n} no encontrada',
+  'jumpTo.hint': '{count} presentaciones disponibles',
 
   // Live banner (Phase 4)
   'live.label': 'EN VIVO:',

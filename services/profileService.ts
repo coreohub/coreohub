@@ -28,12 +28,16 @@ export const getOrCreateProfile = async (user: any): Promise<Profile | null> => 
 
     if (existingProfile) {
       if (user.email && ADMIN_EMAILS.includes(user.email) && existingProfile.role !== UserRole.COREOHUB_ADMIN) {
+        // Item 39: maybeSingle pra evitar PGRST116 caso o UPDATE não toque
+        // nenhuma linha (trigger protect_profiles_privileged_columns pode
+        // reverter, ou profile pode ter sido deletado entre fetch e update).
+        // Promoção a admin é best-effort — falha cai pra existingProfile.
         const { data: updatedProfile } = await supabase
           .from('profiles')
           .update({ role: UserRole.COREOHUB_ADMIN })
           .eq('id', user.id)
           .select()
-          .single();
+          .maybeSingle();
         if (updatedProfile) return updatedProfile as Profile;
       }
       return existingProfile as Profile;

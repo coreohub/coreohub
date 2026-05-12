@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../services/supabase';
+import { supabase, resolveActiveEventId } from '../services/supabase';
 import {
   Headphones, RefreshCw, Loader2, CheckCircle2,
   AlertTriangle, Wifi, WifiOff, Monitor, User,
   CircleDot, Clock, Radio, Hourglass,
+  Maximize2, Minimize2, Megaphone, ChevronRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -36,6 +37,18 @@ interface LiveStatus {
   submissions: Record<string, string>;
 }
 
+// Item 38: cronograma completo pro modo display
+interface ScheduleRow {
+  id: string;
+  nome_coreografia: string;
+  estilo_danca: string | null;
+  estudio: string | null;
+  ordem_apresentacao: number | null;
+  categoria: string | null;
+}
+
+type ActionMessage = { kind: 'success' | 'warning' | 'error'; text: string };
+
 const statusConfig: Record<JudgeStatus, { label: string; color: string; bg: string; icon: React.ElementType }> = {
   ONLINE:   { label: 'Online',   color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20', icon: CheckCircle2 },
   OFFLINE:  { label: 'Offline',  color: 'text-slate-400',   bg: 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10', icon: WifiOff },
@@ -51,6 +64,21 @@ const SuporteJuri = () => {
   const [online, setOnline] = useState(navigator.onLine);
   // Phase 4: status da apresentacao ao vivo segundo a Mesa de Som
   const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
+
+  // Item 38: modo display kiosk + cronograma completo + push offline
+  const [displayMode, setDisplayMode] = useState(false);
+  const [eventId, setEventId] = useState<string | null>(null);
+  const [fullSchedule, setFullSchedule] = useState<ScheduleRow[]>([]);
+  // Quando push pro Supabase falha (offline/RLS), marca aqui pra mostrar no kiosk
+  // que coordenador precisa anunciar em voz alta.
+  const [manualLiveId, setManualLiveId] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<ActionMessage | null>(null);
+  // Auto-dismiss do toast de ação
+  useEffect(() => {
+    if (!actionMessage) return;
+    const tid = setTimeout(() => setActionMessage(null), 6000);
+    return () => clearTimeout(tid);
+  }, [actionMessage]);
 
   useEffect(() => {
     const on  = () => setOnline(true);
@@ -110,18 +138,28 @@ const SuporteJuri = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [{ data: judgesData }, { data: schedule }] = await Promise.all([
+      // Resolve evento ativo (necessário pra UPDATE em events.live_registration_id)
+      const evId = await resolveActiveEventId();
+      setEventId(evId);
+
+      // Cronograma completo: mesma fonte que o JudgeTerminal (status=APROVADA),
+      // filtrado por evento ativo quando há um. Sem filtro = compat legado.
+      let scheduleQuery = supabase
+        .from('registrations')
+        .select('id, nome_coreografia, estilo_danca, estudio, ordem_apresentacao, categoria')
+        .eq('status', 'APROVADA')
+        .order('ordem_apresentacao', { ascending: true });
+      if (evId) scheduleQuery = scheduleQuery.eq('event_id', evId);
+
+      const [{ data: judgesData }, { data: scheduleData }] = await Promise.all([
         supabase.from('judges').select('id,name,avatar_url,is_active,competencias_generos,competencias_formatos,pin').order('name'),
-        supabase
-          .from('registrations')
-          .select('nome_coreografia,estilo_danca,ordem_apresentacao')
-          .eq('status_pagamento', 'CONFIRMADO')
-          .order('ordem_apresentacao', { ascending: true })
-          .limit(1),
+        scheduleQuery,
       ]);
 
       const list: Judge[] = judgesData || [];
       setJudges(list);
+      setFullSchedule((scheduleData ?? []) as ScheduleRow[]);
+
       // Phase 4: carrega live status em paralelo
       await fetchLiveStatus();
 
@@ -142,9 +180,11 @@ const SuporteJuri = () => {
         return next;
       });
 
-      if (schedule && schedule.length > 0) {
-        setCurrentPresentation(schedule[0].nome_coreografia || '');
-        setCurrentStyle(schedule[0].estilo_danca || '');
+      // Próxima na fila pro card de transição
+      const next = (scheduleData ?? [])[0];
+      if (next) {
+        setCurrentPresentation(next.nome_coreografia || '');
+        setCurrentStyle(next.estilo_danca || '');
       }
     } catch (e) {
       console.error(e);
@@ -152,6 +192,35 @@ const SuporteJuri = () => {
       setLoading(false);
     }
   }, [fetchLiveStatus]);
+
+  // Item 38: marca uma apresentação como ao vivo. Online → UPDATE no Supabase;
+  // offline/RLS bloqueado → marcador local + toast pedindo anúncio em voz alta.
+  const handleMarkLive = useCallback(async (reg: ScheduleRow) => {
+    if (!eventId) {
+      setActionMessage({ kind: 'error', text: 'Evento ativo não identificado. Recarregue a página.' });
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from('events')
+        .update({ live_registration_id: reg.id, live_started_at: new Date().toISOString() })
+        .eq('id', eventId);
+      if (error) throw error;
+      setManualLiveId(null);
+      setActionMessage({
+        kind: 'success',
+        text: `#${reg.ordem_apresentacao ?? '?'} ${reg.nome_coreografia} marcada como ao vivo`,
+      });
+      await fetchLiveStatus();
+    } catch (e) {
+      // Fallback: salva localmente pra exibir no kiosk + instrui voz alta
+      setManualLiveId(reg.id);
+      setActionMessage({
+        kind: 'warning',
+        text: `Sem conexão. Anuncie "Apresentação número ${reg.ordem_apresentacao ?? '?'}" em voz alta — jurados pulam manualmente no menu ⋮`,
+      });
+    }
+  }, [eventId, fetchLiveStatus]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -182,6 +251,163 @@ const SuporteJuri = () => {
   const onlineCount  = Object.values(judgeStates).filter(s => s.status === 'ONLINE').length;
   const problemCount = Object.values(judgeStates).filter(s => s.status === 'PROBLEMA').length;
 
+  // Item 38: dados derivados pro modo display
+  const liveReg = liveStatus
+    ? fullSchedule.find(r => r.id === liveStatus.registration_id) ?? null
+    : null;
+  const manualLiveReg = manualLiveId
+    ? fullSchedule.find(r => r.id === manualLiveId) ?? null
+    : null;
+  // Em offline, prioriza o que o coordenador acabou de marcar manualmente
+  const kioskActive = manualLiveReg ?? liveReg;
+  const kioskActiveIdx = kioskActive
+    ? fullSchedule.findIndex(r => r.id === kioskActive.id)
+    : -1;
+  const upcomingList = kioskActiveIdx >= 0
+    ? fullSchedule.slice(kioskActiveIdx + 1, kioskActiveIdx + 6)
+    : fullSchedule.slice(0, 5);
+
+  // ─── Modo Display (kiosk) ──────────────────────────────────────────────────
+  // Tablet do coordenador em modo "anunciador": número GIGANTE da coreografia
+  // ao vivo, fila de próximas com botão "Marcar como ao vivo" pra cada uma.
+  // Funciona em qualquer rede: online faz UPDATE, offline marca local + toast
+  // pedindo anúncio em voz alta (jurados digitam #N no menu ⋮ do terminal).
+  if (displayMode) {
+    return (
+      <div className="fixed inset-0 z-[60] bg-slate-950 text-white overflow-y-auto">
+        {/* Topbar do kiosk */}
+        <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-white/10 px-6 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Megaphone size={18} className="text-[#ff0068]" />
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
+              Modo Display · Coordenador
+            </p>
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[8px] font-black uppercase tracking-widest ${online ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/10 text-amber-400 border-amber-500/30'}`}>
+              {online ? <Wifi size={10} /> : <WifiOff size={10} />}
+              {online ? 'Online' : 'Offline'}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={fetchData}
+              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 transition-all"
+              title="Atualizar"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            </button>
+            <button
+              onClick={() => setDisplayMode(false)}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-[10px] font-black uppercase tracking-widest transition-all"
+            >
+              <Minimize2 size={12} /> Sair do display
+            </button>
+          </div>
+        </div>
+
+        {/* Mensagem de ação (online success / offline warning) */}
+        <AnimatePresence>
+          {actionMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className={`mx-6 mt-4 px-5 py-3 rounded-2xl border text-sm font-bold ${
+                actionMessage.kind === 'success' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' :
+                actionMessage.kind === 'warning' ? 'bg-amber-500/10 border-amber-500/30 text-amber-200' :
+                'bg-rose-500/10 border-rose-500/30 text-rose-300'
+              }`}
+            >
+              {actionMessage.text}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Card central: número GIGANTE da apresentação ao vivo */}
+        <div className="px-6 py-10">
+          {kioskActive ? (
+            <div className="bg-gradient-to-br from-[#ff0068]/20 via-rose-600/10 to-transparent border-2 border-[#ff0068]/40 rounded-[2rem] p-10 text-center">
+              <div className="flex items-center justify-center gap-3 mb-6">
+                <Radio size={20} className="text-[#ff0068] animate-pulse" />
+                <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#ff0068]">
+                  {manualLiveReg ? 'Anunciar agora' : 'Ao vivo no palco'}
+                </p>
+              </div>
+              <p
+                className="font-black tabular-nums leading-none text-white tracking-tighter"
+                style={{ fontSize: 'clamp(8rem, 28vw, 24rem)' }}
+              >
+                #{kioskActive.ordem_apresentacao ?? '?'}
+              </p>
+              <p className="mt-6 text-3xl sm:text-5xl font-black uppercase tracking-tighter italic text-white">
+                {kioskActive.nome_coreografia}
+              </p>
+              <p className="mt-3 text-sm sm:text-lg font-bold uppercase tracking-widest text-slate-400">
+                {kioskActive.estudio ?? '—'} · {kioskActive.estilo_danca ?? '—'}
+                {kioskActive.categoria && ` · ${kioskActive.categoria}`}
+              </p>
+              {manualLiveReg && (
+                <p className="mt-6 text-[11px] font-black uppercase tracking-widest text-amber-300">
+                  Sem rede — anuncie em voz alta. Jurados digitam #{kioskActive.ordem_apresentacao} no menu ⋮ do terminal.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="bg-white/5 border border-white/10 rounded-[2rem] p-16 text-center">
+              <CircleDot size={48} className="mx-auto mb-6 text-slate-500" />
+              <p className="text-2xl font-black uppercase tracking-tighter text-slate-300">
+                Aguardando início
+              </p>
+              <p className="mt-2 text-[11px] font-black uppercase tracking-widest text-slate-500">
+                Selecione abaixo a apresentação que vai ao palco
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Lista de próximas (clicável: marcar como ao vivo) */}
+        <div className="px-6 pb-16">
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mb-4">
+            Próximas apresentações
+          </p>
+          {fullSchedule.length === 0 ? (
+            <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 py-8 text-center">
+              Cronograma vazio
+            </p>
+          ) : upcomingList.length === 0 ? (
+            <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 py-8 text-center">
+              Fim do cronograma
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {upcomingList.map(reg => (
+                <button
+                  key={reg.id}
+                  onClick={() => handleMarkLive(reg)}
+                  className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#ff0068]/40 transition-all text-left group"
+                >
+                  <div className="shrink-0 w-16 h-16 rounded-2xl bg-[#ff0068]/10 group-hover:bg-[#ff0068]/20 border border-[#ff0068]/20 flex items-center justify-center transition-all">
+                    <span className="text-2xl font-black tabular-nums text-[#ff0068]">
+                      {reg.ordem_apresentacao ?? '?'}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-black text-lg uppercase tracking-tight truncate text-white">
+                      {reg.nome_coreografia}
+                    </p>
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 truncate">
+                      {reg.estudio ?? '—'} · {reg.estilo_danca ?? '—'}
+                    </p>
+                  </div>
+                  <ChevronRight size={20} className="shrink-0 text-slate-500 group-hover:text-[#ff0068] transition-colors" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-700">
 
@@ -201,11 +427,37 @@ const SuporteJuri = () => {
             {online ? <Wifi size={12} /> : <WifiOff size={12} />}
             {online ? 'Conectado' : 'Offline'}
           </div>
+          {/* Item 38: toggle pro modo display kiosk (anunciador) */}
+          <button
+            onClick={() => setDisplayMode(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-[#ff0068]/10 hover:bg-[#ff0068]/20 border border-[#ff0068]/30 rounded-2xl text-[#ff0068] text-[9px] font-black uppercase tracking-widest transition-all"
+            title="Modo display: número grande pra anunciar coreografias em voz alta"
+          >
+            <Maximize2 size={12} /> Modo display
+          </button>
           <button onClick={fetchData} className="p-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-400 hover:text-[#ff0068] transition-all">
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
+
+      {/* Item 38: toast de ação (sucesso/aviso offline/erro) */}
+      <AnimatePresence>
+        {actionMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className={`px-5 py-3 rounded-2xl border text-[11px] font-bold ${
+              actionMessage.kind === 'success' ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300' :
+              actionMessage.kind === 'warning' ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300' :
+              'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300'
+            }`}
+          >
+            {actionMessage.text}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Phase 4: Apresentação ao vivo (Mesa de Som controla) + status de submissões */}
       {liveStatus ? (

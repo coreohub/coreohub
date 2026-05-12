@@ -7,6 +7,7 @@ import {
   Shield, AlertTriangle, ClipboardCheck,
   Zap, Crown, Users, Award, Shirt,
   Monitor, Tablet, Smartphone, LogOut,
+  MoreVertical, FastForward,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useT, useLocale, setLocale } from '../hooks/useT';
@@ -211,6 +212,11 @@ const JudgeTerminal = () => {
   const [judges, setJudges]                   = useState<any[]>([]);
   const [selectedJudge, setSelectedJudge]     = useState<any | null>(null);
   const [showJudgePicker, setShowJudgePicker] = useState(false);
+
+  /* ── Header overflow menu (item 38 — pular pra #N) ── */
+  const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+  const [jumpToInput, setJumpToInput]           = useState('');
+  const [jumpToError, setJumpToError]           = useState<string | null>(null);
 
   /* ── Schedule ── */
   const [schedule, setSchedule]             = useState<any[]>([]);
@@ -1103,6 +1109,31 @@ const JudgeTerminal = () => {
     setCurrentIndex(prev => prev + 1);
   };
 
+  /* ── Jump to performance by ordem_apresentacao (item 38 — push offline)
+     Coordenador anuncia "apresentação #N" em voz alta quando Wi-Fi cai;
+     jurado digita aqui e pula direto. Funciona 100% offline (só state local). */
+  const handleJumpTo = () => {
+    const raw = jumpToInput.trim();
+    const n = parseInt(raw, 10);
+    if (!raw || Number.isNaN(n)) return;
+    const idx = filteredSchedule.findIndex((r: any) => Number(r.ordem_apresentacao) === n);
+    if (idx < 0) {
+      setJumpToError(t('jumpTo.notFound', { n: String(n) }));
+      return;
+    }
+    handleActivity();
+    setIsSubmitted(false);
+    setSubmittedAt(null);
+    rollingChunksRef.current = [];
+    setMicAttempted(false);
+    setTieWarning(null);
+    setFeedbackText('');
+    setCurrentIndex(idx);
+    setJumpToInput('');
+    setJumpToError(null);
+    setShowOverflowMenu(false);
+  };
+
   /* ── PIN handlers ── */
   const handlePinKey = (key: string) => {
     if (showPinSetup) {
@@ -1489,6 +1520,58 @@ const JudgeTerminal = () => {
           >
             <Lock size={12} />
           </button>
+
+          {/* Overflow menu (item 38 — pular pra #N quando Wi-Fi cai) */}
+          <div className="relative">
+            <button
+              onClick={() => { setShowOverflowMenu(p => !p); setJumpToError(null); }}
+              className="p-1.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 transition-all"
+              title={t('header.moreTooltip')}
+            >
+              <MoreVertical size={12} />
+            </button>
+
+            {showOverflowMenu && (
+              <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl z-50 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <FastForward size={14} className="text-[#ff0068]" />
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-white">
+                    {t('jumpTo.title')}
+                  </p>
+                </div>
+                <p className="text-[8px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+                  {t('jumpTo.label')}
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    autoFocus
+                    placeholder={t('jumpTo.placeholder')}
+                    value={jumpToInput}
+                    onChange={e => { setJumpToInput(e.target.value); setJumpToError(null); }}
+                    onKeyDown={e => { if (e.key === 'Enter') handleJumpTo(); }}
+                    className="flex-1 px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm font-black text-slate-900 dark:text-white tabular-nums focus:outline-none focus:border-[#ff0068] transition-all"
+                  />
+                  <button
+                    onClick={handleJumpTo}
+                    disabled={!jumpToInput.trim()}
+                    className="px-3 py-2 bg-[#ff0068] hover:bg-[#ff0068]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                  >
+                    {t('jumpTo.cta')}
+                  </button>
+                </div>
+                {jumpToError ? (
+                  <p className="mt-2 text-[9px] font-bold text-rose-500 uppercase tracking-widest">{jumpToError}</p>
+                ) : (
+                  <p className="mt-2 text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                    {t('jumpTo.hint', { count: String(filteredSchedule.length) })}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Judge selector */}
           <div className="relative">

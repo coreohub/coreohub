@@ -44,6 +44,15 @@ const judgePt = {
   'header.judgeLabel': 'Jurado',
   'header.judgeActive': 'Ativo',
   'header.switchTooltip': 'Trocar jurado (sair e voltar pro login)',
+  'header.moreTooltip': 'Mais opções',
+
+  // Jump-to (item 38 — push de coreografia em modo offline)
+  'jumpTo.title': 'Pular pra apresentação',
+  'jumpTo.label': 'Número de ordem',
+  'jumpTo.placeholder': 'Ex: 12',
+  'jumpTo.cta': 'Ir',
+  'jumpTo.notFound': 'Apresentação #{n} não encontrada',
+  'jumpTo.hint': '{count} apresentações disponíveis',
 
   // Live banner (Phase 4 — Mesa de Som ao vivo)
   'live.label': 'AO VIVO:',

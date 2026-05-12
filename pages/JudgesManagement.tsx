@@ -215,9 +215,12 @@ const JudgesManagement = () => {
     isNew: boolean,
     judgeId?: string,
   ): Promise<any> => {
+    // Item 39: UPDATE usa .maybeSingle() pra não estourar PGRST116 quando RLS
+    // bloqueia silenciosamente (0 rows). INSERT mantém .single() — se inserção
+    // não retorna a row, é erro real.
     const query = isNew
       ? supabase.from('judges').insert(payload).select().single()
-      : supabase.from('judges').update(payload).eq('id', judgeId!).select().single();
+      : supabase.from('judges').update(payload).eq('id', judgeId!).select().maybeSingle();
 
     const { data, error } = await query;
 
@@ -235,6 +238,10 @@ const JudgesManagement = () => {
         return trySaveWithPayload(reduced, isNew, judgeId);
       }
       throw error;
+    }
+    // UPDATE retornando 0 rows = RLS bloqueou ou jurado removido entre clicks
+    if (!isNew && !data) {
+      throw new Error('Jurado não encontrado ou sem permissão pra editar.');
     }
     return data;
   };

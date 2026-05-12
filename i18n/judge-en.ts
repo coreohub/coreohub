@@ -42,6 +42,15 @@ const judgeEn: Record<JudgeDictKey, string> = {
   'header.judgeLabel': 'Judge',
   'header.judgeActive': 'Active',
   'header.switchTooltip': 'Switch judge (sign out and back to login)',
+  'header.moreTooltip': 'More options',
+
+  // Jump-to (item 38)
+  'jumpTo.title': 'Jump to performance',
+  'jumpTo.label': 'Order number',
+  'jumpTo.placeholder': 'E.g. 12',
+  'jumpTo.cta': 'Go',
+  'jumpTo.notFound': 'Performance #{n} not found',
+  'jumpTo.hint': '{count} performances available',
 
   // Live banner (Phase 4)
   'live.label': 'LIVE:',
