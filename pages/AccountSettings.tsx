@@ -7,6 +7,7 @@ import {
 } from '../services/genreService';
 import { EventStyle, Subgenre } from '../types';
 import { maskCpfCnpj, unmaskCpfCnpj, maskMoeda, parseMoeda, maskData, parseDataISO, calcIdade, validateCpf, validateCnpj, maskedChange, formatPrecoBR, parsePrecoBR } from '../utils/masks';
+import { humanizeSupabaseError } from '../utils/supabaseErrors';
 import AsaasBadge from '../components/AsaasBadge';
 import DemoSettingsTab from '../components/DemoSettingsTab';
 import {
@@ -1663,7 +1664,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
-      setError(err.message || 'Falha ao salvar');
+      setError(humanizeSupabaseError(err, 'salvar configurações'));
     } finally {
       setSaving(false);
     }
@@ -4974,7 +4975,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       }
                       setGenreModal(m => ({ ...m, open: false }));
                     } catch (e: any) {
-                      alert('Erro: ' + e.message);
+                      alert(humanizeSupabaseError(e, 'editar gênero'));
                     }
                   }}
                   className="flex-1 py-3 rounded-2xl bg-[#ff0068] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#e0005c] transition-all"
