@@ -38,6 +38,10 @@ const OnboardingWizard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  // Guard síncrono contra double-click. setSaving é assíncrono (React state),
+  // então cliques rápidos podem entrar no handleCreate antes do re-render
+  // desabilitar o botão — bug que gerou 10 events duplicados em produção.
+  const createInFlightRef = useRef(false);
 
   const [data, setData] = useState({
     name: '',
@@ -100,20 +104,45 @@ const OnboardingWizard: React.FC = () => {
 
   const handleCreate = async () => {
     if (data.templates.length === 0) return;
+    // Guard síncrono — bloqueia double-click antes do React re-renderizar
+    // o disabled. Sem isso, cliques rápidos criam events duplicados.
+    if (createInFlightRef.current) return;
+    createInFlightRef.current = true;
     setSaving(true);
     setError(null);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Sessão expirada — faça login de novo.');
 
+      // Defesa em profundidade: se já existe event do mesmo produtor com
+      // mesmo nome (case-insensitive) e mesmo ano, redireciona pra ele em
+      // vez de criar duplicado. Cobre o caso de wizard aberto em 2 abas
+      // ou usuário voltando depois de já ter criado.
+      const editionYearCheck = new Date(data.start_date).getFullYear() || new Date().getFullYear();
+      const { data: existing } = await supabase
+        .from('events')
+        .select('id, slug')
+        .eq('created_by', user.id)
+        .ilike('name', data.name.trim())
+        .eq('edition_year', editionYearCheck)
+        .maybeSingle();
+      if (existing?.id) {
+        setCreatedEvent({ id: existing.id, slug: existing.slug ?? '' });
+        setStep(3);
+        return;
+      }
+
       // Combina os templates selecionados (Competitiva tem prioridade como default).
       const tpls = data.templates.map(getTemplate);
       const hasCompetitiva = data.templates.includes('COMPETITIVA');
       const baseTpl = hasCompetitiva ? getTemplate('COMPETITIVA') : tpls[0];
 
-      // Slug limpo "festival-ano". Conflito de unicidade é tratado pelo retry com sufixo abaixo.
+      // Slug limpo "festival-ano". Se o nome já termina com o ano (ex:
+      // "Usualdance Festival 2026"), não duplica → "usualdance-festival-2026".
       const editionYear = new Date(data.start_date).getFullYear() || new Date().getFullYear();
-      const baseSlug = `${slugify(data.name)}-${editionYear}`;
+      const nameSlug = slugify(data.name);
+      const yearSuffix = `-${editionYear}`;
+      const baseSlug = nameSlug.endsWith(yearSuffix) ? nameSlug : `${nameSlug}${yearSuffix}`;
       const slug = baseSlug;
 
       // Payload validado contra o schema real da tabela events (testado via
@@ -155,6 +184,7 @@ const OnboardingWizard: React.FC = () => {
       setError(e.message ?? 'Erro ao criar o evento.');
     } finally {
       setSaving(false);
+      createInFlightRef.current = false;
     }
   };
 

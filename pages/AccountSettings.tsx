@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, uploadEventCover, supabaseUrl } from '../services/supabase';
 import imageCompression from 'browser-image-compression';
 import {
@@ -790,6 +790,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   })();
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
   const [saving, setSaving]       = useState(false);
+  // Guard síncrono contra double-click. setSaving é assíncrono — sem ref,
+  // cliques rápidos podem entrar em handleSave antes do disabled atualizar.
+  const saveInFlightRef = useRef(false);
   const [success, setSuccess]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [isFirstSave, setIsFirstSave] = useState(false);
@@ -1408,6 +1411,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
   /* ── save ── */
   const handleSave = async () => {
+    // Guard síncrono — bloqueia re-entry antes do React atualizar disabled
+    if (saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
     setSaving(true);
     setError(null);
     try {
@@ -1600,7 +1606,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           }
           console.log('[sync] event atualizado:', existingEventId);
         } else {
-          const baseSlug = slugify(`${general.eventName}-${editionYear}`);
+          // Se o nome já termina com o ano (ex: "Festival 2026"), não duplica
+          // o ano no slug → "festival-2026" em vez de "festival-2026-2026".
+          const nameSlug = slugify(general.eventName);
+          const yearSuffix = `-${editionYear}`;
+          const baseSlug = nameSlug.endsWith(yearSuffix) ? nameSlug : `${nameSlug}${yearSuffix}`;
           const { data: newEvent, error: insertErr } = await supabase
             .from('events')
             .insert({ ...eventPayload, slug: baseSlug })
@@ -1667,6 +1677,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       setError(humanizeSupabaseError(err, 'salvar configurações'));
     } finally {
       setSaving(false);
+      saveInFlightRef.current = false;
     }
   };
 
