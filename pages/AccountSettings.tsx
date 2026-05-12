@@ -3037,92 +3037,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                             </div>
                           ))}
 
-                          {/* ── Avaliação — resumo inline ── */}
-                          {(() => {
-                            const usingGlobal    = isUsingGlobal(genre.id);
-                            const effectiveRules = getEffectiveRules(genre.id);
-                            const total          = pesoTotal(effectiveRules.criterios);
-                            return (
-                              <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/10">
-                                <div className="flex items-center justify-between mb-2">
-                                  <div className="flex items-center gap-2">
-                                    <Scale size={12} className="text-[#ff0068]" />
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white/80">Regras de Avaliação</span>
-                                    <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full ${
-                                      usingGlobal
-                                        ? 'bg-[#ff0068]/10 text-[#ff0068]'
-                                        : 'bg-indigo-100 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400'
-                                    }`}>
-                                      {usingGlobal ? 'Global' : 'Personalizada'}
-                                    </span>
-                                  </div>
-                                  <button
-                                    onClick={() => setActiveTab('Avaliação')}
-                                    className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-[#ff0068] transition-colors"
-                                  >
-                                    Editar →
-                                  </button>
-                                </div>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {effectiveRules.criterios.map((c, i) => (
-                                    <span key={i} className="flex items-center gap-1 px-2 py-1 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-lg text-[9px] font-bold text-slate-600 dark:text-slate-300">
-                                      {c.name}
-                                      <span className="text-[#ff0068] font-black">×{c.peso}</span>
-                                      {total > 0 && <span className="text-slate-400">({Math.round((c.peso/total)*100)}%)</span>}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })()}
-
-                          {/* ── Sugestões do mercado ── */}
-                          {(() => {
-                            const key = genre.name.toLowerCase().trim();
-                            const suggestions = SUBGENRE_SUGGESTIONS[key];
-                            if (!suggestions) return null;
-                            const existingNames = genre.sub_types.map(s => s.name.toLowerCase());
-                            const available = suggestions.filter(s => !existingNames.includes(s.toLowerCase()));
-                            if (available.length === 0) return null;
-                            return (
-                              <div className="pt-3 mt-1 border-t border-slate-200 dark:border-white/5">
-                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2.5 flex items-center gap-1.5">
-                                  <Sparkles size={10} className="text-[#ff0068]" />
-                                  Sugestões do mercado — clique para adicionar
-                                </p>
-                                <div className="flex flex-wrap gap-2">
-                                  {available.map(suggestion => {
-                                    const sid = `${genre.id}-${suggestion}`;
-                                    const isAdding = addingSuggestion === sid;
-                                    return (
-                                      <button
-                                        key={suggestion}
-                                        disabled={isAdding}
-                                        onClick={async () => {
-                                          setAddingSuggestion(sid);
-                                          try {
-                                            const updated = await addSubgenre(genre, { name: suggestion, is_categoria_livre: false });
-                                            setGenres(gs => gs.map(g => g.id === genre.id ? updated : g));
-                                          } catch (e: any) {
-                                            alert('Erro: ' + e.message);
-                                          } finally {
-                                            setAddingSuggestion(null);
-                                          }
-                                        }}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-white/5 border border-dashed border-slate-300 dark:border-white/10 rounded-full text-[10px] font-bold text-slate-600 dark:text-slate-400 hover:border-[#ff0068] hover:text-[#ff0068] hover:bg-[#ff0068]/5 transition-all disabled:opacity-50"
-                                      >
-                                        {isAdding
-                                          ? <Loader2 size={10} className="animate-spin" />
-                                          : <Plus size={10} />
-                                        }
-                                        {suggestion}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            );
-                          })()}
+                          {/* Bloco "Regras de Avaliação" inline e "Sugestões do mercado"
+                              removidos daqui (cards de gênero) em 2026-05-12 — viviam
+                              duplicados com a aba Avaliação (que tem toggle Global/Custom
+                              + RulesEditor por gênero) e poluíam a tela de Gêneros, que
+                              deve focar só no eixo técnico (estilos + modalidades). */}
                         </div>
                       </motion.div>
                     )}
