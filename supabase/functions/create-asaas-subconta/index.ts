@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
         throw new Error('Você não tem subconta configurada. Configure uma primeiro.')
       }
       if (!prof.asaas_api_key) {
-        throw new Error('Não conseguimos atualizar sua chave PIX automaticamente. Entre em contato com o suporte: contato@coreohub.com')
+        throw new Error('Não conseguimos atualizar sua chave PIX automaticamente. Entre em contato com o suporte WhatsApp: https://wa.me/5517997936169')
       }
       const key = String(pix_key).trim()
       const onlyDigits = key.replace(/\D/g, '')
@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
       if (!existing) {
         console.error('[create-asaas-subconta] subconta duplicada mas não recuperável. email:', email, 'cpf:', cpfLimpo)
         throw new Error(
-          `${errMsg || 'Conflito detectado'} Não conseguimos recuperar a subconta existente automaticamente. Entre em contato com o suporte: contato@coreohub.com`
+          `${errMsg || 'Conflito detectado'} Não conseguimos recuperar a subconta existente automaticamente. Entre em contato com o suporte WhatsApp: https://wa.me/5517997936169`
         )
       }
       // GET /accounts não retorna apiKey/accessToken — vai recorrer ao que estiver

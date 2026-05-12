@@ -583,7 +583,7 @@ const AGE_PRESETS: AgePreset[] = [
 const NIVEIS_TECNICOS = ['Iniciante', 'Intermediário', 'Avançado', 'Profissional'] as const;
 
 /* ─── shared input style ─── */
-const input = 'w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-5 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm dark:[color-scheme:dark]';
+const input = 'w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-5 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm dark:[color-scheme:dark]';
 const label = 'block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5 ml-1';
 
 /* ═══════════════════════ EventCommissionCard ═══════════════════════ */
@@ -4671,8 +4671,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               <div>
                 <label className={label}>Tipo de Cobrança</label>
                 <select value={tempValue.pricingType || 'FIXED'} onChange={e => setTempValue((v: any) => ({ ...v, pricingType: e.target.value }))} className={input}>
-                  <option value="FIXED">Valor Fixo</option>
-                  <option value="PER_MEMBER">Por Participante</option>
+                  <option value="FIXED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Valor Fixo</option>
+                  <option value="PER_MEMBER" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Por Participante</option>
                 </select>
               </div>
               <div>
@@ -4965,7 +4965,15 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         setExpandedGenre(created.id);
                       } else if (genreModal.mode === 'edit-genre' && genreModal.genre) {
                         const updated = await updateGenre(genreModal.genre.id, { name });
-                        setGenres(gs => gs.map(g => g.id === genreModal.genre!.id ? updated : g));
+                        // Se updated.id é DIFERENTE do original = fork (era gênero do catálogo
+                        // global, virou cópia personalizada). Adiciona o fork à lista, mantém
+                        // o original visível (ele continua no catálogo pra outros produtores).
+                        if (updated.id !== genreModal.genre!.id) {
+                          setGenres(gs => [...gs, updated]);
+                          alert('Como esse gênero é do catálogo global, salvamos uma cópia personalizada pra você. O nome original continua no catálogo.');
+                        } else {
+                          setGenres(gs => gs.map(g => g.id === genreModal.genre!.id ? updated : g));
+                        }
                       } else if (genreModal.mode === 'add-sub' && genreModal.genre) {
                         const updated = await addSubgenre(genreModal.genre, { name, is_categoria_livre: genreModal.tempFree, allow_shorter_track: genreModal.tempShorterTrack });
                         setGenres(gs => gs.map(g => g.id === genreModal.genre!.id ? updated : g));

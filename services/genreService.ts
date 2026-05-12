@@ -104,9 +104,9 @@ export async function updateGenre(
     patch.requires_subcategory = updates.sub_types.length > 0;
   }
 
+  // Tenta atualizar primeiro (funciona se o gênero é do produtor ou se é admin).
   // maybeSingle em vez de single porque RLS pode bloquear UPDATE silenciosamente
-  // (returning 0 rows), e .single() lançaria "Cannot coerce". Tratamos como erro
-  // de permissão explícito.
+  // (returning 0 rows), e .single() lançaria "Cannot coerce".
   const { data, error } = await supabase
     .from('event_styles')
     .update(patch)
@@ -115,10 +115,41 @@ export async function updateGenre(
     .maybeSingle();
 
   if (error) throw error;
-  if (!data) {
-    throw new Error('Você não tem permissão pra editar esse gênero. Crie um gênero próprio em vez de editar um do catálogo global.');
+  if (data) return toEventStyle(data);
+
+  // Fallback: UPDATE retornou 0 rows = o gênero é do catálogo global (created_by NULL)
+  // e o produtor não tem permissão de edit. Em vez de falhar, faz FORK: busca o
+  // gênero original, cria uma cópia com created_by = user e os patches aplicados.
+  // Padrão Notion/Figma "edit a template": editou? Vira seu.
+  const { data: original, error: fetchErr } = await supabase
+    .from('event_styles')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (fetchErr) throw fetchErr;
+  if (!original) {
+    throw new Error('Esse gênero não existe mais. Recarregue a página.');
   }
-  return toEventStyle(data);
+
+  const { data: { user } } = await supabase.auth.getUser();
+  const forkedPayload = {
+    event_id:             original.event_id,
+    name:                 patch.name ?? original.name,
+    sub_types:            patch.sub_types ?? original.sub_types,
+    is_active:            patch.is_active ?? original.is_active,
+    requires_subcategory: patch.requires_subcategory ?? original.requires_subcategory,
+    created_by:           user?.id ?? null,
+  };
+
+  const { data: forked, error: forkErr } = await supabase
+    .from('event_styles')
+    .insert(forkedPayload)
+    .select()
+    .single();
+
+  if (forkErr) throw forkErr;
+  return toEventStyle(forked);
 }
 
 /** Adiciona um subgênero a um gênero existente */

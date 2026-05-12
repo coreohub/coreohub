@@ -218,7 +218,7 @@ const OnboardingWizard: React.FC = () => {
               <div className="text-center space-y-2">
                 <span className="text-[10px] font-black text-[#ff0068] uppercase tracking-[0.3em]">Passo 1 de 3</span>
                 <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
-                  Vamos criar sua <span className="text-[#ff0068]">mostra</span>
+                  Vamos criar seu <span className="text-[#ff0068]">festival</span>
                 </h1>
                 <p className="text-sm text-slate-500 font-medium">
                   Comece pelo básico — você refina os detalhes depois.
@@ -327,7 +327,7 @@ const OnboardingWizard: React.FC = () => {
               <div className="text-center space-y-2">
                 <span className="text-[10px] font-black text-[#ff0068] uppercase tracking-[0.3em]">Passo 2 de 3</span>
                 <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
-                  Como vai ser sua <span className="text-[#ff0068]">mostra?</span>
+                  Como vai ser seu <span className="text-[#ff0068]">festival?</span>
                 </h1>
                 <p className="text-sm text-slate-500 font-medium">
                   Pode escolher uma ou as duas — seu festival pode ter modalidades de cada tipo.
@@ -389,7 +389,7 @@ const OnboardingWizard: React.FC = () => {
                 >
                   {saving
                     ? <><Loader2 size={15} className="animate-spin" /> Criando…</>
-                    : <>Criar mostra <ArrowRight size={15} /></>}
+                    : <>Criar festival <ArrowRight size={15} /></>}
                 </button>
               </div>
             </motion.div>
@@ -413,7 +413,7 @@ const OnboardingWizard: React.FC = () => {
                   <CheckCircle2 size={42} className="text-emerald-500" />
                 </motion.div>
                 <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
-                  Sua mostra <span className="text-emerald-500">foi criada!</span>
+                  Seu festival <span className="text-emerald-500">foi criado!</span>
                 </h1>
                 <p className="text-sm text-slate-500 font-medium max-w-md mx-auto">
                   Próximos passos: configurar preços, gêneros, jurados e critérios em <strong>Configurações</strong>.
@@ -447,16 +447,16 @@ const OnboardingWizard: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
-                  onClick={() => navigate('/qg-organizador')}
+                  onClick={() => navigate('/account-settings')}
                   className="flex items-center justify-center gap-2 py-3.5 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:border-[#ff0068]/40 transition-all"
                 >
-                  Ir pro painel <ArrowRight size={13} />
+                  <Settings2 size={13} /> Configurar depois
                 </button>
                 <button
-                  onClick={() => navigate('/account-settings')}
-                  className="flex items-center justify-center gap-2 py-3.5 bg-[#ff0068]/10 border border-[#ff0068]/30 text-[#ff0068] rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-[#ff0068]/20 transition-all"
+                  onClick={() => navigate('/qg-organizador')}
+                  className="flex items-center justify-center gap-2 py-3.5 bg-[#ff0068] text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-[#ff0068]/30"
                 >
-                  <Settings2 size={13} /> Configurar agora
+                  Ir pro painel <ArrowRight size={13} />
                 </button>
               </div>
             </motion.div>
