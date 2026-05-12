@@ -72,6 +72,10 @@ export async function createGenre(
   name: string,
   subgenres: Subgenre[] = [],
 ): Promise<EventStyle> {
+  // created_by é obrigatório pra passar pela RLS `producer_writes_own_styles`
+  // que exige WITH CHECK (created_by = auth.uid()). Sem isso, só super admin
+  // consegue criar/editar gêneros (via super_admin_all_event_styles).
+  const { data: { user } } = await supabase.auth.getUser();
   const { data, error } = await supabase
     .from('event_styles')
     .insert({
@@ -80,6 +84,7 @@ export async function createGenre(
       sub_types:            subgenres,
       is_active:            true,
       requires_subcategory: subgenres.length > 0,
+      created_by:           user?.id ?? null,
     })
     .select()
     .single();
@@ -99,14 +104,20 @@ export async function updateGenre(
     patch.requires_subcategory = updates.sub_types.length > 0;
   }
 
+  // maybeSingle em vez de single porque RLS pode bloquear UPDATE silenciosamente
+  // (returning 0 rows), e .single() lançaria "Cannot coerce". Tratamos como erro
+  // de permissão explícito.
   const { data, error } = await supabase
     .from('event_styles')
     .update(patch)
     .eq('id', id)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
+  if (!data) {
+    throw new Error('Você não tem permissão pra editar esse gênero. Crie um gênero próprio em vez de editar um do catálogo global.');
+  }
   return toEventStyle(data);
 }
 

@@ -1477,19 +1477,27 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         atualizado_em:       new Date().toISOString(),
       };
 
-      // Salva na row do evento (multi-tenant)
+      // Salva na row do evento (multi-tenant).
+      // event_id é OBRIGATÓRIO pra passar pela RLS `producer_manages_own_configuracoes`
+      // que verifica EXISTS(SELECT 1 FROM events e WHERE e.id = configuracoes.event_id AND e.created_by = auth.uid()).
+      // Sem event_id no payload, produtores não-super-admin batem em RLS.
       const { error: errA } = await supabase.from('configuracoes').upsert(
-        { id: myEvent.id, ...cfgPayload },
+        { id: myEvent.id, event_id: myEvent.id, ...cfgPayload },
         { onConflict: 'id' }
       );
       if (errA) throw errA;
 
-      // Salva na row legacy id='1' pra outras telas continuarem funcionando
-      const { error: errB } = await supabase.from('configuracoes').upsert(
-        { id: '1', ...cfgPayload },
-        { onConflict: 'id' }
-      );
-      if (errB) throw errB;
+      // Salva na row legacy id='1' pra outras telas continuarem funcionando.
+      // SÓ super admin escreve nessa row porque ela é "compartilhada" — qualquer
+      // produtor sobrescreveria config de outro. Quando todas as telas legacy
+      // forem migradas pra ler por event_id, esse upsert pode ser removido.
+      if (isAdmin) {
+        const { error: errB } = await supabase.from('configuracoes').upsert(
+          { id: '1', ...cfgPayload },
+          { onConflict: 'id' }
+        );
+        if (errB) throw errB;
+      }
 
       // Identidade pública (redes sociais + e-mail + regulamento PDF) vai
       // direto na tabela events
