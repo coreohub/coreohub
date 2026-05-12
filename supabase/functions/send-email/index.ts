@@ -344,6 +344,45 @@ async function sendViaResend(params: {
   return { id: data?.id as string | undefined }
 }
 
+// ─── Template: admin_new_producer ──────────────────────────────────────────
+// Notifica contato@coreohub.com toda vez que um novo produtor cria conta.
+// Disparado em paralelo com producer_welcome (cópia interna pro admin).
+
+function buildAdminNewProducer(p: { produtorNome?: string; produtorEmail: string }) {
+  const contentHtml = `
+    <p style="margin:0 0 16px;font-size:14px;line-height:1.65;color:#334155;">
+      Acabou de chegar mais um produtor na plataforma:
+    </p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+           style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-top:8px;">
+      <tr><td style="padding:6px 0;">
+        <p style="margin:0;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">Nome</p>
+        <p style="margin:2px 0 0;font-size:14px;color:#0b0b0f;font-weight:700;">${escape(p.produtorNome ?? '—')}</p>
+      </td></tr>
+      <tr><td style="padding:6px 0;">
+        <p style="margin:0;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">E-mail</p>
+        <p style="margin:2px 0 0;font-size:14px;color:#0b0b0f;font-weight:700;">${escape(p.produtorEmail)}</p>
+      </td></tr>
+      <tr><td style="padding:6px 0;">
+        <p style="margin:0;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">Criado em</p>
+        <p style="margin:2px 0 0;font-size:14px;color:#0b0b0f;font-weight:700;">${escape(new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }))}</p>
+      </td></tr>
+    </table>
+    <p style="margin:24px 0 0;font-size:12px;color:#64748b;">
+      Considere mandar uma mensagem pessoal de boas-vindas pelo WhatsApp.
+    </p>`
+
+  return {
+    subject: `🎉 Novo produtor: ${p.produtorNome ?? p.produtorEmail}`,
+    html: baseLayout({
+      preheader: `Novo cadastro de produtor: ${p.produtorEmail}`,
+      title: 'Novo produtor cadastrado',
+      intro: 'Notificação interna — alguém acabou de criar conta de produtor no CoreoHub.',
+      contentHtml,
+    }),
+  }
+}
+
 // ─── Template: producer_welcome ─────────────────────────────────────────────
 
 interface ProducerWelcomePayload {
@@ -759,6 +798,24 @@ Deno.serve(async (req) => {
         to = p.produtorEmail
         subject = tpl.subject
         html = tpl.html
+
+        // Em paralelo, dispara notificação interna pro admin do CoreoHub
+        // (best-effort — falha não bloqueia o producer_welcome).
+        const adminEmail = Deno.env.get('ADMIN_NOTIFY_EMAIL') ?? 'contato@coreohub.com'
+        try {
+          const adminTpl = buildAdminNewProducer({
+            produtorNome: p.produtorNome,
+            produtorEmail: p.produtorEmail,
+          })
+          // fire-and-forget — não await pra não atrasar a resposta
+          sendViaResend({
+            to: adminEmail,
+            subject: adminTpl.subject,
+            html: adminTpl.html,
+          }).catch(err => console.warn('[send-email] admin notify falhou:', err?.message ?? err))
+        } catch (err: any) {
+          console.warn('[send-email] admin notify skip:', err?.message ?? err)
+        }
         break
       }
       case 'audience_ticket_confirmed': {

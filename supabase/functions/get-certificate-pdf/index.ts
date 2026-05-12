@@ -77,7 +77,14 @@ function resolveTag(tag: string, ctx: any): string {
     NOME_PARTICIPANTE: ctx.recipient_name,
     CORPO: ctx.template_type === 'workshop'
       ? `participou do workshop ministrado por ${data.professor_nome ?? '—'}, com duração de ${data.duracao_minutos ?? '—'} minutos, durante o evento`
-      : `participou da apresentação "${data.coreografia ?? '—'}" na modalidade ${data.modalidade ?? '—'}${data.classificacao ? `, obtendo ${data.classificacao}` : ''}, durante o evento`,
+      : (() => {
+          // Avaliada não tem classificação/prêmio — texto adaptado.
+          const isAvaliada = String(data.tipo_apresentacao ?? '').toLowerCase() === 'avaliada';
+          if (isAvaliada) {
+            return `participou com a apresentação "${data.coreografia ?? '—'}" na modalidade ${data.modalidade ?? '—'}, na Mostra Avaliada do evento`;
+          }
+          return `participou da apresentação "${data.coreografia ?? '—'}" na modalidade ${data.modalidade ?? '—'}${data.classificacao ? `, obtendo ${data.classificacao}` : ''}, durante o evento`;
+        })(),
     EVENTO: data.evento_nome ?? '',
     WORKSHOP_NOME: data.workshop_nome ?? '',
     DATA_LOCAL: [
@@ -96,6 +103,13 @@ function resolveTag(tag: string, ctx: any): string {
     DATA_EVENTO: data.evento_data ? new Date(String(data.evento_data) + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }) : '',
     LOCAL_EVENTO: data.evento_local ?? '',
     HASH_VALIDACAO: ctx.hash?.slice(0, 8).toUpperCase() ?? '',
+    // Pra templates customizados que querem mencionar explicitamente.
+    // Mostra Competitiva, Mostra Avaliada, etc. (capitaliza primeira letra).
+    TIPO_APRESENTACAO: (() => {
+      const t = data.tipo_apresentacao;
+      if (!t) return '';
+      return `Mostra ${String(t).charAt(0).toUpperCase()}${String(t).slice(1).toLowerCase()}`;
+    })(),
   }
   return tags[tag] ?? ''
 }

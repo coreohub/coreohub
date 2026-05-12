@@ -500,7 +500,20 @@ const ResultsPanel = () => {
           {Object.entries(groupedByGenreCat).length === 0 ? (
             <div className="p-12 text-center bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-3xl">
               <Trophy size={32} className="mx-auto mb-3 text-slate-300 dark:text-slate-600" />
-              <p className="text-sm font-black uppercase tracking-widest text-slate-400">Nenhum resultado encontrado</p>
+              {/* Mensagem específica quando o festival é Avaliada-only:
+                  competitiva.length === 0 mas avaliada.length > 0 indica que
+                  o produtor configurou só Mostra Avaliada. Sem isso, parecia
+                  "nenhum resultado" genérico e o produtor não entendia. */}
+              {competitiva.length === 0 && avaliada.length > 0 ? (
+                <>
+                  <p className="text-sm font-black uppercase tracking-widest text-slate-400">Festival sem competição</p>
+                  <p className="text-xs text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
+                    Este festival é exclusivo Mostra Avaliada — não há ranking ou premiação. Veja os feedbacks dos jurados na aba <strong>Mostra Avaliada</strong>.
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm font-black uppercase tracking-widest text-slate-400">Nenhum resultado encontrado</p>
+              )}
             </div>
           ) : (
             Object.entries(groupedByGenreCat).map(([key, entries]) => {

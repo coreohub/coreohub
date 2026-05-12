@@ -69,6 +69,7 @@ interface WizardData {
   duracao_minutos: string;
   coreografo_nome: string;
   estudio_nome: string;
+  tipo_apresentacao: 'Competitiva' | 'Avaliada';
   // Passo 2 — Elenco
   bailarinos: BailarinoEntry[];
   // Passo 3 — Trilha
@@ -174,11 +175,16 @@ const InscricaoWizard: React.FC = () => {
     duracao_minutos: '',
     coreografo_nome: '',
     estudio_nome: '',
+    tipo_apresentacao: 'Competitiva', // Default; auto-corrige se só Avaliada estiver habilitada
     bailarinos: [{ nome: '', cpf: '', data_nascimento: '' }],
     trilha_url: '',
     trilha_pendente: false,
     trilha_obs: '',
   });
+
+  // Tipos de apresentação habilitados no evento (default: ambos pra retrocompat).
+  // Lido de configuracoes.tipos_apresentacao. Se só houver um, força esse tipo.
+  const [tiposApresentacao, setTiposApresentacao] = useState<string[]>(['Competitiva']);
 
   // ─── Upload de trilha (Supabase Storage bucket 'trilhas') ─────────────────
   const [trilhaFileName, setTrilhaFileName] = useState<string | null>(null);
@@ -312,8 +318,8 @@ const InscricaoWizard: React.FC = () => {
         .maybeSingle();
 
       const [{ data: cfg }, { data: legacy }] = await Promise.all([
-        supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date').eq('event_id', ev.id).maybeSingle(),
-        supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date').eq('id', '1').maybeSingle(),
+        supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date, tipos_apresentacao').eq('event_id', ev.id).maybeSingle(),
+        supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date, tipos_apresentacao').eq('id', '1').maybeSingle(),
       ]);
       const finalCfg = cfg && (cfg.categorias || cfg.estilos) ? cfg : legacy;
 
@@ -342,6 +348,16 @@ const InscricaoWizard: React.FC = () => {
 
       setConfig(finalCfg);
       setEvent(ev);
+
+      // Tipos de apresentação habilitados pelo produtor (default Competitiva).
+      // Se houver só 1 tipo, força automaticamente no state (sem perguntar).
+      const tipos = Array.isArray(finalCfg?.tipos_apresentacao) && finalCfg.tipos_apresentacao.length > 0
+        ? finalCfg.tipos_apresentacao
+        : ['Competitiva'];
+      setTiposApresentacao(tipos);
+      if (tipos.length === 1) {
+        setData(d => ({ ...d, tipo_apresentacao: tipos[0] as 'Competitiva' | 'Avaliada' }));
+      }
 
       if (profile?.full_name) {
         setData(d => ({ ...d, coreografo_nome: profile.full_name }));
@@ -523,6 +539,7 @@ const InscricaoWizard: React.FC = () => {
           estilo_danca:         data.estilo_danca || null,
           categoria:            data.categoria,
           formato_participacao: formacao?.name ?? modalidade,
+          tipo_apresentacao:    data.tipo_apresentacao,
           bailarinos_detalhes:  bailarinosDetalhes,
           trilha_url:           data.trilha_pendente ? null : (data.trilha_url || null),
           status_trilha:        data.trilha_pendente || !data.trilha_url ? 'PENDENTE' : 'ENVIADA',
@@ -750,6 +767,41 @@ const InscricaoWizard: React.FC = () => {
                 className={inputCls}
               />
             </div>
+
+            {/* Tipo de apresentação — só aparece se o evento habilitou ambos.
+                Se for só 1, já foi forçado no state pelo load do config. */}
+            {tiposApresentacao.length > 1 && (
+              <div>
+                <label className={labelCls}>Tipo de apresentação</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                  {tiposApresentacao.map(tipo => {
+                    const selected = data.tipo_apresentacao === tipo;
+                    const isCompetitiva = tipo === 'Competitiva';
+                    return (
+                      <button
+                        key={tipo}
+                        type="button"
+                        onClick={() => setData(d => ({ ...d, tipo_apresentacao: tipo as 'Competitiva' | 'Avaliada' }))}
+                        className={`text-left p-3 rounded-xl border transition-all ${
+                          selected
+                            ? 'border-[#ff0068] bg-[#ff0068]/5'
+                            : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
+                        }`}
+                      >
+                        <p className={`text-[11px] font-black uppercase tracking-tight ${selected ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>
+                          {tipo}
+                        </p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-tight">
+                          {isCompetitiva
+                            ? 'Concorre a prêmio e ranking por categoria.'
+                            : 'Recebe feedback técnico dos jurados, sem competir.'}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

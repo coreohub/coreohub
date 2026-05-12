@@ -590,6 +590,17 @@ const PublicEventPage = () => {
             <p className="text-xs text-slate-400 -mt-2">
               Escolha a modalidade pra começar sua inscrição.
             </p>
+            {/* Badge discreto indicando os tipos de mostra que o evento aceita.
+                Aparece só se o produtor habilitou Avaliada (em festival só
+                Competitiva, badge é redundante e polui o visual). */}
+            {Array.isArray(config?.tipos_apresentacao)
+              && config.tipos_apresentacao.includes('Avaliada') && (
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 -mt-1">
+                {config.tipos_apresentacao.length > 1
+                  ? <>Aceita Mostra Competitiva e Avaliada</>
+                  : <>Festival exclusivo Mostra Avaliada (sem competição)</>}
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {event.formacoes_config.map((mod: any, i: number) => {
                 const today = todayISO();

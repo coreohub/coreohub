@@ -235,6 +235,15 @@ const SortableRow: React.FC<SortableRowProps> = ({
           <h4 className={`text-[11px] font-black uppercase tracking-tight truncate ${isLive ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>
             {reg.nome_coreografia}
           </h4>
+          {/* Badge discreto pra Avaliada — produtor identifica visualmente no
+              cronograma e o jurado sabe que vai entrar em modo feedback. */}
+          {(reg as any).tipo_apresentacao === 'Avaliada' && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-slate-200 dark:bg-white/10 border border-slate-300 dark:border-white/15 shrink-0">
+              <span className="text-[8px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">
+                Avaliada
+              </span>
+            </span>
+          )}
           {hasEntrada && (
             <div
               className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full shrink-0 border ${

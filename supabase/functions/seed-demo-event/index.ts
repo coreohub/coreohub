@@ -661,6 +661,9 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       estilos,
       categorias,
       formatos,
+      // Demo habilita AMBOS tipos pra produtor testar fluxo completo.
+      // ~30% das registrations APROVADAS abaixo viram Avaliada.
+      tipos_apresentacao: ['Competitiva', 'Avaliada'],
       texto_ia: 'Com a coreografia [COREOGRAFIA], recebam no palco: [ESTUDIO]',
       texto_ia_saida: 'Uma salva de palmas para [ESTUDIO]!',
       narracao_saida_ativa: true,
@@ -758,13 +761,21 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       const trilha_url = hasTrilha ? DEMO_TRILHAS[i % DEMO_TRILHAS.length] : null
       const status_trilha = hasTrilha ? 'OK' : 'PENDENTE'
 
+      // Tipo de apresentação: ~30% das APROVADAS viram Avaliada pra produtor
+      // testar fluxo completo (terminal jurado em modo feedback, ResultsPanel
+      // com aba Avaliada, MyResults sem nota). PENDENTES/REJEITADAS ficam
+      // todas Competitiva (padrão).
+      const tipoApresentacao = status === 'APROVADA' && Math.random() < 0.3
+        ? 'Avaliada'
+        : 'Competitiva'
+
       registrationsToInsert.push({
         event_id: eventId,
         nome_coreografia: coreo.nome,
         estilo_danca: coreo.estilo,
         categoria,
         formato_participacao: formato,
-        tipo_apresentacao: 'Competitiva',
+        tipo_apresentacao: tipoApresentacao,
         estudio: estudio.nome,
         bailarinos_detalhes,
         status,

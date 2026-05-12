@@ -201,6 +201,7 @@ Deno.serve(async (req) => {
               modalidade: r.estilo_danca,
               estudio: r.estudio,
               classificacao: r.classificacao_final,
+              tipo_apresentacao: r.tipo_apresentacao, // Avaliada usa corpo de texto diferente
             },
           }
         })
