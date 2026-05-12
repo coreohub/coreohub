@@ -192,6 +192,20 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
         updates.ingressos_audiencia = edited.audience_tickets; // legacy em configuracoes
       }
 
+      // Auditoria 2026-05-12: 14 campos antes não capturados pela IA ─────────
+      // a) Campos que vivem em configuracoes
+      if (edited.event_time)         updates.hora_evento         = edited.event_time;
+      if (edited.tipos_apresentacao?.length) updates.tipos_apresentacao = edited.tipos_apresentacao;
+      if (edited.premiation_system)  updates.premiation_system   = edited.premiation_system;
+      if (edited.medal_thresholds)   updates.medal_thresholds    = edited.medal_thresholds;
+      if (edited.politica_ingressos) updates.politica_ingressos  = edited.politica_ingressos;
+      if (edited.url_ingressos)      updates.url_ingressos       = edited.url_ingressos;
+      if (edited.genres?.length)     updates.estilos             = edited.genres;
+      if (edited.aceita_danca_inclusiva !== null) updates.aceita_danca_inclusiva = edited.aceita_danca_inclusiva;
+      if (edited.nivel_tecnico_enabled !== null)  updates.nivel_tecnico_enabled  = edited.nivel_tecnico_enabled;
+      if (edited.stage_safety_interval_seconds)   updates.intervalo_seguranca    = edited.stage_safety_interval_seconds;
+      if (edited.city && edited.state) updates.cidade_estado     = `${edited.city}, ${edited.state}`;
+
       const { updateActiveEventConfig } = await import('../services/supabase');
       await updateActiveEventConfig(updates);
 
@@ -213,6 +227,28 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
             .from('events')
             .update({ ingressos_config: edited.audience_tickets, audience_sales_enabled: true })
             .eq('id', eventId);
+        }
+
+        // Auditoria 2026-05-12: campos novos que vivem em `events`
+        if (eventId) {
+          const evUpdates: Record<string, any> = {};
+          if (edited.city)               evUpdates.city               = edited.city;
+          if (edited.state)              evUpdates.state              = edited.state;
+          if (edited.event_time)         evUpdates.event_time         = edited.event_time;
+          if (edited.politica_ingressos) evUpdates.politica_ingressos = edited.politica_ingressos;
+          if (edited.url_ingressos)      evUpdates.url_ingressos      = edited.url_ingressos;
+          if (edited.cover_url_hint)     evUpdates.cover_url          = edited.cover_url_hint;
+          if (edited.social_links) {
+            if (edited.social_links.instagram) evUpdates.instagram_event = edited.social_links.instagram;
+            if (edited.social_links.tiktok)    evUpdates.tiktok_event    = edited.social_links.tiktok;
+            if (edited.social_links.youtube)   evUpdates.youtube_event   = edited.social_links.youtube;
+            if (edited.social_links.whatsapp)  evUpdates.whatsapp_event  = edited.social_links.whatsapp;
+            if (edited.social_links.website)   evUpdates.website_event   = edited.social_links.website;
+            if (edited.social_links.email)     evUpdates.email_event     = edited.social_links.email;
+          }
+          if (Object.keys(evUpdates).length > 0) {
+            await supabase.from('events').update(evUpdates).eq('id', eventId);
+          }
         }
 
         // ── Workshops: cria 1 row por workshop extraído ───────────────────

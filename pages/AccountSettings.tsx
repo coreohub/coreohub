@@ -403,40 +403,6 @@ const DEFAULT_CATEGORIES = [
   { id: 4, name: 'Adulto',   min: 18, max: 99 },
 ];
 
-/* ─── Sugestões de subgêneros do mercado de festivais de dança ─── */
-const SUBGENRE_SUGGESTIONS: Record<string, string[]> = {
-  'danças urbanas': [
-    'Breaking', 'Hip-Hop', 'Popping', 'Locking', 'Waacking',
-    'Voguing', 'House Dance', 'Krump', 'Dancehall', 'Afrobeats',
-    'Litefeet', 'Turfing', 'Flexing',
-  ],
-  'estilo livre': [
-    'Contemporâneo', 'Jazz', 'Funk', 'Acrobacia', 'Dança Criativa',
-    'Musical Theatre', 'Experimental', 'Fusão', 'Lírico', 'Neoclássico',
-    'Dança Cênica',
-  ],
-  'k-pop': [
-    'Girl Group', 'Boy Group', 'Solo', 'Collab', 'Coreografia Original',
-    'Cover Fiel', 'Freestyle K-Pop',
-  ],
-  'clássico': [
-    'Clássico Infantil', 'Variação Solo', 'Pas de Deux', 'Grand Allegro',
-    'Demi-Caractère', 'Contemporâneo Clássico', 'Dança de Caráter',
-  ],
-  'ballet clássico': [
-    'Clássico Infantil', 'Variação Solo', 'Pas de Deux', 'Grand Allegro',
-    'Demi-Caractère', 'Contemporâneo Clássico',
-  ],
-  'balé clássico': [
-    'Clássico Infantil', 'Variação Solo', 'Pas de Deux', 'Grand Allegro',
-    'Demi-Caractère', 'Contemporâneo Clássico',
-  ],
-  'jazz': [
-    'Jazz Técnico', 'Jazz Show', 'Lyrical Jazz', 'Broadway Jazz',
-    'Funk Jazz', 'Street Jazz', 'Jazz Contemporâneo',
-  ],
-};
-
 /* ─── Presets de gêneros baseados em regulamentos reais (FDJ Joinville,
    Passo de Arte, JOPEF, HHI Brasil, Dreamfest K-Pop). Auditoria 2026-05-06.
    Cada preset cria gêneros pai + subgêneros via createGenre/addSubgenre.
@@ -993,8 +959,6 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [expandedGenre, setExpandedGenre] = useState<string | null>(null);
   const [genreLoadingPreset, setGenreLoadingPreset] = useState<string | null>(null);
   const [agePresetLoading,   setAgePresetLoading]   = useState<string | null>(null);
-
-  const [addingSuggestion, setAddingSuggestion] = useState<string | null>(null);
 
   /* ── Regras de Avaliação — Global + Exceções ── */
   const [globalRules,    setGlobalRules]    = useState<EvalRules>(DEFAULT_GLOBAL_RULES);
@@ -1581,66 +1545,19 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           audience_reservation_minutes:  audienceReservationMinutes,
         };
 
-        const { data: cfgRow } = await supabase
-          .from('configuracoes')
-          .select('event_id')
-          .eq('id', 1)
-          .single();
-
-        // Verifica se event_id ainda aponta pra um evento existente (pode ter sido deletado)
-        let existingEventId: string | null = null;
-        if (cfgRow?.event_id) {
-          const { data: existing } = await supabase
-            .from('events')
-            .select('id')
-            .eq('id', cfgRow.event_id)
-            .maybeSingle();
-          if (existing?.id) existingEventId = existing.id;
+        // myEvent.id já foi resolvido lá em cima (linha 1425) via `created_by = user.id`.
+        // SEMPRE atualizamos esse evento — nunca INSERT aqui. INSERT só acontece
+        // via OnboardingWizard. Lookup antigo via configuracoes.id=1 causava
+        // duplicação em loop (issue de 2026-05-12: 10 events criados em 13min).
+        const { error: updateErr } = await supabase
+          .from('events')
+          .update(eventPayload)
+          .eq('id', myEvent.id);
+        if (updateErr) {
+          console.error('[sync] erro ao atualizar event:', updateErr);
+          throw updateErr;
         }
-
-        if (existingEventId) {
-          const { error: updateErr } = await supabase.from('events').update(eventPayload).eq('id', existingEventId);
-          if (updateErr) {
-            console.error('[sync] erro ao atualizar event:', updateErr);
-            throw updateErr;
-          }
-          console.log('[sync] event atualizado:', existingEventId);
-        } else {
-          // Se o nome já termina com o ano (ex: "Festival 2026"), não duplica
-          // o ano no slug → "festival-2026" em vez de "festival-2026-2026".
-          const nameSlug = slugify(general.eventName);
-          const yearSuffix = `-${editionYear}`;
-          const baseSlug = nameSlug.endsWith(yearSuffix) ? nameSlug : `${nameSlug}${yearSuffix}`;
-          const { data: newEvent, error: insertErr } = await supabase
-            .from('events')
-            .insert({ ...eventPayload, slug: baseSlug })
-            .select('id')
-            .single();
-
-          // Conflito de slug → tenta com sufixo aleatório
-          if (insertErr && (insertErr as any).code === '23505') {
-            const altSlug = `${baseSlug}-${Math.random().toString(36).slice(2, 7)}`;
-            const { data: retryEvent, error: retryErr } = await supabase
-              .from('events')
-              .insert({ ...eventPayload, slug: altSlug })
-              .select('id')
-              .single();
-            if (retryErr) {
-              console.error('[sync] insert events (retry slug) falhou:', retryErr);
-              throw retryErr;
-            }
-            if (retryEvent?.id) {
-              await supabase.from('configuracoes').update({ event_id: retryEvent.id }).eq('id', 1);
-              console.log('[sync] event criado (slug alt):', retryEvent.id);
-            }
-          } else if (insertErr) {
-            console.error('[sync] insert events falhou:', insertErr);
-            throw insertErr;
-          } else if (newEvent?.id) {
-            await supabase.from('configuracoes').update({ event_id: newEvent.id }).eq('id', 1);
-            console.log('[sync] event criado:', newEvent.id);
-          }
-        }
+        console.log('[sync] event atualizado:', myEvent.id);
       } catch (syncErr: any) {
         const msg = syncErr?.message ?? String(syncErr);
         console.error('[AccountSettings] Sync para events falhou:', syncErr);

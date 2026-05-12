@@ -57,6 +57,16 @@ export interface SponsorExtract {
   tipo: 'PATROCINADOR' | 'APOIO' | 'REALIZACAO' | 'PRODUCAO' | null
 }
 
+/** Links sociais do evento extraídos do regulamento (auditoria 2026-05-12) */
+export interface SocialLinksExtract {
+  instagram: string | null
+  tiktok:    string | null
+  youtube:   string | null
+  whatsapp:  string | null
+  website:   string | null
+  email:     string | null
+}
+
 /** Resultado completo da extração de regulamento via IA */
 export interface RegulationExtract {
   event_name: string | null
@@ -85,6 +95,21 @@ export interface RegulationExtract {
   programacao: ProgramacaoItem[]
   sponsors: SponsorExtract[]
   meia_entrada_policy: string | null
+  // Auditoria 2026-05-12: 14 campos antes não capturados
+  city: string | null
+  state: string | null
+  event_time: string | null
+  tipos_apresentacao: ('MOSTRA_AVALIADA' | 'COMPETITIVA' | 'NAO_COMPETITIVA' | 'PARTICIPATIVA')[]
+  premiation_system: 'THRESHOLD' | 'RANKING' | null
+  medal_thresholds: { gold: number | null; silver: number | null; bronze: number | null } | null
+  politica_ingressos: 'NAO_DEFINIDO' | 'GRATUITO' | 'INTERNO' | 'EXTERNO' | null
+  url_ingressos: string | null
+  genres: string[]
+  aceita_danca_inclusiva: boolean | null
+  nivel_tecnico_enabled: boolean | null
+  stage_safety_interval_seconds: number | null
+  social_links: SocialLinksExtract | null
+  cover_url_hint: string | null
   summary: string
 }
 
@@ -99,7 +124,14 @@ function buildEmptyExtract(): RegulationExtract {
     tiebreaker_rules: null, registration_lots: [],
     categories: [], formacoes: [], criteria: [], prizes: [],
     audience_tickets: [], workshops: [], programacao: [], sponsors: [],
-    meia_entrada_policy: null, summary: '',
+    meia_entrada_policy: null,
+    // Auditoria 2026-05-12
+    city: null, state: null, event_time: null,
+    tipos_apresentacao: [], premiation_system: null, medal_thresholds: null,
+    politica_ingressos: null, url_ingressos: null, genres: [],
+    aceita_danca_inclusiva: null, nivel_tecnico_enabled: null,
+    stage_safety_interval_seconds: null, social_links: null, cover_url_hint: null,
+    summary: '',
   }
 }
 
@@ -130,6 +162,21 @@ function parseRawExtract(raw: any): RegulationExtract {
     programacao:                raw.programacao                ?? [],
     sponsors:                   raw.sponsors                   ?? [],
     meia_entrada_policy:        raw.meia_entrada_policy        ?? null,
+    // Auditoria 2026-05-12
+    city:                       raw.city                       ?? null,
+    state:                      raw.state                      ?? null,
+    event_time:                 raw.event_time                 ?? null,
+    tipos_apresentacao:         raw.tipos_apresentacao         ?? [],
+    premiation_system:          raw.premiation_system          ?? null,
+    medal_thresholds:           raw.medal_thresholds           ?? null,
+    politica_ingressos:         raw.politica_ingressos         ?? null,
+    url_ingressos:              raw.url_ingressos              ?? null,
+    genres:                     raw.genres                     ?? [],
+    aceita_danca_inclusiva:     raw.aceita_danca_inclusiva     ?? null,
+    nivel_tecnico_enabled:      raw.nivel_tecnico_enabled      ?? null,
+    stage_safety_interval_seconds: raw.stage_safety_interval_seconds ?? null,
+    social_links:               raw.social_links               ?? null,
+    cover_url_hint:             raw.cover_url_hint             ?? null,
     summary:                    raw.summary                    ?? '',
   }
 }

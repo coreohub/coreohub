@@ -144,6 +144,44 @@ const schema = {
         },
       },
       meia_entrada_policy: { type: 'string' },
+      // ── Auditoria 2026-05-12: campos faltantes apontados pelo produtor ──
+      city: { type: 'string' },
+      state: { type: 'string' },
+      event_time: { type: 'string' },
+      tipos_apresentacao: {
+        type: 'array',
+        items: { type: 'string', enum: ['MOSTRA_AVALIADA', 'COMPETITIVA', 'NAO_COMPETITIVA', 'PARTICIPATIVA'] },
+      },
+      premiation_system: { type: 'string', enum: ['THRESHOLD', 'RANKING'] },
+      medal_thresholds: {
+        type: 'object',
+        properties: {
+          gold:   { type: 'number' },
+          silver: { type: 'number' },
+          bronze: { type: 'number' },
+        },
+      },
+      politica_ingressos: { type: 'string', enum: ['NAO_DEFINIDO', 'GRATUITO', 'INTERNO', 'EXTERNO'] },
+      url_ingressos: { type: 'string' },
+      genres: {
+        type: 'array',
+        items: { type: 'string' },
+      },
+      aceita_danca_inclusiva: { type: 'boolean' },
+      nivel_tecnico_enabled: { type: 'boolean' },
+      stage_safety_interval_seconds: { type: 'number' },
+      social_links: {
+        type: 'object',
+        properties: {
+          instagram: { type: 'string' },
+          tiktok:    { type: 'string' },
+          youtube:   { type: 'string' },
+          whatsapp:  { type: 'string' },
+          website:   { type: 'string' },
+          email:     { type: 'string' },
+        },
+      },
+      cover_url_hint: { type: 'string' },
     },
     required: ['summary', 'formacoes', 'categories', 'criteria'],
   },
@@ -202,6 +240,19 @@ EXTRAIA TAMBÉM (campos novos):
 • programacao: cronograma do dia (horários e atividades). Ex { hora: "08:00", atividade: "Credenciamento" }.
 • sponsors: patrocinadores e apoiadores. tipo = PATROCINADOR | APOIO | REALIZACAO | PRODUCAO.
 • meia_entrada_policy: descrição textual da política de meia-entrada se específica do festival (criança até X, prof. de dança grátis, etc — diferente de "Lei 12.933 padrão").
+• city + state: separe a cidade e a UF (2 letras maiúsculas) do address quando possível. Ex address="Votuporanga, SP" → city="Votuporanga", state="SP".
+• event_time: horário de início do evento no formato "HH:MM". Ex "Abertura às 8h" → "08:00".
+• tipos_apresentacao: array dos formatos de mostra oferecidos. MOSTRA_AVALIADA (recebe nota/feedback), COMPETITIVA (com ranking + premiação), NAO_COMPETITIVA (só exibição), PARTICIPATIVA (workshops/coletivos). Pode ter mais de um.
+• premiation_system: como define vencedores. THRESHOLD = vários ganhadores por faixa de nota (Ouro≥X, Prata≥Y, Bronze≥Z, abaixo=Participação). RANKING = só 1º/2º/3º lugar pela maior nota.
+• medal_thresholds: { gold, silver, bronze } com nota mínima de cada medalha (escala 0-10 OU 0-100, mesma do score_scale). Só preencha se premiation_system="THRESHOLD".
+• politica_ingressos: se festival cobra ingresso pra plateia? GRATUITO (entrada franca), INTERNO (CoreoHub vende), EXTERNO (link Sympla/Eventbrite externo), NAO_DEFINIDO.
+• url_ingressos: link da venda externa de ingressos se politica_ingressos="EXTERNO".
+• genres: array de gêneros/estilos aceitos. Ex ["Jazz", "Ballet Clássico", "Hip Hop", "Contemporâneo"]. Use nomes canônicos do mercado BR de dança.
+• aceita_danca_inclusiva: festival aceita dança inclusiva / coreografias com bailarinos PCD? boolean.
+• nivel_tecnico_enabled: festival tem eixo técnico (Iniciante/Intermediário/Avançado) além de categoria por idade? boolean.
+• stage_safety_interval_seconds: intervalo de segurança entre apresentações em SEGUNDOS. Ex "intervalo de 30s entre coreografias" → 30.
+• social_links: { instagram, tiktok, youtube, whatsapp, website, email } do festival/produtora se mencionados. Instagram/TikTok sem o "@". WhatsApp como número com DDI ("+5517..."). Email completo.
+• cover_url_hint: URL de imagem de divulgação/banner/logo do festival SE ENCONTRADO no documento.
 
 IGNORE: preâmbulo legal, justificativa, base legal (lei nº, decreto), declarações exigidas, anexos administrativos, formulários em branco, contrato modelo, cronograma de execução fiscal.
 Para campos não encontrados, retorne null (nunca invente valores). Arrays vazios são preferíveis a inventar items.
@@ -225,6 +276,19 @@ EXTRAIA TAMBÉM (campos novos):
 • programacao: cronograma do dia (horários e atividades). Ex { hora: "08:00", atividade: "Credenciamento" }.
 • sponsors: patrocinadores e apoiadores. tipo = PATROCINADOR | APOIO | REALIZACAO | PRODUCAO.
 • meia_entrada_policy: descrição textual da política de meia-entrada se específica do festival (criança até X, prof. de dança grátis, etc — diferente de "Lei 12.933 padrão").
+• city + state: separe a cidade e a UF (2 letras maiúsculas) do address quando possível. Ex address="Votuporanga, SP" → city="Votuporanga", state="SP".
+• event_time: horário de início do evento no formato "HH:MM". Ex "Abertura às 8h" → "08:00".
+• tipos_apresentacao: array dos formatos de mostra oferecidos. MOSTRA_AVALIADA (recebe nota/feedback), COMPETITIVA (com ranking + premiação), NAO_COMPETITIVA (só exibição), PARTICIPATIVA (workshops/coletivos). Pode ter mais de um.
+• premiation_system: como define vencedores. THRESHOLD = vários ganhadores por faixa de nota (Ouro≥X, Prata≥Y, Bronze≥Z, abaixo=Participação). RANKING = só 1º/2º/3º lugar pela maior nota.
+• medal_thresholds: { gold, silver, bronze } com nota mínima de cada medalha (escala 0-10 OU 0-100, mesma do score_scale). Só preencha se premiation_system="THRESHOLD".
+• politica_ingressos: se festival cobra ingresso pra plateia? GRATUITO (entrada franca), INTERNO (CoreoHub vende), EXTERNO (link Sympla/Eventbrite externo), NAO_DEFINIDO.
+• url_ingressos: link da venda externa de ingressos se politica_ingressos="EXTERNO".
+• genres: array de gêneros/estilos aceitos. Ex ["Jazz", "Ballet Clássico", "Hip Hop", "Contemporâneo"]. Use nomes canônicos do mercado BR de dança.
+• aceita_danca_inclusiva: festival aceita dança inclusiva / coreografias com bailarinos PCD? boolean.
+• nivel_tecnico_enabled: festival tem eixo técnico (Iniciante/Intermediário/Avançado) além de categoria por idade? boolean.
+• stage_safety_interval_seconds: intervalo de segurança entre apresentações em SEGUNDOS. Ex "intervalo de 30s entre coreografias" → 30.
+• social_links: { instagram, tiktok, youtube, whatsapp, website, email } do festival/produtora se mencionados. Instagram/TikTok sem o "@". WhatsApp como número com DDI ("+5517..."). Email completo.
+• cover_url_hint: URL de imagem de divulgação/banner/logo do festival SE ENCONTRADO no documento.
 
 IGNORE: preâmbulo legal, justificativa, base legal (lei nº, decreto), declarações exigidas, anexos administrativos, formulários em branco, contrato modelo, cronograma de execução fiscal.
 Para campos não encontrados, retorne null (nunca invente valores). Arrays vazios são preferíveis a inventar items.
