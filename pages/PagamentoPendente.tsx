@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Clock, RefreshCw, Home } from 'lucide-react';
+import AsaasBadge from '../components/AsaasBadge';
 
 const PagamentoPendente = () => {
   const navigate = useNavigate();
@@ -30,7 +31,7 @@ const PagamentoPendente = () => {
           <ul className="text-xs text-amber-600 dark:text-amber-500 space-y-1 list-disc list-inside">
             <li>Pagamento via boleto aguardando compensação (até 3 dias úteis)</li>
             <li>Pagamento Pix em análise</li>
-            <li>Análise de segurança do Mercado Pago</li>
+            <li>Análise de segurança do processador de pagamentos</li>
           </ul>
         </div>
 
@@ -47,6 +48,11 @@ const PagamentoPendente = () => {
           >
             <Home size={14} /> Ir para o Início
           </button>
+        </div>
+
+        {/* Selo BaaS Asaas — playbook pág. 3 exige em retorno de fluxo financeiro */}
+        <div className="pt-4 flex justify-center">
+          <AsaasBadge variant="compact" />
         </div>
       </div>
     </div>

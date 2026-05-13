@@ -4,6 +4,7 @@ import { supabase } from '../services/supabase';
 import {
   Crown, Loader2, AlertCircle, CheckCircle, ArrowRight, Lock, Mail, User, Sparkles,
 } from 'lucide-react';
+import AsaasBadge from '../components/AsaasBadge';
 
 const OnboardingWizard = lazy(() => import('../components/OnboardingWizard'));
 
@@ -231,6 +232,11 @@ const CriarEventoGate: React.FC = () => {
           <p className="text-[10px] text-center text-slate-400 leading-relaxed">
             Ao criar a conta, você passa por 4 passos rápidos pra colocar sua mostra no ar.
           </p>
+
+          {/* Selo BaaS Asaas — playbook pág. 3 exige em telas de cadastro/login */}
+          <div className="flex justify-center pt-2">
+            <AsaasBadge variant="compact" />
+          </div>
         </div>
 
         <p className="text-center text-[10px] text-slate-400">

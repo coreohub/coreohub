@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CheckCircle, Music2, Calendar, ArrowRight, Home, Receipt } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import AsaasBadge from '../components/AsaasBadge';
 
 interface DetalheInscricao {
   nome: string;
@@ -146,6 +147,11 @@ const PagamentoSucesso = () => {
           >
             <Home size={14} /> Ir para o Início
           </button>
+        </div>
+
+        {/* Selo BaaS Asaas — playbook pág. 3 exige em comprovantes de pagamento */}
+        <div className="pt-4 flex justify-center">
+          <AsaasBadge variant="compact" />
         </div>
       </div>
     </div>

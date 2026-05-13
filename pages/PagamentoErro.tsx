@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { XCircle, RefreshCw, ArrowLeft } from 'lucide-react';
+import AsaasBadge from '../components/AsaasBadge';
 
 const PagamentoErro = () => {
   const navigate = useNavigate();
@@ -48,6 +49,11 @@ const PagamentoErro = () => {
           >
             <ArrowLeft size={14} /> Minhas Inscrições
           </button>
+        </div>
+
+        {/* Selo BaaS Asaas — playbook pág. 3 exige em retorno de fluxo financeiro */}
+        <div className="pt-4 flex justify-center">
+          <AsaasBadge variant="compact" />
         </div>
       </div>
     </div>

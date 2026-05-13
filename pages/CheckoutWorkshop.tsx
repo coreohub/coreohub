@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import AsaasBadge from '../components/AsaasBadge';
 import {
   Loader2, AlertCircle, ArrowLeft, ShieldCheck, User as UserIcon, Mail, Phone, FileText,
   Tag, X, Check, GraduationCap, Sparkles,
@@ -425,6 +426,11 @@ const CheckoutWorkshop: React.FC = () => {
 
           <div className="flex items-center justify-center gap-2 text-[10px] text-slate-500 uppercase tracking-widest">
             <ShieldCheck size={11} /> Pagamento seguro Asaas · CoreoHub
+          </div>
+
+          {/* Selo BaaS Asaas — playbook pág. 3 exige em checkouts/páginas de venda */}
+          <div className="flex justify-center pt-2">
+            <AsaasBadge variant="compact" theme="negative" />
           </div>
         </form>
       </div>
