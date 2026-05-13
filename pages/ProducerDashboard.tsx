@@ -13,7 +13,6 @@ import GuiaDoProdutor from '../components/GuiaDoProdutor';
 import ProducerAlerts from '../components/ProducerAlerts';
 import DemoOnboardingCard from '../components/DemoOnboardingCard';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import AsaasBadge from '../components/AsaasBadge';
 
 const MetricCard = ({ title, value, sub, icon: Icon, trend, warn }: any) => (
   <motion.div
@@ -594,9 +593,8 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
         </div>
       </div>
 
-      <div className="pt-4 border-t border-slate-200 dark:border-white/5">
-        <AsaasBadge variant="inline" />
-      </div>
+      {/* AsaasBadge removido daqui em 2026-05-13 — playbook pág. 16:
+          dashboard operacional não é contexto financeiro ativo. */}
     </div>
   );
 };

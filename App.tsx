@@ -9,7 +9,6 @@ import DemoBanner from './components/DemoBanner';
 import InstallAppBanner from './components/InstallAppBanner';
 import EmailVerifyBanner from './components/EmailVerifyBanner';
 import ImpersonateBanner from './components/ImpersonateBanner';
-import AsaasBadge from './components/AsaasBadge';
 import Header from './components/Header';
 import BottomNavBar from './components/BottomNavBar';
 
@@ -196,22 +195,6 @@ const PrivateLayout: React.FC<{
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Telas ao vivo / operacionais onde o selo Asaas no rodapé não faz sentido
-  // (não há pagamento envolvido, e a presença do logo polui a experiência).
-  const HIDE_ASAAS_FOOTER_ROUTES = [
-    '/judge-terminal',
-    '/deliberacao',
-    '/conferencia',
-    '/judge-practice',
-    '/suporte-juri',
-    '/marcacao-palco',
-    '/check-in',
-    '/credenciais',
-    '/narracao-ia',
-    '/live',
-  ];
-  const hideAsaasFooter = HIDE_ASAAS_FOOTER_ROUTES.some(r => location.pathname.startsWith(r));
-
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate('/login');
@@ -259,20 +242,10 @@ const PrivateLayout: React.FC<{
               {children}
             </Suspense>
           </div>
-          {/* Selo Asaas — exigência regulatória do BaaS (Resolução Conjunta nº
-              16/2025 BCB). Visível na maioria das telas privadas pra cumprir a
-              obrigatoriedade de identificação clara do prestador financeiro.
-              Escondido em telas operacionais ao vivo (HIDE_ASAAS_FOOTER_ROUTES),
-              onde não há pagamento envolvido. */}
-          {!hideAsaasFooter && (
-            <footer className="px-4 py-6 border-t border-slate-200 dark:border-white/5 bg-white dark:bg-slate-950 flex flex-col items-center gap-2">
-              <AsaasBadge variant="compact" width={120} height={36} />
-              <p className="text-[9px] text-slate-400 text-center max-w-md leading-relaxed">
-                Pagamentos processados pelo ASAAS GESTÃO FINANCEIRA S.A., instituição de pagamento
-                autorizada pelo Banco Central do Brasil.
-              </p>
-            </footer>
-          )}
+          {/* Rodapé global do selo Asaas removido em 2026-05-13 — playbook
+              pág. 16 proíbe usar selo fora de contexto financeiro. O selo
+              segue presente em todas as telas explicitamente financeiras
+              (Auth, Checkouts, comprovantes, AccountSettings, e-mails). */}
         </main>
       </div>
 
