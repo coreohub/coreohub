@@ -82,6 +82,7 @@ const VideoSelection           = lazy(() => import('./pages/VideoSelection'));
 const SeletivaInscrito         = lazy(() => import('./pages/SeletivaInscrito'));
 const RegulationAIParser       = lazy(() => import('./pages/RegulationAIParser'));
 const JudgeLogin               = lazy(() => import('./pages/JudgeLogin'));
+const TermoProdutor            = lazy(() => import('./pages/TermoProdutor'));
 
 const PageLoader = () => (
   <div className="flex-1 flex items-center justify-center min-h-[40vh]">
@@ -193,7 +194,6 @@ const PrivateLayout: React.FC<{
 }>  = ({ children, profile, theme, toggleTheme, activeRole, setActiveRole, videoSelectionEnabled }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
-  const location = useLocation();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -415,6 +415,7 @@ const App: React.FC = () => {
         <Route path="/apuracao" element={<PrivateRoute {...privateRouteProps}><ResultsPanel /></PrivateRoute>} />
         <Route path="/equipe-jurados" element={<PrivateRoute {...privateRouteProps}><JudgesManagement /></PrivateRoute>} />
         <Route path="/account-settings" element={<PrivateRoute {...privateRouteProps}><AccountSettings onSaveSuccess={fetchConfig} /></PrivateRoute>} />
+        <Route path="/termo-produtor" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><TermoProdutor /></Suspense></PrivateRoute>} />
         {/* Narração IA: atalho dedicado em vez de aba dentro de Configurações.
             Reusa AccountSettings com tab pré-selecionada e label customizado. */}
         <Route path="/narracao-ia" element={<PrivateRoute {...privateRouteProps}><AccountSettings onSaveSuccess={fetchConfig} forcedTab="Fluxo do Evento" pageLabel="Narração IA" /></PrivateRoute>} />

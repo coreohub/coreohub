@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import AsaasBadge from '../components/AsaasBadge';
+import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
 import {
   Loader2, AlertCircle, ArrowLeft, ShieldCheck, User as UserIcon, Mail, Phone, FileText,
   Tag, X, Check, GraduationCap, Sparkles,
@@ -61,6 +62,8 @@ const CheckoutWorkshop: React.FC = () => {
   const [cpf, setCpf]     = useState('');
   const [phone, setPhone] = useState('');
   const [paying, setPaying] = useState(false);
+  // Mitigation #7: comprador precisa aceitar política de reembolso antes de pagar
+  const [refundAccepted, setRefundAccepted] = useState(false);
 
   // Cupom
   const [couponInput, setCouponInput] = useState('');
@@ -415,9 +418,20 @@ const CheckoutWorkshop: React.FC = () => {
             </div>
           )}
 
+          {/* Bloco legal: política de reembolso (CDC art. 49) + recomendação PIX.
+              Só obriga aceite em workshop pago — grátis não tem reembolso. */}
+          {breakdown?.charged !== 0 && (
+            <CheckoutLegalNotice
+              accepted={refundAccepted}
+              onAcceptedChange={setRefundAccepted}
+              theme="dark"
+            />
+          )}
+
           <button
             type="submit"
-            disabled={!canSubmit}
+            disabled={!canSubmit || (breakdown?.charged !== 0 && !refundAccepted)}
+            title={breakdown?.charged !== 0 && !refundAccepted ? 'Aceite a política de reembolso para prosseguir' : undefined}
             className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#ff0068] px-4 py-3.5 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] disabled:opacity-40 disabled:cursor-not-allowed transition"
           >
             {paying && <Loader2 size={16} className="animate-spin" />}

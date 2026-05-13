@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase, uploadEventCover, supabaseUrl } from '../services/supabase';
 import imageCompression from 'browser-image-compression';
 import {
@@ -759,6 +760,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   // Guard síncrono contra double-click. setSaving é assíncrono — sem ref,
   // cliques rápidos podem entrar em handleSave antes do disabled atualizar.
   const saveInFlightRef = useRef(false);
+  // Navegação programática (usada pelo gate do Termo de Adesão pra ir pra /termo-produtor).
+  const navigate = useNavigate();
   const [success, setSuccess]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [isFirstSave, setIsFirstSave] = useState(false);
@@ -781,6 +784,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [currentUserId, setCurrentUserId]       = useState<string | null>(null);
   const [mpEvents, setMpEvents]                 = useState<any[]>([]);
   const [savingCommission, setSavingCommission] = useState<string | null>(null);
+  // Termo de Adesão do Produtor — aceite obrigatório antes de conectar Asaas.
+  // Versão atual em pages/TermoProdutor.tsx (TERMO_PRODUTOR_VERSION). Se a
+  // versão registrada no profile for diferente da atual, exige re-aceite.
+  const TERMO_PRODUTOR_VERSION_LOCAL = '1.0';
+  const [termsAcceptedVersion, setTermsAcceptedVersion] = useState<string | null>(null);
+  const termsAccepted = termsAcceptedVersion === TERMO_PRODUTOR_VERSION_LOCAL;
 
   /* carrega perfil Asaas e eventos ao montar */
   useEffect(() => {
@@ -790,10 +799,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       setCurrentUserId(user.id);
       const { data: profile } = await supabase
         .from('profiles')
-        .select('asaas_subconta_id, asaas_wallet_id, cpf_cnpj, pix_key, role, is_super_admin')
+        .select('asaas_subconta_id, asaas_wallet_id, cpf_cnpj, pix_key, role, is_super_admin, producer_terms_version')
         .eq('id', user.id)
         .single();
       setAsaasProfile(profile);
+      setTermsAcceptedVersion((profile as any)?.producer_terms_version ?? null);
       // Super admin (is_super_admin=true) E COREOHUB_ADMIN role ambos liberam edicao
       // de comissao. Mesma logica de SuperAdmin.tsx:84 — alinhamento.
       setIsAdmin(Boolean((profile as any)?.is_super_admin) || (profile as any)?.role === 'COREOHUB_ADMIN');
@@ -809,6 +819,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
   const handleConnectAsaas = async () => {
     setAsaasFormError(null);
+    // Gate: produtor precisa ter aceitado o Termo de Adesão antes de abrir
+    // subconta. Defesa em profundidade (UI já bloqueia o form, mas double-check).
+    if (!termsAccepted) {
+      setAsaasFormError('Aceite o Termo de Adesão do Produtor antes de conectar sua conta de recebimento.');
+      return;
+    }
     const cpfCnpjDigits = unmaskCpfCnpj(asaasForm.cpf_cnpj);
     const isCnpj = cpfCnpjDigits.length === 14;
     const isCpf  = cpfCnpjDigits.length === 11;
@@ -3645,6 +3661,32 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   <div className="space-y-4">
                     <AsaasBadge variant="card" />
 
+                    {/* Gate: Termo de Adesão precisa ser aceito antes de abrir a subconta.
+                        Quando não aceito, mostra CTA pro termo e BLOQUEIA o form de conexão. */}
+                    {!termsAccepted && (
+                      <div className="p-5 bg-[#ff0068]/5 border-2 border-[#ff0068]/30 rounded-2xl space-y-3">
+                        <div className="flex items-start gap-3">
+                          <AlertCircle size={20} className="text-[#ff0068] shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight">
+                              Aceite do Termo necessário
+                            </p>
+                            <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
+                              Antes de conectar sua conta de recebimento, é necessário aceitar o
+                              <strong> Termo de Adesão do Produtor</strong>, que cobre responsabilidades
+                              sobre chargebacks, estornos e autorização de débitos.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => navigate('/termo-produtor')}
+                          className="w-full flex items-center justify-center gap-2 py-3 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-xl font-black text-[11px] uppercase tracking-widest transition-all"
+                        >
+                          Ler e aceitar o Termo →
+                        </button>
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-4 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-2xl">
                       <AlertCircle size={22} className="text-amber-500 shrink-0" />
                       <div className="flex-1">
@@ -3767,8 +3809,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
                       <button
                         onClick={handleConnectAsaas}
-                        disabled={asaasLoading}
-                        className="flex items-center gap-3 px-6 py-4 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-50 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20 w-full justify-center"
+                        disabled={asaasLoading || !termsAccepted}
+                        title={!termsAccepted ? 'Aceite o Termo de Adesão antes de conectar' : undefined}
+                        className="flex items-center gap-3 px-6 py-4 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20 w-full justify-center"
                       >
                         {asaasLoading ? <Loader2 size={16} className="animate-spin" /> : <><CheckCircle size={16} /> Configurar conta de recebimento</>}
                       </button>

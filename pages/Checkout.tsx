@@ -8,6 +8,7 @@ import {
   Music2, Users, Tag, Ticket, X, Calendar, Shield,
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
+import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
 
 const SUPABASE_URL = 'https://ghpltzzijlvykiytwslu.supabase.co';
 
@@ -49,6 +50,9 @@ const Checkout = () => {
   const [registration, setRegistration] = useState<any>(null);
   const [loading, setLoading]         = useState(true);
   const [paying, setPaying]           = useState(false);
+  // Mitigation #7: comprador precisa aceitar política de reembolso antes de pagar.
+  // Prova de aceite vira evidência em caso de chargeback.
+  const [refundAccepted, setRefundAccepted] = useState(false);
   const [confirming, setConfirming]   = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const [baseFee, setBaseFee]         = useState<number>(0);
@@ -406,6 +410,16 @@ const Checkout = () => {
           </div>
         )}
 
+        {/* Bloco legal: política de reembolso (CDC art. 49) + recomendação PIX.
+            Só aparece em fluxo pago — em evento governo é gratuito, não tem reembolso. */}
+        {!isGovernment && (
+          <CheckoutLegalNotice
+            accepted={refundAccepted}
+            onAcceptedChange={setRefundAccepted}
+            theme="light"
+          />
+        )}
+
         {/* Botão principal */}
         {isGovernment ? (
           <button
@@ -421,8 +435,9 @@ const Checkout = () => {
         ) : (
           <button
             onClick={handlePay}
-            disabled={paying || finalValue <= 0}
-            className="w-full flex items-center justify-center gap-3 py-5 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-50 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20"
+            disabled={paying || finalValue <= 0 || !refundAccepted}
+            title={!refundAccepted ? 'Aceite a política de reembolso para prosseguir' : undefined}
+            className="w-full flex items-center justify-center gap-3 py-5 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20"
           >
             {paying
               ? <><Loader2 size={18} className="animate-spin" /> Gerando pagamento...</>

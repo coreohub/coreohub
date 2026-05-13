@@ -19,6 +19,7 @@ import {
   Tag, X, Check,
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
+import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
 import { resolveLote, todayISO, formatDataBR, diffDias, type Lote } from '../utils/lotes';
 
 const formatBRL = (n: number) =>
@@ -65,6 +66,8 @@ export default function CheckoutIngresso() {
   const [phone, setPhone] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [paying, setPaying] = useState(false);
+  // Mitigation #7: comprador precisa aceitar política de reembolso antes de pagar
+  const [refundAccepted, setRefundAccepted] = useState(false);
   // Tier 2: cupom + estoque
   const [stock, setStock] = useState<{ sold: number; remaining: number | null; sold_out: boolean } | null>(null);
   const [couponInput, setCouponInput] = useState('');
@@ -560,10 +563,20 @@ export default function CheckoutIngresso() {
           </div>
         )}
 
+        {/* Bloco legal: política de reembolso (CDC art. 49) + recomendação PIX */}
+        <div className="mb-4">
+          <CheckoutLegalNotice
+            accepted={refundAccepted}
+            onAcceptedChange={setRefundAccepted}
+            theme="dark"
+          />
+        </div>
+
         <button
           type="submit"
-          disabled={!canSubmit}
-          className="w-full py-4 bg-[#ff0068] hover:bg-[#ff0068]/90 disabled:bg-white/10 disabled:text-slate-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
+          disabled={!canSubmit || !refundAccepted}
+          title={!refundAccepted ? 'Aceite a política de reembolso para prosseguir' : undefined}
+          className="w-full py-4 bg-[#ff0068] hover:bg-[#ff0068]/90 disabled:bg-white/10 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
         >
           {paying ? <Loader2 className="animate-spin" size={16} /> : <Ticket size={16} />}
           {paying ? 'Gerando pagamento...' : 'Continuar pro pagamento'}
