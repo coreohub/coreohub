@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, uploadEventCover, supabaseUrl } from '../services/supabase';
+import { TERMO_PRODUTOR_VERSION } from './TermoProdutor';
 import imageCompression from 'browser-image-compression';
 import {
   getAllGenres, createGenre, updateGenre, deleteGenre,
@@ -785,11 +786,10 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [mpEvents, setMpEvents]                 = useState<any[]>([]);
   const [savingCommission, setSavingCommission] = useState<string | null>(null);
   // Termo de Adesão do Produtor — aceite obrigatório antes de conectar Asaas.
-  // Versão atual em pages/TermoProdutor.tsx (TERMO_PRODUTOR_VERSION). Se a
-  // versão registrada no profile for diferente da atual, exige re-aceite.
-  const TERMO_PRODUTOR_VERSION_LOCAL = '1.0';
+  // Versão importada de TermoProdutor.tsx — fonte única da verdade.
+  // Bumpar a versão lá invalida aceites antigos aqui automaticamente.
   const [termsAcceptedVersion, setTermsAcceptedVersion] = useState<string | null>(null);
-  const termsAccepted = termsAcceptedVersion === TERMO_PRODUTOR_VERSION_LOCAL;
+  const termsAccepted = termsAcceptedVersion === TERMO_PRODUTOR_VERSION;
 
   /* carrega perfil Asaas e eventos ao montar */
   useEffect(() => {
