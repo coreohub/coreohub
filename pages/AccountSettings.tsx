@@ -3574,6 +3574,31 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               </p>
             </div>
 
+            {/* Banner: Termo de Adesão pendente.
+                Aparece pra todo produtor (conectado ou não) que ainda não aceitou
+                a versão atual do Termo. Aceitar é pré-requisito do Asaas (gate de
+                conexão) — pra produtores que conectaram antes do Termo existir,
+                este banner é o caminho de adesão retroativa. */}
+            {!termsAccepted && (
+              <div className="flex items-center gap-4 p-4 bg-[#ff0068]/5 border-2 border-[#ff0068]/30 rounded-2xl">
+                <AlertCircle size={20} className="text-[#ff0068] shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                    Termo de Adesão pendente
+                  </p>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                    Aceite o Termo de Adesão do Produtor — define responsabilidades sobre chargebacks, estornos e autorização de débitos.
+                  </p>
+                </div>
+                <button
+                  onClick={() => navigate('/termo-produtor')}
+                  className="shrink-0 px-4 py-2.5 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                >
+                  Ler e aceitar →
+                </button>
+              </div>
+            )}
+
             {/* Conexão Asaas */}
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-3xl overflow-hidden">
               <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100 dark:border-white/8">

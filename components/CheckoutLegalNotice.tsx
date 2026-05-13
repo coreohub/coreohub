@@ -34,20 +34,6 @@ const CheckoutLegalNotice: React.FC<CheckoutLegalNoticeProps> = ({
 
   return (
     <div className="space-y-3">
-      {/* Recomendação PIX — mitigation #1 (chargeback window menor) */}
-      {!hidePixRecommendation && (
-        <div className={`flex items-center gap-2.5 p-3 rounded-2xl border ${
-          isDark
-            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-            : 'bg-emerald-50 border-emerald-200 text-emerald-700'
-        }`}>
-          <Zap size={14} className="shrink-0" />
-          <p className="text-[11px] leading-relaxed">
-            <strong>Recomendamos PIX</strong> — pagamento confirmado em segundos e sem taxas pra você.
-          </p>
-        </div>
-      )}
-
       {/* Política de reembolso — CDC art. 49 */}
       <div className={`p-4 rounded-2xl border ${
         isDark
@@ -88,6 +74,18 @@ const CheckoutLegalNotice: React.FC<CheckoutLegalNoticeProps> = ({
             Li e concordo com a política de reembolso acima.
           </span>
         </label>
+
+        {/* Recomendação PIX — discreto, abaixo do checkbox (mitigation #1) */}
+        {!hidePixRecommendation && (
+          <div className={`mt-2 flex items-center gap-1.5 px-2 ${
+            isDark ? 'text-emerald-400/80' : 'text-emerald-600/80'
+          }`}>
+            <Zap size={10} className="shrink-0" />
+            <p className="text-[9px] font-bold uppercase tracking-widest">
+              PIX recomendado
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
