@@ -52,6 +52,8 @@ export interface EventStyle {
   /** Lista de subgêneros com flag de categoria livre */
   sub_types: Subgenre[];
   requires_subcategory: boolean;
+  /** Cor de fundo do badge na UI (hex). Default rosa CoreoHub se ausente. */
+  color?: string;
 }
 
 export interface Subcategory {

@@ -47,15 +47,20 @@ const TermoProdutor: React.FC = () => {
     setAccepting(true);
     setError(null);
     try {
-      const { error: updErr } = await supabase
-        .from('profiles')
-        .update({
-          producer_terms_accepted_at: new Date().toISOString(),
-          producer_terms_version:     TERMO_PRODUTOR_VERSION,
-        })
-        .eq('id', userId);
-      if (updErr) throw updErr;
-      setAcceptedAt(new Date().toISOString());
+      // RPC SECURITY DEFINER captura IP servidor + auth.uid() + grava em
+      // audit log imutável + atualiza profile na mesma transação.
+      // Cliente envia só version + user_agent (UA pode ser spoofado mas o
+      // IP capturado pelo servidor é prova real).
+      const { data: acceptedTimestamp, error: rpcErr } = await supabase.rpc(
+        'accept_producer_terms',
+        {
+          p_version:    TERMO_PRODUTOR_VERSION,
+          p_user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+        }
+      );
+      if (rpcErr) throw rpcErr;
+      const ts = (acceptedTimestamp as string | null) ?? new Date().toISOString();
+      setAcceptedAt(ts);
       setAcceptedVersion(TERMO_PRODUTOR_VERSION);
     } catch (e: any) {
       setError(e.message ?? 'Falha ao registrar aceite. Tente novamente.');

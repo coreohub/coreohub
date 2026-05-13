@@ -783,7 +783,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [updatingPix, setUpdatingPix]           = useState(false);
   const [pixUpdateError, setPixUpdateError]     = useState<string | null>(null);
   const [currentUserId, setCurrentUserId]       = useState<string | null>(null);
-  const [mpEvents, setMpEvents]                 = useState<any[]>([]);
+  const [producerEvents, setProducerEvents]           = useState<any[]>([]);
   const [savingCommission, setSavingCommission] = useState<string | null>(null);
   // Termo de Adesão do Produtor — aceite obrigatório antes de conectar Asaas.
   // Versão importada de TermoProdutor.tsx — fonte única da verdade.
@@ -812,7 +812,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         .select('id, name, commission_type, commission_percent, commission_fixed, fee_mode')
         .eq('created_by', user.id)
         .order('created_at', { ascending: false });
-      setMpEvents(events ?? []);
+      setProducerEvents(events ?? []);
     };
     loadAsaasData();
   }, []);
@@ -928,7 +928,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const handleSaveCommission = async (eventId: string, patch: { commission_type: string; commission_percent: number; commission_fixed: number; fee_mode?: string }) => {
     setSavingCommission(eventId);
     await supabase.from('events').update(patch).eq('id', eventId);
-    setMpEvents(evs => evs.map(e => e.id === eventId ? { ...e, ...patch } : e));
+    setProducerEvents(evs => evs.map(e => e.id === eventId ? { ...e, ...patch } : e));
     setSavingCommission(null);
   };
 
@@ -3856,10 +3856,10 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 </div>
               </div>
               <div className="p-6 space-y-4">
-                {mpEvents.length === 0 ? (
+                {producerEvents.length === 0 ? (
                   <p className="text-center text-slate-400 py-6 text-sm">Nenhum evento encontrado.</p>
                 ) : (
-                  mpEvents.map(ev => (
+                  producerEvents.map(ev => (
                     <EventCommissionCard
                       key={ev.id}
                       event={ev}

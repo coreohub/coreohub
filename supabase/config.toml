@@ -471,42 +471,10 @@ verify_jwt = false
 import_map = "./functions/asaas-webhook/deno.json"
 entrypoint = "./functions/asaas-webhook/index.ts"
 
-[functions.mp-oauth-callback]
-enabled = true
-verify_jwt = true
-import_map = "./functions/mp-oauth-callback/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/mp-oauth-callback/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/mp-oauth-callback/*.html" ]
-
-[functions.create-payment]
-enabled = true
-verify_jwt = true
-import_map = "./functions/create-payment/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/create-payment/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/create-payment/*.html" ]
-
-# Webhook do Mercado Pago: verify_jwt DEVE ser false — o MP não envia
-# header de Authorization, e isso fazia o Supabase rejeitar com 401
-# UNAUTHORIZED_NO_AUTH_HEADER antes do código rodar.
-# A autenticidade do evento é validada via API do MP com o access_token do produtor.
-[functions.mp-webhook]
-enabled = true
-verify_jwt = false
-import_map = "./functions/mp-webhook/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/mp-webhook/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/mp-webhook/*.html" ]
+# Edge functions Mercado Pago (mp-oauth-callback, create-payment, mp-webhook)
+# removidas em 2026-05-13. Projeto migrou pra Asaas BaaS via create-payment-asaas
+# + asaas-webhook. As pastas locais foram deletadas; resta deletar manualmente
+# do projeto Supabase remoto via `supabase functions delete <nome>` quando seguro.
 
 # Etapa 2 Certificados — emite em lote (lazy-cache: cria rows com pdf_url=NULL,
 # PDF é gerado on-demand quando inscrito clica baixar). Producer-only.

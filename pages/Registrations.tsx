@@ -23,7 +23,7 @@ const Registrations = () => {
 
   const handleOpenRefund = (reg: any) => {
     setRefundModal(reg);
-    // Pré-preenche com valor pago (padrão Mercado Pago/Stripe). Produtor edita
+    // Pré-preenche com valor pago (padrão Asaas/Stripe). Produtor edita
     // pra reembolso parcial. Tenta valor_total → valor_pago (legacy) → vazio.
     const valorPago = reg?.valor_total ?? reg?.valor_pago ?? null;
     setRefundAmount(valorPago != null && Number(valorPago) > 0 ? String(valorPago) : '');

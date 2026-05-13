@@ -171,7 +171,9 @@ const PagamentoInscrito = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
 
-      const response = await fetch(`${supabaseUrl}/functions/v1/create-payment`, {
+      // Asaas BaaS (substitui o create-payment legacy do Mercado Pago).
+      // Resposta tem `invoice_url` (página de cobrança Asaas com PIX/cartão/boleto).
+      const response = await fetch(`${supabaseUrl}/functions/v1/create-payment-asaas`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -187,7 +189,8 @@ const PagamentoInscrito = () => {
         throw new Error(result.error ?? result.message ?? `Erro ${response.status} ao gerar o pagamento.`);
       }
 
-      const paymentUrl = result.sandbox_init_point ?? result.init_point;
+      const paymentUrl = result.invoice_url;
+      if (!paymentUrl) throw new Error('URL de pagamento não retornada pelo servidor.');
       window.location.href = paymentUrl;
 
     } catch (err: any) {
@@ -230,7 +233,7 @@ const PagamentoInscrito = () => {
       <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-2xl">
         <ShieldCheck size={16} className="text-blue-500 shrink-0 mt-0.5" />
         <p className="text-[10px] text-blue-700 dark:text-blue-400 font-bold leading-relaxed">
-          Pagamento seguro via <strong>Mercado Pago</strong>. Aceitamos Pix e cartão de crédito/débito.
+          Pagamento seguro via <strong>Asaas</strong>. Aceitamos Pix, cartão de crédito/débito e boleto.
           Sua inscrição é confirmada automaticamente após aprovação.
         </p>
       </div>

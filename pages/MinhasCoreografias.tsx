@@ -474,7 +474,11 @@ const MinhasCoreografias = () => {
             mode:         toleranceRule.mode,
             flagged_at:   new Date().toISOString(),
           } : null,
-          ...(form.event_data || {}),
+          // form.event_data tem 2 usos confundidos neste arquivo: string ISO
+          // pra data do evento (uso predominante) E jsonb metadata aqui no save.
+          // Cast pra evitar erro TS sem mudar comportamento — refactor futuro
+          // pode separar `form.event_date` (string) de `form.event_metadata` (jsonb).
+          ...((form.event_data as any) || {}),
         },
       };
       if (editingId) {

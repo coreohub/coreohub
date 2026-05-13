@@ -31,6 +31,8 @@ interface Judge {
   is_public?: boolean;
   /** 'M' | 'F' — flexão da palavra "Jurado/Jurada" no card público */
   gender?: 'M' | 'F' | null;
+  /** URL da assinatura digital pra emissão de certificados */
+  assinatura_url?: string | null;
 }
 
 const FORMATS = [

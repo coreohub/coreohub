@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($d = \"D:\\\\Documentos\\\\CoreoHub\\\\supabase\\\\functions\\\\detect-workshop-combo\"; $e = \"D:\\\\Documentos\\\\CoreoHub\\\\supabase\\\\functions\\\\emit-certificates-batch\"; deno check --no-lock --config=\"$d\\\\deno.json\" \"$d\\\\index.ts\"; if \\($?\\) { deno check --no-lock --config=\"$e\\\\deno.json\" \"$e\\\\index.ts\" })",
+      "PowerShell($d = \"D:\\\\Documentos\\\\CoreoHub\\\\supabase\\\\functions\\\\detect-workshop-combo\"; $g = \"D:\\\\Documentos\\\\CoreoHub\\\\supabase\\\\functions\\\\get-certificate-pdf\"; $c = \"D:\\\\Documentos\\\\CoreoHub\\\\supabase\\\\functions\\\\create-workshop-registration\"; $e = \"D:\\\\Documentos\\\\CoreoHub\\\\supabase\\\\functions\\\\emit-certificates-batch\"; deno check --no-lock --config=\"$d\\\\deno.json\" \"$d\\\\index.ts\"; if \\($?\\) { deno check --no-lock --config=\"$g\\\\deno.json\" \"$g\\\\index.ts\" }; if \\($?\\) { deno check --no-lock --config=\"$c\\\\deno.json\" \"$c\\\\index.ts\" }; if \\($?\\) { deno check --no-lock --config=\"$e\\\\deno.json\" \"$e\\\\index.ts\" })",
+      "PowerShell(supabase functions deploy detect-workshop-combo --project-ref ghpltzzijlvykiytwslu)",
+      "Bash(git restore *)",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}
