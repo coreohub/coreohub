@@ -28,6 +28,9 @@ yarn-error.log*
 *.sln
 *.sw?
 
+# Claude Code / agent local settings
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db
@@ -35,3 +38,6 @@ Thumbs.db
 # Supabase local
 supabase/.branches
 supabase/.temp
+
+# Screenshots de desenvolvimento (não versionar)
+public/screenshots/
