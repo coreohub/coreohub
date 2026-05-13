@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
-import { ArrowLeft, ShieldCheck, FileText, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, FileText, AlertTriangle, CheckCircle2, Loader2, ArrowRight, CreditCard, Home } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 
 // Versão do Termo. Bump ao alterar conteúdo — produtores existentes precisarão
@@ -289,15 +289,45 @@ const TermoProdutor: React.FC = () => {
         )}
 
         {isCurrentVersionAccepted && (
-          <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-3xl p-5 flex items-center gap-3">
-            <CheckCircle2 size={20} className="text-emerald-500 shrink-0" />
-            <div>
-              <p className="text-sm font-black uppercase tracking-tight text-emerald-700 dark:text-emerald-400">
-                Termo aceito
-              </p>
-              <p className="text-[11px] text-emerald-600 dark:text-emerald-300 mt-0.5">
-                Você aceitou a versão {TERMO_PRODUTOR_VERSION} em {formatDate(acceptedAt!)}.
-              </p>
+          <div className="space-y-4">
+            <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-3xl p-5 flex items-center gap-3">
+              <CheckCircle2 size={20} className="text-emerald-500 shrink-0" />
+              <div>
+                <p className="text-sm font-black uppercase tracking-tight text-emerald-700 dark:text-emerald-400">
+                  Termo aceito
+                </p>
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-300 mt-0.5">
+                  Você aceitou a versão {TERMO_PRODUTOR_VERSION} em {formatDate(acceptedAt!)}.
+                </p>
+              </div>
+            </div>
+
+            {/* CTAs pós-aceite — direciona produtor pra próxima ação relevante.
+                Primário: conectar conta Asaas (motivo provável de ter chegado aqui).
+                Secundário: voltar pro painel. */}
+            <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 rounded-3xl p-5 space-y-3">
+              <div>
+                <p className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                  Próximo passo
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Configure sua conta de recebimento pra começar a receber pagamentos das inscrições.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  onClick={() => navigate('/account-settings')}
+                  className="flex items-center justify-center gap-2 px-4 py-3 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20"
+                >
+                  <CreditCard size={13} /> Configurar conta Asaas <ArrowRight size={13} />
+                </button>
+                <button
+                  onClick={() => navigate('/qg-organizador')}
+                  className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all"
+                >
+                  <Home size={13} /> Ir pro Painel
+                </button>
+              </div>
             </div>
           </div>
         )}
