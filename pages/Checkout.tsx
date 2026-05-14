@@ -93,7 +93,7 @@ const Checkout = () => {
       const [{ data: reg }, { data: ev }] = await Promise.all([
         supabase
           .from('registrations')
-          .select('id, nome_coreografia, formato_participacao, categoria, estilo_danca, status_pagamento, payment_url, profiles(full_name, email)')
+          .select('id, nome_coreografia, formato_participacao, categoria, estilo_danca, subgenero, status_pagamento, payment_url, profiles(full_name, email)')
           .eq('id', registrationId)
           .single(),
         supabase
