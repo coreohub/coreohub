@@ -501,7 +501,7 @@ const CreateEvent = () => {
                     disabled={analyzing || !formData.rules_text}
                     className="flex items-center gap-2 px-4 py-2 bg-[#e3ff0a]/10 text-[#e3ff0a] rounded-xl text-[10px] font-black uppercase hover:bg-[#e3ff0a] hover:text-black transition-all disabled:opacity-40"
                   >
-                    {analyzing ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                    {analyzing && <RefreshCw size={14} className="animate-spin" />}
                     Analisar texto
                   </button>
                 </div>

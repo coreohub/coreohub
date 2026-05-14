@@ -1250,7 +1250,7 @@ const Schedule = () => {
             disabled={isGenerating || isLoading}
             className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:border-slate-400 dark:hover:border-white/20 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-60"
           >
-            {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+            {isGenerating && <Loader2 size={12} className="animate-spin" />}
             {isGenerating ? 'Gerando...' : 'Gerar Ordem Inteligente'}
           </button>
 
@@ -1263,7 +1263,7 @@ const Schedule = () => {
           >
             {batchProgress
               ? <><Loader2 size={12} className="animate-spin" /> Gerando {batchProgress.done}/{batchProgress.total}...</>
-              : <><Sparkles size={12} /> Gerar narrações IA</>
+              : 'Gerar narrações IA'
             }
           </button>
 

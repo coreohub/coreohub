@@ -162,7 +162,7 @@ const DemoSettingsTab: React.FC = () => {
           >
             {busy === 'create'
               ? <><Loader2 size={14} className="animate-spin" /> Populando...</>
-              : <><Sparkles size={14} /> Adicionar Evento de Demonstração</>
+              : 'Adicionar Evento de Demonstração'
             }
           </button>
         </div>

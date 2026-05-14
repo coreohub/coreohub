@@ -466,7 +466,6 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
             disabled={(inputMode === 'pdf' && !selectedFile) || (inputMode === 'text' && !pastedText.trim())}
             className="w-full py-5 bg-slate-950 dark:bg-[#ff0068] text-white rounded-[2rem] font-black text-[11px] uppercase tracking-[0.3em] flex items-center justify-center gap-4 hover:bg-[#ff0068] transition-all disabled:opacity-40 shadow-2xl shadow-[#ff0068]/20"
           >
-            <Sparkles size={18} className="text-yellow-300" />
             Analisar com IA
           </button>
         </div>
