@@ -55,14 +55,40 @@ export async function getGenres(eventId: string): Promise<EventStyle[]> {
   return (data ?? []).map(toEventStyle);
 }
 
-export async function getAllGenres(): Promise<EventStyle[]> {
+export async function getAllGenres(options?: { includeHidden?: boolean }): Promise<EventStyle[]> {
   const { data, error } = await supabase
     .from('event_styles')
     .select('*')
     .order('name');
 
   if (error) throw error;
-  return (data ?? []).map(toEventStyle);
+  const all = (data ?? []).map(toEventStyle);
+
+  // Filtra gêneros "ocultos" — quando o produtor "exclui" um gênero do
+  // catálogo global, criamos um fork local com is_active=false (vide
+  // deleteGenre). Por default, esses ficam ocultos da lista. Pra reativar,
+  // a UI passa includeHidden=true e oferece botão "Reativar".
+  if (options?.includeHidden) return all;
+
+  // Mapa: nome lowercase → fork local do user (created_by não NULL)
+  const localOverrides = new Map<string, EventStyle>();
+  for (const g of all) {
+    // Se há um fork local inativo, ele "mascara" o global de mesmo nome.
+    // toEventStyle não retorna created_by, então leio do data bruto:
+    const raw = data!.find(r => r.id === g.id);
+    if (raw?.created_by && !g.is_active) {
+      localOverrides.set(g.name.trim().toLowerCase(), g);
+    }
+  }
+
+  return all.filter(g => {
+    const key = g.name.trim().toLowerCase();
+    const override = localOverrides.get(key);
+    if (!override) return true;
+    // Tem override local inativo. Esconde TODAS as rows desse nome
+    // (inclui o global original que o user "excluiu" + o próprio fork).
+    return false;
+  });
 }
 
 /* ── Criação ─────────────────────────────────────────────────────────────── */
@@ -182,11 +208,17 @@ export async function removeSubgenre(
 
 /* ── Exclusão ─────────────────────────────────────────────────────────────── */
 
-export async function deleteGenre(id: string): Promise<void> {
+/**
+ * Tenta DELETE direto. Se RLS bloquear (gênero do catálogo global criado
+ * por admin), faz soft-delete via FORK: cria/atualiza row local do produtor
+ * com is_active=false, que o getGenres filtra fora da lista visual.
+ *
+ * Retorna { hard: true } quando deletou de fato, { hard: false, hiddenId }
+ * quando ocultou via fork. UI usa pra mostrar mensagem apropriada.
+ */
+export async function deleteGenre(id: string): Promise<{ hard: boolean; hiddenId?: string }> {
   // .select() retorna as rows efetivamente deletadas — necessário pra
-  // detectar quando RLS bloqueia silenciosamente (gêneros do catálogo
-  // global com created_by NULL não podem ser deletados pelo produtor;
-  // antes, a UI removia visualmente mas o reload trazia o gênero de volta).
+  // detectar quando RLS bloqueia silenciosamente.
   const { data, error } = await supabase
     .from('event_styles')
     .delete()
@@ -195,12 +227,16 @@ export async function deleteGenre(id: string): Promise<void> {
 
   if (error) throw error;
 
-  if (!data || data.length === 0) {
-    throw new Error(
-      'Este é um gênero do catálogo padrão e não pode ser excluído. ' +
-      'Use o botão de desativar (toggle "Ativo/Inativo") pra escondê-lo do seu evento.'
-    );
+  if (data && data.length > 0) {
+    return { hard: true };
   }
+
+  // Fallback: gênero do catálogo global (created_by NULL). RLS bloqueou
+  // o DELETE direto. Fazemos fork-on-soft-delete via updateGenre —
+  // mesma lógica do fork-on-edit que já existe pra UPDATE de globais.
+  // O fork local fica com is_active=false e o getGenres filtra fora.
+  const forked = await updateGenre(id, { is_active: false });
+  return { hard: false, hiddenId: forked.id };
 }
 
 /* ── Utilidades para o Checkout ──────────────────────────────────────────── */

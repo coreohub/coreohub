@@ -2879,8 +2879,15 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       onClick={async () => {
                         if (!confirm(`Excluir "${genre.name}" e todas as suas modalidades?`)) return;
                         try {
-                          await deleteGenre(genre.id);
-                          setGenres(gs => gs.filter(g => g.id !== genre.id));
+                          const result = await deleteGenre(genre.id);
+                          // Hard delete OU soft (fork inativo) — UI esconde igual.
+                          // Gênero some da lista de gêneros do evento.
+                          setGenres(gs => gs.filter(g => g.id !== genre.id && g.name !== genre.name));
+                          if (!result.hard) {
+                            // Visual feedback: gênero foi do catálogo global, ocultamos via fork.
+                            // Não mostra alert intrusivo — produção quieta é melhor.
+                            console.info(`[gêneros] "${genre.name}" ocultado do seu evento via fork (catálogo global protegido).`);
+                          }
                         } catch (e: any) {
                           alert('Erro ao excluir: ' + e.message);
                         }
