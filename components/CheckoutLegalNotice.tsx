@@ -52,6 +52,12 @@ const CheckoutLegalNotice: React.FC<CheckoutLegalNoticeProps> = ({
             type="checkbox"
             checked={accepted}
             onChange={e => onAcceptedChange(e.target.checked)}
+            // color-scheme:dark força o navegador a renderizar o checkbox vazio
+            // com fundo escuro. Sem isso, no checkout dark (fundo escuro fixo
+            // independente do tema da app), o checkbox aparece como quadrado
+            // branco brilhante destoante. Aplicado via style pra funcionar
+            // independente da classe `dark` do <html>.
+            style={isDark ? { colorScheme: 'dark' } : undefined}
             className="mt-0.5 w-4 h-4 accent-[#ff0068] cursor-pointer shrink-0"
           />
           <span className={`text-[11px] leading-relaxed flex-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>

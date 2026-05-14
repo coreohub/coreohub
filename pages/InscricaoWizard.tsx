@@ -65,6 +65,9 @@ interface WizardData {
   // Passo 1 — Coreografia
   nome_coreografia: string;
   estilo_danca: string;
+  /** Modalidade do gênero (ex: K-Pop → Cover/Creative). Vazio quando o
+   *  gênero selecionado não tem sub_types em event_styles. */
+  subgenero: string;
   categoria: string;
   duracao_minutos: string;
   coreografo_nome: string;
@@ -110,6 +113,69 @@ const validCPF = (v: string) => {
   return r === parseInt(d[10]);
 };
 
+/** Máscara DD/MM/AAAA pra input de data ao digitar. Aceita só dígitos.
+ *  Ex: "31122020" → "31/12/2020". User reportou que calendário nativo trava
+ *  a digitação livre — input mascarado é mais rápido pra ano antigo. */
+const maskDateBR = (v: string): string => {
+  const d = v.replace(/\D/g, '').slice(0, 8);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+};
+
+/** "31/12/2020" → "2020-12-31" (formato ISO usado no banco).
+ *  Retorna "" se a data não está completa ou é inválida. */
+const dateBRtoISO = (v: string): string => {
+  const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return '';
+  const [, dd, mm, yyyy] = m;
+  const day = parseInt(dd, 10);
+  const month = parseInt(mm, 10);
+  const year = parseInt(yyyy, 10);
+  if (year < 1900 || year > new Date().getFullYear()) return '';
+  if (month < 1 || month > 12) return '';
+  if (day < 1 || day > 31) return '';
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+/** ISO "2020-12-31" → BR "31/12/2020" (display). */
+const dateISOtoBR = (v: string): string => {
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return v;
+  const [, yyyy, mm, dd] = m;
+  return `${dd}/${mm}/${yyyy}`;
+};
+
+/** Input mascarado de data de nascimento (DD/MM/AAAA). Mantém state interno
+ *  pra preservar digitação parcial sem perder ao re-render. Quando completa
+ *  e válida, emite valor ISO pro parent. Quando parcial/inválida, emite ""
+ *  (validação do submit pega). */
+const DateInputBR: React.FC<{ value: string; onChange: (iso: string) => void; className?: string }> = ({ value, onChange, className }) => {
+  // Inicializa com formato BR derivado do ISO recebido (ou string vazia)
+  const [local, setLocal] = React.useState(() => dateISOtoBR(value || ''));
+  // Sincroniza se o parent mudar value externamente (ex: reset de form)
+  React.useEffect(() => {
+    const fromIso = dateISOtoBR(value || '');
+    // Só sobrescreve se o parent mandou algo diferente do que temos
+    if (fromIso && fromIso !== local) setLocal(fromIso);
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      placeholder="DD/MM/AAAA"
+      maxLength={10}
+      value={local}
+      onChange={e => {
+        const masked = maskDateBR(e.target.value);
+        setLocal(masked);
+        onChange(dateBRtoISO(masked));
+      }}
+      className={className}
+    />
+  );
+};
+
 /** Calcula idade na data de referência. Mesma lógica do MinhasCoreografias.tsx legacy. */
 const calcAgeOnDate = (dob: string, refDateStr: string): number => {
   if (!dob) return 0;
@@ -152,6 +218,9 @@ const InscricaoWizard: React.FC = () => {
 
   const [event, setEvent] = useState<any>(null);
   const [config, setConfig] = useState<any>(null);
+  // Gêneros estruturados (event_styles) — fonte da verdade nova com sub_types.
+  // Usado pra dropdown de modalidade dependente do gênero escolhido.
+  const [eventStyles, setEventStyles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -171,6 +240,7 @@ const InscricaoWizard: React.FC = () => {
   const [data, setData] = useState<WizardData>({
     nome_coreografia: '',
     estilo_danca: '',
+    subgenero: '',
     categoria: '',
     duracao_minutos: '',
     coreografo_nome: '',
@@ -317,10 +387,13 @@ const InscricaoWizard: React.FC = () => {
         .eq('id', user.id)
         .maybeSingle();
 
-      const [{ data: cfg }, { data: legacy }] = await Promise.all([
+      const [{ data: cfg }, { data: legacy }, { data: styles }] = await Promise.all([
         supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date, tipos_apresentacao').eq('event_id', ev.id).maybeSingle(),
         supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date, tipos_apresentacao').eq('id', '1').maybeSingle(),
+        // Gêneros estruturados (com sub_types/modalidades). Source of truth nova.
+        supabase.from('event_styles').select('id, name, is_active, sub_types').eq('event_id', ev.id).eq('is_active', true).order('name'),
       ]);
+      setEventStyles(styles ?? []);
       const finalCfg = cfg && (cfg.categorias || cfg.estilos) ? cfg : legacy;
 
       // Aplica regra de tolerância e modo de referência etária do produtor.
@@ -388,9 +461,23 @@ const InscricaoWizard: React.FC = () => {
   const maxMembers = Number(formacao?.max_members ?? 50);
 
   const categorias: { name: string; min_age?: number; max_age?: number }[] = config?.categorias ?? [];
-  const estilos: { name: string }[] = (config?.estilos ?? []).map((s: any) =>
-    typeof s === 'string' ? { name: s } : { name: s.name ?? '' }
-  ).filter((s: any) => s.name);
+  // Estilos: prioriza event_styles (tabela nova, com sub_types). Fallback pra
+  // configuracoes.estilos (legacy só com nomes) quando a nova tá vazia.
+  const estilos: { name: string; sub_types?: any[] }[] = eventStyles.length > 0
+    ? eventStyles.map((s: any) => ({
+        name: s.name,
+        sub_types: Array.isArray(s.sub_types) ? s.sub_types : [],
+      }))
+    : (config?.estilos ?? []).map((s: any) =>
+        typeof s === 'string' ? { name: s, sub_types: [] } : { name: s.name ?? '', sub_types: s.sub_types ?? [] }
+      ).filter((s: any) => s.name);
+
+  // Modalidades (sub_types) do gênero selecionado. Quando vazio, select de
+  // modalidade fica oculto — permite gênero direto sem subdivisão (Estilo Livre).
+  const selectedStyleObj = estilos.find(s => s.name === data.estilo_danca);
+  const modalities: { name: string }[] = (selectedStyleObj?.sub_types ?? [])
+    .map((m: any) => ({ name: typeof m === 'string' ? m : (m.name ?? '') }))
+    .filter((m: any) => m.name);
 
   // Categoria selecionada (resolve min_age/max_age pra checagem etária).
   const categoriaSelecionada = useMemo(() => {
@@ -441,6 +528,10 @@ const InscricaoWizard: React.FC = () => {
     if (s === 0) {
       if (!data.nome_coreografia.trim()) return 'Informe o nome da coreografia.';
       if (!data.estilo_danca)              return 'Selecione o estilo.';
+      // Modalidade obrigatória quando o gênero selecionado tem sub_types
+      if (modalities.length > 0 && !data.subgenero) {
+        return `Selecione a modalidade do gênero ${data.estilo_danca}.`;
+      }
       if (!data.categoria)                 return 'Selecione a categoria etária.';
       if (data.duracao_minutos) {
         const sec = parseTempoSegundos(data.duracao_minutos);
@@ -453,6 +544,21 @@ const InscricaoWizard: React.FC = () => {
     if (s === 1) {
       if (data.bailarinos.length < minMembers) return `Adicione pelo menos ${minMembers} bailarino(s).`;
       if (data.bailarinos.length > maxMembers) return `Máximo ${maxMembers} bailarinos pra ${modalidade}.`;
+
+      // Detecta CPF duplicado entre bailarinos da MESMA inscrição.
+      // Cada CPF é único — mesma pessoa não pode ser cadastrada 2x na mesma coreografia.
+      const cpfSeen = new Map<string, number>();
+      for (let i = 0; i < data.bailarinos.length; i++) {
+        const digits = data.bailarinos[i].cpf.replace(/\D/g, '');
+        if (digits.length === 11) {
+          const prev = cpfSeen.get(digits);
+          if (prev !== undefined) {
+            return `CPF duplicado: Bailarino ${prev + 1} e Bailarino ${i + 1} têm o mesmo CPF (${data.bailarinos[i].cpf}). Cada bailarino deve ter CPF único.`;
+          }
+          cpfSeen.set(digits, i);
+        }
+      }
+
       for (let i = 0; i < data.bailarinos.length; i++) {
         const b = data.bailarinos[i];
         if (!b.nome.trim())          return `Bailarino ${i + 1}: informe o nome.`;
@@ -537,6 +643,7 @@ const InscricaoWizard: React.FC = () => {
           user_id:              userId,
           nome_coreografia:     data.nome_coreografia.trim(),
           estilo_danca:         data.estilo_danca || null,
+          subgenero:            data.subgenero || null,
           categoria:            data.categoria,
           formato_participacao: formacao?.name ?? modalidade,
           tipo_apresentacao:    data.tipo_apresentacao,
@@ -703,13 +810,30 @@ const InscricaoWizard: React.FC = () => {
                 <label className={labelCls}>Estilo *</label>
                 <select
                   value={data.estilo_danca}
-                  onChange={e => setData(d => ({ ...d, estilo_danca: e.target.value }))}
+                  onChange={e => setData(d => ({ ...d, estilo_danca: e.target.value, subgenero: '' }))}
                   className={inputCls}
                 >
                   <option value="">Selecione…</option>
                   {estilos.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
                 </select>
               </div>
+
+              {/* Modalidade (sub_type) — só aparece quando o gênero tem sub_types.
+                  Ex: K-Pop → Cover/Creative. Estilos diretos (sem sub_types)
+                  pulam esse campo. */}
+              {modalities.length > 0 && (
+                <div>
+                  <label className={labelCls}>Modalidade *</label>
+                  <select
+                    value={data.subgenero}
+                    onChange={e => setData(d => ({ ...d, subgenero: e.target.value }))}
+                    className={inputCls}
+                  >
+                    <option value="">Selecione a modalidade…</option>
+                    {modalities.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className={labelCls}>Categoria etária *</label>
@@ -863,12 +987,18 @@ const InscricaoWizard: React.FC = () => {
                   </div>
                   <div>
                     <label className={labelCls}>Nascimento *</label>
-                    <input
-                      type="date"
+                    {/* Data nascimento — input mascarado DD/MM/AAAA em vez do
+                        calendário nativo. User reportou que escolher ano antigo
+                        no picker era lento; digitação direta é mais rápida.
+                        DateInputBR mantém state interno pra digitação parcial. */}
+                    <DateInputBR
                       value={b.data_nascimento}
-                      min="1900-01-01"
-                      max={new Date().toISOString().slice(0, 10)}
-                      onChange={e => setData(d => ({ ...d, bailarinos: d.bailarinos.map((x, idx) => idx === i ? { ...x, data_nascimento: e.target.value } : x) }))}
+                      onChange={iso => setData(d => ({
+                        ...d,
+                        bailarinos: d.bailarinos.map((x, idx) =>
+                          idx === i ? { ...x, data_nascimento: iso } : x
+                        ),
+                      }))}
                       className={inputCls}
                     />
                   </div>
