@@ -896,11 +896,15 @@ const InscricaoWizard: React.FC = () => {
                 Se for só 1, já foi forçado no state pelo load do config. */}
             {tiposApresentacao.length > 1 && (
               <div>
-                <label className={labelCls}>Tipo de apresentação</label>
+                <label className={labelCls}>Tipo de mostra</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
                   {tiposApresentacao.map(tipo => {
                     const selected = data.tipo_apresentacao === tipo;
                     const isCompetitiva = tipo === 'Competitiva';
+                    // Nome completo "Mostra Competitiva" / "Mostra Avaliada" —
+                    // padrão do mercado de festivais BR. Estado interno mantém
+                    // só "Competitiva"/"Avaliada" pra compat com banco/lógica.
+                    const fullName = isCompetitiva ? 'Mostra Competitiva' : 'Mostra Avaliada';
                     return (
                       <button
                         key={tipo}
@@ -913,7 +917,7 @@ const InscricaoWizard: React.FC = () => {
                         }`}
                       >
                         <p className={`text-[11px] font-black uppercase tracking-tight ${selected ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>
-                          {tipo}
+                          {fullName}
                         </p>
                         <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-tight">
                           {isCompetitiva

@@ -183,12 +183,24 @@ export async function removeSubgenre(
 /* ── Exclusão ─────────────────────────────────────────────────────────────── */
 
 export async function deleteGenre(id: string): Promise<void> {
-  const { error } = await supabase
+  // .select() retorna as rows efetivamente deletadas — necessário pra
+  // detectar quando RLS bloqueia silenciosamente (gêneros do catálogo
+  // global com created_by NULL não podem ser deletados pelo produtor;
+  // antes, a UI removia visualmente mas o reload trazia o gênero de volta).
+  const { data, error } = await supabase
     .from('event_styles')
     .delete()
-    .eq('id', id);
+    .eq('id', id)
+    .select('id');
 
   if (error) throw error;
+
+  if (!data || data.length === 0) {
+    throw new Error(
+      'Este é um gênero do catálogo padrão e não pode ser excluído. ' +
+      'Use o botão de desativar (toggle "Ativo/Inativo") pra escondê-lo do seu evento.'
+    );
+  }
 }
 
 /* ── Utilidades para o Checkout ──────────────────────────────────────────── */
