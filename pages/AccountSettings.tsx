@@ -278,18 +278,22 @@ type TabType =
   | 'Pagamentos'
   | 'Demo';
 
+// Ordem segue fluxo natural de configuração do produtor:
+// 1) Identidade do evento → 2) Eixo técnico (gêneros) → 3) Eixo de inscrição
+// (categorias por idade + formações com preços) → 4) Avaliação + prêmios →
+// 5) Operação (tolerância + fluxo) → 6) Financeiro → 7) Avançado/Demo.
 const TABS: { label: TabType; icon: React.ElementType }[] = [
-  { label: 'Geral',             icon: Settings },
-  { label: 'Gêneros',           icon: Music2 },
-  { label: 'Avaliação',         icon: Scale },
-  { label: 'Prêmios',           icon: Trophy },
-  { label: 'Formações',         icon: DollarSign },
-  { label: 'Categorias',        icon: Users },
-  { label: 'Tolerância',        icon: AlertTriangle },
-  { label: 'Fluxo do Evento',   icon: Clapperboard },
-  { label: 'Redirecionamentos', icon: Link2 },
-  { label: 'Pagamentos',        icon: CreditCard },
-  { label: 'Demo',              icon: Sparkles },
+  { label: 'Geral',             icon: Settings },        // 1. Nome, data, local, identidade
+  { label: 'Gêneros',           icon: Music2 },          // 2. Estilos aceitos
+  { label: 'Categorias',        icon: Users },           // 3a. Faixas etárias
+  { label: 'Formações',         icon: DollarSign },      // 3b. Solo/Duo/Grupo + preços
+  { label: 'Avaliação',         icon: Scale },           // 4a. Critérios e pesos
+  { label: 'Prêmios',           icon: Trophy },          // 4b. Medalhas + prêmios especiais
+  { label: 'Tolerância',        icon: AlertTriangle },   // 5a. Regras de idade
+  { label: 'Fluxo do Evento',   icon: Clapperboard },    // 5b. Narração, marcação
+  { label: 'Pagamentos',        icon: CreditCard },      // 6. Conta Asaas
+  { label: 'Redirecionamentos', icon: Link2 },           // 7a. Links personalizados (avançado)
+  { label: 'Demo',              icon: Sparkles },        // 7b. Sandbox (avançado)
 ];
 
 const TIPOS_APRESENTACAO_OPTIONS = [
@@ -2992,25 +2996,35 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             <CRUDHeader title="Formatos & Lotes de Preço" onAdd={openAdd} />
             <div className="space-y-3">
               {formats.map(f => (
-                <Row key={f.id}>
-                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                <div
+                  key={f.id}
+                  className="p-4 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between sm:gap-4"
+                >
+                  {/* Linha 1 (mobile) / esquerda (desktop): nome + tipo + actions */}
+                  <div className="flex items-center gap-4 sm:flex-1 min-w-0">
                     <div className="w-10 h-10 bg-[#ff0068]/10 rounded-xl flex items-center justify-center text-[#ff0068] shrink-0">
                       <DollarSign size={16} />
                     </div>
-                    <div className="min-w-0">
-                      <p className="font-black text-sm text-slate-900 dark:text-white uppercase">{f.name}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-black text-sm text-slate-900 dark:text-white uppercase truncate">{f.name}</p>
                       <p className="text-[10px] text-slate-500 uppercase tracking-widest">
                         {f.pricingType === 'PER_MEMBER' ? 'por participante' : 'valor fixo'} · mín. {f.minMembers} pessoa{f.minMembers > 1 ? 's' : ''}
                       </p>
                     </div>
+                    {/* Actions: visível na linha 1 do mobile (sm:hidden); desktop usa a versão à direita */}
+                    <div className="sm:hidden shrink-0">
+                      <ActBtns onEdit={() => openEdit(f.id, f)} onDelete={() => handleDelete(f.id)} />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 mr-4 flex-wrap justify-end">
+
+                  {/* Linha 2 (mobile) / direita (desktop): lotes em grid responsivo */}
+                  <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center sm:gap-3 sm:mr-4 sm:flex-wrap sm:justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-white/5">
                     {(f.lotes ?? []).map((lote: FormatLote, i: number) => (
                       <React.Fragment key={i}>
-                        {i > 0 && <div className="w-px h-8 bg-slate-200 dark:bg-white/10" />}
+                        {i > 0 && <div className="hidden sm:block w-px h-8 bg-slate-200 dark:bg-white/10" />}
                         <div className="text-center">
                           <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Lote {i + 1}</p>
-                          <p className={`font-black ${i === 0 ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>R$ {formatPrecoBR(Number(lote.preco) || 0)}</p>
+                          <p className={`font-black text-sm ${i === 0 ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>R$ {formatPrecoBR(Number(lote.preco) || 0)}</p>
                           <p className="text-[9px] text-slate-400 mt-0.5">
                             {lote.data_virada ? `até ${lote.data_virada}` : 'até prazo final'}
                           </p>
@@ -3018,8 +3032,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       </React.Fragment>
                     ))}
                   </div>
-                  <ActBtns onEdit={() => openEdit(f.id, f)} onDelete={() => handleDelete(f.id)} />
-                </Row>
+
+                  {/* Actions desktop only — mobile já tem na linha 1 */}
+                  <div className="hidden sm:block">
+                    <ActBtns onEdit={() => openEdit(f.id, f)} onDelete={() => handleDelete(f.id)} />
+                  </div>
+                </div>
               ))}
               {formats.length === 0 && (
                 <p className="text-center text-slate-400 py-8 text-sm">Nenhum formato cadastrado.</p>

@@ -25,10 +25,14 @@ const NewRegistration = () => {
     formacao: '',
     category: '',
     dance_style: '',
+    subgenero: '',
     num_participants: 1,
   });
 
   const [config, setConfig] = useState<any>(null);
+  // Gêneros estruturados (event_styles) — fonte da verdade nova com sub_types.
+  // Usado pra dropdown de modalidade dependente do gênero escolhido.
+  const [eventStyles, setEventStyles] = useState<any[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -38,7 +42,8 @@ const NewRegistration = () => {
 
       // Categorias, estilos e prazo de inscrição moram em `configuracoes`,
       // não em `events`. Carregamos os dois em paralelo.
-      const [{ data: ev, error: evErr }, { data: cfg }] = await Promise.all([
+      // Também carregamos event_styles (tabela nova com sub_types/modalidades).
+      const [{ data: ev, error: evErr }, { data: cfg }, { data: styles }] = await Promise.all([
         supabase
           .from('events')
           .select('id, name, description, start_date, end_date, formacoes_config, cover_url')
@@ -50,6 +55,12 @@ const NewRegistration = () => {
           .select('categorias, estilos, prazo_inscricao')
           .eq('event_id', eventId)
           .maybeSingle(),
+        supabase
+          .from('event_styles')
+          .select('id, name, is_active, sub_types')
+          .eq('event_id', eventId)
+          .eq('is_active', true)
+          .order('name'),
       ]);
 
       // Se a row per-event não tiver dados (evento recém-criado sem config),
@@ -67,6 +78,7 @@ const NewRegistration = () => {
       if (evErr || !ev) { setError('Evento não encontrado.'); setLoading(false); return; }
       setEvent(ev);
       setConfig(configFinal);
+      setEventStyles(styles ?? []);
 
       // Aplica modalidade pré-selecionada (case-insensitive contra formacoes_config).
       // Vem dos cards clicáveis na vitrine pública — entry point modalidade-first.
@@ -84,11 +96,31 @@ const NewRegistration = () => {
 
   const formacoes: any[] = event?.formacoes_config ?? [];
   const categories: any[] = config?.categorias ?? [];
-  // estilos pode vir como array de strings (legacy) ou objetos {id, name}.
-  // Normaliza pra { id, name } pra renderizar consistentemente.
-  const styles: { id: string; name: string }[] = (config?.estilos ?? []).map((s: any, i: number) =>
-    typeof s === 'string' ? { id: `s_${i}`, name: s } : { id: s.id ?? s.name ?? `s_${i}`, name: s.name ?? '' }
-  ).filter((s: any) => s.name);
+  // Estilos: prioriza event_styles (tabela nova, tem sub_types). Fallback pra
+  // configuracoes.estilos (legacy string[]). Normaliza pra { id, name, sub_types }.
+  const styles: { id: string; name: string; sub_types?: any[] }[] = eventStyles.length > 0
+    ? eventStyles.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        sub_types: Array.isArray(s.sub_types) ? s.sub_types : [],
+      }))
+    : (config?.estilos ?? []).map((s: any, i: number) =>
+        typeof s === 'string'
+          ? { id: `s_${i}`, name: s, sub_types: [] }
+          : { id: s.id ?? s.name ?? `s_${i}`, name: s.name ?? '', sub_types: s.sub_types ?? [] }
+      ).filter((s: any) => s.name);
+
+  // Modalidades (sub_types) do gênero selecionado. Quando vazio, esconde
+  // o select de modalidade. Permite gênero "direto" sem subdivisão.
+  const selectedStyle = styles.find(s => s.name === form.dance_style);
+  const modalities: { name: string }[] = (selectedStyle?.sub_types ?? [])
+    .map((m: any) => ({ name: typeof m === 'string' ? m : (m.name ?? '') }))
+    .filter((m: any) => m.name);
+
+  // Reset subgenero quando troca o gênero (modalidade antiga não vale).
+  useEffect(() => {
+    setForm(f => ({ ...f, subgenero: '' }));
+  }, [form.dance_style]);
 
   const selectedFormacao = formacoes.find(m => m.name === form.formacao);
   const fee: number = selectedFormacao?.fee ?? selectedFormacao?.base_fee ?? 0;
@@ -119,6 +151,11 @@ const NewRegistration = () => {
       setError(`Esta formação aceita de ${minMembers} a ${maxMembers} participantes.`);
       return;
     }
+    // Modalidade obrigatória quando o gênero selecionado tem sub_types cadastrados
+    if (form.dance_style && modalities.length > 0 && !form.subgenero) {
+      setError(`Selecione a modalidade do gênero ${form.dance_style}.`);
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
@@ -136,6 +173,7 @@ const NewRegistration = () => {
           formato_participacao: form.formacao,
           categoria:            form.category,
           estilo_danca:         form.dance_style || null,
+          subgenero:            form.subgenero || null,
           status:               'PENDENTE',
           status_pagamento:     'PENDENTE',
           criado_em:            new Date().toISOString(),
@@ -250,6 +288,21 @@ const NewRegistration = () => {
                   <option value="">Selecione (opcional)</option>
                   {styles.map((s: any) => (
                     <option key={s.id ?? s.name} value={s.name}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Modalidade (sub_type) — aparece só quando o gênero selecionado
+                tem modalidades cadastradas. Permite gêneros "diretos" sem
+                subdivisão (Ex: Estilo Livre). */}
+            {modalities.length > 0 && (
+              <div>
+                <label className={label}>Modalidade</label>
+                <select value={form.subgenero} onChange={e => setForm(f => ({ ...f, subgenero: e.target.value }))} className={input}>
+                  <option value="">Selecione a modalidade</option>
+                  {modalities.map(m => (
+                    <option key={m.name} value={m.name}>{m.name}</option>
                   ))}
                 </select>
               </div>

@@ -238,6 +238,12 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
           if (edited.politica_ingressos) evUpdates.politica_ingressos = edited.politica_ingressos;
           if (edited.url_ingressos)      evUpdates.url_ingressos      = edited.url_ingressos;
           if (edited.cover_url_hint)     evUpdates.cover_url          = edited.cover_url_hint;
+          // Summary da IA vira description do evento (alimenta a vitrine pública).
+          // Só sobrescreve se ainda não há description ou se produtor optou por
+          // re-importar. Não trunca — vitrine sabe lidar com texto longo.
+          if (edited.summary && edited.summary.trim().length > 20) {
+            evUpdates.description = edited.summary;
+          }
           if (edited.social_links) {
             if (edited.social_links.instagram) evUpdates.instagram_event = edited.social_links.instagram;
             if (edited.social_links.tiktok)    evUpdates.tiktok_event    = edited.social_links.tiktok;

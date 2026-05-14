@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { validateCoupon } from '../services/couponService';
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
+import { maskCpfCnpj } from '../utils/masks';
 
 const SUPABASE_URL = 'https://ghpltzzijlvykiytwslu.supabase.co';
 
@@ -68,6 +69,15 @@ const Checkout = () => {
   /* ── CPF/CNPJ — Asaas exige no payer ── */
   const [needsCpf, setNeedsCpf] = useState(false);
   const [cpfInput, setCpfInput] = useState('');
+
+  /* Ref pro bloco de erro — scroll-into-view quando aparece, pra usuário
+     em mobile não precisar rolar pra cima pra ver a mensagem. */
+  const errorRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (error && errorRef.current) {
+      errorRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [error]);
 
   const isGovernment = event?.event_type === 'government';
   const finalValue   = Math.max(0, baseFee - (appliedCoupon?.discount ?? 0));
@@ -273,6 +283,18 @@ const Checkout = () => {
             <LineItem icon={Music2} label="Coreografia" value={registration?.nome_coreografia} />
             <LineItem icon={Users}  label="Formação"    value={registration?.formato_participacao} />
             <LineItem icon={Tag}    label="Categoria"   value={registration?.categoria} />
+            {/* Modalidade/Gênero — só aparece quando inscrito escolheu na inscrição */}
+            {(registration?.estilo_danca || registration?.subgenero) && (
+              <LineItem
+                icon={Music2}
+                label="Modalidade"
+                value={
+                  registration?.subgenero
+                    ? `${registration.estilo_danca ?? ''} · ${registration.subgenero}`
+                    : registration?.estilo_danca
+                }
+              />
+            )}
           </div>
 
           {/* Lote ativo */}
@@ -393,9 +415,10 @@ const Checkout = () => {
               type="text"
               inputMode="numeric"
               value={cpfInput}
-              onChange={e => setCpfInput(e.target.value)}
+              onChange={e => setCpfInput(maskCpfCnpj(e.target.value))}
               placeholder="000.000.000-00"
-              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-5 text-slate-900 dark:text-white outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm"
+              maxLength={18}
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-5 text-slate-900 dark:text-white outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm tabular-nums"
             />
             <p className="text-[10px] text-slate-500 ml-1">
               Necessário pra emitir a cobrança no Asaas. Salvamos no seu perfil pra próximas inscrições.
@@ -404,7 +427,10 @@ const Checkout = () => {
         )}
 
         {error && (
-          <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-2xl">
+          <div
+            ref={errorRef}
+            className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-2xl"
+          >
             <AlertCircle size={16} className="text-red-500 shrink-0" />
             <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
           </div>
