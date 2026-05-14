@@ -39,7 +39,11 @@ const Field: React.FC<{
   );
 };
 
-const inputCls = 'w-full px-4 py-3 bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none rounded-2xl';
+// bg-transparent na superfície + bg sólido nas options pra evitar opções
+// invisíveis no dark mode (Chrome renderiza option com bg branco padrão).
+// [color-scheme] força o dropdown nativo a respeitar tema dark do app.
+const inputCls = 'w-full px-4 py-3 bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none rounded-2xl dark:[color-scheme:dark]';
+const selectOptionCls = 'bg-white text-slate-900 dark:bg-slate-900 dark:text-white';
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
@@ -55,6 +59,11 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
   const [edited, setEdited] = useState<RegulationExtract | null>(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  // Toggle "Mostrar configurações avançadas" — esconde por default os campos
+  // técnicos (Escala, Tolerância, Tempos, Quesitos, Desempate, Referência idade)
+  // que produtor normalmente confere no próprio regulamento. Os valores
+  // permanecem extraídos pela IA e gravados no save mesmo se ocultos.
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── File selection & drag ──
@@ -536,47 +545,101 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
               <Scale size={12} /> Configurações de Evento
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label="Tipo de Apresentação" value={edited.event_format} icon={Layers}>
-                <select className={inputCls} value={edited.event_format ?? ''} onChange={e => setField('event_format', e.target.value || null)}>
-                  <option value="">Selecionar...</option>
-                  <option value="RANKING">Mostra Competitiva (RANKING)</option>
-                  <option value="PEDAGOGICAL">Mostra Avaliada (PEDAGOGICAL)</option>
-                  <option value="GRADUATED">Mostra por Médias (GRADUATED)</option>
-                </select>
-              </Field>
-              <Field label="Escala de Pontuação" value={edited.score_scale} icon={Scale}>
-                <select className={inputCls} value={edited.score_scale ?? ''} onChange={e => setField('score_scale', parseFloat(e.target.value) || null)}>
-                  <option value="">Selecionar...</option>
-                  <option value="9.8">0 a 9,8</option>
-                  <option value="97">0 a 97</option>
-                  <option value="10">0 a 10</option>
-                  <option value="100">0 a 100</option>
-                </select>
-              </Field>
-              <Field label="Referência de Idade" value={edited.age_reference} icon={Users}>
-                <select className={inputCls} value={edited.age_reference ?? ''} onChange={e => setField('age_reference', e.target.value || null)}>
-                  <option value="">Selecionar...</option>
-                  <option value="EVENT_DAY">Data do Evento</option>
-                  <option value="YEAR_END">31/12 do Ano</option>
-                  <option value="FIXED_DATE">Data Fixa</option>
-                </select>
-              </Field>
-              <Field label="Tolerância" value={edited.age_tolerance_mode} icon={Scale}>
-                <div className="flex gap-2 p-1">
-                  <select className="flex-1 px-3 py-2 bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none" value={edited.age_tolerance_mode ?? ''} onChange={e => setField('age_tolerance_mode', e.target.value || null)}>
-                    <option value="">Tipo...</option>
-                    <option value="PERCENT">Percentual (%)</option>
-                    <option value="FIXED_COUNT">Quantidade fixa</option>
-                  </select>
-                  <input type="number" min={0} placeholder="Valor" className="w-24 px-3 py-2 bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none border-l border-slate-200 dark:border-white/10" value={edited.age_tolerance_value ?? ''} onChange={e => setField('age_tolerance_value', parseFloat(e.target.value) || null)} />
+              {/* Tipo de apresentação — agora multi-select. Festival pode ter
+                  mais de uma modalidade simultânea (ex: Avaliada + Competitiva). */}
+              <div className="md:col-span-2 space-y-2">
+                <label className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-slate-500">
+                  <Layers size={10} /> Tipo de Apresentação
+                  {(!edited.tipos_apresentacao || edited.tipos_apresentacao.length === 0) && (
+                    <span className="ml-auto flex items-center gap-1 text-amber-500">
+                      <AlertTriangle size={9} /> Não encontrado
+                    </span>
+                  )}
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl">
+                  {([
+                    { id: 'MOSTRA_AVALIADA',  label: 'Mostra Avaliada' },
+                    { id: 'COMPETITIVA',      label: 'Mostra Competitiva' },
+                    { id: 'NAO_COMPETITIVA',  label: 'Mostra Não Competitiva' },
+                    { id: 'PARTICIPATIVA',    label: 'Mostra Participativa' },
+                  ] as const).map(opt => {
+                    const arr = edited.tipos_apresentacao ?? [];
+                    const checked = arr.includes(opt.id);
+                    return (
+                      <label key={opt.id} className="flex items-center gap-2 cursor-pointer p-2 rounded-xl hover:bg-white dark:hover:bg-white/5 transition-all">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={e => {
+                            const next = e.target.checked
+                              ? [...arr, opt.id]
+                              : arr.filter(t => t !== opt.id);
+                            setField('tipos_apresentacao', next);
+                          }}
+                          className="w-4 h-4 accent-[#ff0068] cursor-pointer shrink-0"
+                        />
+                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">{opt.label}</span>
+                      </label>
+                    );
+                  })}
                 </div>
-              </Field>
-              <Field label="Tempo Entrada no Palco (seg)" value={edited.stage_entry_time_seconds} icon={Clock}>
-                <input type="number" className={inputCls} value={edited.stage_entry_time_seconds ?? ''} onChange={e => setField('stage_entry_time_seconds', parseInt(e.target.value) || null)} placeholder="Ex: 60" />
-              </Field>
-              <Field label="Tempo Marcação de Palco (seg)" value={edited.stage_marking_time_seconds} icon={Clock}>
-                <input type="number" className={inputCls} value={edited.stage_marking_time_seconds ?? ''} onChange={e => setField('stage_marking_time_seconds', parseInt(e.target.value) || null)} placeholder="Ex: 120" />
-              </Field>
+              </div>
+            </div>
+
+            {/* Toggle avançado — produtor expande pra ver/editar campos técnicos
+                que a IA extraiu mas que ele normalmente confere no regulamento. */}
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(s => !s)}
+                className="w-full flex items-center justify-between gap-2 px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 transition-all"
+              >
+                <span className="flex items-center gap-2">
+                  <Settings size={12} className="text-[#ff0068]" />
+                  {showAdvanced ? 'Ocultar' : 'Mostrar'} Configurações Avançadas
+                </span>
+                <span className="text-[9px] text-slate-400 normal-case tracking-normal">
+                  Escala, Tolerância, Tempos · {showAdvanced ? '▲' : '▼'}
+                </span>
+              </button>
+
+              {showAdvanced && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 p-4 bg-slate-50/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl">
+                  <Field label="Escala de Pontuação" value={edited.score_scale} icon={Scale}>
+                    <select className={inputCls} value={edited.score_scale ?? ''} onChange={e => setField('score_scale', parseFloat(e.target.value) || null)}>
+                      <option value="" className={selectOptionCls}>Selecionar...</option>
+                      <option value="9.8" className={selectOptionCls}>0 a 9,8</option>
+                      <option value="97" className={selectOptionCls}>0 a 97</option>
+                      <option value="10" className={selectOptionCls}>0 a 10</option>
+                      <option value="100" className={selectOptionCls}>0 a 100</option>
+                    </select>
+                  </Field>
+                  <Field label="Referência de Idade" value={edited.age_reference} icon={Users}>
+                    <select className={inputCls} value={edited.age_reference ?? ''} onChange={e => setField('age_reference', e.target.value || null)}>
+                      <option value="" className={selectOptionCls}>Selecionar...</option>
+                      <option value="EVENT_DAY" className={selectOptionCls}>Data do Evento</option>
+                      <option value="YEAR_END" className={selectOptionCls}>31/12 do Ano</option>
+                      <option value="FIXED_DATE" className={selectOptionCls}>Data Fixa</option>
+                    </select>
+                  </Field>
+                  <Field label="Tolerância" value={edited.age_tolerance_mode} icon={Scale}>
+                    <div className="flex gap-2 p-1">
+                      <select className="flex-1 px-3 py-2 bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none dark:[color-scheme:dark]" value={edited.age_tolerance_mode ?? ''} onChange={e => setField('age_tolerance_mode', e.target.value || null)}>
+                        <option value="" className={selectOptionCls}>Tipo...</option>
+                        <option value="PERCENT" className={selectOptionCls}>Percentual (%)</option>
+                        <option value="FIXED_COUNT" className={selectOptionCls}>Quantidade fixa</option>
+                      </select>
+                      <input type="number" min={0} placeholder="Valor" className="w-24 px-3 py-2 bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none border-l border-slate-200 dark:border-white/10" value={edited.age_tolerance_value ?? ''} onChange={e => setField('age_tolerance_value', parseFloat(e.target.value) || null)} />
+                    </div>
+                  </Field>
+                  <Field label="Tempo Entrada no Palco (seg)" value={edited.stage_entry_time_seconds} icon={Clock}>
+                    <input type="number" className={inputCls} value={edited.stage_entry_time_seconds ?? ''} onChange={e => setField('stage_entry_time_seconds', parseInt(e.target.value) || null)} placeholder="Ex: 60" />
+                  </Field>
+                  <Field label="Tempo Marcação de Palco (seg)" value={edited.stage_marking_time_seconds} icon={Clock}>
+                    <input type="number" className={inputCls} value={edited.stage_marking_time_seconds ?? ''} onChange={e => setField('stage_marking_time_seconds', parseInt(e.target.value) || null)} placeholder="Ex: 120" />
+                  </Field>
+                </div>
+              )}
             </div>
           </section>
 
@@ -646,8 +709,9 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
             </section>
           )}
 
-          {/* ── Quesitos ── */}
-          {edited.criteria?.length > 0 && (
+          {/* ── Quesitos ── Atrás de "Avançado" — produtor normalmente confere
+              os pesos no próprio regulamento, não precisa editar manualmente aqui. */}
+          {edited.criteria?.length > 0 && showAdvanced && (
             <section className="space-y-4">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2 border-b border-slate-100 dark:border-white/5 pb-3">
                 <Scale size={12} /> Quesitos e Pesos ({edited.criteria.length})
@@ -845,15 +909,18 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
             </section>
           )}
 
-          {/* ── Regras de desempate ── */}
-          <section className="space-y-4">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2 border-b border-slate-100 dark:border-white/5 pb-3">
-              <ChevronRight size={12} /> Regras de Desempate
-            </h3>
-            <Field label="Descrição das regras" value={edited.tiebreaker_rules}>
-              <textarea rows={3} className={inputCls + ' resize-none'} value={edited.tiebreaker_rules ?? ''} onChange={e => setField('tiebreaker_rules', e.target.value || null)} placeholder="Ex: Em caso de empate, prevalece a maior nota em Técnica..." />
-            </Field>
-          </section>
+          {/* ── Regras de desempate ── Atrás de "Avançado" — produtor confere
+              no próprio regulamento. */}
+          {showAdvanced && (
+            <section className="space-y-4">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2 border-b border-slate-100 dark:border-white/5 pb-3">
+                <ChevronRight size={12} /> Regras de Desempate
+              </h3>
+              <Field label="Descrição das regras" value={edited.tiebreaker_rules}>
+                <textarea rows={3} className={inputCls + ' resize-none'} value={edited.tiebreaker_rules ?? ''} onChange={e => setField('tiebreaker_rules', e.target.value || null)} placeholder="Ex: Em caso de empate, prevalece a maior nota em Técnica..." />
+              </Field>
+            </section>
+          )}
 
           {error && (
             <div className="flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-rose-500">
