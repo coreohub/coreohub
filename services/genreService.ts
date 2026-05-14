@@ -56,13 +56,42 @@ export async function getGenres(eventId: string): Promise<EventStyle[]> {
 }
 
 export async function getAllGenres(options?: { includeHidden?: boolean }): Promise<EventStyle[]> {
+  // Filtra gêneros do user logado + globais (event_id NULL = catálogo padrão).
+  // Antes, sem filtro, traziam gêneros ÓRFÃOS de eventos deletados (cleanup
+  // massivo de duplicados deixou event_styles apontando pra event_id que
+  // não existe mais). Esses órfãos apareciam na lista do produtor sem ele
+  // poder deletar (RLS bloqueia created_by NULL).
+  const { data: { user } } = await supabase.auth.getUser();
+  const userId = user?.id;
+
+  // Eventos do produtor (pra filtrar event_styles que pertencem a ELE).
+  // Sem o filtro, qualquer event_styles órfão aparecia.
+  let producerEventIds: string[] = [];
+  if (userId) {
+    const { data: myEvents } = await supabase
+      .from('events')
+      .select('id')
+      .eq('created_by', userId);
+    producerEventIds = (myEvents ?? []).map((e: any) => e.id);
+  }
+
   const { data, error } = await supabase
     .from('event_styles')
     .select('*')
     .order('name');
 
   if (error) throw error;
-  const all = (data ?? []).map(toEventStyle);
+
+  // Filtra: mantém global (event_id NULL), do user (created_by = userId)
+  // ou de eventos do user. Descarta órfãos (event_id de outro evento).
+  const filtered = (data ?? []).filter((r: any) => {
+    if (r.event_id === null) return true;             // catálogo global
+    if (userId && r.created_by === userId) return true; // criado pelo user
+    if (producerEventIds.includes(r.event_id)) return true; // do evento dele
+    return false;
+  });
+
+  const all = filtered.map(toEventStyle);
 
   // Filtra gêneros "ocultos" — quando o produtor "exclui" um gênero do
   // catálogo global, criamos um fork local com is_active=false (vide
@@ -75,7 +104,7 @@ export async function getAllGenres(options?: { includeHidden?: boolean }): Promi
   for (const g of all) {
     // Se há um fork local inativo, ele "mascara" o global de mesmo nome.
     // toEventStyle não retorna created_by, então leio do data bruto:
-    const raw = data!.find(r => r.id === g.id);
+    const raw = filtered.find((r: any) => r.id === g.id);
     if (raw?.created_by && !g.is_active) {
       localOverrides.set(g.name.trim().toLowerCase(), g);
     }
