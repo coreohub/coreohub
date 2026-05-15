@@ -72,13 +72,12 @@ interface WizardData {
   duracao_minutos: string;
   coreografo_nome: string;
   estudio_nome: string;
-  tipo_apresentacao: 'Competitiva' | 'Avaliada';
+  tipo_apresentacao: 'Competitiva' | 'Avaliada' | '';
   // Passo 2 — Elenco
   bailarinos: BailarinoEntry[];
   // Passo 3 — Trilha
   trilha_url: string;
   trilha_pendente: boolean;
-  trilha_obs: string;
 }
 
 const STEPS = [
@@ -245,11 +244,10 @@ const InscricaoWizard: React.FC = () => {
     duracao_minutos: '',
     coreografo_nome: '',
     estudio_nome: '',
-    tipo_apresentacao: 'Competitiva', // Default; auto-corrige se só Avaliada estiver habilitada
+    tipo_apresentacao: '', // Sem pré-seleção quando ambos disponíveis (force escolha). Auto-set abaixo se só 1 habilitado.
     bailarinos: [{ nome: '', cpf: '', data_nascimento: '' }],
     trilha_url: '',
     trilha_pendente: false,
-    trilha_obs: '',
   });
 
   // Tipos de apresentação habilitados no evento (default: ambos pra retrocompat).
@@ -431,6 +429,8 @@ const InscricaoWizard: React.FC = () => {
       if (tipos.length === 1) {
         setData(d => ({ ...d, tipo_apresentacao: tipos[0] as 'Competitiva' | 'Avaliada' }));
       }
+      // Quando há 2+ tipos, mantém '' pra forçar o inscrito a escolher
+      // conscientemente (evita inscrição errada por pré-seleção automática).
 
       if (profile?.full_name) {
         setData(d => ({ ...d, coreografo_nome: profile.full_name }));
@@ -540,6 +540,11 @@ const InscricaoWizard: React.FC = () => {
         if (sec > 30 * 60)   return 'Duração muito longa. Máximo: 30:00.';
       }
       if (!data.coreografo_nome.trim())    return 'Informe o nome do coreógrafo.';
+      // Tipo de mostra obrigatório quando há 2+ opções habilitadas pelo produtor.
+      // Quando há só 1, o state já foi auto-setado no load — não cai aqui.
+      if (tiposApresentacao.length > 1 && !data.tipo_apresentacao) {
+        return 'Selecione o tipo de mostra (Competitiva ou Avaliada).';
+      }
     }
     if (s === 1) {
       if (data.bailarinos.length < minMembers) return `Adicione pelo menos ${minMembers} bailarino(s).`;
@@ -561,7 +566,12 @@ const InscricaoWizard: React.FC = () => {
 
       for (let i = 0; i < data.bailarinos.length; i++) {
         const b = data.bailarinos[i];
-        if (!b.nome.trim())          return `Bailarino ${i + 1}: informe o nome.`;
+        const nomeTrim = b.nome.trim();
+        if (!nomeTrim)               return `Bailarino ${i + 1}: informe o nome.`;
+        // Nome completo: 2+ palavras (mínimo nome + sobrenome). Cada palavra
+        // precisa de pelo menos 2 caracteres pra evitar "J K" ou "Ana A".
+        const palavras = nomeTrim.split(/\s+/).filter(p => p.length >= 2);
+        if (palavras.length < 2)     return `Bailarino ${i + 1}: informe o nome completo (nome + sobrenome).`;
         if (!validCPF(b.cpf))        return `Bailarino ${i + 1}: CPF inválido.`;
         if (!b.data_nascimento)      return `Bailarino ${i + 1}: informe a data de nascimento.`;
         // Regex estrita YYYY-MM-DD (4 dígitos no ano exatamente). type="date" tem
@@ -670,7 +680,6 @@ const InscricaoWizard: React.FC = () => {
               duracao_minutos:  duracaoSec ? Math.round((duracaoSec / 60) * 100) / 100 : null,
               coreografo_nome:  data.coreografo_nome.trim(),
               estudio_nome:     data.estudio_nome.trim() || null,
-              trilha_obs:       data.trilha_obs.trim() || null,
               wizard_version:   'PR-B-2026-05-08',
               // Flag pra produtor ver no painel (legacy MinhasCoreografias).
               // Só salva quando há violação real — caso contrário, null.
@@ -779,13 +788,6 @@ const InscricaoWizard: React.FC = () => {
 
       {/* Conteúdo do passo atual ──────────────────────────────────────────── */}
       <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
-        {error && (
-          <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 text-sm text-rose-600 dark:text-rose-400 flex items-start gap-2">
-            <AlertCircle size={14} className="shrink-0 mt-0.5" />
-            <span>{error}</span>
-          </div>
-        )}
-
         {/* ─── Passo 0: Coreografia ─────────────────────────────────────── */}
         {step === 0 && (
           <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-3xl p-6 space-y-5">
@@ -909,7 +911,7 @@ const InscricaoWizard: React.FC = () => {
                       <button
                         key={tipo}
                         type="button"
-                        onClick={() => setData(d => ({ ...d, tipo_apresentacao: tipo as 'Competitiva' | 'Avaliada' }))}
+                        onClick={() => setData(d => ({ ...d, tipo_apresentacao: tipo as 'Competitiva' | 'Avaliada' | '' }))}
                         className={`text-left p-3 rounded-xl border transition-all ${
                           selected
                             ? 'border-[#ff0068] bg-[#ff0068]/5'
@@ -1158,16 +1160,6 @@ const InscricaoWizard: React.FC = () => {
               </div>
             )}
 
-            <div>
-              <label className={labelCls}>Observações pro operador de som (opcional)</label>
-              <textarea
-                value={data.trilha_obs}
-                onChange={e => setData(d => ({ ...d, trilha_obs: e.target.value }))}
-                placeholder="Ex: começar em volume baixo, subir em 0:30"
-                rows={3}
-                className={inputCls}
-              />
-            </div>
           </div>
         )}
 
@@ -1196,6 +1188,20 @@ const InscricaoWizard: React.FC = () => {
                 <span className="text-slate-500 dark:text-slate-400">Estilo · Categoria</span>
                 <span className="font-black text-slate-900 dark:text-white text-right">{data.estilo_danca} · {data.categoria}</span>
               </div>
+              {data.subgenero && (
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500 dark:text-slate-400">Modalidade do gênero</span>
+                  <span className="font-black text-slate-900 dark:text-white text-right">{data.subgenero}</span>
+                </div>
+              )}
+              {data.tipo_apresentacao && (
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500 dark:text-slate-400">Tipo de mostra</span>
+                  <span className="font-black text-slate-900 dark:text-white text-right">
+                    {data.tipo_apresentacao === 'Competitiva' ? 'Mostra Competitiva' : 'Mostra Avaliada'}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between gap-3">
                 <span className="text-slate-500 dark:text-slate-400">Bailarinos</span>
                 <span className="font-black text-slate-900 dark:text-white">{data.bailarinos.length}</span>
@@ -1221,6 +1227,27 @@ const InscricaoWizard: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Erro sticky logo acima da barra de navegação — sempre visível,
+          mesmo quando user está rolando no conteúdo do step. Antes o erro
+          ficava no topo do step content e sumia da viewport no mobile. */}
+      {error && (
+        <div className="fixed bottom-32 sm:bottom-16 left-0 right-0 z-40 px-4 pointer-events-none">
+          <div className="max-w-2xl mx-auto pointer-events-auto">
+            <div className="bg-rose-500/95 dark:bg-rose-600/95 backdrop-blur border border-rose-400 dark:border-rose-500 rounded-xl p-3 text-sm text-white shadow-lg shadow-rose-500/40 flex items-start gap-2">
+              <AlertCircle size={14} className="shrink-0 mt-0.5" />
+              <span className="flex-1 font-bold">{error}</span>
+              <button
+                onClick={() => setError(null)}
+                aria-label="Fechar"
+                className="shrink-0 -m-1 p-1 hover:bg-white/20 rounded transition-colors text-white/80 hover:text-white text-lg leading-none"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Barra de navegação fixa embaixo — em mobile fica acima do BottomNavBar
           (que tem h-16 no app) pra Voltar/Próximo nunca sumir atrás do menu. */}

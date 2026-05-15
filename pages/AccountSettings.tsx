@@ -1215,18 +1215,20 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [tempValue,   setTempValue]   = useState<any>({});
 
   /* ── fetch ── */
+  // Filtra pelo evento ativo da tela de Configurações pra evitar duplicatas
+  // visuais quando produtor tem 2+ eventos com gêneros de mesmo nome.
   const fetchGenres = useCallback(async () => {
     setGenresLoading(true);
     setGenresError(null);
     try {
-      const data = await getAllGenres();
+      const data = await getAllGenres({ eventId: activeEventId });
       setGenres(data);
     } catch (e: any) {
       setGenresError(e.message || 'Erro ao carregar gêneros');
     } finally {
       setGenresLoading(false);
     }
-  }, []);
+  }, [activeEventId]);
 
   useEffect(() => {
     fetchGenres();
@@ -2095,12 +2097,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       }}
                       className={`relative text-left p-3 rounded-xl border transition-all ${
                         active
-                          ? recommended
-                            ? 'border-[#ff0068] bg-[#ff0068]/10 shadow-lg shadow-[#ff0068]/20 ring-1 ring-[#ff0068]/40'
-                            : 'border-[#ff0068]/60 bg-[#ff0068]/5'
-                          : recommended
-                            ? 'border-[#ff0068]/40 bg-gradient-to-br from-[#ff0068]/5 to-transparent hover:border-[#ff0068]/70 hover:shadow-md hover:shadow-[#ff0068]/10'
-                            : 'border-slate-200 dark:border-white/10 hover:border-[#ff0068]/30'
+                          ? 'border-[#ff0068] bg-[#ff0068]/10 shadow-lg shadow-[#ff0068]/20 ring-1 ring-[#ff0068]/40'
+                          : 'border-slate-200 dark:border-white/10 hover:border-[#ff0068]/30'
                       }`}
                     >
                       {/* Badge "Recomendado" no botão Vender pelo CoreoHub */}
@@ -2109,7 +2107,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                           Recomendado
                         </span>
                       )}
-                      <p className={`text-[10px] font-black uppercase tracking-tight ${active || recommended ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>
+                      <p className={`text-[10px] font-black uppercase tracking-tight ${active ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>
                         {opt.label}
                       </p>
                       <p className="text-[9px] text-slate-400 mt-0.5 leading-relaxed">{opt.desc}</p>
@@ -4897,10 +4895,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     if (!name) return;
                     try {
                       if (genreModal.mode === 'add-genre') {
-                        // Usa o event_id do primeiro evento encontrado (ou null para global)
-                        const { data: evts } = await supabase.from('events').select('id').limit(1).single();
-                        const eventId = evts?.id ?? '00000000-0000-0000-0000-000000000000';
-                        const created = await createGenre(eventId, name);
+                        // Usa o evento ATIVO da tela (não o primeiro aleatório).
+                        // Antes pegava `events.select('id').limit(1)` sem ORDER BY
+                        // — Postgres devolvia ordem indefinida, e o gênero ia pro
+                        // evento errado quando produtor tem 2+ eventos.
+                        if (!activeEventId) { alert('Selecione um evento ativo antes.'); return; }
+                        const created = await createGenre(activeEventId, name);
                         setGenres(gs => [...gs, created]);
                         setExpandedGenre(created.id);
                       } else if (genreModal.mode === 'edit-genre' && genreModal.genre) {

@@ -55,7 +55,7 @@ export async function getGenres(eventId: string): Promise<EventStyle[]> {
   return (data ?? []).map(toEventStyle);
 }
 
-export async function getAllGenres(options?: { includeHidden?: boolean }): Promise<EventStyle[]> {
+export async function getAllGenres(options?: { includeHidden?: boolean; eventId?: string | null }): Promise<EventStyle[]> {
   // Filtra gêneros do user logado + globais (event_id NULL = catálogo padrão).
   // Antes, sem filtro, traziam gêneros ÓRFÃOS de eventos deletados (cleanup
   // massivo de duplicados deixou event_styles apontando pra event_id que
@@ -84,7 +84,16 @@ export async function getAllGenres(options?: { includeHidden?: boolean }): Promi
 
   // Filtra: mantém global (event_id NULL), do user (created_by = userId)
   // ou de eventos do user. Descarta órfãos (event_id de outro evento).
+  // Quando eventId é passado, RESTRINGE a esse evento + catálogo global
+  // (esconde gêneros dos OUTROS eventos do produtor — evita duplicatas
+  // visuais na tela de Configurações).
+  const scopedEventId = options?.eventId ?? null;
   const filtered = (data ?? []).filter((r: any) => {
+    if (scopedEventId) {
+      if (r.event_id === scopedEventId) return true;  // do evento sendo configurado
+      if (r.event_id === null) return true;            // catálogo global
+      return false;
+    }
     if (r.event_id === null) return true;             // catálogo global
     if (userId && r.created_by === userId) return true; // criado pelo user
     if (producerEventIds.includes(r.event_id)) return true; // do evento dele
