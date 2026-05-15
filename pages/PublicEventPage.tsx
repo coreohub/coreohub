@@ -45,6 +45,9 @@ const PublicEventPage = () => {
   }>>([]);
   // Tier 2: estoque por tipo de ingresso (mapa idx → { sold, remaining, sold_out })
   const [stockByType, setStockByType] = useState<Record<string, { sold: number; remaining: number | null; sold_out: boolean }>>({});
+  // Gêneros + modalidades estruturados (event_styles). Renderizado em seção
+  // própria na vitrine pra inscrito ver de cara o leque técnico do festival.
+  const [publicGenres, setPublicGenres] = useState<Array<{ name: string; sub_types: Array<{ name: string }> }>>([]);
 
   useEffect(() => {
     if (!idOrSlug) return;
@@ -91,6 +94,26 @@ const PublicEventPage = () => {
         });
         if (Array.isArray(judgesData)) {
           setPublicJudges(judgesData as JudgePublic[]);
+        }
+
+        // Gêneros + modalidades estruturados desse evento (event_styles ativas).
+        // RLS permite SELECT pra anon — leitura pública. Mostra na vitrine
+        // o leque técnico do festival sem precisar abrir a inscrição.
+        const { data: stylesData } = await supabase
+          .from('event_styles')
+          .select('name, sub_types')
+          .eq('event_id', eventData.id)
+          .eq('is_active', true)
+          .order('name');
+        if (Array.isArray(stylesData)) {
+          setPublicGenres(stylesData.map((g: any) => ({
+            name: g.name,
+            sub_types: Array.isArray(g.sub_types)
+              ? g.sub_types
+                  .map((s: any) => ({ name: typeof s === 'string' ? s : (s?.name ?? '') }))
+                  .filter((s: { name: string }) => s.name)
+              : [],
+          })));
         }
 
         // Workshops Etapa 1: lista pública dos workshops do festival.
@@ -254,6 +277,7 @@ const PublicEventPage = () => {
   // Renderiza só seções que de fato têm conteúdo (evita item morto no menu).
   const visibleSections: AnchorSection[] = [
     event.description ? { id: 'sobre', label: 'Sobre' } : null,
+    publicGenres.length > 0 ? { id: 'estilos', label: 'Estilos' } : null,
     Array.isArray(event.programacao_config) && event.programacao_config.length > 0
       ? { id: 'programacao', label: 'Programação' }
       : null,
@@ -390,6 +414,41 @@ const PublicEventPage = () => {
           <div id="sobre" className="space-y-4 scroll-mt-20">
             <h2 className="text-2xl font-black uppercase tracking-tighter">Sobre o Evento</h2>
             <p className="text-slate-400 leading-relaxed whitespace-pre-line">{event.description}</p>
+          </div>
+        )}
+
+        {/* Estilos & Modalidades — leque técnico do festival.
+            Cada gênero vira card; se tem modalidades (sub_types), aparecem
+            como chips. Inscrito vê de cara em quais estilos pode competir. */}
+        {publicGenres.length > 0 && (
+          <div id="estilos" className="space-y-4 scroll-mt-20">
+            <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
+              <Music size={24} className="text-[#ff0068]" /> Estilos & Modalidades
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {publicGenres.map(g => (
+                <div
+                  key={g.name}
+                  className="p-4 bg-white/5 border border-white/10 rounded-2xl hover:border-[#ff0068]/30 transition-colors"
+                >
+                  <p className="text-sm font-black uppercase tracking-tight text-white">{g.name}</p>
+                  {g.sub_types.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {g.sub_types.map(s => (
+                        <span
+                          key={s.name}
+                          className="text-[10px] font-bold px-2 py-1 bg-[#ff0068]/10 text-[#ff0068] border border-[#ff0068]/20 rounded-full"
+                        >
+                          {s.name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-slate-500 mt-1.5 italic">Sem modalidades específicas</p>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
