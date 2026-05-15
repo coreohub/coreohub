@@ -780,7 +780,23 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   } | null>(null);
   const [isAdmin, setIsAdmin]                   = useState(false);
   const [asaasLoading, setAsaasLoading]         = useState(false);
-  const [asaasForm, setAsaasForm]               = useState({ cpf_cnpj: '', pix_key: '', company_type: 'MEI', income_value: '', birth_date: '' });
+  const [asaasForm, setAsaasForm]               = useState({
+    cpf_cnpj: '',
+    pix_key: '',
+    company_type: 'MEI',
+    income_value: '',
+    birth_date: '',
+    postal_code: '',
+    address: '',
+    address_number: '',
+    complement: '',
+    province: '',
+    city: '',
+    state: '',
+    mobile_phone: '',
+  });
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError]     = useState<string | null>(null);
   const [asaasFormError, setAsaasFormError]     = useState<string | null>(null);
   const [editingPix, setEditingPix]             = useState(false);
   const [newPixKey, setNewPixKey]               = useState('');
@@ -821,6 +837,32 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     loadAsaasData();
   }, []);
 
+  const lookupCep = async (rawCep: string) => {
+    const digits = rawCep.replace(/\D/g, '');
+    if (digits.length !== 8) return;
+    setCepError(null);
+    setCepLoading(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setCepError('CEP não encontrado. Confira o número.');
+        return;
+      }
+      setAsaasForm(f => ({
+        ...f,
+        address:  data.logradouro ?? f.address,
+        province: data.bairro     ?? f.province,
+        city:     data.localidade ?? f.city,
+        state:    (data.uf ?? f.state).toUpperCase(),
+      }));
+    } catch {
+      setCepError('Não foi possível buscar o CEP. Preencha manualmente.');
+    } finally {
+      setCepLoading(false);
+    }
+  };
+
   const handleConnectAsaas = async () => {
     setAsaasFormError(null);
     // Gate: produtor precisa ter aceitado o Termo de Adesão antes de abrir
@@ -849,6 +891,17 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       if (calcIdade(birthDateISO) < 18) { setAsaasFormError('É necessário ter 18 anos ou mais para abrir conta de recebimento.'); return; }
     }
 
+    // Endereço + celular — obrigatórios em produção (KYC Asaas).
+    const cepDigits   = asaasForm.postal_code.replace(/\D/g, '');
+    const phoneDigits = asaasForm.mobile_phone.replace(/\D/g, '');
+    if (cepDigits.length !== 8)              { setAsaasFormError('CEP inválido. Informe 8 dígitos.'); return; }
+    if (!asaasForm.address.trim())           { setAsaasFormError('Informe o endereço (rua).'); return; }
+    if (!asaasForm.address_number.trim())    { setAsaasFormError('Informe o número.'); return; }
+    if (!asaasForm.province.trim())          { setAsaasFormError('Informe o bairro.'); return; }
+    if (!asaasForm.city.trim())              { setAsaasFormError('Informe a cidade.'); return; }
+    if (asaasForm.state.trim().length !== 2) { setAsaasFormError('Informe a UF (2 letras, ex.: SP).'); return; }
+    if (phoneDigits.length < 10 || phoneDigits.length > 11) { setAsaasFormError('Celular inválido. Informe DDD + número.'); return; }
+
     setAsaasLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -859,11 +912,19 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           'Authorization': `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify({
-          cpf_cnpj:     cpfCnpjDigits,
-          pix_key:      asaasForm.pix_key,
-          company_type: isCnpj ? asaasForm.company_type : undefined,
-          income_value: incomeNum,
-          birth_date:   birthDateISO, // null pra CNPJ
+          cpf_cnpj:       cpfCnpjDigits,
+          pix_key:        asaasForm.pix_key,
+          company_type:   isCnpj ? asaasForm.company_type : undefined,
+          income_value:   incomeNum,
+          birth_date:     birthDateISO, // null pra CNPJ
+          postal_code:    cepDigits,
+          address:        asaasForm.address.trim(),
+          address_number: asaasForm.address_number.trim(),
+          complement:     asaasForm.complement.trim() || undefined,
+          province:       asaasForm.province.trim(),
+          city:           asaasForm.city.trim(),
+          state:          asaasForm.state.trim().toUpperCase(),
+          mobile_phone:   phoneDigits,
         }),
       });
       const data = await res.json();
@@ -3824,6 +3885,116 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         />
                         <p className="text-[9px] text-slate-400 mt-1">Exigido pelo Asaas para validação cadastral. Use uma estimativa.</p>
                       </div>
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Celular</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={asaasForm.mobile_phone}
+                          onChange={e => {
+                            const d = e.target.value.replace(/\D/g, '').slice(0, 11);
+                            const formatted = d.length <= 10
+                              ? d.replace(/(\d{2})(\d{0,4})(\d{0,4}).*/, (_,a,b,c) => [a && `(${a})`, b && ` ${b}`, c && `-${c}`].filter(Boolean).join(''))
+                              : d.replace(/(\d{2})(\d{0,5})(\d{0,4}).*/, (_,a,b,c) => [a && `(${a})`, b && ` ${b}`, c && `-${c}`].filter(Boolean).join(''));
+                            setAsaasForm(f => ({ ...f, mobile_phone: formatted }));
+                          }}
+                          placeholder="(11) 91234-5678"
+                          className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                        />
+                        <p className="text-[9px] text-slate-400 mt-1">Exigido pelo Asaas para validação cadastral (KYC).</p>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">CEP</label>
+                          {cepLoading && <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Buscando...</span>}
+                        </div>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={asaasForm.postal_code}
+                          onChange={e => {
+                            const d = e.target.value.replace(/\D/g, '').slice(0, 8);
+                            const formatted = d.length > 5 ? `${d.slice(0,5)}-${d.slice(5)}` : d;
+                            setAsaasForm(f => ({ ...f, postal_code: formatted }));
+                            if (d.length === 8) lookupCep(d);
+                          }}
+                          placeholder="00000-000"
+                          maxLength={9}
+                          className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                        />
+                        {cepError && <p className="text-[9px] text-rose-500 mt-1">{cepError}</p>}
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="col-span-2">
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Endereço (rua)</label>
+                          <input
+                            type="text"
+                            value={asaasForm.address}
+                            onChange={e => setAsaasForm(f => ({ ...f, address: e.target.value }))}
+                            placeholder="Rua / Avenida"
+                            className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Número</label>
+                          <input
+                            type="text"
+                            value={asaasForm.address_number}
+                            onChange={e => setAsaasForm(f => ({ ...f, address_number: e.target.value }))}
+                            placeholder="123"
+                            className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Complemento (opcional)</label>
+                        <input
+                          type="text"
+                          value={asaasForm.complement}
+                          onChange={e => setAsaasForm(f => ({ ...f, complement: e.target.value }))}
+                          placeholder="Apto, sala, bloco..."
+                          className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Bairro</label>
+                        <input
+                          type="text"
+                          value={asaasForm.province}
+                          onChange={e => setAsaasForm(f => ({ ...f, province: e.target.value }))}
+                          placeholder="Bairro"
+                          className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="col-span-2">
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Cidade</label>
+                          <input
+                            type="text"
+                            value={asaasForm.city}
+                            onChange={e => setAsaasForm(f => ({ ...f, city: e.target.value }))}
+                            placeholder="Cidade"
+                            className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">UF</label>
+                          <input
+                            type="text"
+                            value={asaasForm.state}
+                            onChange={e => setAsaasForm(f => ({ ...f, state: e.target.value.toUpperCase().slice(0, 2) }))}
+                            placeholder="SP"
+                            maxLength={2}
+                            className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50 uppercase"
+                          />
+                        </div>
+                      </div>
+
                       <div>
                         <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Chave PIX para receber</label>
                         <input

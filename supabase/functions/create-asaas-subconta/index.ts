@@ -12,21 +12,40 @@ Deno.serve(async (req) => {
   }
 
   try {
+    console.log('[create-asaas-subconta] STEP 1: criando supabase client')
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
     )
 
+    console.log('[create-asaas-subconta] STEP 2: lendo Authorization header')
     const authHeader = req.headers.get('Authorization') ?? ''
+    console.log('[create-asaas-subconta] STEP 2.5: validando user via auth.getUser')
     const { data: { user }, error: authErr } = await supabase.auth.getUser(
       authHeader.replace('Bearer ', '')
     )
-    if (authErr || !user) throw new Error('Não autorizado')
+    if (authErr || !user) {
+      console.error('[create-asaas-subconta] STEP 2 FALHOU:', authErr?.message)
+      throw new Error('Não autorizado')
+    }
+    console.log('[create-asaas-subconta] STEP 3: usuario autenticado:', user.id)
 
-    const { cpf_cnpj, pix_key, company_type, income_value, birth_date, action } = await req.json()
+    console.log('[create-asaas-subconta] STEP 4: lendo body da request')
+    let body: any
+    try {
+      const rawBody = await req.text()
+      console.log('[create-asaas-subconta] STEP 4.1: body raw length=', rawBody.length, 'first200=', rawBody.slice(0, 200))
+      body = rawBody ? JSON.parse(rawBody) : {}
+    } catch (bodyErr) {
+      console.error('[create-asaas-subconta] STEP 4 FALHOU ao parsear body:', (bodyErr as Error).message)
+      throw new Error('Body da requisição inválido: ' + (bodyErr as Error).message)
+    }
+    const { cpf_cnpj, pix_key, company_type, income_value, birth_date, action } = body
+    console.log('[create-asaas-subconta] STEP 5: body parseado, action=', action, 'cpf_len=', String(cpf_cnpj ?? '').length)
 
     const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
     const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+    console.log('[create-asaas-subconta] STEP 6: env vars carregadas, base_url=', ASAAS_BASE_URL, 'api_key_len=', ASAAS_API_KEY.length)
 
     // ─── ACTION: update_pix — trocar apenas a chave PIX, sem mexer no KYC ───
     // Lê apiKey da subconta do profile, registra nova chave no Asaas e atualiza Supabase.
@@ -84,6 +103,17 @@ Deno.serve(async (req) => {
       throw new Error('Data de nascimento deve estar no formato YYYY-MM-DD')
     }
 
+    // Endereço + celular — obrigatórios em produção (KYC Asaas). Sandbox aceitava sem.
+    const { postal_code, address, address_number, complement, province, city, state, mobile_phone } = body
+    if (!postal_code   || !/^\d{8}$/.test(String(postal_code).replace(/\D/g, ''))) throw new Error('CEP é obrigatório (8 dígitos)')
+    if (!address)        throw new Error('Endereço (rua) é obrigatório')
+    if (!address_number) throw new Error('Número do endereço é obrigatório')
+    if (!province)       throw new Error('Bairro é obrigatório')
+    if (!city)           throw new Error('Cidade é obrigatória')
+    if (!state || String(state).length !== 2) throw new Error('UF (estado) é obrigatório (2 letras)')
+    const phoneDigits = String(mobile_phone ?? '').replace(/\D/g, '')
+    if (!phoneDigits || phoneDigits.length < 10 || phoneDigits.length > 11) throw new Error('Celular é obrigatório (DDD + número, 10 ou 11 dígitos)')
+
     const { data: profile } = await supabase
       .from('profiles')
       .select('full_name')
@@ -98,6 +128,7 @@ Deno.serve(async (req) => {
 
     const cpfLimpo = cpf_cnpj.replace(/\D/g, '')
 
+    console.log('[create-asaas-subconta] STEP 7: POST', `${ASAAS_BASE_URL}/accounts`)
     const subcontaRes = await fetch(`${ASAAS_BASE_URL}/accounts`, {
       method: 'POST',
       headers: {
@@ -105,17 +136,33 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        name:        profile.full_name,
-        email:       email,
-        cpfCnpj:     cpfLimpo,
-        incomeValue: Number(income_value),
+        name:           profile.full_name,
+        email:          email,
+        cpfCnpj:        cpfLimpo,
+        incomeValue:    Number(income_value),
+        // Endereço + telefone obrigatórios em produção (KYC).
+        postalCode:     String(postal_code).replace(/\D/g, ''),
+        address:        address,
+        addressNumber:  address_number,
+        ...(complement ? { complement } : {}),
+        province:       province,
+        mobilePhone:    phoneDigits,
         ...(cpfLimpo.length === 14 && company_type ? { companyType: company_type } : {}),
         // birthDate: YYYY-MM-DD — obrigatório pra CPF (KYC Asaas/BCB).
         ...(cpfLimpo.length === 11 && birth_date ? { birthDate: birth_date } : {}),
       }),
     })
 
-    let subcontaData = await subcontaRes.json()
+    console.log('[create-asaas-subconta] STEP 8: resposta Asaas status=', subcontaRes.status)
+    const subcontaText = await subcontaRes.text()
+    console.log('[create-asaas-subconta] STEP 8.1: body len=', subcontaText.length, 'first300=', subcontaText.slice(0, 300))
+    let subcontaData: any
+    try {
+      subcontaData = subcontaText ? JSON.parse(subcontaText) : {}
+    } catch (parseErr) {
+      console.error('[create-asaas-subconta] STEP 8 FALHOU ao parsear resposta Asaas:', (parseErr as Error).message, 'body=', subcontaText)
+      throw new Error(`Asaas retornou resposta inválida (status ${subcontaRes.status}): ${subcontaText.slice(0, 200)}`)
+    }
     let isRecovered = false
 
     if (!subcontaRes.ok) {
@@ -200,6 +247,14 @@ Deno.serve(async (req) => {
         asaas_access_token: preservedAccessToken,
         cpf_cnpj:           cpfLimpo,
         pix_key:            pix_key.trim(),
+        postal_code:        String(postal_code).replace(/\D/g, ''),
+        address:            address,
+        address_number:     address_number,
+        complement:         complement ?? null,
+        province:           province,
+        city:               city,
+        state:              String(state).toUpperCase(),
+        mobile_phone:       phoneDigits,
       })
       .eq('id', user.id)
 
