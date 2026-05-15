@@ -102,7 +102,7 @@ export interface EventConfig {
   startDate: string;
   endDate: string;
   registrationDeadline: string;
-  splitGateway: 'STRIPE' | 'ASAAS' | 'PAGARME' | 'MERCADO_PAGO';
+  splitGateway: 'STRIPE' | 'ASAAS' | 'PAGARME';
   defaultFormat: EventFormat;
   hasMultipleLevels: boolean;
   ageReference: AgeReference;
@@ -297,8 +297,6 @@ export interface Profile {
   instagram?: string;
   location?: string;
   dance_role?: string;
-  mp_client_id?: string;
-  mp_client_secret?: string;
 }
 
 export interface ActiveJudge {
