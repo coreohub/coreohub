@@ -155,7 +155,7 @@ Deno.serve(async (req) => {
 
     console.log('[create-asaas-subconta] STEP 8: resposta Asaas status=', subcontaRes.status)
     const subcontaText = await subcontaRes.text()
-    console.log('[create-asaas-subconta] STEP 8.1: body len=', subcontaText.length, 'first300=', subcontaText.slice(0, 300))
+    console.log('[create-asaas-subconta] STEP 8.1: body len=', subcontaText.length, 'full=', subcontaText.slice(0, 2000))
     let subcontaData: any
     try {
       subcontaData = subcontaText ? JSON.parse(subcontaText) : {}
@@ -163,6 +163,9 @@ Deno.serve(async (req) => {
       console.error('[create-asaas-subconta] STEP 8 FALHOU ao parsear resposta Asaas:', (parseErr as Error).message, 'body=', subcontaText)
       throw new Error(`Asaas retornou resposta inválida (status ${subcontaRes.status}): ${subcontaText.slice(0, 200)}`)
     }
+    // Log explícito dos campos sensíveis pra debug futuro de KYC.
+    // Se Asaas silenciar campo (ex.: mobilePhone "Não informado" no painel), aparece aqui.
+    console.log('[create-asaas-subconta] STEP 8.2: campos retornados — mobilePhone=', subcontaData?.mobilePhone ?? '<null>', 'phone=', subcontaData?.phone ?? '<null>', 'address=', subcontaData?.address ?? '<null>')
     let isRecovered = false
 
     if (!subcontaRes.ok) {
