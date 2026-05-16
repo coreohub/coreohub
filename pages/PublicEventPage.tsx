@@ -262,7 +262,9 @@ const PublicEventPage = () => {
     return `${cap}, ${date}`;
   };
 
-  const eventId = event.id;
+  // Prefere slug nas URLs públicas pra link bonito compartilhável (Fase 1 — Padronização).
+  // UUID como fallback se slug não existir.
+  const slugOrId = event.slug ?? event.id;
   const localCidadeUf = [event.city, event.state].filter(Boolean).join(' / ');
   // Local específico (ex: "Concha Acústica Prof. Geraldo") + cidade pra contexto.
   // Botão "Ver no Google Maps" usa URL oficial sem API key (zero custo, mobile abre
@@ -439,7 +441,7 @@ const PublicEventPage = () => {
         cta={
           isRegistrationOpen ? (
             <Link
-              to={`/festival/${eventId}/register`}
+              to={`/festival/${slugOrId}/register`}
               className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 bg-[#ff0068] text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all"
             >
               Inscreva-se <ChevronRight size={12} />
@@ -842,7 +844,7 @@ const PublicEventPage = () => {
             {/* CTA fallback — pra quem ainda não escolheu modalidade. */}
             {isRegistrationOpen && (
               <Link
-                to={`/festival/${eventId}/register`}
+                to={`/festival/${slugOrId}/register`}
                 className="mt-2 inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3.5 bg-transparent border border-[#ff0068]/30 hover:bg-[#ff0068]/10 text-[#ff0068] rounded-2xl text-sm font-black uppercase tracking-widest transition-all"
               >
                 Ver todas e escolher depois <ChevronRight size={16} />
@@ -953,14 +955,14 @@ const PublicEventPage = () => {
           <div className="flex flex-col gap-3 min-w-[200px]">
             {isRegistrationOpen && (
               <Link
-                to={`/festival/${eventId}/register`}
+                to={`/festival/${slugOrId}/register`}
                 className="px-8 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30 flex items-center justify-center gap-2"
               >
                 Inscreva-se <ChevronRight size={16} />
               </Link>
             )}
             <Link
-              to={`/festival/${eventId}/leaderboard`}
+              to={`/festival/${slugOrId}/leaderboard`}
               className="px-8 py-4 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:border-[#ff0068]/50 transition-all flex items-center justify-center gap-2"
             >
               <Trophy size={16} /> Resultados
