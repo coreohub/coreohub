@@ -82,7 +82,8 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
 
   const handleCopyLink = async () => {
     if (!firstEventId) return;
-    const url = `${window.location.origin}/festival/${firstEventId}/register`;
+    // Prefere slug (Fase 1 — Padronização de URLs). UUID como fallback.
+    const url = `${window.location.origin}/festival/${firstEventSlug ?? firstEventId}/register`;
     try {
       await navigator.clipboard.writeText(url);
       setLinkCopied(true);
@@ -148,7 +149,7 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
             </span>
           )}
           <span className="text-[10px] font-bold text-slate-500 uppercase truncate max-w-[260px]">
-            Inscrição direta: /festival/{firstEventId.substring(0, 8)}…/register
+            Inscrição direta: /festival/{firstEventSlug ?? `${firstEventId.substring(0, 8)}…`}/register
           </span>
         </div>
       ) : null,

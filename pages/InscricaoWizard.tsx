@@ -708,7 +708,8 @@ const InscricaoWizard: React.FC = () => {
       }
 
       // 3) Redireciona pra Checkout existente — reusa integração Asaas/cupom/etc.
-      navigate(`/festival/${event.id}/checkout?registration_id=${reg.id}`);
+      // Mantém o mesmo idOrSlug que o user já tava na URL (preserva slug bonito se foi assim).
+      navigate(`/festival/${idOrSlug}/checkout?registration_id=${reg.id}`);
     } catch (e: any) {
       setError(e.message ?? 'Erro inesperado ao finalizar inscrição.');
       setSubmitting(false);

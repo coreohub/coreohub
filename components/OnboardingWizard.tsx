@@ -188,8 +188,10 @@ const OnboardingWizard: React.FC = () => {
     }
   };
 
+  // Prefere slug pra link bonito compartilhável (Fase 1 — Padronização de URLs).
+  // UUID como fallback se slug ainda não está disponível (criação falhou em algum ponto).
   const publicLink = createdEvent
-    ? `${window.location.origin}/festival/${createdEvent.id}/register`
+    ? `${window.location.origin}/festival/${createdEvent.slug || createdEvent.id}/register`
     : '';
 
   const handleCopyLink = async () => {

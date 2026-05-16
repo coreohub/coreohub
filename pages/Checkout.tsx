@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import { eventFilterColumn } from '../services/eventResolver';
 import { validateCoupon } from '../services/couponService';
 import type { RegistrationLot } from '../types';
 import {
@@ -42,7 +43,10 @@ function getActiveLotFromFormacao(lotes: FormacaoLote[] | null | undefined): {
 }
 
 const Checkout = () => {
-  const { id: eventId } = useParams<{ id: string }>();
+  // Rota /festival/:idOrSlug/checkout — aceita UUID ou slug (Fase 1).
+  // Resolvemos pra UUID interno na primeira query.
+  const { idOrSlug } = useParams<{ idOrSlug: string }>();
+  const [eventId, setEventId] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
   const registrationId = searchParams.get('registration_id');
   const navigate = useNavigate();
@@ -84,7 +88,7 @@ const Checkout = () => {
 
   useEffect(() => {
     const load = async () => {
-      if (!registrationId || !eventId) {
+      if (!registrationId || !idOrSlug) {
         setError('Inscrição não encontrada. Volte e tente novamente.');
         setLoading(false);
         return;
@@ -98,12 +102,13 @@ const Checkout = () => {
           .single(),
         supabase
           .from('events')
-          .select('id, name, cover_url, formacoes_config, created_by, event_type')
-          .eq('id', eventId)
-          .single(),
+          .select('id, name, slug, cover_url, formacoes_config, created_by, event_type')
+          .eq(eventFilterColumn(idOrSlug), idOrSlug)
+          .maybeSingle(),
       ]);
 
       if (!reg || !ev) { setError('Dados não encontrados.'); setLoading(false); return; }
+      setEventId(ev.id);
 
       if (reg.status_pagamento === 'CONFIRMADO' || reg.status_pagamento === 'APROVADO') {
         navigate(`/pagamento/sucesso?registration_id=${registrationId}`);
@@ -139,7 +144,7 @@ const Checkout = () => {
       setLoading(false);
     };
     load();
-  }, [registrationId, eventId, navigate]);
+  }, [registrationId, idOrSlug, navigate]);
 
   const handleApplyCoupon = async () => {
     setCouponError(null);

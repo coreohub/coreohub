@@ -319,7 +319,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
               ) : (
                 <CopyLinkChip
                   label="Link de inscrição"
-                  url={`${window.location.origin}/festival/${selectedEvent.id}/register`}
+                  url={`${window.location.origin}/festival/${selectedEvent.slug ?? selectedEvent.id}/register`}
                 />
               )}
             </div>

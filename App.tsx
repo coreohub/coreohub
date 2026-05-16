@@ -462,15 +462,15 @@ const App: React.FC = () => {
         <Route path="/vendas-ingressos" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><VendasIngressos /></Suspense></PrivateRoute>} />
         <Route path="/workshops-do-evento" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><WorkshopsManagement /></Suspense></PrivateRoute>} />
         <Route path="/cupons"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><Coupons /></Suspense></PrivateRoute>} />
-        <Route path="/festival/:id" element={<FestivalShowcase />} />
-        <Route path="/festival/:id/register" element={<PrivateRoute {...privateRouteProps}><NewRegistration /></PrivateRoute>} />
+        <Route path="/festival/:idOrSlug" element={<FestivalShowcase />} />
+        <Route path="/festival/:idOrSlug/register" element={<PrivateRoute {...privateRouteProps}><NewRegistration /></PrivateRoute>} />
         <Route path="/festival/:idOrSlug/inscrever/:modalidade" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><InscricaoWizard /></Suspense></PrivateRoute>} />
-        <Route path="/festival/:id/checkout" element={<PrivateRoute {...privateRouteProps}><Checkout /></PrivateRoute>} />
+        <Route path="/festival/:idOrSlug/checkout" element={<PrivateRoute {...privateRouteProps}><Checkout /></PrivateRoute>} />
         <Route path="/pagamento"             element={<PrivateRoute {...privateRouteProps}><PagamentoInscrito /></PrivateRoute>} />
         <Route path="/pagamento/sucesso"     element={<PrivateRoute {...privateRouteProps}><PagamentoSucesso /></PrivateRoute>} />
         <Route path="/pagamento/pendente"    element={<PrivateRoute {...privateRouteProps}><PagamentoPendente /></PrivateRoute>} />
         <Route path="/pagamento/erro"        element={<PrivateRoute {...privateRouteProps}><PagamentoErro /></PrivateRoute>} />
-        <Route path="/festival/:id/leaderboard" element={<Leaderboard />} />
+        <Route path="/festival/:idOrSlug/leaderboard" element={<Leaderboard />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

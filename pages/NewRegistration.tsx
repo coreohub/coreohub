@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import { eventFilterColumn } from '../services/eventResolver';
 import { ChevronRight, Loader2, Music2, Users, User, AlertCircle } from 'lucide-react';
 
 const input = 'w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-5 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm dark:[color-scheme:dark]';
 const label = 'block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5 ml-1';
 
 const NewRegistration = () => {
-  const { id: eventId } = useParams<{ id: string }>();
+  // Rota aceita UUID ou slug do evento (Fase 1 — Padronização de URLs).
+  // Resolvemos pro UUID interno (`eventId`) na primeira query e usamos daí pra frente.
+  const { idOrSlug } = useParams<{ idOrSlug: string }>();
+  const [eventId, setEventId] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   // Modalidade pré-selecionada via query string (entry point modalidade-first
@@ -40,25 +44,31 @@ const NewRegistration = () => {
       if (!user) { navigate('/auth'); return; }
       setUserId(user.id);
 
+      // Resolve evento por UUID ou slug primeiro (Fase 1). As demais queries
+      // dependem do UUID interno (event_id), então precisam aguardar essa primeira.
+      const { data: ev, error: evErr } = await supabase
+        .from('events')
+        .select('id, name, slug, description, start_date, end_date, formacoes_config, cover_url')
+        .eq(eventFilterColumn(idOrSlug), idOrSlug)
+        .maybeSingle();
+
+      if (evErr || !ev) { setError('Evento não encontrado.'); setLoading(false); return; }
+      const resolvedEventId = ev.id as string;
+      setEventId(resolvedEventId);
+
       // Categorias, estilos e prazo de inscrição moram em `configuracoes`,
-      // não em `events`. Carregamos os dois em paralelo.
+      // não em `events`. Carregamos em paralelo agora que temos o UUID resolvido.
       // Também carregamos event_styles (tabela nova com sub_types/modalidades).
-      const [{ data: ev, error: evErr }, { data: cfg }, { data: styles }] = await Promise.all([
-        supabase
-          .from('events')
-          .select('id, name, description, start_date, end_date, formacoes_config, cover_url')
-          .eq('id', eventId)
-          .single(),
-        // Multi-tenant: lê config do próprio evento. Fallback abaixo se vazio.
+      const [{ data: cfg }, { data: styles }] = await Promise.all([
         supabase
           .from('configuracoes')
           .select('categorias, estilos, prazo_inscricao')
-          .eq('event_id', eventId)
+          .eq('event_id', resolvedEventId)
           .maybeSingle(),
         supabase
           .from('event_styles')
           .select('id, name, is_active, sub_types')
-          .eq('event_id', eventId)
+          .eq('event_id', resolvedEventId)
           .eq('is_active', true)
           .order('name'),
       ]);
@@ -75,7 +85,6 @@ const NewRegistration = () => {
         configFinal = legacy ?? configFinal;
       }
 
-      if (evErr || !ev) { setError('Evento não encontrado.'); setLoading(false); return; }
       setEvent(ev);
       setConfig(configFinal);
       setEventStyles(styles ?? []);
@@ -92,7 +101,7 @@ const NewRegistration = () => {
       setLoading(false);
     };
     load();
-  }, [eventId, navigate, preselectedModalidade]);
+  }, [idOrSlug, navigate, preselectedModalidade]);
 
   const formacoes: any[] = event?.formacoes_config ?? [];
   const categories: any[] = config?.categorias ?? [];
@@ -184,7 +193,8 @@ const NewRegistration = () => {
 
       if (regErr || !reg) throw regErr ?? new Error('Erro ao criar inscrição.');
 
-      navigate(`/festival/${eventId}/checkout?registration_id=${reg.id}`);
+      // Prefere slug pra URL bonita (link compartilhável). UUID como fallback.
+      navigate(`/festival/${event?.slug ?? eventId}/checkout?registration_id=${reg.id}`);
     } catch (err: any) {
       setError(err.message ?? 'Erro inesperado ao criar inscrição.');
       setSubmitting(false);

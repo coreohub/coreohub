@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import { eventFilterColumn } from '../services/eventResolver';
 import { Trophy, Medal, Search, RefreshCw, Loader2, Star } from 'lucide-react';
 import { motion } from 'motion/react';
 import BrandIcon from '../components/BrandIcon';
@@ -24,7 +25,9 @@ const MedalIcon = ({ rank }: { rank: number }) => {
 };
 
 const Leaderboard = () => {
-  const { id: eventId } = useParams<{ id: string }>();
+  // Rota /festival/:idOrSlug/leaderboard — aceita UUID ou slug (Fase 1).
+  // A RPC get_public_leaderboard exige UUID, então resolvemos via lookup de event primeiro.
+  const { idOrSlug } = useParams<{ idOrSlug: string }>();
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [filtered, setFiltered] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,11 +45,24 @@ const Leaderboard = () => {
       // (get_public_leaderboard) em vez de SELECT direto na tabela evaluations
       // — RLS bloqueia anon de ler notas, mas a RPC encapsula só os campos
       // agregados (média + rank) e gateia por deliberation_status='LIBERADO'.
-      if (!eventId) {
+      if (!idOrSlug) {
         setEntries([]); setFiltered([]); setLoading(false); return;
       }
+
+      // Resolve UUID do evento via slug OU id (Fase 1).
+      const { data: ev } = await supabase
+        .from('events')
+        .select('id, name')
+        .eq(eventFilterColumn(idOrSlug), idOrSlug)
+        .maybeSingle();
+      if (!ev) {
+        setEntries([]); setFiltered([]); setLoading(false); return;
+      }
+      const resolvedEventId = ev.id as string;
+      setEventName(ev.name ?? '');
+
       const { data: rows, error } = await supabase.rpc('get_public_leaderboard', {
-        p_event_id: eventId,
+        p_event_id: resolvedEventId,
       });
       if (error) throw error;
 
@@ -69,11 +85,7 @@ const Leaderboard = () => {
       setCategories(cats);
       setStyles(sts);
 
-      // Nome do evento
-      if (eventId) {
-        const { data: ev } = await supabase.from('events').select('name').eq('id', eventId).single();
-        if (ev) setEventName(ev.name);
-      }
+      // Nome do evento já setado acima na resolução do idOrSlug.
     } catch (err) {
       console.error('Leaderboard error:', err);
     } finally {
@@ -81,7 +93,7 @@ const Leaderboard = () => {
     }
   };
 
-  useEffect(() => { fetchLeaderboard(); }, [eventId]);
+  useEffect(() => { fetchLeaderboard(); }, [idOrSlug]);
 
   useEffect(() => {
     let result = entries;
