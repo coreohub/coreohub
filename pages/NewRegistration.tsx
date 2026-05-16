@@ -170,6 +170,9 @@ const NewRegistration = () => {
     setError(null);
 
     try {
+      // UTMs do sessionStorage — Fase 4 atribuição de vendas.
+      const utms = (await import('../services/utmTracking')).getUtmsForRegistration();
+
       // Tabela `registrations` usa nomes em português. Colunas reais validadas
       // via db-introspect: nome_coreografia, formato_participacao, categoria,
       // estilo_danca, status, status_pagamento, criado_em, data_inscricao.
@@ -187,6 +190,7 @@ const NewRegistration = () => {
           status_pagamento:     'PENDENTE',
           criado_em:            new Date().toISOString(),
           data_inscricao:       new Date().toISOString(),
+          ...(utms ?? {}),
         })
         .select('id')
         .single();

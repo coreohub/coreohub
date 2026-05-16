@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, uploadEventCover, supabaseUrl } from '../services/supabase';
 import { validateSlugInput, isSlugAvailable } from '../services/eventSlug';
+import { validateShortCodeInput, isShortCodeAvailable } from '../services/eventShortCode';
 import { TERMO_PRODUTOR_VERSION } from './TermoProdutor';
 import imageCompression from 'browser-image-compression';
 import {
@@ -1021,6 +1022,13 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [slugMessage, setSlugMessage]     = useState<string | null>(null);
   const [savingSlug, setSavingSlug]       = useState(false);
 
+  // Short code (Fase 5 — Vanity URL). coreohub.com/u/<code> redireciona pro evento.
+  const [shortCodeExisting, setShortCodeExisting] = useState<{ id: string; code: string } | null>(null);
+  const [shortCodeDraft, setShortCodeDraft]       = useState<string>('');
+  const [shortCodeStatus, setShortCodeStatus]     = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
+  const [shortCodeMessage, setShortCodeMessage]   = useState<string | null>(null);
+  const [savingShortCode, setSavingShortCode]     = useState(false);
+
   // Validação live do slug — debounce 500ms (Fase 2 — Slug Hardening).
   // Quando draft muda, valida formato local + checa disponibilidade no banco.
   useEffect(() => {
@@ -1068,6 +1076,87 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       setSlugMessage(`Erro ao salvar: ${e.message ?? 'desconhecido'}`);
     } finally {
       setSavingSlug(false);
+    }
+  };
+
+  // Short code: carrega o code existente quando activeEventId é resolvido.
+  useEffect(() => {
+    if (!activeEventId) return;
+    (async () => {
+      const { data } = await supabase
+        .from('event_short_codes')
+        .select('id, code')
+        .eq('event_id', activeEventId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data) {
+        setShortCodeExisting(data);
+        setShortCodeDraft(data.code);
+      }
+    })();
+  }, [activeEventId]);
+
+  // Validação live do short code — debounce 500ms.
+  useEffect(() => {
+    if (!shortCodeDraft || shortCodeDraft === shortCodeExisting?.code) {
+      setShortCodeStatus('idle');
+      setShortCodeMessage(null);
+      return;
+    }
+    const formatError = validateShortCodeInput(shortCodeDraft);
+    if (formatError) {
+      setShortCodeStatus('invalid');
+      setShortCodeMessage(formatError);
+      return;
+    }
+    setShortCodeStatus('checking');
+    setShortCodeMessage(null);
+    const handle = setTimeout(async () => {
+      const available = await isShortCodeAvailable(shortCodeDraft, shortCodeExisting?.id);
+      if (available) {
+        setShortCodeStatus('valid');
+        setShortCodeMessage('Disponível ✓');
+      } else {
+        setShortCodeStatus('invalid');
+        setShortCodeMessage('Já em uso. Escolha outro.');
+      }
+    }, 500);
+    return () => clearTimeout(handle);
+  }, [shortCodeDraft, shortCodeExisting]);
+
+  const handleSaveShortCode = async () => {
+    if (shortCodeStatus !== 'valid' || !activeEventId || !currentUserId) return;
+    setSavingShortCode(true);
+    try {
+      if (shortCodeExisting) {
+        const { error } = await supabase
+          .from('event_short_codes')
+          .update({ code: shortCodeDraft })
+          .eq('id', shortCodeExisting.id);
+        if (error) throw error;
+        setShortCodeExisting({ id: shortCodeExisting.id, code: shortCodeDraft });
+      } else {
+        const { data, error } = await supabase
+          .from('event_short_codes')
+          .insert({
+            code:        shortCodeDraft,
+            event_id:    activeEventId,
+            producer_id: currentUserId,
+          })
+          .select('id, code')
+          .single();
+        if (error) throw error;
+        if (data) setShortCodeExisting(data);
+      }
+      setShortCodeStatus('idle');
+      setShortCodeMessage('✓ Link curto salvo.');
+      setTimeout(() => setShortCodeMessage(null), 4000);
+    } catch (e: any) {
+      setShortCodeStatus('invalid');
+      setShortCodeMessage(`Erro ao salvar: ${e.message ?? 'desconhecido'}`);
+    } finally {
+      setSavingShortCode(false);
     }
   };
   const [programacao, setProgramacao] = useState<ProgramItem[]>([]);
@@ -1990,6 +2079,58 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     </div>
                   )}
                 </div>
+
+                {/* Short Code (Fase 5 — Vanity URL) — link super curto pra
+                    bio do Insta e cartão de visita. Independente do slug. */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className={label + ' mb-0'}>Link curto (opcional)</label>
+                    {shortCodeStatus === 'valid' && (
+                      <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500">disponível</span>
+                    )}
+                    {shortCodeStatus === 'checking' && (
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">verificando...</span>
+                    )}
+                    {shortCodeStatus === 'invalid' && (
+                      <span className="text-[9px] font-black uppercase tracking-widest text-rose-500">indisponível</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                      coreohub.com/u/
+                    </span>
+                    <input
+                      type="text"
+                      value={shortCodeDraft}
+                      onChange={e => setShortCodeDraft(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                      placeholder="usualdance"
+                      className={input + ' flex-1'}
+                      maxLength={30}
+                    />
+                  </div>
+                  {shortCodeMessage && (
+                    <p className={`text-[10px] mt-1 ${
+                      shortCodeStatus === 'valid' || shortCodeMessage.startsWith('✓') ? 'text-emerald-500' :
+                      shortCodeStatus === 'invalid' ? 'text-rose-500' :
+                      'text-slate-400'
+                    }`}>{shortCodeMessage}</p>
+                  )}
+                  {shortCodeDraft !== shortCodeExisting?.code && shortCodeStatus === 'valid' && (
+                    <div className="mt-2 flex items-center gap-3">
+                      <button
+                        onClick={handleSaveShortCode}
+                        disabled={savingShortCode}
+                        className="px-4 py-2 bg-[#ff0068] hover:bg-[#e0005c] text-white text-[10px] font-black uppercase tracking-widest rounded-xl disabled:opacity-50 transition-all"
+                      >
+                        {savingShortCode ? 'Salvando...' : shortCodeExisting ? 'Atualizar link curto' : 'Salvar link curto'}
+                      </button>
+                      <p className="text-[9px] text-slate-400">
+                        Ideal pra bio do Instagram, cartão de visita, materiais impressos.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 <div>
                   <label className={label}>Local do Evento</label>
                   <input type="text" value={general.location} onChange={e => setGeneral({ ...general, location: e.target.value })} placeholder="Ex: Ginásio Municipal - Centro" className={input} />

@@ -645,12 +645,17 @@ const InscricaoWizard: React.FC = () => {
       const firstLote = (formacao?.lotes ?? [])[0];
       const modFee = firstLote?.preco ?? formacao?.fee ?? formacao?.base_fee ?? 0;
 
+      // UTMs salvos quando inscrito chegou na vitrine via link rastreável
+      // (?utm_source=instagram&utm_campaign=2026). Fase 4 — Atribuição de vendas.
+      const utms = (await import('../services/utmTracking')).getUtmsForRegistration();
+
       // 2) Cria registration. Status AGUARDANDO_PAGAMENTO — Checkout completa.
       const { data: reg, error: regErr } = await supabase
         .from('registrations')
         .insert({
           event_id:             event.id,
           user_id:              userId,
+          ...(utms ?? {}),
           nome_coreografia:     data.nome_coreografia.trim(),
           estilo_danca:         data.estilo_danca || null,
           subgenero:            data.subgenero || null,

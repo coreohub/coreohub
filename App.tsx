@@ -45,6 +45,7 @@ const CriarEventoGate          = lazy(() => import('./pages/CriarEventoGate'));
 const FestivalShowcase         = lazy(() => import('./pages/FestivalShowcase'));
 const PublicEventPage          = lazy(() => import('./pages/PublicEventPage'));
 const Festivais                = lazy(() => import('./pages/Festivais'));
+const ShortCodeRedirect        = lazy(() => import('./pages/ShortCodeRedirect'));
 const NewRegistration          = lazy(() => import('./pages/NewRegistration'));
 const InscricaoWizard          = lazy(() => import('./pages/InscricaoWizard'));
 const Checkout                 = lazy(() => import('./pages/Checkout'));
@@ -285,6 +286,13 @@ const App: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
+  // Fase 4 parcial: captura UTM params da URL no mount inicial e persiste em
+  // sessionStorage. Quando inscrição for criada, os UTMs salvos vão pra
+  // registrations pra produtor saber origem da venda. Idempotente.
+  useEffect(() => {
+    void import('./services/utmTracking').then(mod => mod.captureUtmsFromUrl());
+  }, []);
+
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
   const fetchConfig = async () => {
@@ -449,6 +457,7 @@ const App: React.FC = () => {
 
         <Route path="/festivais" element={<Suspense fallback={<PageLoader />}><Festivais /></Suspense>} />
         <Route path="/evento/:idOrSlug" element={<Suspense fallback={<PageLoader />}><PublicEventPage /></Suspense>} />
+        <Route path="/u/:code" element={<Suspense fallback={<PageLoader />}><ShortCodeRedirect /></Suspense>} />
         {/* Tier 1 paid tickets — todas públicas (guest checkout / acesso por token) */}
         <Route path="/checkout-ingresso/:idOrSlug/:ticketTypeIdx" element={<Suspense fallback={<PageLoader />}><CheckoutIngresso /></Suspense>} />
         <Route path="/meu-ingresso/:token" element={<Suspense fallback={<PageLoader />}><MeuIngresso /></Suspense>} />
