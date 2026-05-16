@@ -504,29 +504,28 @@ const PublicEventPage = () => {
           </div>
         )}
 
-        {/* Local — endereço completo + botão Google Maps. Mobile-friendly
-            (hero só mostra cidade/UF curto pra não estourar a arte). Padrão
-            Sympla/Eventbrite: seção dedicada com endereço + link mapa. */}
+        {/* Local — endereço + botão Google Maps. Mobile-friendly (hero só mostra
+            cidade/UF curto pra não estourar a arte). Tipografia plana pra não
+            competir com a descrição do "Sobre". Botão outline = secundário,
+            mesmo padrão do "Resultados" lá embaixo (CTA primário só "Inscreva-se"). */}
         {hasLocalInfo && (
           <div id="local" className="space-y-4 scroll-mt-20">
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
               <MapPin size={24} className="text-[#ff0068]" /> Local
             </h2>
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
-              {event.location && (
-                <p className="text-lg font-black text-white leading-tight">{event.location}</p>
-              )}
-              {localCidadeUf && (
-                <p className="text-slate-300 text-sm">{localCidadeUf}</p>
-              )}
+            <div className="space-y-3">
+              <p className="text-slate-400 leading-relaxed">
+                {event.location && <>{event.location}<br /></>}
+                {localCidadeUf}
+              </p>
               {mapsUrl && (
                 <a
                   href={mapsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#ff0068] hover:bg-[#e0005c] text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all"
+                  className="inline-flex items-center gap-2 px-8 py-4 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] hover:border-[#ff0068]/50 transition-all"
                 >
-                  <MapPin size={14} /> Ver no Google Maps <ExternalLink size={12} />
+                  <MapPin size={16} /> Ver no Google Maps
                 </a>
               )}
             </div>
