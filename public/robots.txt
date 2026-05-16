@@ -1,0 +1,47 @@
+# Robots config — CoreoHub
+# Permite crawlers indexarem vitrines públicas + landing.
+# Bloqueia rotas privadas/internas pra economizar crawl budget.
+
+User-agent: *
+Allow: /
+Disallow: /qg-organizador
+Disallow: /configuracoes
+Disallow: /account-settings
+Disallow: /credenciais
+Disallow: /credencial/
+Disallow: /credenciamento
+Disallow: /check-in
+Disallow: /judge-login
+Disallow: /judge-terminal
+Disallow: /coordenador-juri
+Disallow: /suporte-juri
+Disallow: /deliberacao
+Disallow: /conferencia
+Disallow: /deliberacoes
+Disallow: /cupons
+Disallow: /vendas-de-ingressos
+Disallow: /workshops-do-evento
+Disallow: /inscricoes
+Disallow: /seletiva-de-video
+Disallow: /cronograma
+Disallow: /narracao-ia
+Disallow: /marcacao-de-palco
+Disallow: /apuracao
+Disallow: /premiacao
+Disallow: /certificados
+Disallow: /minhas-coreografias
+Disallow: /meu-elenco
+Disallow: /meu-perfil
+Disallow: /meus-certificados
+Disallow: /feedbacks
+Disallow: /comprar-ingressos
+Disallow: /central-de-midia
+Disallow: /pagamento
+Disallow: /checkout-ingresso/
+Disallow: /checkout-workshop/
+Disallow: /meu-ingresso/
+Disallow: /meu-workshop/
+Disallow: /api/
+Disallow: /termo-produtor
+
+Sitemap: https://app.coreohub.com/sitemap.xml

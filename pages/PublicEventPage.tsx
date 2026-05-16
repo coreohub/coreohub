@@ -297,6 +297,48 @@ const PublicEventPage = () => {
     ? config.premios_especiais.filter((a: any) => a?.enabled)
     : [];
 
+  // Meta tags dinâmicas pra SEO (Fase 3 — React 19 nativo).
+  // Estes elementos no JSX são içados pro <head> automaticamente pelo React 19.
+  // Funciona pra Googlebot (executa JS no indexing). Bots de preview do WhatsApp/
+  // Telegram/Insta NÃO executam JS — preview neles continua genérico até Subfase 3.2
+  // (prerender server-side via Vercel Edge Middleware).
+  const seoDescription = (event.description ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160) || `Inscrições abertas para ${event.name} — festival de dança no CoreoHub.`;
+  const seoImage = event.cover_url || 'https://app.coreohub.com/coreohub-avatar.png';
+  const seoUrl = typeof window !== 'undefined' ? window.location.href : `https://app.coreohub.com/evento/${event.slug ?? event.id}`;
+  const seoTitle = `${event.name} — Inscrições abertas | CoreoHub`;
+
+  // Schema.org Event pra rich snippets do Google (data, local, organizador).
+  const eventJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Event',
+    name: event.name,
+    description: seoDescription,
+    image: seoImage,
+    startDate: event.start_date,
+    endDate: event.end_date ?? event.start_date,
+    eventStatus: 'https://schema.org/EventScheduled',
+    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+    location: {
+      '@type': 'Place',
+      name: event.location || (localCidadeUf || 'Brasil'),
+      address: {
+        '@type': 'PostalAddress',
+        addressLocality: event.city ?? undefined,
+        addressRegion: event.state ?? undefined,
+        addressCountry: 'BR',
+      },
+    },
+    organizer: {
+      '@type': 'Organization',
+      name: 'CoreoHub',
+      url: 'https://coreohub.com',
+    },
+    url: seoUrl,
+  };
+
   // Etapa 1.5: monta lista de sections visíveis pro anchor menu.
   // Renderiza só seções que de fato têm conteúdo (evita item morto no menu).
   const visibleSections: AnchorSection[] = [
@@ -320,6 +362,23 @@ const PublicEventPage = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white">
+      {/* Meta tags dinâmicas — React 19 nativo as iça pro <head> (Fase 3 — SEO). */}
+      <title>{seoTitle}</title>
+      <meta name="description" content={seoDescription} />
+      <meta property="og:title" content={event.name} />
+      <meta property="og:description" content={seoDescription} />
+      <meta property="og:image" content={seoImage} />
+      <meta property="og:url" content={seoUrl} />
+      <meta property="og:type" content="event" />
+      <meta property="og:site_name" content="CoreoHub" />
+      <meta property="og:locale" content="pt_BR" />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content={event.name} />
+      <meta name="twitter:description" content={seoDescription} />
+      <meta name="twitter:image" content={seoImage} />
+      <link rel="canonical" href={seoUrl} />
+      <script type="application/ld+json">{JSON.stringify(eventJsonLd)}</script>
+
       {/* Hero */}
       <div id="hero" className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-[#ff0068]/20 via-transparent to-[#050505]" />
