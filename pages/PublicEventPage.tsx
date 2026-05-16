@@ -339,10 +339,14 @@ const PublicEventPage = () => {
     url: seoUrl,
   };
 
+  // Tem informação útil de local? (endereço completo OU mapa OU local específico)
+  const hasLocalInfo = !!(event.location || localCidadeUf);
+
   // Etapa 1.5: monta lista de sections visíveis pro anchor menu.
   // Renderiza só seções que de fato têm conteúdo (evita item morto no menu).
   const visibleSections: AnchorSection[] = [
     event.description ? { id: 'sobre', label: 'Sobre' } : null,
+    hasLocalInfo ? { id: 'local', label: 'Local' } : null,
     publicGenres.length > 0 ? { id: 'estilos', label: 'Estilos' } : null,
     Array.isArray(event.programacao_config) && event.programacao_config.length > 0
       ? { id: 'programacao', label: 'Programação' }
@@ -417,27 +421,10 @@ const PublicEventPage = () => {
                   {event.event_time}
                 </div>
               )}
-              {(event.location || localCidadeUf) && (
-                <div className="flex items-start gap-2 text-slate-300">
-                  <MapPin size={16} className="text-[#ff0068] mt-0.5 shrink-0" />
-                  <div className="flex flex-col">
-                    {event.location && <span>{event.location}</span>}
-                    {localCidadeUf && (
-                      <span className={event.location ? 'text-slate-400 text-sm' : ''}>
-                        {localCidadeUf}
-                      </span>
-                    )}
-                    {mapsUrl && (
-                      <a
-                        href={mapsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-[#ff0068] hover:underline mt-1 w-fit"
-                      >
-                        Ver no Google Maps <ExternalLink size={12} />
-                      </a>
-                    )}
-                  </div>
+              {localCidadeUf && (
+                <div className="flex items-center gap-2 text-slate-300">
+                  <MapPin size={16} className="text-[#ff0068]" />
+                  {localCidadeUf}
                 </div>
               )}
             </div>
@@ -514,6 +501,35 @@ const PublicEventPage = () => {
           <div id="sobre" className="space-y-4 scroll-mt-20">
             <h2 className="text-2xl font-black uppercase tracking-tighter">Sobre o Evento</h2>
             <p className="text-slate-400 leading-relaxed whitespace-pre-line">{event.description}</p>
+          </div>
+        )}
+
+        {/* Local — endereço completo + botão Google Maps. Mobile-friendly
+            (hero só mostra cidade/UF curto pra não estourar a arte). Padrão
+            Sympla/Eventbrite: seção dedicada com endereço + link mapa. */}
+        {hasLocalInfo && (
+          <div id="local" className="space-y-4 scroll-mt-20">
+            <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
+              <MapPin size={24} className="text-[#ff0068]" /> Local
+            </h2>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
+              {event.location && (
+                <p className="text-lg font-black text-white leading-tight">{event.location}</p>
+              )}
+              {localCidadeUf && (
+                <p className="text-slate-300 text-sm">{localCidadeUf}</p>
+              )}
+              {mapsUrl && (
+                <a
+                  href={mapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#ff0068] hover:bg-[#e0005c] text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all"
+                >
+                  <MapPin size={14} /> Ver no Google Maps <ExternalLink size={12} />
+                </a>
+              )}
+            </div>
           </div>
         )}
 
