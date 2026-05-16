@@ -263,7 +263,14 @@ const PublicEventPage = () => {
   };
 
   const eventId = event.id;
-  const localizacao = [event.city, event.state].filter(Boolean).join(' / ') || event.address;
+  const localCidadeUf = [event.city, event.state].filter(Boolean).join(' / ');
+  // Local específico (ex: "Concha Acústica Prof. Geraldo") + cidade pra contexto.
+  // Botão "Ver no Google Maps" usa URL oficial sem API key (zero custo, mobile abre
+  // app nativo). Padrão Sympla/Doity. Boas práticas em [[asaas-em-producao-shipado]].
+  const mapsQuery = encodeURIComponent(
+    [event.location, event.city, event.state].filter(Boolean).join(', ')
+  );
+  const mapsUrl = mapsQuery ? `https://www.google.com/maps/search/?api=1&query=${mapsQuery}` : null;
 
   // Normaliza links de redes — algumas pessoas digitam so o handle
   const normalizeUrl = (raw?: string, prefix = '') => {
@@ -351,10 +358,27 @@ const PublicEventPage = () => {
                   {event.event_time}
                 </div>
               )}
-              {localizacao && (
-                <div className="flex items-center gap-2 text-slate-300">
-                  <MapPin size={16} className="text-[#ff0068]" />
-                  {localizacao}
+              {(event.location || localCidadeUf) && (
+                <div className="flex items-start gap-2 text-slate-300">
+                  <MapPin size={16} className="text-[#ff0068] mt-0.5 shrink-0" />
+                  <div className="flex flex-col">
+                    {event.location && <span>{event.location}</span>}
+                    {localCidadeUf && (
+                      <span className={event.location ? 'text-slate-400 text-sm' : ''}>
+                        {localCidadeUf}
+                      </span>
+                    )}
+                    {mapsUrl && (
+                      <a
+                        href={mapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-[#ff0068] hover:underline mt-1 w-fit"
+                      >
+                        Ver no Google Maps <ExternalLink size={12} />
+                      </a>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
