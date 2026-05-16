@@ -35,8 +35,15 @@ CREATE INDEX IF NOT EXISTS idx_event_slug_history_event_id ON event_slug_history
 -- antiga ainda aponta pro A. Tudo bem — o lookup atual sempre prefere events.slug.
 
 -- ── Trigger: ao atualizar events.slug, salva o slug anterior em history ──
+-- SECURITY DEFINER é necessário porque a tabela event_slug_history tem RLS e
+-- só policy de SELECT pública. INSERT direto pelo usuário autenticado seria
+-- bloqueado pela RLS. Com SECURITY DEFINER a função roda com as permissões
+-- do owner (postgres) e bypassa RLS pra escrever o histórico.
 CREATE OR REPLACE FUNCTION record_event_slug_history()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
   -- Só registra se o slug realmente mudou e o anterior não era NULL
   IF OLD.slug IS DISTINCT FROM NEW.slug AND OLD.slug IS NOT NULL THEN
