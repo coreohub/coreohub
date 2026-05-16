@@ -8,6 +8,7 @@ import {
 const DRAFT_KEY = 'coreohub_create_event_draft';
 import { motion, AnimatePresence } from 'motion/react';
 import { createEvent, supabase } from '../services/supabase';
+import { generateEventSlug } from '../services/eventSlug';
 import { formatEventWhatsApp } from '../utils/formatters';
 import { extractRegulationData, extractRegulationFromPdf, RegulationExtract } from '../services/geminiService';
 import { EventFormat } from '../types';
@@ -165,9 +166,6 @@ const CreateEvent = () => {
     }
   };
 
-  const slugify = (text: string) =>
-    text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').replace(/-+/g, '-');
-
   const handleCreate = async () => {
     if (!formData.name || !formData.agreed) {
       setError('Preencha o nome e aceite os termos.');
@@ -177,7 +175,14 @@ const CreateEvent = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Não autenticado');
-      const slug = `${slugify(formData.name)}-${Math.random().toString(36).substring(2, 8)}`;
+      // Slug centralizado via helper (Fase 2 — Slug Hardening). Antes usava
+      // sufixo aleatório de 6 chars, mas isso gerava links feios e diferentes
+      // do padrão do OnboardingWizard. Agora consistente: "festival-ano" com
+      // colisão resolvida via incremento (-2, -3, ...).
+      const year = formData.start_date
+        ? new Date(formData.start_date).getFullYear() || new Date().getFullYear()
+        : new Date().getFullYear();
+      const { slug } = await generateEventSlug(formData.name, year);
       await createEvent({ ...formData, slug, created_by: user.id });
       localStorage.removeItem(DRAFT_KEY);
       navigate('/qg-organizador');

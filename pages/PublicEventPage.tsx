@@ -66,6 +66,23 @@ const PublicEventPage = () => {
           .maybeSingle();
 
         if (!eventData) {
+          // Slug não encontrado em events. Tenta no histórico — pode ser slug
+          // antigo de um evento que foi renomeado. Se achar, redireciona pro
+          // slug atual mantendo URL bonita (Fase 2 — Slug Hardening).
+          if (!isUuid) {
+            const { data: legacy } = await supabase
+              .from('event_slug_history')
+              .select('event_id, events(slug)')
+              .eq('old_slug', idOrSlug)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            const newSlug = (legacy as any)?.events?.slug;
+            if (newSlug) {
+              navigate(`/evento/${newSlug}`, { replace: true });
+              return;
+            }
+          }
           setEvent(null);
           return;
         }

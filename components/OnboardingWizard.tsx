@@ -9,15 +9,10 @@ import {
 import { createEvent, supabase } from '../services/supabase';
 import { extractRegulationFromPdfOrThrow, isExtractEmpty, RegulationExtract } from '../services/geminiService';
 import { eventTemplates, getTemplate, TemplateId } from '../services/eventTemplates';
+import { generateEventSlug } from '../services/eventSlug';
 import { EventFormat } from '../types';
 
 type Step = 1 | 2 | 3;
-
-const slugify = (text: string) =>
-  text.toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim().replace(/\s+/g, '-').replace(/-+/g, '-');
 
 /** Mescla arrays de configs sem duplicar por `name` — primeira ocorrência vence. */
 const mergeByName = <T extends { name: string }>(items: T[]): T[] => {
@@ -137,13 +132,11 @@ const OnboardingWizard: React.FC = () => {
       const hasCompetitiva = data.templates.includes('COMPETITIVA');
       const baseTpl = hasCompetitiva ? getTemplate('COMPETITIVA') : tpls[0];
 
-      // Slug limpo "festival-ano". Se o nome já termina com o ano (ex:
-      // "Usualdance Festival 2026"), não duplica → "usualdance-festival-2026".
+      // Slug "festival-ano" via helper centralizado (Fase 2 — Slug Hardening).
+      // O helper resolve colisão de unicidade no banco automaticamente (-2, -3, ...),
+      // valida palavras reservadas e não duplica ano quando o nome já contém.
       const editionYear = new Date(data.start_date).getFullYear() || new Date().getFullYear();
-      const nameSlug = slugify(data.name);
-      const yearSuffix = `-${editionYear}`;
-      const baseSlug = nameSlug.endsWith(yearSuffix) ? nameSlug : `${nameSlug}${yearSuffix}`;
-      const slug = baseSlug;
+      const { slug } = await generateEventSlug(data.name, editionYear);
 
       // Payload validado contra o schema real da tabela events (testado via
       // db-introspect). Detalhes (categorias, estilos, critérios, tolerância,
@@ -156,29 +149,17 @@ const OnboardingWizard: React.FC = () => {
         city:             data.city,
         state:            data.state,
         location:         data.city + (data.state ? `, ${data.state}` : ''),
-        edition_year:     new Date(data.start_date).getFullYear() || new Date().getFullYear(),
+        edition_year:     editionYear,
         is_public:        true,
         formacoes_config: mergeByName(tpls.flatMap(t => t.formacoes_config)),
         event_type:       'private',
       };
 
-      let result: any;
-      let finalSlug = slug;
-      try {
-        result = await createEvent(payload);
-      } catch (e: any) {
-        // Conflito de slug → retry com sufixo aleatório
-        if (String(e?.code) === '23505' || /duplicate|unique/i.test(e?.message ?? '')) {
-          finalSlug = `${baseSlug}-${Math.random().toString(36).substring(2, 6)}`;
-          result = await createEvent({ ...payload, slug: finalSlug });
-        } else {
-          throw e;
-        }
-      }
+      const result: any = await createEvent(payload);
       const ev = Array.isArray(result) ? result[0] : result;
       if (!ev?.id) throw new Error('Não foi possível criar o evento.');
 
-      setCreatedEvent({ id: ev.id, slug: ev.slug ?? finalSlug });
+      setCreatedEvent({ id: ev.id, slug: ev.slug ?? slug });
       setStep(3);
     } catch (e: any) {
       setError(e.message ?? 'Erro ao criar o evento.');

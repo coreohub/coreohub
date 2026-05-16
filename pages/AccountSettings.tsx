@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, uploadEventCover, supabaseUrl } from '../services/supabase';
+import { validateSlugInput, isSlugAvailable } from '../services/eventSlug';
 import { TERMO_PRODUTOR_VERSION } from './TermoProdutor';
 import imageCompression from 'browser-image-compression';
 import {
@@ -1013,6 +1014,62 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   // do campo "Site oficial"
   const [activeEventSlug, setActiveEventSlug] = useState<string | null>(null);
   const [activeEventId,   setActiveEventId]   = useState<string | null>(null);
+  // Edição de slug (Fase 2 — Slug Hardening). Draft separado pra validação live
+  // sem mexer no slug ativo até user clicar "Salvar link".
+  const [slugDraft, setSlugDraft]         = useState<string>('');
+  const [slugStatus, setSlugStatus]       = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
+  const [slugMessage, setSlugMessage]     = useState<string | null>(null);
+  const [savingSlug, setSavingSlug]       = useState(false);
+
+  // Validação live do slug — debounce 500ms (Fase 2 — Slug Hardening).
+  // Quando draft muda, valida formato local + checa disponibilidade no banco.
+  useEffect(() => {
+    if (!slugDraft || slugDraft === activeEventSlug) {
+      setSlugStatus('idle');
+      setSlugMessage(null);
+      return;
+    }
+    const formatError = validateSlugInput(slugDraft);
+    if (formatError) {
+      setSlugStatus('invalid');
+      setSlugMessage(formatError);
+      return;
+    }
+    setSlugStatus('checking');
+    setSlugMessage(null);
+    const handle = setTimeout(async () => {
+      const available = await isSlugAvailable(slugDraft, activeEventId ?? undefined);
+      if (available) {
+        setSlugStatus('valid');
+        setSlugMessage('Disponível ✓');
+      } else {
+        setSlugStatus('invalid');
+        setSlugMessage('Já em uso por outro festival. Escolha outro.');
+      }
+    }, 500);
+    return () => clearTimeout(handle);
+  }, [slugDraft, activeEventSlug, activeEventId]);
+
+  const handleSaveSlug = async () => {
+    if (slugStatus !== 'valid' || !activeEventId) return;
+    setSavingSlug(true);
+    try {
+      const { error } = await supabase
+        .from('events')
+        .update({ slug: slugDraft })
+        .eq('id', activeEventId);
+      if (error) throw error;
+      setActiveEventSlug(slugDraft);
+      setSlugStatus('idle');
+      setSlugMessage('✓ Link atualizado. Links antigos com slug anterior ainda funcionam.');
+      setTimeout(() => setSlugMessage(null), 4000);
+    } catch (e: any) {
+      setSlugStatus('invalid');
+      setSlugMessage(`Erro ao salvar: ${e.message ?? 'desconhecido'}`);
+    } finally {
+      setSavingSlug(false);
+    }
+  };
   const [programacao, setProgramacao] = useState<ProgramItem[]>([]);
   const [ingressos, setIngressos]     = useState<TicketType[]>([]);
   const [politicaIngressos, setPoliticaIngressos] = useState<'NAO_DEFINIDO' | 'GRATUITO' | 'INTERNO' | 'EXTERNO'>('NAO_DEFINIDO');
@@ -1319,6 +1376,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             // Captura slug pra suggerir URL da vitrine no campo Site oficial
             setActiveEventSlug((myEvent as any).slug ?? myEvent.id);
             setActiveEventId(myEvent.id);
+            // Inicializa draft de edição do slug com o valor atual.
+            setSlugDraft((myEvent as any).slug ?? '');
             // Identidade pública: campos diretos da tabela events
             setIdentity({
               instagram_event:    myEvent.instagram_event ?? '',
@@ -1882,6 +1941,54 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 <div>
                   <label className={label}>Nome do Festival</label>
                   <input type="text" value={general.eventName} onChange={e => setGeneral({ ...general, eventName: e.target.value })} placeholder="Ex: CoreoHub Festival" className={input} />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className={label + ' mb-0'}>Link público do festival</label>
+                    {slugStatus === 'valid' && (
+                      <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500">disponível</span>
+                    )}
+                    {slugStatus === 'checking' && (
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">verificando...</span>
+                    )}
+                    {slugStatus === 'invalid' && (
+                      <span className="text-[9px] font-black uppercase tracking-widest text-rose-500">indisponível</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                      coreohub.com/evento/
+                    </span>
+                    <input
+                      type="text"
+                      value={slugDraft}
+                      onChange={e => setSlugDraft(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                      placeholder="usualdance-festival-2026"
+                      className={input + ' flex-1'}
+                      maxLength={60}
+                    />
+                  </div>
+                  {slugMessage && (
+                    <p className={`text-[10px] mt-1 ${
+                      slugStatus === 'valid' || slugMessage.startsWith('✓') ? 'text-emerald-500' :
+                      slugStatus === 'invalid' ? 'text-rose-500' :
+                      'text-slate-400'
+                    }`}>{slugMessage}</p>
+                  )}
+                  {slugDraft !== activeEventSlug && slugStatus === 'valid' && (
+                    <div className="mt-2 flex items-center gap-3">
+                      <button
+                        onClick={handleSaveSlug}
+                        disabled={savingSlug}
+                        className="px-4 py-2 bg-[#ff0068] hover:bg-[#e0005c] text-white text-[10px] font-black uppercase tracking-widest rounded-xl disabled:opacity-50 transition-all"
+                      >
+                        {savingSlug ? 'Salvando...' : 'Salvar novo link'}
+                      </button>
+                      <p className="text-[9px] text-amber-500 dark:text-amber-400">
+                        ⚠ Trocar o link quebra divulgações antigas. Links antigos automaticamente redirecionam pro novo.
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className={label}>Local do Evento</label>
