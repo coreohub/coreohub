@@ -767,6 +767,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   })();
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
   const [saving, setSaving]       = useState(false);
+  // FIX 2026-05-17 (pós-incidente Usualdance): bloqueia "Salvar" até que
+  // o fetchConfig retorne, pra impedir que state nos defaults sobrescreva
+  // o banco. 9 campos JSONB (estilos, formatos, categorias, programacao,
+  // patrocinadores, ingressos_audiencia, links, regras_avaliacao, tolerancia,
+  // premios_especiais) eram vulneráveis ao mesmo bug — esse gate fecha tudo.
+  const [configLoaded, setConfigLoaded] = useState(false);
   // Guard síncrono contra double-click. setSaving é assíncrono — sem ref,
   // cliques rápidos podem entrar em handleSave antes do disabled atualizar.
   const saveInFlightRef = useRef(false);
@@ -1296,22 +1302,35 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [awards, setAwards] = useState<SpecialAward[]>(
     AWARD_TEMPLATES.map(t => ({ ...t, enabled: false }))
   );
+  // Tracking se awards foi carregado do banco. Sem isso, save com state
+  // ainda nos defaults sobrescreve premios_especiais salvos com array vazio
+  // de templates desabilitados (incidente Usualdance 2026-05-17).
+  // Vira true depois do fetchConfig terminar OU quando user toca em qualquer
+  // award (onTouch via setAwards no toggle/format/genre/add/remove).
+  const [awardsTouched, setAwardsTouched] = useState(false);
   const [newAwardName, setNewAwardName]           = useState('');
   const [newAwardFormation, setNewAwardFormation] = useState('TODOS');
   const [newAwardGenre, setNewAwardGenre]         = useState('TODOS');
   const [newAwardDesc, setNewAwardDesc]           = useState('');
 
-  const toggleAward = (id: string) =>
+  const toggleAward = (id: string) => {
+    setAwardsTouched(true);
     setAwards(prev => prev.map(a => a.id === id ? { ...a, enabled: !a.enabled } : a));
+  };
 
-  const setAwardFormation = (id: string, formation: string) =>
+  const setAwardFormation = (id: string, formation: string) => {
+    setAwardsTouched(true);
     setAwards(prev => prev.map(a => a.id === id ? { ...a, formation } : a));
+  };
 
-  const setAwardGenre = (id: string, genre: string) =>
+  const setAwardGenre = (id: string, genre: string) => {
+    setAwardsTouched(true);
     setAwards(prev => prev.map(a => a.id === id ? { ...a, genre } : a));
+  };
 
   const addCustomAward = () => {
     if (!newAwardName.trim()) return;
+    setAwardsTouched(true);
     const award: SpecialAward = {
       id:          `custom_${Date.now()}`,
       name:        newAwardName.trim(),
@@ -1328,8 +1347,10 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     setNewAwardGenre('TODOS');
   };
 
-  const removeAward = (id: string) =>
+  const removeAward = (id: string) => {
+    setAwardsTouched(true);
     setAwards(prev => prev.filter(a => a.id !== id));
+  };
 
   /* modal de gênero */
   const [genreModal, setGenreModal] = useState<{
@@ -1644,6 +1665,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             // Re-append custom awards (those not in templates)
             const customs = saved.filter(a => !a.isTemplate);
             setAwards([...merged, ...customs]);
+            setAwardsTouched(true);  // carregado do banco — pode salvar
           }
           if (data.regras_avaliacao) {
             const saved = data.regras_avaliacao as any;
@@ -1678,6 +1700,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         }
       } catch (err) {
         console.error('Erro ao carregar configurações:', err);
+      } finally {
+        // Libera o gate de save independente de sucesso/erro do fetch.
+        // Se houve falha, o user vê o estado nos defaults e pode mexer
+        // conscientemente antes de salvar (não silenciosamente bate fora
+        // o que já estava no banco).
+        setConfigLoaded(true);
       }
     };
     fetchConfig();
@@ -1687,6 +1715,13 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const handleSave = async () => {
     // Guard síncrono — bloqueia re-entry antes do React atualizar disabled
     if (saveInFlightRef.current) return;
+    // FIX 2026-05-17: bloqueia save se o fetchConfig ainda não terminou.
+    // Sem isso, state local nos defaults sobrescreve o banco — incidente
+    // Usualdance perdeu premios_especiais customizados desse jeito.
+    if (!configLoaded) {
+      setError('Configurações ainda carregando. Aguarde um momento e tente de novo.');
+      return;
+    }
     saveInFlightRef.current = true;
     setSaving(true);
     setError(null);
@@ -1754,7 +1789,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         modo_sonoplastia:     flowConfig.modo_sonoplastia,
         links,
         regras_avaliacao:    { globalRules, overrides: genreOverrides } satisfies EvalConfig,
-        premios_especiais:   awards,
+        // FIX 2026-05-17 (pós-incidente Usualdance): só salva premios_especiais
+        // se foi carregado do banco OU se o user tocou na lista. Sem isso, save
+        // com state ainda nos defaults (race condition entre fetch e clique
+        // de "Salvar") sobrescrevia o JSONB do banco com 5 templates desabilitados.
+        ...(awardsTouched ? { premios_especiais: awards } : {}),
         atualizado_em:       new Date().toISOString(),
       };
 

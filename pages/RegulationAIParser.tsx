@@ -223,14 +223,44 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       // modalidade + gênero. Cada prize extraído vira um SpecialAward custom
       // (enabled=true, isTemplate=false) em configuracoes.premios_especiais.
       // JudgeTerminal filtra essa lista pelo gênero da apresentação atual.
+      //
+      // FIX 2026-05-17 (pós-incidente Usualdance): NÃO sobrescrever o array
+      // todo. Bug anterior destruía premios_especiais já configurados pelo
+      // produtor (templates habilitados + customizados). Agora faz MERGE:
+      // mantém os existentes, adiciona só os prizes novos (dedup por nome
+      // case-insensitive).
       if (edited.prizes?.length) {
         const slug = (s: string) => s.toLowerCase()
           .normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), '')
           .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
-        updates.premios_especiais = edited.prizes
+
+        // Busca o que já existe no banco pra não perder.
+        // Resolve event_id ativo do produtor (mesmo padrão do save abaixo).
+        const { data: { user: parserUser } } = await supabase.auth.getUser();
+        const { data: parserEv } = parserUser
+          ? await supabase.from('events').select('id').eq('created_by', parserUser.id)
+              .order('created_at', { ascending: false }).limit(1).maybeSingle()
+          : { data: null };
+        const parserEventId = parserEv?.id;
+
+        const { data: existingConfig } = parserEventId
+          ? await supabase
+              .from('configuracoes')
+              .select('premios_especiais')
+              .eq('id', parserEventId)
+              .maybeSingle()
+          : { data: null };
+        const existing: any[] = Array.isArray(existingConfig?.premios_especiais)
+          ? existingConfig.premios_especiais
+          : [];
+
+        const existingNames = new Set(existing.map(p => (p.name ?? '').trim().toLowerCase()));
+
+        const newOnes = edited.prizes
           .filter(p => p.name && p.name.trim().length > 0)
+          .filter(p => !existingNames.has(p.name.trim().toLowerCase()))
           .map((p, i) => ({
-            id:          `ai-${slug(p.name)}-${i}`,
+            id:          `ai-${slug(p.name)}-${i}-${Date.now()}`,
             name:        p.name.trim(),
             description: (p.description ?? '').trim(),
             formation:   p.formation && p.formation.trim() ? p.formation.trim() : 'TODOS',
@@ -238,6 +268,12 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
             isTemplate:  false,
             enabled:     true,
           }));
+
+        if (newOnes.length > 0) {
+          updates.premios_especiais = [...existing, ...newOnes];
+        }
+        // Se NÃO há prizes novos pra adicionar, NÃO inclui premios_especiais
+        // em updates — preserva 100% o que já está no banco.
       }
 
       const { updateActiveEventConfig } = await import('../services/supabase');
