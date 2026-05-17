@@ -71,13 +71,16 @@ const PublicEventPage = () => {
         // Select explícito — evita vazar commission_percent/fee_mode/is_demo/
         // created_by/etc pra anon que carrega a vitrine pública. Listar
         // explicitamente também documenta o que a vitrine consome.
+        // NOTA: registration_start_date/end_date estão em types.ts mas a
+        // migration nunca rodou — incluir aqui retorna PGRST204 e o
+        // .maybeSingle() responde {data: null}, fazendo a vitrine cair em
+        // "Evento não encontrado". Reativar quando a migration existir.
         const { data: eventData } = await supabase
           .from('events')
           .select(`
             id, slug, name, description, cover_url,
             location, city, state,
             start_date, end_date, event_time,
-            registration_start_date, registration_end_date,
             instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event,
             regulation_pdf_url, slots_limit,
             programacao_config, ingressos_config, formacoes_config, patrocinadores_config,
