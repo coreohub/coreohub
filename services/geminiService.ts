@@ -94,7 +94,14 @@ export interface RegulationExtract {
   }[]
   formacoes: { name: string; max_time: string; fee: number; format: 'RANKING' | 'PEDAGOGICAL' | 'GRADUATED' }[]
   criteria: { name: string; weight: number; description: string }[]
-  prizes: { name: string; description: string }[]
+  prizes: {
+    name: string;
+    description: string;
+    /** Modalidade-alvo do prêmio (Solo/Duo/Trio/Grupo/...). 'TODOS' = sem restrição. */
+    formation?: string;
+    /** Gênero-alvo do prêmio (Ballet/Jazz/Hip Hop/...). 'TODOS' = sem restrição. */
+    genre?: string;
+  }[]
   tiebreaker_rules: string | null
   // Item #34 do backlog (2026-05-04): extração estendida pós-Workshops/Tier 2
   audience_tickets: AudienceTicketExtract[]

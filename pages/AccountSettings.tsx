@@ -237,16 +237,19 @@ interface SpecialAward {
   name: string;
   enabled: boolean;
   isTemplate: boolean;
-  formation: string;   // 'TODOS' | formation name
+  formation: string;   // 'TODOS' | formation name (Solo/Duo/Trio/Grupo)
+  /** Tag de gênero (Ballet/Jazz/Hip Hop/...). 'TODOS' = aplica a qualquer gênero.
+   *  Permite prêmios específicos por estilo (ex: "Melhor Coreógrafo Jazz"). */
+  genre: string;
   description: string;
 }
 
 const AWARD_TEMPLATES: Omit<SpecialAward, 'enabled'>[] = [
-  { id: 'tpl_bailarino',  name: 'Melhor Bailarino(a)',   isTemplate: true, formation: 'TODOS',  description: 'Destaque individual de interpretação e técnica.' },
-  { id: 'tpl_revelacao',  name: 'Prêmio Revelação',      isTemplate: true, formation: 'TODOS',  description: 'Apresentação mais surpreendente da noite.' },
-  { id: 'tpl_coreografo', name: 'Melhor Coreografia',    isTemplate: true, formation: 'TODOS',  description: 'Reconhece a obra coreográfica mais marcante.' },
-  { id: 'tpl_grupo',      name: 'Melhor Grupo da Noite', isTemplate: true, formation: 'Grupo',  description: 'Prêmio exclusivo para formações em grupo.' },
-  { id: 'tpl_figurino',   name: 'Melhor Figurino',       isTemplate: true, formation: 'TODOS',  description: 'Destaque na produção visual e adequação ao tema.' },
+  { id: 'tpl_bailarino',  name: 'Melhor Bailarino(a)',   isTemplate: true, formation: 'TODOS',  genre: 'TODOS', description: 'Destaque individual de interpretação e técnica.' },
+  { id: 'tpl_revelacao',  name: 'Prêmio Revelação',      isTemplate: true, formation: 'TODOS',  genre: 'TODOS', description: 'Apresentação mais surpreendente da noite.' },
+  { id: 'tpl_coreografo', name: 'Melhor Coreografia',    isTemplate: true, formation: 'TODOS',  genre: 'TODOS', description: 'Reconhece a obra coreográfica mais marcante.' },
+  { id: 'tpl_grupo',      name: 'Melhor Grupo da Noite', isTemplate: true, formation: 'Grupo',  genre: 'TODOS', description: 'Prêmio exclusivo para formações em grupo.' },
+  { id: 'tpl_figurino',   name: 'Melhor Figurino',       isTemplate: true, formation: 'TODOS',  genre: 'TODOS', description: 'Destaque na produção visual e adequação ao tema.' },
 ];
 
 const AWARD_ICONS: Record<string, React.ElementType> = {
@@ -1295,6 +1298,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   );
   const [newAwardName, setNewAwardName]           = useState('');
   const [newAwardFormation, setNewAwardFormation] = useState('TODOS');
+  const [newAwardGenre, setNewAwardGenre]         = useState('TODOS');
   const [newAwardDesc, setNewAwardDesc]           = useState('');
 
   const toggleAward = (id: string) =>
@@ -1302,6 +1306,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
   const setAwardFormation = (id: string, formation: string) =>
     setAwards(prev => prev.map(a => a.id === id ? { ...a, formation } : a));
+
+  const setAwardGenre = (id: string, genre: string) =>
+    setAwards(prev => prev.map(a => a.id === id ? { ...a, genre } : a));
 
   const addCustomAward = () => {
     if (!newAwardName.trim()) return;
@@ -1311,12 +1318,14 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       enabled:     true,
       isTemplate:  false,
       formation:   newAwardFormation,
+      genre:       newAwardGenre,
       description: newAwardDesc.trim(),
     };
     setAwards(prev => [...prev, award]);
     setNewAwardName('');
     setNewAwardDesc('');
     setNewAwardFormation('TODOS');
+    setNewAwardGenre('TODOS');
   };
 
   const removeAward = (id: string) =>
@@ -1620,8 +1629,13 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           if (data.age_reference) setAgeReference(data.age_reference as 'EVENT_DAY' | 'YEAR_END' | 'FIXED_DATE');
           if (data.age_reference_date) setAgeRefDate(data.age_reference_date);
           if (data.premios_especiais && Array.isArray(data.premios_especiais)) {
-            // Merge saved data with templates (preserve template structure, apply enabled/formation)
-            const saved: SpecialAward[] = data.premios_especiais;
+            // Merge saved data with templates (preserve template structure, apply enabled/formation).
+            // Backward-compat: prêmios salvos antes do Gap B (2026-05-17) não têm
+            // o campo `genre` — populamos com 'TODOS' por default no read.
+            const saved: SpecialAward[] = data.premios_especiais.map((a: any) => ({
+              ...a,
+              genre: a.genre ?? 'TODOS',
+            }));
             const savedMap: Record<string, SpecialAward> = {};
             saved.forEach(a => { savedMap[a.id] = a; });
             const merged = AWARD_TEMPLATES.map(t =>
@@ -4939,6 +4953,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       /* ── PRÊMIOS ESPECIAIS ── */
       case 'Prêmios': {
         const formationOptions = ['TODOS', ...formats.map((f: any) => f.name)];
+        // Gêneros disponíveis pra tag de prêmio (Gap B 2026-05-17).
+        // Permite restringir prêmio a um estilo (ex: "Melhor Coreógrafo Jazz").
+        const genreOptions = ['TODOS', ...styles.filter(s => s && s.trim())];
         const templateAwards = awards.filter(a => a.isTemplate);
         const customAwards   = awards.filter(a => !a.isTemplate);
         const enabledCount   = awards.filter(a => a.enabled).length;
@@ -5011,25 +5028,47 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         </button>
                       </div>
 
-                      {/* Formation selector — shown when enabled */}
+                      {/* Formation + Genre selectors — shown when enabled */}
                       {award.enabled && (
-                        <div className="px-4 pb-3 flex items-center gap-2 border-t border-[#ff0068]/10">
-                          <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 shrink-0 mt-2">Visível para:</span>
-                          <div className="flex flex-wrap gap-1.5 mt-2">
-                            {formationOptions.map(opt => (
-                              <button
-                                key={opt}
-                                onClick={() => setAwardFormation(award.id, opt)}
-                                className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border transition-all ${
-                                  award.formation === opt
-                                    ? 'bg-[#ff0068] border-[#ff0068] text-white'
-                                    : 'border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-[#ff0068]/40'
-                                }`}
-                              >
-                                {opt === 'TODOS' ? 'Todas as Formações' : opt}
-                              </button>
-                            ))}
+                        <div className="px-4 pb-3 space-y-2 border-t border-[#ff0068]/10">
+                          <div className="flex items-start gap-2 pt-2">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 shrink-0 pt-1 w-16">Modalidade:</span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {formationOptions.map(opt => (
+                                <button
+                                  key={opt}
+                                  onClick={() => setAwardFormation(award.id, opt)}
+                                  className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border transition-all ${
+                                    award.formation === opt
+                                      ? 'bg-[#ff0068] border-[#ff0068] text-white'
+                                      : 'border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-[#ff0068]/40'
+                                  }`}
+                                >
+                                  {opt === 'TODOS' ? 'Todas' : opt}
+                                </button>
+                              ))}
+                            </div>
                           </div>
+                          {genreOptions.length > 1 && (
+                            <div className="flex items-start gap-2">
+                              <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 shrink-0 pt-1 w-16">Gênero:</span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {genreOptions.map(opt => (
+                                  <button
+                                    key={opt}
+                                    onClick={() => setAwardGenre(award.id, opt)}
+                                    className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border transition-all ${
+                                      (award.genre ?? 'TODOS') === opt
+                                        ? 'bg-violet-500 border-violet-500 text-white'
+                                        : 'border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-violet-400/40'
+                                    }`}
+                                  >
+                                    {opt === 'TODOS' ? 'Todos' : opt}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -5084,6 +5123,24 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                             </button>
                           ))}
                         </div>
+                        {/* Genre chips — só renderiza se produtor já cadastrou gêneros */}
+                        {genreOptions.length > 1 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {genreOptions.map(opt => (
+                              <button
+                                key={opt}
+                                onClick={() => setAwardGenre(award.id, opt)}
+                                className={`px-2 py-0.5 rounded-lg text-[7px] font-black uppercase tracking-widest border transition-all ${
+                                  (award.genre ?? 'TODOS') === opt
+                                    ? 'bg-violet-500 border-violet-500 text-white'
+                                    : 'border-slate-200 dark:border-white/10 text-slate-400 hover:border-violet-400/40'
+                                }`}
+                              >
+                                {opt === 'TODOS' ? 'Todos gêneros' : opt}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <button
                         onClick={() => removeAward(award.id)}
@@ -5113,9 +5170,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     placeholder="Descrição opcional (ex: Votado pelo público presente)"
                     className="w-full bg-transparent border border-slate-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all placeholder:text-slate-400"
                   />
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1">
-                      <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Visível para</p>
+                  <div className="space-y-2">
+                    <div>
+                      <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Modalidade</p>
                       <div className="flex flex-wrap gap-1.5">
                         {formationOptions.map(opt => (
                           <button
@@ -5127,15 +5184,35 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                                 : 'border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-[#ff0068]/40'
                             }`}
                           >
-                            {opt === 'TODOS' ? 'Todos' : opt}
+                            {opt === 'TODOS' ? 'Todas' : opt}
                           </button>
                         ))}
                       </div>
                     </div>
+                    {genreOptions.length > 1 && (
+                      <div>
+                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Gênero</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {genreOptions.map(opt => (
+                            <button
+                              key={opt}
+                              onClick={() => setNewAwardGenre(opt)}
+                              className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border transition-all ${
+                                newAwardGenre === opt
+                                  ? 'bg-violet-500 border-violet-500 text-white'
+                                  : 'border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-violet-400/40'
+                              }`}
+                            >
+                              {opt === 'TODOS' ? 'Todos' : opt}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <button
                       onClick={addCustomAward}
                       disabled={!newAwardName.trim()}
-                      className={`shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                      className={`w-full sm:w-auto sm:self-end inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
                         newAwardName.trim()
                           ? 'bg-[#ff0068] text-white hover:bg-[#d4005a] active:scale-95'
                           : 'bg-slate-100 dark:bg-white/5 text-slate-400 cursor-not-allowed'

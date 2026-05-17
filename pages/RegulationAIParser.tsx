@@ -219,6 +219,27 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       if (edited.stage_safety_interval_seconds)   updates.intervalo_seguranca    = edited.stage_safety_interval_seconds;
       if (edited.city && edited.state) updates.cidade_estado     = `${edited.city}, ${edited.state}`;
 
+      // Auditoria 2026-05-17 (Gap B): prêmios especiais com tags de
+      // modalidade + gênero. Cada prize extraído vira um SpecialAward custom
+      // (enabled=true, isTemplate=false) em configuracoes.premios_especiais.
+      // JudgeTerminal filtra essa lista pelo gênero da apresentação atual.
+      if (edited.prizes?.length) {
+        const slug = (s: string) => s.toLowerCase()
+          .normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), '')
+          .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+        updates.premios_especiais = edited.prizes
+          .filter(p => p.name && p.name.trim().length > 0)
+          .map((p, i) => ({
+            id:          `ai-${slug(p.name)}-${i}`,
+            name:        p.name.trim(),
+            description: (p.description ?? '').trim(),
+            formation:   p.formation && p.formation.trim() ? p.formation.trim() : 'TODOS',
+            genre:       p.genre     && p.genre.trim()     ? p.genre.trim()     : 'TODOS',
+            isTemplate:  false,
+            enabled:     true,
+          }));
+      }
+
       const { updateActiveEventConfig } = await import('../services/supabase');
       await updateActiveEventConfig(updates);
 

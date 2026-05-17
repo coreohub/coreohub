@@ -47,7 +47,10 @@ interface SpecialAward {
   name: string;
   enabled: boolean;
   isTemplate: boolean;
-  formation: string;  // 'TODOS' | formation name
+  formation: string;  // 'TODOS' | formation name (Solo/Duo/Trio/Grupo)
+  /** Tag de gênero ('TODOS' | Ballet/Jazz/Hip Hop/...). Filtro: prêmio só
+   *  aparece na deliberação de coreografias do mesmo gênero. */
+  genre: string;
   description: string;
 }
 
@@ -69,13 +72,24 @@ const resolveAwardIcon = (award: SpecialAward): React.ElementType => {
   return Award;
 };
 
-/** Returns true if the award applies to the given formation */
-const awardMatchesFormation = (award: SpecialAward, formation: string): boolean => {
+/** Returns true if the award applies to the given formation AND genre.
+ *  Backward-compat: prêmios antigos sem `genre` são tratados como 'TODOS'. */
+const awardMatches = (award: SpecialAward, formation: string, genre?: string | null): boolean => {
   if (!award.enabled) return false;
-  if (award.formation === 'TODOS') return true;
   const norm = (s: string) => s.toLowerCase().trim();
-  return norm(award.formation) === norm(formation);
+  // Formation match: 'TODOS' ou nome exato
+  if (award.formation !== 'TODOS' && norm(award.formation) !== norm(formation)) return false;
+  // Genre match: 'TODOS' (ou ausente em legacy) ou nome exato. Se a
+  // apresentação não tem gênero definido, mostra só os 'TODOS'.
+  const awardGenre = award.genre ?? 'TODOS';
+  if (awardGenre === 'TODOS') return true;
+  if (!genre) return false;
+  return norm(awardGenre) === norm(genre);
 };
+
+/** @deprecated mantém compat com chamadas antigas. Prefira awardMatches(award, formation, genre). */
+const awardMatchesFormation = (award: SpecialAward, formation: string): boolean =>
+  awardMatches(award, formation, null);
 
 /* ── Constants ── */
 const DEFAULT_CRITERIA: CriterionWithWeight[] = [
@@ -133,10 +147,10 @@ const DEMO_SCHEDULE = [
 ];
 
 const DEMO_AWARDS: SpecialAward[] = [
-  { id: 'tpl_bailarino',  name: 'Melhor Bailarino(a)', enabled: true, isTemplate: true, formation: 'Solo',  description: 'Melhor desempenho individual' },
-  { id: 'tpl_revelacao',  name: 'Prêmio Revelação',    enabled: true, isTemplate: true, formation: 'Solo',  description: 'Estreante de destaque' },
-  { id: 'tpl_coreografo', name: 'Melhor Coreógrafo',   enabled: true, isTemplate: true, formation: 'TODOS', description: 'Melhor trabalho coreográfico' },
-  { id: 'tpl_grupo',      name: 'Melhor Grupo da Noite',enabled: true, isTemplate: true, formation: 'Grupo', description: 'Melhor desempenho em grupo' },
+  { id: 'tpl_bailarino',  name: 'Melhor Bailarino(a)', enabled: true, isTemplate: true, formation: 'Solo',  genre: 'TODOS', description: 'Melhor desempenho individual' },
+  { id: 'tpl_revelacao',  name: 'Prêmio Revelação',    enabled: true, isTemplate: true, formation: 'Solo',  genre: 'TODOS', description: 'Estreante de destaque' },
+  { id: 'tpl_coreografo', name: 'Melhor Coreógrafo',   enabled: true, isTemplate: true, formation: 'TODOS', genre: 'TODOS', description: 'Melhor trabalho coreográfico' },
+  { id: 'tpl_grupo',      name: 'Melhor Grupo da Noite',enabled: true, isTemplate: true, formation: 'Grupo', genre: 'TODOS', description: 'Melhor desempenho em grupo' },
 ];
 
 /** Cor da nota — neutra (sem semântica que enviese o jurado).
@@ -601,11 +615,12 @@ const JudgeTerminal = () => {
     })();
   }, [resolveGenreCriteria, judgeSession]);
 
-  /* ── Visible awards for the current performance (filtered by formation) ── */
+  /* ── Visible awards for the current performance (filtered by formation + genre) ── */
   const visibleAwards = useMemo(() => {
     if (!currentPerformance) return [];
     const formation = currentPerformance.formacao || currentPerformance.formato || '';
-    return awardsConfig.filter(a => awardMatchesFormation(a, formation));
+    const genre     = currentPerformance.estilo_danca || '';
+    return awardsConfig.filter(a => awardMatches(a, formation, genre));
   }, [currentPerformance, awardsConfig]);
 
   /* ── Update criteria when performance changes ── */

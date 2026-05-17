@@ -100,6 +100,17 @@ const schema = {
           properties: {
             name:        { type: 'string' },
             description: { type: 'string' },
+            // Tag opcional de MODALIDADE quando o prêmio se restringe a um
+            // formato (ex: "Melhor Grupo da Noite" → formation='Grupo').
+            // 'TODOS' (default) significa que o prêmio se aplica a qualquer
+            // modalidade. Aceita: TODOS, Solo, Duo, Trio, Grupo, Conjunto,
+            // ou nome customizado da formacao.
+            formation:   { type: 'string' },
+            // Tag opcional de GÊNERO quando o prêmio é específico de um
+            // estilo (ex: "Melhor Coreógrafo Jazz" → genre='Jazz').
+            // 'TODOS' (default) = aplica a qualquer gênero. Use exatamente
+            // o mesmo nome canônico que aparece em genres/event_styles_structured.
+            genre:       { type: 'string' },
           },
           required: ['name', 'description'],
         },
@@ -340,6 +351,8 @@ ATENÇÃO ANTI-CONFUSÃO (palavras enganosas):
 • event_styles_structured: MESMO conteúdo de genres, mas estruturado com sub_types (subgêneros aceitos por gênero). Quando o regulamento explicita "Ballet: Clássico de Repertório, Neoclássico" ou "Hip Hop: Locking, Popping, Breaking", capture aqui. Ex [{ name: "Ballet", sub_types: [{name: "Clássico de Repertório"}, {name: "Neoclássico"}] }, { name: "Hip Hop", sub_types: [{name: "Locking"}, {name: "Popping"}] }]. Se o regulamento lista gêneros sem detalhar subgêneros, deixe sub_types como array vazio em cada item.
 • categories[].sub_categories: subdivisões etárias dentro de uma categoria. Festivais comuns dividem "Infantil" em "Infantil 5-7", "Infantil 8-10", "Infantil 11-13". Quando o regulamento detalha essas subdivisões, capture em sub_categories. Se a categoria é uma faixa única (ex: "Adulto 18+"), deixe sub_categories vazio ou ausente.
 • refund_policy: texto da política de cancelamento e reembolso quando o regulamento menciona. Ex "Cancelamentos até 15 dias antes do evento: reembolso de 80%. Após esse prazo: sem reembolso. Em caso de cancelamento do evento por força maior, reembolso integral em até 30 dias."
+• prizes[].formation: quando o prêmio especial é restrito a uma modalidade específica, preencha com o nome dela. Ex "Melhor Grupo da Noite" → formation='Grupo'; "Melhor Solo Masculino" → formation='Solo'. Se o prêmio se aplica a qualquer modalidade, use 'TODOS' (default). Exemplos comuns que NÃO restringem: "Melhor Bailarino(a)", "Revelação", "Melhor Coreografia" → todos viram 'TODOS'.
+• prizes[].genre: quando o prêmio é específico de um gênero/estilo, preencha. Ex "Melhor Coreógrafo Jazz" → genre='Jazz'; "Revelação Hip Hop" → genre='Hip Hop'; "Melhor Variação Clássica" → genre='Ballet Clássico'. Use EXATAMENTE o mesmo nome canônico que aparece em genres/event_styles_structured. Se o prêmio se aplica a qualquer gênero (ex: "Melhor Iluminação", "Melhor Figurino"), use 'TODOS' (default). Quando o regulamento diz "Em cada gênero será premiado o Melhor Coreógrafo", DUPLIQUE o prêmio uma vez por gênero ofertado — gera 1 prize por gênero com nome "Melhor Coreógrafo Jazz", "Melhor Coreógrafo Ballet", etc.
 • aceita_danca_inclusiva: festival aceita dança inclusiva / coreografias com bailarinos PCD? boolean.
 • nivel_tecnico_enabled: festival tem eixo técnico (Iniciante/Intermediário/Avançado) além de categoria por idade? boolean.
 • stage_safety_interval_seconds: intervalo de segurança entre apresentações em SEGUNDOS. Ex "intervalo de 30s entre coreografias" → 30.
@@ -423,6 +436,8 @@ ATENÇÃO ANTI-CONFUSÃO (palavras enganosas):
 • event_styles_structured: MESMO conteúdo de genres, mas estruturado com sub_types (subgêneros aceitos por gênero). Quando o regulamento explicita "Ballet: Clássico de Repertório, Neoclássico" ou "Hip Hop: Locking, Popping, Breaking", capture aqui. Ex [{ name: "Ballet", sub_types: [{name: "Clássico de Repertório"}, {name: "Neoclássico"}] }, { name: "Hip Hop", sub_types: [{name: "Locking"}, {name: "Popping"}] }]. Se o regulamento lista gêneros sem detalhar subgêneros, deixe sub_types como array vazio em cada item.
 • categories[].sub_categories: subdivisões etárias dentro de uma categoria. Festivais comuns dividem "Infantil" em "Infantil 5-7", "Infantil 8-10", "Infantil 11-13". Quando o regulamento detalha essas subdivisões, capture em sub_categories. Se a categoria é uma faixa única (ex: "Adulto 18+"), deixe sub_categories vazio ou ausente.
 • refund_policy: texto da política de cancelamento e reembolso quando o regulamento menciona. Ex "Cancelamentos até 15 dias antes do evento: reembolso de 80%. Após esse prazo: sem reembolso. Em caso de cancelamento do evento por força maior, reembolso integral em até 30 dias."
+• prizes[].formation: quando o prêmio especial é restrito a uma modalidade específica, preencha com o nome dela. Ex "Melhor Grupo da Noite" → formation='Grupo'; "Melhor Solo Masculino" → formation='Solo'. Se o prêmio se aplica a qualquer modalidade, use 'TODOS' (default). Exemplos comuns que NÃO restringem: "Melhor Bailarino(a)", "Revelação", "Melhor Coreografia" → todos viram 'TODOS'.
+• prizes[].genre: quando o prêmio é específico de um gênero/estilo, preencha. Ex "Melhor Coreógrafo Jazz" → genre='Jazz'; "Revelação Hip Hop" → genre='Hip Hop'; "Melhor Variação Clássica" → genre='Ballet Clássico'. Use EXATAMENTE o mesmo nome canônico que aparece em genres/event_styles_structured. Se o prêmio se aplica a qualquer gênero (ex: "Melhor Iluminação", "Melhor Figurino"), use 'TODOS' (default). Quando o regulamento diz "Em cada gênero será premiado o Melhor Coreógrafo", DUPLIQUE o prêmio uma vez por gênero ofertado — gera 1 prize por gênero com nome "Melhor Coreógrafo Jazz", "Melhor Coreógrafo Ballet", etc.
 • aceita_danca_inclusiva: festival aceita dança inclusiva / coreografias com bailarinos PCD? boolean.
 • nivel_tecnico_enabled: festival tem eixo técnico (Iniciante/Intermediário/Avançado) além de categoria por idade? boolean.
 • stage_safety_interval_seconds: intervalo de segurança entre apresentações em SEGUNDOS. Ex "intervalo de 30s entre coreografias" → 30.
