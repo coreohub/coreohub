@@ -484,6 +484,16 @@ const InscricaoWizard: React.FC = () => {
     .map((m: any) => ({ name: typeof m === 'string' ? m : (m.name ?? '') }))
     .filter((m: any) => m.name);
 
+  // Categoria livre — flag setada pelo produtor em event_styles[].sub_types[].
+  // Quando true, modalidade ignora restrição etária (ex: K-Pop > Cover Livre).
+  // Esconde o select de categoria e salva categoria='Livre' no submit.
+  const selectedModalityObj = (selectedStyleObj?.sub_types ?? []).find(
+    (m: any) => (typeof m === 'string' ? m : m.name) === data.subgenero
+  );
+  const isCategoriaLivre = !!(
+    selectedModalityObj && typeof selectedModalityObj === 'object' && (selectedModalityObj as any).is_categoria_livre
+  );
+
   // Categoria selecionada (resolve min_age/max_age pra checagem etária).
   const categoriaSelecionada = useMemo(() => {
     return categorias.find(c => c.name === data.categoria) ?? null;
@@ -537,7 +547,8 @@ const InscricaoWizard: React.FC = () => {
       if (modalities.length > 0 && !data.subgenero) {
         return `Selecione a modalidade do gênero ${data.estilo_danca}.`;
       }
-      if (!data.categoria)                 return 'Selecione a categoria etária.';
+      // Categoria etária só é obrigatória quando a modalidade NÃO é livre.
+      if (!isCategoriaLivre && !data.categoria) return 'Selecione a categoria etária.';
       if (data.duracao_minutos) {
         const sec = parseTempoSegundos(data.duracao_minutos);
         if (sec <= 0)        return 'Duração inválida. Use o formato MM:SS (ex: 03:45).';
@@ -671,7 +682,8 @@ const InscricaoWizard: React.FC = () => {
           nome_coreografia:     data.nome_coreografia.trim(),
           estilo_danca:         data.estilo_danca || null,
           subgenero:            data.subgenero || null,
-          categoria:            data.categoria,
+          // Modalidade marcada como Livre pelo produtor não exige categoria etária.
+          categoria:            isCategoriaLivre ? 'Livre' : data.categoria,
           formato_participacao: formacao?.name ?? modalidade,
           tipo_apresentacao:    data.tipo_apresentacao,
           bailarinos_detalhes:  bailarinosDetalhes,
@@ -856,21 +868,32 @@ const InscricaoWizard: React.FC = () => {
                 </div>
               )}
 
-              <div>
-                <label className={labelCls}>Categoria etária *</label>
-                <select
-                  value={data.categoria}
-                  onChange={e => setData(d => ({ ...d, categoria: e.target.value }))}
-                  className={inputCls}
-                >
-                  <option value="">Selecione…</option>
-                  {categorias.map(c => (
-                    <option key={c.name} value={c.name}>
-                      {c.name}{c.min_age != null ? ` (${c.min_age}–${c.max_age != null && c.max_age < 99 ? c.max_age : '+'} anos)` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {isCategoriaLivre ? (
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500">
+                    Categoria Livre
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Esta modalidade ({data.subgenero}) não tem restrição de idade.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <label className={labelCls}>Categoria etária *</label>
+                  <select
+                    value={data.categoria}
+                    onChange={e => setData(d => ({ ...d, categoria: e.target.value }))}
+                    className={inputCls}
+                  >
+                    <option value="">Selecione…</option>
+                    {categorias.map(c => (
+                      <option key={c.name} value={c.name}>
+                        {c.name}{c.min_age != null ? ` (${c.min_age}–${c.max_age != null && c.max_age < 99 ? c.max_age : '+'} anos)` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
