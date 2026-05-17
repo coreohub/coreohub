@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { startImpersonate } from '../services/impersonateService';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import SuperAdminMfaGate from '../components/SuperAdminMfaGate';
 
 interface ProducerRow {
   id: string;
@@ -343,6 +344,7 @@ const SuperAdmin = () => {
   }
 
   return (
+    <SuperAdminMfaGate>
     <div className="space-y-8 pb-20">
       {/* Header */}
       <header className="flex justify-between items-start gap-4 flex-wrap">
@@ -818,6 +820,7 @@ const SuperAdmin = () => {
         </div>
       )}
     </div>
+    </SuperAdminMfaGate>
   );
 };
 
