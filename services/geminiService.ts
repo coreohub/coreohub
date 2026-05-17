@@ -84,7 +84,14 @@ export interface RegulationExtract {
   stage_entry_time_seconds: number | null
   stage_marking_time_seconds: number | null
   registration_lots: RegistrationLot[]
-  categories: { name: string; min_age: number; max_age: number }[]
+  categories: {
+    name: string;
+    min_age: number;
+    max_age: number;
+    /** Subdivisões etárias (ex: Infantil 5-7, Infantil 8-10). Vazio se a
+     *  categoria não tem sub-faixas no regulamento. */
+    sub_categories?: { name: string; min_age: number; max_age: number }[];
+  }[]
   formacoes: { name: string; max_time: string; fee: number; format: 'RANKING' | 'PEDAGOGICAL' | 'GRADUATED' }[]
   criteria: { name: string; weight: number; description: string }[]
   prizes: { name: string; description: string }[]
@@ -105,6 +112,11 @@ export interface RegulationExtract {
   politica_ingressos: 'NAO_DEFINIDO' | 'GRATUITO' | 'INTERNO' | 'EXTERNO' | null
   url_ingressos: string | null
   genres: string[]
+  /** Gêneros estruturados com modalidades específicas por gênero (vai popular
+   *  event_styles + sub_types). `genres` continua como fallback. */
+  event_styles_structured: { name: string; sub_types: { name: string }[] }[]
+  /** Política textual de cancelamento/reembolso (vai pra events.video_fee_refund_policy). */
+  refund_policy: string | null
   aceita_danca_inclusiva: boolean | null
   nivel_tecnico_enabled: boolean | null
   stage_safety_interval_seconds: number | null
@@ -129,6 +141,7 @@ function buildEmptyExtract(): RegulationExtract {
     city: null, state: null, event_time: null,
     tipos_apresentacao: [], premiation_system: null, medal_thresholds: null,
     politica_ingressos: null, url_ingressos: null, genres: [],
+    event_styles_structured: [], refund_policy: null,
     aceita_danca_inclusiva: null, nivel_tecnico_enabled: null,
     stage_safety_interval_seconds: null, social_links: null, cover_url_hint: null,
     summary: '',
@@ -172,6 +185,8 @@ function parseRawExtract(raw: any): RegulationExtract {
     politica_ingressos:         raw.politica_ingressos         ?? null,
     url_ingressos:              raw.url_ingressos              ?? null,
     genres:                     raw.genres                     ?? [],
+    event_styles_structured:    raw.event_styles_structured    ?? [],
+    refund_policy:              raw.refund_policy              ?? null,
     aceita_danca_inclusiva:     raw.aceita_danca_inclusiva     ?? null,
     nivel_tecnico_enabled:      raw.nivel_tecnico_enabled      ?? null,
     stage_safety_interval_seconds: raw.stage_safety_interval_seconds ?? null,

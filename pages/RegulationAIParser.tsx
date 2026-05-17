@@ -201,6 +201,10 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
         updates.ingressos_audiencia = edited.audience_tickets; // legacy em configuracoes
       }
 
+      // Auditoria 2026-05-17: política de reembolso textual (gap #3 da
+      // auditoria IA do regulamento). Vai pra events.video_fee_refund_policy.
+      // Tratado mais abaixo no bloco de evUpdates (vive em events, não config).
+
       // Auditoria 2026-05-12: 14 campos antes não capturados pela IA ─────────
       // a) Campos que vivem em configuracoes
       if (edited.event_time)         updates.hora_evento         = edited.event_time;
@@ -261,8 +265,90 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
             if (edited.social_links.website)   evUpdates.website_event   = edited.social_links.website;
             if (edited.social_links.email)     evUpdates.email_event     = edited.social_links.email;
           }
+          // Auditoria 2026-05-17 (Gap 3): política de reembolso textual.
+          // Coluna events.video_fee_refund_policy já existe — só popular.
+          if (edited.refund_policy && edited.refund_policy.trim().length > 10) {
+            evUpdates.video_fee_refund_policy = edited.refund_policy;
+          }
           if (Object.keys(evUpdates).length > 0) {
             await supabase.from('events').update(evUpdates).eq('id', eventId);
+          }
+
+          // Auditoria 2026-05-17 (Gap 1): popular tabela event_styles com
+          // gêneros + sub_types estruturados. Insert ignorando duplicatas
+          // (mesmo nome no mesmo event_id). RLS: produtor escreve nos
+          // próprios styles via policy producer_inserts_own_styles.
+          if (eventId && edited.event_styles_structured?.length) {
+            const stylesRows = edited.event_styles_structured
+              .filter(s => s?.name && s.name.trim().length > 0)
+              .map(s => ({
+                event_id:    eventId,
+                created_by:  user.id,
+                name:        s.name.trim(),
+                sub_types:   Array.isArray(s.sub_types)
+                  ? s.sub_types
+                      .filter(st => st?.name && st.name.trim().length > 0)
+                      .map(st => ({ name: st.name.trim() }))
+                  : [],
+                is_active:   true,
+                requires_subcategory: false,
+              }));
+            if (stylesRows.length > 0) {
+              const { error: stylesErr } = await supabase
+                .from('event_styles')
+                .insert(stylesRows);
+              if (stylesErr) {
+                // Erro silencioso — fallback é o `genres` legacy em
+                // configuracoes.estilos que já foi salvo. Não interrompe.
+                console.warn('[RegulationAIParser] falha inserir event_styles:', stylesErr.message);
+              }
+            }
+          }
+
+          // Auditoria 2026-05-17 (Gap 2): popular tabela subcategories quando
+          // o regulamento detalha subdivisões etárias dentro de uma categoria.
+          // Estratégia: pra cada categoria que tem sub_categories, primeiro
+          // INSERT na tabela categories (se ainda não existir) pra obter o ID,
+          // depois INSERT nas subcategories ligadas. Best-effort — falha aqui
+          // não bloqueia o save geral.
+          if (edited.categories?.length) {
+            const catsComSub = edited.categories.filter(c => Array.isArray((c as any).sub_categories) && (c as any).sub_categories.length > 0);
+            for (const cat of catsComSub) {
+              try {
+                const { data: catRow, error: catErr } = await supabase
+                  .from('categories')
+                  .insert({
+                    event_id:   eventId,
+                    created_by: user.id,
+                    name:       cat.name,
+                    min_age:    cat.min_age,
+                    max_age:    cat.max_age,
+                  })
+                  .select('id')
+                  .single();
+                if (catErr || !catRow) {
+                  console.warn(`[RegulationAIParser] falha inserir categoria "${cat.name}":`, catErr?.message);
+                  continue;
+                }
+                const subRows = (cat as any).sub_categories
+                  .filter((s: any) => s?.name && typeof s.min_age === 'number' && typeof s.max_age === 'number')
+                  .map((s: any) => ({
+                    category_id: catRow.id,
+                    created_by:  user.id,
+                    name:        s.name,
+                    min_age:     s.min_age,
+                    max_age:     s.max_age,
+                  }));
+                if (subRows.length > 0) {
+                  const { error: subErr } = await supabase
+                    .from('subcategories')
+                    .insert(subRows);
+                  if (subErr) console.warn(`[RegulationAIParser] falha inserir subcategorias de "${cat.name}":`, subErr.message);
+                }
+              } catch (e: any) {
+                console.warn(`[RegulationAIParser] exception salvando categoria "${cat.name}":`, e?.message);
+              }
+            }
           }
         }
 
