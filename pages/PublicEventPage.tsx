@@ -7,6 +7,7 @@ import {
   Calendar, MapPin, Music, Ticket, ExternalLink,
   ChevronRight, Trophy, Clock, Star, Loader2, ArrowLeft, Youtube, Radio,
   Share2, Copy, Check, Instagram, Globe, MessageCircle, Mail, FileText, Download,
+  GraduationCap,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import BrandIcon from '../components/BrandIcon';
@@ -851,17 +852,33 @@ const PublicEventPage = () => {
             <p className="text-xs text-slate-400 -mt-2">
               Escolha a modalidade pra começar sua inscrição.
             </p>
-            {/* Badge discreto indicando os tipos de mostra que o evento aceita.
-                Aparece só se o produtor habilitou Avaliada (em festival só
-                Competitiva, badge é redundante e polui o visual). */}
-            {Array.isArray(config?.tipos_apresentacao)
-              && config.tipos_apresentacao.includes('Avaliada') && (
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 -mt-1">
-                {config.tipos_apresentacao.length > 1
-                  ? <>Aceita Mostra Competitiva e Avaliada</>
-                  : <>Festival exclusivo Mostra Avaliada (sem competição)</>}
-              </div>
-            )}
+            {/* Tags dos tipos de mostra aceitos. Padrão de mercado (Stripe/Linear):
+                chips neutros com ícone, sempre visíveis pra explicitar o que o
+                evento aceita. Default ['Competitiva'] quando produtor não
+                configurou (fallback consistente com InscricaoWizard). */}
+            {(() => {
+              const tipos: string[] = Array.isArray(config?.tipos_apresentacao) && config.tipos_apresentacao.length > 0
+                ? config.tipos_apresentacao
+                : ['Competitiva'];
+              const aceitaCompetitiva = tipos.includes('Competitiva');
+              const aceitaAvaliada    = tipos.includes('Avaliada');
+              return (
+                <div className="flex flex-wrap items-center gap-2 -mt-1">
+                  {aceitaCompetitiva && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-700 dark:text-slate-300">
+                      <Trophy size={12} className="text-[#ff0068]" />
+                      Mostra Competitiva
+                    </span>
+                  )}
+                  {aceitaAvaliada && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-700 dark:text-slate-300">
+                      <GraduationCap size={12} className="text-violet-400 dark:text-violet-300" />
+                      Mostra Avaliada
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {event.formacoes_config.map((mod: any, i: number) => {
                 const today = todayISO();
