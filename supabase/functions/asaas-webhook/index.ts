@@ -1,4 +1,13 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  dispatchPurchaseConversions,
+  type MetaCapiTarget,
+  type Ga4MpTarget,
+} from '../_shared/conversions.ts'
+
+/** Pixel ID + Measurement ID master da CoreoHub. Espelha index.html. */
+const MASTER_META_PIXEL_ID = '968125229155814'
+const MASTER_GA4_ID        = 'G-Y7N93KHNP8'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -665,6 +674,89 @@ Deno.serve(async (req) => {
         await Promise.all(emailJobs)
       } catch (emailErr) {
         console.error('[asaas-webhook] falha no bloco de emails:', (emailErr as Error).message)
+      }
+
+      // ── Conversions API server-side (Meta + GA4 MP) ─────────────────────
+      // Recupera ~30% perdido client-side (iOS ITP, adblock). Best-effort
+      // total: falha aqui NUNCA quebra o resto do webhook. Deduplicação com
+      // client-side via event_id = registrationId (Meta dedupa por event_id).
+      try {
+        // Detalhes do evento já carregados acima (eventData). Carrega slug
+        // + pixels do produtor + secrets sensíveis da tabela protegida.
+        const [{ data: evPub }, { data: evSec }] = await Promise.all([
+          coreo?.event_id
+            ? supabase.from('events')
+                .select('slug, producer_ga4_id, producer_meta_pixel_id')
+                .eq('id', coreo.event_id).maybeSingle()
+            : Promise.resolve({ data: null } as any),
+          coreo?.event_id
+            ? supabase.from('event_marketing_secrets')
+                .select('meta_capi_token, ga4_api_secret')
+                .eq('event_id', coreo.event_id).maybeSingle()
+            : Promise.resolve({ data: null } as any),
+        ])
+
+        const masterMetaToken = Deno.env.get('META_CAPI_ACCESS_TOKEN') ?? ''
+        const masterGa4Secret = Deno.env.get('GA4_API_SECRET') ?? ''
+
+        const metaTargets: MetaCapiTarget[] = []
+        if (masterMetaToken) {
+          metaTargets.push({ pixelId: MASTER_META_PIXEL_ID, accessToken: masterMetaToken })
+        }
+        if ((evPub as any)?.producer_meta_pixel_id && (evSec as any)?.meta_capi_token) {
+          metaTargets.push({
+            pixelId:     String((evPub as any).producer_meta_pixel_id),
+            accessToken: String((evSec as any).meta_capi_token),
+          })
+        }
+
+        const ga4Targets: Ga4MpTarget[] = []
+        if (masterGa4Secret) {
+          ga4Targets.push({ measurementId: MASTER_GA4_ID, apiSecret: masterGa4Secret })
+        }
+        if ((evPub as any)?.producer_ga4_id && (evSec as any)?.ga4_api_secret) {
+          ga4Targets.push({
+            measurementId: String((evPub as any).producer_ga4_id),
+            apiSecret:     String((evSec as any).ga4_api_secret),
+          })
+        }
+
+        if (metaTargets.length > 0 || ga4Targets.length > 0) {
+          // Email/CPF do inscrito pra Meta CAPI (hash SHA-256 dentro do helper).
+          // CPF mora em registrations.event_data.documento_responsavel ou em
+          // profiles dependendo do caminho de inscrição — pega o que tiver.
+          // (inscritoProfile do bloco de emails está em escopo isolado — query
+          // separada aqui é a opção mais simples.)
+          const [{ data: regExtras }, { data: inscritoForCapi }] = await Promise.all([
+            supabase.from('registrations')
+              .select('event_data')
+              .eq('id', registrationId)
+              .maybeSingle(),
+            coreo?.user_id
+              ? supabase.from('profiles').select('email').eq('id', coreo.user_id).maybeSingle()
+              : Promise.resolve({ data: null } as any),
+          ])
+
+          const inscritoEmail = (inscritoForCapi as any)?.email ?? null
+          const inscritoCpf   = (regExtras as any)?.event_data?.documento_responsavel
+                              ?? (regExtras as any)?.event_data?.cpf
+                              ?? null
+
+          await dispatchPurchaseConversions({
+            input: {
+              transactionId:   registrationId,
+              eventSlug:       (evPub as any)?.slug ?? coreo?.event_id ?? 'unknown',
+              eventName:       eventData?.name ?? 'Festival',
+              value:           grossAmount,
+              email:           inscritoEmail,
+              cpf:             inscritoCpf,
+            },
+            metaTargets,
+            ga4Targets,
+          })
+        }
+      } catch (capiErr) {
+        console.error('[asaas-webhook] falha no bloco CAPI:', (capiErr as Error).message)
       }
     }
 

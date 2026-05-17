@@ -359,11 +359,15 @@ const PublicEventPage = () => {
   // ter chamado onReady. Garante que o GA4/Pixel do produtor recebem o
   // primeiro evento (gtag/fbq não replaya eventos pra streams configurados
   // depois). `viewTracked` evita duplicar se event/pixelsReady mudarem.
+  // Também marca sessionStorage pra que o InscricaoWizard saiba que a
+  // vitrine já trackeou (evita view_event duplicado se inscrito clica
+  // "Inscreva-se" → wizard → ambos disparariam o mesmo evento).
   useEffect(() => {
     if (!event || !pixelsReady || viewTracked) return;
+    const eventId = String((event as any).id);
     trackViewEvent(
       {
-        event_slug: (event as any).slug ?? (event as any).id,
+        event_slug: (event as any).slug ?? eventId,
         event_name: (event as any).name ?? 'Festival',
       },
       {
@@ -371,6 +375,8 @@ const PublicEventPage = () => {
         pixel: (event as any).producer_meta_pixel_id,
       },
     );
+    try { sessionStorage.setItem('coreohub_viewed_' + eventId, String(Date.now())); }
+    catch { /* sessionStorage indisponível — segue sem flag */ }
     setViewTracked(true);
   }, [event, pixelsReady, viewTracked]);
 

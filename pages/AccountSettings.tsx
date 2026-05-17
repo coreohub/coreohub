@@ -1016,6 +1016,23 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     producer_ga4_id:        '',
     producer_meta_pixel_id: '',
   });
+  // Tokens server-side (CAPI Meta + Measurement Protocol GA4). SENSÍVEIS
+  // — vivem em tabela separada (event_marketing_secrets) com RLS owner-only.
+  // Usados pelo webhook Asaas pra disparar Purchase server-side e recuperar
+  // ~30% perdido client-side por iOS/adblock.
+  const [marketingSecrets, setMarketingSecrets] = useState({
+    meta_capi_token: '',
+    ga4_api_secret:  '',
+  });
+  // "Configurado" = tem valor salvo no banco; UI mostra o estado sem expor o token.
+  const [secretsConfigured, setSecretsConfigured] = useState({
+    meta_capi_token: false,
+    ga4_api_secret:  false,
+  });
+  const [showSecrets, setShowSecrets] = useState({
+    meta_capi_token: false,
+    ga4_api_secret:  false,
+  });
   const [identityUploading, setIdentityUploading] = useState(false);
   // Slug do evento ativo — usado pra montar URL da vitrine como smart default
   // do campo "Site oficial"
@@ -1487,6 +1504,20 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               producer_ga4_id:        (myEvent as any).producer_ga4_id ?? '',
               producer_meta_pixel_id: (myEvent as any).producer_meta_pixel_id ?? '',
             });
+            // Carrega secrets sensíveis (CAPI tokens) do event_marketing_secrets.
+            // RLS owner-only protege — só carrega se for dono. UI mostra
+            // "configurado" via flag, nunca expõe o token salvo.
+            const { data: secrets } = await supabase
+              .from('event_marketing_secrets')
+              .select('meta_capi_token, ga4_api_secret')
+              .eq('event_id', myEvent.id)
+              .maybeSingle();
+            if (secrets) {
+              setSecretsConfigured({
+                meta_capi_token: !!secrets.meta_capi_token,
+                ga4_api_secret:  !!secrets.ga4_api_secret,
+              });
+            }
             // Tier 1: configurações de venda de ingressos (events.audience_*)
             if (typeof (myEvent as any).audience_sales_enabled === 'boolean') {
               setAudienceSalesEnabled((myEvent as any).audience_sales_enabled);
@@ -1728,6 +1759,34 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         })
         .eq('id', myEvent.id);
       if (errIdentity) throw errIdentity;
+
+      // Tokens CAPI sensíveis em tabela separada. Só faz upsert dos campos
+      // que o user PREENCHEU agora — campos vazios mantêm o valor anterior
+      // (não bate fora o token salvo só porque o input está mascarado).
+      const newMetaToken  = marketingSecrets.meta_capi_token.trim();
+      const newGa4Secret  = marketingSecrets.ga4_api_secret.trim();
+      if (newMetaToken || newGa4Secret) {
+        const upsertPayload: Record<string, any> = { event_id: myEvent.id };
+        if (newMetaToken) upsertPayload.meta_capi_token = newMetaToken;
+        if (newGa4Secret) upsertPayload.ga4_api_secret  = newGa4Secret;
+        const { error: secretsErr } = await supabase
+          .from('event_marketing_secrets')
+          .upsert(upsertPayload, { onConflict: 'event_id' });
+        if (secretsErr) {
+          // Não bloqueia o save geral — só loga e segue.
+          console.warn('[AccountSettings] falha ao salvar tokens CAPI:', secretsErr.message);
+        } else {
+          // Limpa inputs e marca como configurado pra UI refletir o estado novo.
+          setMarketingSecrets({
+            meta_capi_token: newMetaToken ? '' : marketingSecrets.meta_capi_token,
+            ga4_api_secret:  newGa4Secret ? '' : marketingSecrets.ga4_api_secret,
+          });
+          setSecretsConfigured(s => ({
+            meta_capi_token: newMetaToken ? true : s.meta_capi_token,
+            ga4_api_secret:  newGa4Secret ? true : s.ga4_api_secret,
+          }));
+        }
+      }
 
       // Sync configuracoes → events (vitrine pública)
       // Falha aqui não bloqueia o save da config legacy.
@@ -2317,41 +2376,133 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   <p className="text-xs text-slate-500 mt-0.5">Plugue seus pixels pra rastrear visitantes e conversões nas suas próprias contas. Opcional — funciona em paralelo com o tracking interno do CoreoHub.</p>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className={label}>Google Analytics 4 — Measurement ID</label>
-                  <input
-                    type="text"
-                    value={marketing.producer_ga4_id}
-                    onChange={e => setMarketing({ ...marketing, producer_ga4_id: e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '') })}
-                    placeholder="G-XXXXXXXXXX"
-                    maxLength={15}
-                    className={input}
-                  />
-                  <p className="text-[9px] text-slate-400 mt-1">
-                    Crie em <span className="underline">analytics.google.com</span> → Propriedade → Stream Web. Cole o ID que começa com <code className="px-1 bg-slate-200 dark:bg-white/10 rounded">G-</code>.
-                  </p>
-                </div>
-                <div>
-                  <label className={label}>Meta Pixel ID (Facebook + Instagram)</label>
-                  <input
-                    type="text"
-                    value={marketing.producer_meta_pixel_id}
-                    onChange={e => setMarketing({ ...marketing, producer_meta_pixel_id: e.target.value.replace(/\D/g, '').slice(0, 16) })}
-                    placeholder="000000000000000"
-                    maxLength={16}
-                    inputMode="numeric"
-                    className={input}
-                  />
-                  <p className="text-[9px] text-slate-400 mt-1">
-                    Crie em <span className="underline">business.facebook.com</span> → Gerenciador de Eventos → Pixel da Meta. Cole o ID numérico (15-16 dígitos).
-                  </p>
-                </div>
-              </div>
+              {/* Validação inline — campos vazios não mostram nada; preenchidos
+                  mostram ✓ ou ✗ pra o produtor saber que o ID será aceito antes
+                  de salvar. Espelha os regex de components/ProducerPixels.tsx. */}
+              {(() => {
+                const ga4Raw   = marketing.producer_ga4_id.trim();
+                const pixelRaw = marketing.producer_meta_pixel_id.trim();
+                const ga4Valid   = ga4Raw === '' || /^G-[A-Z0-9]{6,15}$/i.test(ga4Raw);
+                const pixelValid = pixelRaw === '' || /^\d{13,16}$/.test(pixelRaw);
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className={label}>Google Analytics 4 — Measurement ID</label>
+                      <input
+                        type="text"
+                        value={marketing.producer_ga4_id}
+                        onChange={e => setMarketing({ ...marketing, producer_ga4_id: e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '') })}
+                        placeholder="G-XXXXXXXXXX"
+                        maxLength={15}
+                        className={input}
+                      />
+                      {ga4Raw && (
+                        <p className={`text-[10px] mt-1 ${ga4Valid ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                          {ga4Valid
+                            ? '✓ Formato válido — pronto pra salvar.'
+                            : '✗ Formato inválido. Deve começar com G- seguido de letras/números (ex: G-Y7N93KHNP8).'}
+                        </p>
+                      )}
+                      <p className="text-[9px] text-slate-400 mt-1">
+                        Crie em <span className="underline">analytics.google.com</span> → Propriedade → Stream Web. Cole o ID que começa com <code className="px-1 bg-slate-200 dark:bg-white/10 rounded">G-</code>.
+                      </p>
+                    </div>
+                    <div>
+                      <label className={label}>Meta Pixel ID (Facebook + Instagram)</label>
+                      <input
+                        type="text"
+                        value={marketing.producer_meta_pixel_id}
+                        onChange={e => setMarketing({ ...marketing, producer_meta_pixel_id: e.target.value.replace(/\D/g, '').slice(0, 16) })}
+                        placeholder="000000000000000"
+                        maxLength={16}
+                        inputMode="numeric"
+                        className={input}
+                      />
+                      {pixelRaw && (
+                        <p className={`text-[10px] mt-1 ${pixelValid ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                          {pixelValid
+                            ? '✓ Formato válido — pronto pra salvar.'
+                            : `✗ Formato inválido. Pixel ID deve ter 13-16 dígitos numéricos (você digitou ${pixelRaw.length}).`}
+                        </p>
+                      )}
+                      <p className="text-[9px] text-slate-400 mt-1">
+                        Crie em <span className="underline">business.facebook.com</span> → Gerenciador de Eventos → Pixel da Meta. Cole o ID numérico (15-16 dígitos).
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-xl">
                 <p className="text-[10px] text-blue-700 dark:text-blue-300 leading-relaxed">
                   💡 <strong>Como funciona:</strong> Quando configurados, ambos rastreiam automaticamente visitas à vitrine do seu festival, cliques em "Inscreva-se" e conversões de pagamento. Eventos disparam nas suas contas em paralelo com as do CoreoHub. Você usa os dados pra otimizar suas campanhas no Google/Instagram Ads.
                 </p>
+              </div>
+
+              {/* CAPI server-side (opcional) — tokens SENSÍVEIS que vivem em
+                  event_marketing_secrets com RLS owner-only. Recupera ~30%
+                  perdido client-side (iOS ITP, adblockers) disparando
+                  Purchase via servidor quando webhook Asaas confirma. */}
+              <div className="mt-5 pt-5 border-t border-slate-200 dark:border-white/10">
+                <p className="text-[11px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 mb-1">
+                  Conversions API <span className="text-slate-400">(server-side, opcional)</span>
+                </p>
+                <p className="text-[10px] text-slate-500 leading-relaxed mb-4">
+                  Tokens server-side recuperam ~30% das conversões que o tracking client-side perde (iOS 14+, adblockers, modo privado). <strong>Sensíveis</strong> — só salve aqui, são armazenados criptografados e visíveis só pra você.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className={label}>Meta Conversions API — Access Token</label>
+                    <div className="relative">
+                      <input
+                        type={showSecrets.meta_capi_token ? 'text' : 'password'}
+                        value={marketingSecrets.meta_capi_token}
+                        onChange={e => setMarketingSecrets({ ...marketingSecrets, meta_capi_token: e.target.value })}
+                        placeholder={secretsConfigured.meta_capi_token ? '••••••• (já configurado — cole pra trocar)' : 'EAAxxxxxxxxxxxxxxxxxxxx...'}
+                        className={input}
+                        autoComplete="off"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSecrets(s => ({ ...s, meta_capi_token: !s.meta_capi_token }))}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 dark:hover:text-white"
+                      >
+                        {showSecrets.meta_capi_token ? 'ocultar' : 'mostrar'}
+                      </button>
+                    </div>
+                    {secretsConfigured.meta_capi_token && !marketingSecrets.meta_capi_token && (
+                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1">✓ Configurado. Deixe vazio pra manter o atual.</p>
+                    )}
+                    <p className="text-[9px] text-slate-400 mt-1">
+                      Em <span className="underline">business.facebook.com</span> → Gerenciador de Eventos → seu Pixel → Configurações → Conversions API → "Gerar token de acesso".
+                    </p>
+                  </div>
+                  <div>
+                    <label className={label}>GA4 Measurement Protocol — API Secret</label>
+                    <div className="relative">
+                      <input
+                        type={showSecrets.ga4_api_secret ? 'text' : 'password'}
+                        value={marketingSecrets.ga4_api_secret}
+                        onChange={e => setMarketingSecrets({ ...marketingSecrets, ga4_api_secret: e.target.value })}
+                        placeholder={secretsConfigured.ga4_api_secret ? '••••••• (já configurado — cole pra trocar)' : 'aB3-xY9_zQ7kFv2...'}
+                        className={input}
+                        autoComplete="off"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSecrets(s => ({ ...s, ga4_api_secret: !s.ga4_api_secret }))}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 dark:hover:text-white"
+                      >
+                        {showSecrets.ga4_api_secret ? 'ocultar' : 'mostrar'}
+                      </button>
+                    </div>
+                    {secretsConfigured.ga4_api_secret && !marketingSecrets.ga4_api_secret && (
+                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1">✓ Configurado. Deixe vazio pra manter o atual.</p>
+                    )}
+                    <p className="text-[9px] text-slate-400 mt-1">
+                      Em <span className="underline">analytics.google.com</span> → Admin → Streams de Dados → seu Stream → API Secrets do Measurement Protocol → Criar.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 

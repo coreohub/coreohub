@@ -26,6 +26,24 @@ import {
   AlertCircle, CheckCircle, Plus, Trash2, ArrowRight,
 } from 'lucide-react';
 import { maskTempo, parseTempoSegundos, formatTempo, maskedChange } from '../utils/masks';
+import { trackViewEvent } from '../services/producerAnalytics';
+import ProducerPixels from '../components/ProducerPixels';
+
+/** Marca um evento como "já trackeado" na sessão. Lido pelo Wizard pra
+ *  evitar disparar view_event duplicado quando inscrito veio da vitrine
+ *  (que já disparou). PublicEventPage seta isso após o próprio trackViewEvent. */
+const VIEW_TRACKED_PREFIX = 'coreohub_viewed_';
+const VIEW_TRACKED_TTL_MS = 5 * 60 * 1000; // 5min — depois disso vale re-trackear.
+const wasRecentlyTracked = (eventId: string): boolean => {
+  try {
+    const ts = Number(sessionStorage.getItem(VIEW_TRACKED_PREFIX + eventId) ?? '0');
+    return ts > 0 && Date.now() - ts < VIEW_TRACKED_TTL_MS;
+  } catch { return false; }
+};
+const markAsTracked = (eventId: string): void => {
+  try { sessionStorage.setItem(VIEW_TRACKED_PREFIX + eventId, String(Date.now())); }
+  catch { /* sessionStorage indisponível (privado/embed) — ignore */ }
+};
 
 /** Lê a duração de um arquivo de áudio em segundos via HTML5 Audio API.
  *  Retorna 0 se não conseguir ler (formato inválido, arquivo corrompido).
@@ -230,6 +248,12 @@ const InscricaoWizard: React.FC = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
+  // Fase 4B — gate de view_event quando inscrito chega no Wizard por link
+  // direto (sem passar pela vitrine). Espera ProducerPixels chamar onReady
+  // antes de disparar, e checa se a vitrine já trackou nessa sessão pra
+  // não duplicar (sessionStorage flag, TTL 5min).
+  const [pixelsReady, setPixelsReady] = useState(false);
+  const [viewTracked, setViewTracked] = useState(false);
 
   // Configuração de tolerância e referência de idade do produtor (mesmo modelo
   // do MinhasCoreografias.tsx legacy). Default flexível 20% se config faltar.
@@ -355,7 +379,7 @@ const InscricaoWizard: React.FC = () => {
       // de inscrições for criada, adicionar a migration e voltar aqui.
       const { data: ev, error: evErr } = await supabase
         .from('events')
-        .select('id, name, formacoes_config, start_date, event_date')
+        .select('id, name, slug, formacoes_config, start_date, event_date, producer_ga4_id, producer_meta_pixel_id')
         .eq(filterCol, idOrSlug)
         .maybeSingle();
 
@@ -746,6 +770,32 @@ const InscricaoWizard: React.FC = () => {
     }
   };
 
+  // Fase 4B — view_event quando user chega no Wizard por link direto.
+  // Quem veio da vitrine já foi trackeado lá: PublicEventPage marca
+  // sessionStorage flag com TTL 5min e a gente respeita isso aqui pra
+  // não duplicar a conversão. Endereçamento explícito pros pixels do
+  // produtor evita pollution com pixel de outro festival na mesma sessão.
+  useEffect(() => {
+    if (!event || !pixelsReady || viewTracked) return;
+    const eventId = String(event.id);
+    if (wasRecentlyTracked(eventId)) {
+      setViewTracked(true);
+      return;
+    }
+    trackViewEvent(
+      {
+        event_slug: (event as any).slug ?? eventId,
+        event_name: (event as any).name ?? 'Festival',
+      },
+      {
+        ga4:   (event as any).producer_ga4_id,
+        pixel: (event as any).producer_meta_pixel_id,
+      },
+    );
+    markAsTracked(eventId);
+    setViewTracked(true);
+  }, [event, pixelsReady, viewTracked]);
+
   // ─── Render ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -777,6 +827,18 @@ const InscricaoWizard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-32">
+      {/* Fase 4B — pixels do produtor + view_event de link direto.
+          Quando inscrito cai aqui SEM passar pela vitrine (link de Insta,
+          QR code da modalidade, etc), o view_event nunca seria disparado.
+          Aqui dispara só se a vitrine não trackou nessa sessão (flag em
+          sessionStorage com TTL 5min, setado lá ao carregar). */}
+      {event && (
+        <ProducerPixels
+          ga4Id={(event as any).producer_ga4_id}
+          metaPixelId={(event as any).producer_meta_pixel_id}
+          onReady={() => setPixelsReady(true)}
+        />
+      )}
       {/* Header com progresso ────────────────────────────────────────────── */}
       <div className="sticky top-0 z-10 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-white/5 px-4 py-4">
         <div className="max-w-2xl mx-auto">
