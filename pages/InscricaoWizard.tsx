@@ -59,6 +59,8 @@ interface BailarinoEntry {
   nome: string;
   cpf: string;
   data_nascimento: string;
+  /** @ Instagram opcional. Solo/Duo/Trio: usado pra marcar em divulgações. */
+  instagram_handle?: string;
 }
 
 interface WizardData {
@@ -75,6 +77,9 @@ interface WizardData {
   tipo_apresentacao: 'Competitiva' | 'Avaliada' | '';
   // Passo 2 — Elenco
   bailarinos: BailarinoEntry[];
+  /** Em GRUPO: @ do grupo ou coreógrafo, usado pra marcar nas divulgações.
+   *  Solo/Duo/Trio usam o handle por bailarino acima. */
+  instagram_principal?: string;
   // Passo 3 — Trilha
   trilha_url: string;
   trilha_pendente: boolean;
@@ -637,7 +642,14 @@ const InscricaoWizard: React.FC = () => {
         .select('id, nome');
       if (elencoErr) throw new Error('Erro ao criar elenco: ' + elencoErr.message);
 
-      const bailarinosDetalhes = (elencoCreated ?? []).map(b => ({ id: b.id, nome: b.nome }));
+      // Faz join entre o que o Supabase retornou (id + nome) e o input local
+      // pra capturar o @ Instagram informado no wizard. Solo/Duo/Trio usam
+      // bailarinos_detalhes[].instagram_handle; grupo usa instagram_principal.
+      const bailarinosDetalhes = (elencoCreated ?? []).map((b, idx) => ({
+        id:               b.id,
+        nome:             b.nome,
+        instagram_handle: data.bailarinos[idx]?.instagram_handle?.trim() || null,
+      }));
       const createdElencoIds   = (elencoCreated ?? []).map(b => b.id);
 
       // M2: salva metadados legacy (event_nome, mod_fee) em event_data pra
@@ -663,6 +675,7 @@ const InscricaoWizard: React.FC = () => {
           formato_participacao: formacao?.name ?? modalidade,
           tipo_apresentacao:    data.tipo_apresentacao,
           bailarinos_detalhes:  bailarinosDetalhes,
+          instagram_principal:  data.instagram_principal?.trim() || null,
           trilha_url:           data.trilha_pendente ? null : (data.trilha_url || null),
           status_trilha:        data.trilha_pendente || !data.trilha_url ? 'PENDENTE' : 'ENVIADA',
           // Duração do arquivo de áudio em si (extraída via HTML5 Audio API).
@@ -1015,6 +1028,33 @@ const InscricaoWizard: React.FC = () => {
                     />
                   </div>
                 </div>
+                {/* @ Instagram do bailarino — só Solo/Duo/Trio (maxMembers <= 3).
+                    Grupo usa instagram_principal mais abaixo (campo único). */}
+                {maxMembers <= 3 && (
+                  <div>
+                    <label className={labelCls}>@ Instagram (opcional)</label>
+                    <input
+                      type="text"
+                      value={b.instagram_handle ?? ''}
+                      onChange={e => {
+                        const raw = e.target.value.replace(/[^a-zA-Z0-9._]/g, '');
+                        const handle = raw ? `@${raw.replace(/^@+/, '')}` : '';
+                        setData(d => ({
+                          ...d,
+                          bailarinos: d.bailarinos.map((x, idx) =>
+                            idx === i ? { ...x, instagram_handle: handle } : x
+                          ),
+                        }));
+                      }}
+                      placeholder="@seuinsta"
+                      maxLength={31}
+                      className={inputCls}
+                    />
+                    <p className="text-[9px] text-slate-400 mt-1">
+                      Usado pra marcar nas divulgações nas redes sociais.
+                    </p>
+                  </div>
+                )}
               </div>
             ))}
 
@@ -1025,6 +1065,29 @@ const InscricaoWizard: React.FC = () => {
               >
                 <Plus size={12} /> Adicionar bailarino
               </button>
+            )}
+
+            {/* Campo único pra GRUPO (maxMembers > 3). Pedir @ de 4+ bailarinos
+                seria atrito demais; produtor marca o grupo OU o coreógrafo. */}
+            {maxMembers > 3 && (
+              <div className="border border-slate-200 dark:border-white/10 rounded-2xl p-4 space-y-2">
+                <label className={labelCls}>@ do grupo ou coreógrafo (opcional)</label>
+                <input
+                  type="text"
+                  value={data.instagram_principal ?? ''}
+                  onChange={e => {
+                    const raw = e.target.value.replace(/[^a-zA-Z0-9._]/g, '');
+                    const handle = raw ? `@${raw.replace(/^@+/, '')}` : '';
+                    setData(d => ({ ...d, instagram_principal: handle }));
+                  }}
+                  placeholder="@nomedogrupo"
+                  maxLength={31}
+                  className={inputCls}
+                />
+                <p className="text-[9px] text-slate-400">
+                  Usado pra marcar o grupo nas divulgações nas redes sociais.
+                </p>
+              </div>
             )}
 
             <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
