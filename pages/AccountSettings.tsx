@@ -3253,7 +3253,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                                 }}
                                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${
                                   sub.is_categoria_livre
-                                    ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                                    ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
                                     : 'bg-slate-200 dark:bg-white/10 text-slate-500'
                                 }`}
                                 title={sub.is_categoria_livre ? 'Sem limite de idade (Categoria Livre)' : 'Respeita faixas etárias'}
