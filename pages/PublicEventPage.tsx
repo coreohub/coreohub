@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import { trackViewEvent, trackBeginCheckout } from '../services/producerAnalytics';
+import ProducerPixels from '../components/ProducerPixels';
 import {
   Calendar, MapPin, Music, Ticket, ExternalLink,
   ChevronRight, Trophy, Clock, Star, Loader2, ArrowLeft, Youtube, Radio,
@@ -34,6 +36,13 @@ const PublicEventPage = () => {
   const [config, setConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  // Fase 4B — gate que adia view_event até ProducerPixels ter configurado o
+  // GA4/Pixel do produtor. Sem isso, eventos disparados antes do `config`
+  // não chegam no stream do produtor (gtag não replaya retroativamente).
+  const [pixelsReady, setPixelsReady] = useState(false);
+  // Evita disparar view_event duas vezes pro mesmo evento se o useEffect
+  // re-rodar (re-render pós-setEvent + pixelsReady toggle).
+  const [viewTracked, setViewTracked] = useState(false);
   const [publicJudges, setPublicJudges] = useState<JudgePublic[]>([]);
   // Workshops Etapa 1: lista pública dos workshops do evento (publicados)
   const [publicWorkshops, setPublicWorkshops] = useState<Array<{
@@ -103,6 +112,8 @@ const PublicEventPage = () => {
 
         setEvent(eventData);
         setConfig(cfg);
+        // view_event é disparado num useEffect separado que aguarda
+        // pixelsReady (ver abaixo) — não dispara aqui.
 
         // Etapa 1.5: jurados públicos via RPC security-definer
         // (retorna só campos seguros — sem PIN, sem token)
@@ -344,6 +355,42 @@ const PublicEventPage = () => {
   // Tem informação útil de local? (endereço completo OU mapa OU local específico)
   const hasLocalInfo = !!(event.location || localCidadeUf);
 
+  // Fase 4B — view_event dispara só APÓS event carregado E ProducerPixels
+  // ter chamado onReady. Garante que o GA4/Pixel do produtor recebem o
+  // primeiro evento (gtag/fbq não replaya eventos pra streams configurados
+  // depois). `viewTracked` evita duplicar se event/pixelsReady mudarem.
+  useEffect(() => {
+    if (!event || !pixelsReady || viewTracked) return;
+    trackViewEvent(
+      {
+        event_slug: (event as any).slug ?? (event as any).id,
+        event_name: (event as any).name ?? 'Festival',
+      },
+      {
+        ga4:   (event as any).producer_ga4_id,
+        pixel: (event as any).producer_meta_pixel_id,
+      },
+    );
+    setViewTracked(true);
+  }, [event, pixelsReady, viewTracked]);
+
+  // Fase 4B — dispara begin_checkout/InitiateCheckout quando inscrito clica Inscreva-se.
+  // Não impede a navegação do Link (fire-and-forget). Endereça pros pixels do
+  // produtor explicitamente via `send_to`/`trackSingle` (evita pollution se
+  // user navegou de outro festival na mesma sessão).
+  const onInscrevaseClick = () => {
+    trackBeginCheckout(
+      {
+        event_slug: slugOrId,
+        event_name: event.name ?? 'Festival',
+      },
+      {
+        ga4:   (event as any).producer_ga4_id,
+        pixel: (event as any).producer_meta_pixel_id,
+      },
+    );
+  };
+
   // Etapa 1.5: monta lista de sections visíveis pro anchor menu.
   // Renderiza só seções que de fato têm conteúdo (evita item morto no menu).
   const visibleSections: AnchorSection[] = [
@@ -368,6 +415,15 @@ const PublicEventPage = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white">
+      {/* Pixels do produtor — Fase 4B. Carrega GA4+Pixel do dono do festival
+          em paralelo aos pixels master da CoreoHub. Idempotente (não re-init).
+          `onReady` libera o disparo do view_event abaixo. */}
+      <ProducerPixels
+        ga4Id={(event as any).producer_ga4_id}
+        metaPixelId={(event as any).producer_meta_pixel_id}
+        onReady={() => setPixelsReady(true)}
+      />
+
       {/* Meta tags dinâmicas — React 19 nativo as iça pro <head> (Fase 3 — SEO). */}
       <title>{seoTitle}</title>
       <meta name="description" content={seoDescription} />
@@ -442,6 +498,7 @@ const PublicEventPage = () => {
           isRegistrationOpen ? (
             <Link
               to={`/festival/${slugOrId}/register`}
+              onClick={onInscrevaseClick}
               className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 bg-[#ff0068] text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all"
             >
               Inscreva-se <ChevronRight size={12} />
@@ -845,6 +902,7 @@ const PublicEventPage = () => {
             {isRegistrationOpen && (
               <Link
                 to={`/festival/${slugOrId}/register`}
+              onClick={onInscrevaseClick}
                 className="mt-2 inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3.5 bg-transparent border border-[#ff0068]/30 hover:bg-[#ff0068]/10 text-[#ff0068] rounded-2xl text-sm font-black uppercase tracking-widest transition-all"
               >
                 Ver todas e escolher depois <ChevronRight size={16} />
@@ -956,6 +1014,7 @@ const PublicEventPage = () => {
             {isRegistrationOpen && (
               <Link
                 to={`/festival/${slugOrId}/register`}
+              onClick={onInscrevaseClick}
                 className="px-8 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30 flex items-center justify-center gap-2"
               >
                 Inscreva-se <ChevronRight size={16} />

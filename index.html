@@ -22,8 +22,47 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Google Analytics 4 + Meta Pixel da CoreoHub (Fase 4 completa).
+         Carrega apenas em app.coreohub.com pra não poluir o relatório com
+         tráfego de dev/preview/staging. IDs públicos por design — vão no HTML
+         do cliente de qualquer jeito. Pixel da Meta inicializa PageView automático;
+         React Router dispara page_view manual pro GA4 (SPA não navega de verdade). -->
+    <script>
+      (function () {
+        if (window.location.hostname !== 'app.coreohub.com') return;
+        // ── GA4 ──────────────────────────────────────────────
+        var GA_ID = 'G-Y7N93KHNP8';
+        var gtagScript = document.createElement('script');
+        gtagScript.async = true;
+        gtagScript.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(gtagScript);
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = function () { window.dataLayer.push(arguments); };
+        window.gtag('js', new Date());
+        window.gtag('config', GA_ID, { send_page_view: false });
+
+        // ── Meta Pixel ───────────────────────────────────────
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+        window.fbq('init', '968125229155814');
+        window.fbq('track', 'PageView');
+      })();
+    </script>
 </head>
 <body class="bg-mesh min-h-screen">
+    <!-- Meta Pixel fallback pra navegadores sem JS — DEVE ficar no <body>
+         (HTML5 não permite <noscript> com conteúdo dentro do <head>;
+         parse5/Rollup quebra o build). -->
+    <noscript><img height="1" width="1" style="display:none"
+      src="https://www.facebook.com/tr?id=968125229155814&ev=PageView&noscript=1"
+      alt="" /></noscript>
     <!-- #14 mudança 3: redirect inline pre-React quando tablet em modo Terminal
          abre na raiz '/'. Evita flash da raiz antes do RootRedirect rodar.
          Roda síncrono ANTES do bundle React baixar — instantaneo no PWA. -->

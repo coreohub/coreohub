@@ -3,6 +3,8 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CheckCircle, Music2, Calendar, ArrowRight, Home, Receipt } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import AsaasBadge from '../components/AsaasBadge';
+import { trackPurchase } from '../services/producerAnalytics';
+import ProducerPixels from '../components/ProducerPixels';
 
 interface DetalheInscricao {
   nome: string;
@@ -10,6 +12,13 @@ interface DetalheInscricao {
   tipo_apresentacao?: string | null;
   event_id?: string | null;
   eventName?: string | null;
+  /** Slug do evento — usado pra trackPurchase identificar o festival. */
+  eventSlug?: string | null;
+  /** GA4/Pixel do produtor — usados pra montar <ProducerPixels /> nesta tela. */
+  producerGa4Id?: string | null;
+  producerMetaPixelId?: string | null;
+  /** Valor pago — captado de registrations.event_data.mod_fee ou similar. */
+  paidValue?: number;
 }
 
 const PagamentoSucesso = () => {
@@ -19,6 +28,12 @@ const PagamentoSucesso = () => {
 
   const [detalhe, setDetalhe]           = useState<DetalheInscricao | null>(null);
   const [pendentes, setPendentes]       = useState<number>(0);
+  // Fase 4B — só dispara purchase quando pagamento confirmado E pixels prontos.
+  // Validação de status evita conversões fantasma (user acessa URL antes de
+  // pagar ou após estorno); pixelsReady evita race com o config do produtor.
+  const [paymentApproved, setPaymentApproved] = useState(false);
+  const [pixelsReady, setPixelsReady]         = useState(false);
+  const [purchaseTracked, setPurchaseTracked] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -28,21 +43,40 @@ const PagamentoSucesso = () => {
       if (registrationId) {
         const { data: coreo } = await supabase
           .from('registrations')
-          .select('event_id, tipo_apresentacao, nome:nome_coreografia, formacao:formato_participacao')
+          .select('event_id, tipo_apresentacao, nome:nome_coreografia, formacao:formato_participacao, event_data, status_pagamento')
           .eq('id', registrationId)
           .single();
 
         if (coreo) {
           let eventName: string | null = null;
+          let eventSlug: string | null = null;
+          let producerGa4Id: string | null = null;
+          let producerMetaPixelId: string | null = null;
           if (coreo.event_id) {
             const { data: ev } = await supabase
               .from('events')
-              .select('name')
+              .select('name, slug, producer_ga4_id, producer_meta_pixel_id')
               .eq('id', coreo.event_id)
               .single();
-            eventName = ev?.name ?? null;
+            eventName           = ev?.name ?? null;
+            eventSlug           = (ev as any)?.slug ?? null;
+            producerGa4Id       = (ev as any)?.producer_ga4_id ?? null;
+            producerMetaPixelId = (ev as any)?.producer_meta_pixel_id ?? null;
           }
-          setDetalhe({ ...coreo, eventName });
+          const paidValue = Number((coreo as any).event_data?.mod_fee ?? 0) || 0;
+          setDetalhe({
+            ...coreo,
+            eventName,
+            eventSlug,
+            producerGa4Id,
+            producerMetaPixelId,
+            paidValue,
+          });
+          // Marca aprovado só quando Asaas/webhook já confirmou. Mantém o resto
+          // da página renderizando normalmente — só o tracking depende disso.
+          if ((coreo as any).status_pagamento === 'APROVADO') {
+            setPaymentApproved(true);
+          }
         }
       }
 
@@ -61,8 +95,40 @@ const PagamentoSucesso = () => {
     load();
   }, [registrationId]);
 
+  // Fase 4B — dispara purchase quando: detalhe carregou, pagamento aprovado
+  // (evita conversão fantasma), pixels prontos (evita race), e ainda não
+  // tracked (evita duplicar se algum dep mudar). Endereça master + produtor
+  // explicitamente pra não vazar pra pixel de outro festival na mesma sessão.
+  useEffect(() => {
+    if (!detalhe || !paymentApproved || !pixelsReady || purchaseTracked) return;
+    if (!registrationId) return;
+    trackPurchase(
+      {
+        transaction_id: registrationId,
+        event_slug:     detalhe.eventSlug ?? detalhe.event_id ?? 'unknown',
+        event_name:     detalhe.eventName ?? 'Festival',
+        value:          detalhe.paidValue ?? 0,
+      },
+      {
+        ga4:   detalhe.producerGa4Id,
+        pixel: detalhe.producerMetaPixelId,
+      },
+    );
+    setPurchaseTracked(true);
+  }, [detalhe, paymentApproved, pixelsReady, purchaseTracked, registrationId]);
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-6">
+      {/* Pixels do produtor — só renderizam quando o detalhe carrega (precisa
+          dos IDs reais). `onReady` libera o disparo do purchase no useEffect
+          acima, garantindo que o stream do produtor já está configurado. */}
+      {detalhe && (
+        <ProducerPixels
+          ga4Id={detalhe.producerGa4Id}
+          metaPixelId={detalhe.producerMetaPixelId}
+          onReady={() => setPixelsReady(true)}
+        />
+      )}
       <div className="max-w-md w-full space-y-6 text-center">
 
         {/* Ícone animado */}

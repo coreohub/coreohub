@@ -1010,6 +1010,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     email_event:        '',
     regulation_pdf_url: '',
   });
+  // Marketing pixels do produtor (Fase 4B). IDs públicos — vão no HTML do
+  // cliente. Disparam eventos em paralelo aos pixels master da CoreoHub.
+  const [marketing, setMarketing] = useState({
+    producer_ga4_id:        '',
+    producer_meta_pixel_id: '',
+  });
   const [identityUploading, setIdentityUploading] = useState(false);
   // Slug do evento ativo — usado pra montar URL da vitrine como smart default
   // do campo "Site oficial"
@@ -1454,7 +1460,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         let myEvent: any = null;
         if (user) {
           const evRes = await supabase
-            .from('events').select('id, slug, name, description, cover_url, location, city, state, instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes')
+            .from('events').select('id, slug, name, description, cover_url, location, city, state, instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, producer_ga4_id, producer_meta_pixel_id')
             .eq('created_by', user.id)
             .order('created_at', { ascending: false })
             .limit(1).maybeSingle();
@@ -1476,6 +1482,10 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               website_event:      myEvent.website_event ?? '',
               email_event:        myEvent.email_event ?? '',
               regulation_pdf_url: myEvent.regulation_pdf_url ?? '',
+            });
+            setMarketing({
+              producer_ga4_id:        (myEvent as any).producer_ga4_id ?? '',
+              producer_meta_pixel_id: (myEvent as any).producer_meta_pixel_id ?? '',
             });
             // Tier 1: configurações de venda de ingressos (events.audience_*)
             if (typeof (myEvent as any).audience_sales_enabled === 'boolean') {
@@ -1713,6 +1723,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           website_event:      identity.website_event || null,
           email_event:        identity.email_event || null,
           regulation_pdf_url: identity.regulation_pdf_url || null,
+          producer_ga4_id:        marketing.producer_ga4_id.trim() || null,
+          producer_meta_pixel_id: marketing.producer_meta_pixel_id.trim() || null,
         })
         .eq('id', myEvent.id);
       if (errIdentity) throw errIdentity;
@@ -2283,6 +2295,56 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 <p className="text-[10px] text-slate-400 mt-1">
                   Aceita regulamento privado ou edital público (prefeitura, JOMI, Bolsa Cultura).
                   Disponibilizado pra download na vitrine. Lembra de "Salvar" no fim da página.
+                </p>
+              </div>
+            </div>
+
+            {/* Integrações de Marketing (Fase 4B) — produtor pluga GA4 +
+                Pixel Meta próprios pra ver eventos do festival dele isolado.
+                IDs públicos por design (vão no HTML). Disparos paralelos
+                aos pixels master da CoreoHub. */}
+            <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Globe size={18} /></div>
+                <div>
+                  <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Integrações de Marketing</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Plugue seus pixels pra rastrear visitantes e conversões nas suas próprias contas. Opcional — funciona em paralelo com o tracking interno do CoreoHub.</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className={label}>Google Analytics 4 — Measurement ID</label>
+                  <input
+                    type="text"
+                    value={marketing.producer_ga4_id}
+                    onChange={e => setMarketing({ ...marketing, producer_ga4_id: e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '') })}
+                    placeholder="G-XXXXXXXXXX"
+                    maxLength={15}
+                    className={input}
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">
+                    Crie em <span className="underline">analytics.google.com</span> → Propriedade → Stream Web. Cole o ID que começa com <code className="px-1 bg-slate-200 dark:bg-white/10 rounded">G-</code>.
+                  </p>
+                </div>
+                <div>
+                  <label className={label}>Meta Pixel ID (Facebook + Instagram)</label>
+                  <input
+                    type="text"
+                    value={marketing.producer_meta_pixel_id}
+                    onChange={e => setMarketing({ ...marketing, producer_meta_pixel_id: e.target.value.replace(/\D/g, '').slice(0, 16) })}
+                    placeholder="000000000000000"
+                    maxLength={16}
+                    inputMode="numeric"
+                    className={input}
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">
+                    Crie em <span className="underline">business.facebook.com</span> → Gerenciador de Eventos → Pixel da Meta. Cole o ID numérico (15-16 dígitos).
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-xl">
+                <p className="text-[10px] text-blue-700 dark:text-blue-300 leading-relaxed">
+                  💡 <strong>Como funciona:</strong> Quando configurados, ambos rastreiam automaticamente visitas à vitrine do seu festival, cliques em "Inscreva-se" e conversões de pagamento. Eventos disparam nas suas contas em paralelo com as do CoreoHub. Você usa os dados pra otimizar suas campanhas no Google/Instagram Ads.
                 </p>
               </div>
             </div>
