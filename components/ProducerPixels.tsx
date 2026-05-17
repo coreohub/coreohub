@@ -25,11 +25,12 @@
  */
 
 import { useEffect } from 'react';
+import { hasMarketingConsent } from '../utils/consent';
 
 interface Props {
   ga4Id?: string | null;
   metaPixelId?: string | null;
-  /** Disparado depois do init (ou imediatamente em dev/sem-IDs). */
+  /** Disparado depois do init (ou imediatamente em dev/sem-IDs/sem-consent). */
   onReady?: () => void;
 }
 
@@ -56,6 +57,14 @@ export default function ProducerPixels({ ga4Id, metaPixelId, onReady }: Props) {
     // Em dev/preview os scripts master nem carregam — libera o ready
     // imediatamente pra não bloquear o disparo dos eventos.
     if (!isProd()) {
+      onReady?.();
+      return;
+    }
+    // LGPD: sem consent → não inicializa pixel do produtor (master também
+    // já foi gated em index.html). onReady ainda dispara pra não travar UI
+    // de tracking caller — `trackEvent`/`trackMeta` viram no-op naturalmente
+    // porque `window.gtag`/`window.fbq` continuam undefined.
+    if (!hasMarketingConsent()) {
       onReady?.();
       return;
     }

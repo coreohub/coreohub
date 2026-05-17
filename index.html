@@ -23,14 +23,18 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- Google Analytics 4 + Meta Pixel da CoreoHub (Fase 4 completa).
-         Carrega apenas em app.coreohub.com pra não poluir o relatório com
-         tráfego de dev/preview/staging. IDs públicos por design — vão no HTML
-         do cliente de qualquer jeito. Pixel da Meta inicializa PageView automático;
-         React Router dispara page_view manual pro GA4 (SPA não navega de verdade). -->
+    <!-- GA4 + Meta Pixel da CoreoHub (LGPD-compliant).
+         Os scripts NÃO carregam automaticamente. App.tsx checa o consent
+         (utils/consent.ts) e chama window.__loadCoreohubMarketing() quando
+         o usuário aceita marketing no banner. Sem consent → sem cookies
+         de marketing, sem identificação cross-site.
+         Roda só em app.coreohub.com pra não poluir GA com dev/staging. -->
     <script>
-      (function () {
+      window.__loadCoreohubMarketing = function () {
         if (window.location.hostname !== 'app.coreohub.com') return;
+        if (window.__coreohubMarketingLoaded) return;
+        window.__coreohubMarketingLoaded = true;
+
         // ── GA4 ──────────────────────────────────────────────
         var GA_ID = 'G-Y7N93KHNP8';
         var gtagScript = document.createElement('script');
@@ -53,7 +57,7 @@
         'https://connect.facebook.net/en_US/fbevents.js');
         window.fbq('init', '968125229155814');
         window.fbq('track', 'PageView');
-      })();
+      };
     </script>
 </head>
 <body class="bg-mesh min-h-screen">

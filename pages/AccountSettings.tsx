@@ -1033,6 +1033,20 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     meta_capi_token: false,
     ga4_api_secret:  false,
   });
+  // Status dos tokens lido do webhook (atualiza a cada Purchase server-side).
+  // Mostra banner "✓ Última conversão chegou" ou "✗ Token inválido — regerar".
+  const [secretsStatus, setSecretsStatus] = useState<{
+    meta_capi_status:     string | null;
+    ga4_mp_status:        string | null;
+    meta_capi_last_error: string | null;
+    ga4_mp_last_error:    string | null;
+    meta_capi_last_at:    string | null;
+    ga4_mp_last_at:       string | null;
+  }>({
+    meta_capi_status: null, ga4_mp_status: null,
+    meta_capi_last_error: null, ga4_mp_last_error: null,
+    meta_capi_last_at: null, ga4_mp_last_at: null,
+  });
   const [identityUploading, setIdentityUploading] = useState(false);
   // Slug do evento ativo — usado pra montar URL da vitrine como smart default
   // do campo "Site oficial"
@@ -1506,16 +1520,26 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             });
             // Carrega secrets sensíveis (CAPI tokens) do event_marketing_secrets.
             // RLS owner-only protege — só carrega se for dono. UI mostra
-            // "configurado" via flag, nunca expõe o token salvo.
+            // "configurado" via flag, nunca expõe o token salvo. Status
+            // (OK/INVALID_TOKEN/ERROR) é atualizado pelo webhook a cada
+            // dispatch, e renderizado no painel pra alertar token expirado.
             const { data: secrets } = await supabase
               .from('event_marketing_secrets')
-              .select('meta_capi_token, ga4_api_secret')
+              .select('meta_capi_token, ga4_api_secret, meta_capi_status, ga4_mp_status, meta_capi_last_error, ga4_mp_last_error, meta_capi_last_at, ga4_mp_last_at')
               .eq('event_id', myEvent.id)
               .maybeSingle();
             if (secrets) {
               setSecretsConfigured({
                 meta_capi_token: !!secrets.meta_capi_token,
                 ga4_api_secret:  !!secrets.ga4_api_secret,
+              });
+              setSecretsStatus({
+                meta_capi_status:     (secrets as any).meta_capi_status     ?? null,
+                ga4_mp_status:        (secrets as any).ga4_mp_status        ?? null,
+                meta_capi_last_error: (secrets as any).meta_capi_last_error ?? null,
+                ga4_mp_last_error:    (secrets as any).ga4_mp_last_error    ?? null,
+                meta_capi_last_at:    (secrets as any).meta_capi_last_at    ?? null,
+                ga4_mp_last_at:       (secrets as any).ga4_mp_last_at       ?? null,
               });
             }
             // Tier 1: configurações de venda de ingressos (events.audience_*)
@@ -2472,6 +2496,15 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     {secretsConfigured.meta_capi_token && !marketingSecrets.meta_capi_token && (
                       <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1">✓ Configurado. Deixe vazio pra manter o atual.</p>
                     )}
+                    {secretsStatus.meta_capi_status === 'INVALID_TOKEN' && (
+                      <div className="mt-2 p-2 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 rounded-lg">
+                        <p className="text-[10px] font-black text-rose-700 dark:text-rose-300">✗ Token inválido ou expirado</p>
+                        <p className="text-[9px] text-rose-600 dark:text-rose-400 mt-0.5">Regere no Gerenciador de Eventos e cole aqui. Conversões server-side estão paradas.</p>
+                      </div>
+                    )}
+                    {secretsStatus.meta_capi_status === 'OK' && secretsStatus.meta_capi_last_at && (
+                      <p className="text-[9px] text-emerald-600 dark:text-emerald-400 mt-1">✓ Última conversão chegou: {new Date(secretsStatus.meta_capi_last_at).toLocaleString('pt-BR')}</p>
+                    )}
                     <p className="text-[9px] text-slate-400 mt-1">
                       Em <span className="underline">business.facebook.com</span> → Gerenciador de Eventos → seu Pixel → Configurações → Conversions API → "Gerar token de acesso".
                     </p>
@@ -2497,6 +2530,15 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     </div>
                     {secretsConfigured.ga4_api_secret && !marketingSecrets.ga4_api_secret && (
                       <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1">✓ Configurado. Deixe vazio pra manter o atual.</p>
+                    )}
+                    {secretsStatus.ga4_mp_status === 'INVALID_SECRET' && (
+                      <div className="mt-2 p-2 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 rounded-lg">
+                        <p className="text-[10px] font-black text-rose-700 dark:text-rose-300">✗ API Secret inválido</p>
+                        <p className="text-[9px] text-rose-600 dark:text-rose-400 mt-0.5">Crie um novo no GA4 Admin e cole aqui. Conversões server-side estão paradas.</p>
+                      </div>
+                    )}
+                    {secretsStatus.ga4_mp_status === 'OK' && secretsStatus.ga4_mp_last_at && (
+                      <p className="text-[9px] text-emerald-600 dark:text-emerald-400 mt-1">✓ Última conversão chegou: {new Date(secretsStatus.ga4_mp_last_at).toLocaleString('pt-BR')}</p>
                     )}
                     <p className="text-[9px] text-slate-400 mt-1">
                       Em <span className="underline">analytics.google.com</span> → Admin → Streams de Dados → seu Stream → API Secrets do Measurement Protocol → Criar.

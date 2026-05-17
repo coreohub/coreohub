@@ -742,7 +742,7 @@ Deno.serve(async (req) => {
                               ?? (regExtras as any)?.event_data?.cpf
                               ?? null
 
-          await dispatchPurchaseConversions({
+          const dispatchResults = await dispatchPurchaseConversions({
             input: {
               transactionId:   registrationId,
               eventSlug:       (evPub as any)?.slug ?? coreo?.event_id ?? 'unknown',
@@ -754,6 +754,70 @@ Deno.serve(async (req) => {
             metaTargets,
             ga4Targets,
           })
+
+          // Atualiza status do PRODUTOR em event_marketing_secrets. Master
+          // CoreoHub fica fora (vive em secrets do Supabase, não tem row).
+          // Throttle de notificação: só manda email se notified_invalid_at
+          // for null OU > 24h atrás, pra não floodar inbox do admin.
+          if (coreo?.event_id) {
+            const producerMetaPixelId = (evPub as any)?.producer_meta_pixel_id
+            const producerGa4Id       = (evPub as any)?.producer_ga4_id
+
+            const metaResult = dispatchResults.find(r => r.kind === 'meta' && r.targetId === producerMetaPixelId)
+            const ga4Result  = dispatchResults.find(r => r.kind === 'ga4'  && r.targetId === producerGa4Id)
+
+            const statusUpdate: Record<string, any> = {}
+            const now = new Date().toISOString()
+
+            if (metaResult) {
+              statusUpdate.meta_capi_status     = metaResult.ok ? 'OK' : (metaResult.invalidAuth ? 'INVALID_TOKEN' : 'ERROR')
+              statusUpdate.meta_capi_last_error = metaResult.ok ? null : (metaResult.error ?? null)
+              statusUpdate.meta_capi_last_at    = now
+            }
+            if (ga4Result) {
+              statusUpdate.ga4_mp_status     = ga4Result.ok ? 'OK' : (ga4Result.invalidAuth ? 'INVALID_SECRET' : 'ERROR')
+              statusUpdate.ga4_mp_last_error = ga4Result.ok ? null : (ga4Result.error ?? null)
+              statusUpdate.ga4_mp_last_at    = now
+            }
+
+            if (Object.keys(statusUpdate).length > 0) {
+              const { error: statusErr } = await supabase
+                .from('event_marketing_secrets')
+                .update(statusUpdate)
+                .eq('event_id', coreo.event_id)
+              if (statusErr) console.warn('[asaas-webhook] falha update CAPI status:', statusErr.message)
+            }
+
+            // Quando o token está inválido, marca timestamp pra UI do painel
+            // admin destacar (banner amarelo "Token CAPI expirado" em
+            // /super-admin). Throttle de 24h pra não atualizar repetidamente.
+            // (Notificação por email fica como próxima melhoria — hoje o
+            // super admin descobre pelo painel ou pelos logs.)
+            const anyInvalid = (metaResult?.invalidAuth ?? false) || (ga4Result?.invalidAuth ?? false)
+            if (anyInvalid) {
+              const { data: secretsRow } = await supabase
+                .from('event_marketing_secrets')
+                .select('notified_invalid_at')
+                .eq('event_id', coreo.event_id)
+                .maybeSingle()
+
+              const lastNotified = (secretsRow as any)?.notified_invalid_at
+                ? new Date((secretsRow as any).notified_invalid_at).getTime() : 0
+              const hoursSince = (Date.now() - lastNotified) / 3_600_000
+
+              if (hoursSince >= 24) {
+                await supabase
+                  .from('event_marketing_secrets')
+                  .update({ notified_invalid_at: now })
+                  .eq('event_id', coreo.event_id)
+                console.error(
+                  `[asaas-webhook][capi][ALERT] event_id=${coreo.event_id} token inválido — ` +
+                  `meta=${metaResult?.invalidAuth ?? false} ga4=${ga4Result?.invalidAuth ?? false}. ` +
+                  `Produtor precisa regerar em /configuracoes -> Integrações de Marketing.`
+                )
+              }
+            }
+          }
         }
       } catch (capiErr) {
         console.error('[asaas-webhook] falha no bloco CAPI:', (capiErr as Error).message)

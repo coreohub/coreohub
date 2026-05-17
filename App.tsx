@@ -11,6 +11,7 @@ import EmailVerifyBanner from './components/EmailVerifyBanner';
 import ImpersonateBanner from './components/ImpersonateBanner';
 import Header from './components/Header';
 import BottomNavBar from './components/BottomNavBar';
+import CookieBanner from './components/CookieBanner';
 
 // Páginas principais — carregamento imediato (rota mais usada pelos inscritos)
 import Dashboard from './pages/Dashboard';
@@ -483,6 +484,10 @@ const App: React.FC = () => {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      {/* LGPD — banner de consent de cookies de marketing. Renderiza só
+          em surface públicas (lógica interna do componente) e respeita
+          consent salvo em localStorage com TTL de 12 meses. */}
+      <Suspense fallback={null}><CookieBanner /></Suspense>
     </Router>
   );
 };

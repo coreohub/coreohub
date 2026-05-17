@@ -73,12 +73,14 @@ export interface Ga4MpTarget {
 
 /**
  * Dispara `Purchase` no Meta CAPI pra UM destino.
- * Retorna `{ok, error}` — nunca lança.
+ * Retorna `{ok, error, httpStatus}` — nunca lança. `httpStatus` permite
+ * o webhook diferenciar 401/403 (token inválido) de 5xx (rede/Meta down)
+ * pra marcar o status correto em event_marketing_secrets.
  */
 export async function metaCapiPurchase(
   target: MetaCapiTarget,
   input:  CapiPurchaseInput,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; httpStatus?: number }> {
   try {
     const userData: Record<string, unknown> = {}
     if (input.email)           userData.em = [await sha256Hex(input.email)]
@@ -115,9 +117,9 @@ export async function metaCapiPurchase(
 
     if (!resp.ok) {
       const txt = await resp.text().catch(() => '')
-      return { ok: false, error: `Meta CAPI ${resp.status}: ${txt.slice(0, 200)}` }
+      return { ok: false, httpStatus: resp.status, error: `Meta CAPI ${resp.status}: ${txt.slice(0, 200)}` }
     }
-    return { ok: true }
+    return { ok: true, httpStatus: resp.status }
   } catch (e) {
     return { ok: false, error: (e as Error).message }
   }
@@ -125,7 +127,7 @@ export async function metaCapiPurchase(
 
 /**
  * Dispara `purchase` no GA4 via Measurement Protocol pra UM destino.
- * Retorna `{ok, error}` — nunca lança.
+ * Retorna `{ok, error, httpStatus}` — nunca lança.
  *
  * MP não retorna 200 OK quando há erro de payload (sempre 204 em prod).
  * Pra debug, usar https://www.google-analytics.com/debug/mp/collect com
@@ -134,7 +136,7 @@ export async function metaCapiPurchase(
 export async function ga4MpPurchase(
   target: Ga4MpTarget,
   input:  CapiPurchaseInput,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; httpStatus?: number }> {
   try {
     const body = {
       client_id: target.clientId ?? input.transactionId,
@@ -164,30 +166,60 @@ export async function ga4MpPurchase(
     // GA4 MP retorna 204 No Content em sucesso; 200+ = aceito.
     if (!resp.ok && resp.status !== 204) {
       const txt = await resp.text().catch(() => '')
-      return { ok: false, error: `GA4 MP ${resp.status}: ${txt.slice(0, 200)}` }
+      return { ok: false, httpStatus: resp.status, error: `GA4 MP ${resp.status}: ${txt.slice(0, 200)}` }
     }
-    return { ok: true }
+    return { ok: true, httpStatus: resp.status }
   } catch (e) {
     return { ok: false, error: (e as Error).message }
   }
 }
 
+export interface DispatchResult {
+  label:      string
+  kind:       'meta' | 'ga4'
+  targetId:   string
+  ok:         boolean
+  httpStatus?: number
+  error?:     string
+  /** True quando httpStatus é 401/403 (token inválido) — webhook usa pra atualizar status. */
+  invalidAuth: boolean
+}
+
 /**
  * Dispara CAPI pra MÚLTIPLOS destinos em paralelo (master + produtor).
- * Loga falhas individualmente. Não lança — best-effort.
+ * Retorna resultado por destino pra caller decidir o que fazer (atualizar
+ * status no DB, notificar admin, etc). Loga internamente também — não lança.
  */
 export async function dispatchPurchaseConversions(opts: {
   input:       CapiPurchaseInput
   metaTargets: MetaCapiTarget[]
   ga4Targets:  Ga4MpTarget[]
-}): Promise<void> {
-  const jobs: Array<Promise<{ ok: boolean; error?: string; label: string }>> = []
+}): Promise<DispatchResult[]> {
+  const jobs: Array<Promise<DispatchResult>> = []
 
   for (const t of opts.metaTargets) {
-    jobs.push(metaCapiPurchase(t, opts.input).then(r => ({ ...r, label: `meta:${t.pixelId}` })))
+    jobs.push(metaCapiPurchase(t, opts.input).then(r => ({
+      kind:        'meta' as const,
+      label:       `meta:${t.pixelId}`,
+      targetId:    t.pixelId,
+      ok:          r.ok,
+      httpStatus:  r.httpStatus,
+      error:       r.error,
+      invalidAuth: r.httpStatus === 401 || r.httpStatus === 403,
+    })))
   }
   for (const t of opts.ga4Targets) {
-    jobs.push(ga4MpPurchase(t, opts.input).then(r => ({ ...r, label: `ga4:${t.measurementId}` })))
+    jobs.push(ga4MpPurchase(t, opts.input).then(r => ({
+      kind:        'ga4' as const,
+      label:       `ga4:${t.measurementId}`,
+      targetId:    t.measurementId,
+      ok:          r.ok,
+      httpStatus:  r.httpStatus,
+      error:       r.error,
+      // GA4 MP retorna 401 quando api_secret é inválido. 400 também sinaliza payload ruim,
+      // mas aqui tratamos como erro genérico (não invalida o secret).
+      invalidAuth: r.httpStatus === 401 || r.httpStatus === 403,
+    })))
   }
 
   const results = await Promise.all(jobs)
@@ -195,4 +227,5 @@ export async function dispatchPurchaseConversions(opts: {
     if (r.ok) console.log(`[capi] ${r.label}: ok`)
     else      console.error(`[capi] ${r.label}: ${r.error}`)
   }
+  return results
 }

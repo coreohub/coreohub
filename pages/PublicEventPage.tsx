@@ -68,9 +68,22 @@ const PublicEventPage = () => {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
         const filterCol = isUuid ? 'id' : 'slug';
 
+        // Select explícito — evita vazar commission_percent/fee_mode/is_demo/
+        // created_by/etc pra anon que carrega a vitrine pública. Listar
+        // explicitamente também documenta o que a vitrine consome.
         const { data: eventData } = await supabase
           .from('events')
-          .select('*')
+          .select(`
+            id, slug, name, description, cover_url,
+            location, city, state,
+            start_date, end_date, event_time,
+            registration_start_date, registration_end_date,
+            instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event,
+            regulation_pdf_url, slots_limit,
+            programacao_config, ingressos_config, formacoes_config, patrocinadores_config,
+            politica_ingressos, audience_sales_enabled,
+            producer_ga4_id, producer_meta_pixel_id
+          `)
           .eq(filterCol, idOrSlug)
           .maybeSingle();
 
