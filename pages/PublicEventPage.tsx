@@ -635,7 +635,7 @@ const PublicEventPage = () => {
                   className="p-4 bg-white/5 border border-white/10 rounded-2xl hover:border-[#ff0068]/30 transition-colors"
                 >
                   <p className="text-sm font-black uppercase tracking-tight text-white">{g.name}</p>
-                  {g.sub_types.length > 0 ? (
+                  {g.sub_types.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-2">
                       {g.sub_types.map(s => (
                         <span
@@ -646,8 +646,6 @@ const PublicEventPage = () => {
                         </span>
                       ))}
                     </div>
-                  ) : (
-                    <p className="text-[10px] text-slate-500 mt-1.5 italic">Sem modalidades específicas</p>
                   )}
                 </div>
               ))}

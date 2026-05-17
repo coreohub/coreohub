@@ -15,7 +15,7 @@ import { humanizeSupabaseError } from '../utils/supabaseErrors';
 import AsaasBadge from '../components/AsaasBadge';
 import DemoSettingsTab from '../components/DemoSettingsTab';
 import {
-  Settings, Clock, Save, Plus, Pencil, Trash2,
+  Settings, Clock, Save, Plus, Pencil, Trash2, Check,
   Music2, DollarSign, Users, AlertTriangle,
   Clapperboard, Link2, CheckSquare, Square, X,
   ChevronDown, ChevronRight, ToggleLeft, ToggleRight, Loader2, Sparkles,
@@ -1312,6 +1312,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [newAwardFormation, setNewAwardFormation] = useState('TODOS');
   const [newAwardGenre, setNewAwardGenre]         = useState('TODOS');
   const [newAwardDesc, setNewAwardDesc]           = useState('');
+  // ID do prêmio customizado sendo editado inline (null = nenhum em edição)
+  const [editingAwardId, setEditingAwardId]       = useState<string | null>(null);
 
   const toggleAward = (id: string) => {
     setAwardsTouched(true);
@@ -1350,6 +1352,16 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const removeAward = (id: string) => {
     setAwardsTouched(true);
     setAwards(prev => prev.filter(a => a.id !== id));
+  };
+
+  const updateAwardName = (id: string, name: string) => {
+    setAwardsTouched(true);
+    setAwards(prev => prev.map(a => a.id === id ? { ...a, name } : a));
+  };
+
+  const updateAwardDescription = (id: string, description: string) => {
+    setAwardsTouched(true);
+    setAwards(prev => prev.map(a => a.id === id ? { ...a, description } : a));
   };
 
   /* modal de gênero */
@@ -5131,6 +5143,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 {/* Existing custom awards */}
                 {customAwards.map(award => {
                   const Icon = customAwardIcon(award.name);
+                  const isEditing = editingAwardId === award.id;
                   return (
                     <div
                       key={award.id}
@@ -5140,12 +5153,32 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         <Icon size={14} />
                       </div>
                       <div className="flex-1 min-w-0 space-y-2">
-                        <div>
-                          <p className="text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white">{award.name}</p>
-                          {award.description && (
-                            <p className="text-[9px] text-slate-400">{award.description}</p>
-                          )}
-                        </div>
+                        {isEditing ? (
+                          <div className="space-y-2">
+                            <input
+                              type="text"
+                              value={award.name}
+                              onChange={e => updateAwardName(award.id, e.target.value)}
+                              placeholder="Nome do prêmio"
+                              autoFocus
+                              className="w-full bg-white dark:bg-slate-950 border border-indigo-300 dark:border-indigo-500/40 rounded-lg px-2.5 py-1.5 text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
+                            />
+                            <input
+                              type="text"
+                              value={award.description ?? ''}
+                              onChange={e => updateAwardDescription(award.id, e.target.value)}
+                              placeholder="Descrição opcional"
+                              className="w-full bg-white dark:bg-slate-950 border border-indigo-300 dark:border-indigo-500/40 rounded-lg px-2.5 py-1.5 text-[10px] text-slate-700 dark:text-slate-300 focus:outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                        ) : (
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white">{award.name}</p>
+                            {award.description && (
+                              <p className="text-[9px] text-slate-400">{award.description}</p>
+                            )}
+                          </div>
+                        )}
                         {/* Formation chips */}
                         <div className="flex flex-wrap gap-1.5">
                           {formationOptions.map(opt => (
@@ -5181,12 +5214,26 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                           </div>
                         )}
                       </div>
-                      <button
-                        onClick={() => removeAward(award.id)}
-                        className="p-1.5 text-slate-300 dark:text-white/20 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-all shrink-0"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      <div className="flex flex-col gap-1 shrink-0">
+                        <button
+                          onClick={() => setEditingAwardId(isEditing ? null : award.id)}
+                          className={`p-1.5 rounded-lg transition-all ${
+                            isEditing
+                              ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20'
+                              : 'text-slate-300 dark:text-white/20 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10'
+                          }`}
+                          title={isEditing ? 'Concluir edição' : 'Editar nome/descrição'}
+                        >
+                          {isEditing ? <Check size={13} /> : <Pencil size={13} />}
+                        </button>
+                        <button
+                          onClick={() => removeAward(award.id)}
+                          className="p-1.5 text-slate-300 dark:text-white/20 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-all"
+                          title="Remover prêmio"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
