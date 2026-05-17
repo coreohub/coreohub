@@ -202,6 +202,36 @@ const PublicEventPage = () => {
     fetchData();
   }, [idOrSlug]);
 
+  // Fase 4B — view_event dispara só APÓS event carregado E ProducerPixels
+  // ter chamado onReady. Garante que o GA4/Pixel do produtor recebem o
+  // primeiro evento (gtag/fbq não replaya eventos pra streams configurados
+  // depois). `viewTracked` evita duplicar se event/pixelsReady mudarem.
+  // Também marca sessionStorage pra que o InscricaoWizard saiba que a
+  // vitrine já trackeou (evita view_event duplicado se inscrito clica
+  // "Inscreva-se" → wizard → ambos disparariam o mesmo evento).
+  // CRÍTICO: este useEffect TEM QUE ficar antes dos early-returns abaixo
+  // (`if (loading) return ...`, `if (!event) return ...`). Caso contrário,
+  // o número de hooks chamados varia entre renders e React explode com
+  // "Rendered more hooks than during the previous render" (error #310),
+  // resultando em tela em branco no boot.
+  useEffect(() => {
+    if (!event || !pixelsReady || viewTracked) return;
+    const eventId = String((event as any).id);
+    trackViewEvent(
+      {
+        event_slug: (event as any).slug ?? eventId,
+        event_name: (event as any).name ?? 'Festival',
+      },
+      {
+        ga4:   (event as any).producer_ga4_id,
+        pixel: (event as any).producer_meta_pixel_id,
+      },
+    );
+    try { sessionStorage.setItem('coreohub_viewed_' + eventId, String(Date.now())); }
+    catch { /* sessionStorage indisponível — segue sem flag */ }
+    setViewTracked(true);
+  }, [event, pixelsReady, viewTracked]);
+
   const handleShareCopy = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -371,31 +401,6 @@ const PublicEventPage = () => {
 
   // Tem informação útil de local? (endereço completo OU mapa OU local específico)
   const hasLocalInfo = !!(event.location || localCidadeUf);
-
-  // Fase 4B — view_event dispara só APÓS event carregado E ProducerPixels
-  // ter chamado onReady. Garante que o GA4/Pixel do produtor recebem o
-  // primeiro evento (gtag/fbq não replaya eventos pra streams configurados
-  // depois). `viewTracked` evita duplicar se event/pixelsReady mudarem.
-  // Também marca sessionStorage pra que o InscricaoWizard saiba que a
-  // vitrine já trackeou (evita view_event duplicado se inscrito clica
-  // "Inscreva-se" → wizard → ambos disparariam o mesmo evento).
-  useEffect(() => {
-    if (!event || !pixelsReady || viewTracked) return;
-    const eventId = String((event as any).id);
-    trackViewEvent(
-      {
-        event_slug: (event as any).slug ?? eventId,
-        event_name: (event as any).name ?? 'Festival',
-      },
-      {
-        ga4:   (event as any).producer_ga4_id,
-        pixel: (event as any).producer_meta_pixel_id,
-      },
-    );
-    try { sessionStorage.setItem('coreohub_viewed_' + eventId, String(Date.now())); }
-    catch { /* sessionStorage indisponível — segue sem flag */ }
-    setViewTracked(true);
-  }, [event, pixelsReady, viewTracked]);
 
   // Fase 4B — dispara begin_checkout/InitiateCheckout quando inscrito clica Inscreva-se.
   // Não impede a navegação do Link (fire-and-forget). Endereça pros pixels do
