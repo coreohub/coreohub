@@ -204,12 +204,26 @@ const Sidebar = ({ isOpen, toggle, onLogout, activeRole, profile, videoSelection
 
   const customPerms = isEquipeMember ? profile?.permissoes_custom : undefined;
 
+  // Super admin é por flag (profiles.is_super_admin), não por role — flag pode
+  // existir num user cujo role ativo é ORGANIZER ou outro. Painel /super-admin
+  // já aceita ambos os caminhos; o filtro de sidebar tem que aceitar também
+  // ou super admin com role != COREOHUB_ADMIN não vê o link, mesmo tendo acesso.
+  const isSuperAdmin = profile?.is_super_admin === true;
+
   const visibleSections = (() => {
     const base = menuSections
-      .filter(sec => !sec.roles || (activeRole && sec.roles.includes(activeRole)))
+      .filter(sec => {
+        if (!sec.roles) return true;
+        if (sec.section === 'Admin' && isSuperAdmin) return true;
+        return activeRole && sec.roles.includes(activeRole);
+      })
       .map(sec => ({
         ...sec,
-        items: sec.items.filter(item => !item.roles || (activeRole && item.roles.includes(activeRole))),
+        items: sec.items.filter(item => {
+          if (!item.roles) return true;
+          if (sec.section === 'Admin' && isSuperAdmin) return true;
+          return activeRole && item.roles.includes(activeRole);
+        }),
       }))
       .filter(sec => sec.items.length > 0)
       .map(sec => ({

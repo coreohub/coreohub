@@ -297,6 +297,10 @@ export interface Profile {
   instagram?: string;
   location?: string;
   dance_role?: string;
+
+  /** Flag de super admin — espelha profiles.is_super_admin no banco. Painel
+   *  /super-admin aceita esse OU role === COREOHUB_ADMIN. */
+  is_super_admin?: boolean;
 }
 
 export interface ActiveJudge {
