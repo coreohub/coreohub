@@ -1739,11 +1739,17 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
         const formacoesAdapted = formats.map((f: any) => {
           const firstLote = f.lotes?.[0];
+          const min = Number(f.minMembers ?? 1);
+          // Solo/Duo/Trio têm tamanho fixo (max = min). Grupo (min >= 4) tem
+          // teto aberto = 99. Antes max ficava 99 pra qualquer min > 1, o que
+          // fazia o InscricaoWizard tratar Duo/Trio como grupo na branch do
+          // @ Instagram (`maxMembers > 3` → campo único do grupo).
+          const max = min <= 3 ? min : 99;
           return {
             id:           String(f.id),
             name:         f.name,
-            min_members:  f.minMembers ?? 1,
-            max_members:  (f.minMembers ?? 1) > 1 ? 99 : 1,
+            min_members:  min,
+            max_members:  max,
             fee:          firstLote?.preco ?? 0,
             base_fee:     firstLote?.preco ?? 0,
             pricing_type: f.pricingType ?? 'FIXED',
