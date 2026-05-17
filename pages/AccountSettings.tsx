@@ -1682,9 +1682,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       // Salva na row do evento (multi-tenant).
       // event_id é OBRIGATÓRIO pra passar pela RLS `producer_manages_own_configuracoes`
       // que verifica EXISTS(SELECT 1 FROM events e WHERE e.id = configuracoes.event_id AND e.created_by = auth.uid()).
-      // Sem event_id no payload, produtores não-super-admin batem em RLS.
+      // cfgPayload já traz event_id (linha 1637) — não precisa duplicar aqui.
       const { error: errA } = await supabase.from('configuracoes').upsert(
-        { id: myEvent.id, event_id: myEvent.id, ...cfgPayload },
+        { id: myEvent.id, ...cfgPayload },
         { onConflict: 'id' }
       );
       if (errA) throw errA;
