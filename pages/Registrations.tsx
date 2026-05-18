@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
   Search, Download, RefreshCw,
-  Trash2, Pencil, AlertTriangle, X, DollarSign,
+  Trash2, AlertTriangle, X, DollarSign,
   ShieldAlert, CheckCircle2, Clock, Users, Info, ChevronDown,
   Undo2, Loader2, Eye, Music2, Video, Calendar, User, Instagram,
+  TrendingUp,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -15,6 +16,9 @@ const Registrations = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('ALL');
+  const [modalidadeFilter, setModalidadeFilter] = useState('ALL');
+  const [categoriaFilter, setCategoriaFilter] = useState('ALL');
+  const [estiloFilter, setEstiloFilter] = useState('ALL');
   const [refundModal, setRefundModal] = useState<any>(null);
   const [refundAmount, setRefundAmount] = useState<string>('');
   const [refundReason, setRefundReason] = useState('');
@@ -206,13 +210,80 @@ const Registrations = () => {
     let result = registrations;
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      result = result.filter(reg => reg.nome_coreografia?.toLowerCase().includes(term) || reg.estudio?.toLowerCase().includes(term));
+      result = result.filter(reg =>
+        reg.nome_coreografia?.toLowerCase().includes(term) ||
+        reg.estudio?.toLowerCase().includes(term) ||
+        reg.profiles?.full_name?.toLowerCase().includes(term) ||
+        reg.profiles?.email?.toLowerCase().includes(term)
+      );
     }
-    if (paymentFilter !== 'ALL') {
-      result = result.filter(reg => reg.status_pagamento === paymentFilter);
-    }
+    if (paymentFilter !== 'ALL')   result = result.filter(reg => reg.status_pagamento === paymentFilter);
+    if (modalidadeFilter !== 'ALL') result = result.filter(reg => reg.formato_participacao === modalidadeFilter);
+    if (categoriaFilter !== 'ALL') result = result.filter(reg => reg.categoria === categoriaFilter);
+    if (estiloFilter !== 'ALL')    result = result.filter(reg => reg.estilo_danca === estiloFilter);
     setFilteredRegistrations(result);
-  }, [searchTerm, paymentFilter, registrations]);
+  }, [searchTerm, paymentFilter, modalidadeFilter, categoriaFilter, estiloFilter, registrations]);
+
+  /* Stats no topo — cards de KPI (padrão Stripe Dashboard).
+     Derivados de registrations (não filteredRegistrations) pra manter
+     contexto global do evento mesmo com filtros ativos. */
+  const stats = useMemo(() => {
+    const total = registrations.length;
+    const confirmadas = registrations.filter(r => r.status_pagamento === 'CONFIRMADO').length;
+    const pendentes   = registrations.filter(r => r.status_pagamento === 'PENDENTE').length;
+    const receita     = registrations
+      .filter(r => r.status_pagamento === 'CONFIRMADO')
+      .reduce((sum, r) => sum + (Number(r.valor_total) || 0), 0);
+    return { total, confirmadas, pendentes, receita };
+  }, [registrations]);
+
+  /* Listas únicas pros dropdowns de filtro. Derivadas do dataset bruto pra
+     não sumir opções quando o user já filtrou. */
+  const categoriasDisponiveis = useMemo(() => {
+    return [...new Set(registrations.map(r => r.categoria).filter(Boolean))].sort();
+  }, [registrations]);
+  const estilosDisponiveis = useMemo(() => {
+    return [...new Set(registrations.map(r => r.estilo_danca).filter(Boolean))].sort();
+  }, [registrations]);
+
+  const handleExportCSV = () => {
+    if (filteredRegistrations.length === 0) return;
+    const headers = [
+      'Data', 'Coreografia', 'Modalidade', 'Tipo', 'Estúdio',
+      'Categoria', 'Estilo', 'Inscrito', 'Email', 'WhatsApp',
+      'Status Inscrição', 'Status Pagamento', 'Valor (R$)',
+    ];
+    const escape = (v: any) => {
+      const s = v == null ? '' : String(v);
+      return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = filteredRegistrations.map(r => [
+      r.created_at ? new Date(r.created_at).toLocaleString('pt-BR') : '',
+      r.nome_coreografia ?? '',
+      r.formato_participacao ?? '',
+      r.tipo_apresentacao ?? '',
+      r.estudio ?? '',
+      r.categoria ?? '',
+      r.estilo_danca ?? '',
+      r.profiles?.full_name ?? '',
+      r.profiles?.email ?? '',
+      r.profiles?.whatsapp ?? '',
+      r.status ?? '',
+      r.status_pagamento ?? '',
+      r.valor_total != null ? Number(r.valor_total).toFixed(2) : '',
+    ].map(escape).join(','));
+    // BOM UTF-8 pro Excel BR abrir com acentuação correta
+    const csv = '﻿' + headers.join(',') + '\n' + rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `inscricoes_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const handleTriageDecision = async (regId: string, decision: 'APPROVE' | 'PENALIZE' | 'DISQUALIFY') => {
     let update: any = { penalidade_status: 'RESOLVIDO' };
@@ -261,7 +332,12 @@ const Registrations = () => {
             <button onClick={fetchData} className="p-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-400 hover:text-[#ff0068] transition-all shrink-0">
               <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
             </button>
-            <button className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#e0005c] transition-all shadow-lg shadow-[#ff0068]/20">
+            <button
+              onClick={handleExportCSV}
+              disabled={filteredRegistrations.length === 0}
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#e0005c] transition-all shadow-lg shadow-[#ff0068]/20 disabled:opacity-40 disabled:cursor-not-allowed"
+              title={filteredRegistrations.length === 0 ? 'Nada pra exportar com os filtros atuais' : `Exportar ${filteredRegistrations.length} inscrição(ões)`}
+            >
               <Download size={14} /> Exportar CSV
             </button>
           </div>
@@ -279,16 +355,48 @@ const Registrations = () => {
 
       {tab === 'LIST' ? (
         <div className="space-y-6">
-          <div className="bg-slate-100 dark:bg-slate-900/50 p-4 rounded-3xl border border-slate-200 dark:border-white/5 flex flex-col md:flex-row gap-4">
+          {/* Stats cards — padrão Stripe Dashboard. KPIs do evento ativo,
+              não respeitam filtros (visão macro mesmo com filtro estreito). */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatCard icon={<Users size={14} />}        label="Total"       value={String(stats.total)}       tone="slate" />
+            <StatCard icon={<CheckCircle2 size={14} />} label="Confirmadas" value={String(stats.confirmadas)} tone="emerald" />
+            <StatCard icon={<Clock size={14} />}        label="Pendentes"   value={String(stats.pendentes)}   tone="amber" />
+            <StatCard icon={<TrendingUp size={14} />}   label="Receita"     value={`R$ ${stats.receita.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} tone="pink" />
+          </div>
+
+          <div className="bg-slate-100 dark:bg-slate-900/50 p-4 rounded-3xl border border-slate-200 dark:border-white/5 flex flex-col gap-3">
             <div className="flex-1 relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-              <input type="text" placeholder="Buscar coreografia ou estúdio..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]" />
+              <input type="text" placeholder="Buscar coreografia, estúdio, inscrito ou e-mail..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]" />
             </div>
-            <select value={paymentFilter} onChange={e => setPaymentFilter(e.target.value)} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-4 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]">
-              <option value="ALL"        className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Pagamento: Todos</option>
-              <option value="CONFIRMADO" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Confirmado</option>
-              <option value="PENDENTE"   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Pendente</option>
-            </select>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+              <select value={paymentFilter} onChange={e => setPaymentFilter(e.target.value)} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]">
+                <option value="ALL"        className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Pagamento: Todos</option>
+                <option value="CONFIRMADO" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Confirmado</option>
+                <option value="PENDENTE"   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Pendente</option>
+                <option value="ESTORNADO"  className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Estornado</option>
+                <option value="FALHOU"     className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Falhou</option>
+              </select>
+              <select value={modalidadeFilter} onChange={e => setModalidadeFilter(e.target.value)} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]">
+                <option value="ALL"   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Modalidade: Todas</option>
+                <option value="Solo"  className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Solo</option>
+                <option value="Duo"   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Duo</option>
+                <option value="Trio"  className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Trio</option>
+                <option value="Grupo" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Grupo</option>
+              </select>
+              <select value={categoriaFilter} onChange={e => setCategoriaFilter(e.target.value)} disabled={categoriasDisponiveis.length === 0} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark] disabled:opacity-50">
+                <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Categoria: Todas</option>
+                {categoriasDisponiveis.map(c => (
+                  <option key={c} value={c} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{c}</option>
+                ))}
+              </select>
+              <select value={estiloFilter} onChange={e => setEstiloFilter(e.target.value)} disabled={estilosDisponiveis.length === 0} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark] disabled:opacity-50">
+                <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Estilo: Todos</option>
+                {estilosDisponiveis.map(e => (
+                  <option key={e} value={e} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{e}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 rounded-[2.5rem] overflow-x-auto shadow-sm dark:shadow-2xl">
@@ -298,15 +406,17 @@ const Registrations = () => {
                   <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Coreografia</th>
                   <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden md:table-cell">Estúdio</th>
                   <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden lg:table-cell">Categoria</th>
+                  <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden xl:table-cell">Data</th>
+                  <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right hidden md:table-cell">Valor</th>
                   <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Pagamento</th>
                   <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                 {isLoading ? (
-                  <tr><td colSpan={5} className="py-20 text-center"><RefreshCw className="animate-spin mx-auto text-[#ff0068]" size={32} /></td></tr>
+                  <tr><td colSpan={7} className="py-20 text-center"><RefreshCw className="animate-spin mx-auto text-[#ff0068]" size={32} /></td></tr>
                 ) : filteredRegistrations.length === 0 ? (
-                  <tr><td colSpan={5} className="py-20 text-center text-slate-500 font-black uppercase text-xs">Nenhuma inscrição encontrada</td></tr>
+                  <tr><td colSpan={7} className="py-20 text-center text-slate-500 font-black uppercase text-xs">Nenhuma inscrição encontrada</td></tr>
                 ) : filteredRegistrations.map(reg => (
                   <tr
                     key={reg.id}
@@ -322,6 +432,14 @@ const Registrations = () => {
                     </td>
                     <td className="px-4 sm:px-8 py-6 text-xs font-bold text-slate-600 dark:text-slate-300 hidden md:table-cell">{reg.estudio}</td>
                     <td className="px-4 sm:px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden lg:table-cell">{reg.categoria}</td>
+                    <td className="px-4 sm:px-8 py-6 text-[10px] text-slate-500 hidden xl:table-cell whitespace-nowrap">
+                      {reg.created_at ? new Date(reg.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
+                    </td>
+                    <td className="px-4 sm:px-8 py-6 text-right text-xs font-bold text-slate-700 dark:text-slate-300 hidden md:table-cell whitespace-nowrap">
+                      {reg.valor_total != null && Number(reg.valor_total) > 0
+                        ? `R$ ${Number(reg.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : <span className="text-slate-400 font-normal">—</span>}
+                    </td>
                     <td className="px-4 sm:px-8 py-6 text-center">
                       <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border ${getStatusColor(reg.status_pagamento)}`}>{reg.status_pagamento}</span>
                     </td>
@@ -349,11 +467,6 @@ const Registrations = () => {
                             title="Reembolsar"
                           ><Undo2 size={16} /></button>
                         )}
-                        <button
-                          onClick={e => { e.stopPropagation(); setViewingReg(reg); }}
-                          className="p-2 text-slate-500 hover:text-[#ff0068] hover:bg-[#ff0068]/10 rounded-lg transition-all"
-                          title="Editar (em breve)"
-                        ><Pencil size={16} /></button>
                         <button
                           onClick={e => e.stopPropagation()}
                           className="p-2 text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-all opacity-50 cursor-not-allowed"
@@ -777,6 +890,26 @@ const Registrations = () => {
           </div>
         )}
       </AnimatePresence>
+    </div>
+  );
+};
+
+/** KPI card no topo da lista. Padrão Stripe Dashboard: número grande +
+ *  label + ícone tonalizado. Tom controla cor do ícone/borda esquerda. */
+const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: string; tone: 'slate' | 'emerald' | 'amber' | 'pink' }> = ({ icon, label, value, tone }) => {
+  const tones = {
+    slate:   { bg: 'bg-slate-500/10',   text: 'text-slate-600 dark:text-slate-400',     border: 'border-slate-200 dark:border-white/5' },
+    emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-200 dark:border-emerald-500/20' },
+    amber:   { bg: 'bg-amber-500/10',   text: 'text-amber-600 dark:text-amber-400',     border: 'border-amber-200 dark:border-amber-500/20' },
+    pink:    { bg: 'bg-[#ff0068]/10',   text: 'text-[#ff0068]',                          border: 'border-[#ff0068]/20' },
+  }[tone];
+  return (
+    <div className={`bg-white dark:bg-slate-900/40 border ${tones.border} rounded-2xl p-4 flex items-center gap-3`}>
+      <div className={`w-9 h-9 rounded-xl ${tones.bg} ${tones.text} flex items-center justify-center shrink-0`}>{icon}</div>
+      <div className="min-w-0">
+        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 truncate">{label}</p>
+        <p className="text-lg font-black text-slate-900 dark:text-white truncate">{value}</p>
+      </div>
     </div>
   );
 };
