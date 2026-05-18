@@ -473,7 +473,18 @@ const App: React.FC = () => {
         <Route path="/workshops-do-evento" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><WorkshopsManagement /></Suspense></PrivateRoute>} />
         <Route path="/cupons"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><Coupons /></Suspense></PrivateRoute>} />
         <Route path="/festival/:idOrSlug" element={<FestivalShowcase />} />
-        <Route path="/festival/:idOrSlug/register" element={<PrivateRoute {...privateRouteProps}><NewRegistration /></PrivateRoute>} />
+        {/* Inscrição unificada: ambas as rotas renderizam o mesmo Wizard.
+            /inscrever (sem modalidade) → mostra Passo 0 (seleção visual de
+            modalidade) antes do passo Coreografia. Usado por entry points
+            sem intent expresso (botão "Inscreva-se" do header, link compartilhado,
+            site externo, "Ver todas e escolher depois").
+            /inscrever/:modalidade → pula Passo 0 e abre direto no Passo 1
+            com a modalidade pré-selecionada (editável via select). Usado pelos
+            cards Solo/Duo/Trio/Grupo da vitrine, onde o intent é claro.
+            /register é alias legacy redirecionando pra /inscrever — mantém
+            links externos do produtor funcionando sem refactor de QR code/flyer. */}
+        <Route path="/festival/:idOrSlug/register" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><InscricaoWizard /></Suspense></PrivateRoute>} />
+        <Route path="/festival/:idOrSlug/inscrever" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><InscricaoWizard /></Suspense></PrivateRoute>} />
         <Route path="/festival/:idOrSlug/inscrever/:modalidade" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><InscricaoWizard /></Suspense></PrivateRoute>} />
         <Route path="/festival/:idOrSlug/checkout" element={<PrivateRoute {...privateRouteProps}><Checkout /></PrivateRoute>} />
         <Route path="/pagamento"             element={<PrivateRoute {...privateRouteProps}><PagamentoInscrito /></PrivateRoute>} />

@@ -235,7 +235,11 @@ const resolveRefDate = (
 };
 
 const InscricaoWizard: React.FC = () => {
-  const { idOrSlug, modalidade } = useParams<{ idOrSlug: string; modalidade: string }>();
+  const { idOrSlug, modalidade: urlModalidade } = useParams<{ idOrSlug: string; modalidade?: string }>();
+  // Permite trocar modalidade pelo select do Passo 1 SEM perder state preenchido.
+  // Atualiza URL via History API (replaceState) — não dispara remount do componente.
+  const [overrideModalidade, setOverrideModalidade] = useState<string | undefined>(undefined);
+  const modalidade = overrideModalidade ?? urlModalidade;
   const navigate = useNavigate();
 
   const [event, setEvent] = useState<any>(null);
@@ -288,6 +292,34 @@ const InscricaoWizard: React.FC = () => {
   const [trilhaUploading, setTrilhaUploading] = useState(false);
   const [trilhaError, setTrilhaError] = useState<string | null>(null);
   const [trilhaDurationSeconds, setTrilhaDurationSeconds] = useState<number | null>(null);
+
+  /** Troca a modalidade SEM remount do componente (preserva state preenchido).
+   *  Atualiza URL via History API + state local + redimensiona array de bailarinos
+   *  pro novo min_members da formação escolhida. */
+  const handleChangeModalidade = (novoNome: string) => {
+    if (!idOrSlug || !novoNome || novoNome === modalidade) return;
+    setOverrideModalidade(novoNome);
+    try {
+      window.history.replaceState(
+        null,
+        '',
+        `/festival/${idOrSlug}/inscrever/${encodeURIComponent(novoNome)}`,
+      );
+    } catch { /* navegadores muito antigos */ }
+    // Ajusta tamanho do array de bailarinos pro min_members da nova formação.
+    // Preserva nomes/CPFs já preenchidos quando possível (trunca ou adiciona vazios).
+    const novaFormacao = ((event as any)?.formacoes_config ?? []).find(
+      (m: any) => m.name?.trim().toLowerCase() === novoNome.trim().toLowerCase(),
+    );
+    const novoMin = Number(novaFormacao?.min_members ?? 1);
+    setData(d => {
+      const atuais = d.bailarinos ?? [];
+      const next = atuais.length >= novoMin
+        ? atuais.slice(0, novoMin)
+        : [...atuais, ...Array.from({ length: novoMin - atuais.length }, () => ({ nome: '', cpf: '', data_nascimento: '' }))];
+      return { ...d, bailarinos: next };
+    });
+  };
 
   const handleTrilhaUpload = async (file: File | null) => {
     if (!file || !userId) return;
@@ -356,15 +388,19 @@ const InscricaoWizard: React.FC = () => {
   };
 
   // ─── Load event + config + user ──────────────────────────────────────────
+  // Suporta modalidade undefined (entry via /inscrever sem param) — nesse
+  // caso o evento + config carrega normal, mas mostramos a tela de seleção
+  // de modalidade (Passo 0) antes do passo 1.
   useEffect(() => {
-    if (!idOrSlug || !modalidade) return;
+    if (!idOrSlug) return;
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         // Q2 padrão Sympla: redireciona pra login preservando rota de retorno.
-        // CRÍTICO: modalidade vem decoded do useParams (ex.: "Conjunto/Grupo");
-        // re-encoda pra não virar 2 path segments no callback do OAuth.
-        const redirectPath = `/festival/${idOrSlug}/inscrever/${encodeURIComponent(modalidade)}`;
+        // Quando modalidade está presente, preserva ela na rota de retorno.
+        const redirectPath = modalidade
+          ? `/festival/${idOrSlug}/inscrever/${encodeURIComponent(modalidade)}`
+          : `/festival/${idOrSlug}/inscrever`;
         navigate(`/login?redirectTo=${encodeURIComponent(redirectPath)}`);
         return;
       }
@@ -394,13 +430,17 @@ const InscricaoWizard: React.FC = () => {
 
       // A2: valida que a modalidade da URL existe nas formacoes_config do evento.
       // Sem isso, salvaria string crua em formato_participacao (modalidade fantasma).
-      const modalidadeMatch = (ev.formacoes_config ?? []).find((m: any) =>
-        m.name?.trim().toLowerCase() === modalidade.trim().toLowerCase()
-      );
-      if (!modalidadeMatch) {
-        setError(`Modalidade "${modalidade}" não está disponível neste evento. Volte e escolha uma modalidade da lista.`);
-        setLoading(false);
-        return;
+      // Quando modalidade não está na URL (entry via /inscrever sem param), pula
+      // validação — vai cair na tela de seleção (Passo 0).
+      if (modalidade) {
+        const modalidadeMatch = (ev.formacoes_config ?? []).find((m: any) =>
+          m.name?.trim().toLowerCase() === modalidade.trim().toLowerCase()
+        );
+        if (!modalidadeMatch) {
+          setError(`Modalidade "${modalidade}" não está disponível neste evento. Volte e escolha uma modalidade da lista.`);
+          setLoading(false);
+          return;
+        }
       }
 
       // Janela de inscrições (registration_start_date/end_date) ainda não
@@ -466,14 +506,18 @@ const InscricaoWizard: React.FC = () => {
       }
 
       // Ajusta tamanho do array de bailarinos pro mínimo da modalidade.
-      const formacao = (ev.formacoes_config ?? []).find((m: any) =>
-        m.name?.trim().toLowerCase() === modalidade.trim().toLowerCase()
-      );
-      const minMembers = Number(formacao?.min_members ?? 1);
-      setData(d => ({
-        ...d,
-        bailarinos: Array.from({ length: minMembers }, () => ({ nome: '', cpf: '', data_nascimento: '' })),
-      }));
+      // Só roda quando modalidade já está selecionada — senão fica pro
+      // próximo carregamento (após user escolher no Passo 0).
+      if (modalidade) {
+        const formacao = (ev.formacoes_config ?? []).find((m: any) =>
+          m.name?.trim().toLowerCase() === modalidade.trim().toLowerCase()
+        );
+        const minMembers = Number(formacao?.min_members ?? 1);
+        setData(d => ({
+          ...d,
+          bailarinos: Array.from({ length: minMembers }, () => ({ nome: '', cpf: '', data_nascimento: '' })),
+        }));
+      }
 
       setLoading(false);
     })();
@@ -825,6 +869,89 @@ const InscricaoWizard: React.FC = () => {
     );
   }
 
+  // ─── Passo 0: Seleção de modalidade ────────────────────────────────────
+  // Renderizado APENAS quando inscrito chegou via /inscrever (sem :modalidade
+  // na URL — entry genérico: site externo, link compartilhado, botão "Inscreva-se"
+  // do header). Cards visuais mostram cada formação com nome + min/max + preço.
+  // Click navega pra /inscrever/<Nome> que recarrega esse mesmo componente
+  // com modalidade preenchida e pula direto pro Passo 1 (Coreografia).
+  if (event && !modalidade) {
+    const formacoes: any[] = Array.isArray((event as any).formacoes_config)
+      ? (event as any).formacoes_config
+      : [];
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-32">
+        <div className="sticky top-0 z-10 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-white/5 px-4 py-4">
+          <div className="max-w-4xl mx-auto">
+            <button
+              onClick={() => navigate(`/festival/${idOrSlug}`)}
+              className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#ff0068] inline-flex items-center gap-1"
+            >
+              <ChevronLeft size={12} /> Voltar pro festival
+            </button>
+          </div>
+        </div>
+        <div className="max-w-4xl mx-auto px-4 py-10 space-y-8">
+          <div className="text-center space-y-2">
+            <h1 className="text-3xl sm:text-4xl font-black tracking-tighter text-slate-900 dark:text-white italic">
+              Como você vai se apresentar?
+            </h1>
+            <p className="text-sm text-slate-500 max-w-md mx-auto">
+              Escolha a modalidade. Você pode trocar depois durante a inscrição se mudar de ideia.
+            </p>
+          </div>
+          {formacoes.length === 0 ? (
+            <div className="text-center text-slate-500 text-sm">
+              Este festival ainda não tem modalidades configuradas. Contate o produtor.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {formacoes.map((f: any) => {
+                const min = Number(f.min_members ?? 1);
+                const max = Number(f.max_members ?? min);
+                const lotes = Array.isArray(f.lotes) ? f.lotes : [];
+                const preco = lotes[0]?.preco ?? f.fee ?? 0;
+                const perMember = f.pricing_type === 'PER_MEMBER';
+                const peopleLabel = min === max
+                  ? `${min} ${min === 1 ? 'pessoa' : 'pessoas'}`
+                  : `${min}–${max === 99 ? '∞' : max} pessoas`;
+                return (
+                  <button
+                    key={f.name}
+                    onClick={() => navigate(`/festival/${idOrSlug}/inscrever/${encodeURIComponent(f.name)}`)}
+                    className="group text-left p-5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl hover:border-[#ff0068] hover:shadow-lg hover:shadow-[#ff0068]/10 transition-all"
+                  >
+                    <div className="flex items-center gap-2 mb-3">
+                      {min === 1 ? <User size={18} className="text-[#ff0068]" />
+                                  : <Users size={18} className="text-[#ff0068]" />}
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-[#ff0068]">
+                        {peopleLabel}
+                      </span>
+                    </div>
+                    <p className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white mb-2">
+                      {f.name}
+                    </p>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-[#ff0068] font-black text-xl">
+                        R$ {Number(preco).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                      {perMember && (
+                        <span className="text-[9px] font-bold text-slate-400 uppercase">/pessoa</span>
+                      )}
+                    </div>
+                    <div className="mt-4 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-[#ff0068] transition-colors">
+                      Começar <ChevronRight size={12} />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-32">
       {/* Fase 4B — pixels do produtor + view_event de link direto.
@@ -888,6 +1015,38 @@ const InscricaoWizard: React.FC = () => {
               <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Music2 size={18} /></div>
               <h2 className="font-black uppercase tracking-tight text-slate-900 dark:text-white">Sobre sua coreografia</h2>
             </div>
+
+            {/* Modalidade — selecionável a qualquer momento. Trocar reorganiza
+                o array de bailarinos no Passo 2 mas preserva o resto preenchido.
+                Sempre visível pra reforçar contexto (user sabe que tá em Solo,
+                pode trocar pra Duo sem refazer tudo). */}
+            {Array.isArray((event as any)?.formacoes_config) && (event as any).formacoes_config.length > 0 && (
+              <div>
+                <label className={labelCls}>Modalidade *</label>
+                <div className="flex flex-wrap gap-2">
+                  {(event as any).formacoes_config.map((f: any) => {
+                    const isActive = f.name?.trim().toLowerCase() === modalidade?.trim().toLowerCase();
+                    return (
+                      <button
+                        key={f.name}
+                        type="button"
+                        onClick={() => handleChangeModalidade(f.name)}
+                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
+                          isActive
+                            ? 'bg-[#ff0068] border-[#ff0068] text-white shadow-md shadow-[#ff0068]/20'
+                            : 'bg-transparent border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:border-[#ff0068]/40 hover:text-[#ff0068]'
+                        }`}
+                      >
+                        {f.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-2">
+                  Pode trocar a qualquer momento — o resto do preenchimento é preservado.
+                </p>
+              </div>
+            )}
 
             <div>
               <label className={labelCls}>Nome da coreografia *</label>
