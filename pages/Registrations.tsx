@@ -95,7 +95,13 @@ const Registrations = () => {
     try {
       // Schema real usa created_at (não criado_em). order com coluna inexistente
       // fazia o select falhar silently — explicação do "0 inscrições" no demo.
-      let regsQuery = supabase.from('registrations').select('*').order('created_at', { ascending: false });
+      // Pull events.video_selection_enabled e profiles do inscrito pra o modal
+      // de detalhes mostrar seção "Vídeo (seletiva)" somente quando o evento
+      // tem seletiva habilitada + dados de identificação do inscrito.
+      let regsQuery = supabase
+        .from('registrations')
+        .select('*, events(video_selection_enabled, name), profiles!registrations_user_id_fkey(full_name, email, whatsapp)')
+        .order('created_at', { ascending: false });
       if (selectedEventId) regsQuery = regsQuery.eq('event_id', selectedEventId);
 
       const { fetchActiveEventConfig } = await import('../services/supabase');
@@ -624,6 +630,21 @@ const Registrations = () => {
               </div>
 
               <div className="p-6 space-y-6">
+                {/* Inscrito — quem fez a inscrição (dono da conta).
+                    Padrão dashboard moderno (Stripe Dashboard, Linear): identidade
+                    primeiro, depois detalhes do "objeto" (coreografia). */}
+                {viewingReg.profiles && (
+                  <section>
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><User size={12} /> Inscrito</h3>
+                    <dl className="grid grid-cols-2 gap-3 text-[12px]">
+                      <DetailItem label="Nome" value={viewingReg.profiles.full_name} />
+                      <DetailItem label="E-mail" value={viewingReg.profiles.email} />
+                      <DetailItem label="WhatsApp" value={viewingReg.profiles.whatsapp} />
+                      <DetailItem label="Estúdio / Escola" value={viewingReg.estudio} />
+                    </dl>
+                  </section>
+                )}
+
                 {/* Coreografia */}
                 <section>
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><Music2 size={12} /> Coreografia</h3>
@@ -664,9 +685,10 @@ const Registrations = () => {
                   </section>
                 )}
 
-                {/* Mídia */}
+                {/* Mídia — Vídeo (seletiva) só aparece se o evento usa essa feature.
+                    Antes mostrava 'pending' pra qualquer evento, confundindo o produtor. */}
                 <section>
-                  <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><Video size={12} /> Trilha & Vídeo</h3>
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><Video size={12} /> Trilha sonora{viewingReg.events?.video_selection_enabled ? ' & Vídeo' : ''}</h3>
                   <div className="space-y-2 text-[12px]">
                     <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-xl">
                       <span className="text-slate-500">Trilha sonora</span>
@@ -680,24 +702,29 @@ const Registrations = () => {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-xl">
-                      <span className="text-slate-500">Vídeo (seletiva)</span>
-                      <span className={`font-bold flex items-center gap-1 ${
-                        viewingReg.video_status === 'approved' ? 'text-emerald-600 dark:text-emerald-400' :
-                        viewingReg.video_status === 'rejected' ? 'text-rose-600 dark:text-rose-400' :
-                        'text-amber-600 dark:text-amber-400'
-                      }`}>
-                        {viewingReg.video_status === 'approved' ? <><CheckCircle2 size={12} /> Aprovado</> :
-                         viewingReg.video_status === 'rejected' ? <><X size={12} /> Reprovado</> :
-                         viewingReg.video_status === 'submitted' ? <><Clock size={12} /> Em análise</> :
-                         <><Clock size={12} /> {viewingReg.video_status ?? 'Pendente'}</>}
-                      </span>
-                    </div>
-                    {viewingReg.video_feedback && (
-                      <div className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Feedback do vídeo</p>
-                        <p className="text-[11px] text-slate-700 dark:text-slate-300">{viewingReg.video_feedback}</p>
-                      </div>
+                    {/* Vídeo seletiva: condicional pelo flag do evento */}
+                    {viewingReg.events?.video_selection_enabled && (
+                      <>
+                        <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-xl">
+                          <span className="text-slate-500">Vídeo (seletiva)</span>
+                          <span className={`font-bold flex items-center gap-1 ${
+                            viewingReg.video_status === 'approved' ? 'text-emerald-600 dark:text-emerald-400' :
+                            viewingReg.video_status === 'rejected' ? 'text-rose-600 dark:text-rose-400' :
+                            'text-amber-600 dark:text-amber-400'
+                          }`}>
+                            {viewingReg.video_status === 'approved' ? <><CheckCircle2 size={12} /> Aprovado</> :
+                             viewingReg.video_status === 'rejected' ? <><X size={12} /> Reprovado</> :
+                             viewingReg.video_status === 'submitted' ? <><Clock size={12} /> Em análise</> :
+                             <><Clock size={12} /> {viewingReg.video_status ?? 'Pendente'}</>}
+                          </span>
+                        </div>
+                        {viewingReg.video_feedback && (
+                          <div className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Feedback do vídeo</p>
+                            <p className="text-[11px] text-slate-700 dark:text-slate-300">{viewingReg.video_feedback}</p>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </section>
