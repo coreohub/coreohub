@@ -450,7 +450,27 @@ const Registrations = () => {
                 {isLoading ? (
                   <tr><td colSpan={7} className="py-20 text-center"><RefreshCw className="animate-spin mx-auto text-[#ff0068]" size={32} /></td></tr>
                 ) : filteredRegistrations.length === 0 ? (
-                  <tr><td colSpan={7} className="py-20 text-center text-slate-500 font-black uppercase text-xs">Nenhuma inscrição encontrada</td></tr>
+                  <tr>
+                    <td colSpan={7} className="py-20 text-center">
+                      <p className="text-slate-500 font-black uppercase text-xs">Nenhuma inscrição encontrada</p>
+                      {/* Diferencia 'sem inscrições no evento' de 'filtros estreitos demais'.
+                          Se há registrations mas filtered tá vazio, oferece reset rápido. */}
+                      {registrations.length > 0 && (
+                        <button
+                          onClick={() => {
+                            setSearchTerm('');
+                            setPaymentFilter('ALL');
+                            setModalidadeFilter('ALL');
+                            setCategoriaFilter('ALL');
+                            setEstiloFilter('ALL');
+                          }}
+                          className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-[#ff0068]/10 text-[#ff0068] border border-[#ff0068]/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0068] hover:text-white transition-all"
+                        >
+                          <X size={12} /> Limpar filtros
+                        </button>
+                      )}
+                    </td>
+                  </tr>
                 ) : filteredRegistrations.map(reg => (
                   <tr
                     key={reg.id}
@@ -814,7 +834,7 @@ const Registrations = () => {
                         <div key={i} className="flex items-center justify-between gap-3 p-3 bg-slate-50 dark:bg-white/5 rounded-xl">
                           <div className="min-w-0 flex-1">
                             <p className="text-[12px] font-bold text-slate-900 dark:text-white truncate">{b.nome ?? `Bailarino ${i + 1}`}</p>
-                            <p className="text-[10px] text-slate-400">CPF {b.cpf ?? '—'} · Nasc. {b.data_nascimento ?? '—'}</p>
+                            <p className="text-[10px] text-slate-400">CPF {formatCpf(b.cpf)} · Nasc. {formatDateBR(b.data_nascimento)}</p>
                           </div>
                           {b.instagram_handle && (
                             <a href={`https://instagram.com/${b.instagram_handle.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="text-[#ff0068] hover:underline text-[10px] font-bold flex items-center gap-1 shrink-0">
@@ -939,6 +959,22 @@ const Registrations = () => {
       </AnimatePresence>
     </div>
   );
+};
+
+/** Máscaras visuais — CPF 000.000.000-00 e data ISO → dd/mm/yyyy.
+ *  Retorna '—' pra valor vazio. Tolera string já mascarada (só formata
+ *  o que tem 11 dígitos limpos). Data aceita 'YYYY-MM-DD' ou ISO completo. */
+const formatCpf = (raw?: string | null): string => {
+  if (!raw) return '—';
+  const digits = String(raw).replace(/\D/g, '');
+  if (digits.length !== 11) return raw;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+};
+const formatDateBR = (raw?: string | null): string => {
+  if (!raw) return '—';
+  const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return raw;
+  return `${m[3]}/${m[2]}/${m[1]}`;
 };
 
 /** KPI card no topo da lista. Padrão Stripe Dashboard: número grande +
