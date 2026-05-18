@@ -108,7 +108,11 @@ const Registrations = () => {
         .from('registrations')
         .select('*, events(video_selection_enabled, name)')
         .order('created_at', { ascending: false });
-      if (selectedEventId) regsQuery = regsQuery.eq('event_id', selectedEventId);
+      // 'ALL' = produtor escolheu ver inscrições de todos os eventos
+      // (escape hatch pra quando o filtro padrão por evento esconde algo).
+      if (selectedEventId && selectedEventId !== 'ALL') {
+        regsQuery = regsQuery.eq('event_id', selectedEventId);
+      }
 
       const { fetchActiveEventConfig } = await import('../services/supabase');
       const [
@@ -337,9 +341,12 @@ const Registrations = () => {
                 onChange={e => setSelectedEventId(e.target.value)}
                 className="w-full sm:w-auto appearance-none pl-4 pr-9 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 transition-all cursor-pointer truncate dark:[color-scheme:dark]"
               >
+                {allEvents.length > 1 && (
+                  <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Todos os eventos</option>
+                )}
                 {allEvents.map(ev => (
                   <option key={ev.id} value={ev.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
-                    {ev.edition_year ? `${ev.edition_year} — ` : ''}{ev.name}
+                    {ev.edition_year ? `${ev.edition_year} — ` : ''}{ev.name}{(ev as any).is_demo ? ' (demo)' : ''}
                   </option>
                 ))}
               </select>
@@ -447,6 +454,14 @@ const Registrations = () => {
                       <p className="text-[9px] text-[#ff0068] font-bold uppercase tracking-widest">{reg.tipo_apresentacao}</p>
                       {/* Mostra estúdio + categoria em mobile (colunas escondidas em <md/<lg) */}
                       <p className="text-[10px] text-slate-500 mt-1 md:hidden">{reg.estudio}{reg.categoria ? ` · ${reg.categoria}` : ''}</p>
+                      {/* Badge do evento — só aparece quando o produtor escolheu
+                          "Todos os eventos" no dropdown. Mostra a qual evento a
+                          inscrição pertence, evitando ambiguidade. */}
+                      {selectedEventId === 'ALL' && reg.events?.name && (
+                        <p className="text-[9px] text-slate-400 mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 uppercase tracking-widest font-bold">
+                          {reg.events.name}
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 sm:px-8 py-6 text-xs font-bold text-slate-600 dark:text-slate-300 hidden md:table-cell">{reg.estudio}</td>
                     <td className="px-4 sm:px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden lg:table-cell">{reg.categoria}</td>
