@@ -622,6 +622,13 @@ const InscricaoWizard: React.FC = () => {
         if (sec <= 0)        return 'Duração inválida. Use o formato MM:SS (ex: 03:45).';
         if (sec < 30)        return 'Duração muito curta. Mínimo: 00:30.';
         if (sec > 30 * 60)   return 'Duração muito longa. Máximo: 30:00.';
+        // Item 1 auditoria 2026-05-17: valida contra max_time da modalidade.
+        // Regulamentos típicos: Solo/Duo/Trio 2-3min, Grupo 3-5min.
+        const maxTime = (formacao as any)?.max_time as string | undefined;
+        const maxSec = maxTime ? parseTempoSegundos(maxTime) : 0;
+        if (maxSec > 0 && sec > maxSec) {
+          return `Duração (${data.duracao_minutos}) excede o máximo da modalidade ${modalidade} (${maxTime}). Reduza a duração ou troque de modalidade.`;
+        }
       }
       if (!data.coreografo_nome.trim())    return 'Informe o nome do coreógrafo.';
       // Tipo de mostra obrigatório quando há 2+ opções habilitadas pelo produtor.
@@ -1019,25 +1026,39 @@ const InscricaoWizard: React.FC = () => {
             {/* Modalidade — selecionável a qualquer momento. Trocar reorganiza
                 o array de bailarinos no Passo 2 mas preserva o resto preenchido.
                 Sempre visível pra reforçar contexto (user sabe que tá em Solo,
-                pode trocar pra Duo sem refazer tudo). */}
+                pode trocar pra Duo sem refazer tudo).
+                Item 3 auditoria 2026-05-17: mostra preço no chip pra user ver
+                custo da modalidade antes/durante a inscrição (evita surpresa
+                no checkout). PER_MEMBER adiciona "/p" pra deixar claro. */}
             {Array.isArray((event as any)?.formacoes_config) && (event as any).formacoes_config.length > 0 && (
               <div>
                 <label className={labelCls}>Modalidade *</label>
                 <div className="flex flex-wrap gap-2">
                   {(event as any).formacoes_config.map((f: any) => {
                     const isActive = f.name?.trim().toLowerCase() === modalidade?.trim().toLowerCase();
+                    const lotes = Array.isArray(f.lotes) ? f.lotes : [];
+                    const preco = lotes[0]?.preco ?? f.fee ?? 0;
+                    const perMember = f.pricing_type === 'PER_MEMBER';
+                    const precoLabel = preco > 0
+                      ? `R$ ${Number(preco).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}${perMember ? '/p' : ''}`
+                      : null;
                     return (
                       <button
                         key={f.name}
                         type="button"
                         onClick={() => handleChangeModalidade(f.name)}
-                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
+                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all flex items-center gap-2 ${
                           isActive
                             ? 'bg-[#ff0068] border-[#ff0068] text-white shadow-md shadow-[#ff0068]/20'
                             : 'bg-transparent border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:border-[#ff0068]/40 hover:text-[#ff0068]'
                         }`}
                       >
-                        {f.name}
+                        <span>{f.name}</span>
+                        {precoLabel && (
+                          <span className={`text-[9px] font-bold ${isActive ? 'text-white/80' : 'text-slate-400'}`}>
+                            {precoLabel}
+                          </span>
+                        )}
                       </button>
                     );
                   })}
@@ -1129,9 +1150,40 @@ const InscricaoWizard: React.FC = () => {
                   maxLength={5}
                   className={inputCls}
                 />
-                <p className="text-[9px] text-slate-400 mt-1">
-                  Formato minuto:segundo. Máx. 30:00.
-                </p>
+                {/* Validação visual contra max_time da modalidade (item 1 da
+                    auditoria 2026-05-17). Mostra ✓ quando dentro do limite,
+                    ⚠️ quando excede. Submit fica bloqueado quando excede. */}
+                {(() => {
+                  const sec = data.duracao_minutos ? parseTempoSegundos(data.duracao_minutos) : 0;
+                  const maxStr = (formacao as any)?.max_time as string | undefined;
+                  const maxSec = maxStr ? parseTempoSegundos(maxStr) : 0;
+                  if (!sec) {
+                    return (
+                      <p className="text-[9px] text-slate-400 mt-1">
+                        Formato minuto:segundo. {maxSec > 0 ? `Máx. da ${modalidade}: ${maxStr}.` : 'Máx. 30:00.'}
+                      </p>
+                    );
+                  }
+                  if (maxSec > 0 && sec > maxSec) {
+                    return (
+                      <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 font-bold">
+                        ⚠ Excede o máximo da modalidade {modalidade} ({maxStr}). Reduza a duração ou troque pra uma modalidade com tempo maior.
+                      </p>
+                    );
+                  }
+                  if (maxSec > 0) {
+                    return (
+                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1">
+                        ✓ Dentro do limite ({maxStr} é o máximo da {modalidade}).
+                      </p>
+                    );
+                  }
+                  return (
+                    <p className="text-[9px] text-slate-400 mt-1">
+                      Formato minuto:segundo. Máx. 30:00.
+                    </p>
+                  );
+                })()}
               </div>
 
               <div>

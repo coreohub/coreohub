@@ -371,6 +371,35 @@ const PublicEventPage = () => {
   const seoUrl = typeof window !== 'undefined' ? window.location.href : `https://app.coreohub.com/evento/${event.slug ?? event.id}`;
   const seoTitle = `${event.name} — Inscrições abertas | CoreoHub`;
 
+  // Schema.org BreadcrumbList — sinaliza hierarquia "Festivais › Usualdance"
+  // pro Google montar rich snippet de navegação nos resultados. URL canônica
+  // do detalhe continua /evento/<slug> (não muda) — breadcrumb só DESCREVE
+  // a hierarquia conceitual: Home → Festivais → este evento.
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'CoreoHub',
+        item: 'https://coreohub.com',
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: 'Festivais',
+        item: 'https://app.coreohub.com/festivais',
+      },
+      {
+        '@type': 'ListItem',
+        position: 3,
+        name: event.name,
+        item: seoUrl,
+      },
+    ],
+  };
+
   // Schema.org Event pra rich snippets do Google (data, local, organizador).
   const eventJsonLd = {
     '@context': 'https://schema.org',
@@ -469,6 +498,31 @@ const PublicEventPage = () => {
       <meta name="twitter:image" content={seoImage} />
       <link rel="canonical" href={seoUrl} />
       <script type="application/ld+json">{JSON.stringify(eventJsonLd)}</script>
+      <script type="application/ld+json">{JSON.stringify(breadcrumbJsonLd)}</script>
+
+      {/* Breadcrumb visual — sinaliza hierarquia pro user E refleja o
+          BreadcrumbList que injetamos pro Google. URL canônica continua
+          /evento/<slug>, breadcrumb só descreve contexto. Padrão a11y:
+          <nav aria-label="Breadcrumb"> + lista ordenada. */}
+      <nav aria-label="Breadcrumb" className="relative z-10 bg-black/40 backdrop-blur-sm border-b border-white/5">
+        <ol className="max-w-5xl mx-auto px-8 py-2.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 overflow-x-auto whitespace-nowrap">
+          <li>
+            <a href="https://coreohub.com" className="hover:text-[#ff0068] transition-colors">
+              CoreoHub
+            </a>
+          </li>
+          <li aria-hidden="true" className="text-slate-600">›</li>
+          <li>
+            <Link to="/festivais" className="hover:text-[#ff0068] transition-colors">
+              Festivais
+            </Link>
+          </li>
+          <li aria-hidden="true" className="text-slate-600">›</li>
+          <li aria-current="page" className="text-white truncate max-w-[60vw]">
+            {event.name}
+          </li>
+        </ol>
+      </nav>
 
       {/* Hero */}
       <div id="hero" className="relative overflow-hidden">
