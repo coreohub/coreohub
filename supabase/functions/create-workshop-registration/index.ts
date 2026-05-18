@@ -426,6 +426,7 @@ Deno.serve(async (req) => {
           email:    buyer.email,
           cpfCnpj:  cpfLimpo,
           ...(buyer.phone ? { mobilePhone: buyer.phone.replace(/\D/g, '') } : {}),
+          notificationDisabled: true, // CoreoHub usa Resend, evita Taxa de Mensageria
         }),
       })
       const custData = await custRes.json()
@@ -459,10 +460,8 @@ Deno.serve(async (req) => {
             fixedValue: producerAmount,
           },
         ],
-        // Desativa notificações automáticas do Asaas (CoreoHub envia
-        // workshop_registration_confirmed via Resend). Sem isso, Asaas
-        // cobra Taxa de Mensageria R$ 0,99/transação redundantemente.
-        notifications: [],
+        // Notificações configuradas no customer (notificationDisabled),
+        // não por payment — suporte Asaas confirmou 2026-05-18.
       }),
     })
 

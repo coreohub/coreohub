@@ -206,6 +206,12 @@ Deno.serve(async (req) => {
           name:     inscritoProfile?.full_name ?? 'Inscrito',
           email:    inscritoProfile?.email ?? '',
           ...(cpfLimpo ? { cpfCnpj: cpfLimpo } : {}),
+          // Desativa email/SMS automático do Asaas pro cliente — CoreoHub
+          // envia comunicação própria via Resend (payment_confirmed_*).
+          // Suporte Asaas confirmou (2026-05-18): notificações são por
+          // CUSTOMER, não por payment. Flag aqui na criação evita Taxa
+          // de Mensageria (R$ 0,99/transação) que se acumularia silenciosa.
+          notificationDisabled: true,
         }),
       })
       const custData = await custRes.json()
@@ -237,11 +243,8 @@ Deno.serve(async (req) => {
             fixedValue: producerAmount,
           },
         ],
-        // Desativa notificações automáticas do Asaas (email/SMS pro inscrito).
-        // CoreoHub envia email transacional próprio via Resend — Asaas seria
-        // redundante e cobra R$ 0,99/transação como "Taxa de Mensageria".
-        // Array vazio = nenhum tipo de notificação ativo.
-        notifications: [],
+        // Notificações são configuradas a nível de CUSTOMER (notificationDisabled
+        // na criação), não por payment — suporte Asaas confirmou 2026-05-18.
       }),
     })
 
