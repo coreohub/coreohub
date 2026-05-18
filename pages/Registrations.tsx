@@ -74,10 +74,10 @@ const Registrations = () => {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Default do dropdown: prioriza evento DEMO quando existir + ordena por
-    // created_at (alinhado com DemoBanner). Antes ordenava por start_date,
-    // o que descoordenava: banner mostrava demo mas dropdown ficava no
-    // evento real do user → tela "0 inscrições" enganosa.
+    // Default do dropdown: prioriza evento REAL (não-demo). Se só tiver demo,
+    // usa o demo. Razão: produtor com demo + festival real tinha o dropdown
+    // caindo no demo → tela "0 inscrições" enganosa enquanto a inscrição real
+    // ficava invisível (bug em prod 2026-05-18, Hemer/Usualdance).
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -88,8 +88,8 @@ const Registrations = () => {
         .order('created_at', { ascending: false });
       if (data && data.length > 0) {
         setAllEvents(data);
-        const demo = data.find(e => (e as any).is_demo);
-        setSelectedEventId(prev => prev ?? (demo?.id ?? data[0].id));
+        const real = data.find(e => !(e as any).is_demo);
+        setSelectedEventId(prev => prev ?? (real?.id ?? data[0].id));
       }
     })();
   }, []);
