@@ -19,6 +19,7 @@ const Registrations = () => {
   const [modalidadeFilter, setModalidadeFilter] = useState('ALL');
   const [categoriaFilter, setCategoriaFilter] = useState('ALL');
   const [estiloFilter, setEstiloFilter] = useState('ALL');
+  const [inscritoFilter, setInscritoFilter] = useState('ALL');
   const [refundModal, setRefundModal] = useState<any>(null);
   const [refundAmount, setRefundAmount] = useState<string>('');
   const [refundReason, setRefundReason] = useState('');
@@ -260,8 +261,9 @@ const Registrations = () => {
     if (modalidadeFilter !== 'ALL') result = result.filter(reg => reg.formato_participacao === modalidadeFilter);
     if (categoriaFilter !== 'ALL') result = result.filter(reg => reg.categoria === categoriaFilter);
     if (estiloFilter !== 'ALL')    result = result.filter(reg => reg.estilo_danca === estiloFilter);
+    if (inscritoFilter !== 'ALL')  result = result.filter(reg => (reg.inscrito_nome ?? reg.profiles?.full_name) === inscritoFilter);
     setFilteredRegistrations(result);
-  }, [searchTerm, paymentFilter, modalidadeFilter, categoriaFilter, estiloFilter, registrations]);
+  }, [searchTerm, paymentFilter, modalidadeFilter, categoriaFilter, estiloFilter, inscritoFilter, registrations]);
 
   /* Stats no topo — cards de KPI (padrão Stripe Dashboard).
      Derivados de registrations (não filteredRegistrations) pra manter
@@ -283,6 +285,12 @@ const Registrations = () => {
   }, [registrations]);
   const estilosDisponiveis = useMemo(() => {
     return [...new Set(registrations.map(r => r.estilo_danca).filter(Boolean))].sort();
+  }, [registrations]);
+  /* Lista de inscritos únicos pro filtro. Usa snapshot inscrito_nome primeiro
+     (sobrevive a delete de profile), fallback pro profile fetched. Crítico
+     pra dona de estúdio: ela inscreve N coreografias, filtro mostra todas. */
+  const inscritosDisponiveis = useMemo(() => {
+    return [...new Set(registrations.map(r => r.inscrito_nome ?? r.profiles?.full_name).filter(Boolean))].sort();
   }, [registrations]);
 
   const handleExportCSV = () => {
@@ -408,7 +416,7 @@ const Registrations = () => {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
               <input type="text" placeholder="Buscar coreografia, estúdio, inscrito ou e-mail..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]" />
             </div>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
               <select value={paymentFilter} onChange={e => setPaymentFilter(e.target.value)} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]">
                 <option value="ALL"        className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Pagamento: Todos</option>
                 <option value="CONFIRMADO" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Confirmado</option>
@@ -433,6 +441,12 @@ const Registrations = () => {
                 <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Estilo: Todos</option>
                 {estilosDisponiveis.map(e => (
                   <option key={e} value={e} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{e}</option>
+                ))}
+              </select>
+              <select value={inscritoFilter} onChange={e => setInscritoFilter(e.target.value)} disabled={inscritosDisponiveis.length === 0} className="col-span-2 lg:col-span-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark] disabled:opacity-50">
+                <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Inscrito: Todos</option>
+                {inscritosDisponiveis.map(n => (
+                  <option key={n} value={n} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{n}</option>
                 ))}
               </select>
             </div>
@@ -510,6 +524,12 @@ const Registrations = () => {
                     <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border whitespace-nowrap ${getStatusColor(reg.status_pagamento)}`}>{reg.status_pagamento}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-[10px] mb-3">
+                    {(reg.inscrito_nome ?? reg.profiles?.full_name) && (
+                      <div className="min-w-0">
+                        <p className="text-slate-400 uppercase tracking-widest font-bold text-[9px]">Inscrito</p>
+                        <p className="text-slate-700 dark:text-slate-300 font-bold truncate">{reg.inscrito_nome ?? reg.profiles?.full_name}</p>
+                      </div>
+                    )}
                     {reg.estudio && (
                       <div className="min-w-0">
                         <p className="text-slate-400 uppercase tracking-widest font-bold text-[9px]">Estúdio</p>
@@ -567,8 +587,9 @@ const Registrations = () => {
               <thead>
                 <tr className="border-b border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/5">
                   <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Coreografia</th>
+                  <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden lg:table-cell">Inscrito</th>
                   <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden md:table-cell">Estúdio</th>
-                  <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden lg:table-cell">Categoria</th>
+                  <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden xl:table-cell">Categoria</th>
                   <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden xl:table-cell">Data</th>
                   <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right hidden md:table-cell">Valor</th>
                   <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Pagamento</th>
@@ -577,10 +598,10 @@ const Registrations = () => {
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                 {isLoading ? (
-                  <tr><td colSpan={7} className="py-20 text-center"><RefreshCw className="animate-spin mx-auto text-[#ff0068]" size={32} /></td></tr>
+                  <tr><td colSpan={8} className="py-20 text-center"><RefreshCw className="animate-spin mx-auto text-[#ff0068]" size={32} /></td></tr>
                 ) : filteredRegistrations.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-16 text-center">
+                    <td colSpan={8} className="py-16 text-center">
                       {/* 2 estados de vazio diferentes:
                           1) Sem inscrições nenhuma no evento → CTA pra compartilhar
                              o link público (chama bailarinos pra se inscreverem).
@@ -630,6 +651,7 @@ const Registrations = () => {
                               setModalidadeFilter('ALL');
                               setCategoriaFilter('ALL');
                               setEstiloFilter('ALL');
+                              setInscritoFilter('ALL');
                             }}
                             className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-[#ff0068]/10 text-[#ff0068] border border-[#ff0068]/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0068] hover:text-white transition-all"
                           >
@@ -652,8 +674,11 @@ const Registrations = () => {
                       {/* Mostra estúdio + categoria em mobile (colunas escondidas em <md/<lg) */}
                       <p className="text-[10px] text-slate-500 mt-1 md:hidden">{reg.estudio}{reg.categoria ? ` · ${reg.categoria}` : ''}</p>
                     </td>
+                    <td className="px-4 sm:px-8 py-6 text-xs font-bold text-slate-700 dark:text-slate-200 hidden lg:table-cell truncate max-w-[160px]">
+                      {reg.inscrito_nome ?? reg.profiles?.full_name ?? <span className="text-slate-400 font-normal">—</span>}
+                    </td>
                     <td className="px-4 sm:px-8 py-6 text-xs font-bold text-slate-600 dark:text-slate-300 hidden md:table-cell">{reg.estudio}</td>
-                    <td className="px-4 sm:px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden lg:table-cell">{reg.categoria}</td>
+                    <td className="px-4 sm:px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden xl:table-cell">{reg.categoria}</td>
                     <td className="px-4 sm:px-8 py-6 text-[10px] text-slate-500 hidden xl:table-cell whitespace-nowrap">
                       {reg.created_at ? new Date(reg.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
                     </td>
