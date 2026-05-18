@@ -3,7 +3,7 @@ import {
   Search, Download, RefreshCw,
   Trash2, Pencil, AlertTriangle, X, DollarSign,
   ShieldAlert, CheckCircle2, Clock, Users, Info, ChevronDown,
-  Undo2, Loader2,
+  Undo2, Loader2, Eye, Music2, Video, Calendar, User, Instagram,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -53,6 +53,10 @@ const Registrations = () => {
   };
   const [tab, setTab] = useState<'LIST' | 'TRIAGEM'>('LIST');
   const [reviewingReg, setReviewingReg] = useState<any>(null);
+  // Modal "Ver detalhes" — pedido pelo produtor (Usualdance 2026-05-18).
+  // Linha da tabela vira clicável (estilo Notion/Linear). Abre modal com
+  // todos os campos: coreografia, bailarinos, trilha, vídeo, pagamento.
+  const [viewingReg, setViewingReg] = useState<any>(null);
 
   /* tolerance + config loaded once */
   const [toleranceRule, setToleranceRule] = useState<{ mode: 'PERCENT' | 'COUNT'; value: number }>({ mode: 'PERCENT', value: 20 });
@@ -298,9 +302,14 @@ const Registrations = () => {
                 ) : filteredRegistrations.length === 0 ? (
                   <tr><td colSpan={5} className="py-20 text-center text-slate-500 font-black uppercase text-xs">Nenhuma inscrição encontrada</td></tr>
                 ) : filteredRegistrations.map(reg => (
-                  <tr key={reg.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group">
+                  <tr
+                    key={reg.id}
+                    onClick={() => setViewingReg(reg)}
+                    className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group cursor-pointer"
+                    title="Ver detalhes da inscrição"
+                  >
                     <td className="px-4 sm:px-8 py-6">
-                      <p className="font-black text-slate-900 dark:text-white uppercase tracking-tight">{reg.nome_coreografia}</p>
+                      <p className="font-black text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-[#ff0068] transition-colors">{reg.nome_coreografia}</p>
                       <p className="text-[9px] text-[#ff0068] font-bold uppercase tracking-widest">{reg.tipo_apresentacao}</p>
                       {/* Mostra estúdio + categoria em mobile (colunas escondidas em <md/<lg) */}
                       <p className="text-[10px] text-slate-500 mt-1 md:hidden">{reg.estudio}{reg.categoria ? ` · ${reg.categoria}` : ''}</p>
@@ -311,13 +320,40 @@ const Registrations = () => {
                       <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border ${getStatusColor(reg.status_pagamento)}`}>{reg.status_pagamento}</span>
                     </td>
                     <td className="px-4 sm:px-8 py-6 text-right">
+                      {/* stopPropagation em cada ação pra clique na linha não disparar.
+                          Botão de ver explícito (Eye) pra dar affordance — mesmo com a linha clicável,
+                          padrão Notion/Linear mantém ícone visível pra reduzir incerteza. */}
                       <div className="flex justify-end gap-1 sm:gap-2">
-                        {reg.status_pagamento === 'PENDENTE' && <button onClick={() => setReviewingReg(reg)} className="p-2 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all" title="Validar pagamento"><DollarSign size={16} /></button>}
-                        {(reg.status_pagamento === 'CONFIRMADO' || reg.status_pagamento === 'APROVADO') && (
-                          <button onClick={() => handleOpenRefund(reg)} className="p-2 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-lg hover:bg-amber-500 hover:text-white transition-all" title="Reembolsar"><Undo2 size={16} /></button>
+                        <button
+                          onClick={e => { e.stopPropagation(); setViewingReg(reg); }}
+                          className="p-2 text-slate-500 hover:text-[#ff0068] hover:bg-[#ff0068]/10 rounded-lg transition-all"
+                          title="Ver detalhes"
+                        ><Eye size={16} /></button>
+                        {reg.status_pagamento === 'PENDENTE' && (
+                          <button
+                            onClick={e => { e.stopPropagation(); setReviewingReg(reg); }}
+                            className="p-2 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all"
+                            title="Validar pagamento"
+                          ><DollarSign size={16} /></button>
                         )}
-                        <button className="p-2 text-slate-500 hover:text-[#ff0068] transition-all"><Pencil size={16} /></button>
-                        <button className="p-2 text-slate-500 hover:text-rose-500 transition-all"><Trash2 size={16} /></button>
+                        {(reg.status_pagamento === 'CONFIRMADO' || reg.status_pagamento === 'APROVADO') && (
+                          <button
+                            onClick={e => { e.stopPropagation(); handleOpenRefund(reg); }}
+                            className="p-2 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-lg hover:bg-amber-500 hover:text-white transition-all"
+                            title="Reembolsar"
+                          ><Undo2 size={16} /></button>
+                        )}
+                        <button
+                          onClick={e => { e.stopPropagation(); setViewingReg(reg); }}
+                          className="p-2 text-slate-500 hover:text-[#ff0068] hover:bg-[#ff0068]/10 rounded-lg transition-all"
+                          title="Editar (em breve)"
+                        ><Pencil size={16} /></button>
+                        <button
+                          onClick={e => e.stopPropagation()}
+                          className="p-2 text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-all opacity-50 cursor-not-allowed"
+                          title="Remover (em breve)"
+                          disabled
+                        ><Trash2 size={16} /></button>
                       </div>
                     </td>
                   </tr>
@@ -559,6 +595,173 @@ const Registrations = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Modal "Ver Detalhes" — pedido produtor Usualdance 2026-05-18.
+          Estilo Notion/Linear: linha clicável abre painel lateral/modal
+          com tudo sobre a inscrição. Padrão dashboard moderno. */}
+      <AnimatePresence>
+        {viewingReg && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setViewingReg(null)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              className="relative bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+            >
+              {/* Header sticky */}
+              <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 px-6 py-4 flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] mb-1">{viewingReg.tipo_apresentacao ?? '—'}</p>
+                  <h2 className="font-black text-lg uppercase tracking-tight text-slate-900 dark:text-white leading-tight">{viewingReg.nome_coreografia ?? 'Sem nome'}</h2>
+                  {viewingReg.estudio && <p className="text-[11px] text-slate-500 mt-1">{viewingReg.estudio}</p>}
+                </div>
+                <button onClick={() => setViewingReg(null)} className="p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-all shrink-0">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6">
+                {/* Coreografia */}
+                <section>
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><Music2 size={12} /> Coreografia</h3>
+                  <dl className="grid grid-cols-2 gap-3 text-[12px]">
+                    <DetailItem label="Modalidade" value={viewingReg.formato_participacao} />
+                    <DetailItem label="Categoria" value={viewingReg.categoria} />
+                    <DetailItem label="Estilo / Gênero" value={viewingReg.estilo_danca} />
+                    <DetailItem label="Subgênero" value={viewingReg.subgenero} />
+                    <DetailItem label="Coreógrafo(a)" value={viewingReg.coreografo_nome} />
+                    <DetailItem label="Duração" value={viewingReg.duracao_minutos ? `${viewingReg.duracao_minutos} min` : null} />
+                  </dl>
+                </section>
+
+                {/* Bailarinos */}
+                {Array.isArray(viewingReg.bailarinos_detalhes) && viewingReg.bailarinos_detalhes.length > 0 && (
+                  <section>
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><Users size={12} /> Bailarinos ({viewingReg.bailarinos_detalhes.length})</h3>
+                    <div className="space-y-2">
+                      {viewingReg.bailarinos_detalhes.map((b: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between gap-3 p-3 bg-slate-50 dark:bg-white/5 rounded-xl">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[12px] font-bold text-slate-900 dark:text-white truncate">{b.nome ?? `Bailarino ${i + 1}`}</p>
+                            <p className="text-[10px] text-slate-400">CPF {b.cpf ?? '—'} · Nasc. {b.data_nascimento ?? '—'}</p>
+                          </div>
+                          {b.instagram_handle && (
+                            <a href={`https://instagram.com/${b.instagram_handle.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="text-[#ff0068] hover:underline text-[10px] font-bold flex items-center gap-1 shrink-0">
+                              <Instagram size={11} /> {b.instagram_handle}
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {viewingReg.instagram_principal && (
+                      <p className="text-[10px] text-slate-500 mt-2 flex items-center gap-1">
+                        <Instagram size={11} /> Grupo/coreógrafo: <a href={`https://instagram.com/${viewingReg.instagram_principal.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="text-[#ff0068] hover:underline font-bold">{viewingReg.instagram_principal}</a>
+                      </p>
+                    )}
+                  </section>
+                )}
+
+                {/* Mídia */}
+                <section>
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><Video size={12} /> Trilha & Vídeo</h3>
+                  <div className="space-y-2 text-[12px]">
+                    <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-xl">
+                      <span className="text-slate-500">Trilha sonora</span>
+                      {viewingReg.trilha_url ? (
+                        <a href={viewingReg.trilha_url.startsWith('http') ? viewingReg.trilha_url : '#'} target="_blank" rel="noopener noreferrer" className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                          <CheckCircle2 size={12} /> Enviada
+                        </a>
+                      ) : (
+                        <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1">
+                          <Clock size={12} /> Pendente
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-xl">
+                      <span className="text-slate-500">Vídeo (seletiva)</span>
+                      <span className={`font-bold flex items-center gap-1 ${
+                        viewingReg.video_status === 'approved' ? 'text-emerald-600 dark:text-emerald-400' :
+                        viewingReg.video_status === 'rejected' ? 'text-rose-600 dark:text-rose-400' :
+                        'text-amber-600 dark:text-amber-400'
+                      }`}>
+                        {viewingReg.video_status === 'approved' ? <><CheckCircle2 size={12} /> Aprovado</> :
+                         viewingReg.video_status === 'rejected' ? <><X size={12} /> Reprovado</> :
+                         viewingReg.video_status === 'submitted' ? <><Clock size={12} /> Em análise</> :
+                         <><Clock size={12} /> {viewingReg.video_status ?? 'Pendente'}</>}
+                      </span>
+                    </div>
+                    {viewingReg.video_feedback && (
+                      <div className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Feedback do vídeo</p>
+                        <p className="text-[11px] text-slate-700 dark:text-slate-300">{viewingReg.video_feedback}</p>
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                {/* Pagamento */}
+                <section>
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><DollarSign size={12} /> Pagamento</h3>
+                  <dl className="grid grid-cols-2 gap-3 text-[12px]">
+                    <DetailItem label="Status" value={viewingReg.status_pagamento} />
+                    <DetailItem label="Método" value={viewingReg.payment_method ?? viewingReg.metodo_pagamento} />
+                    <DetailItem label="ID Asaas" value={viewingReg.payment_id} mono />
+                    <DetailItem label="Status da inscrição" value={viewingReg.status} />
+                  </dl>
+                </section>
+
+                {/* Tempos */}
+                <section>
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><Calendar size={12} /> Tempos</h3>
+                  <dl className="grid grid-cols-2 gap-3 text-[12px]">
+                    <DetailItem
+                      label="Criada em"
+                      value={viewingReg.created_at ? new Date(viewingReg.created_at).toLocaleString('pt-BR') : null}
+                    />
+                    <DetailItem
+                      label="Pagamento aprovado"
+                      value={viewingReg.paid_at ? new Date(viewingReg.paid_at).toLocaleString('pt-BR') : null}
+                    />
+                  </dl>
+                </section>
+              </div>
+
+              {/* Footer com ações rápidas */}
+              <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-white/10 px-6 py-4 flex justify-end gap-2">
+                {(viewingReg.status_pagamento === 'CONFIRMADO' || viewingReg.status_pagamento === 'APROVADO') && (
+                  <button
+                    onClick={() => { handleOpenRefund(viewingReg); setViewingReg(null); }}
+                    className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 rounded-xl transition-all flex items-center gap-2"
+                  >
+                    <Undo2 size={12} /> Reembolsar
+                  </button>
+                )}
+                <button
+                  onClick={() => setViewingReg(null)}
+                  className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-xl transition-all"
+                >
+                  Fechar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+/** Helper de item de detalhe (label + valor). Esconde quando valor é vazio
+ *  pra modal não exibir "—" pra campos que o inscrito não preencheu. */
+const DetailItem: React.FC<{ label: string; value?: string | null; mono?: boolean }> = ({ label, value, mono }) => {
+  if (!value) return null;
+  return (
+    <div>
+      <dt className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{label}</dt>
+      <dd className={`text-slate-900 dark:text-white break-all ${mono ? 'font-mono text-[11px]' : 'font-bold'}`}>{value}</dd>
     </div>
   );
 };
