@@ -74,11 +74,7 @@ const Registrations = () => {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Default do dropdown: 'Todos os eventos' (não filtra). Razão: produtor
-    // com inscrição num evento que não está no dropdown (RLS, team, demo etc)
-    // tinha tela /registrations zerada enquanto /seletiva-video mostrava a
-    // inscrição (bug em prod 2026-05-18, Hemer/Usualdance). 'ALL' garante que
-    // toda inscrição visível ao usuário aparece, e ele filtra se quiser.
+    // Default do dropdown: primeiro evento (ordenado por created_at desc).
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -89,10 +85,7 @@ const Registrations = () => {
         .order('created_at', { ascending: false });
       if (data && data.length > 0) {
         setAllEvents(data);
-        setSelectedEventId(prev => prev ?? 'ALL');
-      } else {
-        // Sem eventos próprios mas pode ter inscrições visíveis via RLS
-        setSelectedEventId('ALL');
+        setSelectedEventId(prev => prev ?? data[0].id);
       }
     })();
   }, []);
@@ -107,15 +100,16 @@ const Registrations = () => {
       // Profiles NÃO podem ser embed porque registrations.user_id referencia
       // auth.users(id), não profiles(id) — Postgrest não infere a FK e o query
       // inteiro retorna 0 rows (bug em prod 2026-05-18). Fetch separado abaixo.
+      // Sem embed events(...) — o embed quebrava a query inteira (Postgrest
+      // retornava 0 rows) quando a RLS de events não permitia ler o evento
+      // pai. Bug em prod 2026-05-18: /seletiva-video mostrava a inscrição
+      // mas /registrations zerava. Fetch separado abaixo pega o flag de
+      // video_selection_enabled do evento ativo (1 query por mount).
       let regsQuery = supabase
         .from('registrations')
-        .select('*, events(video_selection_enabled, name)')
+        .select('*')
         .order('created_at', { ascending: false });
-      // 'ALL' = produtor escolheu ver inscrições de todos os eventos
-      // (escape hatch pra quando o filtro padrão por evento esconde algo).
-      if (selectedEventId && selectedEventId !== 'ALL') {
-        regsQuery = regsQuery.eq('event_id', selectedEventId);
-      }
+      if (selectedEventId) regsQuery = regsQuery.eq('event_id', selectedEventId);
 
       const { fetchActiveEventConfig } = await import('../services/supabase');
       const [
@@ -138,9 +132,24 @@ const Registrations = () => {
           .in('id', userIds);
         profilesById = Object.fromEntries((profs || []).map(p => [p.id, p]));
       }
+
+      // Fetch separado do evento ativo (só pra o modal saber se mostra a
+      // seção de vídeo). Não pode ser embed na query principal porque
+      // travava a query inteira em prod (ver bug 2026-05-18).
+      let activeEvent: { video_selection_enabled?: boolean; name?: string } | null = null;
+      if (selectedEventId) {
+        const { data: ev } = await supabase
+          .from('events')
+          .select('video_selection_enabled, name')
+          .eq('id', selectedEventId)
+          .maybeSingle();
+        activeEvent = ev;
+      }
+
       const enriched = (data || []).map(r => ({
         ...r,
         profiles: r.user_id ? profilesById[r.user_id] ?? null : null,
+        events: activeEvent,
       }));
       setRegistrations(enriched);
       setFilteredRegistrations(enriched);
@@ -344,10 +353,9 @@ const Registrations = () => {
                 onChange={e => setSelectedEventId(e.target.value)}
                 className="w-full sm:w-auto appearance-none pl-4 pr-9 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 transition-all cursor-pointer truncate dark:[color-scheme:dark]"
               >
-                <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Todos os eventos</option>
                 {allEvents.map(ev => (
                   <option key={ev.id} value={ev.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
-                    {ev.edition_year ? `${ev.edition_year} — ` : ''}{ev.name}{(ev as any).is_demo ? ' (demo)' : ''}
+                    {ev.edition_year ? `${ev.edition_year} — ` : ''}{ev.name}
                   </option>
                 ))}
               </select>
@@ -455,14 +463,6 @@ const Registrations = () => {
                       <p className="text-[9px] text-[#ff0068] font-bold uppercase tracking-widest">{reg.tipo_apresentacao}</p>
                       {/* Mostra estúdio + categoria em mobile (colunas escondidas em <md/<lg) */}
                       <p className="text-[10px] text-slate-500 mt-1 md:hidden">{reg.estudio}{reg.categoria ? ` · ${reg.categoria}` : ''}</p>
-                      {/* Badge do evento — só aparece quando o produtor escolheu
-                          "Todos os eventos" no dropdown. Mostra a qual evento a
-                          inscrição pertence, evitando ambiguidade. */}
-                      {selectedEventId === 'ALL' && reg.events?.name && (
-                        <p className="text-[9px] text-slate-400 mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 uppercase tracking-widest font-bold">
-                          {reg.events.name}
-                        </p>
-                      )}
                     </td>
                     <td className="px-4 sm:px-8 py-6 text-xs font-bold text-slate-600 dark:text-slate-300 hidden md:table-cell">{reg.estudio}</td>
                     <td className="px-4 sm:px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden lg:table-cell">{reg.categoria}</td>
