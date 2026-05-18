@@ -88,7 +88,7 @@ const VideoSelection: React.FC = () => {
       const [{ data: regs, error }, { data: evt }] = await Promise.all([
         supabase
           .from('registrations')
-          .select('id, nome_coreografia, estudio, categoria, formato_participacao, video_url, video_status, video_feedback, video_submitted_at, video_fee_status, profiles(full_name)')
+          .select('id, event_id, nome_coreografia, estudio, categoria, formato_participacao, video_url, video_status, video_feedback, video_submitted_at, video_fee_status, profiles(full_name)')
           .order('video_submitted_at', { ascending: false, nullsFirst: false }),
         supabase
           .from('configuracoes')
@@ -98,7 +98,25 @@ const VideoSelection: React.FC = () => {
       ]);
 
       if (error) throw error;
-      setRegistrations((regs || []).map((r: any) => ({
+
+      // Filtra inscrições pra mostrar só as de eventos com seletiva habilitada.
+      // Antes, a página listava TODAS as inscrições do produtor, incluindo as
+      // de eventos sem seletiva — produtor via inscrição "aguardando" em
+      // evento que nem tinha a feature (bug 2026-05-18, Hemer/Usualdance).
+      // Fetch separado (não embed) pra evitar Postgrest retornar 0 quando a
+      // RLS de events bloqueia alguma row.
+      const eventIds = [...new Set((regs || []).map((r: any) => r.event_id).filter(Boolean))];
+      let seletivaEventIds = new Set<string>();
+      if (eventIds.length > 0) {
+        const { data: evs } = await supabase
+          .from('events')
+          .select('id, video_selection_enabled')
+          .in('id', eventIds);
+        seletivaEventIds = new Set((evs || []).filter(e => e.video_selection_enabled === true).map(e => e.id));
+      }
+      const onlySeletiva = (regs || []).filter((r: any) => seletivaEventIds.has(r.event_id));
+
+      setRegistrations(onlySeletiva.map((r: any) => ({
         ...r,
         video_status: r.video_status ?? 'pending',
       })));

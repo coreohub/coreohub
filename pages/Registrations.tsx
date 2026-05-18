@@ -4,7 +4,7 @@ import {
   Trash2, AlertTriangle, X, DollarSign,
   ShieldAlert, CheckCircle2, Clock, Users, Info, ChevronDown,
   Undo2, Loader2, Eye, Music2, Video, Calendar, User, Instagram,
-  TrendingUp,
+  TrendingUp, ExternalLink,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -905,6 +905,19 @@ const Registrations = () => {
 
               {/* Footer com ações rápidas */}
               <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-white/10 px-6 py-4 flex justify-end gap-2">
+                {/* Deep link Asaas — abre a fatura pública (mesma URL que o
+                    pagador vê). Aceita payment_id com ou sem prefixo 'pay_'. */}
+                {viewingReg.payment_id && (
+                  <a
+                    href={`https://www.asaas.com/i/${String(viewingReg.payment_id).replace(/^pay_/, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-xl transition-all flex items-center gap-2"
+                    title="Abrir fatura no Asaas (nova aba)"
+                  >
+                    <ExternalLink size={12} /> Abrir no Asaas
+                  </a>
+                )}
                 {(viewingReg.status_pagamento === 'CONFIRMADO' || viewingReg.status_pagamento === 'APROVADO') && (
                   <button
                     onClick={() => { handleOpenRefund(viewingReg); setViewingReg(null); }}
