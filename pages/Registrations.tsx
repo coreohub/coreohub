@@ -99,12 +99,14 @@ const Registrations = () => {
     try {
       // Schema real usa created_at (não criado_em). order com coluna inexistente
       // fazia o select falhar silently — explicação do "0 inscrições" no demo.
-      // Pull events.video_selection_enabled e profiles do inscrito pra o modal
-      // de detalhes mostrar seção "Vídeo (seletiva)" somente quando o evento
-      // tem seletiva habilitada + dados de identificação do inscrito.
+      // Pull events.video_selection_enabled pra o modal de detalhes mostrar a
+      // seção "Vídeo (seletiva)" só quando o evento tem a feature habilitada.
+      // Profiles NÃO podem ser embed porque registrations.user_id referencia
+      // auth.users(id), não profiles(id) — Postgrest não infere a FK e o query
+      // inteiro retorna 0 rows (bug em prod 2026-05-18). Fetch separado abaixo.
       let regsQuery = supabase
         .from('registrations')
-        .select('*, events(video_selection_enabled, name), profiles!registrations_user_id_fkey(full_name, email, whatsapp)')
+        .select('*, events(video_selection_enabled, name)')
         .order('created_at', { ascending: false });
       if (selectedEventId) regsQuery = regsQuery.eq('event_id', selectedEventId);
 
@@ -117,8 +119,24 @@ const Registrations = () => {
         fetchActiveEventConfig('tolerancia,age_reference,age_reference_date,data_evento'),
       ]);
       if (error) throw error;
-      setRegistrations(data || []);
-      setFilteredRegistrations(data || []);
+
+      // Hidrata profiles em batch (1 query extra). Vazio se nenhuma inscrição
+      // tem user_id (fluxo antigo guest). Map por id pra lookup O(1) no merge.
+      const userIds = [...new Set((data || []).map(r => r.user_id).filter(Boolean))];
+      let profilesById: Record<string, any> = {};
+      if (userIds.length > 0) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('id, full_name, email, whatsapp')
+          .in('id', userIds);
+        profilesById = Object.fromEntries((profs || []).map(p => [p.id, p]));
+      }
+      const enriched = (data || []).map(r => ({
+        ...r,
+        profiles: r.user_id ? profilesById[r.user_id] ?? null : null,
+      }));
+      setRegistrations(enriched);
+      setFilteredRegistrations(enriched);
 
       if (cfg?.tolerancia) setToleranceRule(cfg.tolerancia);
       if (cfg?.age_reference) setAgeRefMode(cfg.age_reference as 'EVENT_DAY' | 'YEAR_END' | 'FIXED_DATE');
