@@ -747,12 +747,23 @@ const InscricaoWizard: React.FC = () => {
       // (?utm_source=instagram&utm_campaign=2026). Fase 4 — Atribuição de vendas.
       const utms = (await import('../services/utmTracking')).getUtmsForRegistration();
 
+      // Snapshot dos dados de contato do inscrito direto na registration.
+      // Imutável após o insert — protege produtor caso o inscrito delete a
+      // conta um dia (LGPD). Padrão de fatura/recibo de e-commerce.
+      const [{ data: { user: authUser } }, { data: profileSnap }] = await Promise.all([
+        supabase.auth.getUser(),
+        supabase.from('profiles').select('full_name, whatsapp').eq('id', userId!).maybeSingle(),
+      ]);
+
       // 2) Cria registration. Status AGUARDANDO_PAGAMENTO — Checkout completa.
       const { data: reg, error: regErr } = await supabase
         .from('registrations')
         .insert({
           event_id:             event.id,
           user_id:              userId,
+          inscrito_nome:        profileSnap?.full_name ?? null,
+          inscrito_email:       authUser?.email ?? null,
+          inscrito_whatsapp:    profileSnap?.whatsapp ?? null,
           ...(utms ?? {}),
           nome_coreografia:     data.nome_coreografia.trim(),
           estilo_danca:         data.estilo_danca || null,

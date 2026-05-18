@@ -966,19 +966,26 @@ const Registrations = () => {
 
               <div className="p-6 space-y-6">
                 {/* Inscrito — quem fez a inscrição (dono da conta).
-                    Padrão dashboard moderno (Stripe Dashboard, Linear): identidade
-                    primeiro, depois detalhes do "objeto" (coreografia). */}
-                {viewingReg.profiles && (
-                  <section>
-                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><User size={12} /> Inscrito</h3>
-                    <dl className="grid grid-cols-2 gap-3 text-[12px]">
-                      <DetailItem label="Nome" value={viewingReg.profiles.full_name} />
-                      <DetailItem label="E-mail" value={viewingReg.profiles.email} />
-                      <DetailItem label="WhatsApp" value={viewingReg.profiles.whatsapp} />
-                      <DetailItem label="Estúdio / Escola" value={viewingReg.estudio} />
-                    </dl>
-                  </section>
-                )}
+                    Fallback: usa snapshot inscrito_* da registration quando o
+                    profile não pôde ser lido (RLS bloqueando ou conta deletada).
+                    Garante que produtor sempre vê os dados de contato. */}
+                {(() => {
+                  const nome     = viewingReg.profiles?.full_name ?? viewingReg.inscrito_nome;
+                  const email    = viewingReg.profiles?.email     ?? viewingReg.inscrito_email;
+                  const whatsapp = viewingReg.profiles?.whatsapp  ?? viewingReg.inscrito_whatsapp;
+                  if (!nome && !email && !whatsapp && !viewingReg.estudio) return null;
+                  return (
+                    <section>
+                      <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><User size={12} /> Inscrito</h3>
+                      <dl className="grid grid-cols-2 gap-3 text-[12px]">
+                        <DetailItem label="Nome" value={nome} />
+                        <DetailItem label="E-mail" value={email} />
+                        <DetailItem label="WhatsApp" value={whatsapp} />
+                        <DetailItem label="Estúdio / Escola" value={viewingReg.estudio} />
+                      </dl>
+                    </section>
+                  );
+                })()}
 
                 {/* Coreografia */}
                 <section>
