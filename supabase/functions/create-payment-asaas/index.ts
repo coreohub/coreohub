@@ -237,6 +237,11 @@ Deno.serve(async (req) => {
             fixedValue: producerAmount,
           },
         ],
+        // Desativa notificações automáticas do Asaas (email/SMS pro inscrito).
+        // CoreoHub envia email transacional próprio via Resend — Asaas seria
+        // redundante e cobra R$ 0,99/transação como "Taxa de Mensageria".
+        // Array vazio = nenhum tipo de notificação ativo.
+        notifications: [],
       }),
     })
 

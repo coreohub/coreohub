@@ -401,6 +401,10 @@ Deno.serve(async (req) => {
             fixedValue: producerTotal,
           },
         ],
+        // Desativa notificações automáticas do Asaas (CoreoHub usa Resend pro
+        // 'audience_ticket_confirmed'). Sem isso, Asaas cobra Taxa de
+        // Mensageria R$ 0,99/transação redundantemente.
+        notifications: [],
       }),
     })
 
