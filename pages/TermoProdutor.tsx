@@ -8,7 +8,10 @@ import AsaasBadge from '../components/AsaasBadge';
 // re-aceitar antes da próxima ação que dependa de aceite (ex: criar evento novo,
 // receber pagamento). Aceites antigos ficam registrados no banco mas marcados
 // como "versão anterior".
-export const TERMO_PRODUTOR_VERSION = '1.0';
+// 1.0 → 1.1 (2026-05-18): adiciona cláusula 5 sobre taxas bancárias do
+// parceiro financeiro Asaas (taxa de criação de conta R$ 12,90 e demais
+// taxas do Asaas). Cláusulas 5-10 da versão 1.0 foram renumeradas pra 6-11.
+export const TERMO_PRODUTOR_VERSION = '1.1';
 
 const TermoProdutor: React.FC = () => {
   const navigate = useNavigate();
@@ -158,9 +161,33 @@ const TermoProdutor: React.FC = () => {
             </p>
           </section>
 
+          <section>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">5. Taxas bancárias do parceiro financeiro Asaas</h2>
+            <p className="mb-2">
+              5.1. Para o processamento de pagamentos, será aberta conta digital exclusiva em nome do Produtor no <strong>ASAAS GESTÃO FINANCEIRA S.A.</strong> (CNPJ 19.540.550/0001-21), instituição financeira autorizada pelo Banco Central, parceira financeira da CoreoHub, mediante completude do procedimento de identificação (KYC).
+            </p>
+            <p className="mb-2">
+              5.2. O Produtor declara estar ciente e de acordo que, sobre a abertura e utilização de sua conta digital, incidirão taxas <strong>cobradas exclusivamente pelo Asaas</strong> e <strong>não pela CoreoHub</strong>, conforme abaixo:
+            </p>
+            <ul className="list-disc list-inside space-y-1.5 ml-2 mb-2">
+              <li>
+                <strong>Taxa de criação de conta bancária: R$ 12,90 (única).</strong> Cobrada uma única vez pelo Asaas no momento da criação da conta digital. Será descontada automaticamente do primeiro recebimento aprovado do Produtor.
+              </li>
+              <li>
+                <strong>Demais taxas eventualmente aplicáveis</strong> (saque para conta bancária externa, estorno, chargeback, MED, e outros serviços) seguem o regulamento oficial do Asaas vigente, disponível em <a href="https://www.asaas.com/precos-e-taxas" target="_blank" rel="noopener noreferrer" className="text-[#ff0068] underline">asaas.com/precos-e-taxas</a>.
+              </li>
+            </ul>
+            <p className="mb-2">
+              5.3. A CoreoHub <strong>não cobra</strong> do Produtor taxas adicionais de processamento de pagamento (PIX, boleto, cartão) — tais custos são absorvidos pela CoreoHub como parte do serviço da Plataforma. A comissão devida à CoreoHub, regida pela cláusula 4, é cobrada exclusivamente como serviço da Plataforma e independe das taxas bancárias do Asaas.
+            </p>
+            <p>
+              5.4. As taxas do Asaas podem ser reajustadas pela instituição financeira mediante prévio aviso aos seus correntistas. A CoreoHub se compromete a comunicar reajustes assim que tomar ciência, mas não tem ingerência sobre tais valores nem responsabilidade por seu reajuste.
+            </p>
+          </section>
+
           <section className="border-l-4 border-amber-500 pl-4 bg-amber-50/50 dark:bg-amber-500/5 py-3 rounded-r-xl">
             <h2 className="text-sm font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-2">
-              <AlertTriangle size={14} /> 5. Chargebacks, estornos e reembolsos
+              <AlertTriangle size={14} /> 6. Chargebacks, estornos e reembolsos
             </h2>
             <p className="mb-2">
               <strong>O Produtor é integralmente responsável</strong> pelos valores devidos em razão de chargebacks (contestação
@@ -169,7 +196,7 @@ const TermoProdutor: React.FC = () => {
             </p>
             <p className="mb-2">
               Caso o saldo da subconta do Produtor seja insuficiente para cobrir tais valores no momento da contestação, o Asaas
-              aplicará débito automático nos próximos créditos do Produtor, conforme cláusula 12.3 do contrato BaaS Asaas. Se o
+              aplicará débito automático nos próximos créditos do Produtor, conforme contrato BaaS Asaas. Se o
               saldo permanecer negativo, o Produtor obriga-se a regularizar a pendência via PIX <strong>em até 7 (sete) dias corridos</strong>,
               contados da notificação enviada pela CoreoHub.
             </p>
@@ -186,7 +213,7 @@ const TermoProdutor: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">6. Política de reembolso ao comprador</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">7. Política de reembolso ao comprador</h2>
             <p>
               Em conformidade com o art. 49 do Código de Defesa do Consumidor (Lei 8.078/90), o comprador (inscrito ou
               espectador) tem direito a reembolso integral em até <strong>7 (sete) dias corridos</strong> contados da data da compra,
@@ -200,7 +227,7 @@ const TermoProdutor: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">7. Obrigações do Produtor</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">8. Obrigações do Produtor</h2>
             <ul className="list-disc list-inside space-y-1.5">
               <li>Fornecer informações verdadeiras, completas e atualizadas sobre si e sobre seus eventos.</li>
               <li>Cumprir as exigências de KYC (Know Your Customer) do Asaas, fornecendo documentação solicitada.</li>
@@ -212,7 +239,7 @@ const TermoProdutor: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">8. Dados pessoais (LGPD)</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">9. Dados pessoais (LGPD)</h2>
             <p>
               O tratamento de dados pessoais coletados pela Plataforma observa a Lei Geral de Proteção de Dados
               (Lei 13.709/2018). O Produtor atua como controlador dos dados de seus inscritos, espectadores e bailarinos,
@@ -222,7 +249,7 @@ const TermoProdutor: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">9. Suspensão e encerramento</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">10. Suspensão e encerramento</h2>
             <p>
               A CoreoHub poderá suspender ou encerrar o acesso do Produtor a qualquer tempo, sem aviso prévio, em caso de
               descumprimento deste Termo, inadimplência, suspeita de fraude, determinação de autoridade competente ou
@@ -231,7 +258,7 @@ const TermoProdutor: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">10. Foro</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">11. Foro</h2>
             <p>
               Fica eleito o foro da comarca de <strong>Votuporanga / SP</strong> para dirimir quaisquer controvérsias decorrentes
               deste Termo, com renúncia expressa a qualquer outro, por mais privilegiado que seja.
@@ -272,7 +299,8 @@ const TermoProdutor: React.FC = () => {
               />
               <span className="text-[12px] text-slate-700 dark:text-slate-300 leading-relaxed">
                 Li e aceito integralmente o Termo de Adesão do Produtor versão <strong>{TERMO_PRODUTOR_VERSION}</strong>,
-                incluindo a cláusula 5 sobre ressarcimento de chargebacks/estornos e autorização de débito automático
+                incluindo a cláusula 5 sobre taxas bancárias do Asaas (taxa única de criação de conta R$ 12,90) e
+                a cláusula 6 sobre ressarcimento de chargebacks/estornos e autorização de débito automático
                 no Asaas.
               </span>
             </label>

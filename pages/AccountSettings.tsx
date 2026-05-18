@@ -15,7 +15,7 @@ import { humanizeSupabaseError } from '../utils/supabaseErrors';
 import AsaasBadge from '../components/AsaasBadge';
 import DemoSettingsTab from '../components/DemoSettingsTab';
 import {
-  Settings, Clock, Save, Plus, Pencil, Trash2, Check,
+  Settings, Clock, Save, Plus, Pencil, Trash2, Check, Info,
   Music2, DollarSign, Users, AlertTriangle,
   Clapperboard, Link2, CheckSquare, Square, X,
   ChevronDown, ChevronRight, ToggleLeft, ToggleRight, Loader2, Sparkles,
@@ -4269,6 +4269,40 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               <div className="p-6">
                 {asaasProfile?.asaas_subconta_id ? (
                   <div className="space-y-4">
+                    {/* Histórico de taxas — referência transparente (cláusula 5
+                        do Termo de Adesão). Mostra a taxa única que o produtor
+                        já aceitou + link pro regulamento Asaas atualizado. */}
+                    <details className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl">
+                      <summary className="cursor-pointer p-4 text-[11px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-300 hover:text-[#ff0068] transition-colors flex items-center gap-2">
+                        <Info size={12} /> Taxas da sua conta no Asaas
+                      </summary>
+                      <div className="px-4 pb-4 space-y-2 text-[11px] text-slate-600 dark:text-slate-400">
+                        <p className="text-slate-500 dark:text-slate-500 leading-relaxed">
+                          Conforme cláusula 5 do Termo de Adesão aceito, sua conta digital
+                          está no <strong>Asaas Gestão Financeira S.A.</strong> (CNPJ 19.540.550/0001-21).
+                        </p>
+                        <div className="flex justify-between items-start gap-3 py-2 border-t border-slate-200 dark:border-white/10">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-slate-900 dark:text-white">Taxa de criação de conta bancária</p>
+                            <p className="text-[10px] text-slate-500 italic">Cobrada pelo Asaas — descontada do 1º recebimento</p>
+                          </div>
+                          <span className="font-black text-slate-700 dark:text-slate-300 shrink-0">R$ 12,90</span>
+                        </div>
+                        <div className="flex justify-between items-start gap-3 py-2 border-t border-slate-200 dark:border-white/10">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-slate-900 dark:text-white">Demais taxas Asaas</p>
+                            <p className="text-[10px] text-slate-500 italic">Saque externo, estorno, chargeback, MED — conforme regulamento</p>
+                          </div>
+                          <a href="https://www.asaas.com/precos-e-taxas" target="_blank" rel="noopener noreferrer" className="text-[#ff0068] font-bold underline shrink-0 text-[10px]">
+                            ver tabela →
+                          </a>
+                        </div>
+                        <div className="pt-2 border-t border-slate-200 dark:border-white/10 text-[10px] text-emerald-700 dark:text-emerald-400 font-bold">
+                          ✓ Sem mensalidade, anuidade ou taxa de manutenção. CoreoHub não cobra taxas de processamento de pagamento.
+                        </div>
+                      </div>
+                    </details>
+
                     <div className="flex items-center gap-4 p-4 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-2xl">
                       <CheckCircle size={22} className="text-emerald-500 shrink-0" />
                       <div className="flex-1 min-w-0">
@@ -4344,8 +4378,84 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   <div className="space-y-4">
                     <AsaasBadge variant="card" />
 
+                    {/* Aviso de taxas bancárias do Asaas (2026-05-18).
+                        Pattern de mercado (Stripe Connect, Sympla): disclosure
+                        UPFRONT da taxa de criação de conta antes do produtor
+                        aceitar o termo. Tom formal, separação clara entre
+                        taxas do Asaas vs comissão CoreoHub, exemplo numérico
+                        concreto. Aceite vai no Termo (cláusula 5). */}
+                    <div className="p-5 bg-blue-50/50 dark:bg-blue-500/5 border border-blue-200 dark:border-blue-500/20 rounded-2xl space-y-3">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-blue-100 dark:bg-blue-500/10 rounded-xl text-blue-600 dark:text-blue-400 shrink-0">
+                          <Info size={16} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight">
+                            Conta de recebimento bancária
+                          </p>
+                          <p className="text-[12px] text-slate-700 dark:text-slate-300 mt-2 leading-relaxed">
+                            Para processar pagamentos de inscrições, é necessária a abertura de
+                            uma conta digital exclusiva em seu nome no <strong>Asaas</strong> —
+                            instituição financeira autorizada pelo Banco Central (CNPJ
+                            19.540.550/0001-21), parceiro financeiro da CoreoHub.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="bg-white dark:bg-slate-900/40 rounded-xl p-4 space-y-2">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">
+                          Taxas bancárias aplicáveis à sua conta no Asaas
+                        </p>
+                        <div className="flex justify-between items-start gap-3 pb-2 border-b border-slate-100 dark:border-white/5">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[12px] font-bold text-slate-900 dark:text-white">
+                              Taxa de criação de conta bancária
+                            </p>
+                            <p className="text-[10px] text-slate-500 mt-0.5">
+                              Cobrada uma única vez pelo Asaas. Descontada automaticamente
+                              do seu primeiro recebimento aprovado.
+                            </p>
+                          </div>
+                          <span className="text-[#ff0068] font-black text-sm shrink-0">R$ 12,90</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 italic">
+                          Não há mensalidade, anuidade ou taxa de manutenção. Demais taxas
+                          do Asaas (saque externo, estorno, chargeback) seguem o regulamento
+                          oficial: <a href="https://www.asaas.com/precos-e-taxas" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 underline">asaas.com/precos-e-taxas</a>.
+                        </p>
+                      </div>
+
+                      <div className="bg-amber-50 dark:bg-amber-500/5 border-l-4 border-amber-400 p-3 rounded-r-lg">
+                        <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
+                          <strong>Importante:</strong> estas taxas são cobradas pela instituição
+                          financeira Asaas, <strong>não pela CoreoHub</strong>. A comissão da CoreoHub
+                          é cobrada separadamente como serviço da Plataforma —
+                          <strong> sem taxas adicionais de processamento de pagamento</strong> (PIX, boleto, cartão).
+                        </p>
+                      </div>
+
+                      <details className="text-[11px]">
+                        <summary className="cursor-pointer font-bold text-slate-700 dark:text-slate-300 hover:text-[#ff0068] transition-colors">
+                          Ver exemplo de cálculo na primeira venda
+                        </summary>
+                        <div className="mt-2 p-3 bg-slate-50 dark:bg-white/5 rounded-lg font-mono text-[11px] leading-relaxed text-slate-700 dark:text-slate-300">
+                          <p>Inscrição aprovada via PIX:                <strong>R$ 100,00</strong></p>
+                          <p>− Comissão CoreoHub (10%, exemplo):        R$  10,00 <span className="text-slate-400">(plataforma)</span></p>
+                          <p>− Taxa de criação (Asaas, única):           R$  12,90 <span className="text-slate-400">(banco)</span></p>
+                          <p className="border-t border-slate-300 dark:border-white/10 mt-1 pt-1 font-bold text-emerald-600 dark:text-emerald-400">
+                            = Valor depositado na sua conta:           R$  77,10
+                          </p>
+                          <p className="mt-2 text-slate-500 italic">
+                            Da segunda venda em diante, sem desconto da taxa de criação:
+                            R$ 100 − R$ 10 = <strong className="text-emerald-600 dark:text-emerald-400">R$ 90,00</strong> depositados.
+                          </p>
+                        </div>
+                      </details>
+                    </div>
+
                     {/* Gate: Termo de Adesão precisa ser aceito antes de abrir a subconta.
-                        Quando não aceito, mostra CTA pro termo e BLOQUEIA o form de conexão. */}
+                        Quando não aceito, mostra CTA pro termo e BLOQUEIA o form de conexão.
+                        O termo (versão 1.1+) cobre a taxa do Asaas na cláusula 5. */}
                     {!termsAccepted && (
                       <div className="p-5 bg-[#ff0068]/5 border-2 border-[#ff0068]/30 rounded-2xl space-y-3">
                         <div className="flex items-start gap-3">
@@ -4356,8 +4466,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                             </p>
                             <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
                               Antes de conectar sua conta de recebimento, é necessário aceitar o
-                              <strong> Termo de Adesão do Produtor</strong>, que cobre responsabilidades
-                              sobre chargebacks, estornos e autorização de débitos.
+                              <strong> Termo de Adesão do Produtor</strong>, que cobre as taxas
+                              bancárias do Asaas (cláusula 5), responsabilidades sobre chargebacks
+                              e estornos (cláusula 6) e demais condições do serviço.
                             </p>
                           </div>
                         </div>
