@@ -72,6 +72,10 @@ const Registrations = () => {
   /* Edition selector */
   const [allEvents, setAllEvents] = useState<{ id: string; name: string; edition_year?: number }[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  /* Evento ativo (nome + slug) — usado no CTA do empty state pra compor o
+     link público do evento. Carregado junto do fetchData. */
+  const [activeEventInfo, setActiveEventInfo] = useState<{ name?: string; slug?: string } | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   useEffect(() => {
     // Default do dropdown: primeiro evento (ordenado por created_at desc).
@@ -133,17 +137,18 @@ const Registrations = () => {
         profilesById = Object.fromEntries((profs || []).map(p => [p.id, p]));
       }
 
-      // Fetch separado do evento ativo (só pra o modal saber se mostra a
-      // seção de vídeo). Não pode ser embed na query principal porque
-      // travava a query inteira em prod (ver bug 2026-05-18).
-      let activeEvent: { video_selection_enabled?: boolean; name?: string } | null = null;
+      // Fetch separado do evento ativo (modal + empty state precisam).
+      // Não pode ser embed na query principal porque travava o query
+      // inteiro em prod (ver bug 2026-05-18).
+      let activeEvent: { video_selection_enabled?: boolean; name?: string; slug?: string } | null = null;
       if (selectedEventId) {
         const { data: ev } = await supabase
           .from('events')
-          .select('video_selection_enabled, name')
+          .select('video_selection_enabled, name, slug')
           .eq('id', selectedEventId)
           .maybeSingle();
         activeEvent = ev;
+        setActiveEventInfo(ev);
       }
 
       const enriched = (data || []).map(r => ({
@@ -433,7 +438,131 @@ const Registrations = () => {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 rounded-[2.5rem] overflow-x-auto shadow-sm dark:shadow-2xl">
+          {/* Mobile: cards (md:hidden). Em desktop renderiza a table abaixo.
+              Padrão Sympla/Mercado Pago — em mobile cada inscrição vira card
+              tap-friendly, sem scroll horizontal. */}
+          <div className="md:hidden space-y-3">
+            {isLoading ? (
+              <div className="py-20 text-center bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 rounded-3xl">
+                <RefreshCw className="animate-spin mx-auto text-[#ff0068]" size={32} />
+              </div>
+            ) : filteredRegistrations.length === 0 ? (
+              <div className="py-16 px-4 text-center bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 rounded-3xl">
+                {registrations.length === 0 ? (
+                  <div className="max-w-md mx-auto space-y-5">
+                    <div className="w-16 h-16 mx-auto bg-[#ff0068]/10 rounded-3xl flex items-center justify-center">
+                      <Users size={28} className="text-[#ff0068]" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Nenhuma inscrição ainda</p>
+                      <p className="text-[11px] text-slate-500 mt-1 normal-case font-normal">Compartilhe o link do evento pros bailarinos se inscreverem.</p>
+                    </div>
+                    {activeEventInfo?.slug && (() => {
+                      const url = `${window.location.origin}/evento/${activeEventInfo.slug}`;
+                      return (
+                        <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-3 flex items-center gap-2 text-left">
+                          <code className="flex-1 text-[11px] text-slate-700 dark:text-slate-300 truncate font-mono">{url}</code>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(url).then(() => {
+                                setCopiedLink(true);
+                                setTimeout(() => setCopiedLink(false), 2000);
+                              });
+                            }}
+                            className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 shrink-0 ${copiedLink ? 'bg-emerald-500 text-white' : 'bg-[#ff0068] text-white hover:bg-[#e0005c]'}`}
+                          >
+                            {copiedLink ? <><CheckCircle2 size={12} /> Copiado</> : <><Eye size={12} /> Copiar</>}
+                          </button>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-slate-500 font-black uppercase text-xs">Nenhuma inscrição encontrada</p>
+                    <button
+                      onClick={() => {
+                        setSearchTerm('');
+                        setPaymentFilter('ALL');
+                        setModalidadeFilter('ALL');
+                        setCategoriaFilter('ALL');
+                        setEstiloFilter('ALL');
+                      }}
+                      className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-[#ff0068]/10 text-[#ff0068] border border-[#ff0068]/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0068] hover:text-white transition-all"
+                    >
+                      <X size={12} /> Limpar filtros
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : (
+              filteredRegistrations.map(reg => (
+                <div
+                  key={reg.id}
+                  onClick={() => setViewingReg(reg)}
+                  className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 rounded-3xl p-4 cursor-pointer hover:border-[#ff0068]/30 transition-all"
+                >
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-black text-slate-900 dark:text-white uppercase tracking-tight text-sm">{reg.nome_coreografia}</p>
+                      <p className="text-[9px] text-[#ff0068] font-bold uppercase tracking-widest mt-0.5">{reg.tipo_apresentacao}{reg.formato_participacao ? ` · ${reg.formato_participacao}` : ''}</p>
+                    </div>
+                    <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border whitespace-nowrap ${getStatusColor(reg.status_pagamento)}`}>{reg.status_pagamento}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[10px] mb-3">
+                    {reg.estudio && (
+                      <div className="min-w-0">
+                        <p className="text-slate-400 uppercase tracking-widest font-bold text-[9px]">Estúdio</p>
+                        <p className="text-slate-700 dark:text-slate-300 font-bold truncate">{reg.estudio}</p>
+                      </div>
+                    )}
+                    {reg.categoria && (
+                      <div className="min-w-0">
+                        <p className="text-slate-400 uppercase tracking-widest font-bold text-[9px]">Categoria</p>
+                        <p className="text-slate-700 dark:text-slate-300 font-bold truncate">{reg.categoria}</p>
+                      </div>
+                    )}
+                    {reg.created_at && (
+                      <div>
+                        <p className="text-slate-400 uppercase tracking-widest font-bold text-[9px]">Data</p>
+                        <p className="text-slate-700 dark:text-slate-300 font-bold">{new Date(reg.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: '2-digit' })}</p>
+                      </div>
+                    )}
+                    {reg.valor_total != null && Number(reg.valor_total) > 0 && (
+                      <div>
+                        <p className="text-slate-400 uppercase tracking-widest font-bold text-[9px]">Valor</p>
+                        <p className="text-slate-700 dark:text-slate-300 font-bold">R$ {Number(reg.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex justify-end gap-1 pt-3 border-t border-slate-100 dark:border-white/5">
+                    <button
+                      onClick={e => { e.stopPropagation(); setViewingReg(reg); }}
+                      className="p-2 text-slate-500 hover:text-[#ff0068] hover:bg-[#ff0068]/10 rounded-lg transition-all"
+                      title="Ver detalhes"
+                    ><Eye size={16} /></button>
+                    {reg.status_pagamento === 'PENDENTE' && (
+                      <button
+                        onClick={e => { e.stopPropagation(); setReviewingReg(reg); }}
+                        className="p-2 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all"
+                        title="Validar pagamento"
+                      ><DollarSign size={16} /></button>
+                    )}
+                    {(reg.status_pagamento === 'CONFIRMADO' || reg.status_pagamento === 'APROVADO') && (
+                      <button
+                        onClick={e => { e.stopPropagation(); handleOpenRefund(reg); }}
+                        className="p-2 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-lg hover:bg-amber-500 hover:text-white transition-all"
+                        title="Reembolsar"
+                      ><Undo2 size={16} /></button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Desktop: tabela tradicional (hidden md:block). */}
+          <div className="hidden md:block bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 rounded-[2.5rem] overflow-x-auto shadow-sm dark:shadow-2xl">
             <table className="w-full min-w-[640px] text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/5">
@@ -451,23 +580,62 @@ const Registrations = () => {
                   <tr><td colSpan={7} className="py-20 text-center"><RefreshCw className="animate-spin mx-auto text-[#ff0068]" size={32} /></td></tr>
                 ) : filteredRegistrations.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-20 text-center">
-                      <p className="text-slate-500 font-black uppercase text-xs">Nenhuma inscrição encontrada</p>
-                      {/* Diferencia 'sem inscrições no evento' de 'filtros estreitos demais'.
-                          Se há registrations mas filtered tá vazio, oferece reset rápido. */}
-                      {registrations.length > 0 && (
-                        <button
-                          onClick={() => {
-                            setSearchTerm('');
-                            setPaymentFilter('ALL');
-                            setModalidadeFilter('ALL');
-                            setCategoriaFilter('ALL');
-                            setEstiloFilter('ALL');
-                          }}
-                          className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-[#ff0068]/10 text-[#ff0068] border border-[#ff0068]/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0068] hover:text-white transition-all"
-                        >
-                          <X size={12} /> Limpar filtros
-                        </button>
+                    <td colSpan={7} className="py-16 text-center">
+                      {/* 2 estados de vazio diferentes:
+                          1) Sem inscrições nenhuma no evento → CTA pra compartilhar
+                             o link público (chama bailarinos pra se inscreverem).
+                          2) Tem inscrições mas filtros zeraram → reset dos filtros. */}
+                      {registrations.length === 0 ? (
+                        <div className="max-w-md mx-auto space-y-5 px-4">
+                          <div className="w-16 h-16 mx-auto bg-[#ff0068]/10 rounded-3xl flex items-center justify-center">
+                            <Users size={28} className="text-[#ff0068]" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Nenhuma inscrição ainda</p>
+                            <p className="text-[11px] text-slate-500 mt-1 normal-case font-normal">Compartilhe o link do evento pros bailarinos se inscreverem.</p>
+                          </div>
+                          {activeEventInfo?.slug ? (() => {
+                            const url = `${window.location.origin}/evento/${activeEventInfo.slug}`;
+                            return (
+                              <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-3 flex items-center gap-2 text-left">
+                                <code className="flex-1 text-[11px] text-slate-700 dark:text-slate-300 truncate font-mono">{url}</code>
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(url).then(() => {
+                                      setCopiedLink(true);
+                                      setTimeout(() => setCopiedLink(false), 2000);
+                                    });
+                                  }}
+                                  className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 shrink-0 ${
+                                    copiedLink
+                                      ? 'bg-emerald-500 text-white'
+                                      : 'bg-[#ff0068] text-white hover:bg-[#e0005c]'
+                                  }`}
+                                >
+                                  {copiedLink ? <><CheckCircle2 size={12} /> Copiado</> : <><Eye size={12} /> Copiar</>}
+                                </button>
+                              </div>
+                            );
+                          })() : (
+                            <p className="text-[10px] text-slate-400 normal-case">Configure um <em>slug</em> pro evento pra gerar o link de compartilhamento.</p>
+                          )}
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-slate-500 font-black uppercase text-xs">Nenhuma inscrição encontrada</p>
+                          <button
+                            onClick={() => {
+                              setSearchTerm('');
+                              setPaymentFilter('ALL');
+                              setModalidadeFilter('ALL');
+                              setCategoriaFilter('ALL');
+                              setEstiloFilter('ALL');
+                            }}
+                            className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-[#ff0068]/10 text-[#ff0068] border border-[#ff0068]/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0068] hover:text-white transition-all"
+                          >
+                            <X size={12} /> Limpar filtros
+                          </button>
+                        </>
                       )}
                     </td>
                   </tr>
