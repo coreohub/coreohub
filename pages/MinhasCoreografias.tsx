@@ -316,7 +316,7 @@ const MinhasCoreografias = () => {
     setProfileCpf(prof?.cpf_cnpj ?? null);
     if (!cpf) {
       setError('Pra pagar você precisa completar seu CPF no perfil.');
-      navigate('/meu-perfil');
+      navigate('/profile');
       return false;
     }
     return true;
@@ -354,7 +354,7 @@ const MinhasCoreografias = () => {
       const data = await resp.json();
       if (!resp.ok) {
         if (data?.error_code === 'CPF_REQUIRED') {
-          navigate('/meu-perfil');
+          navigate('/profile');
           throw new Error('CPF/CNPJ obrigatório. Complete seu perfil.');
         }
         throw new Error(data?.error ?? 'Erro ao gerar fatura.');
@@ -694,7 +694,7 @@ const MinhasCoreografias = () => {
               Pra gerar a fatura, complete seu CPF no perfil.
             </p>
             <button
-              onClick={() => navigate('/meu-perfil')}
+              onClick={() => navigate('/profile')}
               className="mt-2 px-3 py-1.5 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-xl font-black text-[9px] uppercase tracking-widest"
             >
               Completar perfil
