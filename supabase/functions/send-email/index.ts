@@ -878,26 +878,28 @@ interface VideoFeePaidUploadReadyPayload {
 }
 
 function buildVideoFeePaidUploadReady(p: VideoFeePaidUploadReadyPayload) {
-  const titulo = 'Taxa de seletiva paga — envie seu vídeo'
-  const intro  = `Olá ${escape(p.inscritoNome ?? 'bailarino(a)')}, recebemos o pagamento da taxa de seletiva da coreografia <strong>${escape(p.coreografia ?? '')}</strong>${p.eventoNome ? ` no <strong>${escape(p.eventoNome)}</strong>` : ''}. Agora envie o link do vídeo pra a comissão analisar.`
+  // Joinville-style: vídeo já foi enviado no wizard. Este email confirma
+  // pagamento da taxa A e avisa que a comissão vai analisar — sem CTA de ação.
+  const titulo = 'Taxa de seletiva paga — vídeo em análise'
+  const intro  = `Olá ${escape(p.inscritoNome ?? 'bailarino(a)')}, recebemos o pagamento da taxa de seletiva da coreografia <strong>${escape(p.coreografia ?? '')}</strong>${p.eventoNome ? ` no <strong>${escape(p.eventoNome)}</strong>` : ''}. O vídeo enviado na inscrição já está na fila da comissão pra análise.`
 
   const contentHtml = `
     <div style="margin-top:4px;padding:18px;border:2px solid #34d399;border-radius:14px;background:#ecfdf5;">
-      <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#059669;">✓ Pagamento confirmado</p>
+      <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#059669;">✓ Pagamento confirmado · Vídeo em análise</p>
       <p style="margin:8px 0 0;font-size:14px;color:#0b0b0f;font-weight:600;">${escape(p.coreografia ?? 'Coreografia')}</p>
     </div>
     <p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#475569;">
-      Acesse a página da seletiva e cole o link do vídeo (YouTube, Vimeo, Drive). O produtor analisa e te avisa quando aprovar pra você concluir a inscrição.
+      Sem ação necessária agora. A comissão vai avaliar o vídeo e você recebe outro email com o resultado. Se for aprovada, libera o pagamento da taxa de inscrição (cheia). Pode acompanhar o status na sua área de seletiva.
     </p>`
 
   return {
-    subject: `${p.eventoNome ? `[${p.eventoNome}] ` : ''}Envie seu vídeo da seletiva`,
+    subject: `${p.eventoNome ? `[${p.eventoNome}] ` : ''}Vídeo em análise pela comissão`,
     html: baseLayout({
-      preheader: 'Taxa paga. Agora envie o link do vídeo pra análise da comissão.',
+      preheader: 'Taxa de seletiva paga. Vídeo já está na fila — aguarde o resultado.',
       title: titulo,
       intro,
       contentHtml,
-      ctaLabel: 'Enviar vídeo',
+      ctaLabel: 'Acompanhar status',
       ctaUrl: p.ctaUrl,
     }),
   }

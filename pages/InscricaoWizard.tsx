@@ -22,7 +22,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import {
   ChevronLeft, ChevronRight, Loader2, Music2, User, Users, Upload,
-  AlertCircle, CheckCircle, Plus, Trash2, ArrowRight,
+  AlertCircle, CheckCircle, Plus, Trash2, ArrowRight, Video,
 } from 'lucide-react';
 import { maskTempo, parseTempoSegundos, formatTempo, maskedChange } from '../utils/masks';
 import { trackViewEvent } from '../services/producerAnalytics';
@@ -97,9 +97,12 @@ interface WizardData {
   /** Em GRUPO: @ do grupo ou coreógrafo, usado pra marcar nas divulgações.
    *  Solo/Duo/Trio usam o handle por bailarino acima. */
   instagram_principal?: string;
-  // Passo 3 — Trilha
+  // Passo 3 — Trilha (Modelo 1, sem seletiva) OU Vídeo (quando seletiva ativa)
   trilha_url: string;
   trilha_pendente: boolean;
+  // Link da seletiva quando event.video_selection_enabled. Joinville-style: vídeo
+  // é submetido NA inscrição (não em página separada). Trilha vai pra pós-aprovação.
+  video_url: string;
 }
 
 const STEPS = [
@@ -280,6 +283,7 @@ const InscricaoWizard: React.FC = () => {
     bailarinos: [{ nome: '', cpf: '', data_nascimento: '' }],
     trilha_url: '',
     trilha_pendente: false,
+    video_url: '',
   });
 
   // Tipos de apresentação habilitados no evento (default: ambos pra retrocompat).
@@ -532,6 +536,18 @@ const InscricaoWizard: React.FC = () => {
   const minMembers = Number(formacao?.min_members ?? 1);
   const maxMembers = Number(formacao?.max_members ?? 50);
 
+  // Modelo seletiva (Joinville-style): inscrito submete LINK do vídeo no wizard
+  // em vez da trilha sonora. Trilha vai pra pós-aprovação em /minhas-coreografias.
+  // - isSeletivaMode = true → Passo 3 vira "Vídeo da Seletiva"
+  // - videoLinkRequired = true → campo obrigatório (Modelo 2 + Modelo 3)
+  const isSeletivaMode      = Boolean((event as any)?.video_selection_enabled);
+  const videoLinkRequired   = isSeletivaMode && Boolean((event as any)?.video_selection_fee_required);
+
+  // Label dinâmico do passo 2 conforme modo (Trilha vs Vídeo).
+  const stepsForEvent = useMemo(() => STEPS.map((s, i) => (
+    i === 2 && isSeletivaMode ? { ...s, label: 'Vídeo' } : s
+  )), [isSeletivaMode]);
+
   const categorias: { name: string; min_age?: number; max_age?: number }[] = config?.categorias ?? [];
   // Estilos: prioriza event_styles (tabela nova, com sub_types). Fallback pra
   // configuracoes.estilos (legacy só com nomes) quando a nova tá vazia.
@@ -685,10 +701,18 @@ const InscricaoWizard: React.FC = () => {
       }
     }
     if (s === 2) {
-      // Trilha agora é upload direto pro bucket "trilhas".
-      // Validação: ou tem arquivo enviado (trilha_url = path interno),
-      // ou marcou "anexar depois" (trilha_pendente=true).
-      // Nada obrigatório aqui — o user pode pular se quiser anexar depois.
+      if (isSeletivaMode) {
+        // Modo seletiva: passo é "Vídeo da Seletiva" em vez de "Trilha".
+        // Trilha vai pra pós-aprovação.
+        if (videoLinkRequired && !data.video_url?.trim()) {
+          return 'Informe o link do vídeo da seletiva.';
+        }
+        if (data.video_url?.trim()) {
+          try { new URL(data.video_url.trim()); }
+          catch { return 'Link do vídeo inválido. Cole a URL completa (https://...).'; }
+        }
+      }
+      // Modo Trilha (não-seletiva): nada obrigatório — pode "anexar depois".
     }
     return null;
   };
@@ -773,8 +797,16 @@ const InscricaoWizard: React.FC = () => {
           tipo_apresentacao:    data.tipo_apresentacao,
           bailarinos_detalhes:  bailarinosDetalhes,
           instagram_principal:  data.instagram_principal?.trim() || null,
-          trilha_url:           data.trilha_pendente ? null : (data.trilha_url || null),
-          status_trilha:        data.trilha_pendente || !data.trilha_url ? 'PENDENTE' : 'ENVIADA',
+          // Modo seletiva: trilha sonora vai pra pós-aprovação em /minhas-coreografias.
+          // Modo normal: trilha submetida no wizard (legado).
+          trilha_url:           isSeletivaMode ? null : (data.trilha_pendente ? null : (data.trilha_url || null)),
+          status_trilha:        isSeletivaMode ? 'PENDENTE' : (data.trilha_pendente || !data.trilha_url ? 'PENDENTE' : 'ENVIADA'),
+          // Vídeo da seletiva (Joinville-style): submetido aqui, não em /seletiva.
+          // video_status='submitted' → cai direto na fila de análise do produtor
+          // após pagamento da taxa A (ou imediatamente se Modelo 2 grátis).
+          video_url:            isSeletivaMode && data.video_url?.trim() ? data.video_url.trim() : null,
+          video_status:         isSeletivaMode && data.video_url?.trim() ? 'submitted' : null,
+          video_submitted_at:   isSeletivaMode && data.video_url?.trim() ? new Date().toISOString() : null,
           // Duração do arquivo de áudio em si (extraída via HTML5 Audio API).
           // Distinto de event_data.duracao_segundos (duração da COREOGRAFIA).
           duracao_trilha_segundos: trilhaDurationSeconds ?? null,
@@ -1049,7 +1081,7 @@ const InscricaoWizard: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {STEPS.map((s, i) => (
+            {stepsForEvent.map((s, i) => (
               <div key={s.key} className="flex-1 flex items-center gap-2">
                 <div
                   className={`h-2 flex-1 rounded-full transition-colors ${
@@ -1060,7 +1092,7 @@ const InscricaoWizard: React.FC = () => {
             ))}
           </div>
           <div className="flex items-center justify-between mt-1.5">
-            {STEPS.map((s, i) => (
+            {stepsForEvent.map((s, i) => (
               <span
                 key={s.key}
                 className={`text-[9px] font-black uppercase tracking-widest ${
@@ -1484,8 +1516,51 @@ const InscricaoWizard: React.FC = () => {
           </div>
         )}
 
-        {/* ─── Passo 2: Trilha ──────────────────────────────────────────── */}
-        {step === 2 && (
+        {/* ─── Passo 2: Vídeo da Seletiva (modo seletiva) ou Trilha sonora ─── */}
+        {step === 2 && isSeletivaMode && (
+          <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-3xl p-6 space-y-5">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Video size={18} /></div>
+              <div>
+                <h2 className="font-black uppercase tracking-tight text-slate-900 dark:text-white">Vídeo da seletiva</h2>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  A comissão analisa o vídeo antes da inscrição ser confirmada. A trilha sonora será solicitada depois da aprovação.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                Link do vídeo {videoLinkRequired && <span className="text-rose-500">*</span>}
+              </label>
+              <input
+                type="url"
+                placeholder="https://youtube.com/watch?v=... ou https://drive.google.com/..."
+                value={data.video_url}
+                onChange={e => setData(d => ({ ...d, video_url: e.target.value }))}
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068] transition-all"
+              />
+              <p className="text-[10px] text-slate-400">
+                YouTube, Vimeo ou Google Drive (link compartilhável). Os bailarinos no vídeo devem ser os mesmos cadastrados no passo anterior — anti-fraude segue padrão dos festivais (Joinville, Catanduva).
+              </p>
+            </div>
+
+            {/* Aviso sobre taxa de seletiva (Modelo 3) */}
+            {videoLinkRequired && Number((event as any)?.video_selection_fee ?? 0) > 0 && (
+              <div className="flex items-start gap-3 p-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl">
+                <AlertCircle size={14} className="text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Taxa de seletiva</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    Você vai pagar a taxa de seletiva ao confirmar — esse valor cobre a análise técnica do vídeo pela comissão e <strong>não tem reembolso em caso de reprovação</strong> (padrão dos festivais brasileiros).
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {step === 2 && !isSeletivaMode && (
           <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-3xl p-6 space-y-5">
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Upload size={18} /></div>
@@ -1654,16 +1729,25 @@ const InscricaoWizard: React.FC = () => {
                   </div>
                 );
               })()}
-              <div className="flex justify-between gap-3">
-                <span className="text-slate-500 dark:text-slate-400">Trilha</span>
-                <span className="font-black text-slate-900 dark:text-white text-right">
-                  {data.trilha_pendente
-                    ? '⏳ Anexar depois'
-                    : data.trilha_url
-                      ? '✅ Enviada'
-                      : '⏳ Não enviada'}
-                </span>
-              </div>
+              {isSeletivaMode ? (
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500 dark:text-slate-400">Vídeo da seletiva</span>
+                  <span className="font-black text-slate-900 dark:text-white text-right break-all max-w-[60%]">
+                    {data.video_url?.trim() ? '✅ Link informado' : '⏳ Não informado'}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500 dark:text-slate-400">Trilha</span>
+                  <span className="font-black text-slate-900 dark:text-white text-right">
+                    {data.trilha_pendente
+                      ? '⏳ Anexar depois'
+                      : data.trilha_url
+                        ? '✅ Enviada'
+                        : '⏳ Não enviada'}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="border-t border-slate-200 dark:border-white/10 pt-4 mt-4">
@@ -1715,7 +1799,7 @@ const InscricaoWizard: React.FC = () => {
               onClick={advance}
               className="inline-flex items-center gap-2 px-6 py-3 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
             >
-              Próximo: {STEPS[step + 1].label} <ChevronRight size={14} />
+              Próximo: {stepsForEvent[step + 1].label} <ChevronRight size={14} />
             </button>
           ) : (
             <button

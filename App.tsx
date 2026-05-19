@@ -305,6 +305,42 @@ const App: React.FC = () => {
     }
   };
 
+  // Seletiva de Vídeo: a flag agora é DERIVADA — produtor vê o link se algum
+  // evento dele tem seletiva ativa; inscrito vê se tem inscrição em evento com
+  // seletiva. configuracoes.video_selection_enabled (global) virou stale —
+  // a feature é por evento, não por tenant.
+  const [videoSelectionFromEvents, setVideoSelectionFromEvents] = useState(false);
+  useEffect(() => {
+    const checkVideoSelection = async () => {
+      const userId = session?.user?.id;
+      if (!userId) { setVideoSelectionFromEvents(false); return; }
+      try {
+        // Como produtor: tem evento próprio com flag ON?
+        const { data: ownedEvents } = await supabase
+          .from('events')
+          .select('id')
+          .eq('created_by', userId)
+          .eq('video_selection_enabled', true)
+          .limit(1);
+        if (ownedEvents && ownedEvents.length > 0) {
+          setVideoSelectionFromEvents(true);
+          return;
+        }
+        // Como inscrito: tem alguma registration em evento com flag ON?
+        const { data: regsWithSeletiva } = await supabase
+          .from('registrations')
+          .select('id, events!inner(video_selection_enabled)')
+          .eq('user_id', userId)
+          .eq('events.video_selection_enabled', true)
+          .limit(1);
+        setVideoSelectionFromEvents((regsWithSeletiva ?? []).length > 0);
+      } catch {
+        setVideoSelectionFromEvents(false);
+      }
+    };
+    void checkVideoSelection();
+  }, [session?.user?.id]);
+
   useEffect(() => {
     // Timeout de segurança: se após 5s a autenticação ainda não resolveu, libera a UI.
     // Evita que o app fique preso em loading quando a aba é suspensa/reativada pelo navegador.
@@ -376,7 +412,9 @@ const App: React.FC = () => {
     );
   }
 
-  const videoSelectionEnabled = config.video_selection_enabled ?? false;
+  // Flag derivada: produtor com evento de seletiva OU inscrito em evento de
+  // seletiva. Mantém legacy config.video_selection_enabled como fallback OR.
+  const videoSelectionEnabled = videoSelectionFromEvents || (config.video_selection_enabled ?? false);
   const privateRouteProps = { session, profile, activeRole, theme, toggleTheme, setActiveRole, videoSelectionEnabled };
 
   // Phase 2B+: tablet em modo Terminal redireciona / pra /judge-login/<token>

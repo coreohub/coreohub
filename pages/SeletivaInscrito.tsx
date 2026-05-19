@@ -225,7 +225,7 @@ const SeletivaInscrito: React.FC = () => {
         <div>
           <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Como funciona</p>
           <p className="text-[10px] text-slate-400 mt-0.5">
-            Envie o link do vídeo da sua coreografia (YouTube, Google Drive, Vimeo, etc.). O produtor irá analisar e você será notificado sobre a decisão.
+            O link do vídeo é informado no momento da inscrição (padrão Joinville). Aqui você acompanha o status da análise da comissão, e pode trocar o link enquanto ainda não foi aprovado. Trilha sonora é solicitada após aprovação.
           </p>
         </div>
       </div>
@@ -260,7 +260,13 @@ const SeletivaInscrito: React.FC = () => {
             const st = statusConfig[reg.video_status ?? 'pending'];
             const StatusIcon = st.icon;
             const isBlocked = (reg.video_fee_status === 'pending');
-            const canSubmit = reg.video_status === 'pending' && !isBlocked;
+            // Permite enviar/trocar vídeo se ainda não foi aprovado pela comissão
+            // (pending = sem link ainda; submitted/conditional = pode trocar; approved = trava).
+            const canEditVideo = !isBlocked
+              && reg.video_status !== 'approved'
+              && reg.video_status !== 'rejected';
+            const isFirstSubmit = reg.video_status === 'pending' && !reg.video_url;
+            const canSubmit = canEditVideo;
 
             return (
               <motion.div
@@ -325,10 +331,13 @@ const SeletivaInscrito: React.FC = () => {
                   </div>
                 )}
 
-                {/* Submit form */}
+                {/* Submit/edit form — Joinville-style: link já vem do wizard,
+                    mas inscrito pode trocar enquanto não-aprovado. */}
                 {canSubmit && (
                   <div className="border-t border-slate-100 dark:border-white/5 p-6 space-y-3">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Enviar link do vídeo</p>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                      {isFirstSubmit ? 'Enviar link do vídeo' : 'Trocar link do vídeo'}
+                    </p>
                     <div className="flex gap-3">
                       <div className="flex-1">
                         <input
