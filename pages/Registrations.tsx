@@ -1216,31 +1216,40 @@ const Registrations = () => {
 
               {/* Footer com ações rápidas */}
               <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-white/10 px-6 py-4 flex flex-wrap justify-end gap-2">
-                {/* Sessão 3 P3: WhatsApp pré-preenchido. Só aparece se o
-                    inscrito tem whatsapp cadastrado E a inscrição está
-                    PENDENTE (faz sentido cobrar pagamento). */}
-                {viewingReg.status_pagamento === 'PENDENTE'
-                  && viewingReg.profiles?.whatsapp
-                  && (() => {
+                {/* Sessão 3 P3: WhatsApp pré-preenchido. Aparece em qualquer
+                    status quando o inscrito tem whatsapp cadastrado.
+                    Mensagem varia por contexto (cobrar pagamento / confirmar
+                    logística / aviso de inscrição vencida). */}
+                {viewingReg.profiles?.whatsapp && (() => {
                   const digits = String(viewingReg.profiles?.whatsapp ?? '').replace(/\D/g, '');
                   if (!digits) return null;
                   const phone = digits.startsWith('55') ? digits : `55${digits}`;
-                  const url = viewingReg.payment_url
-                    ?? (viewingReg.payment_id ? `https://www.asaas.com/i/${String(viewingReg.payment_id).replace(/^pay_/, '')}` : '');
                   const nome = viewingReg.profiles?.full_name ?? '';
                   const coreo = viewingReg.nome_coreografia ?? '';
-                  const msg = encodeURIComponent(
-                    `Oi ${nome.split(' ')[0]}! Tudo bem? Aqui é da produção do festival. Sua inscrição "${coreo}" ainda está aguardando pagamento.` +
-                    (url ? `\n\nPra confirmar é só pagar por aqui: ${url}` : '') +
-                    `\n\nQualquer dúvida me chama por aqui mesmo. 🎉`
-                  );
+                  const eventoNome = activeEventInfo?.name ?? '';
+                  const url = viewingReg.payment_url
+                    ?? (viewingReg.payment_id ? `https://www.asaas.com/i/${String(viewingReg.payment_id).replace(/^pay_/, '')}` : '');
+
+                  let body: string;
+                  if (viewingReg.status_pagamento === 'PENDENTE') {
+                    body = `Oi ${nome.split(' ')[0]}! Aqui é da produção${eventoNome ? ` do ${eventoNome}` : ''}. Sua inscrição "${coreo}" ainda está aguardando pagamento.` +
+                      (url ? `\n\nPra confirmar é só pagar por aqui: ${url}` : '') +
+                      `\n\nQualquer dúvida me chama por aqui. 🎉`;
+                  } else if (viewingReg.status_pagamento === 'APROVADO' || viewingReg.status_pagamento === 'CONFIRMADO') {
+                    body = `Oi ${nome.split(' ')[0]}! Aqui é da produção${eventoNome ? ` do ${eventoNome}` : ''}. Tô passando pra falar sobre a sua inscrição "${coreo}".`;
+                  } else if (viewingReg.status_pagamento === 'VENCIDO' || viewingReg.status_pagamento === 'EXPIRADO') {
+                    body = `Oi ${nome.split(' ')[0]}! Aqui é da produção${eventoNome ? ` do ${eventoNome}` : ''}. Sua inscrição "${coreo}" venceu sem pagamento. Se ainda quiser participar, me chama por aqui pra ver as opções.`;
+                  } else {
+                    body = `Oi ${nome.split(' ')[0]}! Aqui é da produção${eventoNome ? ` do ${eventoNome}` : ''} sobre sua inscrição "${coreo}".`;
+                  }
+                  const msg = encodeURIComponent(body);
                   return (
                     <a
                       href={`https://wa.me/${phone}?text=${msg}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 rounded-xl transition-all flex items-center gap-2"
-                      title="Enviar lembrete pelo WhatsApp"
+                      title="Enviar mensagem pelo WhatsApp"
                     >
                       📱 WhatsApp
                     </a>
