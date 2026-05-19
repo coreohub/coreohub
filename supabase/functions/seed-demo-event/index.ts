@@ -596,6 +596,18 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       audience_max_per_purchase: 6,
       patrocinadores_config: DEMO_PATROCINADORES,
       programacao_config: DEMO_PROGRAMACAO,
+      // Seletiva por vídeo — Modelo 3 (taxa A + análise + libera taxa B).
+      // Configurado pro produtor testar end-to-end no demo sem precisar
+      // ligar manualmente em /seletiva-de-video → Configurações.
+      // Prazo de envio = 7 dias antes do evento (suficiente pra demo).
+      video_selection_enabled: true,
+      video_selection_fee: 30, // taxa A
+      video_selection_fee_required: true, // bloqueia inscrição até aprovar
+      video_fee_refund_policy: 'partial_refund',
+      video_fee_partial_refund_percent: 50,
+      video_submission_deadline: new Date(startDate.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+      video_evaluators_count: 1, // produtor solo (multi-jurado v1.1)
+      video_evaluation_rule: 'majority',
     }]).select('id').single()
 
     if (evErr || !ev) return json({ error: 'db_error', detail: evErr?.message ?? 'event' }, 500)

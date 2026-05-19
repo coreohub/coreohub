@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
+import { maskMoeda, parseMoeda } from '../utils/masks';
 
 type VideoStatus = 'pending' | 'submitted' | 'approved' | 'rejected' | 'conditional' | 'review_later';
 
@@ -410,16 +411,16 @@ const VideoSelection: React.FC = () => {
                 />
               </div>
 
-              {/* Taxa */}
+              {/* Taxa — máscara BR progressiva tipo cartão de crédito.
+                  Digita "3000" → R$ 30,00. Evita NaN/concatenação do type=number. */}
               <div className="space-y-2">
-                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><DollarSign size={11} /> Taxa de Seletiva (R$)</label>
+                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><DollarSign size={11} /> Taxa de Seletiva</label>
                 <input
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  placeholder="0.00 = Gratuita"
-                  value={config.video_selection_fee || ''}
-                  onChange={e => setConfig(p => ({ ...p, video_selection_fee: parseFloat(e.target.value) || 0 }))}
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="R$ 0,00 = Gratuita"
+                  value={config.video_selection_fee > 0 ? maskMoeda(String(Math.round(config.video_selection_fee * 100))) : ''}
+                  onChange={e => setConfig(p => ({ ...p, video_selection_fee: parseMoeda(e.target.value) }))}
                   className="w-full px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068] transition-all"
                 />
               </div>
@@ -451,9 +452,15 @@ const VideoSelection: React.FC = () => {
                 <div className="space-y-2">
                   <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">% do Reembolso Parcial</label>
                   <input
-                    type="number" min={0} max={100} step={1}
-                    value={config.video_fee_partial_refund_percent}
-                    onChange={e => setConfig(p => ({ ...p, video_fee_partial_refund_percent: Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) }))}
+                    type="text"
+                    inputMode="numeric"
+                    value={String(config.video_fee_partial_refund_percent ?? 50)}
+                    onChange={e => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 3);
+                      const n = digits ? Math.max(0, Math.min(100, parseInt(digits, 10))) : 0;
+                      setConfig(p => ({ ...p, video_fee_partial_refund_percent: n }));
+                    }}
+                    placeholder="50"
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068] transition-all"
                   />
                   <p className="text-[9px] text-slate-400">Ex: 50 = devolve metade da taxa em caso de reprovação.</p>
