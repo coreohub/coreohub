@@ -1598,8 +1598,9 @@ const InscricaoWizard: React.FC = () => {
 
             <div className="border-t border-slate-200 dark:border-white/10 pt-4 mt-4">
               <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                Ao confirmar, você cria sua inscrição e vai pra tela de pagamento. O valor depende
-                do lote vigente (Pix, cartão ou boleto via Asaas).
+                Ao confirmar, sua inscrição é salva como pendente em <strong>Minhas Coreografias</strong>.
+                Lá você decide: pagar agora separadamente, juntar com outras coreografias em 1 PIX, ou
+                adicionar mais inscrições antes. O valor depende do lote vigente (Pix, cartão ou boleto via Asaas).
               </p>
             </div>
           </div>
@@ -1653,7 +1654,7 @@ const InscricaoWizard: React.FC = () => {
               className="inline-flex items-center gap-2 px-6 py-3 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50 transition-all"
             >
               {submitting ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
-              {submitting ? 'Criando inscrição…' : 'Confirmar e ir pro pagamento'}
+              {submitting ? 'Criando inscrição…' : 'Confirmar inscrição'}
             </button>
           )}
         </div>
