@@ -635,16 +635,31 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
     const lote2Virada = new Date(today.getTime() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     const lote3Virada = new Date(today.getTime() + 20 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     const precoBase = (f: string) => f === 'Solo' ? 80 : f === 'Duo' ? 60 : 50
-    const formatos = FORMACOES.map(f => ({
-      name: f,
-      pricingType: f === 'Solo' ? 'FIXED' : 'PER_MEMBER',
-      minMembers: formacaoSize(f) === 1 ? 1 : (f === 'Duo' ? 2 : f === 'Trio' ? 3 : 5),
-      lotes: [
-        { nome: '1º Lote (Promocional)', data_virada: lote1Virada, preco: Math.round(precoBase(f) * 0.7) },
-        { nome: '2º Lote',               data_virada: lote2Virada, preco: Math.round(precoBase(f) * 0.85) },
-        { nome: '3º Lote (Último)',      data_virada: lote3Virada, preco: precoBase(f) },
-      ],
-    }))
+    const sizeFor = (f: string) => {
+      const min = f === 'Solo' ? 1 : f === 'Duo' ? 2 : f === 'Trio' ? 3 : 5
+      const max = f === 'Solo' ? 1 : f === 'Duo' ? 2 : f === 'Trio' ? 3 : 50
+      return { min, max }
+    }
+    const formatos = FORMACOES.map(f => {
+      const { min, max } = sizeFor(f)
+      return {
+        name: f,
+        // Salva em snake_case (wizard lê assim) E camelCase (AccountSettings UI).
+        // Bug 2026-05-19: wizard "Adicionar bailarino" aparecia em Solo porque
+        // max_members estava ausente → fallback 50.
+        pricingType: f === 'Solo' ? 'FIXED' : 'PER_MEMBER',
+        pricing_type: f === 'Solo' ? 'FIXED' : 'PER_MEMBER',
+        minMembers: min,
+        min_members: min,
+        maxMembers: max,
+        max_members: max,
+        lotes: [
+          { nome: '1º Lote (Promocional)', data_virada: lote1Virada, preco: Math.round(precoBase(f) * 0.7) },
+          { nome: '2º Lote',               data_virada: lote2Virada, preco: Math.round(precoBase(f) * 0.85) },
+          { nome: '3º Lote (Último)',      data_virada: lote3Virada, preco: precoBase(f) },
+        ],
+      }
+    })
 
     // Pronuncia personalizada — exemplo demonstrando o feature
     const pronunciaPersonalizada = [

@@ -225,7 +225,7 @@ const SeletivaInscrito: React.FC = () => {
         <div>
           <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Como funciona</p>
           <p className="text-[10px] text-slate-400 mt-0.5">
-            O link do vídeo é informado no momento da inscrição (padrão Joinville). Aqui você acompanha o status da análise da comissão, e pode trocar o link enquanto ainda não foi aprovado. Trilha sonora é solicitada após aprovação.
+            Acompanhe o status da análise da comissão. Você pode trocar o link do vídeo até a aprovação. A trilha sonora será solicitada depois.
           </p>
         </div>
       </div>

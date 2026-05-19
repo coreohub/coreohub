@@ -534,7 +534,18 @@ const InscricaoWizard: React.FC = () => {
   }, [event, modalidade]);
 
   const minMembers = Number(formacao?.min_members ?? 1);
-  const maxMembers = Number(formacao?.max_members ?? 50);
+  // Defaults seguros baseados no NOME quando o produtor não setou max_members
+  // explicitamente. Evita o bug do botão "Adicionar bailarino" em Solo (vi
+  // no smoke test 2026-05-19): Solo deve ter max=1, Duo=2, Trio=3. Grupo
+  // sem limite explícito = 50.
+  const inferDefaultMax = (name: string | undefined): number => {
+    const n = (name ?? '').trim().toLowerCase();
+    if (n === 'solo') return 1;
+    if (n === 'duo' || n === 'dupla')  return 2;
+    if (n === 'trio') return 3;
+    return 50;
+  };
+  const maxMembers = Number(formacao?.max_members ?? inferDefaultMax(formacao?.name));
 
   // Modelo seletiva (Joinville-style): inscrito submete LINK do vídeo no wizard
   // em vez da trilha sonora. Trilha vai pra pós-aprovação em /minhas-coreografias.
