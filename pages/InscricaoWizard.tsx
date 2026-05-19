@@ -822,9 +822,12 @@ const InscricaoWizard: React.FC = () => {
         throw regErr ?? new Error('Erro ao criar inscrição.');
       }
 
-      // 3) Redireciona pra Checkout existente — reusa integração Asaas/cupom/etc.
-      // Mantém o mesmo idOrSlug que o user já tava na URL (preserva slug bonito se foi assim).
-      navigate(`/festival/${idOrSlug}/checkout?registration_id=${reg.id}`);
+      // 3) Sessão 2 do carrinho: em vez de mandar pro checkout single, manda
+      // pro /minhas-coreografias com a inscrição recém-criada destacada. O
+      // inscrito decide se quer adicionar mais coreografias ou pagar agora
+      // (separado ou agregado). Inscrição fica como PENDENTE no banco.
+      // Param `nova=<id>` permite a UI destacar/animar a inscrição recém-criada.
+      navigate(`/minhas-coreografias?nova=${reg.id}`);
     } catch (e: any) {
       setError(e.message ?? 'Erro inesperado ao finalizar inscrição.');
       setSubmitting(false);
