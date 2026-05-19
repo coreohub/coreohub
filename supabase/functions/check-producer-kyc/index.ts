@@ -112,6 +112,9 @@ Deno.serve(async (req) => {
       // Pega o onboardingUrl do primeiro doc pendente (geralmente é o mesmo
       // pra todos — link único de upload no app Asaas).
       onboardingUrl: pendingDocuments.find((d: any) => d.onboardingUrl)?.onboardingUrl ?? null,
+      // A9 auditoria Sessão 3: expor expiração do link agregado pra frontend
+      // poder esconder botão e pedir novo link quando expirar.
+      onboardingUrlExpirationDate: pendingDocuments.find((d: any) => d.onboardingUrl)?.onboardingUrlExpirationDate ?? null,
     })
   } catch (e: any) {
     return respond(500, { error: e.message })

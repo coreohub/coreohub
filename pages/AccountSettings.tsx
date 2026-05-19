@@ -25,6 +25,7 @@ import {
   CreditCard, CheckCircle, AlertCircle, ExternalLink, Percent, Hash,
   Image as ImageIcon, Upload, Play, Pause, Volume2,
   Instagram, MessageCircle, Globe, Mail, FileText, Youtube, Smartphone,
+  RefreshCw,
 } from 'lucide-react';
 import { formatEventWhatsApp } from '../utils/formatters';
 import InstallPWAButton from '../components/InstallPWAButton';
@@ -823,9 +824,15 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     status?:    { commercialInfo: string | null; documentation: string | null; general: string | null; bankAccountInfo: string | null };
     pendingDocuments?: Array<{ type: string; title: string; status: string; onboardingUrl: string | null }>;
     onboardingUrl?:    string | null;
+    onboardingUrlExpirationDate?: string | null;  // A9: expiração do link de KYC
     unrecoverable?:    boolean;  // A8: subconta sem apiKey (recovered partial)
     loaded:     boolean;
-  }>({ canReceive: false, canPayout: false, loaded: false });
+    // A14 auditoria Sessão 3: rastreia falhas consecutivas pra exibir warning
+    // depois que o check falhar repetidamente (silencioso antes deixava produtor
+    // sem feedback). A15: estado de loading pro botão "Verificar novamente".
+    checkFailures?: number;
+    checking?:      boolean;
+  }>({ canReceive: false, canPayout: false, loaded: false, checkFailures: 0 });
   const [producerEvents, setProducerEvents]           = useState<any[]>([]);
   const [savingCommission, setSavingCommission] = useState<string | null>(null);
   // Termo de Adesão do Produtor — aceite obrigatório antes de conectar Asaas.
@@ -833,6 +840,43 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   // Bumpar a versão lá invalida aceites antigos aqui automaticamente.
   const [termsAcceptedVersion, setTermsAcceptedVersion] = useState<string | null>(null);
   const termsAccepted = termsAcceptedVersion === TERMO_PRODUTOR_VERSION;
+
+  // A15+A14 auditoria Sessão 3: chamada KYC reutilizável. Usada no mount
+  // E pelo botão "Verificar novamente" no banner. Rastreia falhas
+  // consecutivas pra mostrar warning genérico quando >=2 erros.
+  const refreshKycStatus = async () => {
+    setKycStatus(prev => ({ ...prev, checking: true }));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setKycStatus(prev => ({ ...prev, checking: false, checkFailures: (prev.checkFailures ?? 0) + 1 }));
+        return;
+      }
+      const r = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-producer-kyc`,
+        { headers: { 'Authorization': `Bearer ${session.access_token}` } }
+      );
+      if (!r.ok) {
+        setKycStatus(prev => ({ ...prev, checking: false, checkFailures: (prev.checkFailures ?? 0) + 1 }));
+        return;
+      }
+      const data = await r.json();
+      setKycStatus({
+        canReceive:       Boolean(data.canReceive),
+        canPayout:        Boolean(data.canPayout),
+        status:           data.status,
+        pendingDocuments: data.pendingDocuments,
+        onboardingUrl:    data.onboardingUrl,
+        onboardingUrlExpirationDate: data.onboardingUrlExpirationDate ?? null,
+        unrecoverable:    Boolean(data.unrecoverable),
+        loaded:           true,
+        checking:         false,
+        checkFailures:    0,  // reset em sucesso
+      });
+    } catch {
+      setKycStatus(prev => ({ ...prev, checking: false, checkFailures: (prev.checkFailures ?? 0) + 1 }));
+    }
+  };
 
   /* carrega perfil Asaas e eventos ao montar */
   useEffect(() => {
@@ -853,27 +897,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
       // Sessão 3: consulta status KYC outbound da subconta. Best-effort.
       if (profile?.asaas_subconta_id) {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-            const r = await fetch(
-              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-producer-kyc`,
-              { headers: { 'Authorization': `Bearer ${session.access_token}` } }
-            );
-            if (r.ok) {
-              const data = await r.json();
-              setKycStatus({
-                canReceive:       Boolean(data.canReceive),
-                canPayout:        Boolean(data.canPayout),
-                status:           data.status,
-                pendingDocuments: data.pendingDocuments,
-                onboardingUrl:    data.onboardingUrl,
-                unrecoverable:    Boolean(data.unrecoverable),
-                loaded:           true,
-              });
-            }
-          }
-        } catch { /* silencioso — banner não aparece, fallback OK */ }
+        await refreshKycStatus();
       }
       const { data: events } = await supabase
         .from('events')
@@ -4359,14 +4383,23 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                             <p className="text-[11px] text-rose-700/90 dark:text-rose-300/80 mt-1 leading-relaxed">
                               Sua subconta foi criada mas perdemos a credencial pra consultar status e fazer repasses automáticos. Precisamos te ajudar a regenerar — entre em contato pelo WhatsApp.
                             </p>
-                            <a
-                              href="https://wa.me/5517997936169?text=Oi%2C%20preciso%20regenerar%20minha%20subconta%20Asaas%20no%20CoreoHub"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
-                            >
-                              📱 Falar com suporte
-                            </a>
+                            <div className="flex flex-wrap items-center gap-2 mt-3">
+                              <a
+                                href="https://wa.me/5517997936169?text=Oi%2C%20preciso%20regenerar%20minha%20subconta%20Asaas%20no%20CoreoHub"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+                              >
+                                📱 Falar com suporte
+                              </a>
+                              <button
+                                onClick={refreshKycStatus}
+                                disabled={kycStatus.checking}
+                                className="inline-flex items-center gap-1.5 px-4 py-2 border border-rose-300 dark:border-rose-500/30 text-rose-600 dark:text-rose-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-100 dark:hover:bg-rose-500/10 disabled:opacity-50"
+                              >
+                                <RefreshCw size={12} className={kycStatus.checking ? 'animate-spin' : ''} /> Verificar novamente
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ) : (
@@ -4384,28 +4417,72 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                                 Pendente: {kycStatus.pendingDocuments.map(d => d.title).join(' · ')}
                               </p>
                             )}
-                            {kycStatus.onboardingUrl ? (
-                              <a
-                                href={kycStatus.onboardingUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+                            {/* A9 auditoria Sessão 3: onboardingUrl pode estar expirado.
+                                Asaas retorna onboardingUrlExpirationDate junto. Se já passou,
+                                esconder botão e mostrar mensagem pra pedir novo link. */}
+                            {(() => {
+                              const expIso = kycStatus.onboardingUrlExpirationDate;
+                              const expired = expIso ? new Date(expIso).getTime() < Date.now() : false;
+                              const showOnboarding = Boolean(kycStatus.onboardingUrl) && !expired;
+                              const expFmt = expIso ? new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' }).format(new Date(expIso)) : null;
+                              return (
+                            <div className="flex flex-wrap items-center gap-2 mt-3">
+                              {showOnboarding ? (
+                                <a
+                                  href={kycStatus.onboardingUrl!}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+                                >
+                                  Completar verificação{expFmt ? ` (expira em ${expFmt})` : ''} →
+                                </a>
+                              ) : (
+                                <a
+                                  href={`https://wa.me/5517997936169?text=${encodeURIComponent(expired ? 'Oi, o link de verificação Asaas expirou. Pode gerar um novo?' : 'Oi, preciso do link de verificação Asaas')}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+                                >
+                                  📱 {expired ? 'Pedir novo link (expirado)' : 'Pedir link de verificação'}
+                                </a>
+                              )}
+                              {/* A15: produtor completou KYC em outra aba? recheck sem precisar de F5. */}
+                              <button
+                                onClick={refreshKycStatus}
+                                disabled={kycStatus.checking}
+                                className="inline-flex items-center gap-1.5 px-4 py-2 border border-amber-300 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-100 dark:hover:bg-amber-500/10 disabled:opacity-50"
                               >
-                                Completar verificação →
-                              </a>
-                            ) : (
-                              <a
-                                href="https://wa.me/5517997936169?text=Oi%2C%20preciso%20do%20link%20de%20verifica%C3%A7%C3%A3o%20Asaas"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
-                              >
-                                📱 Pedir link de verificação
-                              </a>
-                            )}
+                                <RefreshCw size={12} className={kycStatus.checking ? 'animate-spin' : ''} /> Já completei, verificar
+                              </button>
+                            </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       )
+                    )}
+                    {/* A14 auditoria Sessão 3: warning genérico quando check-producer-kyc
+                        falhar >=2 vezes consecutivas (silencioso no try/catch antes
+                        deixava o produtor sem feedback do que tava errado). */}
+                    {kycStatus.loaded === false && (kycStatus.checkFailures ?? 0) >= 2 && (
+                      <div className="flex items-start gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-2xl">
+                        <AlertCircle size={18} className="text-slate-500 shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-[11px] text-slate-700 dark:text-slate-300">
+                            Não foi possível verificar status do Asaas
+                          </p>
+                          <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                            Tentamos consultar a sua subconta mas o serviço não respondeu. Recarregue a página ou tente de novo. Se persistir, fale com o suporte.
+                          </p>
+                          <button
+                            onClick={refreshKycStatus}
+                            disabled={kycStatus.checking}
+                            className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 border border-slate-300 dark:border-white/10 text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 dark:hover:bg-white/5 disabled:opacity-50"
+                          >
+                            <RefreshCw size={11} className={kycStatus.checking ? 'animate-spin' : ''} /> Tentar de novo
+                          </button>
+                        </div>
+                      </div>
                     )}
 
                     <div className="flex items-center gap-4 p-4 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-2xl">

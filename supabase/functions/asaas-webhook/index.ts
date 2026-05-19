@@ -71,11 +71,72 @@ async function trySweepProducer(
           })
           .eq('id', opts.paymentId)
       }
+      // A21: sweep OK = reset contador de falhas consecutivas.
+      await supabase
+        .from('profiles')
+        .update({ sweep_failure_count: 0, sweep_last_failure_at: null })
+        .eq('id', producerId)
     } else {
       console.warn(`[asaas-webhook][sweep][${context}] skip produtor=${producerId} reason=${result.reason} error=${result.error ?? ''}`)
+      // A21 auditoria Sessão 3: skips com motivo "técnico" contam como falha.
+      // no_balance/no_amount/no_pix/no_api_key são esperados e NÃO incrementam.
+      const TECH_FAILS = new Set(['transfer_failed', 'pix_invalid', 'kyc_pending', 'exception'])
+      if (result.reason && TECH_FAILS.has(result.reason)) {
+        await trackSweepFailure(supabase, producerId, prod, context, result.reason, result.error)
+      }
     }
   } catch (e) {
     console.error(`[asaas-webhook][sweep][${context}] exception produtor=${producerId}:`, (e as Error).message)
+    await trackSweepFailure(supabase, producerId, null, context, 'exception', (e as Error).message)
+  }
+}
+
+/** A21 auditoria Sessão 3: incrementa contador de falhas consecutivas do sweep
+ *  e emite log [ALERT] estruturado quando passar do threshold (3) com throttle
+ *  de 24h. Logs [ALERT] são monitorados pela ops via Supabase dashboard;
+ *  futuro: hook pra email/Slack admin se virar tráfego de verdade.
+ */
+async function trackSweepFailure(
+  supabase: any,
+  producerId: string,
+  prodHint: { full_name?: string } | null,
+  context: string,
+  reason: string,
+  error?: string,
+): Promise<void> {
+  try {
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('full_name, sweep_failure_count, sweep_notified_at')
+      .eq('id', producerId)
+      .maybeSingle()
+    const prevCount = Number((prof as any)?.sweep_failure_count ?? 0)
+    const nextCount = prevCount + 1
+    const now = new Date().toISOString()
+    await supabase
+      .from('profiles')
+      .update({ sweep_failure_count: nextCount, sweep_last_failure_at: now })
+      .eq('id', producerId)
+
+    const THRESHOLD = 3
+    if (nextCount < THRESHOLD) return
+
+    const lastNotified = (prof as any)?.sweep_notified_at
+      ? new Date((prof as any).sweep_notified_at).getTime() : 0
+    const hoursSince = (Date.now() - lastNotified) / 3_600_000
+    if (hoursSince < 24) return  // throttle
+
+    await supabase
+      .from('profiles')
+      .update({ sweep_notified_at: now })
+      .eq('id', producerId)
+    const name = (prof as any)?.full_name ?? prodHint?.full_name ?? '?'
+    console.error(
+      `[asaas-webhook][sweep][ALERT] produtor=${producerId} (${name}) ` +
+      `${nextCount} falhas consecutivas — reason=${reason} ctx=${context} error=${error ?? ''}`
+    )
+  } catch (e) {
+    console.error('[asaas-webhook][sweep][ALERT] trackSweepFailure exception:', (e as Error).message)
   }
 }
 
@@ -532,11 +593,21 @@ async function handleAggregatePayment(opts: {
     const cand = payment.confirmedDate ?? payment.paymentDate
     if (cand) {
       const s = String(cand)
-      // YYYY-MM-DD puro (10 chars) → meio-dia BRT (UTC-3 = 15:00Z)
-      const iso = s.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(s)
-        ? `${s}T15:00:00.000Z`
-        : s
-      const d = new Date(iso)
+      // YYYY-MM-DD puro (10 chars) → meio-dia em America/Sao_Paulo.
+      // A7 auditoria Sessão 3: deriva offset via Intl pra não quebrar se
+      // horário de verão voltar (hoje Brasil = UTC-3 fixo, mas robustez >
+      // hardcode). Construímos "12:00 BRT" detectando offset atual.
+      if (s.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        const sample = new Date(`${s}T12:00:00Z`)
+        const spHourStr = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false,
+        }).formatToParts(sample).find(p => p.type === 'hour')?.value ?? '12'
+        // Se em 12:00 UTC a hora em SP é 09, offset = +3 (noon SP = 15:00 UTC).
+        const offsetH = 12 - Number(spHourStr)
+        const utcHour = String(12 + offsetH).padStart(2, '0')
+        return new Date(`${s}T${utcHour}:00:00.000Z`).toISOString()
+      }
+      const d = new Date(s)
       if (!isNaN(d.getTime())) return d.toISOString()
     }
     return new Date().toISOString()

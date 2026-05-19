@@ -288,7 +288,11 @@ const Registrations = () => {
         return 0;
       })();
       result = result.filter(reg => {
-        const t = new Date(reg.created_at ?? reg.criado_em ?? 0).getTime();
+        // A18 auditoria Sessão 3: se a row não tem created_at/criado_em, NÃO
+        // esconder do filtro (datar como Date.now() = inclui em qualquer cutoff
+        // passado). O fallback antigo `?? 0` excluía rows antigas sem data.
+        const raw = reg.created_at ?? reg.criado_em;
+        const t = raw ? new Date(raw).getTime() : Date.now();
         return t >= cutoff;
       });
     }
@@ -1179,10 +1183,15 @@ const Registrations = () => {
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><Calendar size={12} /> Timeline</h3>
                   {(() => {
                     type TimelineIcon = 'created' | 'audio' | 'video' | 'paid' | 'refund';
+                    // A16 auditoria Sessão 3: trilha_uploaded_at/video_uploaded_at
+                    // não existem como colunas em registrations (confirmado via grep
+                    // das migrations). Sem coluna dedicada, fallback é updated_at —
+                    // não é o instante exato do upload mas é o melhor sinal disponível
+                    // (qualquer update marca updated_at, então é a janela do upload).
                     const events: Array<{ label: string; at: string | null; icon: TimelineIcon }> = [
                       { label: 'Inscrição criada',  at: viewingReg.created_at ?? viewingReg.criado_em ?? null, icon: 'created' as TimelineIcon },
-                      { label: 'Trilha enviada',    at: viewingReg.trilha_url ? (viewingReg.trilha_uploaded_at ?? viewingReg.updated_at ?? null) : null, icon: 'audio' as TimelineIcon },
-                      { label: 'Vídeo enviado',    at: viewingReg.video_url ? (viewingReg.video_uploaded_at ?? null) : null, icon: 'video' as TimelineIcon },
+                      { label: 'Trilha enviada',    at: viewingReg.trilha_url ? (viewingReg.updated_at ?? null) : null, icon: 'audio' as TimelineIcon },
+                      { label: 'Vídeo enviado',    at: viewingReg.video_url ? (viewingReg.updated_at ?? null) : null, icon: 'video' as TimelineIcon },
                       { label: 'Pagamento confirmado', at: viewingReg.paid_at ?? null, icon: 'paid' as TimelineIcon },
                       { label: 'Reembolsada',       at: viewingReg.refunded_at ?? null, icon: 'refund' as TimelineIcon },
                     ].filter(e => e.at);
@@ -1224,7 +1233,13 @@ const Registrations = () => {
                 {viewingReg.profiles?.whatsapp && (() => {
                   const digits = String(viewingReg.profiles?.whatsapp ?? '').replace(/\D/g, '');
                   if (!digits) return null;
-                  const phone = digits.startsWith('55') ? digits : `55${digits}`;
+                  // A17 auditoria Sessão 3: precisa de 10 (DDD+8) ou 11 (DDD+9) dígitos
+                  // antes de prefixar 55. Com prefixo BR, aceita 12 ou 13. Qualquer
+                  // outro tamanho é número quebrado — não mostra botão.
+                  const hasBr = digits.startsWith('55');
+                  const local = hasBr ? digits.slice(2) : digits;
+                  if (local.length !== 10 && local.length !== 11) return null;
+                  const phone = `55${local}`;
                   const nome = viewingReg.profiles?.full_name ?? '';
                   const coreo = viewingReg.nome_coreografia ?? '';
                   const eventoNome = activeEventInfo?.name ?? '';

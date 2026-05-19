@@ -140,9 +140,13 @@ Deno.serve(async (req) => {
         return { ok: false, error: 'missing_data' }
       }
 
-      const expiresFmt = new Date(p.expires_at).toLocaleDateString('pt-BR', {
+      // A11 auditoria Sessão 3: Deno roda em UTC, então toLocaleDateString sem
+      // timeZone formata em UTC e gera off-by-one quando expires_at é "23:59 BRT"
+      // (vira 02:59 UTC do dia seguinte). Forçar America/Sao_Paulo via Intl.
+      const expiresFmt = new Intl.DateTimeFormat('pt-BR', {
         day: '2-digit', month: 'long', year: 'numeric',
-      })
+        timeZone: 'America/Sao_Paulo',
+      }).format(new Date(p.expires_at))
 
       const resp = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
         method: 'POST',

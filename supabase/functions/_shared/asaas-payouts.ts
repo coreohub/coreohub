@@ -66,6 +66,35 @@ export function detectPixType(key: string): PixDescriptor {
   return { pixAddressKeyType: 'EVP', pixAddressKey: k }
 }
 
+/** A3 auditoria Sessão 3: detecção robusta de erro KYC pendente.
+ *  Asaas retorna `{ errors: [{ code, description }] }`. Parseamos JSON e
+ *  checamos múltiplos padrões em description (case-insensitive). Fallback
+ *  pra match textual cru se o body não for JSON válido.
+ */
+export function isKycPendingError(body: string): boolean {
+  const KYC_PATTERNS = [
+    'aprovada para utilizar o pix',
+    'conta ainda não está aprovada',
+    'not approved',
+    'verificação de identidade',
+    'documentos pendentes',
+  ]
+  const matchAny = (text: string) => {
+    const lower = text.toLowerCase()
+    return KYC_PATTERNS.some((p) => lower.includes(p))
+  }
+  try {
+    const parsed = JSON.parse(body) as { errors?: Array<{ description?: string }> }
+    const errors = parsed?.errors ?? []
+    for (const err of errors) {
+      if (err?.description && matchAny(err.description)) return true
+    }
+    return false
+  } catch {
+    return matchAny(body)
+  }
+}
+
 export interface SweepResult {
   swept:        boolean       // true se transferência foi disparada
   value:        number        // valor transferido (0 se skipped)
@@ -147,12 +176,10 @@ export async function sweepProducerBalance(opts: {
 
     if (!transferRes.ok) {
       const body = await transferRes.text().catch(() => '')
-      // Erros comuns: KYC outbound pendente (400 com mensagem específica)
-      const isKycPending = body.includes('aprovada para utilizar o Pix') || body.includes('not approved')
       return {
         swept: false,
         value: 0,
-        reason: isKycPending ? 'kyc_pending' : 'transfer_failed',
+        reason: isKycPendingError(body) ? 'kyc_pending' : 'transfer_failed',
         error: `${transferRes.status}: ${body.slice(0, 300)}`,
       }
     }

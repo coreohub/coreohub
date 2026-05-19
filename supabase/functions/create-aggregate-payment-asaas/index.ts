@@ -452,8 +452,12 @@ Deno.serve(async (req) => {
         .eq('id', event.created_by)
         .maybeSingle()
 
+      // A11 auditoria Sessão 3: forçar timeZone pra evitar off-by-one em UTC.
       const expiresAtFmt = expiresAt
-        ? new Date(expiresAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+        ? new Intl.DateTimeFormat('pt-BR', {
+            day: '2-digit', month: 'long', year: 'numeric',
+            timeZone: 'America/Sao_Paulo',
+          }).format(new Date(expiresAt))
         : undefined
 
       const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
