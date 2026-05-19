@@ -134,7 +134,10 @@ const MinhasCoreografias = () => {
         .maybeSingle();
       setProfileCpf(profile?.cpf_cnpj ?? null);
 
-      // Inscrições do user. Join com events pra mostrar nome/data/local na lista.
+      // Inscrições do user. Não usamos embed PostgREST com events porque
+      // registrations tem múltiplas FKs pra events (event_id + outras
+      // colunas com FK ambígua) e o embed falha com erro PGRST201.
+      // Buscamos events em query separada e mapeamos client-side.
       const { data: regsData, error: regsErr } = await supabase
         .from('registrations')
         .select(`
@@ -143,17 +146,28 @@ const MinhasCoreografias = () => {
           estilo_danca, categoria,
           status, status_pagamento,
           payment_url, payment_preference_id, payment_id, payment_group_id,
-          mod_fee, charged_amount, valor_pago, paid_at, created_at,
-          _event:events(id, name, slug, start_date, location)
+          mod_fee, charged_amount, valor_pago, paid_at, created_at
         `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (regsErr) throw regsErr;
-      // Normaliza join (Supabase retorna como array em alguns casos).
-      const regs: Registration[] = (regsData ?? []).map((r: any) => ({
+      const regsRaw = regsData ?? [];
+
+      // Carrega events em batch.
+      const eventIds = Array.from(new Set(regsRaw.map((r: any) => r.event_id).filter(Boolean))) as string[];
+      let eventsMap: Record<string, any> = {};
+      if (eventIds.length > 0) {
+        const { data: eventsData } = await supabase
+          .from('events')
+          .select('id, name, slug, start_date, location')
+          .in('id', eventIds);
+        for (const ev of (eventsData ?? [])) eventsMap[ev.id] = ev;
+      }
+
+      const regs: Registration[] = regsRaw.map((r: any) => ({
         ...r,
-        _event: Array.isArray(r._event) ? r._event[0] : r._event,
+        _event: r.event_id ? eventsMap[r.event_id] : undefined,
       }));
       setRegistrations(regs);
 
