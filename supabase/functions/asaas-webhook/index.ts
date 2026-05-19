@@ -1030,7 +1030,7 @@ async function handleVideoSelectionFee(opts: {
               inscritoEmail: inscrito.email,
               eventoNome:    (eventData as any)?.name ?? '',
               coreografia:   reg?.nome_coreografia ?? '',
-              ctaUrl:        `${frontendUrl}/seletiva/${registrationId}`,
+              ctaUrl:        `${frontendUrl}/minha-seletiva`,
             },
           }),
         })

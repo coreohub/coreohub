@@ -736,6 +736,23 @@ const InscricaoWizard: React.FC = () => {
     setSubmitting(true);
     setError(null);
 
+    // Modelo 3 (taxa A obrigatória > 0): CPF é necessário pra emitir cobrança
+    // Asaas. Sem ele a registration é criada mas a cobrança falha — wizard
+    // ficava num estado intermediário ruim. Bloqueia antes do submit.
+    if (isSeletivaMode && videoLinkRequired && Number((event as any)?.video_selection_fee ?? 0) > 0) {
+      const { data: profSnap } = await supabase
+        .from('profiles')
+        .select('cpf_cnpj')
+        .eq('id', userId!)
+        .maybeSingle();
+      const cpfDigits = (profSnap?.cpf_cnpj ?? '').replace(/\D/g, '');
+      if (!cpfDigits) {
+        setError('Pra pagar a taxa de seletiva você precisa cadastrar CPF/CNPJ no perfil. Acesse "Meu Perfil" antes de confirmar.');
+        setSubmitting(false);
+        return;
+      }
+    }
+
     try {
       // 1) Cria entries de elenco em batch (uma por bailarino).
       //    RLS: user só insere com user_id próprio.
@@ -890,8 +907,17 @@ const InscricaoWizard: React.FC = () => {
             return;
           }
         } catch (e: any) {
-          setError(`Inscrição criada mas falha ao gerar cobrança: ${e.message}. Acesse /seletiva pra retomar.`);
-          navigate('/seletiva');
+          // Rota correta é /minha-seletiva (não /seletiva). Edge function pode
+          // falhar por CPF faltando — mensagem clara pro inscrito completar
+          // perfil e retomar pela página de status da seletiva.
+          const msg = String(e.message ?? '');
+          const isCpfMissing = msg.toLowerCase().includes('cpf');
+          setError(
+            isCpfMissing
+              ? `Pra pagar a taxa de seletiva você precisa completar seu CPF no perfil. Acesse "Meu Perfil" → CPF e volte em "Minha Seletiva" pra retomar.`
+              : `Inscrição criada mas falha ao gerar cobrança: ${msg}. Acesse "Minha Seletiva" pra retomar.`
+          );
+          navigate(isCpfMissing ? '/profile' : '/minha-seletiva');
           return;
         }
       } else if (requiresVideoSel && videoFee === 0) {
@@ -901,7 +927,7 @@ const InscricaoWizard: React.FC = () => {
           .from('registrations')
           .update({ status_pagamento: 'AGUARDANDO_VIDEO', video_fee_status: 'waived' })
           .eq('id', reg.id);
-        navigate('/seletiva');
+        navigate('/minha-seletiva');
         return;
       }
 

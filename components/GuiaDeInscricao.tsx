@@ -143,7 +143,10 @@ const GuiaDeInscricao: React.FC<Props> = ({ profile, config }) => {
     const fetchData = async () => {
       const [elencoRes, coreografiasRes] = await Promise.all([
         supabase.from('elenco').select('id', { count: 'exact', head: true }).eq('user_id', profile.id),
-        supabase.from('registrations').select('id, status, trilha_url').eq('user_id', profile.id),
+        // status_pagamento + video_status pra detectar fluxo de seletiva: enquanto
+        // o vídeo não foi aprovado, trilha sonora ainda não é cobrada do inscrito
+        // (Joinville-style: trilha vai pós-aprovação).
+        supabase.from('registrations').select('id, status, trilha_url, status_pagamento, video_status').eq('user_id', profile.id),
       ]);
       setElencoCount(elencoRes.count ?? 0);
       setCoreografias(coreografiasRes.data ?? []);
@@ -153,9 +156,14 @@ const GuiaDeInscricao: React.FC<Props> = ({ profile, config }) => {
   }, [profile.id]);
 
   const hasElenco      = elencoCount > 0;
-  const total          = coreografias.length;
-  const comTrilha      = coreografias.filter(c => c.trilha_url).length;
-  const pagas          = coreografias.filter(c => c.status === 'PAGO').length;
+  // Coreografias em fluxo de seletiva (AGUARDANDO_VIDEO) ainda não-aprovadas
+  // NÃO entram na contagem de trilha pendente — a comissão analisa primeiro.
+  const isAwaitingVideo = (c: any) =>
+    c.status_pagamento === 'AGUARDANDO_VIDEO' && c.video_status !== 'approved';
+  const coreoTrilhaApplicable = coreografias.filter(c => !isAwaitingVideo(c));
+  const total          = coreoTrilhaApplicable.length;
+  const comTrilha      = coreoTrilhaApplicable.filter(c => c.trilha_url).length;
+  const pagas          = coreoTrilhaApplicable.filter(c => c.status === 'PAGO').length;
   // PR-C: perfil deixa de fazer parte do "completo" — fluxo pode terminar
   // sem perfil (só não emite certificado). Banner separado cobra o perfil.
   const allDone        = hasElenco && total > 0 && comTrilha === total && pagas === total;

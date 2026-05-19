@@ -7,7 +7,7 @@ import {
   Calendar, MapPin, Music, Ticket, ExternalLink,
   ChevronRight, Trophy, Clock, Star, Loader2, ArrowLeft, Youtube, Radio,
   Share2, Copy, Check, Instagram, Globe, MessageCircle, Mail, FileText, Download,
-  GraduationCap,
+  GraduationCap, Video,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import BrandIcon from '../components/BrandIcon';
@@ -542,6 +542,19 @@ const PublicEventPage = () => {
               <BrandIcon size={28} />
               <span className="text-[10px] font-black text-[#ff0068] uppercase tracking-[0.4em]">CoreoHub</span>
             </div>
+            {(event as any).video_selection_enabled && (
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 mb-3 bg-amber-500/10 border border-amber-500/30 rounded-full">
+                <Video size={12} className="text-amber-400" />
+                <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
+                  Seletiva por vídeo
+                  {(event as any).video_selection_fee_required && Number((event as any).video_selection_fee ?? 0) > 0 && (
+                    <span className="font-bold text-amber-300/80 normal-case tracking-normal ml-2">
+                      · taxa R$ {Number((event as any).video_selection_fee).toFixed(2).replace('.', ',')} antes da análise
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
             <motion.h1
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}

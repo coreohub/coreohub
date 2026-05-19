@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
               inscritoEmail:   inscrito.email,
               eventoNome:      event?.name ?? '',
               coreografia:     reg.nome_coreografia ?? '',
-              ctaUrl:          `${frontendUrl}/seletiva/${registration_id}`,
+              ctaUrl:          `${frontendUrl}/minha-seletiva`,
             },
           }),
         })
