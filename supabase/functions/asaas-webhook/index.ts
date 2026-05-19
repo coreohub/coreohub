@@ -4,6 +4,44 @@ import {
   type MetaCapiTarget,
   type Ga4MpTarget,
 } from '../_shared/conversions.ts'
+import { sweepProducerBalance } from '../_shared/asaas-payouts.ts'
+
+/** Helper local pra centralizar o sweep + log estruturado.
+ *  Best-effort: erro nunca bloqueia o webhook caller.
+ *  Sessão 3 — substitui o "saque manual" que o produtor teria que fazer
+ *  no painel Asaas pra receber o split. */
+async function trySweepProducer(
+  supabase: any,
+  producerId: string | null | undefined,
+  asaasBaseUrl: string,
+  context: string
+): Promise<void> {
+  if (!producerId) return
+  try {
+    const { data: prod } = await supabase
+      .from('profiles')
+      .select('asaas_api_key, pix_key, full_name')
+      .eq('id', producerId)
+      .maybeSingle()
+    if (!prod?.asaas_api_key || !prod?.pix_key) {
+      console.log(`[asaas-webhook][sweep][${context}] produtor=${producerId} sem api_key/pix — skip`)
+      return
+    }
+    const result = await sweepProducerBalance({
+      producerApiKey: prod.asaas_api_key,
+      producerPixKey: prod.pix_key,
+      asaasBaseUrl,
+      description:   `Repasse CoreoHub — ${context}`,
+    })
+    if (result.swept) {
+      console.log(`[asaas-webhook][sweep][${context}] OK produtor=${producerId} valor=R$${result.value} transfer=${result.transferId}`)
+    } else {
+      console.warn(`[asaas-webhook][sweep][${context}] skip produtor=${producerId} reason=${result.reason} error=${result.error ?? ''}`)
+    }
+  } catch (e) {
+    console.error(`[asaas-webhook][sweep][${context}] exception produtor=${producerId}:`, (e as Error).message)
+  }
+}
 
 /** Pixel ID + Measurement ID master da CoreoHub. Espelha index.html. */
 const MASTER_META_PIXEL_ID = '968125229155814'
@@ -222,6 +260,14 @@ async function handleAudienceTicket(opts: {
     console.error('[asaas-webhook][audience] falha bloco emails:', (emailErr as Error).message)
   }
 
+  // Sessão 3: auto-saque do split que acabou de cair na subconta do produtor.
+  await trySweepProducer(
+    supabase,
+    eventData?.created_by,
+    Deno.env.get('ASAAS_BASE_URL') ?? '',
+    'audience'
+  )
+
   return respond({
     status:          'ok',
     payment_status:  payment.status,
@@ -382,6 +428,14 @@ async function handleWorkshopRegistration(opts: {
   } catch (emailErr) {
     console.error('[asaas-webhook][workshop] falha bloco emails:', (emailErr as Error).message)
   }
+
+  // Sessão 3: auto-saque do split do workshop.
+  await trySweepProducer(
+    supabase,
+    workshop?.created_by,
+    Deno.env.get('ASAAS_BASE_URL') ?? '',
+    'workshop'
+  )
 
   return respond({
     status:          'ok',
@@ -700,6 +754,14 @@ async function handleAggregatePayment(opts: {
   } catch (capiErr) {
     console.error('[asaas-webhook][aggregate] falha bloco CAPI:', (capiErr as Error).message)
   }
+
+  // Sessão 3: auto-saque do split agregado (10% master, 90% subconta).
+  await trySweepProducer(
+    supabase,
+    eventData?.created_by,
+    Deno.env.get('ASAAS_BASE_URL') ?? '',
+    'aggregate'
+  )
 
   return respond({
     status:          'ok',
@@ -1160,6 +1222,14 @@ Deno.serve(async (req) => {
       } catch (capiErr) {
         console.error('[asaas-webhook] falha no bloco CAPI:', (capiErr as Error).message)
       }
+
+      // Sessão 3: auto-saque do split (fluxo legacy single registration).
+      await trySweepProducer(
+        supabase,
+        eventData?.created_by,
+        Deno.env.get('ASAAS_BASE_URL') ?? '',
+        'registration'
+      )
     }
 
     return ok({
