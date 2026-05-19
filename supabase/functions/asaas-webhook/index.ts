@@ -388,6 +388,205 @@ async function handleWorkshopRegistration(opts: {
   })
 }
 
+// ── Handler dedicado pra fatura agregada (carrinho — 1 cobrança → N registrations) ─
+// Atualiza o payment row + todas as registrations linkadas via payment_group_id,
+// insere N rows em platform_commissions (1 por registration, com valores proporcionais)
+// e dispara emails de confirmação. Idempotente via platform_commissions.asaas_payment_id.
+async function handleAggregatePayment(opts: {
+  supabase:      any
+  payment:       any
+  statusInterno: string
+  paymentId:     string  // UUID em public.payments
+}): Promise<Response> {
+  const { supabase, payment, statusInterno, paymentId } = opts
+
+  const respHeaders = { ...corsHeaders, 'Content-Type': 'application/json' }
+  const respond = (body: Record<string, unknown>) =>
+    new Response(JSON.stringify(body), { status: 200, headers: respHeaders })
+
+  // Idempotência: se já registramos comissão pra este payment, ignora.
+  if (statusInterno === 'APROVADO') {
+    const { data: existing } = await supabase
+      .from('platform_commissions')
+      .select('id')
+      .eq('asaas_payment_id', String(payment.id))
+      .limit(1)
+      .maybeSingle()
+    if (existing) {
+      console.log(`[asaas-webhook][aggregate] payment=${payment.id} já processado`)
+      return respond({ status: 'already_processed' })
+    }
+  }
+
+  // ── Atualiza payment row + registrations linkadas ─────────────────────────
+  const paymentUpdate: Record<string, unknown> = {
+    status:           statusInterno,
+    payment_method:   payment.billingType ?? null,
+  }
+  if (statusInterno === 'APROVADO') {
+    paymentUpdate.paid_at = new Date().toISOString()
+  }
+
+  const { data: paymentRow, error: payErr } = await supabase
+    .from('payments')
+    .update(paymentUpdate)
+    .eq('id', paymentId)
+    .select('id, user_id, event_id, value_total, commission_total, producer_total')
+    .maybeSingle()
+
+  if (payErr || !paymentRow) {
+    console.error(`[asaas-webhook][aggregate] payment_id=${paymentId} não encontrado:`, payErr?.message)
+    return respond({ status: 'error', reason: 'payment_not_found' })
+  }
+
+  // Carrega registrations linkadas (faz independente do status, pra logging
+  // e pra atualizar status_pagamento mesmo em VENCIDO/ESTORNADO).
+  const { data: regs, error: regsErr } = await supabase
+    .from('registrations')
+    .select('id, event_id, user_id, nome_coreografia, formato_participacao, tipo_apresentacao, mod_fee')
+    .eq('payment_group_id', paymentId)
+
+  if (regsErr) {
+    console.error('[asaas-webhook][aggregate] erro ao carregar registrations:', regsErr.message)
+  }
+  const registrations = regs ?? []
+  if (registrations.length === 0) {
+    console.error(`[asaas-webhook][aggregate] nenhuma registration linkada ao payment ${paymentId}`)
+    return respond({ status: 'error', reason: 'no_registrations_linked' })
+  }
+
+  // Atualiza status_pagamento de todas as registrations.
+  const regUpdate: Record<string, unknown> = {
+    status_pagamento: statusInterno,
+    payment_id:       String(payment.id),  // legacy field — UI lê dali
+    payment_method:   payment.billingType ?? null,
+  }
+  if (statusInterno === 'APROVADO') {
+    regUpdate.paid_at = new Date().toISOString()
+  }
+  await supabase
+    .from('registrations')
+    .update(regUpdate)
+    .eq('payment_group_id', paymentId)
+
+  if (statusInterno !== 'APROVADO') {
+    return respond({
+      status: 'ok',
+      payment_status:  payment.status,
+      internal_status: statusInterno,
+      payment_id:      paymentId,
+      registrations:   registrations.length,
+    })
+  }
+
+  // ── APROVADO: inserir N rows em platform_commissions ─────────────────────
+  // Proporção: comissão de cada reg = (commission_total) × (charged_reg / value_total).
+  // Pra não recalcular preços (que podem ter mudado), distribuímos uniforme
+  // por # de registrations — é uma aproximação aceitável pra relatórios.
+  // Refunds parciais usam o valor proporcional do Asaas, não esta tabela.
+  const { data: eventData } = await supabase
+    .from('events')
+    .select('created_by, name, location, event_date, commission_type, commission_percent, fee_mode')
+    .eq('id', paymentRow.event_id)
+    .single()
+
+  const grossTotal       = Number(payment.value ?? paymentRow.value_total)
+  const commissionTotal  = Number(paymentRow.commission_total)
+  const producerTotalRow = Number(paymentRow.producer_total)
+  const n                = registrations.length
+  const commissionPer    = parseFloat((commissionTotal / n).toFixed(2))
+  const grossPer         = parseFloat((grossTotal / n).toFixed(2))
+  const producerPer      = parseFloat((producerTotalRow / n).toFixed(2))
+
+  const commissionRows = registrations.map((r: any) => ({
+    registration_id:   r.id,
+    event_id:          r.event_id,
+    producer_id:       eventData?.created_by ?? null,
+    gross_amount:      grossPer,
+    commission_amount: commissionPer,
+    net_amount:        producerPer,
+    asaas_payment_id:  String(payment.id),
+    commission_type:   eventData?.commission_type ?? 'percent',
+  }))
+
+  const { error: commErr } = await supabase.from('platform_commissions').insert(commissionRows)
+  if (commErr) {
+    console.error('[asaas-webhook][aggregate] erro inserir comissões:', commErr.message)
+  } else {
+    console.log(
+      `[asaas-webhook][aggregate] APROVADO payment=${paymentId} N=${n}` +
+      ` bruto=R$${grossTotal} comissao=R$${commissionTotal} produtor=R$${producerTotalRow}`
+    )
+  }
+
+  // ── Emails de confirmação (1 por registration) ────────────────────────────
+  try {
+    const [{ data: inscritoProfile }, produtorRes] = await Promise.all([
+      supabase.from('profiles').select('full_name, email').eq('id', paymentRow.user_id).maybeSingle(),
+      eventData?.created_by
+        ? supabase.from('profiles').select('full_name, email').eq('id', eventData.created_by).maybeSingle()
+        : Promise.resolve({ data: null } as any),
+    ])
+    const produtorProfile: any = (produtorRes as any)?.data ?? null
+    const appUrl = Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'
+    const eventoData = eventData?.event_date
+      ? new Date(eventData.event_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+      : null
+
+    const emailJobs: Promise<void>[] = []
+    if (inscritoProfile?.email) {
+      for (const r of registrations) {
+        const modalidade = r.tipo_apresentacao ?? r.formato_participacao ?? null
+        emailJobs.push(dispararEmail('payment_confirmed_registrant', {
+          inscritoNome:   inscritoProfile.full_name,
+          inscritoEmail:  inscritoProfile.email,
+          coreoNome:      r.nome_coreografia,
+          modalidade,
+          eventoNome:     eventData?.name,
+          eventoLocal:    eventData?.location,
+          eventoData,
+          valorPago:      grossPer,
+          appUrl,
+          produtorEmail:  produtorProfile?.email,
+          registrationId: r.id,
+          emailUnverified: false,
+        }))
+      }
+    }
+    if (produtorProfile?.email) {
+      // 1 email pro produtor consolidando todas (não floodar inbox dele com N).
+      emailJobs.push(dispararEmail('payment_confirmed_producer', {
+        produtorNome:  produtorProfile.full_name,
+        produtorEmail: produtorProfile.email,
+        coreoNome:     `${n} coreografias (fatura agregada)`,
+        modalidade:    null,
+        inscritoNome:  inscritoProfile?.full_name,
+        inscritoEmail: inscritoProfile?.email,
+        eventoNome:    eventData?.name,
+        valorBruto:    grossTotal,
+        comissao:      commissionTotal,
+        valorLiquido:  producerTotalRow,
+        appUrl,
+      }))
+    }
+    await Promise.all(emailJobs)
+  } catch (emailErr) {
+    console.error('[asaas-webhook][aggregate] falha bloco emails:', (emailErr as Error).message)
+  }
+
+  // Nota: Conversions API (Meta CAPI + GA4 MP) NÃO é disparada neste handler
+  // por enquanto. O dedupe via event_id quebraria com N eventos diferentes pro
+  // mesmo payment_id no Meta. Sessão 2 decide: 1 evento agregado vs N eventos.
+
+  return respond({
+    status:          'ok',
+    payment_status:  payment.status,
+    internal_status: statusInterno,
+    payment_id:      paymentId,
+    registrations:   n,
+  })
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -448,12 +647,15 @@ Deno.serve(async (req) => {
     // Discriminator do externalReference:
     //   "AT:<group_id>"      = audience ticket (Tier 1/2 plateia)
     //   "WS:<registration>"  = workshop registration (Etapa 1 Workshops)
+    //   "AGG:<payment_id>"   = fatura agregada (carrinho — 1 cobrança → N registrations)
     //   <uuid>               = registration de inscrição (legado, sem prefix)
     const isAudienceTicket = externalRef.startsWith('AT:')
     const isWorkshop       = externalRef.startsWith('WS:')
+    const isAggregate      = externalRef.startsWith('AGG:')
     const audienceGroupId  = isAudienceTicket ? externalRef.slice(3) : null
     const workshopRegistrationId = isWorkshop ? externalRef.slice(3) : null
-    const registrationId   = (isAudienceTicket || isWorkshop) ? null : externalRef
+    const aggregatePaymentId = isAggregate ? externalRef.slice(4) : null
+    const registrationId   = (isAudienceTicket || isWorkshop || isAggregate) ? null : externalRef
 
     // Defesa em profundidade contra forja de webhook (token estatico
     // pode vazar): cross-check via API Asaas. Atacante com token vazado
@@ -496,7 +698,10 @@ Deno.serve(async (req) => {
     }
 
     const statusInterno = STATUS_MAP[payment.status] ?? 'PENDENTE'
-    const refType = isAudienceTicket ? 'audience' : isWorkshop ? 'workshop' : 'registration'
+    const refType = isAudienceTicket ? 'audience'
+                  : isWorkshop       ? 'workshop'
+                  : isAggregate      ? 'aggregate'
+                                     : 'registration'
     console.log(
       `[asaas-webhook] payment_id=${payment.id} asaas_status=${payment.status}` +
       ` → ${statusInterno} | ref=${externalRef} type=${refType}`
@@ -524,6 +729,16 @@ Deno.serve(async (req) => {
         payment,
         statusInterno,
         registrationId: workshopRegistrationId,
+      })
+    }
+
+    // ── BRANCH: AGGREGATE PAYMENT (fatura agregada — carrinho) ───────────────
+    if (isAggregate && aggregatePaymentId) {
+      return await handleAggregatePayment({
+        supabase,
+        payment,
+        statusInterno,
+        paymentId: aggregatePaymentId,
       })
     }
 
