@@ -476,12 +476,21 @@ async function handleAggregatePayment(opts: {
   }
 
   // ── Atualiza payment row + registrations linkadas ─────────────────────────
-  // A5 (audit): paid_at = data real do pagamento (payment.paymentDate ou
-  // confirmedDate), não NOW(). Webhook pode ser retry horas depois.
+  // A5 (audit): paid_at = data real do pagamento, não NOW(). Webhook pode
+  // ser retry horas depois.
+  // Sessão 3: fix timezone. Asaas devolve paymentDate como YYYY-MM-DD (sem
+  // hora). new Date() interpreta como UTC midnight → no BRT vira 21:00 do
+  // dia anterior. Tratamos como meio-dia BRT pra nunca cruzar fronteira.
+  // confirmedDate pode vir como datetime — usa direto.
   const paidAtReal = (() => {
-    const candidate = payment.paymentDate ?? payment.confirmedDate
-    if (candidate) {
-      const d = new Date(candidate)
+    const cand = payment.confirmedDate ?? payment.paymentDate
+    if (cand) {
+      const s = String(cand)
+      // YYYY-MM-DD puro (10 chars) → meio-dia BRT (UTC-3 = 15:00Z)
+      const iso = s.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(s)
+        ? `${s}T15:00:00.000Z`
+        : s
+      const d = new Date(iso)
       if (!isNaN(d.getTime())) return d.toISOString()
     }
     return new Date().toISOString()
