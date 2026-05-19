@@ -1178,12 +1178,13 @@ const Registrations = () => {
                 <section>
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><Calendar size={12} /> Timeline</h3>
                   {(() => {
-                    const events: Array<{ label: string; at: string | null; icon: 'created' | 'audio' | 'video' | 'paid' | 'refund' }> = [
-                      { label: 'Inscrição criada',  at: viewingReg.created_at ?? viewingReg.criado_em ?? null, icon: 'created' },
-                      { label: 'Trilha enviada',    at: viewingReg.trilha_url ? (viewingReg.trilha_uploaded_at ?? viewingReg.updated_at ?? null) : null, icon: 'audio' },
-                      { label: 'Vídeo enviado',    at: viewingReg.video_url ? (viewingReg.video_uploaded_at ?? null) : null, icon: 'video' },
-                      { label: 'Pagamento confirmado', at: viewingReg.paid_at ?? null, icon: 'paid' },
-                      { label: 'Reembolsada',       at: viewingReg.refunded_at ?? null, icon: 'refund' },
+                    type TimelineIcon = 'created' | 'audio' | 'video' | 'paid' | 'refund';
+                    const events: Array<{ label: string; at: string | null; icon: TimelineIcon }> = [
+                      { label: 'Inscrição criada',  at: viewingReg.created_at ?? viewingReg.criado_em ?? null, icon: 'created' as TimelineIcon },
+                      { label: 'Trilha enviada',    at: viewingReg.trilha_url ? (viewingReg.trilha_uploaded_at ?? viewingReg.updated_at ?? null) : null, icon: 'audio' as TimelineIcon },
+                      { label: 'Vídeo enviado',    at: viewingReg.video_url ? (viewingReg.video_uploaded_at ?? null) : null, icon: 'video' as TimelineIcon },
+                      { label: 'Pagamento confirmado', at: viewingReg.paid_at ?? null, icon: 'paid' as TimelineIcon },
+                      { label: 'Reembolsada',       at: viewingReg.refunded_at ?? null, icon: 'refund' as TimelineIcon },
                     ].filter(e => e.at);
 
                     if (events.length === 0) {
