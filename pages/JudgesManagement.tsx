@@ -33,6 +33,10 @@ interface Judge {
   gender?: 'M' | 'F' | null;
   /** URL da assinatura digital pra emissão de certificados */
   assinatura_url?: string | null;
+  /** Sessão Seletiva v1: jurado elegível pra avaliar vídeos da seletiva.
+   *  Default TRUE — produtor desmarca pra restringir avaliação de vídeo a
+   *  um subset dos jurados de palco. */
+  can_evaluate_video?: boolean;
 }
 
 const FORMATS = [
@@ -54,6 +58,7 @@ const EMPTY_JUDGE: Omit<Judge, 'id'> = {
   is_active: true,
   is_public: false,
   gender: null,
+  can_evaluate_video: true,
 };
 
 const inputCls = 'w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-4 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm';
@@ -162,6 +167,7 @@ const JudgesManagement = () => {
     is_active: row.is_active ?? true,
     is_public: row.is_public ?? false,
     gender: row.gender ?? null,
+    can_evaluate_video: row.can_evaluate_video ?? true,
   });
 
   /* ── open modal ── */
@@ -269,6 +275,7 @@ const JudgesManagement = () => {
         is_active: form.is_active ?? true,
         is_public: form.is_public ?? false,
         gender: form.gender ?? null,
+        can_evaluate_video: form.can_evaluate_video ?? true,
       };
 
       const data = await trySaveWithPayload(payload, !editingJudge, editingJudge?.id);
@@ -728,6 +735,32 @@ const JudgesManagement = () => {
                           </p>
                         </div>
                         <div className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${form.is_public ? 'bg-[#ff0068] justify-end' : 'bg-slate-300 dark:bg-white/10 justify-start'}`}>
+                          <div className="w-5 h-5 bg-white rounded-full shadow" />
+                        </div>
+                      </button>
+                    </div>
+
+                    {/* Sessão Seletiva v1: pode avaliar vídeo da seletiva? */}
+                    <div className="md:col-span-2">
+                      <label className={labelCls}>Avalia seletiva de vídeo</label>
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, can_evaluate_video: !f.can_evaluate_video }))}
+                        className={`flex items-center justify-between gap-3 w-full px-4 py-3 rounded-xl border text-left transition-all ${
+                          form.can_evaluate_video
+                            ? 'border-emerald-500 bg-emerald-500/10'
+                            : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5'
+                        }`}
+                      >
+                        <div className="flex-1">
+                          <p className={`text-[11px] font-black uppercase tracking-widest ${form.can_evaluate_video ? 'text-emerald-500' : 'text-slate-700 dark:text-slate-300'}`}>
+                            {form.can_evaluate_video ? '✓ Acessa a fila de seletiva' : 'Sem acesso à seletiva'}
+                          </p>
+                          <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+                            Quando ativo, este jurado pode avaliar os vídeos enviados na seletiva (modo multi-jurado). Default: ativo.
+                          </p>
+                        </div>
+                        <div className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${form.can_evaluate_video ? 'bg-emerald-500 justify-end' : 'bg-slate-300 dark:bg-white/10 justify-start'}`}>
                           <div className="w-5 h-5 bg-white rounded-full shadow" />
                         </div>
                       </button>

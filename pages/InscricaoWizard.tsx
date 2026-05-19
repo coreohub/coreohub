@@ -414,7 +414,7 @@ const InscricaoWizard: React.FC = () => {
       // de inscrições for criada, adicionar a migration e voltar aqui.
       const { data: ev, error: evErr } = await supabase
         .from('events')
-        .select('id, name, slug, formacoes_config, start_date, event_date, producer_ga4_id, producer_meta_pixel_id')
+        .select('id, name, slug, formacoes_config, start_date, event_date, producer_ga4_id, producer_meta_pixel_id, video_selection_enabled, video_selection_fee_required, video_selection_fee')
         .eq(filterCol, idOrSlug)
         .maybeSingle();
 
@@ -822,10 +822,58 @@ const InscricaoWizard: React.FC = () => {
         throw regErr ?? new Error('Erro ao criar inscrição.');
       }
 
-      // 3) Sessão 2 do carrinho: em vez de mandar pro checkout single, manda
-      // pro /minhas-coreografias com a inscrição recém-criada destacada. O
-      // inscrito decide se quer adicionar mais coreografias ou pagar agora
-      // (separado ou agregado). Inscrição fica como PENDENTE no banco.
+      // 3) Branching pelo modelo de seletiva (Sessão seletiva v1):
+      //    Modelo 3 (taxa A obrigatória + valor > 0): marca AGUARDANDO_VIDEO,
+      //      cria cobrança da taxa A e redireciona pro checkout Asaas.
+      //    Modelo 2 (taxa A obrigatória + valor R$ 0): marca AGUARDANDO_VIDEO
+      //      + video_fee_status='waived' e manda direto pro /seletiva.
+      //    Modelo 1 / sem seletiva: fluxo normal do carrinho (/minhas-coreografias).
+      const evWithSelecao = event as any;
+      const requiresVideoSel = Boolean(evWithSelecao?.video_selection_enabled) && Boolean(evWithSelecao?.video_selection_fee_required);
+      const videoFee         = Number(evWithSelecao?.video_selection_fee ?? 0);
+
+      if (requiresVideoSel && videoFee > 0) {
+        // Modelo 3 — cobra taxa de seletiva antes do upload do vídeo.
+        await supabase
+          .from('registrations')
+          .update({ status_pagamento: 'AGUARDANDO_VIDEO', video_fee_status: 'pending' })
+          .eq('id', reg.id);
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const r = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-video-selection-payment`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${session?.access_token ?? ''}`,
+                'Content-Type':  'application/json',
+              },
+              body: JSON.stringify({ registration_id: reg.id, event_id: event.id }),
+            }
+          );
+          const payload = await r.json();
+          if (!r.ok) throw new Error(payload.error ?? 'Erro ao criar cobrança da taxa de seletiva.');
+          if (payload.invoice_url) {
+            window.location.href = payload.invoice_url;
+            return;
+          }
+        } catch (e: any) {
+          setError(`Inscrição criada mas falha ao gerar cobrança: ${e.message}. Acesse /seletiva pra retomar.`);
+          navigate('/seletiva');
+          return;
+        }
+      } else if (requiresVideoSel && videoFee === 0) {
+        // Modelo 2 — inscrição provisória grátis, vídeo é pré-requisito do
+        // pagamento da inscrição cheia.
+        await supabase
+          .from('registrations')
+          .update({ status_pagamento: 'AGUARDANDO_VIDEO', video_fee_status: 'waived' })
+          .eq('id', reg.id);
+        navigate('/seletiva');
+        return;
+      }
+
+      // Modelo 1 / sem seletiva — carrinho padrão Sessão 2.
       // Param `nova=<id>` permite a UI destacar/animar a inscrição recém-criada.
       navigate(`/minhas-coreografias?nova=${reg.id}`);
     } catch (e: any) {

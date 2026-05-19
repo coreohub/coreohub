@@ -294,6 +294,7 @@ async function handleAudienceTicket(opts: {
       asaas_payment_id:  String(payment.id),
       commission_type:   'percent',
       audience_ticket_group_id: groupId,
+      kind:              'audience',
     })
 
   if (commErr) {
@@ -468,6 +469,7 @@ async function handleWorkshopRegistration(opts: {
       asaas_payment_id:          String(payment.id),
       commission_type:           'percent',
       workshop_registration_id:  registrationId,
+      kind:                      'workshop',
     })
 
   if (commErr) {
@@ -721,6 +723,7 @@ async function handleAggregatePayment(opts: {
       net_amount:        prodR,
       asaas_payment_id:  String(payment.id),
       commission_type:   eventData?.commission_type ?? 'percent',
+      kind:              'registration',  // carrinho = inscrição cheia
     }
   })
   // Para o email consolidado abaixo, mantemos referência ao gross por reg.
@@ -904,6 +907,148 @@ async function handleAggregatePayment(opts: {
   })
 }
 
+// ── Handler dedicado pra TAXA DE SELETIVA DE VÍDEO (Modelo 3) ────────────────
+// Atualiza video_fee_status na registration sem mexer em status_pagamento
+// (que permanece AGUARDANDO_VIDEO até taxa B ser paga). Registra split em
+// platform_commissions normalmente e dispara sweep do produtor.
+// Idempotente via platform_commissions.asaas_payment_id.
+async function handleVideoSelectionFee(opts: {
+  supabase:       any
+  payment:        any
+  statusInterno:  string
+  registrationId: string
+  asaasBaseUrl:   string
+}): Promise<Response> {
+  const { supabase, payment, statusInterno, registrationId, asaasBaseUrl } = opts
+
+  const respHeaders = { ...corsHeaders, 'Content-Type': 'application/json' }
+  const respond = (body: Record<string, unknown>) =>
+    new Response(JSON.stringify(body), { status: 200, headers: respHeaders })
+
+  // Idempotência via platform_commissions (mesma table das outras branches)
+  if (statusInterno === 'APROVADO') {
+    const { data: existing } = await supabase
+      .from('platform_commissions')
+      .select('id')
+      .eq('asaas_payment_id', String(payment.id))
+      .maybeSingle()
+    if (existing) {
+      console.log(`[asaas-webhook][video_selection] payment=${payment.id} já processado`)
+      return respond({ status: 'already_processed' })
+    }
+  }
+
+  // Mapeia status interno → video_fee_status
+  // APROVADO → paid (libera upload de vídeo)
+  // VENCIDO → vence registration toda (sem taxa A paga não pode enviar vídeo)
+  // ESTORNADO → waived
+  let videoFeeStatus: string | undefined
+  let registrationStatus: string | undefined
+  if (statusInterno === 'APROVADO') {
+    videoFeeStatus = 'paid'
+    // status_pagamento permanece AGUARDANDO_VIDEO (taxa B ainda não cobrada)
+  } else if (statusInterno === 'VENCIDO') {
+    registrationStatus = 'VENCIDO'
+  } else if (statusInterno === 'ESTORNADO') {
+    videoFeeStatus = 'waived'
+  }
+
+  const updatePayload: Record<string, unknown> = {}
+  if (videoFeeStatus)       updatePayload.video_fee_status = videoFeeStatus
+  if (registrationStatus)   updatePayload.status_pagamento = registrationStatus
+  if (Object.keys(updatePayload).length > 0) {
+    await supabase
+      .from('registrations')
+      .update(updatePayload)
+      .eq('id', registrationId)
+  }
+
+  // Se APROVADO, contabiliza split + dispara sweep + email
+  if (statusInterno === 'APROVADO') {
+    const { data: reg } = await supabase
+      .from('registrations')
+      .select('event_id, user_id, nome_coreografia')
+      .eq('id', registrationId)
+      .maybeSingle()
+
+    const { data: eventData } = reg?.event_id
+      ? await supabase
+          .from('events')
+          .select('created_by, name, commission_percent, fee_mode')
+          .eq('id', reg.event_id)
+          .maybeSingle()
+      : { data: null }
+
+    const grossAmount       = Number(payment.value ?? 0)
+    const commissionPercent = Number((eventData as any)?.commission_percent ?? 10)
+    const feeMode           = (eventData as any)?.fee_mode ?? 'repassar'
+
+    const baseFee = feeMode === 'repassar'
+      ? parseFloat((grossAmount / (1 + commissionPercent / 100)).toFixed(2))
+      : grossAmount
+    const commissionAmount = parseFloat((baseFee * (commissionPercent / 100)).toFixed(2))
+    const producerAmount   = parseFloat((grossAmount - commissionAmount).toFixed(2))
+
+    await supabase
+      .from('platform_commissions')
+      .insert({
+        registration_id:   registrationId,
+        event_id:          reg?.event_id ?? null,
+        producer_id:       (eventData as any)?.created_by ?? null,
+        gross_amount:      grossAmount,
+        commission_amount: commissionAmount,
+        net_amount:        producerAmount,
+        asaas_payment_id:  String(payment.id),
+        kind:              'video_selection',  // discriminador opcional pra relatórios
+      })
+
+    // Sweep da subconta do produtor (mesma infra do split normal)
+    await trySweepProducer(
+      supabase,
+      (eventData as any)?.created_by,
+      asaasBaseUrl,
+      'video_selection',
+      { producerAmount },
+    )
+
+    // Email "pode enviar vídeo agora"
+    try {
+      const { data: inscrito } = reg?.user_id
+        ? await supabase.from('profiles').select('full_name, email').eq('id', reg.user_id).maybeSingle()
+        : { data: null }
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+      const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+      const frontendUrl = Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'
+      if (inscrito?.email) {
+        await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'video_fee_paid_upload_ready',
+            payload: {
+              inscritoNome:  inscrito.full_name,
+              inscritoEmail: inscrito.email,
+              eventoNome:    (eventData as any)?.name ?? '',
+              coreografia:   reg?.nome_coreografia ?? '',
+              ctaUrl:        `${frontendUrl}/seletiva/${registrationId}`,
+            },
+          }),
+        })
+      }
+    } catch (e) {
+      console.warn('[asaas-webhook][video_selection] email falhou:', (e as Error).message)
+    }
+  }
+
+  return respond({
+    status:          'ok',
+    payment_status:  payment.status,
+    internal_status: statusInterno,
+    registration_id: registrationId,
+    branch:          'video_selection',
+  })
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -965,14 +1110,17 @@ Deno.serve(async (req) => {
     //   "AT:<group_id>"      = audience ticket (Tier 1/2 plateia)
     //   "WS:<registration>"  = workshop registration (Etapa 1 Workshops)
     //   "AGG:<payment_id>"   = fatura agregada (carrinho — 1 cobrança → N registrations)
+    //   "VS:<registration>"  = taxa de seletiva de vídeo (Modelo 3 — Sessão seletiva)
     //   <uuid>               = registration de inscrição (legado, sem prefix)
     const isAudienceTicket = externalRef.startsWith('AT:')
     const isWorkshop       = externalRef.startsWith('WS:')
     const isAggregate      = externalRef.startsWith('AGG:')
+    const isVideoSelection = externalRef.startsWith('VS:')
     const audienceGroupId  = isAudienceTicket ? externalRef.slice(3) : null
     const workshopRegistrationId = isWorkshop ? externalRef.slice(3) : null
     const aggregatePaymentId = isAggregate ? externalRef.slice(4) : null
-    const registrationId   = (isAudienceTicket || isWorkshop || isAggregate) ? null : externalRef
+    const videoSelectionRegistrationId = isVideoSelection ? externalRef.slice(3) : null
+    const registrationId   = (isAudienceTicket || isWorkshop || isAggregate || isVideoSelection) ? null : externalRef
 
     // Defesa em profundidade contra forja de webhook (token estatico
     // pode vazar): cross-check via API Asaas. Atacante com token vazado
@@ -1018,6 +1166,7 @@ Deno.serve(async (req) => {
     const refType = isAudienceTicket ? 'audience'
                   : isWorkshop       ? 'workshop'
                   : isAggregate      ? 'aggregate'
+                  : isVideoSelection ? 'video_selection'
                                      : 'registration'
     console.log(
       `[asaas-webhook] payment_id=${payment.id} asaas_status=${payment.status}` +
@@ -1056,6 +1205,17 @@ Deno.serve(async (req) => {
         payment,
         statusInterno,
         paymentId: aggregatePaymentId,
+      })
+    }
+
+    // ── BRANCH: VIDEO SELECTION FEE (taxa de seletiva — Modelo 3) ────────────
+    if (isVideoSelection && videoSelectionRegistrationId) {
+      return await handleVideoSelectionFee({
+        supabase,
+        payment,
+        statusInterno,
+        registrationId: videoSelectionRegistrationId,
+        asaasBaseUrl:   ASAAS_BASE_URL,
       })
     }
 

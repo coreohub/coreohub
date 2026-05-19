@@ -159,6 +159,11 @@ export interface Event {
   video_selection_fee?: number;          // 0 = gratuita
   video_selection_fee_required?: boolean;
   video_fee_refund_policy?: 'no_refund' | 'full_refund' | 'partial_refund';
+  video_fee_partial_refund_percent?: number; // 0-100, default 50
+  // Multi-jurado (Sessão Seletiva v1): 1 = produtor solo via VideoSelection.tsx,
+  // >=2 = blind multi-judge via /jurado-seletiva agregado por majority/unanimous.
+  video_evaluators_count?: number;
+  video_evaluation_rule?: 'majority' | 'unanimous';
 
   // Palco & Tempos
   stage_entry_time_seconds?: number;    // Tempo de entrada no palco
@@ -207,6 +212,22 @@ export interface Registration {
   video_submitted_at?: string;
   video_fee_status?: 'not_required' | 'pending' | 'paid' | 'waived';
   video_fee_payment_id?: string;
+  video_approved_at?: string;
+  video_approved_by?: string;
+}
+
+/** Avaliação individual de jurado quando event.video_evaluators_count >= 2.
+ *  Agregação pra video_status agregado é computada em código (lib + edge function).
+ */
+export interface VideoEvaluation {
+  id: string;
+  registration_id: string;
+  judge_id: string;
+  decision: 'approve' | 'reject' | 'conditional';
+  feedback?: string;
+  score?: number;  // 0-10, opcional v1
+  created_at: string;
+  updated_at: string;
 }
 
 /** Lote de inscrição com prazo e preço */
@@ -228,8 +249,10 @@ export interface Coupon {
   used_count: number;
   expires_at?: string | null;
   is_active: boolean;
-  /** Tier 2: 'inscription' (default), 'audience' (plateia), 'both'. */
-  scope?: 'inscription' | 'audience' | 'both';
+  /** Escopo: inscription = só inscrições. audience = só plateia. workshop = só workshops.
+   *  video_selection = só taxa de seletiva de vídeo. both = inscrição+plateia (legacy).
+   *  all = todos. */
+  scope?: 'inscription' | 'audience' | 'workshop' | 'video_selection' | 'both' | 'all';
   created_at: string;
 }
 

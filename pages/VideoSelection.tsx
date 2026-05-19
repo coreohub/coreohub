@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
-import { reviewVideoSubmission } from '../services/supabase';
 
 type VideoStatus = 'pending' | 'submitted' | 'approved' | 'rejected' | 'conditional' | 'review_later';
 
@@ -31,6 +30,12 @@ interface EventVideoConfig {
   video_selection_fee: number;
   video_selection_fee_required: boolean;
   video_fee_refund_policy: 'no_refund' | 'full_refund' | 'partial_refund';
+  video_fee_partial_refund_percent: number;  // 0-100, default 50
+}
+
+interface ProdutorEvent {
+  id: string;
+  name: string;
 }
 
 const STATUS_FILTER_OPTIONS: { value: VideoStatus | 'ALL'; label: string; color: string }[] = [
@@ -78,23 +83,36 @@ const VideoSelection: React.FC = () => {
     video_selection_fee: 0,
     video_selection_fee_required: false,
     video_fee_refund_policy: 'no_refund',
+    video_fee_partial_refund_percent: 50,
   });
   const [savingConfig, setSavingConfig] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
+  // Sessão Seletiva v1: config é por evento (events table). Antes salvava em
+  // configuracoes.id=1 — dead code que nunca persistia. Agora dropdown seleciona
+  // qual evento configurar.
+  const [produtorEvents, setProdutorEvents] = useState<ProdutorEvent[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string>('');
 
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [{ data: regs, error }, { data: evt }] = await Promise.all([
+      const { data: { user } } = await supabase.auth.getUser();
+      // Eventos do produtor com seletiva habilitável (events.created_by = user).
+      const { data: prodEvts } = user
+        ? await supabase
+            .from('events')
+            .select('id, name')
+            .eq('created_by', user.id)
+            .order('created_at', { ascending: false })
+        : { data: [] as any[] };
+      const evList = (prodEvts ?? []) as ProdutorEvent[];
+      setProdutorEvents(evList);
+
+      const [{ data: regs, error }] = await Promise.all([
         supabase
           .from('registrations')
           .select('id, event_id, nome_coreografia, estudio, categoria, formato_participacao, video_url, video_status, video_feedback, video_submitted_at, video_fee_status, profiles(full_name)')
           .order('video_submitted_at', { ascending: false, nullsFirst: false }),
-        supabase
-          .from('configuracoes')
-          .select('video_selection_enabled, video_submission_deadline, video_selection_fee, video_selection_fee_required, video_fee_refund_policy')
-          .eq('id', 1)
-          .single(),
       ]);
 
       if (error) throw error;
@@ -121,19 +139,34 @@ const VideoSelection: React.FC = () => {
         video_status: r.video_status ?? 'pending',
       })));
 
-      if (evt) {
-        setConfig({
-          video_selection_enabled: evt.video_selection_enabled ?? false,
-          video_submission_deadline: evt.video_submission_deadline ?? '',
-          video_selection_fee: evt.video_selection_fee ?? 0,
-          video_selection_fee_required: evt.video_selection_fee_required ?? false,
-          video_fee_refund_policy: evt.video_fee_refund_policy ?? 'no_refund',
-        });
+      // Carrega config do 1º evento do produtor por default. Dropdown permite trocar.
+      if (evList.length > 0) {
+        const firstId = evList[0].id;
+        setSelectedEventId(firstId);
+        await loadEventConfig(firstId);
       }
     } catch (err) {
       console.error('Erro ao carregar seletivas:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadEventConfig = async (eventId: string) => {
+    const { data: evt } = await supabase
+      .from('events')
+      .select('video_selection_enabled, video_submission_deadline, video_selection_fee, video_selection_fee_required, video_fee_refund_policy, video_fee_partial_refund_percent')
+      .eq('id', eventId)
+      .maybeSingle();
+    if (evt) {
+      setConfig({
+        video_selection_enabled:           evt.video_selection_enabled ?? false,
+        video_submission_deadline:         evt.video_submission_deadline ?? '',
+        video_selection_fee:               Number(evt.video_selection_fee ?? 0),
+        video_selection_fee_required:      evt.video_selection_fee_required ?? false,
+        video_fee_refund_policy:           evt.video_fee_refund_policy ?? 'no_refund',
+        video_fee_partial_refund_percent:  Number(evt.video_fee_partial_refund_percent ?? 50),
+      });
     }
   };
 
@@ -166,7 +199,54 @@ const VideoSelection: React.FC = () => {
     if (!reviewing) return;
     setSavingReview(true);
     try {
-      await reviewVideoSubmission(reviewing.id, decision, feedback || undefined);
+      // Update direto + timestamps de aprovação (não passa por reviewVideoSubmission
+      // pra capturar video_approved_at/by que o helper não setava). Modelo 3 v1.
+      const { data: { user } } = await supabase.auth.getUser();
+      const updatePayload: Record<string, any> = {
+        video_status:   decision,
+        video_feedback: feedback || null,
+      };
+      if (decision === 'approved') {
+        updatePayload.video_approved_at = new Date().toISOString();
+        updatePayload.video_approved_by = user?.id ?? null;
+      } else {
+        // Caso produtor mude voto (reprova depois de aprovado) — limpa aprovação.
+        updatePayload.video_approved_at = null;
+        updatePayload.video_approved_by = null;
+      }
+      const { error: updErr } = await supabase
+        .from('registrations')
+        .update(updatePayload)
+        .eq('id', reviewing.id);
+      if (updErr) throw updErr;
+
+      // Pós-ação: dispara email pro inscrito (aprovado) ou estorno (reprovado).
+      // Best-effort — falha aqui não desfaz a decisão.
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const baseHeaders = {
+          'Authorization': `Bearer ${session?.access_token ?? ''}`,
+          'Content-Type':  'application/json',
+        };
+        if (decision === 'approved') {
+          await fetch(`${supabaseUrl}/functions/v1/trigger-registration-payment`, {
+            method: 'POST',
+            headers: baseHeaders,
+            body: JSON.stringify({ registration_id: reviewing.id }),
+          });
+        } else if (decision === 'rejected') {
+          await fetch(`${supabaseUrl}/functions/v1/process-video-refund`, {
+            method: 'POST',
+            headers: baseHeaders,
+            body: JSON.stringify({ registration_id: reviewing.id, feedback }),
+          });
+        }
+        // conditional + review_later não disparam side effects.
+      } catch (e) {
+        console.warn('[VideoSelection] post-action falhou (decisão persistida):', e);
+      }
+
       setRegistrations(prev =>
         prev.map(r => r.id === reviewing.id ? { ...r, video_status: decision, video_feedback: feedback || null } : r)
       );
@@ -180,18 +260,20 @@ const VideoSelection: React.FC = () => {
   };
 
   const handleSaveConfig = async () => {
+    if (!selectedEventId) return;
     setSavingConfig(true);
     try {
       const { error } = await supabase
-        .from('configuracoes')
+        .from('events')
         .update({
-          video_selection_enabled: config.video_selection_enabled,
-          video_submission_deadline: config.video_submission_deadline || null,
-          video_selection_fee: config.video_selection_fee,
-          video_selection_fee_required: config.video_selection_fee_required,
-          video_fee_refund_policy: config.video_fee_refund_policy,
+          video_selection_enabled:           config.video_selection_enabled,
+          video_submission_deadline:         config.video_submission_deadline || null,
+          video_selection_fee:               config.video_selection_fee,
+          video_selection_fee_required:      config.video_selection_fee_required,
+          video_fee_refund_policy:           config.video_fee_refund_policy,
+          video_fee_partial_refund_percent:  config.video_fee_partial_refund_percent,
         })
-        .eq('id', 1);
+        .eq('id', selectedEventId);
       if (error) throw error;
       setConfigSaved(true);
       setTimeout(() => setConfigSaved(false), 2500);
@@ -257,6 +339,36 @@ const VideoSelection: React.FC = () => {
             </div>
 
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Seletor de evento — config é por evento, salva em events.* */}
+              <div className="col-span-full">
+                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-2">
+                  <Calendar size={11} /> Evento sendo configurado
+                </label>
+                <select
+                  value={selectedEventId}
+                  onChange={async e => {
+                    const id = e.target.value;
+                    setSelectedEventId(id);
+                    if (id) await loadEventConfig(id);
+                  }}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068] transition-all"
+                >
+                  {produtorEvents.length === 0 && <option value="">Sem eventos cadastrados</option>}
+                  {produtorEvents.map(ev => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
+                </select>
+              </div>
+
+              {/* Tooltip dos 3 modelos */}
+              <div className="col-span-full flex items-start gap-3 p-3 bg-blue-500/5 border border-blue-500/20 rounded-xl">
+                <Info size={14} className="text-blue-400 shrink-0 mt-0.5" />
+                <div className="text-[10px] text-slate-500 leading-relaxed">
+                  <span className="font-black text-blue-400 uppercase tracking-widest text-[9px]">3 modelos cobertos</span><br/>
+                  <strong>Modelo 1</strong> (vídeo opcional): "Seletiva Ativa" ON, "Vídeo obrigatório antes do pagamento" OFF → vídeo é só metadata.<br/>
+                  <strong>Modelo 2</strong> (vídeo grátis libera inscrição): ON + obrigatório ON + Taxa = R$ 0 → inscrito envia vídeo, produtor aprova, libera pagamento.<br/>
+                  <strong>Modelo 3</strong> (taxa de seletiva paga primeiro): ON + obrigatório ON + Taxa &gt; R$ 0 → inscrito paga taxa A → envia vídeo → produtor aprova → libera taxa B (inscrição).
+                </div>
+              </div>
+
               {/* Toggle ativo */}
               <div className="col-span-full flex items-center justify-between p-4 bg-slate-50 dark:bg-white/5 rounded-2xl">
                 <div>
@@ -270,6 +382,22 @@ const VideoSelection: React.FC = () => {
                   }
                 </button>
               </div>
+
+              {/* Toggle: vídeo obrigatório antes do pagamento (Modelo 2/3) */}
+              {config.video_selection_enabled && (
+                <div className="col-span-full flex items-center justify-between p-4 bg-slate-50 dark:bg-white/5 rounded-2xl">
+                  <div>
+                    <p className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">Vídeo obrigatório antes do pagamento</p>
+                    <p className="text-[9px] text-slate-400 mt-0.5">ON = Modelo 2/3 (bloqueia pagamento até aprovação). OFF = Modelo 1 (vídeo é opcional).</p>
+                  </div>
+                  <button onClick={() => setConfig(p => ({ ...p, video_selection_fee_required: !p.video_selection_fee_required }))}>
+                    {config.video_selection_fee_required
+                      ? <ToggleRight size={36} className="text-[#ff0068]" />
+                      : <ToggleLeft size={36} className="text-slate-400" />
+                    }
+                  </button>
+                </div>
+              )}
 
               {/* Deadline */}
               <div className="space-y-2">
@@ -315,6 +443,20 @@ const VideoSelection: React.FC = () => {
                       </button>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* % de reembolso parcial (só quando policy=partial_refund) */}
+              {config.video_selection_fee > 0 && config.video_fee_refund_policy === 'partial_refund' && (
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">% do Reembolso Parcial</label>
+                  <input
+                    type="number" min={0} max={100} step={1}
+                    value={config.video_fee_partial_refund_percent}
+                    onChange={e => setConfig(p => ({ ...p, video_fee_partial_refund_percent: Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) }))}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068] transition-all"
+                  />
+                  <p className="text-[9px] text-slate-400">Ex: 50 = devolve metade da taxa em caso de reprovação.</p>
                 </div>
               )}
             </div>

@@ -24,9 +24,23 @@ interface RegistrationWithVideo {
   video_feedback?: string | null;
   video_submitted_at?: string | null;
   video_fee_status?: VideoFeeStatus;
+  video_fee_payment_id?: string | null;
+  video_approved_at?: string | null;
+  status_pagamento?: string;
+  payment_url?: string | null;
   video_selection_enabled?: boolean;
   video_selection_fee?: number;
+  video_selection_fee_required?: boolean;
 }
+
+// YouTube URL é a opção indicada (resposta do produto). Mas aceitamos qualquer
+// URL válida (Vimeo, Drive, etc.) — só sinalizamos YouTube como recomendado.
+const isYoutubeUrl = (url: string): boolean => {
+  try {
+    const u = new URL(url);
+    return /(^|\.)youtube\.com$/.test(u.hostname) || u.hostname === 'youtu.be';
+  } catch { return false; }
+};
 
 const statusConfig: Record<VideoStatus, { label: string; color: string; icon: React.ElementType }> = {
   pending:     { label: 'Aguardando Envio', color: 'text-amber-500 bg-amber-500/10 border-amber-500/20',    icon: Clock         },
@@ -50,6 +64,9 @@ const SeletivaInscrito: React.FC = () => {
   const [videoLinks, setVideoLinks] = useState<Record<string, string>>({});
   const [linkError, setLinkError] = useState<Record<string, string>>({});
   const [activeDetail, setActiveDetail] = useState<RegistrationWithVideo | null>(null);
+  const [feePaying,   setFeePaying]    = useState<string | null>(null);
+  const [inscrPaying, setInscrPaying]  = useState<string | null>(null);
+  const [actionError, setActionError]  = useState<Record<string, string>>({});
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -62,8 +79,9 @@ const SeletivaInscrito: React.FC = () => {
         .select(`
           id, nome_coreografia, estudio, categoria, formacao, event_id,
           video_url, video_status, video_feedback, video_submitted_at,
-          video_fee_status,
-          events(name, video_selection_enabled, video_selection_fee)
+          video_fee_status, video_fee_payment_id, video_approved_at,
+          status_pagamento, payment_url,
+          events(name, video_selection_enabled, video_selection_fee, video_selection_fee_required)
         `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
@@ -75,6 +93,7 @@ const SeletivaInscrito: React.FC = () => {
         event_nome: r.events?.name,
         video_selection_enabled: r.events?.video_selection_enabled ?? false,
         video_selection_fee: r.events?.video_selection_fee ?? 0,
+        video_selection_fee_required: r.events?.video_selection_fee_required ?? false,
         video_status: r.video_status ?? 'pending',
         video_fee_status: r.video_fee_status ?? 'not_required',
       }));
@@ -85,6 +104,69 @@ const SeletivaInscrito: React.FC = () => {
       console.error('Erro ao carregar seletivas:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Modelo 3: dispara cobrança da TAXA A (seletiva) e redireciona pro Asaas.
+  const handlePagarTaxa = async (reg: RegistrationWithVideo) => {
+    setFeePaying(reg.id);
+    setActionError(p => ({ ...p, [reg.id]: '' }));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const r = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-video-selection-payment`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token ?? ''}`,
+            'Content-Type':  'application/json',
+          },
+          body: JSON.stringify({ registration_id: reg.id, event_id: reg.event_id }),
+        }
+      );
+      const payload = await r.json();
+      if (!r.ok) throw new Error(payload.error ?? 'Falha ao criar cobrança.');
+      if (payload.waived) {
+        await fetchData();
+        return;
+      }
+      if (payload.invoice_url) {
+        window.location.href = payload.invoice_url;
+      }
+    } catch (e: any) {
+      setActionError(p => ({ ...p, [reg.id]: e.message ?? 'Erro inesperado.' }));
+    } finally {
+      setFeePaying(null);
+    }
+  };
+
+  // Modelo 2/3 pós-aprovação: dispara cobrança da INSCRIÇÃO CHEIA (taxa B).
+  // Reutiliza create-payment-asaas — inscrito já tem JWT + ownership.
+  const handlePagarInscricao = async (reg: RegistrationWithVideo) => {
+    setInscrPaying(reg.id);
+    setActionError(p => ({ ...p, [reg.id]: '' }));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const r = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-payment-asaas`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token ?? ''}`,
+            'Content-Type':  'application/json',
+          },
+          body: JSON.stringify({ registration_id: reg.id, event_id: reg.event_id }),
+        }
+      );
+      const payload = await r.json();
+      if (!r.ok) throw new Error(payload.error ?? 'Falha ao criar cobrança.');
+      if (payload.invoice_url) {
+        window.location.href = payload.invoice_url;
+      }
+    } catch (e: any) {
+      setActionError(p => ({ ...p, [reg.id]: e.message ?? 'Erro inesperado.' }));
+    } finally {
+      setInscrPaying(null);
     }
   };
 
@@ -275,16 +357,51 @@ const SeletivaInscrito: React.FC = () => {
                   </div>
                 )}
 
-                {/* Blocked by fee */}
+                {/* Blocked by fee — wired pra create-video-selection-payment */}
                 {isBlocked && (
                   <div className="border-t border-slate-100 dark:border-white/5 p-6 flex items-center gap-3">
                     <Lock size={16} className="text-amber-500 shrink-0" />
                     <div className="flex-1">
                       <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest">Pagamento necessário</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">Realize o pagamento da taxa de seletiva para liberar o envio do vídeo.</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Pague a taxa de seletiva para liberar o envio do vídeo.</p>
+                      {actionError[reg.id] && (
+                        <p className="text-[9px] font-black text-rose-500 uppercase tracking-widest mt-1">{actionError[reg.id]}</p>
+                      )}
                     </div>
-                    <button className="px-5 py-2.5 bg-amber-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-amber-500/20 flex items-center gap-2 shrink-0">
-                      <CreditCard size={13} /> Pagar Taxa
+                    <button
+                      onClick={() => handlePagarTaxa(reg)}
+                      disabled={feePaying === reg.id}
+                      className="px-5 py-2.5 bg-amber-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-amber-500/20 flex items-center gap-2 shrink-0 disabled:opacity-60"
+                    >
+                      {feePaying === reg.id
+                        ? <RefreshCw size={13} className="animate-spin" />
+                        : <CreditCard size={13} />}
+                      Pagar Taxa
+                    </button>
+                  </div>
+                )}
+
+                {/* Aprovação na seletiva → libera 2ª cobrança (taxa B — inscrição cheia).
+                    Mostra quando vídeo APROVADO e inscrição ainda em AGUARDANDO_VIDEO. */}
+                {reg.video_status === 'approved' && reg.status_pagamento === 'AGUARDANDO_VIDEO' && (
+                  <div className="border-t border-slate-100 dark:border-white/5 p-6 flex items-center gap-3 bg-emerald-50/40 dark:bg-emerald-500/5">
+                    <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Vídeo aprovado!</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">Conclua sua inscrição pagando o valor da taxa de inscrição.</p>
+                      {actionError[reg.id] && (
+                        <p className="text-[9px] font-black text-rose-500 uppercase tracking-widest mt-1">{actionError[reg.id]}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handlePagarInscricao(reg)}
+                      disabled={inscrPaying === reg.id}
+                      className="px-5 py-2.5 bg-emerald-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2 shrink-0 disabled:opacity-60"
+                    >
+                      {inscrPaying === reg.id
+                        ? <RefreshCw size={13} className="animate-spin" />
+                        : <CreditCard size={13} />}
+                      Pagar Inscrição
                     </button>
                   </div>
                 )}
