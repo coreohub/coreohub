@@ -4,7 +4,7 @@ import {
   Trash2, AlertTriangle, X, DollarSign,
   ShieldAlert, CheckCircle2, Clock, Users, Info, ChevronDown,
   Undo2, Loader2, Eye, Music2, Video, Calendar, User, Instagram,
-  TrendingUp, ExternalLink,
+  TrendingUp, ExternalLink, Pencil, Save,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -29,6 +29,53 @@ const Registrations = () => {
   const [refundReason, setRefundReason] = useState('');
   const [refunding, setRefunding] = useState(false);
   const [refundError, setRefundError] = useState<string | null>(null);
+  // Edição inline de inscrição (pedido Grazieli/Usualdance 2026-05-19):
+  // produtor corrige estilo/categoria/formação/tipo_apresentacao no modal de
+  // detalhes. RLS protege — produtor edita as próprias, super admin tem bypass.
+  const [editing, setEditing] = useState(false);
+  const [editValues, setEditValues] = useState<Record<string, any>>({});
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const startEditing = (reg: any) => {
+    setEditing(true);
+    setEditError(null);
+    setEditValues({
+      formato_participacao: reg.formato_participacao ?? '',
+      categoria:            reg.categoria ?? '',
+      estilo_danca:         reg.estilo_danca ?? '',
+      tipo_apresentacao:    reg.tipo_apresentacao ?? '',
+    });
+  };
+
+  const cancelEditing = () => {
+    setEditing(false);
+    setEditError(null);
+    setEditValues({});
+  };
+
+  const handleSaveEdit = async (regId: string) => {
+    setSavingEdit(true);
+    setEditError(null);
+    try {
+      const patch: Record<string, any> = {};
+      // Só envia campos que mudaram pra não resetar coluna por engano.
+      for (const k of ['formato_participacao', 'categoria', 'estilo_danca', 'tipo_apresentacao']) {
+        const v = editValues[k]?.trim?.() ?? editValues[k];
+        if (v !== undefined && v !== '') patch[k] = v;
+      }
+      const { error } = await supabase.from('registrations').update(patch).eq('id', regId);
+      if (error) throw error;
+      // Atualiza state local pra refletir mudança sem refetch.
+      setRegistrations(prev => prev.map(r => r.id === regId ? { ...r, ...patch } : r));
+      setViewingReg((prev: any) => prev && prev.id === regId ? { ...prev, ...patch } : prev);
+      cancelEditing();
+    } catch (e: any) {
+      setEditError(e.message ?? 'Erro ao salvar.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   const handleOpenRefund = (reg: any) => {
     setRefundModal(reg);
@@ -1058,9 +1105,20 @@ const Registrations = () => {
                   <h2 className="font-black text-lg uppercase tracking-tight text-slate-900 dark:text-white leading-tight">{viewingReg.nome_coreografia ?? 'Sem nome'}</h2>
                   {viewingReg.estudio && <p className="text-[11px] text-slate-500 mt-1">{viewingReg.estudio}</p>}
                 </div>
-                <button onClick={() => setViewingReg(null)} className="p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-all shrink-0">
-                  <X size={20} />
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {!editing && (
+                    <button
+                      onClick={() => startEditing(viewingReg)}
+                      className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-xl transition-all flex items-center gap-1.5"
+                      title="Editar dados da inscrição"
+                    >
+                      <Pencil size={12} /> Editar
+                    </button>
+                  )}
+                  <button onClick={() => { cancelEditing(); setViewingReg(null); }} className="p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-all">
+                    <X size={20} />
+                  </button>
+                </div>
               </div>
 
               <div className="p-6 space-y-6">
@@ -1089,14 +1147,53 @@ const Registrations = () => {
                 {/* Coreografia */}
                 <section>
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><Music2 size={12} /> Coreografia</h3>
-                  <dl className="grid grid-cols-2 gap-3 text-[12px]">
-                    <DetailItem label="Modalidade" value={viewingReg.formato_participacao} />
-                    <DetailItem label="Categoria" value={viewingReg.categoria} />
-                    <DetailItem label="Estilo / Gênero" value={viewingReg.estilo_danca} />
-                    <DetailItem label="Subgênero" value={viewingReg.subgenero} />
-                    <DetailItem label="Coreógrafo(a)" value={viewingReg.coreografo_nome} />
-                    <DetailItem label="Duração" value={viewingReg.duracao_minutos ? `${viewingReg.duracao_minutos} min` : null} />
-                  </dl>
+                  {editing ? (
+                    <div className="grid grid-cols-2 gap-3 text-[12px]">
+                      <EditField label="Modalidade" value={editValues.formato_participacao}
+                        onChange={v => setEditValues(p => ({ ...p, formato_participacao: v }))}
+                        options={['Solo', 'Duo', 'Trio', 'Grupo', 'Conjunto']} />
+                      <EditField label="Categoria" value={editValues.categoria}
+                        onChange={v => setEditValues(p => ({ ...p, categoria: v }))}
+                        options={categoriasDisponiveis} />
+                      <EditField label="Estilo / Gênero" value={editValues.estilo_danca}
+                        onChange={v => setEditValues(p => ({ ...p, estilo_danca: v }))}
+                        options={estilosDisponiveis} />
+                      <EditField label="Tipo de Mostra" value={editValues.tipo_apresentacao}
+                        onChange={v => setEditValues(p => ({ ...p, tipo_apresentacao: v }))}
+                        options={['Competitiva', 'Avaliada']} />
+                    </div>
+                  ) : (
+                    <dl className="grid grid-cols-2 gap-3 text-[12px]">
+                      <DetailItem label="Modalidade" value={viewingReg.formato_participacao} />
+                      <DetailItem label="Categoria" value={viewingReg.categoria} />
+                      <DetailItem label="Estilo / Gênero" value={viewingReg.estilo_danca} />
+                      <DetailItem label="Subgênero" value={viewingReg.subgenero} />
+                      <DetailItem label="Coreógrafo(a)" value={viewingReg.coreografo_nome} />
+                      <DetailItem label="Duração" value={viewingReg.duracao_minutos ? `${viewingReg.duracao_minutos} min` : null} />
+                    </dl>
+                  )}
+                  {editing && (
+                    <div className="mt-4 flex items-center justify-end gap-2">
+                      {editError && (
+                        <p className="flex-1 text-[10px] font-black text-rose-500 uppercase tracking-widest">{editError}</p>
+                      )}
+                      <button
+                        onClick={cancelEditing}
+                        disabled={savingEdit}
+                        className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-all disabled:opacity-50"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={() => handleSaveEdit(viewingReg.id)}
+                        disabled={savingEdit}
+                        className="px-4 py-2 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-[#ff0068]/20 flex items-center gap-1.5 disabled:opacity-60"
+                      >
+                        {savingEdit ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />}
+                        Salvar
+                      </button>
+                    </div>
+                  )}
                 </section>
 
                 {/* Bailarinos */}
@@ -1364,6 +1461,48 @@ const DetailItem: React.FC<{ label: string; value?: string | null; mono?: boolea
     <div>
       <dt className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{label}</dt>
       <dd className={`text-slate-900 dark:text-white break-all ${mono ? 'font-mono text-[11px]' : 'font-bold'}`}>{value}</dd>
+    </div>
+  );
+};
+
+/** Campo editável combo: select com opções conhecidas + datalist-style fallback
+ *  livre. Permite escolher valor existente OU digitar novo (útil quando produtor
+ *  precisa de uma categoria que ainda não existe em outras inscrições). */
+const EditField: React.FC<{
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+}> = ({ label, value, onChange, options }) => {
+  // Mostra select se valor atual está nas opções; senão input livre.
+  const inOptions = options.includes(value);
+  return (
+    <div>
+      <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">{label}</label>
+      {inOptions ? (
+        <select
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 text-[12px] font-bold text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]"
+        >
+          {options.map(o => <option key={o} value={o}>{o}</option>)}
+          {!inOptions && value && <option value={value}>{value} (atual)</option>}
+        </select>
+      ) : (
+        <input
+          type="text"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder={options.length > 0 ? `Ex.: ${options[0]}` : ''}
+          className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 text-[12px] font-bold text-slate-900 dark:text-white outline-none focus:border-[#ff0068]"
+          list={`opts-${label}`}
+        />
+      )}
+      {!inOptions && options.length > 0 && (
+        <datalist id={`opts-${label}`}>
+          {options.map(o => <option key={o} value={o} />)}
+        </datalist>
+      )}
     </div>
   );
 };
