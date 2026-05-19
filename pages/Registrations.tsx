@@ -20,6 +20,8 @@ const Registrations = () => {
   const [categoriaFilter, setCategoriaFilter] = useState('ALL');
   const [estiloFilter, setEstiloFilter] = useState('ALL');
   const [inscritoFilter, setInscritoFilter] = useState('ALL');
+  // Pedido Grazieli/Usualdance 2026-05-19: filtrar por Mostra Competitiva/Avaliada.
+  const [tipoApresentacaoFilter, setTipoApresentacaoFilter] = useState<'ALL' | 'Competitiva' | 'Avaliada'>('ALL');
   // Sessão 3 P4 backlog painel produtor — filtro por range de data
   const [dateFilter, setDateFilter] = useState<'ALL' | 'today' | '7d' | '30d' | 'month'>('ALL');
   const [refundModal, setRefundModal] = useState<any>(null);
@@ -276,6 +278,7 @@ const Registrations = () => {
     if (categoriaFilter !== 'ALL') result = result.filter(reg => reg.categoria === categoriaFilter);
     if (estiloFilter !== 'ALL')    result = result.filter(reg => reg.estilo_danca === estiloFilter);
     if (inscritoFilter !== 'ALL')  result = result.filter(reg => (reg.inscrito_nome ?? reg.profiles?.full_name) === inscritoFilter);
+    if (tipoApresentacaoFilter !== 'ALL') result = result.filter(reg => reg.tipo_apresentacao === tipoApresentacaoFilter);
     // Filtro por data — usa created_at (data da inscrição)
     if (dateFilter !== 'ALL') {
       const now = new Date();
@@ -297,7 +300,7 @@ const Registrations = () => {
       });
     }
     setFilteredRegistrations(result);
-  }, [searchTerm, paymentFilter, modalidadeFilter, categoriaFilter, estiloFilter, inscritoFilter, dateFilter, registrations]);
+  }, [searchTerm, paymentFilter, modalidadeFilter, categoriaFilter, estiloFilter, inscritoFilter, tipoApresentacaoFilter, dateFilter, registrations]);
 
   /* Stats no topo — cards de KPI (padrão Stripe Dashboard).
      Derivados de registrations (não filteredRegistrations) pra manter
@@ -505,6 +508,16 @@ const Registrations = () => {
                 {inscritosDisponiveis.map(n => (
                   <option key={n} value={n} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{n}</option>
                 ))}
+              </select>
+              {/* Pedido Usualdance 2026-05-19: filtrar Competitiva/Avaliada. */}
+              <select
+                value={tipoApresentacaoFilter}
+                onChange={e => setTipoApresentacaoFilter(e.target.value as 'ALL' | 'Competitiva' | 'Avaliada')}
+                className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]"
+              >
+                <option value="ALL"          className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Mostra: Todas</option>
+                <option value="Competitiva"  className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Mostra Competitiva</option>
+                <option value="Avaliada"     className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Mostra Avaliada</option>
               </select>
             </div>
           </div>

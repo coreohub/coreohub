@@ -149,7 +149,8 @@ const MinhasCoreografias = () => {
           estilo_danca, categoria,
           status, status_pagamento,
           payment_url, payment_preference_id, payment_id, payment_group_id,
-          mod_fee, charged_amount, valor_pago, paid_at, created_at
+          mod_fee, charged_amount, valor_pago, paid_at, created_at,
+          bailarinos_detalhes
         `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
@@ -184,23 +185,37 @@ const MinhasCoreografias = () => {
       const calcPrecoDisplay = (r: any): number | null => {
         if (r.charged_amount != null && r.charged_amount > 0) return Number(r.charged_amount);
         if (r.valor_pago     != null && r.valor_pago     > 0) return Number(r.valor_pago);
-        if (r.mod_fee        != null && r.mod_fee        > 0) return Number(r.mod_fee);
-        if (!r.event_id) return null;
+        // mod_fee é UNIT — se PER_MEMBER, precisa multiplicar. Não retorna direto.
+        if (!r.event_id) {
+          if (r.mod_fee != null && r.mod_fee > 0) return Number(r.mod_fee);
+          return null;
+        }
         const formacaoNome: string = (r.formato_participacao ?? r.tipo_apresentacao ?? '').toLowerCase();
-        if (!formacaoNome) return null;
         const cfg     = configsMap[r.event_id];
         const ev      = eventsMap[r.event_id];
-        const fmCfg   = (cfg?.formatos_precos ?? []).find((f: any) => f.nome?.toLowerCase() === formacaoNome);
-        const fmEvent = (ev?.formacoes_config ?? []).find((m: any) => m.name?.toLowerCase() === formacaoNome);
-        const base    = fmCfg?.preco ?? fmEvent?.fee ?? fmEvent?.base_fee ?? null;
+        const fmCfg   = formacaoNome ? (cfg?.formatos_precos ?? []).find((f: any) => f.nome?.toLowerCase() === formacaoNome) : undefined;
+        const fmEvent = formacaoNome ? (ev?.formacoes_config ?? []).find((m: any) => m.name?.toLowerCase() === formacaoNome) : undefined;
+        // pricing_type da formação efetivamente escolhida.
+        const pricingType: 'FIXED' | 'PER_MEMBER' = fmEvent?.pricing_type ?? 'FIXED';
+        const bailarinosCount = Array.isArray(r.bailarinos_detalhes) ? r.bailarinos_detalhes.length : 1;
+        const multiplier = (pricingType === 'PER_MEMBER' && bailarinosCount > 1) ? bailarinosCount : 1;
+
+        // Preferência: mod_fee unit × N → fmCfg/fmEvent → null
+        let base: number | null = null;
+        if (r.mod_fee != null && r.mod_fee > 0)         base = Number(r.mod_fee);
+        else if (fmCfg?.preco != null)                  base = Number(fmCfg.preco);
+        else if (fmEvent?.fee != null)                  base = Number(fmEvent.fee);
+        else if (fmEvent?.base_fee != null)             base = Number(fmEvent.base_fee);
         if (base == null || base <= 0) return null;
+
+        const total = base * multiplier;
         // Se o evento repassa a taxa, soma a comissão pra mostrar o que o inscrito paga.
         const feeMode = ev?.fee_mode ?? 'repassar';
         if (feeMode === 'repassar') {
           const pct = Number(ev?.commission_percent ?? 10);
-          return parseFloat((Number(base) * (1 + pct / 100)).toFixed(2));
+          return parseFloat((total * (1 + pct / 100)).toFixed(2));
         }
-        return Number(base);
+        return parseFloat(total.toFixed(2));
       };
 
       const regs: Registration[] = regsRaw.map((r: any) => ({

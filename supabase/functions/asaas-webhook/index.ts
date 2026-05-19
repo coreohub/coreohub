@@ -1162,12 +1162,81 @@ Deno.serve(async (req) => {
       console.warn('[asaas-webhook] ASAAS_API_KEY nao configurada — cross-check pulado')
     }
 
-    const statusInterno = STATUS_MAP[payment.status] ?? 'PENDENTE'
     const refType = isAudienceTicket ? 'audience'
                   : isWorkshop       ? 'workshop'
                   : isAggregate      ? 'aggregate'
                   : isVideoSelection ? 'video_selection'
                                      : 'registration'
+
+    // ── BRANCH: PAYMENT DELETED / CANCELLED ─────────────────────────────────
+    // Produtor deletou/cancelou cobrança no dashboard Asaas. Não estorna
+    // (Asaas só permite estorno em cobrança paga). Aqui apenas LIMPA os
+    // campos de pagamento da registration pra que próximo clique em "Pagar"
+    // gere cobrança nova. Mantém a registration viva — produtor não quer
+    // perder a inscrição, só refazer a cobrança.
+    //
+    // Caso da Grazieli (2026-05-19): produtor deletou boleto com valor errado
+    // (R$ 35 fixo vs R$ 35 × 18 PER_MEMBER) — inscrita precisava regerar pelo
+    // valor correto. Sem este handler, payment_url ficava apontando pra URL
+    // cancelada do Asaas e MinhasCoreografias redirecionava pra ela direto.
+    const isDeleted = event === 'PAYMENT_DELETED' || payment.status === 'DELETED'
+    if (isDeleted) {
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+      )
+      console.log(`[asaas-webhook] DELETED event=${event} payment_id=${payment.id} ref=${externalRef} type=${refType}`)
+
+      // Registration ÚNICA (fluxo legado sem prefix OU video selection VS:)
+      if (registrationId || videoSelectionRegistrationId) {
+        const regId = registrationId ?? videoSelectionRegistrationId!
+        const patch: Record<string, unknown> = {
+          payment_url:           null,
+          payment_preference_id: null,
+          payment_id:            null,
+        }
+        if (isVideoSelection) {
+          // Taxa A cancelada → registration volta pra estado pré-cobrança.
+          patch.video_fee_payment_id = null
+          patch.video_fee_status     = 'pending'
+          // status_pagamento permanece AGUARDANDO_VIDEO (registration ainda
+          // está no fluxo de seletiva, só precisa regerar a taxa A).
+        } else {
+          patch.status_pagamento = 'PENDENTE'
+        }
+        await supabase.from('registrations').update(patch).eq('id', regId)
+        return ok({ status: 'deleted_cleaned', registration_id: regId, kind: isVideoSelection ? 'video_selection' : 'registration' })
+      }
+
+      // Aggregate (carrinho): marca payment row como cancelado + libera
+      // todas as registrations linkadas pra refazer cobrança individual ou
+      // nova fatura agregada.
+      if (aggregatePaymentId) {
+        await supabase
+          .from('payments')
+          .update({ status: 'CANCELADO', updated_at: new Date().toISOString() })
+          .eq('id', aggregatePaymentId)
+        await supabase
+          .from('registrations')
+          .update({
+            payment_url:           null,
+            payment_preference_id: null,
+            payment_group_id:      null,
+            payment_id:            null,
+            status_pagamento:      'PENDENTE',
+          })
+          .eq('payment_group_id', aggregatePaymentId)
+        return ok({ status: 'deleted_cleaned', payment_id: aggregatePaymentId, kind: 'aggregate' })
+      }
+
+      // Audience/Workshop: por enquanto só loga, não mexe (esses fluxos têm
+      // semântica diferente — workshop_registration deletada deve gerar
+      // refund, não regerar; plateia idem).
+      console.log(`[asaas-webhook] DELETED ignorado pra refType=${refType}`)
+      return ok({ status: 'deleted_ignored', external_ref: externalRef })
+    }
+
+    const statusInterno = STATUS_MAP[payment.status] ?? 'PENDENTE'
     console.log(
       `[asaas-webhook] payment_id=${payment.id} asaas_status=${payment.status}` +
       ` → ${statusInterno} | ref=${externalRef} type=${refType}`

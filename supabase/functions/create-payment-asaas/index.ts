@@ -96,11 +96,14 @@ Deno.serve(async (req) => {
         ?? 0
 
     const formacaoUsada = formacaoNome || primeiraFormacao?.name || 'padrão'
+    // Formação efetivamente escolhida pelo inscrito (não a "primeira ativa"
+    // — bug anterior aplicava lotes/pricing_type do Solo em Duo/Trio/Grupo).
+    const formacaoEscolhida: any = formatoEvento ?? primeiraFormacao
 
     // ── 5b. Lote ativo da formação substitui o preço base ───────────────────
     // Lotes vivem em formacoes_config[].lotes (formato { preco, data_virada }).
     const formacaoLotes: Array<{ preco: number; data_virada: string | null }> =
-      (primeiraFormacao as any)?.lotes ?? []
+      formacaoEscolhida?.lotes ?? []
     if (formacaoLotes.length > 0) {
       const today = new Date()
       today.setHours(0, 0, 0, 0)
@@ -113,6 +116,19 @@ Deno.serve(async (req) => {
       }
       if (allExpired) throw new Error('Inscrições encerradas: prazo de todos os lotes vencido.')
       if (lotPicked && lotPicked.preco > 0) baseFee = lotPicked.preco
+    }
+
+    // ── 5c. pricing_type: PER_MEMBER multiplica pelo nº de bailarinos ───────
+    // Produtor configura por formação em AccountSettings → Formações.
+    // FIXED (default legado): valor único da coreografia.
+    // PER_MEMBER: valor × bailarinos_detalhes.length (Usualdance Grupo, etc.)
+    const pricingType: 'FIXED' | 'PER_MEMBER' = formacaoEscolhida?.pricing_type ?? 'FIXED'
+    const bailarinosCount = Array.isArray(coreo.bailarinos_detalhes)
+      ? coreo.bailarinos_detalhes.length
+      : 1
+    const feeUnit = baseFee
+    if (pricingType === 'PER_MEMBER' && bailarinosCount > 1) {
+      baseFee = parseFloat((baseFee * bailarinosCount).toFixed(2))
     }
 
     if (baseFee <= 0) {
@@ -166,8 +182,9 @@ Deno.serve(async (req) => {
     }
 
     console.log(
-      `[create-payment-asaas] formacao="${formacaoUsada}" base=${baseFee} mode=${feeMode}` +
-      ` charged=${chargedAmount} producer=${producerAmount} commission=${commissionAmount}`
+      `[create-payment-asaas] formacao="${formacaoUsada}" pricing=${pricingType}` +
+      (pricingType === 'PER_MEMBER' ? ` ${feeUnit}×${bailarinosCount}=${baseFee}` : ` base=${baseFee}`) +
+      ` mode=${feeMode} charged=${chargedAmount} producer=${producerAmount} commission=${commissionAmount}`
     )
 
     // ── 7. Wallet do produtor ─────────────────────────────────────────────────

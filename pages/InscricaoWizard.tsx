@@ -1632,6 +1632,28 @@ const InscricaoWizard: React.FC = () => {
                 <span className="text-slate-500 dark:text-slate-400">Bailarinos</span>
                 <span className="font-black text-slate-900 dark:text-white">{data.bailarinos.length}</span>
               </div>
+              {/* Preview do valor estimado — multiplica × bailarinos se PER_MEMBER.
+                  Bug Grazieli/Usualdance (2026-05-19): inscrita não via que Grupo
+                  de 18 bailarinos × R$ 35 = R$ 630 antes de confirmar. */}
+              {(() => {
+                const firstLote = ((formacao as any)?.lotes ?? [])[0];
+                const feeUnit = Number(firstLote?.preco ?? (formacao as any)?.fee ?? (formacao as any)?.base_fee ?? 0);
+                if (feeUnit <= 0) return null;
+                const perMember = (formacao as any)?.pricing_type === 'PER_MEMBER';
+                const total = perMember ? feeUnit * data.bailarinos.length : feeUnit;
+                return (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-500 dark:text-slate-400">Valor estimado</span>
+                    <span className="font-black text-[#ff0068] text-right">
+                      {perMember && data.bailarinos.length > 1 ? (
+                        <>R$ {feeUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} × {data.bailarinos.length} = R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</>
+                      ) : (
+                        <>R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</>
+                      )}
+                    </span>
+                  </div>
+                );
+              })()}
               <div className="flex justify-between gap-3">
                 <span className="text-slate-500 dark:text-slate-400">Trilha</span>
                 <span className="font-black text-slate-900 dark:text-white text-right">

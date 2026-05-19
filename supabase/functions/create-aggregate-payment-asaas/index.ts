@@ -16,6 +16,7 @@ const corsHeaders = {
 type RegistrationRow = {
   id:                    string
   user_id:               string
+  bailarinos_detalhes?:  any[] | null
   event_id:              string
   nome_coreografia:      string | null
   status_pagamento:      string
@@ -95,7 +96,8 @@ Deno.serve(async (req) => {
       .select(`
         id, user_id, event_id,
         nome_coreografia, formato_participacao, tipo_apresentacao,
-        mod_fee, status_pagamento, payment_group_id
+        mod_fee, status_pagamento, payment_group_id,
+        bailarinos_detalhes
       `)
       .in('id', registration_ids)
 
@@ -217,15 +219,25 @@ Deno.serve(async (req) => {
       // Lote ativo da formação (preço pode ter mudado entre criação da inscrição
       // e geração da fatura — usamos o lote ATIVO HOJE, mesma regra do fluxo
       // single-registration. Se a inscrição tinha mod_fee fixado, ele vence.
+      const formacaoEscolhida: any = formatoEvento ?? primeiraFormacao
       if (!(r.mod_fee && r.mod_fee > 0)) {
-        const formacaoForLote = formatoEvento ?? primeiraFormacao
-        const lot = pickActiveLote(formacaoForLote)
+        const lot = pickActiveLote(formacaoEscolhida)
         if (lot && lot.preco > 0) baseFee = lot.preco
-        else if ((formacaoForLote?.lotes?.length ?? 0) > 0 && !lot) {
+        else if ((formacaoEscolhida?.lotes?.length ?? 0) > 0 && !lot) {
           throw new Error(
             `Inscrições encerradas: todos os lotes da formação "${formacaoNome}" venceram.`
           )
         }
+      }
+
+      // pricing_type PER_MEMBER → fee × bailarinos. Default FIXED preserva legado.
+      const pricingType: 'FIXED' | 'PER_MEMBER' = formacaoEscolhida?.pricing_type ?? 'FIXED'
+      const bailarinosCount = Array.isArray((r as any).bailarinos_detalhes)
+        ? (r as any).bailarinos_detalhes.length
+        : 1
+      const feeUnit = baseFee
+      if (pricingType === 'PER_MEMBER' && bailarinosCount > 1) {
+        baseFee = parseFloat((baseFee * bailarinosCount).toFixed(2))
       }
 
       if (baseFee <= 0) {
