@@ -39,6 +39,9 @@ interface Registration {
     start_date: string | null;
     location:   string | null;
   };
+  /** Preço calculado client-side pra exibição (charged_amount / valor_pago /
+   *  mod_fee / fallback formacao.preco). Null quando não há base configurada. */
+  _precoDisplay?: number | null;
 }
 
 interface AggregatePayment {
@@ -84,12 +87,12 @@ const diasAte = (iso?: string | null): number | null => {
  * estados reais que o webhook/cron produz.
  */
 const STATUS_PAGAMENTO_CFG: Record<string, { bg: string; text: string; label: string; tone: 'pendente' | 'ok' | 'erro' | 'expirado' }> = {
-  PENDENTE:  { bg: 'bg-amber-100 dark:bg-amber-500/15',   text: 'text-amber-700 dark:text-amber-300',     label: 'Aguardando pagamento', tone: 'pendente' },
-  APROVADO:  { bg: 'bg-emerald-100 dark:bg-emerald-500/15', text: 'text-emerald-700 dark:text-emerald-300', label: 'Confirmada',           tone: 'ok' },
-  VENCIDO:   { bg: 'bg-rose-100 dark:bg-rose-500/15',     text: 'text-rose-700 dark:text-rose-300',       label: 'Vencida',              tone: 'expirado' },
-  EXPIRADO:  { bg: 'bg-rose-100 dark:bg-rose-500/15',     text: 'text-rose-700 dark:text-rose-300',       label: 'Expirada',             tone: 'expirado' },
-  ESTORNADO: { bg: 'bg-slate-100 dark:bg-white/8',        text: 'text-slate-500',                         label: 'Estornada',            tone: 'erro' },
-  CANCELADO: { bg: 'bg-slate-100 dark:bg-white/8',        text: 'text-slate-500',                         label: 'Cancelada',            tone: 'erro' },
+  PENDENTE:  { bg: 'bg-amber-50 dark:bg-amber-500/10',   text: 'text-amber-700 dark:text-amber-400',     label: 'Aguardando pagamento', tone: 'pendente' },
+  APROVADO:  { bg: 'bg-emerald-50 dark:bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-400', label: 'Confirmada',         tone: 'ok' },
+  VENCIDO:   { bg: 'bg-slate-100 dark:bg-white/5',       text: 'text-slate-500',                         label: 'Vencida',              tone: 'expirado' },
+  EXPIRADO:  { bg: 'bg-slate-100 dark:bg-white/5',       text: 'text-slate-500',                         label: 'Expirada',             tone: 'expirado' },
+  ESTORNADO: { bg: 'bg-slate-100 dark:bg-white/5',       text: 'text-slate-500',                         label: 'Estornada',            tone: 'erro' },
+  CANCELADO: { bg: 'bg-slate-100 dark:bg-white/5',       text: 'text-slate-500',                         label: 'Cancelada',            tone: 'erro' },
 };
 const statusCfg = (s: string) => STATUS_PAGAMENTO_CFG[s] ?? STATUS_PAGAMENTO_CFG.PENDENTE;
 
@@ -154,20 +157,57 @@ const MinhasCoreografias = () => {
       if (regsErr) throw regsErr;
       const regsRaw = regsData ?? [];
 
-      // Carrega events em batch.
+      // Carrega events e configuracoes em batch. `formacoes_config` em events
+      // + `formatos_precos` em configuracoes são as fontes de preço por
+      // formação (mesmas fontes que create-aggregate-payment-asaas lê).
       const eventIds = Array.from(new Set(regsRaw.map((r: any) => r.event_id).filter(Boolean))) as string[];
-      let eventsMap: Record<string, any> = {};
+      let eventsMap:  Record<string, any> = {};
+      let configsMap: Record<string, any> = {};
       if (eventIds.length > 0) {
-        const { data: eventsData } = await supabase
-          .from('events')
-          .select('id, name, slug, start_date, location')
-          .in('id', eventIds);
-        for (const ev of (eventsData ?? [])) eventsMap[ev.id] = ev;
+        const [{ data: eventsData }, { data: configsData }] = await Promise.all([
+          supabase
+            .from('events')
+            .select('id, name, slug, start_date, location, formacoes_config, fee_mode, commission_percent')
+            .in('id', eventIds),
+          supabase
+            .from('configuracoes')
+            .select('event_id, formatos_precos')
+            .in('event_id', eventIds),
+        ]);
+        for (const ev of (eventsData  ?? [])) eventsMap[ev.id]        = ev;
+        for (const cf of (configsData ?? [])) configsMap[cf.event_id] = cf;
       }
+
+      // Helper: calcula o preço a mostrar pra uma inscrição. Espelha a lógica
+      // de create-aggregate-payment-asaas (sem o passo de lote — pra simples
+      // exibição usamos o preço base da formação).
+      const calcPrecoDisplay = (r: any): number | null => {
+        if (r.charged_amount != null && r.charged_amount > 0) return Number(r.charged_amount);
+        if (r.valor_pago     != null && r.valor_pago     > 0) return Number(r.valor_pago);
+        if (r.mod_fee        != null && r.mod_fee        > 0) return Number(r.mod_fee);
+        if (!r.event_id) return null;
+        const formacaoNome: string = (r.formato_participacao ?? r.tipo_apresentacao ?? '').toLowerCase();
+        if (!formacaoNome) return null;
+        const cfg     = configsMap[r.event_id];
+        const ev      = eventsMap[r.event_id];
+        const fmCfg   = (cfg?.formatos_precos ?? []).find((f: any) => f.nome?.toLowerCase() === formacaoNome);
+        const fmEvent = (ev?.formacoes_config ?? []).find((m: any) => m.name?.toLowerCase() === formacaoNome);
+        const base    = fmCfg?.preco ?? fmEvent?.fee ?? fmEvent?.base_fee ?? null;
+        if (base == null || base <= 0) return null;
+        // Se o evento repassa a taxa, soma a comissão pra mostrar o que o inscrito paga.
+        const feeMode = ev?.fee_mode ?? 'repassar';
+        if (feeMode === 'repassar') {
+          const pct = Number(ev?.commission_percent ?? 10);
+          return parseFloat((Number(base) * (1 + pct / 100)).toFixed(2));
+        }
+        return Number(base);
+      };
 
       const regs: Registration[] = regsRaw.map((r: any) => ({
         ...r,
-        _event: r.event_id ? eventsMap[r.event_id] : undefined,
+        _event:        r.event_id ? eventsMap[r.event_id] : undefined,
+        // Snapshot do preço calculado pra exibir. Não é persistido — é só pra UI.
+        _precoDisplay: calcPrecoDisplay(r),
       }));
       setRegistrations(regs);
 
@@ -238,9 +278,9 @@ const MinhasCoreografias = () => {
       const g = map.get(key)!;
       if (r.status_pagamento === 'PENDENTE') {
         g.pendentes.push(r);
-        // Preço estimado pendente: charged_amount snapshot OU mod_fee OU 0.
-        // Quando a fatura agregada existe, o valor já está em payment.value_total.
-        g.totalPendente += Number(r.charged_amount ?? r.mod_fee ?? 0);
+        // Soma o preço calculado pra UI. Quando a fatura agregada existe,
+        // o valor real já está em payment.value_total e sobrescreve este total.
+        g.totalPendente += Number(r._precoDisplay ?? 0);
       } else {
         g.outras.push(r);
       }
@@ -414,13 +454,13 @@ const MinhasCoreografias = () => {
 
       {/* ── Banner "Inscrição criada" ── */}
       {novaId && registrations.some(r => r.id === novaId) && (
-        <div className="flex items-start gap-3 p-4 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-xl">
-          <CheckCircle size={16} className="text-emerald-500 shrink-0 mt-0.5" />
+        <div className="flex items-start gap-3 p-4 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl">
+          <CheckCircle size={14} className="text-emerald-500 shrink-0 mt-0.5" />
           <div className="flex-1">
-            <p className="text-[11px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200">
               Inscrição adicionada
             </p>
-            <p className="text-[12px] text-emerald-700/80 dark:text-emerald-300/80 mt-1">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
               Adicione mais coreografias antes de pagar pra economizar — pague tudo de uma vez no botão "Pagar todas".
             </p>
           </div>
@@ -428,10 +468,10 @@ const MinhasCoreografias = () => {
       )}
 
       {error && (
-        <div className="flex items-start gap-3 p-4 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-xl text-rose-600 dark:text-rose-400 text-sm">
-          <AlertCircle size={14} className="shrink-0 mt-0.5" />
+        <div className="flex items-start gap-3 p-4 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-600 dark:text-slate-300 text-sm">
+          <AlertCircle size={14} className="text-rose-500 shrink-0 mt-0.5" />
           <div className="flex-1">{error}</div>
-          <button onClick={() => setError(null)} className="text-rose-400 hover:text-rose-600">
+          <button onClick={() => setError(null)} className="text-slate-400 hover:text-slate-600">
             <X size={14} />
           </button>
         </div>
@@ -440,8 +480,8 @@ const MinhasCoreografias = () => {
       {/* ── Empty state ── */}
       {registrations.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
-          <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center">
-            <Music2 size={24} className="text-slate-400" />
+          <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-white/5 flex items-center justify-center">
+            <Music2 size={20} className="text-slate-400" />
           </div>
           <div>
             <p className="font-black uppercase tracking-tight text-slate-500">Nenhuma inscrição ainda</p>
@@ -454,10 +494,10 @@ const MinhasCoreografias = () => {
 
       {/* ── Grupos por evento ── */}
       {grupos.map(grupo => (
-        <div key={grupo.eventId} className="bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/8 rounded-2xl overflow-hidden">
+        <div key={grupo.eventId} className="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-white/5 rounded-3xl overflow-hidden">
 
           {/* Cabeçalho do evento */}
-          <div className="px-5 py-4 border-b border-slate-100 dark:border-white/8 flex items-center justify-between gap-4">
+          <div className="px-5 py-4 border-b border-slate-200 dark:border-white/5 flex items-center justify-between gap-4">
             <div className="min-w-0 flex-1">
               <p className="font-black uppercase tracking-tight text-slate-900 dark:text-white truncate">
                 {grupo.eventNome}
@@ -478,7 +518,7 @@ const MinhasCoreografias = () => {
             {grupo.eventSlug && (
               <button
                 onClick={() => navigate(`/festival/${grupo.eventSlug}`)}
-                className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-[#ff0068] flex items-center gap-1 shrink-0"
+                className="text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-[#ff0068] flex items-center gap-1 shrink-0"
                 title="Inscrever mais coreografias"
               >
                 <Plus size={12} /> Adicionar
@@ -492,19 +532,19 @@ const MinhasCoreografias = () => {
             const total = grupo.payment?.value_total ?? grupo.totalPendente;
             const expiraDias = grupo.payment?.expires_at ? diasAte(grupo.payment.expires_at) : null;
             return (
-              <div className="p-5 bg-gradient-to-br from-[#ff0068]/5 to-violet-500/5 dark:from-[#ff0068]/10 dark:to-violet-500/10 border-b border-slate-100 dark:border-white/8">
+              <div className="px-5 py-4 bg-slate-50 dark:bg-white/[0.02] border-b border-slate-200 dark:border-white/5">
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div>
                     <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
                       Pagar todas
                     </p>
-                    <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">
+                    <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5 tabular-nums">
                       {fmtMoney(total)}
                     </p>
                     <p className="text-[10px] font-bold text-slate-400 mt-0.5">
                       {grupo.pendentes.length} coreografia{grupo.pendentes.length !== 1 ? 's' : ''} em 1 PIX
                       {expiraDias != null && expiraDias <= 7 && (
-                        <span className="text-amber-600 dark:text-amber-400 ml-2">
+                        <span className="text-slate-500 ml-2">
                           · {expiraDias === 0 ? 'Vence hoje' : `Vence em ${expiraDias} dia${expiraDias !== 1 ? 's' : ''}`}
                         </span>
                       )}
@@ -513,15 +553,15 @@ const MinhasCoreografias = () => {
                   <button
                     onClick={() => handlePagarAgregado(grupo)}
                     disabled={payingEvent === grupo.eventId}
-                    className="flex items-center gap-2 px-5 py-3 bg-[#ff0068] hover:bg-[#d4005a] disabled:opacity-50 text-white rounded-xl font-black text-[11px] uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 active:scale-95 transition-all"
+                    className="flex items-center gap-2 px-5 py-3 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-40 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 transition-all"
                   >
                     {payingEvent === grupo.eventId ? (
-                      <Loader2 size={14} className="animate-spin" />
+                      <Loader2 size={13} className="animate-spin" />
                     ) : (
-                      <ShoppingCart size={14} />
+                      <ShoppingCart size={13} />
                     )}
                     Pagar tudo
-                    <ChevronRight size={13} />
+                    <ChevronRight size={12} />
                   </button>
                 </div>
               </div>
@@ -535,15 +575,19 @@ const MinhasCoreografias = () => {
               const isNova = reg.id === novaId;
               const isPendente = reg.status_pagamento === 'PENDENTE';
               const modalidade = reg.tipo_apresentacao ?? reg.formato_participacao ?? null;
-              const valorMostrar = reg.valor_pago ?? reg.charged_amount ?? reg.mod_fee ?? null;
+              // Preço a mostrar: pagas usam valor_pago real; pendentes usam o
+              // calculado client-side (_precoDisplay) com base na formação.
+              const valorMostrar = isPendente
+                ? reg._precoDisplay ?? null
+                : (reg.valor_pago ?? reg.charged_amount ?? reg._precoDisplay ?? null);
 
               return (
                 <div
                   key={reg.id}
-                  className={`p-4 flex items-start gap-3 transition-colors ${isNova ? 'bg-emerald-50/40 dark:bg-emerald-500/5' : ''}`}
+                  className={`p-4 flex items-start gap-3 transition-colors ${isNova ? 'bg-slate-50 dark:bg-white/[0.02]' : ''}`}
                 >
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${st.tone === 'ok' ? 'bg-emerald-100 dark:bg-emerald-500/15' : st.tone === 'pendente' ? 'bg-amber-100 dark:bg-amber-500/15' : 'bg-slate-100 dark:bg-white/5'}`}>
-                    <Clapperboard size={16} className={st.tone === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : st.tone === 'pendente' ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'} />
+                  <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-slate-100 dark:bg-white/5">
+                    <Clapperboard size={14} className="text-slate-400" />
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -554,10 +598,10 @@ const MinhasCoreografias = () => {
                         </p>
                         <div className="flex flex-wrap gap-1.5 mt-1">
                           {modalidade && (
-                            <span className="px-2 py-0.5 bg-[#ff0068]/10 text-[#ff0068] text-[8px] font-black uppercase tracking-widest rounded-full">{modalidade}</span>
+                            <span className="px-2 py-0.5 bg-slate-100 dark:bg-white/5 text-slate-500 text-[8px] font-black uppercase tracking-widest rounded-full">{modalidade}</span>
                           )}
                           {reg.categoria && (
-                            <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 text-[8px] font-black uppercase tracking-widest rounded-full">{reg.categoria}</span>
+                            <span className="px-2 py-0.5 bg-slate-100 dark:bg-white/5 text-slate-500 text-[8px] font-black uppercase tracking-widest rounded-full">{reg.categoria}</span>
                           )}
                           {reg.estilo_danca && (
                             <span className="px-2 py-0.5 bg-slate-100 dark:bg-white/5 text-slate-500 text-[8px] font-black uppercase tracking-widest rounded-full">{reg.estilo_danca}</span>
@@ -565,18 +609,18 @@ const MinhasCoreografias = () => {
                         </div>
                       </div>
 
-                      <span className={`shrink-0 px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${st.bg} ${st.text}`}>
+                      <span className={`shrink-0 px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${st.bg} ${st.text} ${st.tone === 'ok' ? 'border-emerald-200 dark:border-emerald-500/20' : st.tone === 'pendente' ? 'border-amber-200 dark:border-amber-500/20' : 'border-slate-200 dark:border-white/10'}`}>
                         {st.label}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between gap-3 mt-2 flex-wrap">
-                      <div className="text-[10px] font-bold text-slate-400 flex items-center gap-2">
+                      <div className="text-[10px] font-bold text-slate-500 flex items-center gap-3 tabular-nums">
                         {valorMostrar != null && (
                           <span>{fmtMoney(valorMostrar)}</span>
                         )}
                         {reg.paid_at && (
-                          <span className="flex items-center gap-1">
+                          <span className="flex items-center gap-1 text-slate-400">
                             <Clock size={9} /> Pago em {fmtDate(reg.paid_at)}
                           </span>
                         )}
@@ -586,17 +630,17 @@ const MinhasCoreografias = () => {
                         {st.tone === 'ok' && (
                           <button
                             onClick={() => navigate(`/credencial/${reg.id}`)}
-                            className="p-2 rounded-lg hover:bg-[#ff0068]/10 text-slate-400 hover:text-[#ff0068]"
+                            className="p-2 rounded-lg text-slate-400 hover:text-[#ff0068] hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
                             title="Credencial (QR)"
                           >
-                            <QrCode size={14} />
+                            <QrCode size={13} />
                           </button>
                         )}
                         {isPendente && (
                           <button
                             onClick={() => handlePagarSingle(reg)}
                             disabled={payingSingle === reg.id}
-                            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 font-black text-[9px] uppercase tracking-widest flex items-center gap-1 disabled:opacity-50"
+                            className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 font-black text-[9px] uppercase tracking-widest flex items-center gap-1.5 disabled:opacity-50 transition-all"
                             title="Pagar só esta inscrição"
                           >
                             {payingSingle === reg.id
@@ -608,10 +652,10 @@ const MinhasCoreografias = () => {
                         {isPendente && !reg.payment_group_id && (
                           <button
                             onClick={() => setConfirmDel(reg)}
-                            className="p-2 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-500/10 text-slate-400 hover:text-rose-500"
+                            className="p-2 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
                             title="Remover inscrição"
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={13} />
                           </button>
                         )}
                       </div>
@@ -626,18 +670,18 @@ const MinhasCoreografias = () => {
 
       {/* ── Aviso CPF faltando ── */}
       {registrations.length > 0 && totalPendentesGlobal > 0 && !profileCpf && (
-        <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-xl">
+        <div className="flex items-start gap-3 p-4 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl">
           <AlertTriangle size={14} className="text-amber-500 shrink-0 mt-0.5" />
           <div className="flex-1">
-            <p className="text-[11px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200">
               CPF necessário pra pagar
             </p>
-            <p className="text-[10px] text-amber-700/80 dark:text-amber-300/80 mt-1">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
               Pra gerar a fatura, complete seu CPF no perfil.
             </p>
             <button
               onClick={() => navigate('/meu-perfil')}
-              className="mt-2 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-black text-[9px] uppercase tracking-widest"
+              className="mt-2 px-3 py-1.5 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-xl font-black text-[9px] uppercase tracking-widest"
             >
               Completar perfil
             </button>
@@ -651,8 +695,8 @@ const MinhasCoreografias = () => {
       {confirmDel && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 shadow-2xl p-6 text-center">
-            <div className="w-12 h-12 rounded-full bg-rose-100 dark:bg-rose-500/15 flex items-center justify-center mx-auto mb-4">
-              <Trash2 size={20} className="text-rose-500" />
+            <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-white/5 flex items-center justify-center mx-auto mb-4">
+              <Trash2 size={18} className="text-rose-500" />
             </div>
             <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white mb-2">
               Remover {confirmDel.nome_coreografia || 'inscrição'}?
