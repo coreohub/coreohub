@@ -172,9 +172,12 @@ const Registrations = () => {
   };
 
   const handleApprove = async (id: string) => {
-    const { error } = await supabase.from('registrations').update({ status: 'APROVADA', status_pagamento: 'CONFIRMADO' }).eq('id', id);
+    // Webhook sempre salva 'APROVADO'. Manter consistência aqui também
+    // — o painel deve mostrar o mesmo valor em ambos os caminhos
+    // (pagamento real via Asaas + aprovação manual pelo produtor).
+    const { error } = await supabase.from('registrations').update({ status: 'APROVADA', status_pagamento: 'APROVADO' }).eq('id', id);
     if (error) return;
-    setRegistrations(prev => prev.map(reg => reg.id === id ? { ...reg, status: 'APROVADA', status_pagamento: 'CONFIRMADO' } : reg));
+    setRegistrations(prev => prev.map(reg => reg.id === id ? { ...reg, status: 'APROVADA', status_pagamento: 'APROVADO' } : reg));
     setReviewingReg(null);
   };
 
@@ -225,9 +228,13 @@ const Registrations = () => {
   };
 
   /* registrations that actually have a violation */
+  // Helper: webhook usa 'APROVADO'. Legado de meses atrás usava 'CONFIRMADO'.
+  // Aceitar ambos pra cobrir rows antigas até backfill.
+  const isPago = (s?: string) => s === 'APROVADO' || s === 'CONFIRMADO';
+
   const violatingRegs = useMemo(() => {
     return registrations
-      .filter(r => r.status_pagamento === 'CONFIRMADO')
+      .filter(r => isPago(r.status_pagamento))
       .filter(r => {
         const { violates } = checkViolation(r);
         return violates;
@@ -257,7 +264,12 @@ const Registrations = () => {
         reg.profiles?.email?.toLowerCase().includes(term)
       );
     }
-    if (paymentFilter !== 'ALL')   result = result.filter(reg => reg.status_pagamento === paymentFilter);
+    if (paymentFilter !== 'ALL') {
+      // 'APROVADO' do filtro cobre rows antigas com 'CONFIRMADO' também.
+      result = paymentFilter === 'APROVADO'
+        ? result.filter(reg => isPago(reg.status_pagamento))
+        : result.filter(reg => reg.status_pagamento === paymentFilter);
+    }
     if (modalidadeFilter !== 'ALL') result = result.filter(reg => reg.formato_participacao === modalidadeFilter);
     if (categoriaFilter !== 'ALL') result = result.filter(reg => reg.categoria === categoriaFilter);
     if (estiloFilter !== 'ALL')    result = result.filter(reg => reg.estilo_danca === estiloFilter);
@@ -270,11 +282,13 @@ const Registrations = () => {
      contexto global do evento mesmo com filtros ativos. */
   const stats = useMemo(() => {
     const total = registrations.length;
-    const confirmadas = registrations.filter(r => r.status_pagamento === 'CONFIRMADO').length;
+    const confirmadas = registrations.filter(r => isPago(r.status_pagamento)).length;
     const pendentes   = registrations.filter(r => r.status_pagamento === 'PENDENTE').length;
+    // Receita: prioriza valor_pago (snapshot real do webhook) com fallback
+    // pra valor_total legado e mod_fee de eventos antigos.
     const receita     = registrations
-      .filter(r => r.status_pagamento === 'CONFIRMADO')
-      .reduce((sum, r) => sum + (Number(r.valor_total) || 0), 0);
+      .filter(r => isPago(r.status_pagamento))
+      .reduce((sum, r) => sum + (Number(r.valor_pago ?? r.valor_total ?? r.mod_fee ?? 0) || 0), 0);
     return { total, confirmadas, pendentes, receita };
   }, [registrations]);
 
@@ -344,8 +358,13 @@ const Registrations = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'APROVADO':
       case 'CONFIRMADO': return 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20';
       case 'PENDENTE': return 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-500/20';
+      case 'VENCIDO':
+      case 'EXPIRADO': return 'bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-500/20';
+      case 'ESTORNADO':
+      case 'CANCELADO': return 'bg-slate-100 dark:bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-500/20';
       default: return 'bg-slate-100 dark:bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-500/20';
     }
   };
@@ -419,10 +438,11 @@ const Registrations = () => {
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
               <select value={paymentFilter} onChange={e => setPaymentFilter(e.target.value)} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]">
                 <option value="ALL"        className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Pagamento: Todos</option>
-                <option value="CONFIRMADO" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Confirmado</option>
+                <option value="APROVADO"   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Confirmado</option>
                 <option value="PENDENTE"   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Pendente</option>
+                <option value="VENCIDO"    className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Vencido</option>
                 <option value="ESTORNADO"  className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Estornado</option>
-                <option value="FALHOU"     className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Falhou</option>
+                <option value="EXPIRADO"   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Expirado</option>
               </select>
               <select value={modalidadeFilter} onChange={e => setModalidadeFilter(e.target.value)} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]">
                 <option value="ALL"   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Modalidade: Todas</option>
