@@ -698,6 +698,175 @@ function buildWorkshopProducerNotification(p: WorkshopProducerPayload) {
   }
 }
 
+// ─── Templates: fatura agregada (carrinho — Sessão 2) ──────────────────────
+// 4 templates novos: criação da fatura, confirmação consolidada, lembrete
+// X dias antes do deadline, último aviso 24h antes.
+
+interface AggregateInvoicePayload {
+  inscritoNome?:  string
+  inscritoEmail:  string
+  produtorEmail?: string
+  eventoNome?:    string
+  eventoData?:    string
+  invoiceUrl:     string
+  valorTotal:     number
+  expiresAt?:     string  // string ISO ou já formatado em PT-BR
+  coreografias?:  Array<{ nome: string; formacao?: string; charged?: number }>
+  appUrl?:        string
+}
+
+function fmtListaCoreografias(coreos: Array<{ nome: string; formacao?: string; charged?: number }>): string {
+  return coreos.map(c => `
+    <tr><td style="padding:8px 0;border-bottom:1px solid #f1f5f9;">
+      <p style="margin:0;font-size:13px;color:#0b0b0f;font-weight:600;">
+        ${escape(c.nome)}${c.formacao ? ` <span style="color:#94a3b8;font-weight:400;">· ${escape(c.formacao)}</span>` : ''}
+      </p>
+      ${typeof c.charged === 'number' ? `<p style="margin:2px 0 0;font-size:12px;color:#64748b;">${escape(money(c.charged))}</p>` : ''}
+    </td></tr>`).join('')
+}
+
+function buildAggregateInvoiceCreated(p: AggregateInvoicePayload) {
+  const coreos = Array.isArray(p.coreografias) ? p.coreografias : []
+  const n = coreos.length
+  const listaHtml = coreos.length > 0
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;">${fmtListaCoreografias(coreos)}</table>`
+    : ''
+
+  const expiraLine = p.expiresAt
+    ? `<p style="margin:12px 0 0;font-size:12px;color:#b45309;font-weight:600;">⏰ Pague até ${escape(p.expiresAt)}.</p>`
+    : ''
+
+  const contentHtml = `
+    <p style="margin:0 0 12px;font-size:14px;line-height:1.65;color:#334155;">
+      Suas <strong>${n} coreografia${n !== 1 ? 's' : ''}</strong>${p.eventoNome ? ` no <strong>${escape(p.eventoNome)}</strong>` : ''}
+      estão prontas pra pagamento em <strong>uma fatura única</strong> de <strong>${escape(money(p.valorTotal))}</strong>.
+    </p>
+    ${listaHtml}
+    <div style="margin-top:20px;padding:16px;border-radius:12px;background:#f1f5f9;">
+      <p style="margin:0;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#64748b;font-weight:700;">Valor total</p>
+      <p style="margin:4px 0 0;font-size:22px;color:#0b0b0f;font-weight:900;">${escape(money(p.valorTotal))}</p>
+      ${expiraLine}
+    </div>
+    <p style="margin:24px 0 0;font-size:12px;color:#94a3b8;">
+      Se a inscrição for cancelada antes do pagamento, a fatura é descartada automaticamente.
+    </p>`
+
+  return {
+    subject: `${p.eventoNome ? `[${p.eventoNome}] ` : ''}Sua fatura — ${n} coreografia${n !== 1 ? 's' : ''}`,
+    html: baseLayout({
+      preheader: `Pague suas ${n} coreografias em um PIX único de ${money(p.valorTotal)}.`,
+      title: `${n} coreografia${n !== 1 ? 's' : ''} prontas pra pagar`,
+      intro: `Olá ${escape(p.inscritoNome ?? 'bailarino(a)')}, geramos uma fatura única com todas as suas coreografias pendentes.`,
+      contentHtml,
+      ctaLabel: 'Pagar agora',
+      ctaUrl: p.invoiceUrl,
+    }),
+  }
+}
+
+interface AggregateConfirmedPayload {
+  inscritoNome?:  string
+  inscritoEmail:  string
+  produtorEmail?: string
+  eventoNome?:    string
+  eventoData?:    string
+  eventoLocal?:   string
+  valorTotal:     number
+  coreografias:   Array<{ nome: string; formacao?: string; charged?: number; registrationId?: string }>
+  appUrl?:        string
+}
+
+function buildAggregateConfirmed(p: AggregateConfirmedPayload) {
+  const n = p.coreografias.length
+  const linhasInfo = [
+    p.eventoNome  ? infoRow('Evento', escape(p.eventoNome)) : '',
+    p.eventoData  ? infoRow('Data',   escape(p.eventoData)) : '',
+    p.eventoLocal ? infoRow('Local',  escape(p.eventoLocal)) : '',
+    infoRow('Coreografias', String(n)),
+    infoRow('Valor pago total', escape(money(p.valorTotal))),
+  ].filter(Boolean).join('')
+
+  const listaHtml = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;">${fmtListaCoreografias(p.coreografias)}</table>`
+
+  const appUrl = p.appUrl ?? 'https://coreohub.com'
+  const contentHtml = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhasInfo}</table>
+    <p style="margin:24px 0 8px;font-size:13px;font-weight:700;color:#0b0b0f;">
+      Coreografias confirmadas:
+    </p>
+    ${listaHtml}
+    <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      Cada coreografia tem sua própria credencial digital — acesse em
+      <a href="${appUrl}/minhas-coreografias" style="color:${BRAND_COLOR};font-weight:700;">Minhas Coreografias</a>
+      pra ver os QRs.
+    </p>`
+
+  return {
+    subject: `${p.eventoNome ? `[${p.eventoNome}] ` : ''}${n} inscrições confirmadas`,
+    html: baseLayout({
+      preheader: `Pagamento aprovado. ${n} coreografias garantidas em ${p.eventoNome ?? 'CoreoHub'}.`,
+      title: `${n} inscrições confirmadas!`,
+      intro: `Olá ${escape(p.inscritoNome ?? 'bailarino(a)')}, recebemos seu pagamento e suas ${n} coreografias foram <strong>aprovadas</strong>. Bora dançar!`,
+      contentHtml,
+      ctaLabel: 'Ver minhas coreografias',
+      ctaUrl: `${appUrl}/minhas-coreografias`,
+    }),
+  }
+}
+
+interface AggregateReminderPayload {
+  inscritoNome?:  string
+  inscritoEmail:  string
+  produtorEmail?: string
+  eventoNome?:    string
+  invoiceUrl:     string
+  valorTotal:     number
+  qtdCoreografias: number
+  expiresAt:      string  // formatado em PT-BR
+  diasRestantes:  number  // pra ajustar tom do email
+  appUrl?:        string
+}
+
+function buildAggregateReminder(p: AggregateReminderPayload) {
+  const isLastChance = p.diasRestantes <= 1
+  const urgencyColor = isLastChance ? '#dc2626' : '#f59e0b'
+  const urgencyBg    = isLastChance ? '#fef2f2' : '#fffbeb'
+  const urgencyBd    = isLastChance ? '#fecaca' : '#fde68a'
+
+  const titulo = isLastChance ? 'Última chance — suas inscrições vencem amanhã' : `Faltam ${p.diasRestantes} dia${p.diasRestantes !== 1 ? 's' : ''} pra pagar`
+  const intro  = isLastChance
+    ? `Olá ${escape(p.inscritoNome ?? 'bailarino(a)')}, suas <strong>${p.qtdCoreografias} coreografias</strong> pendentes vencem em menos de 24h. Se não pagar até ${escape(p.expiresAt)}, elas serão canceladas.`
+    : `Olá ${escape(p.inscritoNome ?? 'bailarino(a)')}, você tem <strong>${p.qtdCoreografias} coreografias</strong> pendentes${p.eventoNome ? ` no <strong>${escape(p.eventoNome)}</strong>` : ''}. Pague até <strong>${escape(p.expiresAt)}</strong> pra garantir sua participação.`
+
+  const contentHtml = `
+    <div style="margin-top:4px;padding:18px;border:2px solid ${urgencyBd};border-radius:14px;background:${urgencyBg};">
+      <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:${urgencyColor};">
+        ${isLastChance ? '⚠ Última chance' : `⏰ Faltam ${p.diasRestantes} dia${p.diasRestantes !== 1 ? 's' : ''}`}
+      </p>
+      <p style="margin:8px 0 0;font-size:24px;font-weight:900;color:#0b0b0f;">${escape(money(p.valorTotal))}</p>
+      <p style="margin:4px 0 0;font-size:13px;color:#64748b;font-weight:600;">
+        ${p.qtdCoreografias} coreografia${p.qtdCoreografias !== 1 ? 's' : ''} pendente${p.qtdCoreografias !== 1 ? 's' : ''}${p.eventoNome ? ` · ${escape(p.eventoNome)}` : ''}
+      </p>
+    </div>
+    <p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      ${isLastChance
+        ? 'Depois desse prazo as inscrições viram inválidas e o produtor pode não conseguir te encaixar mais.'
+        : 'O produtor encerrou as inscrições e os pagamentos vão até a data limite. Não deixa pra última hora.'}
+    </p>`
+
+  return {
+    subject: `${p.eventoNome ? `[${p.eventoNome}] ` : ''}${isLastChance ? '⚠ Última chance — paga até amanhã' : `Faltam ${p.diasRestantes} dias`}`,
+    html: baseLayout({
+      preheader: `${p.qtdCoreografias} coreografias pendentes — ${money(p.valorTotal)} até ${p.expiresAt}.`,
+      title: titulo,
+      intro,
+      contentHtml,
+      ctaLabel: 'Pagar agora',
+      ctaUrl: p.invoiceUrl,
+    }),
+  }
+}
+
 // ─── Handler ────────────────────────────────────────────────────────────────
 
 interface SendEmailRequest {
@@ -710,6 +879,9 @@ interface SendEmailRequest {
     | 'audience_ticket_producer'
     | 'workshop_registration_confirmed'
     | 'workshop_registration_producer'
+    | 'aggregate_invoice_created'
+    | 'aggregate_payment_confirmed'
+    | 'aggregate_reminder'
   payload: Record<string, unknown>
 }
 
@@ -877,6 +1049,41 @@ Deno.serve(async (req) => {
         to = p.produtorEmail
         subject = tpl.subject
         html = tpl.html
+        break
+      }
+      case 'aggregate_invoice_created': {
+        const p = payload as unknown as AggregateInvoicePayload
+        if (!p.inscritoEmail) throw new Error('inscritoEmail é obrigatório')
+        if (!p.invoiceUrl)    throw new Error('invoiceUrl é obrigatório')
+        const tpl = buildAggregateInvoiceCreated(p)
+        to = p.inscritoEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        replyTo = p.produtorEmail
+        break
+      }
+      case 'aggregate_payment_confirmed': {
+        const p = payload as unknown as AggregateConfirmedPayload
+        if (!p.inscritoEmail) throw new Error('inscritoEmail é obrigatório')
+        const tpl = buildAggregateConfirmed(p)
+        to = p.inscritoEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        replyTo = p.produtorEmail
+        break
+      }
+      case 'aggregate_reminder': {
+        const p = payload as unknown as AggregateReminderPayload
+        if (!p.inscritoEmail) throw new Error('inscritoEmail é obrigatório')
+        if (!p.invoiceUrl)    throw new Error('invoiceUrl é obrigatório')
+        const tpl = buildAggregateReminder(p)
+        to = p.inscritoEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        replyTo = p.produtorEmail
         break
       }
       default:

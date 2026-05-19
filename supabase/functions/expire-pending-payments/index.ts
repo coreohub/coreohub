@@ -58,8 +58,12 @@ Deno.serve(async (req) => {
     return respond(401, { error: 'Unauthorized' })
   }
 
+  // A3 (audit): sem fallback pra sandbox em código que toca dinheiro.
   const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY')  ?? ''
-  const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+  const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? ''
+  if (!ASAAS_API_KEY || !ASAAS_BASE_URL) {
+    return respond(500, { error: 'ASAAS_API_KEY/ASAAS_BASE_URL não setados' })
+  }
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
@@ -68,12 +72,16 @@ Deno.serve(async (req) => {
 
   // Busca payments expirados. Limite alto pra cobrir batch acumulado, mas
   // não infinito — se houver explosão a próxima execução pega o restante.
+  // E1 (audit): ORDER BY expires_at ASC garante que os mais antigos saem
+  // primeiro, evitando que payments fiquem pra sempre no final da fila se
+  // houver >200 vencidos acumulados.
   const { data: expiredPayments, error } = await supabase
     .from('payments')
     .select('id, asaas_payment_id, expires_at, value_total')
     .eq('status', 'PENDENTE')
     .not('expires_at', 'is', null)
     .lt('expires_at', new Date().toISOString())
+    .order('expires_at', { ascending: true })
     .limit(200)
 
   if (error) {

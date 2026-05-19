@@ -37,7 +37,10 @@ async function dispararEmail(
     | 'audience_ticket_confirmed'
     | 'audience_ticket_producer'
     | 'workshop_registration_confirmed'
-    | 'workshop_registration_producer',
+    | 'workshop_registration_producer'
+    | 'aggregate_invoice_created'
+    | 'aggregate_payment_confirmed'
+    | 'aggregate_reminder',
   payload: Record<string, unknown>
 ): Promise<void> {
   try {
@@ -419,12 +422,23 @@ async function handleAggregatePayment(opts: {
   }
 
   // ── Atualiza payment row + registrations linkadas ─────────────────────────
+  // A5 (audit): paid_at = data real do pagamento (payment.paymentDate ou
+  // confirmedDate), não NOW(). Webhook pode ser retry horas depois.
+  const paidAtReal = (() => {
+    const candidate = payment.paymentDate ?? payment.confirmedDate
+    if (candidate) {
+      const d = new Date(candidate)
+      if (!isNaN(d.getTime())) return d.toISOString()
+    }
+    return new Date().toISOString()
+  })()
+
   const paymentUpdate: Record<string, unknown> = {
     status:           statusInterno,
     payment_method:   payment.billingType ?? null,
   }
   if (statusInterno === 'APROVADO') {
-    paymentUpdate.paid_at = new Date().toISOString()
+    paymentUpdate.paid_at = paidAtReal
   }
 
   const { data: paymentRow, error: payErr } = await supabase
@@ -441,9 +455,11 @@ async function handleAggregatePayment(opts: {
 
   // Carrega registrations linkadas (faz independente do status, pra logging
   // e pra atualizar status_pagamento mesmo em VENCIDO/ESTORNADO).
+  // A6 (audit): charged_amount = snapshot por registration setado pela
+  // create-aggregate. Usado pra distribuição proporcional de comissão.
   const { data: regs, error: regsErr } = await supabase
     .from('registrations')
-    .select('id, event_id, user_id, nome_coreografia, formato_participacao, tipo_apresentacao, mod_fee')
+    .select('id, event_id, user_id, nome_coreografia, formato_participacao, tipo_apresentacao, mod_fee, charged_amount')
     .eq('payment_group_id', paymentId)
 
   if (regsErr) {
@@ -462,7 +478,7 @@ async function handleAggregatePayment(opts: {
     payment_method:   payment.billingType ?? null,
   }
   if (statusInterno === 'APROVADO') {
-    regUpdate.paid_at = new Date().toISOString()
+    regUpdate.paid_at = paidAtReal
   }
   await supabase
     .from('registrations')
@@ -480,10 +496,8 @@ async function handleAggregatePayment(opts: {
   }
 
   // ── APROVADO: inserir N rows em platform_commissions ─────────────────────
-  // Proporção: comissão de cada reg = (commission_total) × (charged_reg / value_total).
-  // Pra não recalcular preços (que podem ter mudado), distribuímos uniforme
-  // por # de registrations — é uma aproximação aceitável pra relatórios.
-  // Refunds parciais usam o valor proporcional do Asaas, não esta tabela.
+  // A6 (audit): distribuição PROPORCIONAL ao charged_amount snapshot.
+  // Se a inscrição não tem snapshot (legacy), cai no fallback uniforme.
   const { data: eventData } = await supabase
     .from('events')
     .select('created_by, name, location, event_date, commission_type, commission_percent, fee_mode')
@@ -494,22 +508,61 @@ async function handleAggregatePayment(opts: {
   const commissionTotal  = Number(paymentRow.commission_total)
   const producerTotalRow = Number(paymentRow.producer_total)
   const n                = registrations.length
-  const commissionPer    = parseFloat((commissionTotal / n).toFixed(2))
-  const grossPer         = parseFloat((grossTotal / n).toFixed(2))
-  const producerPer      = parseFloat((producerTotalRow / n).toFixed(2))
+  const valueTotalSnap   = Number(paymentRow.value_total)
 
-  const commissionRows = registrations.map((r: any) => ({
-    registration_id:   r.id,
-    event_id:          r.event_id,
-    producer_id:       eventData?.created_by ?? null,
-    gross_amount:      grossPer,
-    commission_amount: commissionPer,
-    net_amount:        producerPer,
-    asaas_payment_id:  String(payment.id),
-    commission_type:   eventData?.commission_type ?? 'percent',
-  }))
+  // Soma dos charged_amount (snapshot). Se algum for null, usamos fallback.
+  const sumCharged = registrations.reduce(
+    (s: number, r: any) => s + Number(r.charged_amount ?? 0),
+    0
+  )
+  const hasFullSnapshot = sumCharged > 0 &&
+    registrations.every((r: any) => r.charged_amount != null && Number(r.charged_amount) > 0)
 
-  const { error: commErr } = await supabase.from('platform_commissions').insert(commissionRows)
+  const commissionRows = registrations.map((r: any) => {
+    let grossR: number, commR: number, prodR: number
+    if (hasFullSnapshot) {
+      const ratio = Number(r.charged_amount) / sumCharged
+      grossR = parseFloat((grossTotal       * ratio).toFixed(2))
+      commR  = parseFloat((commissionTotal  * ratio).toFixed(2))
+      prodR  = parseFloat((producerTotalRow * ratio).toFixed(2))
+    } else {
+      // Fallback uniforme pra payments criados antes da migration de
+      // 2026-05-31 (sem charged_amount snapshot).
+      grossR = parseFloat((grossTotal       / n).toFixed(2))
+      commR  = parseFloat((commissionTotal  / n).toFixed(2))
+      prodR  = parseFloat((producerTotalRow / n).toFixed(2))
+    }
+    return {
+      registration_id:   r.id,
+      event_id:          r.event_id,
+      producer_id:       eventData?.created_by ?? null,
+      gross_amount:      grossR,
+      commission_amount: commR,
+      net_amount:        prodR,
+      asaas_payment_id:  String(payment.id),
+      commission_type:   eventData?.commission_type ?? 'percent',
+    }
+  })
+  // Para o email consolidado abaixo, mantemos referência ao gross por reg.
+  const grossPerReg: Record<string, number> = {}
+  commissionRows.forEach((row, i) => {
+    grossPerReg[registrations[i].id] = row.gross_amount
+  })
+  // Atualiza valor_pago em cada registration com o gross proporcional, pra
+  // queries de relatório lerem direto da coluna.
+  for (const r of registrations) {
+    await supabase
+      .from('registrations')
+      .update({ valor_pago: grossPerReg[r.id] ?? 0 })
+      .eq('id', r.id)
+  }
+
+  // A7 (audit): upsert idempotente. Unique constraint
+  // (asaas_payment_id, registration_id) garante que retry de webhook não
+  // duplica rows mesmo se idempotency outer falhar por timing.
+  const { error: commErr } = await supabase
+    .from('platform_commissions')
+    .upsert(commissionRows, { onConflict: 'asaas_payment_id,registration_id', ignoreDuplicates: true })
   if (commErr) {
     console.error('[asaas-webhook][aggregate] erro inserir comissões:', commErr.message)
   } else {
@@ -519,7 +572,8 @@ async function handleAggregatePayment(opts: {
     )
   }
 
-  // ── Emails de confirmação (1 por registration) ────────────────────────────
+  // ── Emails de confirmação ──────────────────────────────────────────────
+  // A9 (audit): 1 email consolidado pro inscrito (não N). 1 email pro produtor.
   try {
     const [{ data: inscritoProfile }, produtorRes] = await Promise.all([
       supabase.from('profiles').select('full_name, email').eq('id', paymentRow.user_id).maybeSingle(),
@@ -531,30 +585,28 @@ async function handleAggregatePayment(opts: {
     const appUrl = Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'
     const eventoData = eventData?.event_date
       ? new Date(eventData.event_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
-      : null
+      : undefined
 
     const emailJobs: Promise<void>[] = []
     if (inscritoProfile?.email) {
-      for (const r of registrations) {
-        const modalidade = r.tipo_apresentacao ?? r.formato_participacao ?? null
-        emailJobs.push(dispararEmail('payment_confirmed_registrant', {
-          inscritoNome:   inscritoProfile.full_name,
-          inscritoEmail:  inscritoProfile.email,
-          coreoNome:      r.nome_coreografia,
-          modalidade,
-          eventoNome:     eventData?.name,
-          eventoLocal:    eventData?.location,
-          eventoData,
-          valorPago:      grossPer,
-          appUrl,
-          produtorEmail:  produtorProfile?.email,
-          registrationId: r.id,
-          emailUnverified: false,
-        }))
-      }
+      emailJobs.push(dispararEmail('aggregate_payment_confirmed', {
+        inscritoNome:  inscritoProfile.full_name,
+        inscritoEmail: inscritoProfile.email,
+        produtorEmail: produtorProfile?.email,
+        eventoNome:    eventData?.name,
+        eventoLocal:   eventData?.location,
+        eventoData,
+        valorTotal:    grossTotal,
+        coreografias:  registrations.map((r: any) => ({
+          nome:            r.nome_coreografia ?? 'Coreografia',
+          formacao:        r.tipo_apresentacao ?? r.formato_participacao ?? undefined,
+          charged:         grossPerReg[r.id],
+          registrationId:  r.id,
+        })),
+        appUrl,
+      } as any))
     }
     if (produtorProfile?.email) {
-      // 1 email pro produtor consolidando todas (não floodar inbox dele com N).
       emailJobs.push(dispararEmail('payment_confirmed_producer', {
         produtorNome:  produtorProfile.full_name,
         produtorEmail: produtorProfile.email,
@@ -574,9 +626,80 @@ async function handleAggregatePayment(opts: {
     console.error('[asaas-webhook][aggregate] falha bloco emails:', (emailErr as Error).message)
   }
 
-  // Nota: Conversions API (Meta CAPI + GA4 MP) NÃO é disparada neste handler
-  // por enquanto. O dedupe via event_id quebraria com N eventos diferentes pro
-  // mesmo payment_id no Meta. Sessão 2 decide: 1 evento agregado vs N eventos.
+  // ── Conversions API server-side (Meta CAPI + GA4 MP) ─────────────────────
+  // W7 (audit): pro fluxo agregado disparamos UM evento `Purchase` consolidado
+  // com value=total. Dedupe pelo paymentId (UUID interno). N eventos seria
+  // mais granular mas o Meta dedupa pelo event_id e quebraria com IDs distintos
+  // disparando ao mesmo tempo. Best-effort total — falha aqui NUNCA quebra o
+  // resto do webhook.
+  try {
+    const [{ data: evPub }, { data: evSec }] = await Promise.all([
+      paymentRow.event_id
+        ? supabase.from('events')
+            .select('slug, producer_ga4_id, producer_meta_pixel_id')
+            .eq('id', paymentRow.event_id).maybeSingle()
+        : Promise.resolve({ data: null } as any),
+      paymentRow.event_id
+        ? supabase.from('event_marketing_secrets')
+            .select('meta_capi_token, ga4_api_secret')
+            .eq('event_id', paymentRow.event_id).maybeSingle()
+        : Promise.resolve({ data: null } as any),
+    ])
+
+    const masterMetaToken = Deno.env.get('META_CAPI_ACCESS_TOKEN') ?? ''
+    const masterGa4Secret = Deno.env.get('GA4_API_SECRET') ?? ''
+
+    const metaTargets: MetaCapiTarget[] = []
+    if (masterMetaToken) {
+      metaTargets.push({ pixelId: MASTER_META_PIXEL_ID, accessToken: masterMetaToken })
+    }
+    if ((evPub as any)?.producer_meta_pixel_id && (evSec as any)?.meta_capi_token) {
+      metaTargets.push({
+        pixelId:     String((evPub as any).producer_meta_pixel_id),
+        accessToken: String((evSec as any).meta_capi_token),
+      })
+    }
+
+    const ga4Targets: Ga4MpTarget[] = []
+    if (masterGa4Secret) {
+      ga4Targets.push({ measurementId: MASTER_GA4_ID, apiSecret: masterGa4Secret })
+    }
+    if ((evPub as any)?.producer_ga4_id && (evSec as any)?.ga4_api_secret) {
+      ga4Targets.push({
+        measurementId: String((evPub as any).producer_ga4_id),
+        apiSecret:     String((evSec as any).ga4_api_secret),
+      })
+    }
+
+    if (metaTargets.length > 0 || ga4Targets.length > 0) {
+      // Email/CPF do inscrito pra Meta CAPI (hash SHA-256 dentro do helper).
+      const { data: inscritoForCapi } = await supabase
+        .from('profiles')
+        .select('email, cpf_cnpj')
+        .eq('id', paymentRow.user_id)
+        .maybeSingle()
+
+      const inscritoEmail = (inscritoForCapi as any)?.email ?? null
+      const inscritoCpf   = (inscritoForCapi as any)?.cpf_cnpj ?? null
+
+      await dispatchPurchaseConversions({
+        input: {
+          // Usa paymentId (UUID em public.payments) como dedupe key. UI usa o
+          // mesmo paymentId no client-side, então Meta dedupa corretamente.
+          transactionId: paymentId,
+          eventSlug:     (evPub as any)?.slug ?? paymentRow.event_id ?? 'unknown',
+          eventName:     eventData?.name ?? 'Festival',
+          value:         grossTotal,
+          email:         inscritoEmail,
+          cpf:           inscritoCpf,
+        },
+        metaTargets,
+        ga4Targets,
+      })
+    }
+  } catch (capiErr) {
+    console.error('[asaas-webhook][aggregate] falha bloco CAPI:', (capiErr as Error).message)
+  }
 
   return respond({
     status:          'ok',

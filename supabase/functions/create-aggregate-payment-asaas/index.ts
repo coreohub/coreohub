@@ -70,8 +70,14 @@ Deno.serve(async (req) => {
       throw new Error('registration_ids deve conter pelo menos 1 inscrição.')
     }
 
+    // A3 (audit): em PROD jamais fazer fallback pra sandbox — secret faltando
+    // significa erro de deploy, não modo degradado. Sem fallback silencioso em
+    // código que toca dinheiro.
     const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY')  ?? ''
-    const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+    const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? ''
+    if (!ASAAS_API_KEY || !ASAAS_BASE_URL) {
+      throw new Error('Configuração inválida: ASAAS_API_KEY/ASAAS_BASE_URL não setados.')
+    }
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -131,6 +137,33 @@ Deno.serve(async (req) => {
     if (!event) throw new Error('Evento não encontrado.')
     if (event.event_type === 'government') {
       throw new Error('Eventos governamentais não usam pagamento.')
+    }
+
+    // A4 (audit): fail-fast em CPF/CNPJ ausente. Asaas rejeita criação de
+    // payment sem cpfCnpj no customer e a UX fica péssima (espera 5s + erro
+    // após payment row + linking criados). Validamos antes de qualquer write.
+    const cpfRaw = inscritoProfile?.cpf_cnpj?.replace(/\D/g, '') ?? ''
+    if (!cpfRaw) {
+      return respond(422, {
+        error:           'CPF/CNPJ obrigatório pra gerar pagamento.',
+        error_code:      'CPF_REQUIRED',
+        action_required: 'complete_profile',
+        redirect_to:     '/meu-perfil',
+      })
+    }
+
+    // A2 (audit): se o deadline do festival já passou ou está a menos de 1
+    // dia, não dá pra gerar fatura — risco de race entre cron de expiração e
+    // confirmação Asaas.
+    let expiresAt: string | null = null
+    if (config?.prazo_inscricao) {
+      const d = new Date(config.prazo_inscricao + 'T23:59:59')
+      if (!isNaN(d.getTime())) {
+        if (d.getTime() < Date.now()) {
+          throw new Error('Inscrições encerradas: prazo do festival já passou.')
+        }
+        expiresAt = d.toISOString()
+      }
     }
 
     // ── 4. Wallet do produtor ──────────────────────────────────────────────
@@ -230,12 +263,7 @@ Deno.serve(async (req) => {
     )
 
     // ── 6. Criar payment row PRIMEIRO (pra ter o UUID pro externalReference) ──
-    // Snapshot expires_at = prazo_inscricao do evento. Cron de expiração lê isso.
-    let expiresAt: string | null = null
-    if (config?.prazo_inscricao) {
-      const d = new Date(config.prazo_inscricao + 'T23:59:59')
-      if (!isNaN(d.getTime())) expiresAt = d.toISOString()
-    }
+    // expiresAt já calculado no bloco de validação acima (A2).
 
     const { data: paymentRow, error: payInsErr } = await supabase
       .from('payments')
@@ -257,17 +285,35 @@ Deno.serve(async (req) => {
     }
     const paymentId = paymentRow.id as string
 
-    // ── 7. Linkar registrations ao payment_group_id (antes do Asaas pra que,
-    //      se algo falhar na API, o cron de expiração limpa via ON DELETE) ──
-    const { error: linkErr } = await supabase
-      .from('registrations')
-      .update({ payment_group_id: paymentId })
-      .in('id', registration_ids)
+    // ── 7. Linkar registrations atomicamente ao payment_group_id ──────────
+    // A1 (audit): race condition — UPDATE com filtro payment_group_id IS NULL.
+    // Se outra request linkou as mesmas registrations no meio do caminho, o
+    // count retornado vai divergir e fazemos rollback.
+    // A6 (audit): também grava charged_amount por inscrição — snapshot pro
+    // webhook distribuir comissão proporcional (quando preços diferem).
+    const linkErrors: string[] = []
+    for (const p of priced) {
+      const { data: row, error } = await supabase
+        .from('registrations')
+        .update({ payment_group_id: paymentId, charged_amount: p.charged })
+        .eq('id', p.reg.id)
+        .is('payment_group_id', null)
+        .select('id')
+        .maybeSingle()
+      if (error || !row) linkErrors.push(p.reg.id)
+    }
 
-    if (linkErr) {
-      // Rollback do payment row
+    if (linkErrors.length > 0) {
+      // Race detectada ou erro de update. Rollback completo.
+      await supabase
+        .from('registrations')
+        .update({ payment_group_id: null, charged_amount: null })
+        .eq('payment_group_id', paymentId)
       await supabase.from('payments').delete().eq('id', paymentId)
-      throw new Error(`Erro ao linkar inscrições: ${linkErr.message}`)
+      throw new Error(
+        `Não foi possível agrupar ${linkErrors.length} inscrição(ões). ` +
+        'Provavelmente foram agrupadas em outra fatura no meio do caminho. Tente novamente.'
+      )
     }
 
     // ── 8. Criar/reutilizar customer Asaas ──────────────────────────────────
@@ -286,8 +332,9 @@ Deno.serve(async (req) => {
       'access_token':  ASAAS_API_KEY,
       'Content-Type':  'application/json',
     }
+    // cpfLimpo veio do bloco A4 acima (já garantido não-vazio).
     let customerId: string | undefined
-    const cpfLimpo = inscritoProfile?.cpf_cnpj?.replace(/\D/g, '') ?? ''
+    const cpfLimpo = cpfRaw
     if (cpfLimpo) {
       const searchRes  = await fetch(`${ASAAS_BASE_URL}/customers?cpfCnpj=${cpfLimpo}&limit=1`, { headers: asaasHeaders })
       const parsed = await safeJson(searchRes)
@@ -320,8 +367,14 @@ Deno.serve(async (req) => {
     }
 
     // ── 9. Criar cobrança Asaas com split ──────────────────────────────────
-    const dueDate = new Date()
-    dueDate.setDate(dueDate.getDate() + 3)
+    // A2 (audit): dueDate = min(+3 dias, expires_at). Pra não criar fatura
+    // cuja data de vencimento ultrapasse o deadline do festival.
+    const defaultDueDate = new Date()
+    defaultDueDate.setDate(defaultDueDate.getDate() + 3)
+    const expiresAtDate = expiresAt ? new Date(expiresAt) : null
+    const dueDate = (expiresAtDate && expiresAtDate.getTime() < defaultDueDate.getTime())
+      ? expiresAtDate
+      : defaultDueDate
     const dueDateStr = dueDate.toISOString().split('T')[0]
 
     const descricaoCoreos = priced
@@ -343,7 +396,12 @@ Deno.serve(async (req) => {
         { walletId: producer.asaas_wallet_id, fixedValue: producerTotal },
       ],
     }
-    console.log(`[create-aggregate-payment-asaas] POST /payments body=${JSON.stringify(paymentPayload)}`)
+    // A8 (audit): NÃO logar payload bruto (contém customer CPF/email + walletId
+    // do produtor). Log resumido — info suficiente pra debug sem secrets.
+    console.log(
+      `[create-aggregate-payment-asaas] POST /payments value=${valueTotal} dueDate=${dueDateStr}` +
+      ` externalRef=AGG:${paymentId} split=${producerTotal}`
+    )
 
     const payRes = await fetch(`${ASAAS_BASE_URL}/payments`, {
       method: 'POST',
@@ -384,6 +442,49 @@ Deno.serve(async (req) => {
         payment_url:           payData.invoiceUrl,
       })
       .in('id', registration_ids)
+
+    // A10 (audit): email de confirmação da criação da fatura. Best-effort —
+    // falha não bloqueia o fluxo principal (UI já tem a invoice_url no response).
+    try {
+      const { data: produtorProfile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', event.created_by)
+        .maybeSingle()
+
+      const expiresAtFmt = expiresAt
+        ? new Date(expiresAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+        : undefined
+
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+      const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+      if (supabaseUrl && serviceKey && inscritoProfile?.email) {
+        fetch(`${supabaseUrl}/functions/v1/send-email`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'aggregate_invoice_created',
+            payload: {
+              inscritoNome:  inscritoProfile.full_name,
+              inscritoEmail: inscritoProfile.email,
+              produtorEmail: produtorProfile?.email,
+              eventoNome:    event.name,
+              invoiceUrl:    payData.invoiceUrl,
+              valorTotal:    valueTotal,
+              expiresAt:     expiresAtFmt,
+              coreografias:  priced.map(p => ({
+                nome:     p.reg.nome_coreografia ?? 'Coreografia',
+                formacao: p.formacao,
+                charged:  p.charged,
+              })),
+              appUrl:        Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com',
+            },
+          }),
+        }).catch(err => console.warn('[create-aggregate-payment-asaas] email criação falhou:', err?.message ?? err))
+      }
+    } catch (emailErr) {
+      console.warn('[create-aggregate-payment-asaas] bloco email falhou:', (emailErr as Error).message)
+    }
 
     return new Response(
       JSON.stringify({
