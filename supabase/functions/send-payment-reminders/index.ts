@@ -60,15 +60,20 @@ Deno.serve(async (req) => {
     serviceRoleKey
   )
 
-  // Janela de tempo: pega payments PENDENTE cujo expires_at cai entre:
-  //   - 7d±12h (envia o lembrete X dias antes)
-  //   - 24h±12h (último aviso)
-  // Sem janela = não envia (já passou ou ainda longe).
+  // Janela de tempo (A10 auditoria Sessão 3):
+  // Catch-up amplo. Janela estreita ±12h pulava o dia se cron falhasse.
+  // Agora: qualquer payment PENDENTE com expires_at em [now+1h, now+8d] e
+  // marker null vira candidato. Marker garante que só dispara 1 vez.
+  //
+  //   - 7d: qualquer expires_at entre [now+25h, now+8d] sem reminder_7d_at
+  //   - 1d: qualquer expires_at entre [now+1h, now+25h] sem reminder_1d_at
+  //
+  // Limite inferior +1h evita disparar pra payment quase expirado (já foi
+  // ou vai ser EXPIRADO pelo cron de expire-pending-payments).
   const now = Date.now()
-  const lower7 = new Date(now + (7 * 24 - 12) * 3600_000).toISOString()
-  const upper7 = new Date(now + (7 * 24 + 12) * 3600_000).toISOString()
-  const lower1 = new Date(now + (24 - 12) * 3600_000).toISOString()
-  const upper1 = new Date(now + (24 + 12) * 3600_000).toISOString()
+  const oneHour   = new Date(now +  1 * 3600_000).toISOString()
+  const twentyFiveH = new Date(now + 25 * 3600_000).toISOString()
+  const eightDays = new Date(now + 8 * 24 * 3600_000).toISOString()
 
   type Payment = {
     id: string
@@ -81,25 +86,25 @@ Deno.serve(async (req) => {
     reminder_1d_at: string | null
   }
 
-  // 7-day reminder candidates
+  // 7-day reminder candidates: entre +25h e +8d (catch-up amplo)
   const { data: cand7, error: err7 } = await supabase
     .from('payments')
     .select('id, user_id, event_id, value_total, payment_url, expires_at, reminder_7d_at, reminder_1d_at')
     .eq('status', 'PENDENTE')
     .not('expires_at', 'is', null)
-    .gte('expires_at', lower7)
-    .lt('expires_at', upper7)
+    .gte('expires_at', twentyFiveH)
+    .lt('expires_at', eightDays)
     .is('reminder_7d_at', null)
     .limit(200)
 
-  // 1-day last chance candidates
+  // 1-day last chance: entre +1h e +25h
   const { data: cand1, error: err1 } = await supabase
     .from('payments')
     .select('id, user_id, event_id, value_total, payment_url, expires_at, reminder_7d_at, reminder_1d_at')
     .eq('status', 'PENDENTE')
     .not('expires_at', 'is', null)
-    .gte('expires_at', lower1)
-    .lt('expires_at', upper1)
+    .gte('expires_at', oneHour)
+    .lt('expires_at', twentyFiveH)
     .is('reminder_1d_at', null)
     .limit(200)
 
@@ -109,7 +114,12 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
 
-  async function dispatch(p: Payment, daysRemaining: number, marker: 'reminder_7d_at' | 'reminder_1d_at'): Promise<{ ok: boolean; error?: string }> {
+  async function dispatch(p: Payment, marker: 'reminder_7d_at' | 'reminder_1d_at'): Promise<{ ok: boolean; error?: string }> {
+    // A10: diasRestantes calculado dinamicamente do expires_at (janela ampla
+    // pode disparar com qualquer valor entre 1-8d, não só os 7 ou 1 fixos).
+    const daysRemaining = p.expires_at
+      ? Math.max(1, Math.ceil((new Date(p.expires_at).getTime() - Date.now()) / 86400_000))
+      : (marker === 'reminder_1d_at' ? 1 : 7);
     try {
       // Conta quantas registrations PENDENTE estão linkadas
       const { count } = await supabase
@@ -173,11 +183,11 @@ Deno.serve(async (req) => {
   let sent7 = 0, sent1 = 0, errors: any[] = []
 
   for (const p of (cand7 ?? []) as Payment[]) {
-    const r = await dispatch(p, 7, 'reminder_7d_at')
+    const r = await dispatch(p, 'reminder_7d_at')
     if (r.ok) sent7++; else errors.push({ id: p.id, type: '7d', error: r.error })
   }
   for (const p of (cand1 ?? []) as Payment[]) {
-    const r = await dispatch(p, 1, 'reminder_1d_at')
+    const r = await dispatch(p, 'reminder_1d_at')
     if (r.ok) sent1++; else errors.push({ id: p.id, type: '1d', error: r.error })
   }
 

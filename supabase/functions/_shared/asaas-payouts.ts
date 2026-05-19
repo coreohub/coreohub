@@ -10,16 +10,32 @@ export interface PixDescriptor {
   pixAddressKeyType: 'EMAIL' | 'CPF' | 'CNPJ' | 'PHONE' | 'EVP'
 }
 
+/** Valida CPF via dígito verificador (algoritmo padrão da Receita Federal).
+ *  Retorna true se os 11 dígitos compõem CPF válido.
+ *  Bloqueia CPFs com todos dígitos iguais (000... 111... etc).
+ */
+function isValidCpf(digits: string): boolean {
+  if (digits.length !== 11) return false
+  if (/^(\d)\1{10}$/.test(digits)) return false
+
+  const calc = (slice: number): number => {
+    let sum = 0
+    for (let i = 0; i < slice; i++) sum += Number(digits[i]) * (slice + 1 - i)
+    const mod = (sum * 10) % 11
+    return mod === 10 ? 0 : mod
+  }
+  return calc(9) === Number(digits[9]) && calc(10) === Number(digits[10])
+}
+
 /** Detecta o tipo de chave PIX baseado no formato.
  *  Heurística:
  *   - email: contém '@'
  *   - CNPJ: 14 dígitos
- *   - CPF: 11 dígitos (não distinguível de celular sem DDD; assumimos CPF
- *     quando explicitamente passar como `treat11AsCpf`)
- *   - celular: 11 dígitos com DDD ou 13 começando com 55
+ *   - CPF: 11 dígitos COM checksum válido (A2 auditoria Sessão 3)
+ *   - celular: 11 dígitos sem checksum válido (presumido DDD + 9 dígitos), ou 13 com 55
  *   - EVP: fallback (UUID, chave aleatória, hex)
  */
-export function detectPixType(key: string, opts?: { treat11AsCpf?: boolean }): PixDescriptor {
+export function detectPixType(key: string): PixDescriptor {
   const k = String(key ?? '').trim()
   if (!k) throw new Error('Chave PIX vazia')
 
@@ -34,10 +50,11 @@ export function detectPixType(key: string, opts?: { treat11AsCpf?: boolean }): P
   }
 
   if (digits.length === 11) {
-    if (opts?.treat11AsCpf) {
+    // A2 auditoria Sessão 3: ambiguidade CPF vs celular. CPF tem checksum
+    // determinístico — se passar, é CPF. Senão presumido celular (DDD+9 dígitos).
+    if (isValidCpf(digits)) {
       return { pixAddressKeyType: 'CPF', pixAddressKey: digits }
     }
-    // Celular brasileiro sem DDI — Asaas espera +55 prefix
     return { pixAddressKeyType: 'PHONE', pixAddressKey: `+55${digits}` }
   }
 
@@ -63,12 +80,21 @@ export interface SweepResult {
  *  Best-effort total — qualquer falha retorna { swept: false, ... } sem
  *  throw, pra não bloquear o webhook caller. Não é fatal se o saldo ficar
  *  parado na subconta (próximo ciclo de cobrança vai disparar de novo).
+ *
+ *  IMPORTANTE (A1 auditoria Sessão 3):
+ *  Se `amount` for passado, saca apenas esse valor específico (clampado
+ *  ao saldo disponível). Sem `amount`, saca o saldo inteiro — modo legado
+ *  que arrasta toda grana da subconta, incluindo possíveis recebimentos
+ *  de fora do CoreoHub. Webhook agora sempre passa o producer_amount
+ *  conhecido do split pra evitar surpresa.
  */
 export async function sweepProducerBalance(opts: {
   producerApiKey: string  // asaas_api_key da subconta
   producerPixKey: string  // pix_key do profile do produtor
   asaasBaseUrl:   string
   description?:   string
+  /** Valor exato a sacar (clamped ao saldo). Sem isso, varre saldo inteiro. */
+  amount?:        number
 }): Promise<SweepResult> {
   const { producerApiKey, producerPixKey, asaasBaseUrl } = opts
   if (!producerApiKey)   return { swept: false, value: 0, reason: 'no_api_key' }
@@ -81,7 +107,7 @@ export async function sweepProducerBalance(opts: {
   }
 
   try {
-    // 1) Saldo atual da subconta
+    // 1) Saldo atual da subconta — também usado como clamp do amount
     const balRes = await fetch(`${asaasBaseUrl}/finance/balance`, { headers })
     if (!balRes.ok) {
       const body = await balRes.text().catch(() => '')
@@ -90,6 +116,13 @@ export async function sweepProducerBalance(opts: {
     const balJson = await balRes.json().catch(() => null) as any
     const balance = Number(balJson?.balance ?? 0)
     if (balance <= 0) return { swept: false, value: 0, reason: 'no_balance' }
+
+    // A1: valor a sacar = min(amount conhecido, balance). Se amount ausente,
+    // saca saldo inteiro (compat com modo legado / scripts admin).
+    const desired = opts.amount != null && opts.amount > 0
+      ? Math.min(Number(opts.amount), balance)
+      : balance
+    if (desired <= 0) return { swept: false, value: 0, reason: 'no_amount' }
 
     // 2) Monta payload do PIX
     let pix: PixDescriptor
@@ -104,7 +137,7 @@ export async function sweepProducerBalance(opts: {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        value:           balance,
+        value:           desired,
         operationType:   'PIX',
         pixAddressKey:   pix.pixAddressKey,
         pixAddressKeyType: pix.pixAddressKeyType,
@@ -127,7 +160,7 @@ export async function sweepProducerBalance(opts: {
     const transferData = await transferRes.json().catch(() => null) as any
     return {
       swept:      true,
-      value:      balance,
+      value:      desired,
       transferId: transferData?.id,
     }
   } catch (e) {

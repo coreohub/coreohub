@@ -823,6 +823,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     status?:    { commercialInfo: string | null; documentation: string | null; general: string | null; bankAccountInfo: string | null };
     pendingDocuments?: Array<{ type: string; title: string; status: string; onboardingUrl: string | null }>;
     onboardingUrl?:    string | null;
+    unrecoverable?:    boolean;  // A8: subconta sem apiKey (recovered partial)
     loaded:     boolean;
   }>({ canReceive: false, canPayout: false, loaded: false });
   const [producerEvents, setProducerEvents]           = useState<any[]>([]);
@@ -867,6 +868,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 status:           data.status,
                 pendingDocuments: data.pendingDocuments,
                 onboardingUrl:    data.onboardingUrl,
+                unrecoverable:    Boolean(data.unrecoverable),
                 loaded:           true,
               });
             }
@@ -4342,34 +4344,68 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         não está APPROVED, repasses entram mas ficam parados
                         na subconta Asaas. Avisa o produtor antes que vire
                         bola de neve. Link onboardingUrl leva direto pro app
-                        Asaas pra completar (RG/CNH + selfie). */}
+                        Asaas pra completar (RG/CNH + selfie).
+                        A8 auditoria: caso unrecoverable=true (apiKey perdida),
+                        mostra mensagem específica + WhatsApp do suporte em
+                        vez de botão pra URL null. */}
                     {kycStatus.loaded && !kycStatus.canPayout && (
-                      <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-2xl">
-                        <AlertTriangle size={18} className="text-amber-500 shrink-0 mt-0.5" />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-black text-[11px] uppercase tracking-widest text-amber-700 dark:text-amber-300">
-                            Verificação de identidade pendente
-                          </p>
-                          <p className="text-[11px] text-amber-700/90 dark:text-amber-300/80 mt-1 leading-relaxed">
-                            Você consegue receber pagamentos, mas o repasse pro seu PIX está bloqueado até concluir a verificação de documentos (RG/CNH + selfie). Sem isso, o dinheiro fica parado na sua conta Asaas em vez de cair direto no seu PIX.
-                          </p>
-                          {kycStatus.pendingDocuments && kycStatus.pendingDocuments.length > 0 && (
-                            <p className="text-[10px] text-amber-700/80 dark:text-amber-300/70 mt-2">
-                              Pendente: {kycStatus.pendingDocuments.map(d => d.title).join(' · ')}
+                      kycStatus.unrecoverable ? (
+                        <div className="flex items-start gap-3 p-4 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 rounded-2xl">
+                          <AlertTriangle size={18} className="text-rose-500 shrink-0 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-black text-[11px] uppercase tracking-widest text-rose-700 dark:text-rose-300">
+                              Subconta Asaas precisa de regeração manual
                             </p>
-                          )}
-                          {kycStatus.onboardingUrl && (
+                            <p className="text-[11px] text-rose-700/90 dark:text-rose-300/80 mt-1 leading-relaxed">
+                              Sua subconta foi criada mas perdemos a credencial pra consultar status e fazer repasses automáticos. Precisamos te ajudar a regenerar — entre em contato pelo WhatsApp.
+                            </p>
                             <a
-                              href={kycStatus.onboardingUrl}
+                              href="https://wa.me/5517997936169?text=Oi%2C%20preciso%20regenerar%20minha%20subconta%20Asaas%20no%20CoreoHub"
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+                              className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
                             >
-                              Completar verificação →
+                              📱 Falar com suporte
                             </a>
-                          )}
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-2xl">
+                          <AlertTriangle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-black text-[11px] uppercase tracking-widest text-amber-700 dark:text-amber-300">
+                              Verificação de identidade pendente
+                            </p>
+                            <p className="text-[11px] text-amber-700/90 dark:text-amber-300/80 mt-1 leading-relaxed">
+                              Você consegue receber pagamentos, mas o repasse pro seu PIX está bloqueado até concluir a verificação de documentos (RG/CNH + selfie). Sem isso, o dinheiro fica parado na sua conta Asaas em vez de cair direto no seu PIX.
+                            </p>
+                            {kycStatus.pendingDocuments && kycStatus.pendingDocuments.length > 0 && (
+                              <p className="text-[10px] text-amber-700/80 dark:text-amber-300/70 mt-2">
+                                Pendente: {kycStatus.pendingDocuments.map(d => d.title).join(' · ')}
+                              </p>
+                            )}
+                            {kycStatus.onboardingUrl ? (
+                              <a
+                                href={kycStatus.onboardingUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+                              >
+                                Completar verificação →
+                              </a>
+                            ) : (
+                              <a
+                                href="https://wa.me/5517997936169?text=Oi%2C%20preciso%20do%20link%20de%20verifica%C3%A7%C3%A3o%20Asaas"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+                              >
+                                📱 Pedir link de verificação
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      )
                     )}
 
                     <div className="flex items-center gap-4 p-4 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-2xl">

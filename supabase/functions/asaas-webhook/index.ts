@@ -9,15 +9,39 @@ import { sweepProducerBalance } from '../_shared/asaas-payouts.ts'
 /** Helper local pra centralizar o sweep + log estruturado.
  *  Best-effort: erro nunca bloqueia o webhook caller.
  *  Sessão 3 — substitui o "saque manual" que o produtor teria que fazer
- *  no painel Asaas pra receber o split. */
+ *  no painel Asaas pra receber o split.
+ *
+ *  Auditoria Sessão 3:
+ *  - A1: passa `producerAmount` quando conhecido pro sweep não arrastar
+ *    saldo de outras fontes. Sem producerAmount, varre tudo (modo legado).
+ *  - A4: idempotência opcional via `paymentId`. Se passado, checa
+ *    payments.swept_at antes de sacar; após sacar, persiste o marker.
+ *    Branches sem payment row (legacy, audience, workshop) usam a
+ *    idempotência externa via platform_commissions.asaas_payment_id já
+ *    presente no topo do handler.
+ */
 async function trySweepProducer(
   supabase: any,
   producerId: string | null | undefined,
   asaasBaseUrl: string,
-  context: string
+  context: string,
+  opts?: { paymentId?: string; producerAmount?: number }
 ): Promise<void> {
   if (!producerId) return
   try {
+    // A4: idempotência via payments.swept_at quando aplicável.
+    if (opts?.paymentId) {
+      const { data: pay } = await supabase
+        .from('payments')
+        .select('swept_at')
+        .eq('id', opts.paymentId)
+        .maybeSingle()
+      if (pay?.swept_at) {
+        console.log(`[asaas-webhook][sweep][${context}] payment=${opts.paymentId} já swept (${pay.swept_at}) — skip`)
+        return
+      }
+    }
+
     const { data: prod } = await supabase
       .from('profiles')
       .select('asaas_api_key, pix_key, full_name')
@@ -31,10 +55,22 @@ async function trySweepProducer(
       producerApiKey: prod.asaas_api_key,
       producerPixKey: prod.pix_key,
       asaasBaseUrl,
-      description:   `Repasse CoreoHub — ${context}`,
+      description:    `Repasse CoreoHub — ${context}`,
+      amount:         opts?.producerAmount,
     })
     if (result.swept) {
       console.log(`[asaas-webhook][sweep][${context}] OK produtor=${producerId} valor=R$${result.value} transfer=${result.transferId}`)
+      // A4: persiste marker pra evitar duplicação em retry.
+      if (opts?.paymentId) {
+        await supabase
+          .from('payments')
+          .update({
+            swept_at:          new Date().toISOString(),
+            swept_amount:      result.value,
+            swept_transfer_id: result.transferId ?? null,
+          })
+          .eq('id', opts.paymentId)
+      }
     } else {
       console.warn(`[asaas-webhook][sweep][${context}] skip produtor=${producerId} reason=${result.reason} error=${result.error ?? ''}`)
     }
@@ -261,11 +297,19 @@ async function handleAudienceTicket(opts: {
   }
 
   // Sessão 3: auto-saque do split que acabou de cair na subconta do produtor.
+  // A1: amount = soma dos producer_amount dos tickets (não pega saldo total).
+  // A4: branch sem payment row próprio — idempotência via platform_commissions.
   await trySweepProducer(
     supabase,
     eventData?.created_by,
     Deno.env.get('ASAAS_BASE_URL') ?? '',
-    'audience'
+    'audience',
+    {
+      producerAmount: tickets.reduce(
+        (s: number, t: any) => s + Number(t.producer_amount ?? 0),
+        0
+      ),
+    }
   )
 
   return respond({
@@ -430,11 +474,13 @@ async function handleWorkshopRegistration(opts: {
   }
 
   // Sessão 3: auto-saque do split do workshop.
+  // A1: producerAmount conhecido (1 workshop = 1 produtor).
   await trySweepProducer(
     supabase,
     workshop?.created_by,
     Deno.env.get('ASAAS_BASE_URL') ?? '',
-    'workshop'
+    'workshop',
+    { producerAmount }
   )
 
   return respond({
@@ -764,12 +810,18 @@ async function handleAggregatePayment(opts: {
     console.error('[asaas-webhook][aggregate] falha bloco CAPI:', (capiErr as Error).message)
   }
 
-  // Sessão 3: auto-saque do split agregado (10% master, 90% subconta).
+  // Sessão 3: auto-saque do split agregado.
+  // A1: amount = producer_total snapshot (não saca saldo de outras fontes).
+  // A4: idempotente via payments.swept_at — retry de webhook não duplica.
   await trySweepProducer(
     supabase,
     eventData?.created_by,
     Deno.env.get('ASAAS_BASE_URL') ?? '',
-    'aggregate'
+    'aggregate',
+    {
+      paymentId:      paymentId,
+      producerAmount: producerTotalRow,
+    }
   )
 
   return respond({
@@ -1233,11 +1285,14 @@ Deno.serve(async (req) => {
       }
 
       // Sessão 3: auto-saque do split (fluxo legacy single registration).
+      // A1: producerAmount conhecido (1 inscrição = 1 split).
+      // A4: branch sem payment row próprio — idempotência via platform_commissions.
       await trySweepProducer(
         supabase,
         eventData?.created_by,
         Deno.env.get('ASAAS_BASE_URL') ?? '',
-        'registration'
+        'registration',
+        { producerAmount }
       )
     }
 
