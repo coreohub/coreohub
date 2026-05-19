@@ -298,9 +298,23 @@ const MinhasCoreografias = () => {
      ACTIONS
   ══════════════════════════════════════════════════════════ */
 
-  /** Valida CPF antes de qualquer chamada de payment. */
-  const requireCpf = (): boolean => {
-    if (!profileCpf || !profileCpf.replace(/\D/g, '')) {
+  /** Valida CPF antes de pagar. Sempre consulta fresh do banco (não usa
+   *  estado cacheado) porque o produtor pode ter completado o perfil em
+   *  outra aba/sessão. Evita falso-positivo após UPDATE direto no banco. */
+  const requireCpf = async (): Promise<boolean> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      navigate('/auth');
+      return false;
+    }
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('cpf_cnpj')
+      .eq('id', user.id)
+      .maybeSingle();
+    const cpf = prof?.cpf_cnpj?.replace(/\D/g, '') ?? '';
+    setProfileCpf(prof?.cpf_cnpj ?? null);
+    if (!cpf) {
       setError('Pra pagar você precisa completar seu CPF no perfil.');
       navigate('/meu-perfil');
       return false;
@@ -309,7 +323,7 @@ const MinhasCoreografias = () => {
   };
 
   const handlePagarAgregado = async (grupo: Grupo) => {
-    if (!requireCpf()) return;
+    if (!(await requireCpf())) return;
     if (grupo.pendentes.length === 0) return;
     setPayingEvent(grupo.eventId);
     setError(null);
@@ -355,7 +369,7 @@ const MinhasCoreografias = () => {
   };
 
   const handlePagarSingle = async (reg: Registration) => {
-    if (!requireCpf()) return;
+    if (!(await requireCpf())) return;
     // Se a registration já tem payment_url (gerada anteriormente — ou pelo
     // create-payment-asaas legacy, ou pela create-aggregate), reusa.
     if (reg.payment_url) {
