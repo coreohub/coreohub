@@ -4,7 +4,7 @@ import {
   Trash2, AlertTriangle, X, DollarSign,
   ShieldAlert, CheckCircle2, Clock, Users, Info, ChevronDown,
   Undo2, Loader2, Eye, Music2, Video, Calendar, User, Instagram,
-  TrendingUp, ExternalLink, Pencil, Save,
+  TrendingUp, ExternalLink, Pencil, Save, Lock as LockIcon,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -1148,20 +1148,36 @@ const Registrations = () => {
                 <section>
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><Music2 size={12} /> Coreografia</h3>
                   {editing ? (
-                    <div className="grid grid-cols-2 gap-3 text-[12px]">
-                      <EditField label="Modalidade" value={editValues.formato_participacao}
-                        onChange={v => setEditValues(p => ({ ...p, formato_participacao: v }))}
-                        options={['Solo', 'Duo', 'Trio', 'Grupo', 'Conjunto']} />
-                      <EditField label="Categoria" value={editValues.categoria}
-                        onChange={v => setEditValues(p => ({ ...p, categoria: v }))}
-                        options={categoriasDisponiveis} />
-                      <EditField label="Estilo / Gênero" value={editValues.estilo_danca}
-                        onChange={v => setEditValues(p => ({ ...p, estilo_danca: v }))}
-                        options={estilosDisponiveis} />
-                      <EditField label="Tipo de Mostra" value={editValues.tipo_apresentacao}
-                        onChange={v => setEditValues(p => ({ ...p, tipo_apresentacao: v }))}
-                        options={['Competitiva', 'Avaliada']} />
-                    </div>
+                    <>
+                      <div className="grid grid-cols-2 gap-3 text-[12px]">
+                        {/* Modalidade trava em inscrição APROVADA — mudança altera
+                            preço (fee/pricing_type por formação) e exige
+                            estorno + recobrança. Pra Solo→Grupo num pago
+                            seria fraude potencial. */}
+                        {viewingReg.status_pagamento === 'APROVADO' ? (
+                          <div>
+                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Modalidade</label>
+                            <div className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-[12px] font-bold text-slate-500 flex items-center gap-2">
+                              <LockIcon size={11} /> {viewingReg.formato_participacao ?? '—'}
+                            </div>
+                            <p className="text-[9px] text-slate-400 mt-1">Trocar modalidade exige estornar e refazer a inscrição (afeta preço).</p>
+                          </div>
+                        ) : (
+                          <EditField label="Modalidade" value={editValues.formato_participacao}
+                            onChange={v => setEditValues(p => ({ ...p, formato_participacao: v }))}
+                            options={['Solo', 'Duo', 'Trio', 'Grupo', 'Conjunto']} />
+                        )}
+                        <EditField label="Categoria" value={editValues.categoria}
+                          onChange={v => setEditValues(p => ({ ...p, categoria: v }))}
+                          options={categoriasDisponiveis} />
+                        <EditField label="Estilo / Gênero" value={editValues.estilo_danca}
+                          onChange={v => setEditValues(p => ({ ...p, estilo_danca: v }))}
+                          options={estilosDisponiveis} />
+                        <EditField label="Tipo de Mostra" value={editValues.tipo_apresentacao}
+                          onChange={v => setEditValues(p => ({ ...p, tipo_apresentacao: v }))}
+                          options={['Competitiva', 'Avaliada']} />
+                      </div>
+                    </>
                   ) : (
                     <dl className="grid grid-cols-2 gap-3 text-[12px]">
                       <DetailItem label="Modalidade" value={viewingReg.formato_participacao} />
