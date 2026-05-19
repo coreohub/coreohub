@@ -703,9 +703,13 @@ const Registrations = () => {
                       {reg.created_at ? new Date(reg.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
                     </td>
                     <td className="px-4 sm:px-8 py-6 text-right text-xs font-bold text-slate-700 dark:text-slate-300 hidden md:table-cell whitespace-nowrap">
-                      {reg.valor_total != null && Number(reg.valor_total) > 0
-                        ? `R$ ${Number(reg.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                        : <span className="text-slate-400 font-normal">—</span>}
+                      {(() => {
+                        // Webhook novo (2026-05-31) seta valor_pago. Legado usa valor_total. Fallback final: mod_fee.
+                        const v = Number(reg.valor_pago ?? reg.valor_total ?? reg.mod_fee ?? 0);
+                        return v > 0
+                          ? `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          : <span className="text-slate-400 font-normal">—</span>;
+                      })()}
                     </td>
                     <td className="px-4 sm:px-8 py-6 text-center">
                       <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border ${getStatusColor(reg.status_pagamento)}`}>{reg.status_pagamento}</span>
