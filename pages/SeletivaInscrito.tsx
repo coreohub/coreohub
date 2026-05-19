@@ -74,29 +74,45 @@ const SeletivaInscrito: React.FC = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
+      // Split queries (JOIN events(...) embed pode falhar quando RLS de events
+      // restringe leitura pra inscrito não-dono). Mais robusto:
+      // 1. Pega registrations do user
+      // 2. Pega events por id (RLS de events permite SELECT pra qualquer auth
+      //    em eventos públicos do festival)
+      const { data: regsData, error } = await supabase
         .from('registrations')
         .select(`
           id, nome_coreografia, estudio, categoria, formacao, event_id,
           video_url, video_status, video_feedback, video_submitted_at,
           video_fee_status, video_fee_payment_id, video_approved_at,
-          status_pagamento, payment_url,
-          events(name, video_selection_enabled, video_selection_fee, video_selection_fee_required)
+          status_pagamento, payment_url
         `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
-
       if (error) throw error;
 
-      const mapped: RegistrationWithVideo[] = (data || []).map((r: any) => ({
-        ...r,
-        event_nome: r.events?.name,
-        video_selection_enabled: r.events?.video_selection_enabled ?? false,
-        video_selection_fee: r.events?.video_selection_fee ?? 0,
-        video_selection_fee_required: r.events?.video_selection_fee_required ?? false,
-        video_status: r.video_status ?? 'pending',
-        video_fee_status: r.video_fee_status ?? 'not_required',
-      }));
+      const eventIds = Array.from(new Set((regsData ?? []).map((r: any) => r.event_id).filter(Boolean)));
+      let eventsMap: Record<string, any> = {};
+      if (eventIds.length > 0) {
+        const { data: evts } = await supabase
+          .from('events')
+          .select('id, name, video_selection_enabled, video_selection_fee, video_selection_fee_required')
+          .in('id', eventIds);
+        for (const e of (evts ?? [])) eventsMap[e.id] = e;
+      }
+
+      const mapped: RegistrationWithVideo[] = (regsData || []).map((r: any) => {
+        const ev = eventsMap[r.event_id] ?? {};
+        return {
+          ...r,
+          event_nome: ev.name,
+          video_selection_enabled: ev.video_selection_enabled ?? false,
+          video_selection_fee: ev.video_selection_fee ?? 0,
+          video_selection_fee_required: ev.video_selection_fee_required ?? false,
+          video_status: r.video_status ?? 'pending',
+          video_fee_status: r.video_fee_status ?? 'not_required',
+        };
+      });
 
       // Only show registrations where seletiva is enabled
       setRegistrations(mapped.filter(r => r.video_selection_enabled));
