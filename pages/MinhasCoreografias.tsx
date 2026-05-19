@@ -517,11 +517,11 @@ const MinhasCoreografias = () => {
             </div>
             {grupo.eventSlug && (
               <button
-                onClick={() => navigate(`/festival/${grupo.eventSlug}`)}
+                onClick={() => navigate(`/evento/${grupo.eventSlug}`)}
                 className="text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-[#ff0068] flex items-center gap-1 shrink-0"
-                title="Inscrever mais coreografias"
+                title="Inscrever mais coreografias na vitrine pública"
               >
-                <Plus size={12} /> Adicionar
+                <Plus size={12} /> Nova inscrição
               </button>
             )}
           </div>
