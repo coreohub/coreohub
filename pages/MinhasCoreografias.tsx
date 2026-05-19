@@ -5,7 +5,7 @@ import SystemErrorBanner from '../components/SystemErrorBanner';
 import {
   Music2, Plus, Trash2, AlertCircle, Loader2, CheckCircle,
   Clapperboard, Calendar, MapPin, Clock, CreditCard, QrCode,
-  ChevronRight, AlertTriangle, ShoppingCart, X,
+  ChevronRight, AlertTriangle, ShoppingCart, X, Video,
 } from 'lucide-react';
 
 /* ══════════════════════════════════════════════════════════════
@@ -272,10 +272,22 @@ const MinhasCoreografias = () => {
     payment:    AggregatePayment | undefined;
   };
 
+  // Inscrições em fluxo de seletiva ainda não-aprovadas ficam EM PÁGINA PRÓPRIA
+  // (/minha-seletiva). Aqui mostramos apenas inscrições do fluxo normal de
+  // pagamento — evita confusão "AGUARDANDO PAGAMENTO" pra coreografia que na
+  // verdade aguarda análise de vídeo (com taxa A separada).
+  const inSeletivaFlow = (r: any) =>
+    r.status_pagamento === 'AGUARDANDO_VIDEO' && r.video_status !== 'approved';
+  const seletivaCount = useMemo(
+    () => registrations.filter(inSeletivaFlow).length,
+    [registrations]
+  );
+
   const grupos: Grupo[] = useMemo(() => {
     const map = new Map<string, Grupo>();
     for (const r of registrations) {
       if (!r.event_id) continue;
+      if (inSeletivaFlow(r)) continue;  // mostradas em /minha-seletiva
       const key = r.event_id;
       if (!map.has(key)) {
         map.set(key, {
@@ -480,6 +492,25 @@ const MinhasCoreografias = () => {
           </p>
         </div>
       </div>
+
+      {/* ── Banner "Você tem inscrições em seletiva de vídeo" ── */}
+      {seletivaCount > 0 && (
+        <button
+          onClick={() => navigate('/minha-seletiva')}
+          className="w-full flex items-center gap-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-left hover:bg-amber-500/15 transition-all"
+        >
+          <Video size={14} className="text-amber-500 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">
+              {seletivaCount} coreografia{seletivaCount > 1 ? 's' : ''} em análise da seletiva
+            </p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+              Inscrições em fluxo de seletiva de vídeo ficam em <strong>Minha Seletiva</strong> até a aprovação da comissão.
+            </p>
+          </div>
+          <ChevronRight size={14} className="text-amber-500 shrink-0" />
+        </button>
+      )}
 
       {/* ── Banner "Inscrição criada" ── */}
       {novaId && registrations.some(r => r.id === novaId) && (

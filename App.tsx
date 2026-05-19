@@ -327,13 +327,26 @@ const App: React.FC = () => {
           return;
         }
         // Como inscrito: tem alguma registration em evento com flag ON?
-        const { data: regsWithSeletiva } = await supabase
+        // Query split (mais robusta que !inner+eq.foreign_table) — pega event_ids
+        // das registrations e checa video_selection_enabled em events separado.
+        const { data: regs } = await supabase
           .from('registrations')
-          .select('id, events!inner(video_selection_enabled)')
-          .eq('user_id', userId)
-          .eq('events.video_selection_enabled', true)
-          .limit(1);
-        setVideoSelectionFromEvents((regsWithSeletiva ?? []).length > 0);
+          .select('event_id')
+          .eq('user_id', userId);
+        const eventIds = Array.from(new Set((regs ?? []).map((r: any) => r.event_id).filter(Boolean)));
+        if (eventIds.length > 0) {
+          const { data: eventsWithSel } = await supabase
+            .from('events')
+            .select('id')
+            .in('id', eventIds)
+            .eq('video_selection_enabled', true)
+            .limit(1);
+          if ((eventsWithSel ?? []).length > 0) {
+            setVideoSelectionFromEvents(true);
+            return;
+          }
+        }
+        setVideoSelectionFromEvents(false);
       } catch {
         setVideoSelectionFromEvents(false);
       }
