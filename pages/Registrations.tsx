@@ -20,6 +20,8 @@ const Registrations = () => {
   const [categoriaFilter, setCategoriaFilter] = useState('ALL');
   const [estiloFilter, setEstiloFilter] = useState('ALL');
   const [inscritoFilter, setInscritoFilter] = useState('ALL');
+  // Sessão 3 P4 backlog painel produtor — filtro por range de data
+  const [dateFilter, setDateFilter] = useState<'ALL' | 'today' | '7d' | '30d' | 'month'>('ALL');
   const [refundModal, setRefundModal] = useState<any>(null);
   const [refundAmount, setRefundAmount] = useState<string>('');
   const [refundReason, setRefundReason] = useState('');
@@ -274,8 +276,24 @@ const Registrations = () => {
     if (categoriaFilter !== 'ALL') result = result.filter(reg => reg.categoria === categoriaFilter);
     if (estiloFilter !== 'ALL')    result = result.filter(reg => reg.estilo_danca === estiloFilter);
     if (inscritoFilter !== 'ALL')  result = result.filter(reg => (reg.inscrito_nome ?? reg.profiles?.full_name) === inscritoFilter);
+    // Filtro por data — usa created_at (data da inscrição)
+    if (dateFilter !== 'ALL') {
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const cutoff = (() => {
+        if (dateFilter === 'today') return startOfDay;
+        if (dateFilter === '7d')    return startOfDay - 6 * 86400_000;
+        if (dateFilter === '30d')   return startOfDay - 29 * 86400_000;
+        if (dateFilter === 'month') return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+        return 0;
+      })();
+      result = result.filter(reg => {
+        const t = new Date(reg.created_at ?? reg.criado_em ?? 0).getTime();
+        return t >= cutoff;
+      });
+    }
     setFilteredRegistrations(result);
-  }, [searchTerm, paymentFilter, modalidadeFilter, categoriaFilter, estiloFilter, inscritoFilter, registrations]);
+  }, [searchTerm, paymentFilter, modalidadeFilter, categoriaFilter, estiloFilter, inscritoFilter, dateFilter, registrations]);
 
   /* Stats no topo — cards de KPI (padrão Stripe Dashboard).
      Derivados de registrations (não filteredRegistrations) pra manter
@@ -284,12 +302,15 @@ const Registrations = () => {
     const total = registrations.length;
     const confirmadas = registrations.filter(r => isPago(r.status_pagamento)).length;
     const pendentes   = registrations.filter(r => r.status_pagamento === 'PENDENTE').length;
-    // Receita: prioriza valor_pago (snapshot real do webhook) com fallback
-    // pra valor_total legado e mod_fee de eventos antigos.
-    const receita     = registrations
-      .filter(r => isPago(r.status_pagamento))
-      .reduce((sum, r) => sum + (Number(r.valor_pago ?? r.valor_total ?? r.mod_fee ?? 0) || 0), 0);
-    return { total, confirmadas, pendentes, receita };
+    // Helper: extrai o valor "esperado" da inscrição (snapshot ou config).
+    const valorDe = (r: any) => Number(r.valor_pago ?? r.valor_total ?? r.charged_amount ?? r.mod_fee ?? 0) || 0;
+    // Receita já recebida (APROVADO)
+    const receita     = registrations.filter(r => isPago(r.status_pagamento)).reduce((s, r) => s + valorDe(r), 0);
+    // Sessão 3 P9: receita prevista = soma das pendentes que ainda podem pagar.
+    const receitaPrevista = registrations
+      .filter(r => r.status_pagamento === 'PENDENTE')
+      .reduce((s, r) => s + valorDe(r), 0);
+    return { total, confirmadas, pendentes, receita, receitaPrevista };
   }, [registrations]);
 
   /* Listas únicas pros dropdowns de filtro. Derivadas do dataset bruto pra
@@ -423,11 +444,15 @@ const Registrations = () => {
         <div className="space-y-6">
           {/* Stats cards — padrão Stripe Dashboard. KPIs do evento ativo,
               não respeitam filtros (visão macro mesmo com filtro estreito). */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             <StatCard icon={<Users size={14} />}        label="Total"       value={String(stats.total)}       tone="slate" />
             <StatCard icon={<CheckCircle2 size={14} />} label="Confirmadas" value={String(stats.confirmadas)} tone="emerald" />
             <StatCard icon={<Clock size={14} />}        label="Pendentes"   value={String(stats.pendentes)}   tone="amber" />
             <StatCard icon={<TrendingUp size={14} />}   label="Receita"     value={`R$ ${stats.receita.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} tone="pink" />
+            {/* Sessão 3 P9: receita prevista = soma das pendentes que ainda
+                podem virar pagamento. Ajuda o produtor a saber o teto da
+                edição sem ter que filtrar e somar mentalmente. */}
+            <StatCard icon={<TrendingUp size={14} />}   label="Prevista"    value={`R$ ${stats.receitaPrevista.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} tone="slate" />
           </div>
 
           <div className="bg-slate-100 dark:bg-slate-900/50 p-4 rounded-3xl border border-slate-200 dark:border-white/5 flex flex-col gap-3">
@@ -443,6 +468,14 @@ const Registrations = () => {
                 <option value="VENCIDO"    className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Vencido</option>
                 <option value="ESTORNADO"  className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Estornado</option>
                 <option value="EXPIRADO"   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Expirado</option>
+              </select>
+              {/* Sessão 3 P4: filtro por range de data */}
+              <select value={dateFilter} onChange={e => setDateFilter(e.target.value as any)} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]">
+                <option value="ALL"   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Data: Todas</option>
+                <option value="today" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Hoje</option>
+                <option value="7d"    className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">7 dias</option>
+                <option value="30d"   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">30 dias</option>
+                <option value="month" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Este mês</option>
               </select>
               <select value={modalidadeFilter} onChange={e => setModalidadeFilter(e.target.value)} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]">
                 <option value="ALL"   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Modalidade: Todas</option>
@@ -1124,31 +1157,95 @@ const Registrations = () => {
                 <section>
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><DollarSign size={12} /> Pagamento</h3>
                   <dl className="grid grid-cols-2 gap-3 text-[12px]">
+                    {/* Sessão 3 — valor por inscrição (P1 backlog painel produtor). */}
+                    {(() => {
+                      const v = Number(viewingReg.valor_pago ?? viewingReg.valor_total ?? viewingReg.charged_amount ?? viewingReg.mod_fee ?? 0);
+                      return v > 0 ? (
+                        <DetailItem label="Valor pago" value={`R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+                      ) : null;
+                    })()}
                     <DetailItem label="Status" value={viewingReg.status_pagamento} />
                     <DetailItem label="Método" value={viewingReg.payment_method ?? viewingReg.metodo_pagamento} />
                     <DetailItem label="ID Asaas" value={viewingReg.payment_id} mono />
+                    {viewingReg.coupon_id && (
+                      <DetailItem label="Cupom aplicado" value={`R$ ${Number(viewingReg.discount_amount ?? 0).toFixed(2)} de desconto`} />
+                    )}
                     <DetailItem label="Status da inscrição" value={viewingReg.status} />
                   </dl>
                 </section>
 
-                {/* Tempos */}
+                {/* Tempos / Timeline — Sessão 3 P2 backlog painel produtor */}
                 <section>
-                  <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><Calendar size={12} /> Tempos</h3>
-                  <dl className="grid grid-cols-2 gap-3 text-[12px]">
-                    <DetailItem
-                      label="Criada em"
-                      value={viewingReg.created_at ? new Date(viewingReg.created_at).toLocaleString('pt-BR') : null}
-                    />
-                    <DetailItem
-                      label="Pagamento aprovado"
-                      value={viewingReg.paid_at ? new Date(viewingReg.paid_at).toLocaleString('pt-BR') : null}
-                    />
-                  </dl>
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><Calendar size={12} /> Timeline</h3>
+                  {(() => {
+                    const events: Array<{ label: string; at: string | null; icon: 'created' | 'audio' | 'video' | 'paid' | 'refund' }> = [
+                      { label: 'Inscrição criada',  at: viewingReg.created_at ?? viewingReg.criado_em ?? null, icon: 'created' },
+                      { label: 'Trilha enviada',    at: viewingReg.trilha_url ? (viewingReg.trilha_uploaded_at ?? viewingReg.updated_at ?? null) : null, icon: 'audio' },
+                      { label: 'Vídeo enviado',    at: viewingReg.video_url ? (viewingReg.video_uploaded_at ?? null) : null, icon: 'video' },
+                      { label: 'Pagamento confirmado', at: viewingReg.paid_at ?? null, icon: 'paid' },
+                      { label: 'Reembolsada',       at: viewingReg.refunded_at ?? null, icon: 'refund' },
+                    ].filter(e => e.at);
+
+                    if (events.length === 0) {
+                      return <p className="text-[11px] text-slate-500">Sem eventos registrados ainda.</p>;
+                    }
+
+                    return (
+                      <ol className="space-y-2 relative pl-4 border-l-2 border-slate-200 dark:border-white/10">
+                        {events.map((e, i) => (
+                          <li key={i} className="relative">
+                            <span className={`absolute -left-[21px] top-1 w-3 h-3 rounded-full border-2 border-white dark:border-slate-900 ${
+                              e.icon === 'paid' ? 'bg-emerald-500' :
+                              e.icon === 'refund' ? 'bg-rose-500' :
+                              e.icon === 'audio' || e.icon === 'video' ? 'bg-amber-500' :
+                              'bg-slate-400'
+                            }`} />
+                            <p className="text-[11px] font-black text-slate-700 dark:text-slate-200">{e.label}</p>
+                            <p className="text-[10px] text-slate-500">
+                              {new Date(e.at!).toLocaleString('pt-BR', {
+                                day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit',
+                              })}
+                            </p>
+                          </li>
+                        ))}
+                      </ol>
+                    );
+                  })()}
                 </section>
               </div>
 
               {/* Footer com ações rápidas */}
-              <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-white/10 px-6 py-4 flex justify-end gap-2">
+              <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-white/10 px-6 py-4 flex flex-wrap justify-end gap-2">
+                {/* Sessão 3 P3: WhatsApp pré-preenchido. Só aparece se o
+                    inscrito tem whatsapp cadastrado E a inscrição está
+                    PENDENTE (faz sentido cobrar pagamento). */}
+                {viewingReg.status_pagamento === 'PENDENTE'
+                  && viewingReg.profiles?.whatsapp
+                  && (() => {
+                  const digits = String(viewingReg.profiles?.whatsapp ?? '').replace(/\D/g, '');
+                  if (!digits) return null;
+                  const phone = digits.startsWith('55') ? digits : `55${digits}`;
+                  const url = viewingReg.payment_url
+                    ?? (viewingReg.payment_id ? `https://www.asaas.com/i/${String(viewingReg.payment_id).replace(/^pay_/, '')}` : '');
+                  const nome = viewingReg.profiles?.full_name ?? '';
+                  const coreo = viewingReg.nome_coreografia ?? '';
+                  const msg = encodeURIComponent(
+                    `Oi ${nome.split(' ')[0]}! Tudo bem? Aqui é da produção do festival. Sua inscrição "${coreo}" ainda está aguardando pagamento.` +
+                    (url ? `\n\nPra confirmar é só pagar por aqui: ${url}` : '') +
+                    `\n\nQualquer dúvida me chama por aqui mesmo. 🎉`
+                  );
+                  return (
+                    <a
+                      href={`https://wa.me/${phone}?text=${msg}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 rounded-xl transition-all flex items-center gap-2"
+                      title="Enviar lembrete pelo WhatsApp"
+                    >
+                      📱 WhatsApp
+                    </a>
+                  );
+                })()}
                 {/* Deep link Asaas — abre a fatura pública (mesma URL que o
                     pagador vê). Aceita payment_id com ou sem prefixo 'pay_'. */}
                 {viewingReg.payment_id && (
