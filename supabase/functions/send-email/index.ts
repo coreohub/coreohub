@@ -867,6 +867,128 @@ function buildAggregateReminder(p: AggregateReminderPayload) {
   }
 }
 
+// ─── Seletiva por vídeo (Modelo 3 — Sessão seletiva 2026-05-19) ────────────
+
+interface VideoFeePaidUploadReadyPayload {
+  inscritoNome?:  string
+  inscritoEmail:  string
+  eventoNome?:    string
+  coreografia?:   string
+  ctaUrl:         string  // link pra /seletiva onde envia o vídeo
+}
+
+function buildVideoFeePaidUploadReady(p: VideoFeePaidUploadReadyPayload) {
+  const titulo = 'Taxa de seletiva paga — envie seu vídeo'
+  const intro  = `Olá ${escape(p.inscritoNome ?? 'bailarino(a)')}, recebemos o pagamento da taxa de seletiva da coreografia <strong>${escape(p.coreografia ?? '')}</strong>${p.eventoNome ? ` no <strong>${escape(p.eventoNome)}</strong>` : ''}. Agora envie o link do vídeo pra a comissão analisar.`
+
+  const contentHtml = `
+    <div style="margin-top:4px;padding:18px;border:2px solid #34d399;border-radius:14px;background:#ecfdf5;">
+      <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#059669;">✓ Pagamento confirmado</p>
+      <p style="margin:8px 0 0;font-size:14px;color:#0b0b0f;font-weight:600;">${escape(p.coreografia ?? 'Coreografia')}</p>
+    </div>
+    <p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      Acesse a página da seletiva e cole o link do vídeo (YouTube, Vimeo, Drive). O produtor analisa e te avisa quando aprovar pra você concluir a inscrição.
+    </p>`
+
+  return {
+    subject: `${p.eventoNome ? `[${p.eventoNome}] ` : ''}Envie seu vídeo da seletiva`,
+    html: baseLayout({
+      preheader: 'Taxa paga. Agora envie o link do vídeo pra análise da comissão.',
+      title: titulo,
+      intro,
+      contentHtml,
+      ctaLabel: 'Enviar vídeo',
+      ctaUrl: p.ctaUrl,
+    }),
+  }
+}
+
+interface VideoApprovedInscriptionReadyPayload {
+  inscritoNome?:  string
+  inscritoEmail:  string
+  eventoNome?:    string
+  coreografia?:   string
+  ctaUrl:         string  // link pra /seletiva onde paga a inscrição cheia
+}
+
+function buildVideoApprovedInscriptionReady(p: VideoApprovedInscriptionReadyPayload) {
+  const titulo = 'Aprovado na seletiva! 🎉'
+  const intro  = `Olá ${escape(p.inscritoNome ?? 'bailarino(a)')}, parabéns — a coreografia <strong>${escape(p.coreografia ?? '')}</strong>${p.eventoNome ? ` no <strong>${escape(p.eventoNome)}</strong>` : ''} foi aprovada pela comissão de seletiva. Agora você pode concluir a inscrição pagando a taxa do festival.`
+
+  const contentHtml = `
+    <div style="margin-top:4px;padding:18px;border:2px solid #34d399;border-radius:14px;background:#ecfdf5;">
+      <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#059669;">✓ Vídeo aprovado</p>
+      <p style="margin:8px 0 0;font-size:14px;color:#0b0b0f;font-weight:600;">${escape(p.coreografia ?? 'Coreografia')}</p>
+    </div>
+    <p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      Acesse a página da seletiva pra gerar a cobrança da taxa de inscrição. Depois do pagamento, sua inscrição é confirmada e você entra no cronograma do evento.
+    </p>`
+
+  return {
+    subject: `${p.eventoNome ? `[${p.eventoNome}] ` : ''}Aprovado na seletiva — conclua sua inscrição`,
+    html: baseLayout({
+      preheader: 'Sua coreografia passou na seletiva. Pague a inscrição pra confirmar.',
+      title: titulo,
+      intro,
+      contentHtml,
+      ctaLabel: 'Pagar inscrição',
+      ctaUrl: p.ctaUrl,
+    }),
+  }
+}
+
+interface VideoRejectedPayload {
+  inscritoNome?:  string
+  inscritoEmail:  string
+  eventoNome?:    string
+  coreografia?:   string
+  feedback?:      string
+  refundAmount?:  number   // R$ a estornar (0 se policy=no_refund)
+  refundPolicy?:  'no_refund' | 'partial_refund' | 'full_refund'
+}
+
+function buildVideoRejected(p: VideoRejectedPayload) {
+  const titulo = 'Resultado da seletiva'
+  const intro  = `Olá ${escape(p.inscritoNome ?? 'bailarino(a)')}, agradecemos sua inscrição da coreografia <strong>${escape(p.coreografia ?? '')}</strong>${p.eventoNome ? ` no <strong>${escape(p.eventoNome)}</strong>` : ''}. A comissão analisou o vídeo e infelizmente não pôde classificá-la pra esta edição.`
+
+  const refundLabel = p.refundPolicy === 'full_refund'    ? 'Estorno integral da taxa de seletiva'
+                    : p.refundPolicy === 'partial_refund' ? 'Estorno parcial da taxa de seletiva'
+                    : 'Sem estorno (taxa de seletiva = serviço de análise prestado)'
+  const refundColor = p.refundPolicy === 'no_refund' ? '#64748b' : '#059669'
+  const refundBg    = p.refundPolicy === 'no_refund' ? '#f1f5f9' : '#ecfdf5'
+  const refundBd    = p.refundPolicy === 'no_refund' ? '#e2e8f0' : '#34d399'
+
+  const feedbackBlock = p.feedback
+    ? `<div style="margin-top:14px;padding:16px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;">
+         <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#64748b;">Feedback da comissão</p>
+         <p style="margin:8px 0 0;font-size:13px;color:#0b0b0f;line-height:1.5;">${escape(p.feedback)}</p>
+       </div>`
+    : ''
+
+  const contentHtml = `
+    <div style="margin-top:4px;padding:18px;border:2px solid ${refundBd};border-radius:14px;background:${refundBg};">
+      <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:${refundColor};">${refundLabel}</p>
+      ${p.refundAmount && p.refundAmount > 0
+        ? `<p style="margin:8px 0 0;font-size:20px;font-weight:900;color:#0b0b0f;">${escape(money(p.refundAmount))}</p>
+           <p style="margin:4px 0 0;font-size:12px;color:#64748b;">O estorno entra na conta original em até 5 dias úteis.</p>`
+        : `<p style="margin:8px 0 0;font-size:12px;color:#64748b;">A taxa de seletiva remunera a análise técnica do vídeo pela comissão, conforme regulamento do evento.</p>`}
+    </div>
+    ${feedbackBlock}
+    <p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      Obrigado por participar. Continuem dançando — esperamos vocês na próxima!
+    </p>`
+
+  return {
+    subject: `${p.eventoNome ? `[${p.eventoNome}] ` : ''}Resultado da seletiva`,
+    html: baseLayout({
+      preheader: 'Resultado da análise da comissão de seletiva.',
+      title: titulo,
+      intro,
+      contentHtml,
+    }),
+  }
+}
+
 // ─── Handler ────────────────────────────────────────────────────────────────
 
 interface SendEmailRequest {
@@ -882,6 +1004,9 @@ interface SendEmailRequest {
     | 'aggregate_invoice_created'
     | 'aggregate_payment_confirmed'
     | 'aggregate_reminder'
+    | 'video_fee_paid_upload_ready'
+    | 'video_approved_inscription_ready'
+    | 'video_rejected'
   payload: Record<string, unknown>
 }
 
@@ -1084,6 +1209,38 @@ Deno.serve(async (req) => {
         html = tpl.html
         festivalName = p.eventoNome
         replyTo = p.produtorEmail
+        break
+      }
+      case 'video_fee_paid_upload_ready': {
+        const p = payload as unknown as VideoFeePaidUploadReadyPayload
+        if (!p.inscritoEmail) throw new Error('inscritoEmail é obrigatório')
+        if (!p.ctaUrl)        throw new Error('ctaUrl é obrigatório')
+        const tpl = buildVideoFeePaidUploadReady(p)
+        to = p.inscritoEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        break
+      }
+      case 'video_approved_inscription_ready': {
+        const p = payload as unknown as VideoApprovedInscriptionReadyPayload
+        if (!p.inscritoEmail) throw new Error('inscritoEmail é obrigatório')
+        if (!p.ctaUrl)        throw new Error('ctaUrl é obrigatório')
+        const tpl = buildVideoApprovedInscriptionReady(p)
+        to = p.inscritoEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        break
+      }
+      case 'video_rejected': {
+        const p = payload as unknown as VideoRejectedPayload
+        if (!p.inscritoEmail) throw new Error('inscritoEmail é obrigatório')
+        const tpl = buildVideoRejected(p)
+        to = p.inscritoEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
         break
       }
       default:
