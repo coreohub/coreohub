@@ -814,6 +814,17 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [updatingPix, setUpdatingPix]           = useState(false);
   const [pixUpdateError, setPixUpdateError]     = useState<string | null>(null);
   const [currentUserId, setCurrentUserId]       = useState<string | null>(null);
+
+  // Sessão 3 do carrinho: status KYC outbound da subconta Asaas. Sem isso o
+  // produtor cadastra PIX e descobre tarde que não consegue receber.
+  const [kycStatus, setKycStatus] = useState<{
+    canReceive: boolean;
+    canPayout:  boolean;
+    status?:    { commercialInfo: string | null; documentation: string | null; general: string | null; bankAccountInfo: string | null };
+    pendingDocuments?: Array<{ type: string; title: string; status: string; onboardingUrl: string | null }>;
+    onboardingUrl?:    string | null;
+    loaded:     boolean;
+  }>({ canReceive: false, canPayout: false, loaded: false });
   const [producerEvents, setProducerEvents]           = useState<any[]>([]);
   const [savingCommission, setSavingCommission] = useState<string | null>(null);
   // Termo de Adesão do Produtor — aceite obrigatório antes de conectar Asaas.
@@ -838,6 +849,30 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       // Super admin (is_super_admin=true) E COREOHUB_ADMIN role ambos liberam edicao
       // de comissao. Mesma logica de SuperAdmin.tsx:84 — alinhamento.
       setIsAdmin(Boolean((profile as any)?.is_super_admin) || (profile as any)?.role === 'COREOHUB_ADMIN');
+
+      // Sessão 3: consulta status KYC outbound da subconta. Best-effort.
+      if (profile?.asaas_subconta_id) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            const r = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-producer-kyc`,
+              { headers: { 'Authorization': `Bearer ${session.access_token}` } }
+            );
+            if (r.ok) {
+              const data = await r.json();
+              setKycStatus({
+                canReceive:       Boolean(data.canReceive),
+                canPayout:        Boolean(data.canPayout),
+                status:           data.status,
+                pendingDocuments: data.pendingDocuments,
+                onboardingUrl:    data.onboardingUrl,
+                loaded:           true,
+              });
+            }
+          }
+        } catch { /* silencioso — banner não aparece, fallback OK */ }
+      }
       const { data: events } = await supabase
         .from('events')
         .select('id, name, commission_type, commission_percent, commission_fixed, fee_mode')
@@ -4303,6 +4338,40 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       </div>
                     </details>
 
+                    {/* Sessão 3: banner KYC outbound. Quando documentation
+                        não está APPROVED, repasses entram mas ficam parados
+                        na subconta Asaas. Avisa o produtor antes que vire
+                        bola de neve. Link onboardingUrl leva direto pro app
+                        Asaas pra completar (RG/CNH + selfie). */}
+                    {kycStatus.loaded && !kycStatus.canPayout && (
+                      <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-2xl">
+                        <AlertTriangle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-black text-[11px] uppercase tracking-widest text-amber-700 dark:text-amber-300">
+                            Verificação de identidade pendente
+                          </p>
+                          <p className="text-[11px] text-amber-700/90 dark:text-amber-300/80 mt-1 leading-relaxed">
+                            Você consegue receber pagamentos, mas o repasse pro seu PIX está bloqueado até concluir a verificação de documentos (RG/CNH + selfie). Sem isso, o dinheiro fica parado na sua conta Asaas em vez de cair direto no seu PIX.
+                          </p>
+                          {kycStatus.pendingDocuments && kycStatus.pendingDocuments.length > 0 && (
+                            <p className="text-[10px] text-amber-700/80 dark:text-amber-300/70 mt-2">
+                              Pendente: {kycStatus.pendingDocuments.map(d => d.title).join(' · ')}
+                            </p>
+                          )}
+                          {kycStatus.onboardingUrl && (
+                            <a
+                              href={kycStatus.onboardingUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+                            >
+                              Completar verificação →
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-4 p-4 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-2xl">
                       <CheckCircle size={22} className="text-emerald-500 shrink-0" />
                       <div className="flex-1 min-w-0">
@@ -4368,8 +4437,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     )}
                     <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-2xl">
                       <AlertCircle size={16} className="text-blue-500 shrink-0 mt-0.5" />
-                      <p className="text-[10px] text-blue-700 dark:text-blue-400">
-                        O repasse cai diretamente na sua chave PIX no momento em que o inscrito paga. A comissão da plataforma é descontada automaticamente.
+                      <p className="text-[10px] text-blue-700 dark:text-blue-400 leading-relaxed">
+                        A cada inscrição confirmada, o repasse é enviado automaticamente pra sua chave PIX em segundos. A comissão da plataforma é descontada antes do envio.
                       </p>
                     </div>
                     <AsaasBadge variant="inline" />
