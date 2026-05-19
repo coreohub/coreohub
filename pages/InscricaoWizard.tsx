@@ -2,8 +2,7 @@
  * Wizard de inscrição modalidade-first (PR-B).
  *
  * 4 passos numerados (Coreografia → Elenco → Trilha → Pagamento) — padrão
- * Sympla/Eventbrite. Substitui o NewRegistration.tsx (mantido como fallback
- * em /register sem modalidade pré-selecionada).
+ * Sympla/Eventbrite. Único fluxo de inscrição (legado NewRegistration removido 2026-05-18).
  *
  * Rota: /festival/:idOrSlug/inscrever/:modalidade
  *

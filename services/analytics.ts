@@ -10,7 +10,7 @@
  * - page_view         → React Router (App.tsx) ao mudar de rota
  * - campaign_landing  → captureUtmsFromUrl (quando chega com ?utm_*)
  * - view_event        → PublicEventPage (visualizou vitrine)
- * - begin_checkout    → InscricaoWizard/NewRegistration (clicou Inscreva-se)
+ * - begin_checkout    → InscricaoWizard (clicou Inscreva-se)
  * - purchase          → asaas-webhook (server-side via Measurement Protocol — futuro)
  *
  * GA4 cria conversões automaticamente pra eventos com nomes reservados

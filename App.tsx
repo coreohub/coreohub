@@ -47,7 +47,6 @@ const FestivalShowcase         = lazy(() => import('./pages/FestivalShowcase'));
 const PublicEventPage          = lazy(() => import('./pages/PublicEventPage'));
 const Festivais                = lazy(() => import('./pages/Festivais'));
 const ShortCodeRedirect        = lazy(() => import('./pages/ShortCodeRedirect'));
-const NewRegistration          = lazy(() => import('./pages/NewRegistration'));
 const InscricaoWizard          = lazy(() => import('./pages/InscricaoWizard'));
 const Checkout                 = lazy(() => import('./pages/Checkout'));
 const CheckoutIngresso         = lazy(() => import('./pages/CheckoutIngresso'));
