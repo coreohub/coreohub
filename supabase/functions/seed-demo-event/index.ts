@@ -723,6 +723,16 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       ingressos_audiencia: DEMO_INGRESSOS,
       patrocinadores: DEMO_PATROCINADORES,
       programacao: DEMO_PROGRAMACAO,
+      // Critérios de avaliação padrão (mesma estrutura do AccountSettings).
+      // Sem isso, dashboard mostra alerta amarelo "Configure os critérios"
+      // e jurados não conseguem dar notas no terminal.
+      regras_avaliacao: {
+        globalRules: {
+          criterios: CRITERIOS_PADRAO,
+          desempate: ['maior_media', ...CRITERIOS_PADRAO.map(c => `criterio_${c.name}`)],
+        },
+        overrides: {},
+      },
     }], { onConflict: 'id' })
 
     // Espelha formacoes_config em events (algumas telas leem dali)
