@@ -236,41 +236,90 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
       <div className="divide-y divide-slate-100 dark:divide-white/5">
         {steps.map((step) => {
           const status = getStatus(step.id);
-          const isExpanded = expandedStep === step.id || status === 'active';
+          const isExpanded = expandedStep === step.id;
           const { Icon } = step;
 
+          // Etapa concluída: layout COMPACTO (linha fina, padding mínimo,
+          // sem subtítulo). Padrão Stripe/Linear/Notion — depois que
+          // concluiu, o item vira só confirmação visual.
+          if (status === 'done') {
+            return (
+              <motion.div
+                key={step.id}
+                layout
+                onClick={() => setExpandedStep(isExpanded ? null : step.id)}
+                className="px-5 py-2.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors duration-200"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0 bg-emerald-500/10 text-emerald-500">
+                    <CheckCircle2 size={14} />
+                  </div>
+                  <h3 className="flex-1 min-w-0 font-bold text-[12px] text-slate-500 dark:text-slate-400 truncate">
+                    {step.title}
+                  </h3>
+                  <ChevronRight
+                    size={13}
+                    className={`text-slate-300 dark:text-slate-600 shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                  />
+                </div>
+
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="mt-2 ml-10 space-y-2 pb-1">
+                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 leading-relaxed max-w-xl">
+                          {step.description}
+                        </p>
+                        {step.detail && (
+                          <div className="flex flex-wrap gap-2 items-center">{step.detail}</div>
+                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); step.ctaAction(); }}
+                          className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 hover:text-[#ff0068] uppercase tracking-widest transition-colors mt-1"
+                        >
+                          {step.ctaLabel} <ChevronRight size={11} />
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            );
+          }
+
+          // Etapa ativa ou bloqueada: layout expandido com CTA visível.
+          const isActiveExpanded = status === 'active';
           return (
             <motion.div
               key={step.id}
               layout
               onClick={() => {
                 if (status === 'locked') return;
-                setExpandedStep(isExpanded && status !== 'active' ? null : step.id);
               }}
               className={`px-5 py-4 transition-colors duration-200 ${
-                status === 'locked'  ? 'opacity-35 cursor-not-allowed' :
-                status === 'active'  ? 'bg-[#ff0068]/5 cursor-pointer' :
-                                       'cursor-pointer hover:bg-slate-50 dark:hover:bg-white/[0.03]'
+                status === 'locked' ? 'opacity-35 cursor-not-allowed' : 'bg-[#ff0068]/5'
               }`}
             >
               <div className="flex items-center gap-3 sm:gap-4">
                 <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 transition-all ${
-                  status === 'done'   ? 'bg-emerald-500/10 text-emerald-500' :
-                  status === 'active' ? 'bg-[#ff0068] text-white shadow-lg shadow-[#ff0068]/25' :
-                                       'bg-slate-100 dark:bg-white/5 text-slate-300 dark:text-slate-600'
+                  status === 'active'
+                    ? 'bg-[#ff0068] text-white shadow-lg shadow-[#ff0068]/25'
+                    : 'bg-slate-100 dark:bg-white/5 text-slate-300 dark:text-slate-600'
                 }`}>
-                  {status === 'done'   ? <CheckCircle2 size={18} /> :
-                   status === 'locked' ? <Lock size={14} /> :
-                                        <Icon size={18} />}
+                  {status === 'locked' ? <Lock size={14} /> : <Icon size={18} />}
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <span className={`text-[10px] font-black uppercase tracking-widest ${
-                    status === 'done'   ? 'text-emerald-500' :
-                    status === 'active' ? 'text-[#ff0068]' :
-                                         'text-slate-400'
+                    status === 'active' ? 'text-[#ff0068]' : 'text-slate-400'
                   }`}>
-                    {status === 'done' ? '✓ Concluído' : status === 'active' ? '● Em andamento' : `Passo ${step.id}`}
+                    {status === 'active' ? '● Em andamento' : `Passo ${step.id}`}
                   </span>
                   <h3 className={`font-black uppercase tracking-tighter text-sm leading-tight ${
                     status === 'locked' ? 'text-slate-400 dark:text-slate-600' : 'text-slate-900 dark:text-white'
@@ -281,10 +330,6 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
                     {step.subtitle}
                   </p>
                 </div>
-
-                {status === 'done' && (
-                  <ChevronRight size={15} className="text-slate-300 dark:text-slate-600 shrink-0" />
-                )}
 
                 {status === 'active' && (
                   <div className="shrink-0 hidden sm:block">
@@ -309,36 +354,16 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
                 </div>
               )}
 
-              <AnimatePresence>
-                {isExpanded && status !== 'locked' && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="mt-3 ml-13 space-y-2.5 pb-1">
-                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 leading-relaxed max-w-xl">
-                        {step.description}
-                      </p>
-                      {step.detail && (
-                        <div className="flex flex-wrap gap-2 items-center">
-                          {step.detail}
-                        </div>
-                      )}
-                      {status === 'done' && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); step.ctaAction(); }}
-                          className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 hover:text-[#ff0068] uppercase tracking-widest transition-colors mt-1"
-                        >
-                          {step.ctaLabel} <ChevronRight size={11} />
-                        </button>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              {isActiveExpanded && (
+                <div className="mt-3 ml-13 space-y-2.5 pb-1">
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 leading-relaxed max-w-xl">
+                    {step.description}
+                  </p>
+                  {step.detail && (
+                    <div className="flex flex-wrap gap-2 items-center">{step.detail}</div>
+                  )}
+                </div>
+              )}
             </motion.div>
           );
         })}
