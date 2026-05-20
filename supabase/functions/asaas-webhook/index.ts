@@ -4,140 +4,18 @@ import {
   type MetaCapiTarget,
   type Ga4MpTarget,
 } from '../_shared/conversions.ts'
-import { sweepProducerBalance } from '../_shared/asaas-payouts.ts'
+// 2026-05-21 — Settlement period D+7
+// Auto-sweep imediato foi removido. O dinheiro fica retido na subconta
+// do produtor por 7 dias após o APROVADO (refunds funcionam). Cron
+// `daily-release-funds` libera o saldo automático no D+7+. Produtor
+// pode antecipar via botão "Transferir agora" em /qg-organizador
+// (chama `manual-transfer-now`).
+const RELEASE_WINDOW_DAYS = 7
 
-/** Helper local pra centralizar o sweep + log estruturado.
- *  Best-effort: erro nunca bloqueia o webhook caller.
- *  Sessão 3 — substitui o "saque manual" que o produtor teria que fazer
- *  no painel Asaas pra receber o split.
- *
- *  Auditoria Sessão 3:
- *  - A1: passa `producerAmount` quando conhecido pro sweep não arrastar
- *    saldo de outras fontes. Sem producerAmount, varre tudo (modo legado).
- *  - A4: idempotência opcional via `paymentId`. Se passado, checa
- *    payments.swept_at antes de sacar; após sacar, persiste o marker.
- *    Branches sem payment row (legacy, audience, workshop) usam a
- *    idempotência externa via platform_commissions.asaas_payment_id já
- *    presente no topo do handler.
- */
-async function trySweepProducer(
-  supabase: any,
-  producerId: string | null | undefined,
-  asaasBaseUrl: string,
-  context: string,
-  opts?: { paymentId?: string; producerAmount?: number }
-): Promise<void> {
-  if (!producerId) return
-  try {
-    // A4: idempotência via payments.swept_at quando aplicável.
-    if (opts?.paymentId) {
-      const { data: pay } = await supabase
-        .from('payments')
-        .select('swept_at')
-        .eq('id', opts.paymentId)
-        .maybeSingle()
-      if (pay?.swept_at) {
-        console.log(`[asaas-webhook][sweep][${context}] payment=${opts.paymentId} já swept (${pay.swept_at}) — skip`)
-        return
-      }
-    }
-
-    const { data: prod } = await supabase
-      .from('profiles')
-      .select('asaas_api_key, pix_key, full_name')
-      .eq('id', producerId)
-      .maybeSingle()
-    if (!prod?.asaas_api_key || !prod?.pix_key) {
-      console.log(`[asaas-webhook][sweep][${context}] produtor=${producerId} sem api_key/pix — skip`)
-      return
-    }
-    const result = await sweepProducerBalance({
-      producerApiKey: prod.asaas_api_key,
-      producerPixKey: prod.pix_key,
-      asaasBaseUrl,
-      description:    `Repasse CoreoHub — ${context}`,
-      amount:         opts?.producerAmount,
-    })
-    if (result.swept) {
-      console.log(`[asaas-webhook][sweep][${context}] OK produtor=${producerId} valor=R$${result.value} transfer=${result.transferId}`)
-      // A4: persiste marker pra evitar duplicação em retry.
-      if (opts?.paymentId) {
-        await supabase
-          .from('payments')
-          .update({
-            swept_at:          new Date().toISOString(),
-            swept_amount:      result.value,
-            swept_transfer_id: result.transferId ?? null,
-          })
-          .eq('id', opts.paymentId)
-      }
-      // A21: sweep OK = reset contador de falhas consecutivas.
-      await supabase
-        .from('profiles')
-        .update({ sweep_failure_count: 0, sweep_last_failure_at: null })
-        .eq('id', producerId)
-    } else {
-      console.warn(`[asaas-webhook][sweep][${context}] skip produtor=${producerId} reason=${result.reason} error=${result.error ?? ''}`)
-      // A21 auditoria Sessão 3: skips com motivo "técnico" contam como falha.
-      // no_balance/no_amount/no_pix/no_api_key são esperados e NÃO incrementam.
-      const TECH_FAILS = new Set(['transfer_failed', 'pix_invalid', 'kyc_pending', 'exception'])
-      if (result.reason && TECH_FAILS.has(result.reason)) {
-        await trackSweepFailure(supabase, producerId, prod, context, result.reason, result.error)
-      }
-    }
-  } catch (e) {
-    console.error(`[asaas-webhook][sweep][${context}] exception produtor=${producerId}:`, (e as Error).message)
-    await trackSweepFailure(supabase, producerId, null, context, 'exception', (e as Error).message)
-  }
-}
-
-/** A21 auditoria Sessão 3: incrementa contador de falhas consecutivas do sweep
- *  e emite log [ALERT] estruturado quando passar do threshold (3) com throttle
- *  de 24h. Logs [ALERT] são monitorados pela ops via Supabase dashboard;
- *  futuro: hook pra email/Slack admin se virar tráfego de verdade.
- */
-async function trackSweepFailure(
-  supabase: any,
-  producerId: string,
-  prodHint: { full_name?: string } | null,
-  context: string,
-  reason: string,
-  error?: string,
-): Promise<void> {
-  try {
-    const { data: prof } = await supabase
-      .from('profiles')
-      .select('full_name, sweep_failure_count, sweep_notified_at')
-      .eq('id', producerId)
-      .maybeSingle()
-    const prevCount = Number((prof as any)?.sweep_failure_count ?? 0)
-    const nextCount = prevCount + 1
-    const now = new Date().toISOString()
-    await supabase
-      .from('profiles')
-      .update({ sweep_failure_count: nextCount, sweep_last_failure_at: now })
-      .eq('id', producerId)
-
-    const THRESHOLD = 3
-    if (nextCount < THRESHOLD) return
-
-    const lastNotified = (prof as any)?.sweep_notified_at
-      ? new Date((prof as any).sweep_notified_at).getTime() : 0
-    const hoursSince = (Date.now() - lastNotified) / 3_600_000
-    if (hoursSince < 24) return  // throttle
-
-    await supabase
-      .from('profiles')
-      .update({ sweep_notified_at: now })
-      .eq('id', producerId)
-    const name = (prof as any)?.full_name ?? prodHint?.full_name ?? '?'
-    console.error(
-      `[asaas-webhook][sweep][ALERT] produtor=${producerId} (${name}) ` +
-      `${nextCount} falhas consecutivas — reason=${reason} ctx=${context} error=${error ?? ''}`
-    )
-  } catch (e) {
-    console.error('[asaas-webhook][sweep][ALERT] trackSweepFailure exception:', (e as Error).message)
-  }
+/** Calcula o instante em que a comissão fica elegível pro sweep automático. */
+function computeReleaseAt(paidAtIso?: string): string {
+  const base = paidAtIso ? new Date(paidAtIso).getTime() : Date.now()
+  return new Date(base + RELEASE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString()
 }
 
 /** Pixel ID + Measurement ID master da CoreoHub. Espelha index.html. */
@@ -283,6 +161,7 @@ async function handleAudienceTicket(opts: {
     .eq('id', eventId)
     .single()
 
+  const audiencePaidAt = (updatePayload.paid_at as string | undefined) ?? new Date().toISOString()
   const { error: commErr } = await supabase
     .from('platform_commissions')
     .insert({
@@ -295,6 +174,7 @@ async function handleAudienceTicket(opts: {
       commission_type:   'percent',
       audience_ticket_group_id: groupId,
       kind:              'audience',
+      release_at:        computeReleaseAt(audiencePaidAt),
     })
 
   if (commErr) {
@@ -358,21 +238,8 @@ async function handleAudienceTicket(opts: {
     console.error('[asaas-webhook][audience] falha bloco emails:', (emailErr as Error).message)
   }
 
-  // Sessão 3: auto-saque do split que acabou de cair na subconta do produtor.
-  // A1: amount = soma dos producer_amount dos tickets (não pega saldo total).
-  // A4: branch sem payment row próprio — idempotência via platform_commissions.
-  await trySweepProducer(
-    supabase,
-    eventData?.created_by,
-    Deno.env.get('ASAAS_BASE_URL') ?? '',
-    'audience',
-    {
-      producerAmount: tickets.reduce(
-        (s: number, t: any) => s + Number(t.producer_amount ?? 0),
-        0
-      ),
-    }
-  )
+  // Settlement D+7: saldo fica retido na subconta até release_at. Cron
+  // `daily-release-funds` libera automaticamente quando passar.
 
   return respond({
     status:          'ok',
@@ -458,6 +325,7 @@ async function handleWorkshopRegistration(opts: {
 
   // Workshop pode estar atrelado a um event_id (festival pai); se não, comissão fica
   // sem event_id. platform_commissions já permite registration_id NULL desde Tier 1.
+  const workshopPaidAt = (updatePayload.paid_at as string | undefined) ?? new Date().toISOString()
   const { error: commErr } = await supabase
     .from('platform_commissions')
     .insert({
@@ -470,6 +338,7 @@ async function handleWorkshopRegistration(opts: {
       commission_type:           'percent',
       workshop_registration_id:  registrationId,
       kind:                      'workshop',
+      release_at:                computeReleaseAt(workshopPaidAt),
     })
 
   if (commErr) {
@@ -536,15 +405,7 @@ async function handleWorkshopRegistration(opts: {
     console.error('[asaas-webhook][workshop] falha bloco emails:', (emailErr as Error).message)
   }
 
-  // Sessão 3: auto-saque do split do workshop.
-  // A1: producerAmount conhecido (1 workshop = 1 produtor).
-  await trySweepProducer(
-    supabase,
-    workshop?.created_by,
-    Deno.env.get('ASAAS_BASE_URL') ?? '',
-    'workshop',
-    { producerAmount }
-  )
+  // Settlement D+7: saldo fica retido na subconta até release_at.
 
   return respond({
     status:          'ok',
@@ -724,6 +585,7 @@ async function handleAggregatePayment(opts: {
       asaas_payment_id:  String(payment.id),
       commission_type:   eventData?.commission_type ?? 'percent',
       kind:              'registration',  // carrinho = inscrição cheia
+      release_at:        computeReleaseAt(paidAtReal),
     }
   })
   // Para o email consolidado abaixo, mantemos referência ao gross por reg.
@@ -884,19 +746,7 @@ async function handleAggregatePayment(opts: {
     console.error('[asaas-webhook][aggregate] falha bloco CAPI:', (capiErr as Error).message)
   }
 
-  // Sessão 3: auto-saque do split agregado.
-  // A1: amount = producer_total snapshot (não saca saldo de outras fontes).
-  // A4: idempotente via payments.swept_at — retry de webhook não duplica.
-  await trySweepProducer(
-    supabase,
-    eventData?.created_by,
-    Deno.env.get('ASAAS_BASE_URL') ?? '',
-    'aggregate',
-    {
-      paymentId:      paymentId,
-      producerAmount: producerTotalRow,
-    }
-  )
+  // Settlement D+7: saldo fica retido na subconta até release_at (paidAtReal + 7d).
 
   return respond({
     status:          'ok',
@@ -1000,16 +850,10 @@ async function handleVideoSelectionFee(opts: {
         net_amount:        producerAmount,
         asaas_payment_id:  String(payment.id),
         kind:              'video_selection',  // discriminador opcional pra relatórios
+        release_at:        computeReleaseAt(),
       })
 
-    // Sweep da subconta do produtor (mesma infra do split normal)
-    await trySweepProducer(
-      supabase,
-      (eventData as any)?.created_by,
-      asaasBaseUrl,
-      'video_selection',
-      { producerAmount },
-    )
+    // Settlement D+7: saldo fica retido na subconta até release_at.
 
     // Email "pode enviar vídeo agora"
     try {
@@ -1358,6 +1202,7 @@ Deno.serve(async (req) => {
           net_amount:       producerAmount,
           asaas_payment_id: String(payment.id),
           commission_type:  eventData?.commission_type ?? 'percent',
+          release_at:       computeReleaseAt(),
         })
 
       if (insErr) {
@@ -1584,16 +1429,7 @@ Deno.serve(async (req) => {
         console.error('[asaas-webhook] falha no bloco CAPI:', (capiErr as Error).message)
       }
 
-      // Sessão 3: auto-saque do split (fluxo legacy single registration).
-      // A1: producerAmount conhecido (1 inscrição = 1 split).
-      // A4: branch sem payment row próprio — idempotência via platform_commissions.
-      await trySweepProducer(
-        supabase,
-        eventData?.created_by,
-        Deno.env.get('ASAAS_BASE_URL') ?? '',
-        'registration',
-        { producerAmount }
-      )
+      // Settlement D+7: saldo fica retido na subconta até release_at.
     }
 
     return ok({

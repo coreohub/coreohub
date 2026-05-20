@@ -11,7 +11,10 @@ import AsaasBadge from '../components/AsaasBadge';
 // 1.0 → 1.1 (2026-05-18): adiciona cláusula 5 sobre taxas bancárias do
 // parceiro financeiro Asaas (taxa de criação de conta R$ 12,90 e demais
 // taxas do Asaas). Cláusulas 5-10 da versão 1.0 foram renumeradas pra 6-11.
-export const TERMO_PRODUTOR_VERSION = '1.1';
+// 1.1 → 1.2 (2026-05-21): adiciona cláusula 6 sobre prazo de liberação
+// de repasses (janela D+7 + antecipação manual sob risco). Cláusulas
+// 6-11 da v1.1 foram renumeradas pra 7-12.
+export const TERMO_PRODUTOR_VERSION = '1.2';
 
 const TermoProdutor: React.FC = () => {
   const navigate = useNavigate();
@@ -185,9 +188,46 @@ const TermoProdutor: React.FC = () => {
             </p>
           </section>
 
+          <section>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">6. Prazo de liberação dos repasses (janela D+7)</h2>
+            <p className="mb-2">
+              6.1. Os valores líquidos devidos ao Produtor (resultado do pagamento aprovado, líquido da comissão da Plataforma e taxas Asaas)
+              permanecem retidos na subconta Asaas do Produtor por um período de <strong>7 (sete) dias corridos</strong> contados da
+              confirmação do pagamento. Decorrido esse prazo, a Plataforma dispara automaticamente a transferência do saldo
+              liberado para a chave PIX cadastrada pelo Produtor.
+            </p>
+            <p className="mb-2">
+              6.2. A janela de 7 dias tem por finalidade <strong>preservar saldo suficiente</strong> para o processamento integral de
+              eventuais reembolsos (art. 49 do CDC), estornos solicitados ao Asaas, devoluções via MED do PIX e contestações
+              de cartão (chargebacks) — evitando que o Produtor precise repor valores do próprio bolso para honrar reembolsos
+              legítimos.
+            </p>
+            <p className="mb-2">
+              6.3. <strong>Antecipação manual ("Transferir agora"):</strong> a Plataforma disponibiliza no painel do Produtor a opção
+              de antecipar a transferência do saldo retido a qualquer momento, antes do encerramento da janela de 7 dias.
+              Ao optar pela antecipação, o Produtor declara estar ciente e concorda integralmente que:
+            </p>
+            <ul className="list-disc list-inside space-y-1.5 ml-2 mb-2">
+              <li>
+                Caso ocorra <strong>reembolso, estorno, MED ou chargeback</strong> nas vendas correspondentes dentro dos 7 dias
+                seguintes à confirmação do pagamento, e o saldo da subconta Asaas for <strong>insuficiente</strong> para cobrir o valor
+                devolvido, o Produtor obriga-se a <strong>repor o valor</strong> via PIX para a Plataforma no prazo de 7 (sete) dias
+                corridos contados da notificação.
+              </li>
+              <li>
+                Aplica-se subsidiariamente à antecipação a autorização expressa de débito automático prevista na cláusula 7.
+              </li>
+            </ul>
+            <p>
+              6.4. A janela de 7 dias e o mecanismo de antecipação podem ser ajustados pela Plataforma mediante prévio aviso ao
+              Produtor, em especial para acomodar exigências regulatórias, mudanças no contrato com o Asaas ou ajustes
+              operacionais relacionados à mitigação de risco de fraude.
+            </p>
+          </section>
+
           <section className="border-l-4 border-amber-500 pl-4 bg-amber-50/50 dark:bg-amber-500/5 py-3 rounded-r-xl">
             <h2 className="text-sm font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-2">
-              <AlertTriangle size={14} /> 6. Chargebacks, estornos e reembolsos
+              <AlertTriangle size={14} /> 7. Chargebacks, estornos e reembolsos
             </h2>
             <p className="mb-2">
               <strong>O Produtor é integralmente responsável</strong> pelos valores devidos em razão de chargebacks (contestação
@@ -213,7 +253,7 @@ const TermoProdutor: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">7. Política de reembolso ao comprador</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">8. Política de reembolso ao comprador</h2>
             <p>
               Em conformidade com o art. 49 do Código de Defesa do Consumidor (Lei 8.078/90), o comprador (inscrito ou
               espectador) tem direito a reembolso integral em até <strong>7 (sete) dias corridos</strong> contados da data da compra,
@@ -227,7 +267,7 @@ const TermoProdutor: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">8. Obrigações do Produtor</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">9. Obrigações do Produtor</h2>
             <ul className="list-disc list-inside space-y-1.5">
               <li>Fornecer informações verdadeiras, completas e atualizadas sobre si e sobre seus eventos.</li>
               <li>Cumprir as exigências de KYC (Know Your Customer) do Asaas, fornecendo documentação solicitada.</li>
@@ -239,7 +279,7 @@ const TermoProdutor: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">9. Dados pessoais (LGPD)</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">10. Dados pessoais (LGPD)</h2>
             <p>
               O tratamento de dados pessoais coletados pela Plataforma observa a Lei Geral de Proteção de Dados
               (Lei 13.709/2018). O Produtor atua como controlador dos dados de seus inscritos, espectadores e bailarinos,
@@ -249,7 +289,7 @@ const TermoProdutor: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">10. Suspensão e encerramento</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">11. Suspensão e encerramento</h2>
             <p>
               A CoreoHub poderá suspender ou encerrar o acesso do Produtor a qualquer tempo, sem aviso prévio, em caso de
               descumprimento deste Termo, inadimplência, suspeita de fraude, determinação de autoridade competente ou
@@ -258,7 +298,7 @@ const TermoProdutor: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">11. Foro</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">12. Foro</h2>
             <p>
               Fica eleito o foro da comarca de <strong>Votuporanga / SP</strong> para dirimir quaisquer controvérsias decorrentes
               deste Termo, com renúncia expressa a qualquer outro, por mais privilegiado que seja.
@@ -299,9 +339,9 @@ const TermoProdutor: React.FC = () => {
               />
               <span className="text-[12px] text-slate-700 dark:text-slate-300 leading-relaxed">
                 Li e aceito integralmente o Termo de Adesão do Produtor versão <strong>{TERMO_PRODUTOR_VERSION}</strong>,
-                incluindo a cláusula 5 sobre taxas bancárias do Asaas (taxa única de criação de conta R$ 12,90) e
-                a cláusula 6 sobre ressarcimento de chargebacks/estornos e autorização de débito automático
-                no Asaas.
+                incluindo a cláusula 5 (taxas bancárias do Asaas, taxa única de criação de conta R$ 12,90),
+                a cláusula 6 (janela de 7 dias para liberação dos repasses e antecipação manual sob risco) e
+                a cláusula 7 (ressarcimento de chargebacks/estornos e autorização de débito automático no Asaas).
               </span>
             </label>
 

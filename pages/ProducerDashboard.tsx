@@ -11,6 +11,7 @@ import { motion } from 'motion/react';
 import { Profile as UserProfile } from '../types';
 import GuiaDoProdutor from '../components/GuiaDoProdutor';
 import ProducerAlerts from '../components/ProducerAlerts';
+import ProducerBalanceCard from '../components/ProducerBalanceCard';
 import DemoOnboardingCard from '../components/DemoOnboardingCard';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
@@ -366,6 +367,11 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
 
       {/* Alertas acionáveis — Asaas, critérios, prazos */}
       <ProducerAlerts profile={profile} />
+
+      {/* Saldo na subconta Asaas (settlement D+7 + antecipação manual). Só
+          aparece se houver algum repasse pendente — esconde sozinho pra
+          produtor que nunca recebeu nada. */}
+      {asaasConnected && <ProducerBalanceCard producerId={profile.id} />}
 
       {/* Metric cards */}
       {loading ? (

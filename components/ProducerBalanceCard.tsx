@@ -1,0 +1,314 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Wallet, ArrowDownToLine, Loader2, AlertTriangle, CheckCircle2,
+  Clock, ShieldCheck, X, Info,
+} from 'lucide-react';
+import { supabase } from '../services/supabase';
+
+interface PendingCommission {
+  id:          string;
+  net_amount:  number;
+  release_at:  string | null;
+}
+
+interface Props {
+  producerId: string;
+}
+
+/**
+ * Card "Saldo" do /qg-organizador — settlement period D+7.
+ * Mostra 2 buckets (retido vs disponível) + botão "Transferir agora" que
+ * antecipa o retido sob risco (modal de confirmação reforça o aviso).
+ */
+const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
+  const [loading, setLoading]     = useState(true);
+  const [pending, setPending]     = useState<PendingCommission[]>([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [transferring, setTransferring] = useState(false);
+  const [feedback, setFeedback]   = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('platform_commissions')
+      .select('id, net_amount, release_at')
+      .eq('producer_id', producerId)
+      .is('released_at', null)
+      .gt('net_amount', 0);
+    if (!error) {
+      setPending((data ?? []) as PendingCommission[]);
+    }
+    setLoading(false);
+  }, [producerId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const { retido, disponivel, nextReleaseAt } = useMemo(() => {
+    const now = Date.now();
+    let r = 0, d = 0;
+    let next: number | null = null;
+    for (const c of pending) {
+      const releaseTs = c.release_at ? new Date(c.release_at).getTime() : 0;
+      const amt = Number(c.net_amount ?? 0);
+      if (releaseTs > now) {
+        r += amt;
+        if (next === null || releaseTs < next) next = releaseTs;
+      } else {
+        d += amt;
+      }
+    }
+    return {
+      retido:        parseFloat(r.toFixed(2)),
+      disponivel:    parseFloat(d.toFixed(2)),
+      nextReleaseAt: next,
+    };
+  }, [pending]);
+
+  const total = retido + disponivel;
+
+  const handleTransfer = async () => {
+    setTransferring(true);
+    setFeedback(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('manual-transfer-now', {
+        body: {},
+      });
+      if (error) throw error;
+      if ((data as any)?.status !== 'ok') {
+        throw new Error((data as any)?.message ?? (data as any)?.reason ?? 'Falha na transferência');
+      }
+      const released = Number((data as any)?.released ?? 0);
+      setFeedback({
+        kind: 'ok',
+        msg:  `Transferência disparada: R$ ${released.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} a caminho do seu PIX.`,
+      });
+      setModalOpen(false);
+      await load();
+    } catch (e: any) {
+      setFeedback({ kind: 'err', msg: e?.message ?? 'Erro ao processar transferência.' });
+    } finally {
+      setTransferring(false);
+    }
+  };
+
+  const fmtBRL = (v: number) =>
+    v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  const fmtNextRelease = () => {
+    if (!nextReleaseAt) return null;
+    const diffH = Math.max(1, Math.round((nextReleaseAt - Date.now()) / (1000 * 60 * 60)));
+    if (diffH < 24) return `em ${diffH}h`;
+    const days = Math.ceil(diffH / 24);
+    return `em ${days} dia${days > 1 ? 's' : ''}`;
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-3xl p-6 flex items-center justify-center">
+        <Loader2 size={20} className="animate-spin text-[#ff0068]" />
+      </div>
+    );
+  }
+
+  // Se nunca recebeu nada, não mostra o card pra não poluir o painel.
+  if (total <= 0 && !feedback) return null;
+
+  return (
+    <>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-3xl p-6"
+      >
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-500/20">
+              <Wallet size={16} />
+            </div>
+            <div>
+              <h2 className="text-sm font-black uppercase text-slate-900 dark:text-white tracking-tight italic">
+                Saldo na subconta Asaas
+              </h2>
+              <p className="text-[10px] text-slate-500">
+                Repasses ficam retidos por 7 dias para cobrir reembolsos (padrão Sympla/Stripe).
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+          {/* Disponível */}
+          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle2 size={12} className="text-emerald-500" />
+              <span className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-400">
+                Disponível
+              </span>
+            </div>
+            <div className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter">
+              {fmtBRL(disponivel)}
+            </div>
+            <p className="text-[10px] text-slate-500 mt-1">
+              Liberado automaticamente — sem risco de estorno.
+            </p>
+          </div>
+
+          {/* Retido */}
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Clock size={12} className="text-amber-500" />
+              <span className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-700 dark:text-amber-400">
+                Retido (D+7)
+              </span>
+            </div>
+            <div className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter">
+              {fmtBRL(retido)}
+            </div>
+            <p className="text-[10px] text-slate-500 mt-1">
+              {nextReleaseAt
+                ? `Próxima liberação ${fmtNextRelease()}.`
+                : 'Sem repasses retidos.'}
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setModalOpen(true)}
+          disabled={total <= 0}
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20"
+        >
+          <ArrowDownToLine size={13} />
+          Transferir agora — {fmtBRL(total)}
+        </button>
+
+        <AnimatePresence>
+          {feedback && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className={`mt-4 flex items-start gap-2 p-3 rounded-2xl border text-[11px] ${
+                feedback.kind === 'ok'
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400'
+                  : 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-400'
+              }`}
+            >
+              {feedback.kind === 'ok'
+                ? <CheckCircle2 size={14} className="shrink-0 mt-px" />
+                : <AlertTriangle size={14} className="shrink-0 mt-px" />}
+              <span className="leading-relaxed">{feedback.msg}</span>
+              <button
+                onClick={() => setFeedback(null)}
+                className="ml-auto opacity-60 hover:opacity-100"
+                aria-label="Fechar"
+              >
+                <X size={12} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="mt-4 flex items-start gap-2 text-[10px] text-slate-500">
+          <Info size={11} className="shrink-0 mt-0.5" />
+          <span>
+            A janela de 7 dias garante que reembolsos legítimos possam ser processados
+            sem que você precise repor valores do bolso. Você pode antecipar quando quiser.
+          </span>
+        </div>
+      </motion.div>
+
+      {/* Modal de confirmação */}
+      <AnimatePresence>
+        {modalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => !transferring && setModalOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-6 max-w-md w-full space-y-5"
+            >
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-[#ff0068]/10 text-[#ff0068] rounded-xl border border-[#ff0068]/20 shrink-0">
+                  <ArrowDownToLine size={16} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black uppercase tracking-tight italic text-slate-900 dark:text-white">
+                    Confirmar transferência
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Você vai receber {fmtBRL(total)} no seu PIX cadastrado.
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 p-4 space-y-2 text-[12px]">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Disponível (sem risco)</span>
+                  <strong className="text-emerald-600 dark:text-emerald-400">{fmtBRL(disponivel)}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Antecipado (sob risco)</span>
+                  <strong className="text-amber-600 dark:text-amber-400">{fmtBRL(retido)}</strong>
+                </div>
+                <div className="flex justify-between pt-2 border-t border-slate-200 dark:border-white/10">
+                  <span className="font-black text-slate-900 dark:text-white">Total</span>
+                  <strong className="text-slate-900 dark:text-white">{fmtBRL(total)}</strong>
+                </div>
+              </div>
+
+              {retido > 0 && (
+                <div className="rounded-2xl border-2 border-amber-500/40 bg-amber-500/10 p-4 flex items-start gap-3">
+                  <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="text-[11px] text-amber-800 dark:text-amber-200 leading-relaxed">
+                    <strong className="block mb-1">Antecipação sob risco.</strong>
+                    Se algum bailarino solicitar reembolso dentro dos próximos 7 dias e
+                    sua subconta não tiver saldo pra cobrir, <strong>você precisará repor o valor</strong> via PIX.
+                    Recomendado: aguardar a liberação automática.
+                  </div>
+                </div>
+              )}
+
+              {retido === 0 && (
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 flex items-start gap-3">
+                  <ShieldCheck size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                  <div className="text-[11px] text-emerald-800 dark:text-emerald-200 leading-relaxed">
+                    Todo o saldo já passou da janela de 7 dias — transferência sem risco de reembolso.
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => setModalOpen(false)}
+                  disabled={transferring}
+                  className="flex-1 px-4 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 text-[10px] font-black uppercase tracking-widest hover:border-slate-300 dark:hover:border-white/20 transition-all disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleTransfer}
+                  disabled={transferring}
+                  className="flex-1 px-4 py-3 rounded-2xl bg-[#ff0068] hover:bg-[#e0005c] text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20 disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                >
+                  {transferring
+                    ? <><Loader2 size={13} className="animate-spin" /> Processando…</>
+                    : <>Confirmar transferência</>}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+};
+
+export default ProducerBalanceCard;
