@@ -953,12 +953,17 @@ function buildVideoRejected(p: VideoRejectedPayload) {
   const titulo = 'Resultado da seletiva'
   const intro  = `Olá ${escape(p.inscritoNome ?? 'bailarino(a)')}, agradecemos sua inscrição da coreografia <strong>${escape(p.coreografia ?? '')}</strong>${p.eventoNome ? ` no <strong>${escape(p.eventoNome)}</strong>` : ''}. A comissão analisou o vídeo e infelizmente não pôde classificá-la pra esta edição.`
 
-  const refundLabel = p.refundPolicy === 'full_refund'    ? 'Estorno integral da taxa de seletiva'
+  // Quando refundAmount=0 (cobrança não paga, dispensada por cupom, ou no_refund
+  // policy), trata como "sem estorno" pro label e cor — evita contradição
+  // "Estorno parcial" + texto "taxa remunera análise" no body.
+  const noRefundEffective = !p.refundAmount || p.refundAmount <= 0
+  const refundLabel = noRefundEffective                   ? 'Sem estorno (taxa de seletiva = serviço de análise prestado)'
+                    : p.refundPolicy === 'full_refund'    ? 'Estorno integral da taxa de seletiva'
                     : p.refundPolicy === 'partial_refund' ? 'Estorno parcial da taxa de seletiva'
                     : 'Sem estorno (taxa de seletiva = serviço de análise prestado)'
-  const refundColor = p.refundPolicy === 'no_refund' ? '#64748b' : '#059669'
-  const refundBg    = p.refundPolicy === 'no_refund' ? '#f1f5f9' : '#ecfdf5'
-  const refundBd    = p.refundPolicy === 'no_refund' ? '#e2e8f0' : '#34d399'
+  const refundColor = noRefundEffective ? '#64748b' : '#059669'
+  const refundBg    = noRefundEffective ? '#f1f5f9' : '#ecfdf5'
+  const refundBd    = noRefundEffective ? '#e2e8f0' : '#34d399'
 
   const feedbackBlock = p.feedback
     ? `<div style="margin-top:14px;padding:16px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;">
