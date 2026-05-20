@@ -220,12 +220,32 @@ const MinhasCoreografias = () => {
         const bailarinosCount = Array.isArray(r.bailarinos_detalhes) ? r.bailarinos_detalhes.length : 1;
         const multiplier = (pricingType === 'PER_MEMBER' && bailarinosCount > 1) ? bailarinosCount : 1;
 
-        // Preferência: mod_fee unit × N → fmCfg/fmEvent → null
+        // Resolve lote vigente (mesma lógica de create-payment-asaas):
+        // primeiro lote cuja data_virada está no futuro (ou sem data_virada).
+        const resolveLotePrice = (formacao: any): number | null => {
+          const lotes: Array<{ preco: number; data_virada: string | null }> = formacao?.lotes ?? [];
+          if (lotes.length === 0) return null;
+          const today = new Date();
+          for (const lot of lotes) {
+            if (!lot.data_virada) return Number(lot.preco);
+            const d = new Date(lot.data_virada + 'T23:59:59');
+            if (d.getTime() >= today.getTime()) return Number(lot.preco);
+          }
+          return null; // todos lotes vencidos
+        };
+
+        // Preferência: mod_fee unit × N → lote vigente (fmCfg/fmEvent) → fee/base_fee legacy → null
         let base: number | null = null;
         if (r.mod_fee != null && r.mod_fee > 0)         base = Number(r.mod_fee);
-        else if (fmCfg?.preco != null)                  base = Number(fmCfg.preco);
-        else if (fmEvent?.fee != null)                  base = Number(fmEvent.fee);
-        else if (fmEvent?.base_fee != null)             base = Number(fmEvent.base_fee);
+        else {
+          const loteCfg   = resolveLotePrice(fmCfg);
+          const loteEvent = resolveLotePrice(fmEvent);
+          if (loteCfg != null && loteCfg > 0)           base = loteCfg;
+          else if (loteEvent != null && loteEvent > 0)  base = loteEvent;
+          else if (fmCfg?.preco != null)                base = Number(fmCfg.preco);
+          else if (fmEvent?.fee != null)                base = Number(fmEvent.fee);
+          else if (fmEvent?.base_fee != null)           base = Number(fmEvent.base_fee);
+        }
         if (base == null || base <= 0) return null;
 
         const total = base * multiplier;
