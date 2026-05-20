@@ -368,10 +368,10 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
       {/* Alertas acionáveis — Asaas, critérios, prazos */}
       <ProducerAlerts profile={profile} />
 
-      {/* Saldo na subconta Asaas (settlement D+7 + antecipação manual). Só
-          aparece se houver algum repasse pendente — esconde sozinho pra
-          produtor que nunca recebeu nada. */}
-      {asaasConnected && <ProducerBalanceCard producerId={profile.id} />}
+      {/* Saldo na subconta Asaas (settlement D+7 + antecipação manual).
+          Renderiza sempre — o próprio card mostra estado vazio se não
+          tem repasse pendente. */}
+      <ProducerBalanceCard producerId={profile.id} />
 
       {/* Metric cards */}
       {loading ? (

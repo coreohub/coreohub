@@ -111,8 +111,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
     );
   }
 
-  // Se nunca recebeu nada, não mostra o card pra não poluir o painel.
-  if (total <= 0 && !feedback) return null;
+  // Mostra sempre, mesmo vazio — empty state é melhor que sumir silencioso.
 
   return (
     <>
