@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Ticket, Calendar, MapPin, ChevronRight, Loader2, Search, ExternalLink, Info } from 'lucide-react';
+import { Ticket, Calendar, MapPin, ChevronRight, Loader2, Search, ExternalLink, Info, QrCode, Clock } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
 interface EventSummary {
@@ -12,6 +12,25 @@ interface EventSummary {
   politica_ingressos?: 'NAO_DEFINIDO' | 'GRATUITO' | 'INTERNO' | 'EXTERNO' | null;
   audience_sales_enabled?: boolean | null;
 }
+
+interface MyTicket {
+  id: string;
+  event_id: string | null;
+  buyer_email: string | null;
+  buyer_name: string | null;
+  status_pagamento: string | null;
+  preco_pago: number | null;
+  paid_at: string | null;
+  access_token: string | null;
+  created_at: string;
+  _eventName?: string;
+  _eventDate?: string | null;
+}
+
+const fmtMoney = (v?: number | null) =>
+  v != null
+    ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
+    : '—';
 
 const formatDateBR = (iso?: string | null) => {
   if (!iso) return null;
@@ -25,6 +44,7 @@ const formatDateBR = (iso?: string | null) => {
 
 const Ingressos: React.FC = () => {
   const [events, setEvents] = useState<EventSummary[]>([]);
+  const [myTickets, setMyTickets] = useState<MyTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,13 +55,14 @@ const Ingressos: React.FC = () => {
         // já era inscrito como competidor — SPECTATOR nunca via nada.
         // Agora: lista TODOS eventos com venda aberta (INTERNO ou EXTERNO),
         // independente do user ter coreografia inscrita.
-        const [{ data: evs, error: evErr }, { data: cfgs }] = await Promise.all([
+        const [{ data: evs, error: evErr }, { data: cfgs }, { data: { user } }] = await Promise.all([
           supabase
             .from('events')
             .select('id,name,start_date,location,politica_ingressos,audience_sales_enabled')
             .in('politica_ingressos', ['INTERNO', 'EXTERNO'])
             .order('start_date', { ascending: true }),
           supabase.from('configuracoes').select('event_id,url_ingressos'),
+          supabase.auth.getUser(),
         ]);
         if (evErr) throw evErr;
 
@@ -59,6 +80,33 @@ const Ingressos: React.FC = () => {
           });
 
         setEvents(merged);
+
+        // Meus Ingressos — só pra user logado. Mostra os de plateia (audience_tickets).
+        if (user?.email) {
+          try {
+            const { data: tk } = await supabase
+              .from('audience_tickets')
+              .select('id, event_id, buyer_email, buyer_name, status_pagamento, preco_pago, paid_at, access_token, created_at')
+              .eq('buyer_email', user.email)
+              .order('created_at', { ascending: false });
+            const tickets = (tk ?? []) as MyTicket[];
+            // Hidrata nome/data do evento (audience_tickets não embeda direto).
+            const eventIds = Array.from(new Set(tickets.map(t => t.event_id).filter(Boolean))) as string[];
+            const eventNames: Record<string, { name: string; start_date: string | null }> = {};
+            if (eventIds.length > 0) {
+              const { data: evRows } = await supabase
+                .from('events')
+                .select('id,name,start_date')
+                .in('id', eventIds);
+              for (const ev of (evRows ?? [])) eventNames[ev.id] = { name: ev.name, start_date: ev.start_date };
+            }
+            setMyTickets(tickets.map(t => ({
+              ...t,
+              _eventName: t.event_id ? (eventNames[t.event_id]?.name ?? 'Evento') : 'Evento',
+              _eventDate: t.event_id ? (eventNames[t.event_id]?.start_date ?? null) : null,
+            })));
+          } catch { /* RLS pode bloquear — ignora silencioso */ }
+        }
       } catch (e: any) {
         setError(e.message ?? 'Erro ao carregar eventos.');
       } finally {
@@ -75,16 +123,66 @@ const Ingressos: React.FC = () => {
     );
   }
 
+  const paidTickets = myTickets.filter(t => t.status_pagamento === 'APROVADO' || t.status_pagamento === 'PAGO');
+
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="text-center space-y-2">
         <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
-          Comprar <span className="text-[#ff0068]">Ingresso</span>
+          <span className="text-[#ff0068]">Ingressos</span>
         </h1>
         <p className="text-xs font-bold uppercase tracking-[0.25em] text-slate-500">
-          Festivais com vendas abertas pra plateia
+          {paidTickets.length > 0 ? 'Seus ingressos + festivais com vendas abertas' : 'Festivais com vendas abertas pra plateia'}
         </p>
       </div>
+
+      {/* ── Meus Ingressos (topo, só se tem comprados) ── */}
+      {paidTickets.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+            <Ticket size={11} className="text-[#ff0068]" /> Meus Ingressos ({paidTickets.length})
+          </p>
+          <div className="space-y-2">
+            {paidTickets.map(t => (
+              <div key={t.id} className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+                  <Ticket size={16} className="text-emerald-500" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-black text-sm text-slate-900 dark:text-white truncate">{t._eventName}</p>
+                  <div className="flex flex-wrap gap-3 mt-0.5">
+                    {t._eventDate && (
+                      <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
+                        <Calendar size={9} /> {formatDateBR(t._eventDate)}
+                      </span>
+                    )}
+                    {t.paid_at && (
+                      <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                        <Clock size={9} /> Pago — {fmtMoney(t.preco_pago)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {t.access_token && (
+                  <Link
+                    to={`/meu-ingresso/${t.access_token}`}
+                    className="shrink-0 p-2.5 rounded-xl bg-[#ff0068]/10 text-[#ff0068] hover:bg-[#ff0068]/20 transition-all"
+                    title="Mostrar QR Code"
+                  >
+                    <QrCode size={16} />
+                  </Link>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {paidTickets.length > 0 && events.length > 0 && (
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5 pt-2 border-t border-slate-200 dark:border-white/10">
+          <Search size={11} /> Comprar mais ingressos
+        </p>
+      )}
 
       {error && (
         <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl text-sm text-rose-600 dark:text-rose-400">

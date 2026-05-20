@@ -7,7 +7,7 @@ import {
   Ticket, Trophy,
   BarChart2, UserCheck,
   ClipboardList, ShieldCheck, Mic2, Settings,
-  Clapperboard, UserRound, Music2,
+  Clapperboard, Music2,
   PersonStanding, Headphones, Filter, CreditCard,
   Video, FileSearch, Tag, GraduationCap,
 } from 'lucide-react';
@@ -150,13 +150,12 @@ const menuSections: MenuSection[] = [
     roles: ALL_USER,
     items: [
       { path: '/dashboard',           label: 'Início',                icon: LayoutDashboard },
-      { path: '/profile',             label: 'Meu Perfil',            icon: UserRound       },
       { path: '/bailarinos',          label: 'Meu Elenco',            icon: Users           },
       { path: '/minhas-coreografias', label: 'Minhas Inscrições',     icon: Clapperboard    },
-      { path: '/central-de-midia',    label: 'Central de Mídia',      icon: Music2          },
+      { path: '/central-de-midia',    label: 'Trilha Sonora',         icon: Music2          },
       { path: '/meus-resultados',     label: 'Feedbacks / Resultados', icon: Trophy         },
       { path: '/meus-certificados',   label: 'Meus Certificados',     icon: Award           },
-      { path: '/ingressos',           label: 'Comprar Ingressos',     icon: Ticket          },
+      { path: '/ingressos',           label: 'Ingressos',             icon: Ticket          },
     ],
   },
   {

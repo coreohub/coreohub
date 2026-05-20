@@ -5,7 +5,7 @@ import SystemErrorBanner from '../components/SystemErrorBanner';
 import {
   Music2, Plus, Trash2, AlertCircle, Loader2, CheckCircle,
   Clapperboard, Calendar, MapPin, Clock, CreditCard, QrCode,
-  ChevronRight, AlertTriangle, ShoppingCart, X, Video, Ticket,
+  ChevronRight, AlertTriangle, ShoppingCart, X, Video,
 } from 'lucide-react';
 
 /* ══════════════════════════════════════════════════════════════
@@ -116,7 +116,6 @@ const MinhasCoreografias = () => {
 
   const [registrations, setRegistrations]    = useState<Registration[]>([]);
   const [workshops,     setWorkshops]        = useState<any[]>([]);
-  const [ingressos,     setIngressos]        = useState<any[]>([]);
   const [activePayments, setActivePayments]  = useState<Record<string, AggregatePayment>>({});
   const [profileCpf, setProfileCpf]          = useState<string | null>(null);
   const [loading,  setLoading]               = useState(true);
@@ -268,15 +267,9 @@ const MinhasCoreografias = () => {
         setWorkshops(ws ?? []);
       } catch { setWorkshops([]); }
 
-      // Ingressos comprados (audience_tickets)
-      try {
-        const { data: tk } = await supabase
-          .from('audience_tickets')
-          .select('id, group_id, event_id, ticket_type_id, buyer_email, buyer_name, status_pagamento, preco_pago, paid_at, access_token, created_at')
-          .eq('buyer_email', user.email ?? '')
-          .order('created_at', { ascending: false });
-        setIngressos(tk ?? []);
-      } catch { setIngressos([]); }
+      // Ingressos de plateia ficam em /ingressos (persona separada — público
+      // geral, família, apreciadores). Decisão 2026-05-20: Minhas Inscrições é
+      // só pra coreografias/workshops do artista.
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -312,7 +305,6 @@ const MinhasCoreografias = () => {
     outras:     Registration[];
     seletiva:   Registration[];  // AGUARDANDO_VIDEO + video_status != approved
     workshops:  any[];
-    ingressos:  any[];
     totalPendente: number;
     payment:    AggregatePayment | undefined;
   };
@@ -342,7 +334,6 @@ const MinhasCoreografias = () => {
           outras:     [],
           seletiva:   [],
           workshops:  [],
-          ingressos:  [],
           totalPendente: 0,
           payment:    activePayments[eventId],
         });
@@ -378,17 +369,9 @@ const MinhasCoreografias = () => {
       g.workshops.push(w);
     }
 
-    // Ingressos: agrupa por event_id.
-    for (const t of ingressos) {
-      if (!t.event_id) continue;
-      const g = ensure(t.event_id);
-      g.ingressos.push(t);
-    }
-
-    // Filtra grupos vazios depois das agregações (caso ingresso aponte pra
-    // event_id sem registration própria — precisa fetchar o nome separado).
+    // Filtra grupos vazios depois das agregações.
     for (const [key, g] of map) {
-      if (g.pendentes.length + g.outras.length + g.seletiva.length + g.workshops.length + g.ingressos.length === 0) {
+      if (g.pendentes.length + g.outras.length + g.seletiva.length + g.workshops.length === 0) {
         map.delete(key);
       }
     }
@@ -400,7 +383,7 @@ const MinhasCoreografias = () => {
       if (hasActivityA !== hasActivityB) return hasActivityB - hasActivityA;
       return (a.eventData ?? '').localeCompare(b.eventData ?? '');
     });
-  }, [registrations, workshops, ingressos, activePayments]);
+  }, [registrations, workshops, activePayments]);
 
   // Aplica filtro de tab no topo. Marca tudo de hoje em diante como upcoming.
   const todayISO = useMemo(() => new Date().toISOString().split('T')[0], []);
@@ -657,7 +640,6 @@ const MinhasCoreografias = () => {
             {totalPendentesGlobal > 0 && ` · ${totalPendentesGlobal} pendente${totalPendentesGlobal !== 1 ? 's' : ''}`}
             {seletivaCount > 0 && ` · ${seletivaCount} em análise`}
             {workshops.length > 0 && ` · ${workshops.length} workshop${workshops.length !== 1 ? 's' : ''}`}
-            {ingressos.length > 0 && ` · ${ingressos.length} ingresso${ingressos.length !== 1 ? 's' : ''}`}
           </p>
         </div>
       </div>
@@ -712,7 +694,7 @@ const MinhasCoreografias = () => {
             { key: 'upcoming' as Tab, label: 'Próximas',  count: tabCounts.upcoming },
             { key: 'all'      as Tab, label: 'Todas',     count: tabCounts.all },
             { key: 'selecao'  as Tab, label: 'Em análise', count: tabCounts.selecao },
-            { key: 'past'     as Tab, label: 'Passadas',  count: tabCounts.past },
+            { key: 'past'     as Tab, label: 'Anteriores', count: tabCounts.past },
           ]).map(t => {
             const active = activeTab === t.key;
             return (
@@ -878,13 +860,22 @@ const MinhasCoreografias = () => {
 
                       <div className="flex items-center gap-1">
                         {st.tone === 'ok' && (
-                          <button
-                            onClick={() => navigate(`/credencial/${reg.id}`)}
-                            className="p-2 rounded-lg text-slate-400 hover:text-[#ff0068] hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
-                            title="Credencial (QR)"
-                          >
-                            <QrCode size={13} />
-                          </button>
+                          <>
+                            <button
+                              onClick={() => navigate('/central-de-midia')}
+                              className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 font-black text-[9px] uppercase tracking-widest flex items-center gap-1.5 transition-all"
+                              title="Enviar trilha sonora desta coreografia"
+                            >
+                              <Music2 size={11} /> Trilha
+                            </button>
+                            <button
+                              onClick={() => navigate(`/credencial/${reg.id}`)}
+                              className="p-2 rounded-lg text-slate-400 hover:text-[#ff0068] hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
+                              title="Credencial (QR)"
+                            >
+                              <QrCode size={13} />
+                            </button>
+                          </>
                         )}
                         {isPendente && (
                           <button
@@ -1033,33 +1024,6 @@ const MinhasCoreografias = () => {
             </div>
           )}
 
-          {/* ── Seção INGRESSOS ── */}
-          {grupo.ingressos.length > 0 && (
-            <div className="border-t border-slate-200 dark:border-white/10 p-5">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5 mb-3">
-                <Ticket size={11} /> Ingressos ({grupo.ingressos.length})
-              </p>
-              <div className="space-y-2">
-                {grupo.ingressos.map(t => (
-                  <div key={t.id} className="flex items-center justify-between gap-3 bg-slate-50 dark:bg-white/5 rounded-xl p-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-black text-slate-900 dark:text-white">Ingresso de plateia</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5">
-                        Comprado em {fmtDate(t.created_at)}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-[10px] font-black text-slate-700 dark:text-slate-200 tabular-nums">{fmtMoney(t.preco_pago)}</p>
-                      <p className={`text-[9px] font-black uppercase tracking-widest ${
-                        t.status_pagamento === 'APROVADO' || t.status_pagamento === 'PAGO' ? 'text-emerald-500' :
-                        t.status_pagamento === 'PENDENTE' ? 'text-amber-500' : 'text-slate-400'
-                      }`}>{t.status_pagamento ?? '—'}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       ))}
 

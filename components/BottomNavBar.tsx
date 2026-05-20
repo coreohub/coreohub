@@ -22,7 +22,7 @@ const INSCRITO_NAV = [
   { path: '/dashboard',           label: 'Início',  icon: LayoutDashboard },
   { path: '/bailarinos',          label: 'Elenco',  icon: Users           },
   { path: '/minhas-coreografias', label: 'Inscrições', icon: Clapperboard },
-  { path: '/central-de-midia',    label: 'Mídias',  icon: Music2          },
+  { path: '/central-de-midia',    label: 'Trilha',  icon: Music2          },
   { path: '/profile',             label: 'Perfil',  icon: UserRound       },
 ];
 
