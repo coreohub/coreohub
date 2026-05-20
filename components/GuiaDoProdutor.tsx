@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  UserCircle, CreditCard, Calendar, Share2,
+  UserCircle, CreditCard, Calendar,
   CheckCircle2, ChevronRight, Lock, ArrowRight, Trophy, X,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
@@ -20,7 +20,7 @@ const GuiaSkeleton = () => (
         <div className="h-4 w-36 bg-slate-200 dark:bg-white/10 rounded-full" />
       </div>
       <div className="flex items-center gap-1.5">
-        {[1, 2, 3, 4].map(i => <div key={i} className="h-1.5 w-5 bg-slate-200 dark:bg-white/10 rounded-full" />)}
+        {[1, 2, 3].map(i => <div key={i} className="h-1.5 w-5 bg-slate-200 dark:bg-white/10 rounded-full" />)}
       </div>
     </div>
     {[1, 2, 3].map(i => (
@@ -40,9 +40,6 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
   const [loading, setLoading] = useState(true);
   const [asaasConnected, setAsaasConnected] = useState(false);
   const [eventsCount, setEventsCount] = useState(0);
-  const [firstEventId, setFirstEventId] = useState<string | null>(null);
-  const [firstEventSlug, setFirstEventSlug] = useState<string | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
   const [expandedStep, setExpandedStep] = useState<number | null>(null);
   const [dismissedAt, setDismissedAt] = useState<string | null>(null);
   const [dismissing, setDismissing] = useState(false);
@@ -51,16 +48,11 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
     const fetchData = async () => {
       const [asaasRes, eventsRes] = await Promise.all([
         supabase.from('profiles').select('asaas_subconta_id, onboarding_dismissed_at').eq('id', profile.id).maybeSingle(),
-        supabase.from('events').select('id, slug').eq('created_by', profile.id).order('created_at', { ascending: true }),
+        supabase.from('events').select('id').eq('created_by', profile.id).limit(1),
       ]);
       setAsaasConnected(!!asaasRes.data?.asaas_subconta_id);
       setDismissedAt((asaasRes.data as any)?.onboarding_dismissed_at ?? null);
-      const evs = eventsRes.data ?? [];
-      setEventsCount(evs.length);
-      if (evs[0]) {
-        setFirstEventId(evs[0].id);
-        setFirstEventSlug(evs[0].slug ?? null);
-      }
+      setEventsCount((eventsRes.data ?? []).length);
       setLoading(false);
     };
     fetchData();
@@ -77,35 +69,25 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
     setDismissing(false);
   };
 
+  // Etapa 4 "Compartilhar link" removida 2026-05-20: era redundante com o
+  // botão "LINK DE INSCRIÇÃO" do header do dashboard, e tinha bug de estado
+  // volátil (linkCopied só vivia em memória, perdia no reload).
+  // Setup agora = 3 etapas (perfil + Asaas + evento). Quando completa, mostra
+  // "Tudo pronto" com botão Fechar.
   const profileComplete = !!(profile.full_name && (profile as any).whatsapp);
   const hasEvent = eventsCount > 0;
-  const allDone = profileComplete && asaasConnected && hasEvent && linkCopied;
+  const allDone = profileComplete && asaasConnected && hasEvent;
 
   const activeStep =
     !profileComplete ? 1 :
     !asaasConnected  ? 2 :
-    !hasEvent        ? 3 :
-    !linkCopied      ? 4 : 5;
+    !hasEvent        ? 3 : 4;
 
   type StepStatus = 'done' | 'active' | 'locked';
   const getStatus = (id: number): StepStatus => {
-    if (activeStep === 5 || id < activeStep) return 'done';
+    if (activeStep === 4 || id < activeStep) return 'done';
     if (id === activeStep) return 'active';
     return 'locked';
-  };
-
-  const handleCopyLink = async () => {
-    if (!firstEventId) return;
-    // Prefere slug (Fase 1 — Padronização de URLs). UUID como fallback.
-    const url = `${window.location.origin}/festival/${firstEventSlug ?? firstEventId}/register`;
-    try {
-      await navigator.clipboard.writeText(url);
-      setLinkCopied(true);
-    } catch {
-      // fallback se clipboard API não disponível
-      window.prompt('Copie o link manualmente:', url);
-      setLinkCopied(true);
-    }
   };
 
   const steps = [
@@ -146,27 +128,6 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
       detail: hasEvent
         ? <span className="text-[10px] font-bold text-emerald-500 uppercase">{eventsCount} evento{eventsCount !== 1 ? 's' : ''} cadastrado{eventsCount !== 1 ? 's' : ''}</span>
         : <span className="text-[10px] font-bold text-amber-500 uppercase">Nenhum evento criado ainda</span>,
-    },
-    {
-      id: 4,
-      Icon: Share2,
-      title: 'Compartilhe o link de inscrições',
-      subtitle: 'Divulgue para os bailarinos',
-      description: 'Copie o link de inscrição e divulgue no Instagram, WhatsApp e redes sociais do festival. Os bailarinos clicam, criam conta e se inscrevem direto na plataforma — pagamento integrado.',
-      ctaLabel: linkCopied ? 'Link copiado ✓' : 'Copiar link',
-      ctaAction: handleCopyLink,
-      detail: firstEventId ? (
-        <div className="flex flex-col gap-1.5">
-          {firstEventSlug && (
-            <span className="text-[10px] font-bold text-slate-500 uppercase truncate max-w-[260px]">
-              Página pública: /evento/{firstEventSlug}
-            </span>
-          )}
-          <span className="text-[10px] font-bold text-slate-500 uppercase truncate max-w-[260px]">
-            Inscrição direta: /festival/{firstEventSlug ?? `${firstEventId.substring(0, 8)}…`}/register
-          </span>
-        </div>
-      ) : null,
     },
   ];
 
@@ -217,7 +178,7 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
           <h2 className="text-base font-black uppercase tracking-tighter leading-tight">Guia do Produtor</h2>
         </div>
         <div className="flex items-center gap-1.5">
-          {[1, 2, 3, 4].map(s => (
+          {[1, 2, 3].map(s => (
             <div
               key={s}
               className={`h-1.5 rounded-full transition-all duration-500 ${
@@ -228,7 +189,7 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
             />
           ))}
           <span className="ml-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            {Math.max(0, activeStep - 1)}/4
+            {Math.max(0, activeStep - 1)}/3
           </span>
         </div>
       </div>
