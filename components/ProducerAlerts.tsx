@@ -55,30 +55,38 @@ const ProducerAlerts: React.FC<Props> = ({ profile }) => {
     const load = async () => {
       const newAlerts: AlertItem[] = [];
 
-      const [eventsRes, profileRes, cfgRes] = await Promise.all([
+      // 1) Pega eventos do produtor + profile primeiro
+      const [eventsRes, profileRes] = await Promise.all([
         supabase
           .from('events')
-          .select('id, name, formacoes_config')
-          .eq('created_by', profile.id),
+          .select('id, name, formacoes_config, created_at, is_demo')
+          .eq('created_by', profile.id)
+          .order('created_at', { ascending: false }),
         supabase
           .from('profiles')
           .select('asaas_subconta_id')
           .eq('id', profile.id)
           .maybeSingle(),
-        supabase
-          .from('configuracoes')
-          .select('regras_avaliacao, prazo_inscricao, event_id')
-          .eq('id', 1)
-          .maybeSingle(),
       ]);
 
       const events = eventsRes.data ?? [];
       const asaasOk = !!profileRes.data?.asaas_subconta_id;
+
+      // 2) Configuracoes do EVENTO ATIVO (não do row legacy id=1).
+      //    Multi-tenant: cada evento tem sua própria configuracoes com id=event_id.
+      //    Prioriza demo > evento mais recente > fallback id='1' pra casos legados.
+      const activeEvent = events.find(e => (e as any).is_demo) ?? events[0] ?? null;
+      const activeEventId = activeEvent?.id ?? '1';
+
+      const cfgRes = await supabase
+        .from('configuracoes')
+        .select('regras_avaliacao, prazo_inscricao, event_id')
+        .eq('id', String(activeEventId))
+        .maybeSingle();
+
       const hasCriterios = !!(cfgRes.data?.regras_avaliacao && (cfgRes.data.regras_avaliacao as any)?.globalRules);
-      // Prazo de inscrição vive em configuracoes (singleton), não em events.
-      // Se aponta pra um evento do produtor, é o prazo dele.
       const cfgPrazo: string | null = cfgRes.data?.prazo_inscricao ?? null;
-      const cfgEventId: string | null = cfgRes.data?.event_id ?? null;
+      const cfgEventId: string | null = cfgRes.data?.event_id ?? (activeEvent?.id ?? null);
 
       // ── ALERTA CRÍTICO: Asaas não conectado mas tem evento pago ───────
       const hasPaidEvent = events.some(e => {
