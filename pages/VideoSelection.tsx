@@ -210,10 +210,15 @@ const VideoSelection: React.FC = () => {
       if (decision === 'approved') {
         updatePayload.video_approved_at = new Date().toISOString();
         updatePayload.video_approved_by = user?.id ?? null;
+        // Libera fluxo de cobrança da taxa B: registration sai de AGUARDANDO_VIDEO
+        // e cai em PENDENTE pra inscrito pagar a inscrição cheia em /minhas-coreografias.
+        updatePayload.status_pagamento = 'PENDENTE';
       } else {
         // Caso produtor mude voto (reprova depois de aprovado) — limpa aprovação.
         updatePayload.video_approved_at = null;
         updatePayload.video_approved_by = null;
+        // Reverte status pra AGUARDANDO_VIDEO (estado pré-aprovação).
+        updatePayload.status_pagamento = 'AGUARDANDO_VIDEO';
       }
       const { error: updErr } = await supabase
         .from('registrations')
@@ -249,7 +254,12 @@ const VideoSelection: React.FC = () => {
       }
 
       setRegistrations(prev =>
-        prev.map(r => r.id === reviewing.id ? { ...r, video_status: decision, video_feedback: feedback || null } : r)
+        prev.map(r => r.id === reviewing.id ? {
+          ...r,
+          video_status: decision,
+          video_feedback: feedback || null,
+          status_pagamento: decision === 'approved' ? 'PENDENTE' : 'AGUARDANDO_VIDEO',
+        } : r)
       );
       setReviewing(null);
       setFeedback('');
