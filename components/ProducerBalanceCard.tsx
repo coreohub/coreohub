@@ -30,13 +30,20 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
 
   const load = useCallback(async () => {
     setLoading(true);
+    // Pega auth.uid() ao vivo em vez de confiar só no producerId vindo por
+    // prop (pode estar desatualizado se profile da rota era cache antigo).
+    const { data: { user } } = await supabase.auth.getUser();
+    const targetId = user?.id ?? producerId;
     const { data, error } = await supabase
       .from('platform_commissions')
       .select('id, net_amount, release_at')
-      .eq('producer_id', producerId)
+      .eq('producer_id', targetId)
       .is('released_at', null)
       .gt('net_amount', 0);
-    if (!error) {
+    if (error) {
+      console.error('[ProducerBalanceCard] erro query commissions:', error);
+    } else {
+      console.log(`[ProducerBalanceCard] producer=${targetId} pending=${data?.length ?? 0}`, data);
       setPending((data ?? []) as PendingCommission[]);
     }
     setLoading(false);
@@ -120,58 +127,42 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
         animate={{ opacity: 1, y: 0 }}
         className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-3xl p-6"
       >
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-500/20">
-              <Wallet size={16} />
-            </div>
-            <div>
-              <h2 className="text-sm font-black uppercase text-slate-900 dark:text-white tracking-tight italic">
-                Saldo na subconta Asaas
-              </h2>
-              <p className="text-[10px] text-slate-500">
-                Repasses ficam retidos por 7 dias para cobrir reembolsos.
-              </p>
-            </div>
+        {/* Header: ícone + título compacto */}
+        <div className="flex items-center gap-3 mb-5">
+          <div className="p-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-500/20">
+            <Wallet size={16} />
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-          {/* Disponível */}
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <CheckCircle2 size={12} className="text-emerald-500" />
-              <span className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-400">
-                Disponível
-              </span>
-            </div>
-            <div className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter">
-              {fmtBRL(disponivel)}
-            </div>
-            <p className="text-[10px] text-slate-500 mt-1">
-              Liberado automaticamente — sem risco de estorno.
-            </p>
-          </div>
-
-          {/* Retido */}
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Clock size={12} className="text-amber-500" />
-              <span className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-700 dark:text-amber-400">
-                A liberar em 7 dias
-              </span>
-            </div>
-            <div className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter">
-              {fmtBRL(retido)}
-            </div>
-            <p className="text-[10px] text-slate-500 mt-1">
-              {nextReleaseAt
-                ? `Próxima liberação ${fmtNextRelease()}.`
-                : 'Sem repasses retidos.'}
+          <div>
+            <h2 className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">
+              Saldo
+            </h2>
+            <p className="text-[10px] text-slate-500 mt-0.5">
+              Repasse automático em até 7 dias
             </p>
           </div>
         </div>
 
+        {/* Número grande do total + breakdown secundário */}
+        <div className="mb-5">
+          <div className="text-4xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tighter mb-2">
+            {fmtBRL(total)}
+          </div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+            <span className="inline-flex items-center gap-1.5">
+              <CheckCircle2 size={11} className="text-emerald-500" />
+              <strong className="font-black text-slate-700 dark:text-slate-300">{fmtBRL(disponivel)}</strong>
+              disponível agora
+            </span>
+            <span className="text-slate-300 dark:text-slate-600">•</span>
+            <span className="inline-flex items-center gap-1.5">
+              <Clock size={11} className="text-amber-500" />
+              <strong className="font-black text-slate-700 dark:text-slate-300">{fmtBRL(retido)}</strong>
+              a liberar {nextReleaseAt ? fmtNextRelease() : ''}
+            </span>
+          </div>
+        </div>
+
+        {/* CTA principal */}
         <button
           onClick={() => setModalOpen(true)}
           disabled={total <= 0}
@@ -211,8 +202,8 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
         <div className="mt-4 flex items-start gap-2 text-[10px] text-slate-500">
           <Info size={11} className="shrink-0 mt-0.5" />
           <span>
-            A janela de 7 dias garante que reembolsos legítimos possam ser processados
-            sem que você precise repor valores do bolso. Você pode antecipar quando quiser.
+            Você pode antecipar quando quiser. Se houver reembolso nos próximos 7 dias,
+            precisa repor o valor via PIX.
           </span>
         </div>
       </motion.div>
