@@ -130,7 +130,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
                 Saldo na subconta Asaas
               </h2>
               <p className="text-[10px] text-slate-500">
-                Repasses ficam retidos por 7 dias para cobrir reembolsos (padrão Sympla/Stripe).
+                Repasses ficam retidos por 7 dias para cobrir reembolsos.
               </p>
             </div>
           </div>
@@ -158,7 +158,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
             <div className="flex items-center gap-2 mb-2">
               <Clock size={12} className="text-amber-500" />
               <span className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-700 dark:text-amber-400">
-                Retido (D+7)
+                A liberar em 7 dias
               </span>
             </div>
             <div className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter">

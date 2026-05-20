@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   UserCircle, CreditCard, Calendar, Share2,
-  CheckCircle2, ChevronRight, Lock, ArrowRight, Trophy,
+  CheckCircle2, ChevronRight, Lock, ArrowRight, Trophy, X,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { Profile as UserProfile } from '../types';
@@ -44,14 +44,17 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
   const [firstEventSlug, setFirstEventSlug] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [expandedStep, setExpandedStep] = useState<number | null>(null);
+  const [dismissedAt, setDismissedAt] = useState<string | null>(null);
+  const [dismissing, setDismissing] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       const [asaasRes, eventsRes] = await Promise.all([
-        supabase.from('profiles').select('asaas_subconta_id').eq('id', profile.id).maybeSingle(),
+        supabase.from('profiles').select('asaas_subconta_id, onboarding_dismissed_at').eq('id', profile.id).maybeSingle(),
         supabase.from('events').select('id, slug').eq('created_by', profile.id).order('created_at', { ascending: true }),
       ]);
       setAsaasConnected(!!asaasRes.data?.asaas_subconta_id);
+      setDismissedAt((asaasRes.data as any)?.onboarding_dismissed_at ?? null);
       const evs = eventsRes.data ?? [];
       setEventsCount(evs.length);
       if (evs[0]) {
@@ -62,6 +65,17 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
     };
     fetchData();
   }, [profile.id]);
+
+  const handleDismiss = async () => {
+    setDismissing(true);
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from('profiles')
+      .update({ onboarding_dismissed_at: now })
+      .eq('id', profile.id);
+    if (!error) setDismissedAt(now);
+    setDismissing(false);
+  };
 
   const profileComplete = !!(profile.full_name && (profile as any).whatsapp);
   const hasEvent = eventsCount > 0;
@@ -158,22 +172,35 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
 
   if (loading) return <GuiaSkeleton />;
 
+  // Produtor já fechou o guia depois de completar tudo — some pra sempre.
+  if (dismissedAt) return null;
+
   if (allDone) {
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.97 }}
         className="bg-emerald-500/5 rounded-3xl border border-emerald-500/20 p-6 flex items-center gap-5"
       >
         <div className="w-14 h-14 bg-emerald-500/10 rounded-2xl flex items-center justify-center text-emerald-500 shrink-0">
           <Trophy size={28} />
         </div>
-        <div>
+        <div className="flex-1">
           <h3 className="text-base font-black uppercase tracking-tighter text-emerald-500">Tudo pronto!</h3>
           <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">
             Seu festival está no ar e pronto pra receber inscrições.
           </p>
         </div>
+        <button
+          onClick={handleDismiss}
+          disabled={dismissing}
+          title="Fechar guia"
+          aria-label="Fechar guia do produtor"
+          className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-white/10 hover:border-slate-400 dark:hover:border-white/30 transition-all disabled:opacity-50"
+        >
+          <X size={12} /> Fechar
+        </button>
       </motion.div>
     );
   }
