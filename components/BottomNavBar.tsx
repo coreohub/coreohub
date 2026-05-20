@@ -21,7 +21,7 @@ const INSCRITO_ROLES = new Set([
 const INSCRITO_NAV = [
   { path: '/dashboard',           label: 'Início',  icon: LayoutDashboard },
   { path: '/bailarinos',          label: 'Elenco',  icon: Users           },
-  { path: '/minhas-coreografias', label: 'Coreos',  icon: Clapperboard    },
+  { path: '/minhas-coreografias', label: 'Inscrições', icon: Clapperboard },
   { path: '/central-de-midia',    label: 'Mídias',  icon: Music2          },
   { path: '/profile',             label: 'Perfil',  icon: UserRound       },
 ];

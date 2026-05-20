@@ -5,7 +5,7 @@ import SystemErrorBanner from '../components/SystemErrorBanner';
 import {
   Music2, Plus, Trash2, AlertCircle, Loader2, CheckCircle,
   Clapperboard, Calendar, MapPin, Clock, CreditCard, QrCode,
-  ChevronRight, AlertTriangle, ShoppingCart, X, Video,
+  ChevronRight, AlertTriangle, ShoppingCart, X, Video, Ticket,
 } from 'lucide-react';
 
 /* ══════════════════════════════════════════════════════════════
@@ -31,6 +31,15 @@ interface Registration {
   valor_pago:            number | null;
   paid_at:               string | null;
   created_at:            string;
+  // Seletiva por vídeo (Modelo 3) — coreografias em AGUARDANDO_VIDEO carregam
+  // essas colunas pra renderização inline (substituindo /minha-seletiva).
+  video_url?:            string | null;
+  video_status?:         string | null;
+  video_fee_status?:     string | null;
+  video_approved_at?:    string | null;
+  bailarinos_detalhes?:  any[] | null;
+  /** Snapshot do video_selection_fee do evento no momento (preview de UI). */
+  _videoFee?:            number;
   /** Hidratado do join com events */
   _event?: {
     id:         string;
@@ -106,6 +115,8 @@ const MinhasCoreografias = () => {
   const novaId = searchParams.get('nova');
 
   const [registrations, setRegistrations]    = useState<Registration[]>([]);
+  const [workshops,     setWorkshops]        = useState<any[]>([]);
+  const [ingressos,     setIngressos]        = useState<any[]>([]);
   const [activePayments, setActivePayments]  = useState<Record<string, AggregatePayment>>({});
   const [profileCpf, setProfileCpf]          = useState<string | null>(null);
   const [loading,  setLoading]               = useState(true);
@@ -114,7 +125,16 @@ const MinhasCoreografias = () => {
   const [confirmDel, setConfirmDel]          = useState<Registration | null>(null);
   const [payingEvent, setPayingEvent]        = useState<string | null>(null);
   const [payingSingle, setPayingSingle]      = useState<string | null>(null);
+  const [payingTaxa,   setPayingTaxa]        = useState<string | null>(null);
   const [deleting,    setDeleting]           = useState(false);
+  const [editingVideo, setEditingVideo]      = useState<string | null>(null);
+  const [videoLinkInput, setVideoLinkInput]  = useState('');
+  const [actionError,  setActionError]       = useState<Record<string, string>>({});
+
+  // Tabs no topo (padrão Sympla/Eventbrite). Default mostra "Próximas" se
+  // tem pelo menos 1 evento futuro; senão "Todas".
+  type Tab = 'all' | 'upcoming' | 'past' | 'selecao';
+  const [activeTab, setActiveTab] = useState<Tab>('upcoming');
 
   /* ══════════════════════════════════════════════════════════
      FETCH
@@ -150,7 +170,8 @@ const MinhasCoreografias = () => {
           status, status_pagamento,
           payment_url, payment_preference_id, payment_id, payment_group_id,
           mod_fee, charged_amount, valor_pago, paid_at, created_at,
-          bailarinos_detalhes
+          bailarinos_detalhes,
+          video_url, video_status, video_fee_status, video_approved_at
         `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
@@ -168,7 +189,7 @@ const MinhasCoreografias = () => {
         const [{ data: eventsData }, { data: configsData }] = await Promise.all([
           supabase
             .from('events')
-            .select('id, name, slug, start_date, location, formacoes_config, fee_mode, commission_percent')
+            .select('id, name, slug, start_date, location, formacoes_config, fee_mode, commission_percent, video_selection_fee')
             .in('id', eventIds),
           supabase
             .from('configuracoes')
@@ -223,6 +244,7 @@ const MinhasCoreografias = () => {
         _event:        r.event_id ? eventsMap[r.event_id] : undefined,
         // Snapshot do preço calculado pra exibir. Não é persistido — é só pra UI.
         _precoDisplay: calcPrecoDisplay(r),
+        _videoFee:     r.event_id ? Number(eventsMap[r.event_id]?.video_selection_fee ?? 0) : 0,
       }));
       setRegistrations(regs);
 
@@ -235,6 +257,26 @@ const MinhasCoreografias = () => {
       const map: Record<string, AggregatePayment> = {};
       for (const p of (payments ?? [])) map[p.event_id] = p as AggregatePayment;
       setActivePayments(map);
+
+      // Workshops do user (best-effort — RLS pode bloquear se conta deletada)
+      try {
+        const { data: ws } = await supabase
+          .from('workshop_registrations')
+          .select('id, workshop_id, buyer_email, buyer_name, status_pagamento, preco_pago, paid_at, access_token, created_at, workshops(id, event_id, title, date_from, instructor_name)')
+          .eq('buyer_email', user.email ?? '')
+          .order('created_at', { ascending: false });
+        setWorkshops(ws ?? []);
+      } catch { setWorkshops([]); }
+
+      // Ingressos comprados (audience_tickets)
+      try {
+        const { data: tk } = await supabase
+          .from('audience_tickets')
+          .select('id, group_id, event_id, ticket_type_id, buyer_email, buyer_name, status_pagamento, preco_pago, paid_at, access_token, created_at')
+          .eq('buyer_email', user.email ?? '')
+          .order('created_at', { ascending: false });
+        setIngressos(tk ?? []);
+      } catch { setIngressos([]); }
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -268,14 +310,17 @@ const MinhasCoreografias = () => {
     eventLocal: string | null;
     pendentes:  Registration[];
     outras:     Registration[];
+    seletiva:   Registration[];  // AGUARDANDO_VIDEO + video_status != approved
+    workshops:  any[];
+    ingressos:  any[];
     totalPendente: number;
     payment:    AggregatePayment | undefined;
   };
 
-  // Inscrições em fluxo de seletiva ainda não-aprovadas ficam EM PÁGINA PRÓPRIA
-  // (/minha-seletiva). Aqui mostramos apenas inscrições do fluxo normal de
-  // pagamento — evita confusão "AGUARDANDO PAGAMENTO" pra coreografia que na
-  // verdade aguarda análise de vídeo (com taxa A separada).
+  // Coreografias em fluxo de seletiva (AGUARDANDO_VIDEO + não aprovadas)
+  // entram agora no mesmo grupo do evento, mas em uma seção dedicada com
+  // botões próprios (Pagar Taxa A, Trocar Vídeo). Antes ficavam numa página
+  // separada — consolidado pra match com padrão Sympla/Eventbrite.
   const inSeletivaFlow = (r: any) =>
     r.status_pagamento === 'AGUARDANDO_VIDEO' && r.video_status !== 'approved';
   const seletivaCount = useMemo(
@@ -285,25 +330,37 @@ const MinhasCoreografias = () => {
 
   const grupos: Grupo[] = useMemo(() => {
     const map = new Map<string, Grupo>();
-    for (const r of registrations) {
-      if (!r.event_id) continue;
-      if (inSeletivaFlow(r)) continue;  // mostradas em /minha-seletiva
-      const key = r.event_id;
-      if (!map.has(key)) {
-        map.set(key, {
-          eventId:    key,
-          eventNome:  r._event?.name ?? 'Evento',
-          eventSlug:  r._event?.slug ?? null,
-          eventData:  r._event?.start_date ?? null,
-          eventLocal: r._event?.location ?? null,
+    const ensure = (eventId: string, sample?: { name?: string; slug?: string | null; start_date?: string | null; location?: string | null }) => {
+      if (!map.has(eventId)) {
+        map.set(eventId, {
+          eventId,
+          eventNome:  sample?.name ?? 'Evento',
+          eventSlug:  sample?.slug ?? null,
+          eventData:  sample?.start_date ?? null,
+          eventLocal: sample?.location ?? null,
           pendentes:  [],
           outras:     [],
+          seletiva:   [],
+          workshops:  [],
+          ingressos:  [],
           totalPendente: 0,
-          payment:    activePayments[key],
+          payment:    activePayments[eventId],
         });
       }
-      const g = map.get(key)!;
-      if (r.status_pagamento === 'PENDENTE') {
+      return map.get(eventId)!;
+    };
+
+    for (const r of registrations) {
+      if (!r.event_id) continue;
+      const g = ensure(r.event_id, {
+        name: r._event?.name,
+        slug: r._event?.slug,
+        start_date: r._event?.start_date,
+        location: r._event?.location,
+      });
+      if (inSeletivaFlow(r)) {
+        g.seletiva.push(r);
+      } else if (r.status_pagamento === 'PENDENTE') {
         g.pendentes.push(r);
         // Soma o preço calculado pra UI. Quando a fatura agregada existe,
         // o valor real já está em payment.value_total e sobrescreve este total.
@@ -312,14 +369,54 @@ const MinhasCoreografias = () => {
         g.outras.push(r);
       }
     }
+
+    // Workshops: agrupa por workshops.event_id (workshops podem ser standalone
+    // sem evento — caem num grupo "Standalone" com ID fake).
+    for (const w of workshops) {
+      const eventId = w.workshops?.event_id ?? `workshop-${w.id}`;
+      const g = ensure(eventId, { name: w.workshops?.title ?? 'Workshop standalone' });
+      g.workshops.push(w);
+    }
+
+    // Ingressos: agrupa por event_id.
+    for (const t of ingressos) {
+      if (!t.event_id) continue;
+      const g = ensure(t.event_id);
+      g.ingressos.push(t);
+    }
+
+    // Filtra grupos vazios depois das agregações (caso ingresso aponte pra
+    // event_id sem registration própria — precisa fetchar o nome separado).
+    for (const [key, g] of map) {
+      if (g.pendentes.length + g.outras.length + g.seletiva.length + g.workshops.length + g.ingressos.length === 0) {
+        map.delete(key);
+      }
+    }
+
     // Pendentes primeiro, depois por data do evento.
     return Array.from(map.values()).sort((a, b) => {
-      if (a.pendentes.length !== b.pendentes.length) {
-        return b.pendentes.length - a.pendentes.length;
-      }
+      const hasActivityA = a.pendentes.length + a.seletiva.length > 0 ? 1 : 0;
+      const hasActivityB = b.pendentes.length + b.seletiva.length > 0 ? 1 : 0;
+      if (hasActivityA !== hasActivityB) return hasActivityB - hasActivityA;
       return (a.eventData ?? '').localeCompare(b.eventData ?? '');
     });
-  }, [registrations, activePayments]);
+  }, [registrations, workshops, ingressos, activePayments]);
+
+  // Aplica filtro de tab no topo. Marca tudo de hoje em diante como upcoming.
+  const todayISO = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const isUpcoming = (g: Grupo) => !g.eventData || g.eventData >= todayISO;
+  const tabCounts = useMemo(() => ({
+    all: grupos.length,
+    upcoming: grupos.filter(isUpcoming).length,
+    past: grupos.filter(g => !isUpcoming(g)).length,
+    selecao: grupos.filter(g => g.seletiva.length > 0).length,
+  }), [grupos]);
+  const filteredGrupos = useMemo(() => {
+    if (activeTab === 'upcoming') return grupos.filter(isUpcoming);
+    if (activeTab === 'past')     return grupos.filter(g => !isUpcoming(g));
+    if (activeTab === 'selecao')  return grupos.filter(g => g.seletiva.length > 0);
+    return grupos;
+  }, [grupos, activeTab]);
 
   /* ══════════════════════════════════════════════════════════
      ACTIONS
@@ -434,6 +531,75 @@ const MinhasCoreografias = () => {
     }
   };
 
+  // ─── Seletiva: pagar taxa A (Modelo 3) ─────────────────────────────────
+  // Antes vivia em SeletivaInscrito.tsx. Migrado pra inline depois do
+  // refactor "Minhas Inscrições" (2026-05-19) — uma página única.
+  const handlePagarTaxa = async (reg: Registration) => {
+    if (!(await requireCpf())) return;
+    setPayingTaxa(reg.id);
+    setActionError(p => ({ ...p, [reg.id]: '' }));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const r = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-video-selection-payment`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token ?? ''}`,
+            'Content-Type':  'application/json',
+          },
+          body: JSON.stringify({ registration_id: reg.id, event_id: reg.event_id }),
+        }
+      );
+      const payload = await r.json();
+      if (!r.ok) throw new Error(payload.error ?? 'Falha ao criar cobrança.');
+      if (payload.waived) {
+        await fetchAll();
+        return;
+      }
+      if (payload.invoice_url) {
+        window.location.href = payload.invoice_url;
+      }
+    } catch (e: any) {
+      setActionError(p => ({ ...p, [reg.id]: e.message ?? 'Erro inesperado.' }));
+    } finally {
+      setPayingTaxa(null);
+    }
+  };
+
+  // ─── Seletiva: trocar link do vídeo (enquanto não aprovado) ─────────────
+  const handleSaveVideoLink = async (regId: string) => {
+    const url = videoLinkInput.trim();
+    if (!url) {
+      setActionError(p => ({ ...p, [regId]: 'Informe o link do vídeo.' }));
+      return;
+    }
+    try { new URL(url); }
+    catch {
+      setActionError(p => ({ ...p, [regId]: 'Link inválido. Use URL completa (https://...).' }));
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from('registrations')
+        .update({
+          video_url: url,
+          video_status: 'submitted',
+          video_submitted_at: new Date().toISOString(),
+        })
+        .eq('id', regId);
+      if (error) throw error;
+      setRegistrations(prev =>
+        prev.map(r => r.id === regId ? { ...r, video_url: url, video_status: 'submitted' as any } : r)
+      );
+      setEditingVideo(null);
+      setVideoLinkInput('');
+      setActionError(p => ({ ...p, [regId]: '' }));
+    } catch (e: any) {
+      setActionError(p => ({ ...p, [regId]: e.message ?? 'Erro ao salvar.' }));
+    }
+  };
+
   const handleDelete = async (reg: Registration) => {
     setDeleting(true);
     setError(null);
@@ -483,34 +649,21 @@ const MinhasCoreografias = () => {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
-            Minhas <span className="text-[#ff0068]">Coreografias</span>
+            Minhas <span className="text-[#ff0068]">Inscrições</span>
           </h1>
           <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">
-            {registrations.length} inscriç{registrations.length === 1 ? 'ão' : 'ões'}
+            {registrations.length} coreo{registrations.length === 1 ? 'grafia' : 'grafias'}
             {totalConfirmadasGlobal > 0 && ` · ${totalConfirmadasGlobal} confirmada${totalConfirmadasGlobal !== 1 ? 's' : ''}`}
             {totalPendentesGlobal > 0 && ` · ${totalPendentesGlobal} pendente${totalPendentesGlobal !== 1 ? 's' : ''}`}
+            {seletivaCount > 0 && ` · ${seletivaCount} em análise`}
+            {workshops.length > 0 && ` · ${workshops.length} workshop${workshops.length !== 1 ? 's' : ''}`}
+            {ingressos.length > 0 && ` · ${ingressos.length} ingresso${ingressos.length !== 1 ? 's' : ''}`}
           </p>
         </div>
       </div>
 
-      {/* ── Banner "Você tem inscrições em seletiva de vídeo" ── */}
-      {seletivaCount > 0 && (
-        <button
-          onClick={() => navigate('/minha-seletiva')}
-          className="w-full flex items-center gap-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-left hover:bg-amber-500/15 transition-all"
-        >
-          <Video size={14} className="text-amber-500 shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">
-              {seletivaCount} coreografia{seletivaCount > 1 ? 's' : ''} em análise da seletiva
-            </p>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              Inscrições em fluxo de seletiva de vídeo ficam em <strong>Minha Seletiva</strong> até a aprovação da comissão.
-            </p>
-          </div>
-          <ChevronRight size={14} className="text-amber-500 shrink-0" />
-        </button>
-      )}
+      {/* Banner "X em análise" removido — agora vira tab "Em análise" no topo
+          + seção dedicada dentro de cada card de evento (refactor 2026-05-19). */}
 
       {/* ── Banner "Inscrição criada" ── */}
       {novaId && registrations.some(r => r.id === novaId) && (
@@ -552,8 +705,45 @@ const MinhasCoreografias = () => {
         </div>
       )}
 
+      {/* ── Tabs (padrão Sympla/Eventbrite) ── */}
+      {grupos.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+          {([
+            { key: 'upcoming' as Tab, label: 'Próximas',  count: tabCounts.upcoming },
+            { key: 'all'      as Tab, label: 'Todas',     count: tabCounts.all },
+            { key: 'selecao'  as Tab, label: 'Em análise', count: tabCounts.selecao },
+            { key: 'past'     as Tab, label: 'Passadas',  count: tabCounts.past },
+          ]).map(t => {
+            const active = activeTab === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => setActiveTab(t.key)}
+                className={`shrink-0 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${
+                  active
+                    ? 'bg-[#ff0068] text-white shadow-lg shadow-[#ff0068]/20'
+                    : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
+                }`}
+              >
+                {t.label}
+                <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${active ? 'bg-white/20' : 'bg-slate-200 dark:bg-white/10'}`}>{t.count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {filteredGrupos.length === 0 && grupos.length > 0 && (
+        <div className="py-12 flex flex-col items-center gap-3 bg-slate-50 dark:bg-white/5 border border-dashed border-slate-200 dark:border-white/10 rounded-2xl">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nada nessa aba.</p>
+          <button onClick={() => setActiveTab('all')} className="text-[10px] font-black uppercase tracking-widest text-[#ff0068] hover:underline">
+            Ver todas →
+          </button>
+        </div>
+      )}
+
       {/* ── Grupos por evento ── */}
-      {grupos.map(grupo => (
+      {filteredGrupos.map(grupo => (
         <div key={grupo.eventId} className="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-white/5 rounded-3xl overflow-hidden">
 
           {/* Cabeçalho do evento */}
@@ -725,6 +915,151 @@ const MinhasCoreografias = () => {
               );
             })}
           </div>
+
+          {/* ── Seção SELETIVA DE VÍDEO (cards inline) ── */}
+          {grupo.seletiva.length > 0 && (
+            <div className="border-t border-slate-200 dark:border-white/10 p-5 bg-amber-500/5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1.5 mb-3">
+                <Video size={11} /> Em análise da seletiva ({grupo.seletiva.length})
+              </p>
+              <div className="space-y-3">
+                {grupo.seletiva.map(reg => {
+                  const feePending = reg.video_fee_status === 'pending';
+                  const fee = Number(reg._videoFee ?? 0);
+                  const isEditing = editingVideo === reg.id;
+                  return (
+                    <div key={reg.id} className="bg-white dark:bg-slate-900/60 border border-amber-500/20 rounded-2xl p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-black text-sm text-slate-900 dark:text-white">{reg.nome_coreografia ?? 'Coreografia'}</p>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
+                            {[reg.tipo_apresentacao, reg.formato_participacao, reg.categoria, reg.estilo_danca].filter(Boolean).join(' · ')}
+                          </p>
+                        </div>
+                        <span className="px-2 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[9px] font-black uppercase tracking-widest shrink-0">
+                          🎬 Em análise
+                        </span>
+                      </div>
+
+                      {/* Link do vídeo (read-only ou edit inline) */}
+                      {isEditing ? (
+                        <div className="flex gap-2">
+                          <input
+                            type="url"
+                            value={videoLinkInput}
+                            onChange={e => setVideoLinkInput(e.target.value)}
+                            placeholder="https://youtube.com/..."
+                            className="flex-1 px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:border-[#ff0068]"
+                          />
+                          <button
+                            onClick={() => handleSaveVideoLink(reg.id)}
+                            className="px-3 py-2 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+                          >Salvar</button>
+                          <button
+                            onClick={() => { setEditingVideo(null); setVideoLinkInput(''); }}
+                            className="px-3 py-2 text-slate-500 text-[10px] font-black uppercase tracking-widest"
+                          >Cancelar</button>
+                        </div>
+                      ) : reg.video_url ? (
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <span className="text-slate-400">Vídeo:</span>
+                          <a href={reg.video_url} target="_blank" rel="noopener noreferrer" className="text-[#ff0068] hover:underline truncate">{reg.video_url}</a>
+                          <button
+                            onClick={() => { setEditingVideo(reg.id); setVideoLinkInput(reg.video_url ?? ''); }}
+                            className="ml-auto text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-[#ff0068]"
+                          >Trocar</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setEditingVideo(reg.id); setVideoLinkInput(''); }}
+                          className="text-[10px] font-black uppercase tracking-widest text-[#ff0068] hover:underline"
+                        >+ Adicionar link do vídeo</button>
+                      )}
+
+                      {actionError[reg.id] && (
+                        <p className="text-[9px] font-black text-rose-500 uppercase tracking-widest">{actionError[reg.id]}</p>
+                      )}
+
+                      {/* Ações */}
+                      {feePending && fee > 0 && (
+                        <div className="flex items-center justify-between gap-3 pt-2 border-t border-amber-500/10">
+                          <div>
+                            <p className="text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Taxa de seletiva</p>
+                            <p className="text-base font-black text-slate-900 dark:text-white tabular-nums">{fmtMoney(fee)}</p>
+                          </div>
+                          <button
+                            onClick={() => handlePagarTaxa(reg)}
+                            disabled={payingTaxa === reg.id}
+                            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shrink-0"
+                          >
+                            {payingTaxa === reg.id ? <Loader2 size={12} className="animate-spin" /> : <CreditCard size={12} />}
+                            Pagar taxa
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Seção WORKSHOPS ── */}
+          {grupo.workshops.length > 0 && (
+            <div className="border-t border-slate-200 dark:border-white/10 p-5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5 mb-3">
+                <Clapperboard size={11} /> Workshops ({grupo.workshops.length})
+              </p>
+              <div className="space-y-2">
+                {grupo.workshops.map(w => (
+                  <div key={w.id} className="flex items-center justify-between gap-3 bg-slate-50 dark:bg-white/5 rounded-xl p-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-black text-slate-900 dark:text-white truncate">{w.workshops?.title ?? 'Workshop'}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">
+                        {w.workshops?.instructor_name && <>com <strong>{w.workshops.instructor_name}</strong> · </>}
+                        {w.workshops?.date_from && fmtDate(w.workshops.date_from)}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-[10px] font-black text-slate-700 dark:text-slate-200 tabular-nums">{fmtMoney(w.preco_pago)}</p>
+                      <p className={`text-[9px] font-black uppercase tracking-widest ${
+                        w.status_pagamento === 'APROVADO' || w.status_pagamento === 'PAGO' ? 'text-emerald-500' :
+                        w.status_pagamento === 'PENDENTE' ? 'text-amber-500' : 'text-slate-400'
+                      }`}>{w.status_pagamento ?? '—'}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Seção INGRESSOS ── */}
+          {grupo.ingressos.length > 0 && (
+            <div className="border-t border-slate-200 dark:border-white/10 p-5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5 mb-3">
+                <Ticket size={11} /> Ingressos ({grupo.ingressos.length})
+              </p>
+              <div className="space-y-2">
+                {grupo.ingressos.map(t => (
+                  <div key={t.id} className="flex items-center justify-between gap-3 bg-slate-50 dark:bg-white/5 rounded-xl p-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-black text-slate-900 dark:text-white">Ingresso de plateia</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">
+                        Comprado em {fmtDate(t.created_at)}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-[10px] font-black text-slate-700 dark:text-slate-200 tabular-nums">{fmtMoney(t.preco_pago)}</p>
+                      <p className={`text-[9px] font-black uppercase tracking-widest ${
+                        t.status_pagamento === 'APROVADO' || t.status_pagamento === 'PAGO' ? 'text-emerald-500' :
+                        t.status_pagamento === 'PENDENTE' ? 'text-amber-500' : 'text-slate-400'
+                      }`}>{t.status_pagamento ?? '—'}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ))}
 

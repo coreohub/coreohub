@@ -152,7 +152,7 @@ const menuSections: MenuSection[] = [
       { path: '/dashboard',           label: 'Início',                icon: LayoutDashboard },
       { path: '/profile',             label: 'Meu Perfil',            icon: UserRound       },
       { path: '/bailarinos',          label: 'Meu Elenco',            icon: Users           },
-      { path: '/minhas-coreografias', label: 'Minhas Coreografias',   icon: Clapperboard    },
+      { path: '/minhas-coreografias', label: 'Minhas Inscrições',     icon: Clapperboard    },
       { path: '/central-de-midia',    label: 'Central de Mídia',      icon: Music2          },
       { path: '/meus-resultados',     label: 'Feedbacks / Resultados', icon: Trophy         },
       { path: '/meus-certificados',   label: 'Meus Certificados',     icon: Award           },
@@ -229,20 +229,10 @@ const Sidebar = ({ isOpen, toggle, onLogout, activeRole, profile, videoSelection
       .map(sec => ({
         ...sec,
         items: sec.items.filter((item, idx, arr) => arr.findIndex(x => x.path === item.path) === idx),
-      }))
-      // Injeta "Seletiva de Vídeo" na seção do Inscrito somente quando ativa
-      .map(sec => {
-        if (sec.section !== 'Inscrito') return sec;
-        const seletivaItem = { path: '/minha-seletiva', label: 'Seletiva de Vídeo', icon: Video };
-        if (!videoSelectionEnabled) return sec;
-        // Insere após "Central de Midia"
-        const insertAfter = '/central-de-midia';
-        const idx = sec.items.findIndex(i => i.path === insertAfter);
-        if (idx === -1) return { ...sec, items: [...sec.items, seletivaItem] };
-        const items = [...sec.items];
-        items.splice(idx + 1, 0, seletivaItem);
-        return { ...sec, items };
-      });
+      }));
+      // Seletiva de Vídeo NÃO ganha item próprio no sidebar — coreografias em
+      // fluxo de seletiva ficam dentro de "Minhas Inscrições" com badge/aba
+      // dedicada (padrão Sympla/Eventbrite). Remove poluição de menu.
 
     // If member has permissoes_custom, replace the Equipe section with a dynamic one
     if (customPerms) {

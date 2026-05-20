@@ -46,21 +46,31 @@ const Credencial: React.FC = () => {
       return;
     }
     (async () => {
+      // Split query: o embed events!inner falhou após migration 20260604
+      // ("more than one relationship found"). Migration adicionou
+      // video_approved_by referenciando auth.users — provavelmente confundiu
+      // o schema cache do PostgREST porque ele tenta inferir relacionamentos
+      // via FKs e auth.users tem caminho indireto. Solução: 2 queries simples.
       const { data: row, error: dbErr } = await supabase
         .from('registrations')
         .select(`
-          id, nome_coreografia, estudio, estilo_danca, categoria,
-          formato_participacao, status, status_pagamento,
-          events!inner(name, edition_year, cover_url)
+          id, event_id, nome_coreografia, estudio, estilo_danca, categoria,
+          formato_participacao, status, status_pagamento
         `)
         .eq('id', registrationId)
         .maybeSingle();
       if (dbErr) { setError(dbErr.message); setLoading(false); return; }
       if (!row) { setError('Inscrição não encontrada ou você não tem acesso.'); setLoading(false); return; }
-      setData({
-        ...(row as any),
-        event: Array.isArray((row as any).events) ? (row as any).events[0] : (row as any).events,
-      });
+      let event: any = null;
+      if ((row as any).event_id) {
+        const { data: ev } = await supabase
+          .from('events')
+          .select('name, edition_year, cover_url')
+          .eq('id', (row as any).event_id)
+          .maybeSingle();
+        event = ev;
+      }
+      setData({ ...(row as any), event });
       setLoading(false);
     })();
   }, [registrationId]);

@@ -80,7 +80,8 @@ const StageMarker              = lazy(() => import('./pages/StageMarker'));
 const EquipeProdutor           = lazy(() => import('./pages/EquipeProdutor'));
 const SuporteJuri              = lazy(() => import('./pages/SuporteJuri'));
 const VideoSelection           = lazy(() => import('./pages/VideoSelection'));
-const SeletivaInscrito         = lazy(() => import('./pages/SeletivaInscrito'));
+// SeletivaInscrito removido — funcionalidade consolidada em /minhas-coreografias
+// (refactor 2026-05-19, padrão Sympla/Eventbrite). Redirect 301 abaixo.
 const RegulationAIParser       = lazy(() => import('./pages/RegulationAIParser'));
 const JudgeLogin               = lazy(() => import('./pages/JudgeLogin'));
 const TermoProdutor            = lazy(() => import('./pages/TermoProdutor'));
@@ -494,7 +495,8 @@ const App: React.FC = () => {
         <Route path="/live" element={<PrivateRoute {...privateRouteProps}><Live /></PrivateRoute>} />
 
         <Route path="/seletiva-video"       element={<PrivateRoute {...privateRouteProps}><VideoSelection /></PrivateRoute>} />
-        <Route path="/minha-seletiva"       element={<PrivateRoute {...privateRouteProps}><SeletivaInscrito /></PrivateRoute>} />
+        {/* Compat 301 — refactor 2026-05-19 consolidou em /minhas-coreografias */}
+        <Route path="/minha-seletiva"       element={<Navigate to="/minhas-coreografias?tab=selecao" replace />} />
         <Route path="/importar-regulamento" element={<PrivateRoute {...privateRouteProps}><RegulationAIParser /></PrivateRoute>} />
 
         <Route path="/criar-evento" element={<Suspense fallback={<PageLoader />}><CriarEventoGate /></Suspense>} />
