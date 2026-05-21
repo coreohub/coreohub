@@ -226,6 +226,16 @@ Pasta `~/.claude/projects/.../memory/` tem contexto histórico denso. Em **toda 
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-05-20 (madrugada) — Bundle P1 (7 polimentos)
+Commit `5077112`. Sequência rápida de melhorias pós-D+7:
+- **#40 Exceções de validação agrupadas** — modal de subgênero em AccountSettings ganha header explícito "Exceções de validação (opcional)" agrupando Categoria Livre + Trilha de Repertório.
+- **Sweep `status_pagamento`** — novo `utils/registrationStatus.ts` com helper `isRegistrationPaid()`. Aplicado em `CheckIn.tsx` (3 lugares) que ainda usava só `'CONFIRMADO'` (bloqueava check-in de quem pagou via fluxo novo `APROVADO`).
+- **Guia "Esconder por 14 dias"** — botão "Esconder" no header do guia incompleto. Volta a aparecer em 14d se ainda incompleto, ou some permanente se chegou em 100% (padrão Stripe/Linear/Slack).
+- **#35 Polimento selo Asaas no login** — variante `mono` (oficial Asaas) + 100×30 (proporção 3.3:1 preservada) + microcopy "Pagamentos via". 100% dentro do Playbook BaaS.
+- **#36 Auditoria selo Asaas** — verificação confirmou que está OK em todos os lugares. ProducerDashboard já removido em 2026-05-13. VendasIngressos mantém (listagem de cobrança = obrigatório). Template base de email já carrega selo.
+- **#42 KYC banner "Complete sua verificação"** — migration `20260523` (`profiles.asaas_onboarding_url` + `asaas_kyc_status` + `asaas_kyc_checked_at`). `create-asaas-subconta` consulta `GET /myAccount/documents` após criar subconta e captura `onboardingUrl` + status. Banner amarelo em `/account-settings → Pagamentos` quando `kyc_status != 'APPROVED'` (NOT_SENT/PENDING/REJECTED distinguidos). CTA "Completar agora" abre `onboardingUrl` em nova aba.
+- **EventPickerSheet custom** — novo `components/EventPickerSheet.tsx` substitui `<select>` nativo do Android (que vira bottom sheet ruim sem controle). Bottom sheet em mobile (handle visual + backdrop blur + Esc fecha) + dropdown ancorado em desktop. Search automática quando ≥6 eventos (Baymard Institute). Aplicado em `Registrations.tsx` e `ProducerDashboard.tsx`.
+
 ### 2026-05-20 (noite) — Bundle de bug fixes pós-smoke
 Commit `25261dc`. 5 bugs reportados pelo user durante exploração do painel:
 - **Filtros Inscrições mobile** — `MOSTRA` agora ao lado de `ESTILO` (par lógico "estilo+mostra"). `INSCRITO` move pro final em col-span-2.
@@ -268,13 +278,12 @@ BaaS aprovado, secrets prod configurados, webhook ativo, primeira subconta criad
 Priorização cronológica detalhada em `memory/MEMORY.md` + cada item tem sua memória dedicada.
 
 ### 🟧 P1 — Alta prioridade, baixo esforço, destravado
-- **KYC banner "Complete sua verificação"** (`#42` no `project_backlog.md`) — produtor novo cai na armadilha do Pix nativo. Edge function `create-asaas-subconta` precisa chamar `GET /myAccount/documents` e salvar `onboardingUrl` em `profiles`. UI banner amarelo em `/account-settings → Pagamentos`. ~1h mínimo.
-- **Polimento selo Asaas** (`#35`) — login ganha variante mono + tamanho reduzido. ~15min.
-- **Auditoria presença selo Asaas** (`#36`) — remover de 3 lugares (rodapé global, ProducerDashboard, VendasIngressos) + adicionar em 3 emails. ~30min.
-- **Agrupar "Categoria Livre" + "Trilha Repertório"** (`#40`) — UI no modal de subgênero em `AccountSettings`. Header "Exceções de validação". ~10min.
-- **Guia "Esconder por 14 dias"** — botão "Esconder por enquanto" pra produtor incompleto, persiste `onboarding_dismissed_at`, reaparece em 14d se ainda incompleto. ~30min.
-- **Componente `<EventPickerSheet>` custom** — substituir `<select>` nativo do Android (que vira bottom sheet ruim) por componente próprio com handle visual + backdrop blur. Aplica em `Registrations`, `ProducerDashboard`, `VideoSelection`, `Schedule`, `Credenciais`. Pesquisa de UX já feita (padrão Stripe/Uber). ~45min-1h.
-- **`status_pagamento` — sweep do bug `CONFIRMADO` vs `APROVADO`** — fixei 3 lugares no commit `25261dc`, mas `CheckIn.tsx` ainda usa só `'CONFIRMADO'` em 3 lugares (linhas 86, 119, 384). Bloqueia check-in de quem pagou via fluxo novo. `Checkout.tsx:219` faz UPDATE pra `'CONFIRMADO'` (legacy, cupom 100% gratuito). Vale criar helper `isRegistrationPaid(reg)` em `utils/` e propagar. ~30min.
+
+**✅ Bundle P1 SHIPADO em 2026-05-20** (commit `5077112`) — 7 itens fechados: #40 Exceções validação, Sweep status_pagamento + helper, Guia "Esconder 14d", #35 Selo Asaas mono, #36 Auditoria selo (sem mudança), #42 KYC banner, EventPickerSheet custom.
+
+**Residual:**
+- **EventPickerSheet em outras telas** — aplicado em Registrations + ProducerDashboard. Ainda falta em VideoSelection, Schedule, Credenciais (mesma substituição). ~15min total.
+- **Checkout.tsx:219** — faz UPDATE pra `'CONFIRMADO'` (legacy, cupom 100% gratuito). Migrar pra `'APROVADO'` quando confiar que UPDATE não quebra fluxo existente. ~5min mas precisa testar.
 
 ### 🟨 P2 — Alto valor, esforço maior
 - **Painel /registrations Sessão 4** — drill-down side panel + ações em massa + sort header + paginação. ~8-10h.
