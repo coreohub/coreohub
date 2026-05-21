@@ -125,6 +125,8 @@ const MinhasCoreografias = () => {
   const [payingEvent, setPayingEvent]        = useState<string | null>(null);
   const [payingSingle, setPayingSingle]      = useState<string | null>(null);
   const [payingTaxa,   setPayingTaxa]        = useState<string | null>(null);
+  const [couponInputs, setCouponInputs]      = useState<Record<string, string>>({});
+  const [showCoupon,   setShowCoupon]        = useState<Record<string, boolean>>({});
   const [deleting,    setDeleting]           = useState(false);
   const [editingVideo, setEditingVideo]      = useState<string | null>(null);
   const [videoLinkInput, setVideoLinkInput]  = useState('');
@@ -537,12 +539,14 @@ const MinhasCoreografias = () => {
   // ─── Seletiva: pagar taxa A (Modelo 3) ─────────────────────────────────
   // Antes vivia em SeletivaInscrito.tsx. Migrado pra inline depois do
   // refactor "Minhas Inscrições" (2026-05-19) — uma página única.
-  const handlePagarTaxa = async (reg: Registration) => {
+  const handlePagarTaxa = async (reg: Registration, couponCode?: string) => {
     if (!(await requireCpf())) return;
     setPayingTaxa(reg.id);
     setActionError(p => ({ ...p, [reg.id]: '' }));
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      const body: Record<string, unknown> = { registration_id: reg.id, event_id: reg.event_id };
+      if (couponCode && couponCode.trim()) body.coupon_code = couponCode.trim();
       const r = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-video-selection-payment`,
         {
@@ -551,7 +555,7 @@ const MinhasCoreografias = () => {
             'Authorization': `Bearer ${session?.access_token ?? ''}`,
             'Content-Type':  'application/json',
           },
-          body: JSON.stringify({ registration_id: reg.id, event_id: reg.event_id }),
+          body: JSON.stringify(body),
         }
       );
       const payload = await r.json();
@@ -993,19 +997,47 @@ const MinhasCoreografias = () => {
 
                       {/* Ações */}
                       {feePending && fee > 0 && (
-                        <div className="flex items-center justify-between gap-3 pt-2 border-t border-amber-500/10">
-                          <div>
-                            <p className="text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Taxa de seletiva</p>
-                            <p className="text-base font-black text-slate-900 dark:text-white tabular-nums">{fmtMoney(fee)}</p>
+                        <div className="pt-2 border-t border-amber-500/10 space-y-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Taxa de seletiva</p>
+                              <p className="text-base font-black text-slate-900 dark:text-white tabular-nums">{fmtMoney(fee)}</p>
+                            </div>
+                            <button
+                              onClick={() => handlePagarTaxa(reg, couponInputs[reg.id])}
+                              disabled={payingTaxa === reg.id}
+                              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shrink-0"
+                            >
+                              {payingTaxa === reg.id ? <Loader2 size={12} className="animate-spin" /> : <CreditCard size={12} />}
+                              Pagar taxa
+                            </button>
                           </div>
-                          <button
-                            onClick={() => handlePagarTaxa(reg)}
-                            disabled={payingTaxa === reg.id}
-                            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shrink-0"
-                          >
-                            {payingTaxa === reg.id ? <Loader2 size={12} className="animate-spin" /> : <CreditCard size={12} />}
-                            Pagar taxa
-                          </button>
+                          {/* Cupom: input expansível. Mantém checkout limpo pra
+                              quem não tem cupom — clica em "Tem cupom?" pra abrir. */}
+                          {showCoupon[reg.id] ? (
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={couponInputs[reg.id] ?? ''}
+                                onChange={e => setCouponInputs(p => ({ ...p, [reg.id]: e.target.value.toUpperCase() }))}
+                                placeholder="Código do cupom"
+                                className="flex-1 px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-xs font-mono text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500/50 uppercase"
+                              />
+                              <button
+                                onClick={() => { setShowCoupon(p => ({ ...p, [reg.id]: false })); setCouponInputs(p => ({ ...p, [reg.id]: '' })); }}
+                                className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 px-2"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setShowCoupon(p => ({ ...p, [reg.id]: true }))}
+                              className="text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 hover:underline"
+                            >
+                              Tem cupom?
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>

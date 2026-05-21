@@ -92,7 +92,14 @@ const Header = ({ toggleSidebar, profile, theme, toggleTheme, activeRole, setAct
                     return (
                       <button
                         key={option.role}
-                        onClick={() => { setActiveRole(option.role); setDropdownOpen(false); }}
+                        onClick={() => {
+                          setActiveRole(option.role);
+                          setDropdownOpen(false);
+                          // Redireciona pra home — rotas costumam ser role-specific
+                          // (ex: /registrations só pra produtor). Sem redirect, super
+                          // admin trocava pra "Inscrito" e ficava em tela vazia/quebrada.
+                          if (option.role !== activeRole) navigate('/', { replace: true });
+                        }}
                         className={`w-full flex items-center justify-between px-4 py-2.5 transition-all text-left ${
                           isSelected
                             ? 'bg-slate-100 dark:bg-white/10'

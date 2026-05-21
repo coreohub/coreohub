@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { registration_id, event_id, coupon_id } = await req.json()
+    const { registration_id, event_id, coupon_id, coupon_code } = await req.json()
     if (!registration_id || !event_id) {
       throw new Error('registration_id e event_id são obrigatórios.')
     }
@@ -108,11 +108,16 @@ Deno.serve(async (req) => {
     let baseFee = fee
     let discountAmount = 0
     let validatedCoupon: any = null
+    // Aceita coupon_id (UUID — passado por integrações internas) OU coupon_code
+    // (texto digitado pelo inscrito no checkout da seletiva).
+    let couponQuery: any = null
     if (coupon_id) {
-      const { data: coupon } = await supabase
-        .from('coupons')
-        .select('*')
-        .eq('id', coupon_id)
+      couponQuery = supabase.from('coupons').select('*').eq('id', coupon_id);
+    } else if (coupon_code && coupon_code.trim()) {
+      couponQuery = supabase.from('coupons').select('*').ilike('code', coupon_code.trim());
+    }
+    if (couponQuery) {
+      const { data: coupon } = await couponQuery
         .eq('event_id', event_id)
         .eq('is_active', true)
         .maybeSingle()
