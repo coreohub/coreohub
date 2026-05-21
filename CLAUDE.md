@@ -226,6 +226,15 @@ Pasta `~/.claude/projects/.../memory/` tem contexto histórico denso. Em **toda 
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-05-20 (noite) — Bundle de bug fixes pós-smoke
+Commit `25261dc`. 5 bugs reportados pelo user durante exploração do painel:
+- **Filtros Inscrições mobile** — `MOSTRA` agora ao lado de `ESTILO` (par lógico "estilo+mostra"). `INSCRITO` move pro final em col-span-2.
+- **Cupom — campo %** aceitava valores >100 (print mostrou `06494949494`). Clamp 0-100 no `onChange` quando `type=percent`.
+- **Cupom — botão Salvar** ficava escondido atrás do teclado mobile. Troca `max-h-[92vh]` por `max-h-[92dvh]` (dynamic viewport).
+- **Cupom — scope** expandido pra 6 opções via dropdown (Inscrição/Plateia/Workshop/Seletiva/Insc+Plat/Todos). Banco/RPCs já suportavam desde 2026-05-19/20, só faltava UI. `couponService.createCoupon` type estendido.
+- **Sidebar mobile** — primeiro item (Painel) ficava escondido atrás do Header sticky `h-16`. Nav ganhou `pt-20` mobile.
+- **Receita Usualdance zerada** (R$ 0 + 0 inscrições no dashboard) — bug do enum `status_pagamento`: `ProducerDashboard` filtrava `=== 'CONFIRMADO'` mas o valor real é `'APROVADO'`. `'CONFIRMADO'` é legacy. Fixado em 3 lugares: `ProducerDashboard.tsx`, `StageMarker.tsx`, `ProducerAlerts.tsx`. Lição: sempre usar helper `isPago(s) = s === 'APROVADO' || s === 'CONFIRMADO'` ao filtrar.
+
 ### 2026-05-20 — Settlement period D+7 ✅ SHIPADO + VALIDADO
 Commits: `7fe91aa` → `08fdaa7` → `a13a164` (mais ajustes UX `afca00a`/`3893e49`/`021eb78`/`fae9c2a`). Mudança arquitetural grande:
 - Webhook **deixou de fazer auto-saque imediato** (era o que causava o bug do refund pós-sweep).
@@ -264,6 +273,8 @@ Priorização cronológica detalhada em `memory/MEMORY.md` + cada item tem sua m
 - **Auditoria presença selo Asaas** (`#36`) — remover de 3 lugares (rodapé global, ProducerDashboard, VendasIngressos) + adicionar em 3 emails. ~30min.
 - **Agrupar "Categoria Livre" + "Trilha Repertório"** (`#40`) — UI no modal de subgênero em `AccountSettings`. Header "Exceções de validação". ~10min.
 - **Guia "Esconder por 14 dias"** — botão "Esconder por enquanto" pra produtor incompleto, persiste `onboarding_dismissed_at`, reaparece em 14d se ainda incompleto. ~30min.
+- **Componente `<EventPickerSheet>` custom** — substituir `<select>` nativo do Android (que vira bottom sheet ruim) por componente próprio com handle visual + backdrop blur. Aplica em `Registrations`, `ProducerDashboard`, `VideoSelection`, `Schedule`, `Credenciais`. Pesquisa de UX já feita (padrão Stripe/Uber). ~45min-1h.
+- **`status_pagamento` — sweep do bug `CONFIRMADO` vs `APROVADO`** — fixei 3 lugares no commit `25261dc`, mas `CheckIn.tsx` ainda usa só `'CONFIRMADO'` em 3 lugares (linhas 86, 119, 384). Bloqueia check-in de quem pagou via fluxo novo. `Checkout.tsx:219` faz UPDATE pra `'CONFIRMADO'` (legacy, cupom 100% gratuito). Vale criar helper `isRegistrationPaid(reg)` em `utils/` e propagar. ~30min.
 
 ### 🟨 P2 — Alto valor, esforço maior
 - **Painel /registrations Sessão 4** — drill-down side panel + ações em massa + sort header + paginação. ~8-10h.
