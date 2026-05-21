@@ -81,11 +81,16 @@ Deno.serve(async (req) => {
   try {
     // Pega TODAS as comissões elegíveis. Join manual com profiles em batch
     // pra evitar N queries.
+    //
+    // Filtra `refunded_at IS NULL` pra ignorar comissões totalmente
+    // estornadas — sem isso, cron tentaria sweep de valor que não está mais
+    // na subconta Asaas e ficaria em loop com insufficient_balance.
     const { data: commissions, error: cErr } = await supabase
       .from('platform_commissions')
-      .select('id, producer_id, net_amount, release_at, asaas_payment_id, kind')
+      .select('id, producer_id, net_amount, refund_amount, release_at, asaas_payment_id, kind')
       .lte('release_at', new Date().toISOString())
       .is('released_at', null)
+      .is('refunded_at', null)
       .not('producer_id', 'is', null)
       .gt('net_amount', 0)
 
@@ -130,7 +135,11 @@ Deno.serve(async (req) => {
         })
       }
       const b = buckets.get(pid)!
-      b.totalAmount += Number(c.net_amount ?? 0)
+      // Subtrai refund parcial (refund total foi filtrado na query). Em refund
+      // parcial a comissão segue elegível pela diferença, não pelo bruto.
+      const net = Number(c.net_amount ?? 0) - Number(c.refund_amount ?? 0)
+      if (net <= 0) continue
+      b.totalAmount += net
       b.commissionIds.push(c.id as string)
     }
 

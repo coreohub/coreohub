@@ -1091,6 +1091,62 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
     )
 
+    // ── REFUND BOOKKEEPING: marca platform_commissions como refundada ────────
+    // Asaas estorna mas não atualiza nossa tabela de comissões. Sem isso, o
+    // ProducerBalanceCard mostra saldo "fantasma" (net_amount sem subtrair o
+    // refund) e o cron daily-release-funds tenta sweep de comissão já
+    // refundada, falhando com insufficient_balance em loop. Cobre tanto refund
+    // total (status=REFUNDED, event=PAYMENT_REFUNDED) quanto parcial
+    // (event=PAYMENT_PARTIALLY_REFUNDED, status pode seguir RECEIVED).
+    //
+    // Busca total refundado via GET /payments/{id}/refunds (soma dos parciais)
+    // pra ser idempotente — múltiplos webhooks de PARTIAL_REFUNDED setam o
+    // mesmo total agregado em vez de incrementar.
+    const isRefundEvent =
+      event === 'PAYMENT_REFUNDED' ||
+      event === 'PAYMENT_PARTIALLY_REFUNDED' ||
+      statusInterno === 'ESTORNADO'
+    if (isRefundEvent) {
+      let refundTotal = 0
+      try {
+        const refundsRes = await fetch(`${ASAAS_BASE_URL}/payments/${payment.id}/refunds`, {
+          headers: { 'access_token': ASAAS_API_KEY, 'Content-Type': 'application/json' },
+        })
+        if (refundsRes.ok) {
+          const refundsData = await refundsRes.json()
+          const refunds: Array<{ value?: number; status?: string }> = refundsData?.data ?? []
+          refundTotal = refunds
+            .filter(r => r.status !== 'CANCELLED')
+            .reduce((sum, r) => sum + Number(r.value ?? 0), 0)
+        }
+      } catch (e) {
+        console.warn(`[asaas-webhook] refunds lookup falhou payment=${payment.id}:`, (e as Error).message)
+      }
+      // Fallback: se a API não respondeu, usa o valor total do payment (refund integral assumido).
+      if (refundTotal <= 0) refundTotal = Number(payment.value ?? 0)
+      const refundedAt = new Date().toISOString()
+      const isPartial = event === 'PAYMENT_PARTIALLY_REFUNDED' && refundTotal < Number(payment.value ?? 0)
+
+      const { error: refundErr } = await supabase
+        .from('platform_commissions')
+        .update({
+          refund_amount: parseFloat(refundTotal.toFixed(2)),
+          // Em refund parcial mantém refunded_at NULL — comissão segue válida
+          // pela diferença. Só marca refunded_at quando refund cobre 100% do
+          // payment original (sweep ignora a row a partir desse momento).
+          ...(isPartial ? {} : { refunded_at: refundedAt }),
+        })
+        .eq('asaas_payment_id', String(payment.id))
+      if (refundErr) {
+        console.error(`[asaas-webhook] erro update refund em platform_commissions payment=${payment.id}:`, refundErr.message)
+      } else {
+        console.log(
+          `[asaas-webhook] refund marcado payment=${payment.id} valor=R$${refundTotal.toFixed(2)}` +
+          ` ${isPartial ? '(parcial)' : '(total)'}`
+        )
+      }
+    }
+
     // ── BRANCH: AUDIENCE TICKET ──────────────────────────────────────────────
     if (isAudienceTicket && audienceGroupId) {
       return await handleAudienceTicket({

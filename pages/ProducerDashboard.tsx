@@ -20,11 +20,8 @@ const MetricCard = ({ title, value, sub, icon: Icon, trend, warn }: any) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
-    className={`bg-slate-100 dark:bg-white/5 p-5 rounded-3xl border relative overflow-hidden group hover:border-[#ff0068]/30 transition-all ${warn ? 'border-amber-400/40' : 'border-slate-200 dark:border-white/5'}`}
+    className={`bg-slate-100 dark:bg-white/5 p-5 rounded-3xl border group hover:border-[#ff0068]/30 transition-all ${warn ? 'border-amber-400/40' : 'border-slate-200 dark:border-white/5'}`}
   >
-    <div className="absolute top-0 right-0 p-5 opacity-5 group-hover:opacity-10 transition-opacity">
-      <Icon size={60} />
-    </div>
     <div className="flex justify-between items-start mb-3">
       <div className={`p-2 rounded-xl border ${warn ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-[#ff0068]/10 text-[#ff0068] border-[#ff0068]/20'}`}>
         <Icon size={18} />

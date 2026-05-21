@@ -7,9 +7,10 @@ import {
 import { supabase } from '../services/supabase';
 
 interface PendingCommission {
-  id:          string;
-  net_amount:  number;
-  release_at:  string | null;
+  id:            string;
+  net_amount:    number;
+  refund_amount: number | null;
+  release_at:    string | null;
 }
 
 interface Props {
@@ -36,9 +37,10 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
     const targetId = user?.id ?? producerId;
     const { data, error } = await supabase
       .from('platform_commissions')
-      .select('id, net_amount, release_at')
+      .select('id, net_amount, refund_amount, release_at')
       .eq('producer_id', targetId)
       .is('released_at', null)
+      .is('refunded_at', null)
       .gt('net_amount', 0);
     if (error) {
       console.error('[ProducerBalanceCard] erro query commissions:', error);
@@ -81,7 +83,11 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
     let next: number | null = null;
     for (const c of pending) {
       const releaseTs = c.release_at ? new Date(c.release_at).getTime() : 0;
-      const amt = Number(c.net_amount ?? 0);
+      // Refund parcial: comissão segue válida pela diferença. Refund total
+      // já é filtrado na query (refunded_at IS NULL), então aqui é só
+      // descontar o parcial.
+      const amt = Number(c.net_amount ?? 0) - Number(c.refund_amount ?? 0);
+      if (amt <= 0) continue;
       if (releaseTs > now) {
         r += amt;
         if (next === null || releaseTs < next) next = releaseTs;
