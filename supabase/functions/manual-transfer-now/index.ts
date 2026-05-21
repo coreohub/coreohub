@@ -78,11 +78,17 @@ Deno.serve(async (req) => {
 
     // 2) Pega TODAS as comissões pendentes deste produtor (retidas + disponíveis).
     //    Manual = antecipa tudo. O cron diário só pegaria o "disponível" (release_at <= NOW).
+    //
+    //    Filtra `refunded_at IS NULL` pra ignorar comissões totalmente
+    //    estornadas + subtrai refund_amount no cálculo do total — sem isso,
+    //    sweep tentaria sacar valor já refundado e o Asaas rejeitaria por
+    //    saldo insuficiente.
     const { data: pending, error: cErr } = await admin
       .from('platform_commissions')
-      .select('id, net_amount, release_at, kind')
+      .select('id, net_amount, refund_amount, release_at, kind')
       .eq('producer_id', producerId)
       .is('released_at', null)
+      .is('refunded_at', null)
       .gt('net_amount', 0)
 
     if (cErr) {
@@ -92,11 +98,14 @@ Deno.serve(async (req) => {
       return jsonResp({ status: 'ok', reason: 'nothing_to_release', released: 0, commissions: 0 })
     }
 
+    const netOf = (c: { net_amount?: number | null; refund_amount?: number | null }) =>
+      Math.max(0, Number(c.net_amount ?? 0) - Number(c.refund_amount ?? 0))
+
     const nowIso = new Date().toISOString()
-    const totalPending = pending.reduce((s, c) => s + Number(c.net_amount ?? 0), 0)
+    const totalPending = pending.reduce((s, c) => s + netOf(c), 0)
     const anticipated  = pending
       .filter(c => c.release_at && new Date(c.release_at).getTime() > Date.now())
-      .reduce((s, c) => s + Number(c.net_amount ?? 0), 0)
+      .reduce((s, c) => s + netOf(c), 0)
 
     // 3) Sweep direto — passa amount = totalPending pra não arrastar dinheiro
     //    fora do CoreoHub. sweepProducerBalance clampa ao saldo real da subconta.

@@ -29,31 +29,52 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
   const [transferring, setTransferring] = useState(false);
   const [feedback, setFeedback]   = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
   const [asaasBalance, setAsaasBalance] = useState<{ value: number; fetchedAt: number } | null>(null);
-  const [asaasLoading, setAsaasLoading] = useState(false);
 
-  const load = useCallback(async () => {
+  // Carrega comissões do DB local. `withAsaas=true` também consulta o saldo
+  // real da subconta Asaas em paralelo (botão refresh manual). Mount inicial
+  // e realtime usam só o local pra não martelar a API Asaas a cada webhook.
+  const load = useCallback(async (withAsaas = false) => {
     setLoading(true);
-    // Pega auth.uid() ao vivo em vez de confiar só no producerId vindo por
-    // prop (pode estar desatualizado se profile da rota era cache antigo).
     const { data: { user } } = await supabase.auth.getUser();
     const targetId = user?.id ?? producerId;
-    const { data, error } = await supabase
+
+    const localPromise = supabase
       .from('platform_commissions')
       .select('id, net_amount, refund_amount, release_at')
       .eq('producer_id', targetId)
       .is('released_at', null)
       .is('refunded_at', null)
       .gt('net_amount', 0);
-    if (error) {
-      console.error('[ProducerBalanceCard] erro query commissions:', error);
+
+    const asaasPromise = withAsaas
+      ? supabase.functions.invoke('get-producer-asaas-balance', { body: {} })
+      : Promise.resolve(null);
+
+    const [localRes, asaasRes] = await Promise.all([localPromise, asaasPromise]);
+
+    if (localRes.error) {
+      console.error('[ProducerBalanceCard] erro query commissions:', localRes.error);
     } else {
-      console.log(`[ProducerBalanceCard] producer=${targetId} pending=${data?.length ?? 0}`, data);
-      setPending((data ?? []) as PendingCommission[]);
+      setPending((localRes.data ?? []) as PendingCommission[]);
     }
+
+    if (withAsaas && asaasRes) {
+      const { data: asaasData, error: asaasErr } = asaasRes as { data: any; error: any };
+      if (asaasErr || asaasData?.status !== 'ok') {
+        const reason = asaasData?.message ?? asaasData?.reason ?? asaasErr?.message ?? 'erro_desconhecido';
+        setFeedback({ kind: 'err', msg: `Não foi possível consultar o Asaas: ${reason}` });
+      } else {
+        setAsaasBalance({
+          value:     Number(asaasData.balance ?? 0),
+          fetchedAt: Date.now(),
+        });
+      }
+    }
+
     setLoading(false);
   }, [producerId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(false); }, [load]);
 
   // Realtime: cron daily-release-funds marca released_at em commissions sem o
   // produtor ouvir nada. Sem subscribe, card mostra retido velho até refresh.
@@ -123,7 +144,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
         msg:  `Transferência disparada: R$ ${released.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} a caminho do seu PIX.`,
       });
       setModalOpen(false);
-      await load();
+      await load(true);
     } catch (e: any) {
       setFeedback({ kind: 'err', msg: e?.message ?? 'Erro ao processar transferência.' });
     } finally {
@@ -133,32 +154,6 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
 
   const fmtBRL = (v: number) =>
     v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-  // Padrão Stripe/MercadoPago: carteira local + sync via webhook. Em caso de
-  // divergência (refunds, taxas Asaas, dívidas pré-D+7), botão consulta saldo
-  // real da subconta sob demanda. Não polui a UX a cada render.
-  const handleCheckAsaasBalance = async () => {
-    setAsaasLoading(true);
-    setFeedback(null);
-    try {
-      const { data, error } = await supabase.functions.invoke('get-producer-asaas-balance', {
-        body: {},
-      });
-      if (error) throw error;
-      if ((data as any)?.status !== 'ok') {
-        const reason = (data as any)?.message ?? (data as any)?.reason ?? 'erro_desconhecido';
-        throw new Error(String(reason));
-      }
-      setAsaasBalance({
-        value:     Number((data as any).balance ?? 0),
-        fetchedAt: Date.now(),
-      });
-    } catch (e: any) {
-      setFeedback({ kind: 'err', msg: e?.message ?? 'Não foi possível consultar o Asaas.' });
-    } finally {
-      setAsaasLoading(false);
-    }
-  };
 
   const fmtNextRelease = () => {
     if (!nextReleaseAt) return null;
@@ -199,7 +194,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
             </p>
           </div>
           <button
-            onClick={load}
+            onClick={() => load(true)}
             disabled={loading}
             title="Atualizar saldo"
             className="p-2 rounded-xl text-slate-400 hover:text-[#ff0068] hover:bg-slate-100 dark:hover:bg-white/5 transition-all disabled:opacity-50"
@@ -274,33 +269,23 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
           </span>
         </div>
 
-        {/* Conferência sob demanda do saldo real Asaas. Mostra divergência se
-            houver (refund parcial, taxas, dívida). Padrão Stripe/MP. */}
-        <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-white/5">
-          <button
-            onClick={handleCheckAsaasBalance}
-            disabled={asaasLoading}
-            className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-[#ff0068] transition-colors disabled:opacity-50"
-          >
-            {asaasLoading
-              ? <Loader2 size={11} className="animate-spin" />
-              : <ShieldCheck size={11} />}
-            Conferir saldo Asaas
-          </button>
-          {asaasBalance && (
-            <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px]">
-              <span className="text-slate-500">Saldo real:</span>
-              <strong className="font-black text-slate-700 dark:text-slate-300">
-                {fmtBRL(asaasBalance.value)}
-              </strong>
-              {Math.abs(asaasBalance.value - total) > 0.01 && (
-                <span className="text-[10px] text-amber-600 dark:text-amber-400">
-                  • diverge do CoreoHub em {fmtBRL(asaasBalance.value - total)}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
+        {/* Saldo real Asaas — só aparece após primeiro clique no refresh
+            manual. Mostra divergência em âmbar se diferir do CoreoHub (refund
+            parcial, taxas, dívida pré-D+7). Padrão Stripe/MP. */}
+        {asaasBalance && (
+          <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-white/5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px]">
+            <ShieldCheck size={11} className="text-slate-400" />
+            <span className="text-slate-500">Saldo real Asaas:</span>
+            <strong className="font-black text-slate-700 dark:text-slate-300">
+              {fmtBRL(asaasBalance.value)}
+            </strong>
+            {Math.abs(asaasBalance.value - total) > 0.01 && (
+              <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                • diverge em {fmtBRL(asaasBalance.value - total)}
+              </span>
+            )}
+          </div>
+        )}
       </motion.div>
 
       {/* Modal de confirmação */}
