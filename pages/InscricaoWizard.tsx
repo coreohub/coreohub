@@ -893,6 +893,18 @@ const InscricaoWizard: React.FC = () => {
       const videoFee         = Number(evWithSelecao?.video_selection_fee ?? 0);
 
       if (requiresVideoSel && videoFee > 0) {
+        // Em evento DEMO (is_demo=true), pula Asaas e marca taxa waived — vai
+        // direto pra /minhas-coreografias pro inscrito ver a inscrição criada
+        // sem cobrar R$ real. Sem isso, testar o fluxo no demo gerava cobrança
+        // real (reportado em 2026-05-21).
+        if ((event as any)?.is_demo) {
+          await supabase
+            .from('registrations')
+            .update({ status_pagamento: 'AGUARDANDO_VIDEO', video_fee_status: 'waived' })
+            .eq('id', reg.id);
+          navigate(`/minhas-coreografias?nova=${reg.id}`);
+          return;
+        }
         // Modelo 3 — cobra taxa de seletiva antes do upload do vídeo.
         await supabase
           .from('registrations')

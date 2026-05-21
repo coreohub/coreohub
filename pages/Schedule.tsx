@@ -1041,15 +1041,43 @@ const Schedule = () => {
     setTimeout(() => setSavedMsg(''), 2200);
   };
 
-  const handleDragEnd = (event: any) => {
+  const handleDragEnd = async (event: any) => {
     const { active, over } = event;
-    if (over && active.id !== over.id) {
-      setRegistrations((prev) => {
-        const oldIndex = prev.findIndex((r) => r.id === active.id);
-        const newIndex = prev.findIndex((r) => r.id === over.id);
-        return arrayMove(prev, oldIndex, newIndex);
-      });
-      setOrderChanged(true);
+    if (!over || active.id === over.id) return;
+    // Detecta bloco_id de origem e destino. Se forem diferentes, atualiza
+    // bloco_id da coreografia arrastada imediato no DB (igual handleAssignBloco)
+    // e marca ordem como suja pra produtor salvar manual.
+    const fromReg = registrations.find(r => r.id === active.id);
+    const toReg   = registrations.find(r => r.id === over.id);
+    const fromBlocoId = fromReg?.bloco_id ?? null;
+    const toBlocoId   = toReg?.bloco_id ?? null;
+    setRegistrations((prev) => {
+      const oldIndex = prev.findIndex((r) => r.id === active.id);
+      const newIndex = prev.findIndex((r) => r.id === over.id);
+      const reordered = arrayMove(prev, oldIndex, newIndex);
+      if (fromBlocoId !== toBlocoId) {
+        return reordered.map(r => r.id === active.id ? { ...r, bloco_id: toBlocoId } : r);
+      }
+      return reordered;
+    });
+    setOrderChanged(true);
+    if (fromBlocoId !== toBlocoId) {
+      setRecentlyMovedId(active.id);
+      setTimeout(() => setRecentlyMovedId(curr => (curr === active.id ? null : curr)), 2000);
+      const { error } = await supabase
+        .from('registrations')
+        .update({ bloco_id: toBlocoId })
+        .eq('id', active.id);
+      if (error) {
+        console.error('[Schedule] falha ao salvar bloco_id no drag:', error);
+        setRegistrations(prev => prev.map(r => r.id === active.id ? { ...r, bloco_id: fromBlocoId } : r));
+        setSavedMsg('Falha ao mover. Tente de novo.');
+        setTimeout(() => setSavedMsg(''), 3000);
+      } else {
+        const blocoNome = toBlocoId ? (blocos.find(b => b.id === toBlocoId)?.name ?? 'bloco') : 'Sem bloco';
+        setSavedMsg(`Movida pra ${blocoNome}`);
+        setTimeout(() => setSavedMsg(''), 2200);
+      }
     }
   };
 

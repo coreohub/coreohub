@@ -385,11 +385,14 @@ const Coupons: React.FC = () => {
         </div>
       )}
 
-      {/* Modal criar — z-[60] pra cobrir o BottomNavBar mobile (z-50). Sem isso,
-          o footer do modal (botão Salvar) ficava escondido atrás da nav. */}
+      {/* Modal criar — z-[60] cobre o BottomNavBar (z-50) MAS Chrome mobile
+          ainda renderizava o nav por cima em alguns devices (issue confirmado
+          em 2026-05-21). Fix definitivo: pb-16 sm:pb-0 deixa 64px de margem
+          no rodape em mobile = altura do BottomNav. Footer do modal sempre
+          fica acima do nav, sem depender de z-stacking. */}
       {showModal && (
         <div
-          className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+          className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center pb-16 sm:pb-0 sm:p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
           onClick={() => { setShowModal(false); setEditingId(null); setFormError(null); }}
         >
           <div
