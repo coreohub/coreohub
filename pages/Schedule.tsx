@@ -5,6 +5,7 @@ import {
   Loader2, FileArchive, Users, ChevronDown, ChevronUp, Info,
   Volume2, Play, Pause, Radio, StopCircle, AlertTriangle,
   Layers, X, Plus, Trash2, ArrowUp, ArrowDown, Edit3, SkipForward,
+  Search,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { DndContext, closestCenter, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -166,6 +167,8 @@ interface SortableRowProps {
   updatingLive: boolean;
   currentVoice: string;
   blocos: Bloco[];
+  matchesSearch: boolean;
+  recentlyMoved: boolean;
   onOpenBlocoPicker: (reg: Registration) => void;
   onGenerateOne: (reg: Registration) => void;
   onAnnounce: (reg: Registration) => void;
@@ -175,7 +178,7 @@ interface SortableRowProps {
 const SortableRow: React.FC<SortableRowProps> = ({
   reg, index, conflicts,
   audioSet, saidaAtiva, isLive, isGenerating, batchInProgress, updatingLive, currentVoice,
-  blocos, onOpenBlocoPicker,
+  blocos, matchesSearch, recentlyMoved, onOpenBlocoPicker,
   onGenerateOne, onAnnounce, onPrepare,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -205,6 +208,8 @@ const SortableRow: React.FC<SortableRowProps> = ({
       style={style}
       className={`flex flex-wrap sm:flex-nowrap items-center gap-3 p-3 rounded-2xl border transition-all select-none
         ${isDragging ? 'shadow-2xl ring-2 ring-[#ff0068]/40' : ''}
+        ${recentlyMoved ? 'ring-2 ring-emerald-400/70 animate-pulse' : ''}
+        ${matchesSearch ? 'ring-2 ring-amber-400/70 bg-amber-50/40 dark:bg-amber-500/10' : ''}
         ${isLive
           ? 'bg-[#ff0068]/5 border-[#ff0068]/40'
           : hasConflict
@@ -415,7 +420,7 @@ const Schedule = () => {
   const [orderChanged, setOrderChanged] = useState(false);
 
   /* Edition selector */
-  const [allEvents, setAllEvents] = useState<{ id: string; name: string; edition_year?: number }[]>([]);
+  const [allEvents, setAllEvents] = useState<{ id: string; name: string; edition_year?: number; is_demo?: boolean }[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
   /* Blocos (Etapa 2 da fusão) */
@@ -424,6 +429,8 @@ const Schedule = () => {
   // Picker de bloco por coreografia (substitui select inline em mobile —
   // botao na row abre bottomsheet com lista de blocos pra atribuir).
   const [blocoPickerForReg, setBlocoPickerForReg] = useState<Registration | null>(null);
+  const [recentlyMovedId, setRecentlyMovedId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
   const [eventPickerOpen, setEventPickerOpen] = useState(false);
   const eventPickerRef = useRef<HTMLDivElement | null>(null);
 
@@ -471,7 +478,7 @@ const Schedule = () => {
   useEffect(() => {
     supabase
       .from('events')
-      .select('id,name,edition_year,start_date,created_at')
+      .select('id,name,edition_year,start_date,created_at,is_demo')
       .order('created_at', { ascending: false })
       .then(({ data }) => {
         if (data && data.length > 0) {
@@ -1009,9 +1016,29 @@ const Schedule = () => {
     }).sort((a, b) => a.ordem - b.ordem));
   };
 
-  const handleAssignBloco = (regId: string, blocoId: string | null) => {
+  /** Atribui bloco direto no DB (sem esperar "Salvar Ordem"). Esperar o botão
+      gerava o bug "coreografia some" — produtor movia, fechava sem salvar, e
+      perdia a mudança. Ordem dentro do bloco continua sendo manual via drag +
+      Salvar Ordem; só o vínculo a bloco é instantâneo. */
+  const handleAssignBloco = async (regId: string, blocoId: string | null) => {
+    const prevReg = registrations.find(r => r.id === regId);
     setRegistrations(prev => prev.map(r => r.id === regId ? { ...r, bloco_id: blocoId } : r));
-    setOrderChanged(true);
+    setRecentlyMovedId(regId);
+    setTimeout(() => setRecentlyMovedId(curr => (curr === regId ? null : curr)), 2000);
+    const { error } = await supabase
+      .from('registrations')
+      .update({ bloco_id: blocoId })
+      .eq('id', regId);
+    if (error) {
+      console.error('[Schedule] falha ao salvar bloco_id', error);
+      setRegistrations(prev => prev.map(r => r.id === regId ? { ...r, bloco_id: prevReg?.bloco_id ?? null } : r));
+      setSavedMsg('Falha ao mover. Tente de novo.');
+      setTimeout(() => setSavedMsg(''), 3000);
+      return;
+    }
+    const blocoNome = blocoId ? (blocos.find(b => b.id === blocoId)?.name ?? 'bloco') : 'Sem bloco';
+    setSavedMsg(`Movida pra ${blocoNome}`);
+    setTimeout(() => setSavedMsg(''), 2200);
   };
 
   const handleDragEnd = (event: any) => {
@@ -1171,9 +1198,12 @@ const Schedule = () => {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Edition selector — dropdown custom (select nativo ignorava tema escuro no Chrome/Win) */}
+          {/* Edition selector — em modo demo só mostra demos; em modo real só mostra reais.
+              Evita produtor abrir demo e ver eventos de produção misturados no picker. */}
           {allEvents.length > 0 && (() => {
             const selectedEv = allEvents.find(ev => ev.id === selectedEventId);
+            const isInDemo = !!selectedEv?.is_demo;
+            const visibleEvents = allEvents.filter(ev => !!ev.is_demo === isInDemo);
             return (
               <div className="relative" ref={eventPickerRef}>
                 <button
@@ -1188,7 +1218,7 @@ const Schedule = () => {
                 <ChevronDown size={10} className={`absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-transform ${eventPickerOpen ? 'rotate-180' : ''}`} />
                 {eventPickerOpen && (
                   <div className="absolute top-full mt-1 left-0 right-0 min-w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl shadow-2xl z-30 overflow-hidden max-h-64 overflow-y-auto">
-                    {allEvents.map(ev => {
+                    {visibleEvents.map(ev => {
                       const isSelected = ev.id === selectedEventId;
                       return (
                         <button
@@ -1210,6 +1240,20 @@ const Schedule = () => {
               </div>
             );
           })()}
+
+          {/* Busca rápida — destaca rows que batem com o termo (não filtra,
+              só sinaliza). Permite achar 1 entre N coreografias sem perder
+              contexto do cronograma. */}
+          <div className="relative">
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar coreografia..."
+              className="pl-7 pr-3 py-2 w-44 sm:w-56 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-white placeholder-slate-400 outline-none focus:border-[#ff0068]/50"
+            />
+          </div>
 
           <button
             onClick={() => fetchData(selectedEventId)}
@@ -1559,6 +1603,15 @@ const Schedule = () => {
             let globalIdx = 0;
             const sections: React.ReactNode[] = [];
 
+            const searchLower = search.trim().toLowerCase();
+            const matches = (r: Registration) => {
+              if (!searchLower) return false;
+              return (
+                (r.nome_coreografia ?? '').toLowerCase().includes(searchLower) ||
+                (r.estudio ?? '').toLowerCase().includes(searchLower)
+              );
+            };
+
             const renderRows = (regs: Registration[], startIdx: number) =>
               regs.map((reg, localIdx) => (
                 <SortableRow
@@ -1574,6 +1627,8 @@ const Schedule = () => {
                   updatingLive={updatingLive}
                   currentVoice={config?.voice_id || 'Charon'}
                   blocos={blocos}
+                  matchesSearch={matches(reg)}
+                  recentlyMoved={recentlyMovedId === reg.id}
                   onOpenBlocoPicker={setBlocoPickerForReg}
                   onGenerateOne={handleGenerateOne}
                   onAnnounce={handleAnnounce}
