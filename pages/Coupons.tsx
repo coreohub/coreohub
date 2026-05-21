@@ -23,19 +23,52 @@ const Coupons: React.FC = () => {
   const [showModal, setShowModal]         = useState(false);
   const [editingId, setEditingId]         = useState<string | null>(null);
 
-  // Scope completo (mora em types.ts/Coupon.scope). RPC do banco já suporta
-  // 'workshop' e 'video_selection' desde 2026-05-19/2026-05-20.
+  // Scope no banco: 6 valores possíveis (mora em types.ts/Coupon.scope).
+  // UI usa multi-select de 4 setores (Inscrição/Plateia/Workshop/Seletiva)
+  // e MAPEIA pras combinações válidas do banco atual no save:
+  //   1 setor → valor direto
+  //   inscription + audience → 'both'
+  //   todos os 4 → 'all'
+  //   outras combinações → erro (migration de array fica como backlog)
   type Scope = 'inscription' | 'audience' | 'workshop' | 'video_selection' | 'both' | 'all';
+  type SetorAtomic = 'inscription' | 'audience' | 'workshop' | 'video_selection';
+
+  /** Decompõe scope do banco em set de setores atômicos. */
+  const scopeToSetores = (scope?: string | null): SetorAtomic[] => {
+    if (!scope) return ['inscription'];
+    if (scope === 'both') return ['inscription', 'audience'];
+    if (scope === 'all')  return ['inscription', 'audience', 'workshop', 'video_selection'];
+    return [scope as SetorAtomic];
+  };
+
+  /** Mapeia set de setores pro valor único do banco. Retorna null se combinação
+   *  não é suportada pelo enum atual. */
+  const setoresToScope = (setores: SetorAtomic[]): Scope | null => {
+    const set = new Set(setores);
+    if (set.size === 0) return null;
+    if (set.size === 1) return setores[0] as Scope;
+    if (set.size === 4) return 'all';
+    if (set.size === 2 && set.has('inscription') && set.has('audience')) return 'both';
+    return null; // combinação não suportada
+  };
+
   const emptyForm = {
     code:           '',
     discount_type:  'percent' as DiscountType,
     discount_value: 10,
     max_uses:       '' as string | number,
     expires_at:     '',
-    scope:          'inscription' as Scope,
+    setores:        ['inscription'] as SetorAtomic[],
   };
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const toggleSetor = (s: SetorAtomic) => {
+    setForm(f => {
+      const has = f.setores.includes(s);
+      return { ...f, setores: has ? f.setores.filter(x => x !== s) : [...f.setores, s] };
+    });
+  };
 
   const openCreate = () => {
     setEditingId(null);
@@ -52,7 +85,7 @@ const Coupons: React.FC = () => {
       discount_value: c.discount_value,
       max_uses:       c.max_uses ?? '',
       expires_at:     c.expires_at ?? '',
-      scope:          (c.scope ?? 'inscription') as Scope,
+      setores:        scopeToSetores(c.scope),
     });
     setFormError(null);
     setShowModal(true);
@@ -105,9 +138,20 @@ const Coupons: React.FC = () => {
       setFormError('Percentual não pode ser maior que 100%.');
       return;
     }
+    // Mapeia setores selecionados pro scope único do banco. Combinações não
+    // suportadas pelo enum atual bloqueiam o salvar com mensagem clara.
+    const scopeMapped = setoresToScope(form.setores);
+    if (!scopeMapped) {
+      if (form.setores.length === 0) {
+        setFormError('Selecione ao menos um setor onde o cupom se aplica.');
+      } else {
+        setFormError('Combinação atual não suportada. Selecione: 1 setor, Inscrição + Plateia, ou os 4 setores juntos.');
+      }
+      return;
+    }
     // Cupom 100% off não funciona pra plateia (Asaas exige valor > 0).
     // Inscrição também é problemática mas existe fluxo gratuito separado.
-    if (form.discount_type === 'percent' && form.discount_value === 100 && form.scope !== 'inscription') {
+    if (form.discount_type === 'percent' && form.discount_value === 100 && scopeMapped !== 'inscription') {
       setFormError('Cupom 100% off não é suportado em ingressos de plateia (Asaas exige cobrança > 0). Use desconto parcial ou crie cortesia direta.');
       return;
     }
@@ -120,7 +164,7 @@ const Coupons: React.FC = () => {
           discount_value: form.discount_value,
           max_uses:       form.max_uses === '' ? null : Number(form.max_uses),
           expires_at:     form.expires_at || null,
-          scope:          form.scope,
+          scope:          scopeMapped,
         });
       } else {
         await createCoupon({
@@ -130,7 +174,7 @@ const Coupons: React.FC = () => {
           discount_value: form.discount_value,
           max_uses:       form.max_uses === '' ? null : Number(form.max_uses),
           expires_at:     form.expires_at || null,
-          scope:          form.scope,
+          scope:          scopeMapped,
         });
       }
       setShowModal(false);
@@ -442,23 +486,53 @@ const Coupons: React.FC = () => {
                 </Field>
               </div>
 
-              {/* Scope selector — onde o cupom é aceito. Dropdown (não botões
-                  inline) porque com 6 opções não cabe em grid mobile. */}
+              {/* Scope selector — multi-select via checkboxes. Produtor escolhe
+                  em quais setores o cupom vale. Combinações suportadas mapeiam
+                  pros valores enum do banco (1 setor / Insc+Plateia / Todos).
+                  Outras combinações bloqueiam o salvar com mensagem clara. */}
               <Field label="Aplica em">
-                <select
-                  value={form.scope}
-                  onChange={e => setForm(f => ({ ...f, scope: e.target.value as Scope }))}
-                  className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 dark:[color-scheme:dark]"
-                >
-                  <option value="inscription"     className="bg-white dark:bg-slate-900">Inscrição (taxa da coreografia)</option>
-                  <option value="audience"        className="bg-white dark:bg-slate-900">Plateia (ingressos)</option>
-                  <option value="workshop"        className="bg-white dark:bg-slate-900">Workshop</option>
-                  <option value="video_selection" className="bg-white dark:bg-slate-900">Taxa de seletiva de vídeo</option>
-                  <option value="both"            className="bg-white dark:bg-slate-900">Inscrição + Plateia</option>
-                  <option value="all"             className="bg-white dark:bg-slate-900">Todos (inscrição, plateia, workshop, seletiva)</option>
-                </select>
-                <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
-                  Inscrição: desconto na taxa da coreografia. Plateia: bailarino compartilha código pra família comprar ingresso. Workshop/Seletiva: desconto nessas taxas específicas.
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { v: 'inscription',     label: 'Inscrição',  hint: 'Taxa da coreografia' },
+                    { v: 'audience',        label: 'Plateia',    hint: 'Ingressos do público' },
+                    { v: 'workshop',        label: 'Workshop',   hint: 'Taxa de workshop' },
+                    { v: 'video_selection', label: 'Seletiva',   hint: 'Taxa de seletiva de vídeo' },
+                  ] as const).map(o => {
+                    const checked = form.setores.includes(o.v);
+                    return (
+                      <button
+                        key={o.v}
+                        type="button"
+                        onClick={() => toggleSetor(o.v)}
+                        className={`flex items-start gap-2.5 p-3 rounded-xl border transition-all text-left ${
+                          checked
+                            ? 'border-[#ff0068] bg-[#ff0068]/5'
+                            : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${
+                          checked
+                            ? 'border-[#ff0068] bg-[#ff0068]'
+                            : 'border-slate-300 dark:border-white/20'
+                        }`}>
+                          {checked && <CheckCircle size={10} className="text-white" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className={`text-[11px] font-black uppercase tracking-widest ${
+                            checked ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'
+                          }`}>
+                            {o.label}
+                          </p>
+                          <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                            {o.hint}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
+                  Marque os setores onde o cupom deve valer. Combinações suportadas: 1 setor, Inscrição + Plateia, ou os 4 juntos.
                 </p>
               </Field>
 
