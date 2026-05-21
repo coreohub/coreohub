@@ -226,6 +226,72 @@ Pasta `~/.claude/projects/.../memory/` tem contexto histórico denso. Em **toda 
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-05-21 (tarde) — Bundle P1-4 (residuais destravados) ✅ SHIPADO
+Commit `9463e66`. 4 itens da fila "destravados pra próxima sessão" — autorizados em bloco pelo user:
+- **Checkout.tsx** — UPDATE direto pra `'APROVADO'` (remove duplo CONFIRMADO→APROVADO legacy do cupom 100%). 1 query a menos por checkout gratuito.
+- **Schedule drag fade** — `animate-pulse` → keyframe `dropIn` (fade 0→1 + translateY -4px→0 em 240ms) declarado em `index.css`. Mascara o "pop" visual do dnd-kit quando linha cruza SortableContext. Solução A (CSS-only) — não precisou refatorar pra B (delay setState) nem C (mover update pro onDragOver).
+- **Wizard rascunho localStorage** — `coreohub:wizard:<eventId>`, TTL 24h, debounce 300ms. Helpers `readWizardDraft/writeWizardDraft/clearWizardDraft` em `pages/InscricaoWizard.tsx`. Hidrata após `setEvent(ev)` (sobrescreve defaults de `coreografo_nome`/`bailarinos`). Limpa logo após registration commitada — cobre 4 caminhos de saída (demo bypass / Asaas redirect / minha-seletiva / minhas-coreografias).
+- **Email "Repasse liberado"** — novo template `payout_released` em `send-email/index.ts` (cifrão 36px verde + PIX mascarado `•••• XXXX` + count de comissões + CTA pro /qg-organizador). Disparado em `daily-release-funds` após cada `result.swept`, best-effort (falha não reverte). Idempotência natural via `released_at` IS NULL filtro da query — cron rodando 2x no mesmo dia não duplica email.
+
+Edge functions deployadas via CLI: `send-email` + `daily-release-funds`.
+
+**Smoke E2E executado 2026-05-21 (noite):** 2 PIX taxa de seletiva R$ 33 cada pagos pela conta Cultural Estúdio → 2 platform_commissions criadas (R$ 30 net cada) → forçado `release_at = NOW() - 1h` na TESTE 2 → invocado cron via curl → sweep transferiu R$ 30 pro PIX do Hemer + chamou send-email (`released_at` + `release_transfer_id` preenchidos) ✅. Refund via painel também coberto: TESTE 1 reprovada em /seletiva-video → `process-video-refund` aplicou `partial_refund 50%` = R$ 16,50 (policy default do evento Usualdance). Email `payout_released` foi enviado pra `festival@usualdance.com` (email do profile do Hemer) — não conferido visualmente porque user não tem acesso ao webmail desse domínio. Funcionalmente OK.
+
+**Bug pré-existente descoberto + corrigido**: faltava policy RLS `producer_reads_own_commissions` em `platform_commissions`. ProducerBalanceCard ficava com R$ 0 pra qualquer produtor não-super-admin (só policy de super_admin existia desde 20260428). Policy aplicada em prod via SQL Editor (versionar a migration ainda pendente — user pediu pra deixar pra depois).
+
+**Cuidado operacional 2026-05-21:** durante o smoke, a `SUPABASE_SERVICE_ROLE_KEY` vazou no transcript por erro do bash (`source .env` quando faltava `=` no arquivo, linha virou comando, chave foi printada no stderr). User vai rotacionar quando puder. Lição em [[feedback-secret-vazou-source-env]] — usar `awk -F=` no lugar de `source` pra extrair secret de .env.
+
+### 2026-05-21 (noite) — Fixes pós-smoke + saldo Asaas em tempo real
+Continuação do smoke. 5 commits:
+
+- **`51c3046` fix(refund) — reflete estorno em platform_commissions + saldo bate com Asaas** — bug descoberto no smoke (TESTE 1 estornada R$ 16,50 mas `platform_commissions` ficava intacta, ProducerBalanceCard mostrava R$ 30 fantasma). Fix em 3 arquivos: `asaas-webhook` ganha branch genérico após `statusInterno` mapping que detecta `PAYMENT_REFUNDED`/`PAYMENT_PARTIALLY_REFUNDED`/`ESTORNADO`, busca total via `GET /payments/{id}/refunds` e marca `refund_amount` + `refunded_at` (refunded_at só em refund 100% — parcial deixa NULL pra comissão seguir válida pela diferença). `daily-release-funds` filtra `refunded_at IS NULL` e subtrai `refund_amount` do `net_amount` sweepável. `ProducerBalanceCard` espelha a mesma lógica. Bonus: ícone gigante cinza claro de fundo dos MetricCards do ProducerDashboard removido. Detalhes em [[bug-refund-nao-atualiza-platform-commissions]].
+
+- **`67f2853` chore(migrations) — versiona policy `producer_reads_own_commissions`** — RLS aplicada em prod durante o smoke, agora versionada em `supabase/migrations/20260524_producer_reads_own_commissions.sql` pra não perder em `db reset`.
+
+- **`b242ded` feat(saldo) — botão 'Conferir saldo Asaas'** — nova edge function `get-producer-asaas-balance` (JWT do produtor, lê `asaas_api_key` do profile, chama `GET /finance/balance` da Asaas). UI no card mostra divergência em âmbar quando |asaas − coreohub| > 0,01. Padrão Stripe Connect/Mercado Pago: carteira local + reconciliação sob demanda.
+
+- **`0f147c8` refactor(saldo) — unifica refresh + Asaas em 1 botão + fix manual-transfer-now** — produtor achou redundante ter 2 botões. Refresh manual agora consulta saldo Asaas em paralelo (mount inicial + realtime continuam só local pra não martelar API). E corrigi um bug encontrado na auditoria pós-fix do refund: `manual-transfer-now` tinha o mesmo problema que `daily-release-funds` tinha antes (não filtrava `refunded_at` nem descontava `refund_amount`) — botão "Transferir agora" tentaria sacar comissão já estornada e Asaas rejeitaria.
+
+- **`ff1b6d2` fix(auth) — produtor cai no /qg-organizador após login** — antes todo user ia pro `/dashboard` (tela do inscrito). Produtor via tela vazia "Sem inscrições" antes de achar o painel no sidebar. Auth.tsx agora lê `profiles.role` pós-SIGNED_IN: `ORGANIZER` → `/qg-organizador`, demais → `/dashboard`. Lookup fora do callback de `onAuthStateChange` (dentro de `setTimeout`) pra não deadlockar o lock interno do auth-js (issue supabase/auth-js#762).
+
+**Validação retroativa:** corrigi a comissão da TESTE 1 (`de563afd-...`) com `PATCH /rest/v1/platform_commissions` setando `refund_amount=16.50`. Card desceu de R$ 30 → R$ 13,50 = bate com a realidade (net 30 − refund 16,50). Asaas mostra subconta R$ 0 (já foi sacado o R$ 30 da TESTE 2 + Asaas reteve o R$ 13,50 da TESTE 1 em pasta "a liberar" que não aparece na view "Saldo" padrão).
+
+**Auditoria pós-fixes:** revisei os 5 commits. Achei o bug do `manual-transfer-now` (já fixado em `0f147c8`). Resto OK. Único finding cosmético sobrando: `pages/ProducerDashboard.tsx:197` faz query de `platform_commissions` sem filtrar refunds — usado pra gráficos históricos, não bloqueia faturamento total (que vem de `registrations.valor_pago`). Anotado pra polir depois.
+
+### 2026-05-21 — Bundle P1 pós-auditoria + bugs P0 reportados
+Detalhes em [[bundle-p1-pos-auditoria-2026-05-21]]. 7 commits, todos em prod:
+
+- **Schedule cronograma — 3 bugs críticos**
+  - Drag entre blocos persiste imediato no DB (handleAssignBloco + handleDragEnd). Toast verde "Movida pra Bloco X" + highlight pulsante 2s. Sem isso produtor movia, fechava sem clicar "Salvar Ordem", perdia.
+  - Filtro `is_demo` no picker do Schedule: em demo só mostra demos, em real só reais. Não mistura.
+  - Campo de busca no header destaca rows com ring âmbar (não filtra, só sinaliza).
+- **EventPickerSheet — badge DEMO + fix mobile**
+  - Badge âmbar "DEMO" no trigger + bottom-sheet mobile + dropdown desktop quando `ev.is_demo`.
+  - Fix BottomNav cobrindo bottom-sheet: `z-[60]` + `bottom-16` + backdrop `z-[55]`. Lista inteira agora visível acima do nav.
+- **ProducerBalanceCard — refresh + realtime**
+  - Botão refresh manual no header do card.
+  - Realtime subscription em `platform_commissions` (filter `producer_id`). Cron `daily-release-funds` libera silenciosamente — card recarrega sozinho via `postgres_changes`.
+- **AccountSettings KYC — botão "Verificar agora"**
+  - Edge function `check-producer-kyc` estendida pra PERSISTIR `asaas_kyc_status` + `asaas_onboarding_url` no profile (antes só lia).
+  - `refreshKycStatus` re-lê o profile após invoke. Banner amarelo some sozinho quando Asaas aprovar — sem produtor recarregar a tela inteira.
+- **Header switch VISÃO — redirect**
+  - Trocar role no dropdown redireciona pra `/`. Antes super admin trocando pra "Inscrito" ficava em rota órfã (/registrations é só produtor → tela vazia).
+- **Cupom no checkout da Seletiva**
+  - `create-video-selection-payment` aceita `coupon_code` (texto) além do `coupon_id` (UUID). Lookup ILIKE em coupons.
+  - MinhasCoreografias ganha UI inline "Tem cupom?" abaixo de cada row de seletiva com taxa pendente.
+  - Workshop já tinha cupom completo (CheckoutWorkshop.tsx verificado).
+- **Validação playlist YouTube**
+  - URL de vídeo seletiva rejeita playlists. Regex `[?&]list=` ou `youtube.com/playlist`. Padrão de mercado (Joinville, Catanduva, SESI): jurado precisa de 1 vídeo único.
+  - Aplicado em 2 pontos: validateStep do Wizard + handleSaveVideoLink em /minhas-coreografias.
+- **Demo bypass Asaas — corrigido em 2 commits**
+  - Wizard pula Asaas e marca `video_fee_status='waived'` se `event.is_demo === true`. Modo demo agora é gratuito end-to-end.
+  - Pegadinha: `event.is_demo` era `undefined` porque o SELECT na linha 421 do InscricaoWizard não incluía `is_demo`. Adicionado.
+- **Instagram input lowercase**
+  - 2 inputs do Wizard (bailarino solo/duo/trio + grupo/coreógrafo) forçam `.toLowerCase()` no onChange. Evita duplicatas (@USUARIO vs @usuario tratados como bailarinos diferentes).
+- **Z-index sweep preemptivo**
+  - 3 modais bumpados de `z-50` → `z-[60]` antes de aparecer bug: Schedule.tsx:1657 (bloco picker), VendasIngressos.tsx:521 (drawer comprador), WorkshopsManagement.tsx (3 modais).
+- **EventPickerSheet em mais telas**: Coupons, Credenciais, VideoSelection (`<select>` nativo Android era horrível).
+
 ### 2026-05-20 (madrugada) — Bundle P1 (7 polimentos)
 Commit `5077112`. Sequência rápida de melhorias pós-D+7:
 - **#40 Exceções de validação agrupadas** — modal de subgênero em AccountSettings ganha header explícito "Exceções de validação (opcional)" agrupando Categoria Livre + Trilha de Repertório.
@@ -279,26 +345,31 @@ Priorização cronológica detalhada em `memory/MEMORY.md` + cada item tem sua m
 
 ### 🟧 P1 — Alta prioridade, baixo esforço, destravado
 
-**✅ Bundle P1 SHIPADO em 2026-05-20** (commit `5077112`) — 7 itens fechados: #40 Exceções validação, Sweep status_pagamento + helper, Guia "Esconder 14d", #35 Selo Asaas mono, #36 Auditoria selo (sem mudança), #42 KYC banner, EventPickerSheet custom.
+**✅ Bundle P1-4 SHIPADO em 2026-05-21 (tarde)** (commit `9463e66`) — 4 residuais destravados: Checkout `APROVADO` direto, Schedule drag fade (`dropIn` keyframe), Wizard rascunho localStorage TTL 24h, Email `payout_released` no cron `daily-release-funds`.
 
-**Residual:**
-- **EventPickerSheet em outras telas** — aplicado em Registrations + ProducerDashboard. Ainda falta em VideoSelection, Schedule, Credenciais (mesma substituição). ~15min total.
-- **Checkout.tsx:219** — faz UPDATE pra `'CONFIRMADO'` (legacy, cupom 100% gratuito). Migrar pra `'APROVADO'` quando confiar que UPDATE não quebra fluxo existente. ~5min mas precisa testar.
+**✅ Bundle P1 pós-auditoria SHIPADO em 2026-05-21** (`061738c` → `bbb43a6`, 7 commits): Schedule drag cross-bloco + filtro demo + busca, Badge DEMO no picker, refresh Saldo + realtime, Verificar KYC agora, VISÃO redirect, cupom seletiva, validação playlist YouTube, Instagram lowercase, demo bypass Asaas. Detalhes em [[bundle-p1-pos-auditoria-2026-05-21]].
+
+**✅ Bundle P1 SHIPADO em 2026-05-20** (commit `5077112`) — 7 itens: #40 Exceções validação, Sweep status_pagamento + helper, Guia "Esconder 14d", #35 Selo Asaas mono, #36 Auditoria selo, #42 KYC banner, EventPickerSheet custom.
+
+**Nenhum P1 destravado em aberto.** Próximos itens precisam de ação externa (smoke test) ou viraram P2 (esforço maior).
 
 ### 🟨 P2 — Alto valor, esforço maior
 - **Painel /registrations Sessão 4** — drill-down side panel + ações em massa + sort header + paginação. ~8-10h.
 - **Phase 6 — Mesa de Som offline-first** (`#37`) — botão "Baixar pacote do evento" pré-cacheia trilhas + narrações no Cache API. Outbox de live_status. ~1-2 sprints.
 - **A19 — Testes automatizados** — Vitest + GitHub Actions + mock Supabase client. 3 PRs (webhook → sweep/KYC/reminders → seletiva/pricing). ~4-6h. Trigger: ~5 produtores ativos OU primeira regressão cara.
 - **Card Saldo: ler saldo real do Asaas via API** — hoje mostra `net_amount` esperado, pode divergir do saldo real se houver dívida pendente na subconta. UX a polir.
+- **Test E2E cenário 3 D+7** (botão Transferir agora) — defer pelo user em 2026-05-21. Cenários 1 + 1.5 + 2 passaram.
+- **Bundle index 891 kB** — warning Vite > 500kB. Code-split BarChart + jspdf ajudaria. LCP em 3G.
 
 ### 🟩 P3 — Aguardando trigger externo
 - **TED como payout alternativo** — plano + taxas pronto, congelado até alguém pedir.
 - **/LP nome festival + GA + vitrine na home** — bloqueado por decisão DNS (Hostinger → Cloudflare).
 - **Multi-jurado seletiva v1.1** — página `/jurado-seletiva` dedicada (modo blind). Infra de DB pronta. Quando algum produtor demandar.
-- **Cupom UI no `SeletivaInscrito`** — RPC `validate_video_coupon` existe, falta input no frontend. ~30min quando precisar.
 
 ### ⚠️ Pendência operacional
-- **Subconta Hemer com saldo R$ -30,00 negativo** — sobra do smoke do D+7 (cron antecipou R$ 30 antes do refund debitar). Resolve sozinho no próximo PIX que cair (Asaas debita automaticamente) OU reposição manual via PIX (cláusula 6 do termo). Não bloqueia nada.
+- **Subconta Hemer com saldo R$ ~0,00 (mais R$ 13,50 retidos no D+7 invisíveis na view padrão)** — sobra do smoke do D+7. A divergência saldo Asaas vs CoreoHub foi corrigida no fix `51c3046` (refund agora atualiza `platform_commissions`).
+- **Service_role_key precisa ser rotacionada** — vazou no transcript durante smoke 2026-05-21 (erro do bash com `source .env` malformado). User vai rotacionar quando puder. Atualizar 3 lugares depois: `.env` local, possível header de webhook no painel Asaas, secret no Supabase Functions (auto).
+- **Polimento residual:** `pages/ProducerDashboard.tsx:197` faz `select` em `platform_commissions` sem filtrar `refunded_at` (usado pra gráficos históricos). Não bloqueia, mas se algum chart derivar daí, mostra receita inflada. Anotado pra polir depois.
 
 ## Não fazer
 
