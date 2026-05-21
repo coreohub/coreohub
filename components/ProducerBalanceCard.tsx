@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Wallet, ArrowDownToLine, Loader2, AlertTriangle, CheckCircle2,
-  Clock, ShieldCheck, X, Info,
+  Clock, ShieldCheck, X, Info, RefreshCw,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
@@ -50,6 +50,30 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
   }, [producerId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Realtime: cron daily-release-funds marca released_at em commissions sem o
+  // produtor ouvir nada. Sem subscribe, card mostra retido velho até refresh.
+  useEffect(() => {
+    let active = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!active || !user?.id) return;
+      channel = supabase
+        .channel(`balance-${user.id}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'platform_commissions',
+          filter: `producer_id=eq.${user.id}`,
+        }, () => { load(); })
+        .subscribe();
+    })();
+    return () => {
+      active = false;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [load]);
 
   const { retido, disponivel, nextReleaseAt } = useMemo(() => {
     const now = Date.now();
@@ -132,7 +156,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
           <div className="p-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-500/20">
             <Wallet size={16} />
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <h2 className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">
               Saldo
             </h2>
@@ -140,6 +164,15 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
               Repasse automático em até 7 dias
             </p>
           </div>
+          <button
+            onClick={load}
+            disabled={loading}
+            title="Atualizar saldo"
+            className="p-2 rounded-xl text-slate-400 hover:text-[#ff0068] hover:bg-slate-100 dark:hover:bg-white/5 transition-all disabled:opacity-50"
+            aria-label="Atualizar saldo"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          </button>
         </div>
 
         {/* Número grande do total + breakdown secundário */}

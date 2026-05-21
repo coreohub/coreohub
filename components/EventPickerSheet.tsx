@@ -86,6 +86,11 @@ const EventPickerSheet: React.FC<Props> = ({
         <span className="truncate max-w-[200px] sm:max-w-[280px]">
           {selected ? formatLabel(selected) : emptyLabel}
         </span>
+        {selected?.is_demo && (
+          <span className="shrink-0 px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-700 dark:text-amber-300 text-[8px] font-black uppercase tracking-widest">
+            DEMO
+          </span>
+        )}
         <ChevronDown size={12} className={`text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
@@ -159,10 +164,13 @@ const EventPickerSheet: React.FC<Props> = ({
                               : 'hover:bg-slate-50 dark:hover:bg-white/5'
                           }`}
                         >
-                          <span className={`text-sm font-bold truncate ${
+                          <span className={`text-sm font-bold truncate flex items-center gap-2 min-w-0 ${
                             isSelected ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'
                           }`}>
-                            {formatLabel(ev)}
+                            <span className="truncate">{formatLabel(ev)}</span>
+                            {ev.is_demo && (
+                              <span className="shrink-0 px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-700 dark:text-amber-300 text-[8px] font-black uppercase tracking-widest">DEMO</span>
+                            )}
                           </span>
                           {isSelected && <Check size={16} className="text-[#ff0068] shrink-0" />}
                         </button>
@@ -217,8 +225,11 @@ const EventPickerSheet: React.FC<Props> = ({
                               : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5'
                           }`}
                         >
-                          <span className="text-[11px] font-black uppercase tracking-widest truncate">
-                            {formatLabel(ev)}
+                          <span className="text-[11px] font-black uppercase tracking-widest truncate flex items-center gap-1.5 min-w-0">
+                            <span className="truncate">{formatLabel(ev)}</span>
+                            {ev.is_demo && (
+                              <span className="shrink-0 px-1 py-0.5 rounded bg-amber-400/20 text-amber-700 dark:text-amber-300 text-[7px] font-black tracking-wider">DEMO</span>
+                            )}
                           </span>
                           {isSelected && <Check size={11} className="shrink-0" />}
                         </button>

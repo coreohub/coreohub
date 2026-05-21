@@ -873,8 +873,20 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         unrecoverable:    Boolean(data.unrecoverable),
         loaded:           true,
         checking:         false,
-        checkFailures:    0,  // reset em sucesso
+        checkFailures:    0,
       });
+      // Edge function agora persiste status/url frescos no profile. Re-lê pra
+      // banner amarelo "Complete sua verificação" sumir sozinho quando Asaas
+      // aprovar (sem precisar produtor recarregar a tela inteira).
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: refreshedProfile } = await supabase
+          .from('profiles')
+          .select('asaas_subconta_id, asaas_wallet_id, cpf_cnpj, pix_key, role, is_super_admin, producer_terms_version, asaas_onboarding_url, asaas_kyc_status')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (refreshedProfile) setAsaasProfile(refreshedProfile as any);
+      }
     } catch {
       setKycStatus(prev => ({ ...prev, checking: false, checkFailures: (prev.checkFailures ?? 0) + 1 }));
     }
@@ -4359,16 +4371,29 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                             </p>
                           )}
                         </div>
-                        {asaasProfile.asaas_onboarding_url && (
-                          <a
-                            href={asaasProfile.asaas_onboarding_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="shrink-0 hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest bg-amber-500 hover:bg-amber-600 text-white transition-all"
+                        <div className="hidden sm:flex flex-col gap-1.5 shrink-0">
+                          {asaasProfile.asaas_onboarding_url && (
+                            <a
+                              href={asaasProfile.asaas_onboarding_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest bg-amber-500 hover:bg-amber-600 text-white transition-all"
+                            >
+                              Completar agora <ArrowUp size={11} className="rotate-45" />
+                            </a>
+                          )}
+                          <button
+                            onClick={refreshKycStatus}
+                            disabled={kycStatus.checking}
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 transition-all disabled:opacity-50"
+                            title="Reconsulta o status atual no Asaas"
                           >
-                            Completar agora <ArrowUp size={11} className="rotate-45" />
-                          </a>
-                        )}
+                            {kycStatus.checking
+                              ? <Loader2 size={10} className="animate-spin" />
+                              : <RefreshCw size={10} />}
+                            Verificar agora
+                          </button>
+                        </div>
                       </div>
                     )}
 

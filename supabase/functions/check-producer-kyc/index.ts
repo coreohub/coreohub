@@ -98,6 +98,25 @@ Deno.serve(async (req) => {
     const canReceive = status?.commercialInfo === 'APPROVED'
     const canPayout  = status?.documentation === 'APPROVED' && status?.general === 'APPROVED'
 
+    // Persiste status/url frescos no profile pra banner /account-settings refletir
+    // sem o produtor ter que recarregar. Status raiz (NOT_SENT/PENDING/APPROVED/REJECTED)
+    // vem da resposta de /myAccount/documents (campo `status`).
+    try {
+      const rootKycStatus = docs?.status
+        ?? (canPayout ? 'APPROVED' : (pendingDocuments.length > 0 ? 'PENDING' : 'NOT_SENT'))
+      const onboardingUrlAgg = pendingDocuments.find((d: any) => d.onboardingUrl)?.onboardingUrl ?? null
+      await supabase
+        .from('profiles')
+        .update({
+          asaas_kyc_status:     rootKycStatus,
+          asaas_onboarding_url: onboardingUrlAgg,
+          asaas_kyc_checked_at: new Date().toISOString(),
+        })
+        .eq('id', user.id)
+    } catch (persistErr) {
+      console.warn('[check-producer-kyc] falha ao persistir status no profile:', (persistErr as Error).message)
+    }
+
     return respond(200, {
       hasSubconta:   true,
       canReceive,
