@@ -390,10 +390,11 @@ const Coupons: React.FC = () => {
         </div>
       )}
 
-      {/* Modal criar */}
+      {/* Modal criar — z-[60] pra cobrir o BottomNavBar mobile (z-50). Sem isso,
+          o footer do modal (botão Salvar) ficava escondido atrás da nav. */}
       {showModal && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+          className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
           onClick={() => { setShowModal(false); setEditingId(null); setFormError(null); }}
         >
           <div
