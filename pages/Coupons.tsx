@@ -6,8 +6,9 @@ import {
 import type { Coupon } from '../types';
 import {
   Ticket, Plus, Trash2, Calendar, Users, Percent,
-  Loader2, X, AlertCircle, CheckCircle, Power, DollarSign, ChevronDown, Pencil,
+  Loader2, X, AlertCircle, CheckCircle, Power, DollarSign, Pencil,
 } from 'lucide-react';
+import EventPickerSheet from '../components/EventPickerSheet';
 
 type DiscountType = 'percent' | 'fixed';
 
@@ -239,18 +240,12 @@ const Coupons: React.FC = () => {
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 sm:shrink-0">
           {events.length > 0 && (
-            <div className="relative">
-              <select
-                value={selectedEventId ?? ''}
-                onChange={e => setSelectedEventId(e.target.value)}
-                className="w-full sm:w-auto appearance-none pl-4 pr-9 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 cursor-pointer truncate dark:[color-scheme:dark]"
-              >
-                {events.map(ev => (
-                  <option key={ev.id} value={ev.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{ev.name}</option>
-                ))}
-              </select>
-              <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            </div>
+            <EventPickerSheet
+              events={events}
+              selectedEventId={selectedEventId}
+              onSelect={setSelectedEventId}
+              className="w-full sm:w-auto"
+            />
           )}
           <button
             disabled={!selectedEventId}

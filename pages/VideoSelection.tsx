@@ -8,6 +8,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
 import { maskMoeda, parseMoeda } from '../utils/masks';
+import EventPickerSheet from '../components/EventPickerSheet';
 
 type VideoStatus = 'pending' | 'submitted' | 'approved' | 'rejected' | 'conditional' | 'review_later';
 
@@ -355,18 +356,21 @@ const VideoSelection: React.FC = () => {
                 <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-2">
                   <Calendar size={11} /> Evento sendo configurado
                 </label>
-                <select
-                  value={selectedEventId}
-                  onChange={async e => {
-                    const id = e.target.value;
-                    setSelectedEventId(id);
-                    if (id) await loadEventConfig(id);
-                  }}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068] transition-all"
-                >
-                  {produtorEvents.length === 0 && <option value="">Sem eventos cadastrados</option>}
-                  {produtorEvents.map(ev => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
-                </select>
+                {produtorEvents.length === 0 ? (
+                  <div className="w-full px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-sm text-slate-500 dark:text-slate-400">
+                    Sem eventos cadastrados
+                  </div>
+                ) : (
+                  <EventPickerSheet
+                    events={produtorEvents}
+                    selectedEventId={selectedEventId}
+                    onSelect={async (id) => {
+                      setSelectedEventId(id);
+                      if (id) await loadEventConfig(id);
+                    }}
+                    className="w-full"
+                  />
+                )}
               </div>
 
               {/* Tooltip dos 3 modelos */}

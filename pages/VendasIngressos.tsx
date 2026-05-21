@@ -518,7 +518,7 @@ const VendasIngressos: React.FC = () => {
           em desktop, bottom sheet em mobile). Abre ao clicar em qualquer linha. */}
       {detailRow && (
         <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center sm:justify-end animate-in fade-in duration-200"
+          className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-end sm:items-center sm:justify-end animate-in fade-in duration-200"
           onClick={() => setDetailRow(null)}
         >
           <div

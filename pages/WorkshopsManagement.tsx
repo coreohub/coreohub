@@ -652,7 +652,7 @@ const BuyersModal: React.FC<{ workshop: WorkshopRow; onClose: () => void }> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4">
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4">
       <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-4xl max-h-[92vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-white/10">
@@ -886,7 +886,7 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
       role="dialog"
       aria-modal="true"
       aria-labelledby="workshop-form-title"
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4"
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4"
       onClick={onClose}
     >
       <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl max-w-3xl w-full shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[90vh]" onClick={e => e.stopPropagation()}>
@@ -1125,7 +1125,7 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, onClose }) => {
       role="dialog"
       aria-modal="true"
       aria-labelledby="workshop-lots-title"
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4"
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4"
       onClick={onClose}
     >
       <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl max-w-3xl w-full shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[90vh]" onClick={e => e.stopPropagation()}>
