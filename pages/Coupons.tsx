@@ -23,7 +23,9 @@ const Coupons: React.FC = () => {
   const [showModal, setShowModal]         = useState(false);
   const [editingId, setEditingId]         = useState<string | null>(null);
 
-  type Scope = 'inscription' | 'audience' | 'both';
+  // Scope completo (mora em types.ts/Coupon.scope). RPC do banco já suporta
+  // 'workshop' e 'video_selection' desde 2026-05-19/2026-05-20.
+  type Scope = 'inscription' | 'audience' | 'workshop' | 'video_selection' | 'both' | 'all';
   const emptyForm = {
     code:           '',
     discount_type:  'percent' as DiscountType,
@@ -262,15 +264,22 @@ const Coupons: React.FC = () => {
                       <span className="font-mono font-bold text-sm text-slate-900 dark:text-white bg-slate-100 dark:bg-white/10 px-3 py-1 rounded-lg border border-slate-200 dark:border-white/10">
                         {c.code}
                       </span>
-                      {c.scope && c.scope !== 'inscription' && (
-                        <span className={`ml-2 inline-block text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${
-                          c.scope === 'audience'
-                            ? 'bg-violet-100 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400'
-                            : 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400'
-                        }`}>
-                          {c.scope === 'audience' ? 'Plateia' : 'Ambos'}
-                        </span>
-                      )}
+                      {c.scope && c.scope !== 'inscription' && (() => {
+                        const scopeLabels: Record<string, { label: string; cls: string }> = {
+                          audience:        { label: 'Plateia',  cls: 'bg-violet-100 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400' },
+                          workshop:        { label: 'Workshop', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' },
+                          video_selection: { label: 'Seletiva', cls: 'bg-pink-100 text-pink-700 dark:bg-pink-500/10 dark:text-pink-400' },
+                          both:            { label: 'Insc+Plateia', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400' },
+                          all:             { label: 'Todos',    cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' },
+                        };
+                        const meta = scopeLabels[c.scope];
+                        if (!meta) return null;
+                        return (
+                          <span className={`ml-2 inline-block text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${meta.cls}`}>
+                            {meta.label}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 sm:px-6 py-4 font-black text-[#ff0068]">{fmtDiscount(c)}</td>
                     <td className="px-4 sm:px-6 py-4 hidden md:table-cell">
@@ -344,7 +353,7 @@ const Coupons: React.FC = () => {
           onClick={() => { setShowModal(false); setEditingId(null); setFormError(null); }}
         >
           <div
-            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[92vh] sm:max-h-[90vh]"
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[92dvh] sm:max-h-[90dvh]"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex justify-between items-start gap-3 px-5 sm:px-6 pt-5 pb-4 border-b border-slate-200 dark:border-white/10 shrink-0">
@@ -397,7 +406,16 @@ const Coupons: React.FC = () => {
                     max={form.discount_type === 'percent' ? 100 : undefined}
                     step={form.discount_type === 'percent' ? 1 : 0.01}
                     value={form.discount_value}
-                    onChange={e => setForm(f => ({ ...f, discount_value: Number(e.target.value) }))}
+                    onChange={e => {
+                      // Clamp pra 0-100 quando %. O atributo max= só limita o spinner
+                      // do browser; digitação livre ainda passava (bug em prod).
+                      const raw = Number(e.target.value);
+                      if (form.discount_type === 'percent') {
+                        setForm(f => ({ ...f, discount_value: Math.max(0, Math.min(100, raw)) }));
+                      } else {
+                        setForm(f => ({ ...f, discount_value: Math.max(0, raw) }));
+                      }
+                    }}
                     className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
                   />
                 </Field>
@@ -424,28 +442,23 @@ const Coupons: React.FC = () => {
                 </Field>
               </div>
 
-              {/* Tier 2: scope selector — em quais checkouts o cupom vale */}
+              {/* Scope selector — onde o cupom é aceito. Dropdown (não botões
+                  inline) porque com 6 opções não cabe em grid mobile. */}
               <Field label="Aplica em">
-                <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 dark:bg-white/5 rounded-xl">
-                  {([
-                    { v: 'inscription', label: 'Inscrição' },
-                    { v: 'audience',    label: 'Plateia' },
-                    { v: 'both',        label: 'Ambos' },
-                  ] as const).map(o => (
-                    <button
-                      key={o.v}
-                      type="button"
-                      onClick={() => setForm(f => ({ ...f, scope: o.v }))}
-                      className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                        form.scope === o.v ? 'bg-[#ff0068] text-white' : 'text-slate-500'
-                      }`}
-                    >
-                      {o.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[10px] text-slate-500 mt-1.5">
-                  Plateia: bailarino inscrito compartilha pra família comprar ingresso. Inscrição: desconto na taxa de inscrição da coreografia.
+                <select
+                  value={form.scope}
+                  onChange={e => setForm(f => ({ ...f, scope: e.target.value as Scope }))}
+                  className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 dark:[color-scheme:dark]"
+                >
+                  <option value="inscription"     className="bg-white dark:bg-slate-900">Inscrição (taxa da coreografia)</option>
+                  <option value="audience"        className="bg-white dark:bg-slate-900">Plateia (ingressos)</option>
+                  <option value="workshop"        className="bg-white dark:bg-slate-900">Workshop</option>
+                  <option value="video_selection" className="bg-white dark:bg-slate-900">Taxa de seletiva de vídeo</option>
+                  <option value="both"            className="bg-white dark:bg-slate-900">Inscrição + Plateia</option>
+                  <option value="all"             className="bg-white dark:bg-slate-900">Todos (inscrição, plateia, workshop, seletiva)</option>
+                </select>
+                <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
+                  Inscrição: desconto na taxa da coreografia. Plateia: bailarino compartilha código pra família comprar ingresso. Workshop/Seletiva: desconto nessas taxas específicas.
                 </p>
               </Field>
 

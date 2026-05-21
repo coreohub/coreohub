@@ -132,7 +132,8 @@ const ProducerAlerts: React.FC<Props> = ({ profile }) => {
             .from('registrations')
             .select('*', { count: 'exact', head: true })
             .eq('event_id', targetEvent.id)
-            .eq('status_pagamento', 'CONFIRMADO');
+            // status_pagamento atual é 'APROVADO'; 'CONFIRMADO' é legacy.
+            .in('status_pagamento', ['APROVADO', 'CONFIRMADO']);
 
           const dayLabel = days === 0 ? 'hoje' : days === 1 ? 'amanhã' : `em ${days} dias`;
           const inscritos = count ?? 0;

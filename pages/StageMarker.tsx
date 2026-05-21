@@ -77,7 +77,8 @@ const StageMarker = () => {
           supabase
             .from('registrations')
             .select('id,nome_coreografia,estudio,categoria,estilo_danca,elenco,ordem_apresentacao')
-            .eq('status_pagamento', 'CONFIRMADO')
+            // status_pagamento = 'APROVADO' (atual) OU 'CONFIRMADO' (legacy)
+            .in('status_pagamento', ['APROVADO', 'CONFIRMADO'])
             .order('ordem_apresentacao', { ascending: true }),
         ]);
         const t = cfg?.tempo_marcacao_palco ?? 45;

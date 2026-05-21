@@ -201,12 +201,17 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
         setCommissions(comms ?? []);
 
         if (allRegs) {
-          const confirmed = allRegs.filter(r => r.status_pagamento === 'CONFIRMADO');
+          // status_pagamento = 'APROVADO' (atual) OU 'CONFIRMADO' (legacy).
+          // Bug 2026-05-20: dashboard mostrava R$ 0 e 0 inscrições no
+          // Usualdance porque só checava 'CONFIRMADO'. Painel Registrations
+          // já considera ambos.
+          const isPago = (s?: string) => s === 'APROVADO' || s === 'CONFIRMADO';
+          const confirmed = allRegs.filter(r => isPago(r.status_pagamento));
           setMetrics({
             faturamentoTotal: confirmed.reduce((acc, curr) => acc + (Number(curr.valor_pago) || 0), 0),
             inscricoesConfirmadas: confirmed.length,
             pagamentosPendentes: allRegs.filter(r => r.status_pagamento === 'PENDENTE').length,
-            trilhasPendentes: allRegs.filter(r => !r.trilha_url && r.status_pagamento === 'CONFIRMADO').length,
+            trilhasPendentes: allRegs.filter(r => !r.trilha_url && isPago(r.status_pagamento)).length,
             pendenciasRegulamento: allRegs.filter(r => r.penalidade_status === 'PENDENTE').length,
             totalJurados: judges?.length || 0,
             juradosAtivos: judges?.filter((j: any) => j.is_active).length || 0,
@@ -516,7 +521,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
                     <span className="text-xs font-black uppercase text-slate-900 dark:text-white">{reg.nome_coreografia || reg.estudio || '—'}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`text-[9px] font-black uppercase ${reg.status_pagamento === 'CONFIRMADO' ? 'text-emerald-500' : 'text-amber-500'}`}>
+                    <span className={`text-[9px] font-black uppercase ${(reg.status_pagamento === 'APROVADO' || reg.status_pagamento === 'CONFIRMADO') ? 'text-emerald-500' : 'text-amber-500'}`}>
                       {reg.status_pagamento}
                     </span>
                   </td>

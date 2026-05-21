@@ -514,6 +514,9 @@ const Registrations = () => {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
               <input type="text" placeholder="Buscar coreografia, estúdio, inscrito ou e-mail..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]" />
             </div>
+            {/* Ordem otimizada pra mobile (2 col): Pagamento/Data → Modalidade/Categoria
+                → Estilo/Mostra (par lógico, "estilo Hip Hop + mostra competitiva")
+                → Inscrito (col-span-2). Em desktop vira 5 col automático. */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
               <select value={paymentFilter} onChange={e => setPaymentFilter(e.target.value)} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]">
                 <option value="ALL"        className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Pagamento: Todos</option>
@@ -550,13 +553,8 @@ const Registrations = () => {
                   <option key={e} value={e} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{e}</option>
                 ))}
               </select>
-              <select value={inscritoFilter} onChange={e => setInscritoFilter(e.target.value)} disabled={inscritosDisponiveis.length === 0} className="col-span-2 lg:col-span-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark] disabled:opacity-50">
-                <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Inscrito: Todos</option>
-                {inscritosDisponiveis.map(n => (
-                  <option key={n} value={n} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{n}</option>
-                ))}
-              </select>
-              {/* Pedido Usualdance 2026-05-19: filtrar Competitiva/Avaliada. */}
+              {/* Pedido Usualdance 2026-05-19: filtrar Competitiva/Avaliada.
+                  Posicionado ao lado de Estilo (par lógico "estilo+mostra"). */}
               <select
                 value={tipoApresentacaoFilter}
                 onChange={e => setTipoApresentacaoFilter(e.target.value as 'ALL' | 'Competitiva' | 'Avaliada')}
@@ -565,6 +563,12 @@ const Registrations = () => {
                 <option value="ALL"          className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Mostra: Todas</option>
                 <option value="Competitiva"  className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Mostra Competitiva</option>
                 <option value="Avaliada"     className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Mostra Avaliada</option>
+              </select>
+              <select value={inscritoFilter} onChange={e => setInscritoFilter(e.target.value)} disabled={inscritosDisponiveis.length === 0} className="col-span-2 lg:col-span-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark] disabled:opacity-50">
+                <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Inscrito: Todos</option>
+                {inscritosDisponiveis.map(n => (
+                  <option key={n} value={n} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{n}</option>
+                ))}
               </select>
             </div>
           </div>

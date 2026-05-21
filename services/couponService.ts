@@ -18,7 +18,8 @@ export async function createCoupon(input: {
   discount_value: number;
   max_uses?: number | null;
   expires_at?: string | null;
-  scope?: 'inscription' | 'audience' | 'both';
+  // Tier 2/3: workshop e video_selection adicionados em 2026-05-19/2026-05-20.
+  scope?: 'inscription' | 'audience' | 'workshop' | 'video_selection' | 'both' | 'all';
 }): Promise<Coupon> {
   const { data, error } = await supabase
     .from('coupons')
