@@ -177,18 +177,84 @@ const SuperAdmin = () => {
     })();
   }, [authorized]);
 
-  /* Métricas globais */
+  /* Métricas globais — totais + janela 30d (padrão B2B SaaS: dashboards acionáveis
+     mostram período recente, não all-time desde sempre). */
   const stats = useMemo(() => {
     const active = commissions.filter(c => !(c as any).refunded_at);
+    const refunded = commissions.filter(c => (c as any).refunded_at);
+
+    const now = Date.now();
+    const cutoff30d = now - 30 * 24 * 60 * 60 * 1000;
+    const cutoff14d = now - 14 * 24 * 60 * 60 * 1000;
+
+    const isRecent = (iso: string) => new Date(iso).getTime() >= cutoff30d;
+
+    const active30d   = active.filter(c => isRecent(c.created_at));
+    const refunded30d = refunded.filter(c => isRecent((c as any).refunded_at ?? c.created_at));
+
     const grossTotal      = active.reduce((s, c) => s + Number(c.gross_amount      ?? 0), 0);
     const commissionTotal = active.reduce((s, c) => s + Number(c.commission_amount ?? 0), 0);
+
+    const gross30d        = active30d.reduce((s, c) => s + Number(c.gross_amount ?? 0), 0);
+    const commission30d   = active30d.reduce((s, c) => s + Number(c.commission_amount ?? 0), 0);
+    const refundsTotal30d = refunded30d.reduce((s, c) => s + Number((c as any).refund_amount ?? 0), 0);
+
+    // Produtores únicos com transação aprovada nos últimos 30 dias.
+    const activeProducers30d = new Set(active30d.map(c => c.producer_id).filter(Boolean)).size;
+
+    // Comissões retidas há +14 dias (sinal de bug no cron daily-release-funds OU
+    // produtor sem PIX/KYC bloqueando o sweep). release_at < cutoff14d AND released_at IS NULL.
+    const stuckCommissions = commissions.filter(c => {
+      const r = c as any;
+      if (r.released_at) return false;
+      if (!r.release_at) return false;
+      return new Date(r.release_at).getTime() < cutoff14d;
+    });
+    const stuckTotal  = stuckCommissions.reduce((s, c) => s + Number((c as any).net_amount ?? 0), 0);
+
     return {
+      // All-time
       grossTotal,
       commissionTotal,
       transactionsCount: active.length,
       producersCount:    producers.length,
+      // 30d window (acionável)
+      gross30d,
+      commission30d,
+      transactions30d:   active30d.length,
+      activeProducers30d,
+      refundsTotal30d,
+      refundsCount30d:   refunded30d.length,
+      // Alertas operacionais
+      stuckCommissions:  stuckCommissions.length,
+      stuckTotal,
     };
   }, [commissions, producers]);
+
+  /* KYC pendente — produtores que têm subconta Asaas mas KYC não está APPROVED.
+     Hoje a coluna asaas_kyc_status pode não existir em produção (feature #42 do
+     backlog). Usamos heurística: tem subconta mas events_count=0 ou total_gross=0
+     pode indicar gargalo de onboarding. */
+  const kycAttention = useMemo(() => {
+    return producers.filter(p =>
+      p.asaas_subconta_id && p.total_gross === 0 && !p.is_blocked
+    ).length;
+  }, [producers]);
+
+  /* Próximos eventos — start_date entre hoje e +30d, públicos */
+  const upcomingEvents = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const cutoff = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    return eventsList
+      .filter(ev => {
+        if (!ev.start_date) return false;
+        const d = new Date(ev.start_date + 'T12:00:00');
+        return d >= now && d <= cutoff;
+      })
+      .sort((a, b) => (a.start_date ?? '').localeCompare(b.start_date ?? ''))
+      .slice(0, 8);
+  }, [eventsList]);
 
   /* Gráfico mensal */
   const monthly = useMemo(() => {
@@ -387,34 +453,111 @@ const SuperAdmin = () => {
         <div className="flex justify-center py-16"><Loader2 size={28} className="animate-spin text-[#ff0068]" /></div>
       ) : (
         <>
-          {/* Métricas */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* KPIs principais — janela 30d (top-left = mais crítico, padrão F-pattern).
+              Subtítulos mostram total all-time pra contexto sem dominar.
+              Pesquisa: B2B SaaS dashboards 2026 mostram 5-7 KPIs contextualizados,
+              não 40 métricas all-time. */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <MetricCard
               icon={DollarSign}
-              label="GMV Total"
-              value={`R$ ${stats.grossTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-              sub="Volume bruto da plataforma"
+              label="GMV 30d"
+              value={`R$ ${stats.gross30d.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+              sub={`All-time R$ ${stats.grossTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
             />
             <MetricCard
               icon={TrendingUp}
-              label="Receita CoreoHub"
-              value={`R$ ${stats.commissionTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-              sub={`${stats.transactionsCount} transações aprovadas`}
+              label="Receita CoreoHub 30d"
+              value={`R$ ${stats.commission30d.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+              sub={`${stats.transactions30d} transações · all-time R$ ${stats.commissionTotal.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`}
               tone="emerald"
             />
             <MetricCard
               icon={Users}
-              label="Produtores"
-              value={stats.producersCount}
-              sub="Com evento ou subconta ativa"
+              label="Produtores Ativos 30d"
+              value={stats.activeProducers30d}
+              sub={`${stats.producersCount} cadastrados`}
+              tone="sky"
             />
             <MetricCard
               icon={Calendar}
               label="Eventos"
               value={eventsByName.size}
-              sub="Cadastrados na plataforma"
+              sub={`${upcomingEvents.length} nos próximos 30 dias`}
+            />
+            <MetricCard
+              icon={AlertCircle}
+              label="Refunds 30d"
+              value={`R$ ${stats.refundsTotal30d.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+              sub={`${stats.refundsCount30d} estornos`}
+              tone={stats.refundsCount30d > 0 ? 'rose' : 'pink'}
             />
           </div>
+
+          {/* Alertas operacionais — sinais que exigem ação. Só renderiza se houver
+              algum sinal positivo, pra não poluir o painel quando tá tudo ok. */}
+          {(stats.stuckCommissions > 0 || kycAttention > 0) && (
+            <Section icon={AlertCircle} title="Alertas Operacionais" sub="Itens que precisam da sua atenção">
+              <div className="divide-y divide-slate-100 dark:divide-white/5">
+                {stats.stuckCommissions > 0 && (
+                  <div className="px-6 py-4 flex items-center gap-4">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center justify-center shrink-0">
+                      <Lock size={14} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                        {stats.stuckCommissions} comissões retidas há +14 dias
+                      </h3>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Total R$ {stats.stuckTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} — possível bug no cron <code>daily-release-funds</code> ou produtores sem PIX/KYC.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {kycAttention > 0 && (
+                  <div className="px-6 py-4 flex items-center gap-4">
+                    <div className="w-9 h-9 rounded-xl bg-sky-500/10 text-sky-500 border border-sky-500/20 flex items-center justify-center shrink-0">
+                      <AlertCircle size={14} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                        {kycAttention} produtor{kycAttention !== 1 ? 'es' : ''} com subconta sem faturamento
+                      </h3>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Sem transação aprovada — possível KYC pendente, falta de evento publicado ou link de inscrição não compartilhado.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Section>
+          )}
+
+          {/* Próximos eventos — visão rápida do funil de demanda */}
+          {upcomingEvents.length > 0 && (
+            <Section icon={Calendar} title="Próximos Eventos" sub={`${upcomingEvents.length} evento${upcomingEvents.length !== 1 ? 's' : ''} nos próximos 30 dias`}>
+              <div className="divide-y divide-slate-100 dark:divide-white/5">
+                {upcomingEvents.map(ev => {
+                  const d = ev.start_date ? new Date(ev.start_date + 'T12:00:00') : null;
+                  const days = d ? Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+                  const fmt = d ? d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'long', year: 'numeric' }) : '—';
+                  return (
+                    <div key={ev.id} className="px-6 py-3 flex items-center gap-4">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white truncate">{ev.name}</h3>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">{fmt}</p>
+                      </div>
+                      <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg shrink-0 ${
+                        days !== null && days <= 7 ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' :
+                        'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                      }`}>
+                        {days === 0 ? 'Hoje' : days === 1 ? 'Amanhã' : `${days} dias`}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </Section>
+          )}
 
           {/* Receita mensal */}
           <Section icon={BarChart3} title="Receita Mensal Consolidada" sub="Soma de todos os produtores">
@@ -824,10 +967,13 @@ const SuperAdmin = () => {
   );
 };
 
-const MetricCard: React.FC<{ icon: any; label: string; value: any; sub: string; tone?: 'pink' | 'emerald' }> = ({ icon: Icon, label, value, sub, tone = 'pink' }) => {
+const MetricCard: React.FC<{ icon: any; label: string; value: any; sub: string; tone?: 'pink' | 'emerald' | 'amber' | 'rose' | 'sky' }> = ({ icon: Icon, label, value, sub, tone = 'pink' }) => {
   const tones = {
     pink:    'bg-[#ff0068]/10 text-[#ff0068] border-[#ff0068]/20',
     emerald: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+    amber:   'bg-amber-500/10 text-amber-500 border-amber-500/20',
+    rose:    'bg-rose-500/10 text-rose-500 border-rose-500/20',
+    sky:     'bg-sky-500/10 text-sky-500 border-sky-500/20',
   };
   return (
     <div className="bg-slate-100 dark:bg-white/5 p-5 rounded-3xl border border-slate-200 dark:border-white/5">
