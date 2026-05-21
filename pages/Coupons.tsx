@@ -262,9 +262,9 @@ const Coupons: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats — cards neutros com ícone rosa (padrão Linear). Antes usava
-          3 cores (indigo/emerald/amber) sem semântica clara — só informativo. */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Stats — 3 colunas em mobile compactas (padrão Stripe/Mercado Pago).
+          Antes 1 coluna mobile inflava verticalmente sem necessidade. */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <StatCard icon={Ticket}  label="Cupons Ativos"   value={totalActive} />
         <StatCard icon={Users}   label="Total de Usos"   value={totalUses}   />
         <StatCard icon={Percent} label="Cupons Criados"  value={coupons.length} />
@@ -570,12 +570,13 @@ const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, 
 
 const StatCard: React.FC<{ icon: any; label: string; value: number }> = ({ icon: Icon, label, value }) => {
   return (
-    <div className="bg-white dark:bg-white/5 p-5 rounded-3xl border border-slate-200 dark:border-white/5">
-      <div className="w-10 h-10 rounded-xl bg-[#ff0068]/10 text-[#ff0068] border border-[#ff0068]/20 flex items-center justify-center mb-3">
-        <Icon size={18} />
+    <div className="bg-white dark:bg-white/5 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-white/5">
+      <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-[#ff0068]/10 text-[#ff0068] border border-[#ff0068]/20 flex items-center justify-center mb-2 sm:mb-3">
+        <Icon size={14} className="sm:hidden" />
+        <Icon size={18} className="hidden sm:block" />
       </div>
-      <h3 className="text-slate-500 text-[8px] font-black uppercase tracking-[0.2em]">{label}</h3>
-      <p className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter">{value}</p>
+      <h3 className="text-slate-500 text-[8px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] truncate">{label}</h3>
+      <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tighter">{value}</p>
     </div>
   );
 };
