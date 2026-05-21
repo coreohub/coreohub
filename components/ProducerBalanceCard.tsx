@@ -28,6 +28,8 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [feedback, setFeedback]   = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
+  const [asaasBalance, setAsaasBalance] = useState<{ value: number; fetchedAt: number } | null>(null);
+  const [asaasLoading, setAsaasLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -131,6 +133,32 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
 
   const fmtBRL = (v: number) =>
     v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  // Padrão Stripe/MercadoPago: carteira local + sync via webhook. Em caso de
+  // divergência (refunds, taxas Asaas, dívidas pré-D+7), botão consulta saldo
+  // real da subconta sob demanda. Não polui a UX a cada render.
+  const handleCheckAsaasBalance = async () => {
+    setAsaasLoading(true);
+    setFeedback(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('get-producer-asaas-balance', {
+        body: {},
+      });
+      if (error) throw error;
+      if ((data as any)?.status !== 'ok') {
+        const reason = (data as any)?.message ?? (data as any)?.reason ?? 'erro_desconhecido';
+        throw new Error(String(reason));
+      }
+      setAsaasBalance({
+        value:     Number((data as any).balance ?? 0),
+        fetchedAt: Date.now(),
+      });
+    } catch (e: any) {
+      setFeedback({ kind: 'err', msg: e?.message ?? 'Não foi possível consultar o Asaas.' });
+    } finally {
+      setAsaasLoading(false);
+    }
+  };
 
   const fmtNextRelease = () => {
     if (!nextReleaseAt) return null;
@@ -244,6 +272,34 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
             Você pode antecipar quando quiser. Se houver reembolso nos próximos 7 dias,
             precisa repor o valor via PIX.
           </span>
+        </div>
+
+        {/* Conferência sob demanda do saldo real Asaas. Mostra divergência se
+            houver (refund parcial, taxas, dívida). Padrão Stripe/MP. */}
+        <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-white/5">
+          <button
+            onClick={handleCheckAsaasBalance}
+            disabled={asaasLoading}
+            className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-[#ff0068] transition-colors disabled:opacity-50"
+          >
+            {asaasLoading
+              ? <Loader2 size={11} className="animate-spin" />
+              : <ShieldCheck size={11} />}
+            Conferir saldo Asaas
+          </button>
+          {asaasBalance && (
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px]">
+              <span className="text-slate-500">Saldo real:</span>
+              <strong className="font-black text-slate-700 dark:text-slate-300">
+                {fmtBRL(asaasBalance.value)}
+              </strong>
+              {Math.abs(asaasBalance.value - total) > 0.01 && (
+                <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                  • diverge do CoreoHub em {fmtBRL(asaasBalance.value - total)}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </motion.div>
 
