@@ -1485,7 +1485,10 @@ const InscricaoWizard: React.FC = () => {
                       type="text"
                       value={b.instagram_handle ?? ''}
                       onChange={e => {
-                        const raw = e.target.value.replace(/[^a-zA-Z0-9._]/g, '');
+                        // @ handles do Instagram são case-insensitive e a
+                        // plataforma armazena em minúsculas — força lowercase
+                        // pra padronizar e evitar duplicatas tipo @USUARIO vs @usuario.
+                        const raw = e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, '');
                         const handle = raw ? `@${raw.replace(/^@+/, '')}` : '';
                         setData(d => ({
                           ...d,
@@ -1524,7 +1527,7 @@ const InscricaoWizard: React.FC = () => {
                   type="text"
                   value={data.instagram_principal ?? ''}
                   onChange={e => {
-                    const raw = e.target.value.replace(/[^a-zA-Z0-9._]/g, '');
+                    const raw = e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, '');
                     const handle = raw ? `@${raw.replace(/^@+/, '')}` : '';
                     setData(d => ({ ...d, instagram_principal: handle }));
                   }}
