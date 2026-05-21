@@ -72,13 +72,32 @@ const Auth = () => {
     })();
   }, [redirectTo]);
 
+  // Decide a tela inicial pós-login com base no role do user. Produtor
+  // (ORGANIZER) cai direto no /qg-organizador. Demais roles vão pro
+  // /dashboard padrão. Lookup feito FORA do callback de onAuthStateChange
+  // pra não deadlockar o lock interno do auth-js.
+  const resolveLandingPath = async (userId: string): Promise<string> => {
+    if (redirectTo) return redirectTo;
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle();
+      return data?.role === 'ORGANIZER' ? '/qg-organizador' : '/dashboard';
+    } catch {
+      return '/dashboard';
+    }
+  };
+
   useEffect(() => {
     // Se a sessão já existe (callback OAuth processou os tokens do hash antes
     // do mount, ou o usuário já tinha login salvo), redireciona direto.
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         setIsAuthenticating(true);
-        setTimeout(() => navigate(redirectTo || '/dashboard'), 0);
+        const path = await resolveLandingPath(session.user.id);
+        setTimeout(() => navigate(path), 0);
       }
     });
 
@@ -90,8 +109,10 @@ const Auth = () => {
       if (event === 'SIGNED_IN' && session?.user) {
         setIsAuthenticating(true);
         // setTimeout(..., 0) garante que o navigate roda fora do lock de auth.
-        setTimeout(() => {
-          navigate(redirectTo || '/dashboard');
+        // resolveLandingPath roda DENTRO do timeout (não no callback) — sem deadlock.
+        setTimeout(async () => {
+          const path = await resolveLandingPath(session.user.id);
+          navigate(path);
         }, 0);
       }
     });
