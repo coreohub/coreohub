@@ -996,6 +996,59 @@ function buildVideoRejected(p: VideoRejectedPayload) {
   }
 }
 
+// ─── Template: payout_released (Settlement D+7 — liberação automática) ─────
+
+interface PayoutReleasedPayload {
+  produtorNome?:           string
+  produtorEmail:           string
+  /** Valor total transferido (R$). Mostrado em destaque grande. */
+  releasedAmount:          number
+  /** PIX key mascarada (últimos 4 chars). Confirma destino sem expor dado completo. */
+  pixKeyPartial?:          string
+  /** Nº de comissões agregadas (ex: "12 inscrições"). Opcional. */
+  commissionsCount?:       number
+  appUrl?:                 string
+}
+
+function buildPayoutReleased(p: PayoutReleasedPayload) {
+  const pixLine = p.pixKeyPartial
+    ? `<p style="margin:6px 0 0;font-size:13px;line-height:1.55;color:#475569;">
+         Já está no seu PIX <strong>•••• ${escape(p.pixKeyPartial)}</strong>.
+       </p>`
+    : `<p style="margin:6px 0 0;font-size:13px;line-height:1.55;color:#475569;">
+         Já está no seu PIX cadastrado.
+       </p>`
+
+  const sourceLine = p.commissionsCount && p.commissionsCount > 0
+    ? `<p style="margin:14px 0 0;font-size:12px;color:#94a3b8;">
+         Liberação automática de ${p.commissionsCount} comissão${p.commissionsCount !== 1 ? 'ões' : ''} que completaram o período de retenção de 7 dias (Settlement D+7).
+       </p>`
+    : `<p style="margin:14px 0 0;font-size:12px;color:#94a3b8;">
+         Liberação automática após o período de retenção de 7 dias (Settlement D+7).
+       </p>`
+
+  const contentHtml = `
+    <div style="margin-top:4px;padding:22px;border-radius:14px;background:#ecfdf5;border:2px solid #34d399;text-align:center;">
+      <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#059669;">Repasse liberado</p>
+      <p style="margin:8px 0 0;font-size:36px;font-weight:900;color:#0b0b0f;letter-spacing:-.02em;">${escape(money(p.releasedAmount))}</p>
+      ${pixLine}
+    </div>
+    ${sourceLine}`
+
+  return {
+    subject: `${money(p.releasedAmount)} foi liberado pra você — CoreoHub`,
+    html: baseLayout({
+      preheader: `Transferência PIX automática de ${money(p.releasedAmount)} disparada pra sua conta.`,
+      title: 'Repasse liberado!',
+      intro: `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, acabamos de transferir o saldo D+7 da sua subconta CoreoHub direto pro seu PIX.`,
+      contentHtml,
+      ctaLabel: 'Ver detalhes no painel',
+      ctaUrl: `${p.appUrl ?? 'https://app.coreohub.com'}/qg-organizador`,
+      footerNote: 'Você está recebendo este email porque um repasse automático foi efetuado pra você.',
+    }),
+  }
+}
+
 // ─── Handler ────────────────────────────────────────────────────────────────
 
 interface SendEmailRequest {
@@ -1014,6 +1067,7 @@ interface SendEmailRequest {
     | 'video_fee_paid_upload_ready'
     | 'video_approved_inscription_ready'
     | 'video_rejected'
+    | 'payout_released'
   payload: Record<string, unknown>
 }
 
@@ -1248,6 +1302,16 @@ Deno.serve(async (req) => {
         subject = tpl.subject
         html = tpl.html
         festivalName = p.eventoNome
+        break
+      }
+      case 'payout_released': {
+        const p = payload as unknown as PayoutReleasedPayload
+        if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
+        if (typeof p.releasedAmount !== 'number') throw new Error('releasedAmount é obrigatório')
+        const tpl = buildPayoutReleased(p)
+        to = p.produtorEmail
+        subject = tpl.subject
+        html = tpl.html
         break
       }
       default:

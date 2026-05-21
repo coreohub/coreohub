@@ -27,8 +27,19 @@ interface ProducerBucket {
   apiKey:        string | null
   pixKey:        string | null
   fullName:      string
+  email:         string | null
   totalAmount:   number
   commissionIds: string[]
+}
+
+/** Mascara PIX key mostrando só os últimos 4 chars. Cobre todos os formatos
+ *  (CPF, CNPJ, email, telefone, chave aleatória) sem expor o dado completo
+ *  no email transacional. Pode rodar sem alocar — só slice. */
+function maskPixKey(pix: string | null | undefined): string | undefined {
+  if (!pix) return undefined
+  const trimmed = String(pix).trim()
+  if (trimmed.length <= 4) return trimmed
+  return trimmed.slice(-4)
 }
 
 Deno.serve(async (req) => {
@@ -96,7 +107,7 @@ Deno.serve(async (req) => {
 
     const { data: profiles, error: pErr } = await supabase
       .from('profiles')
-      .select('id, asaas_api_key, pix_key, full_name')
+      .select('id, asaas_api_key, pix_key, full_name, email')
       .in('id', Array.from(producerIds))
     if (pErr) {
       console.error('[daily-release-funds] erro query profiles:', pErr.message)
@@ -113,6 +124,7 @@ Deno.serve(async (req) => {
           apiKey:        prof?.asaas_api_key ?? null,
           pixKey:        prof?.pix_key ?? null,
           fullName:      prof?.full_name ?? '?',
+          email:         prof?.email ?? null,
           totalAmount:   0,
           commissionIds: [],
         })
@@ -162,6 +174,41 @@ Deno.serve(async (req) => {
         )
         producersOk++
         totalReleased += result.value
+
+        // Notifica produtor por email — best-effort. Falha no email NUNCA reverte
+        // o repasse (a transferência PIX já foi feita). Idempotência via
+        // released_at — se o cron rodar 2x no mesmo dia, no segundo loop a query
+        // não pega essas comissões e nenhum email duplicado sai.
+        if (bucket.email) {
+          try {
+            const emailResp = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${serviceKey}`,
+                'Content-Type':  'application/json',
+              },
+              body: JSON.stringify({
+                type: 'payout_released',
+                payload: {
+                  produtorNome:     bucket.fullName,
+                  produtorEmail:    bucket.email,
+                  releasedAmount:   result.value,
+                  pixKeyPartial:    maskPixKey(bucket.pixKey),
+                  commissionsCount: bucket.commissionIds.length,
+                  appUrl:           'https://app.coreohub.com',
+                },
+              }),
+            })
+            if (!emailResp.ok) {
+              const txt = await emailResp.text().catch(() => '')
+              console.warn(`[daily-release-funds] email skip produtor=${bucket.producerId} status=${emailResp.status} body=${txt.slice(0, 200)}`)
+            }
+          } catch (e) {
+            console.warn(`[daily-release-funds] email falhou produtor=${bucket.producerId}:`, (e as Error).message)
+          }
+        } else {
+          console.warn(`[daily-release-funds] produtor=${bucket.producerId} sem email — skip notify`)
+        }
       } else {
         console.warn(
           `[daily-release-funds] skip produtor=${bucket.producerId} (${bucket.fullName})` +

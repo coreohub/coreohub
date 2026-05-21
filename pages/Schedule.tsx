@@ -208,7 +208,7 @@ const SortableRow: React.FC<SortableRowProps> = ({
       style={style}
       className={`flex flex-wrap sm:flex-nowrap items-center gap-3 p-3 rounded-2xl border transition-all select-none
         ${isDragging ? 'shadow-2xl ring-2 ring-[#ff0068]/40' : ''}
-        ${recentlyMoved ? 'ring-2 ring-emerald-400/70 animate-pulse' : ''}
+        ${recentlyMoved ? 'ring-2 ring-emerald-400/70 animate-drop-in' : ''}
         ${matchesSearch ? 'ring-2 ring-amber-400/70 bg-amber-50/40 dark:bg-amber-500/10' : ''}
         ${isLive
           ? 'bg-[#ff0068]/5 border-[#ff0068]/40'

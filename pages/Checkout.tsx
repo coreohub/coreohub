@@ -216,11 +216,7 @@ const Checkout = () => {
     try {
       await supabase
         .from('registrations')
-        .update({ status_pagamento: 'CONFIRMADO', valor_pago: 0 })
-        .eq('id', registrationId);
-      await supabase
-        .from('registrations')
-        .update({ status_pagamento: 'APROVADO' })
+        .update({ status_pagamento: 'APROVADO', valor_pago: 0 })
         .eq('id', registrationId);
       navigate(`/pagamento/sucesso?registration_id=${registrationId}`);
     } catch (err: any) {

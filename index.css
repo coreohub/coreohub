@@ -57,6 +57,18 @@
   animation: equalizer 0.8s ease-in-out infinite;
 }
 
+/* Fade-in suave aplicado quando uma linha do Schedule acabou de ser movida
+   pra outro bloco. Mascara o "pop" visual do dnd-kit que rola quando o
+   elemento muda de SortableContext mid-drop. Dura 240ms ease-out. */
+@keyframes dropIn {
+  0%   { opacity: 0; transform: translateY(-4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.animate-drop-in {
+  animation: dropIn 240ms ease-out;
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;

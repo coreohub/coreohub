@@ -44,6 +44,35 @@ const markAsTracked = (eventId: string): void => {
   catch { /* sessionStorage indisponível (privado/embed) — ignore */ }
 };
 
+/** Persistência do rascunho do Wizard em localStorage.
+ *  Inscrito perde tudo se clicar voltar do browser/checkout. Salva 1 draft por
+ *  evento (chave coreohub:wizard:<eventId>), TTL 24h, limpa após submit. */
+const WIZARD_DRAFT_PREFIX = 'coreohub:wizard:';
+const WIZARD_DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
+const readWizardDraft = (eventId: string): any | null => {
+  try {
+    const raw = localStorage.getItem(WIZARD_DRAFT_PREFIX + eventId);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.savedAt || Date.now() - parsed.savedAt > WIZARD_DRAFT_TTL_MS) {
+      localStorage.removeItem(WIZARD_DRAFT_PREFIX + eventId);
+      return null;
+    }
+    return parsed.data ?? null;
+  } catch { return null; }
+};
+const writeWizardDraft = (eventId: string, data: any): void => {
+  try {
+    localStorage.setItem(
+      WIZARD_DRAFT_PREFIX + eventId,
+      JSON.stringify({ savedAt: Date.now(), data }),
+    );
+  } catch { /* quota cheia / modo privado — ignora silenciosamente */ }
+};
+const clearWizardDraft = (eventId: string): void => {
+  try { localStorage.removeItem(WIZARD_DRAFT_PREFIX + eventId); } catch { /* ignore */ }
+};
+
 /** Lê a duração de um arquivo de áudio em segundos via HTML5 Audio API.
  *  Retorna 0 se não conseguir ler (formato inválido, arquivo corrompido).
  *  Tem timeout de 10s — alguns browsers não disparam 'error' em codecs raros
@@ -522,9 +551,26 @@ const InscricaoWizard: React.FC = () => {
         }));
       }
 
+      // Hidrata rascunho do localStorage (last write wins). Sempre depois dos
+      // setData defaults acima pra sobrescrever pré-preenchimentos quando o
+      // user já tinha algo em andamento — perda zero ao voltar do Asaas.
+      const draft = readWizardDraft(String(ev.id));
+      if (draft && typeof draft === 'object') {
+        setData(d => ({ ...d, ...draft }));
+      }
+
       setLoading(false);
     })();
   }, [idOrSlug, modalidade, navigate]);
+
+  // Salva o rascunho em localStorage 300ms após cada mudança em `data`.
+  // Debounce evita gravar a cada keystroke em arrays grandes de bailarinos.
+  useEffect(() => {
+    if (!event?.id || loading) return;
+    const eventId = String(event.id);
+    const handle = setTimeout(() => writeWizardDraft(eventId, data), 300);
+    return () => clearTimeout(handle);
+  }, [data, event?.id, loading]);
 
   const formacao = useMemo(() => {
     if (!event || !modalidade) return null;
@@ -891,6 +937,10 @@ const InscricaoWizard: React.FC = () => {
         }
         throw regErr ?? new Error('Erro ao criar inscrição.');
       }
+
+      // Registration commitada — rascunho não é mais útil. Limpa antes de
+      // qualquer branch de saída pra cobrir tanto navigate quanto window.location.
+      clearWizardDraft(String(event.id));
 
       // 3) Branching pelo modelo de seletiva (Sessão seletiva v1):
       //    Modelo 3 (taxa A obrigatória + valor > 0): marca AGUARDANDO_VIDEO,
