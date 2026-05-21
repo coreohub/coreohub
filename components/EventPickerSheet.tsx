@@ -104,18 +104,20 @@ const EventPickerSheet: React.FC<Props> = ({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm md:hidden"
+              className="fixed inset-0 z-[55] bg-black/40 backdrop-blur-sm md:hidden"
               onClick={() => setOpen(false)}
             />
 
-            {/* Sheet mobile (bottom) — desktop usa dropdown ancorado */}
+            {/* Sheet mobile (bottom) — desktop usa dropdown ancorado.
+                bottom-16 deixa 64px = altura do BottomNavBar pra que os últimos
+                itens da lista não fiquem cobertos. z-[60] > BottomNav z-50. */}
             <motion.div
               key="sheet"
               initial={{ y: '100%', opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: '100%', opacity: 0 }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="fixed inset-x-0 bottom-0 z-50 max-h-[80dvh] bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-white/10 rounded-t-3xl shadow-2xl flex flex-col md:hidden"
+              className="fixed inset-x-0 bottom-16 z-[60] max-h-[70dvh] bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-white/10 rounded-t-3xl shadow-2xl flex flex-col md:hidden"
               role="listbox"
             >
               {/* Handle visual (arrastável visualmente — sem lógica drag) */}

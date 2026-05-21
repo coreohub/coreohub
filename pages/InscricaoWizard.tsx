@@ -418,7 +418,7 @@ const InscricaoWizard: React.FC = () => {
       // de inscrições for criada, adicionar a migration e voltar aqui.
       const { data: ev, error: evErr } = await supabase
         .from('events')
-        .select('id, name, slug, formacoes_config, start_date, event_date, producer_ga4_id, producer_meta_pixel_id, video_selection_enabled, video_selection_fee_required, video_selection_fee')
+        .select('id, name, slug, formacoes_config, start_date, event_date, producer_ga4_id, producer_meta_pixel_id, video_selection_enabled, video_selection_fee_required, video_selection_fee, is_demo')
         .eq(filterCol, idOrSlug)
         .maybeSingle();
 
@@ -719,8 +719,18 @@ const InscricaoWizard: React.FC = () => {
           return 'Informe o link do vídeo da seletiva.';
         }
         if (data.video_url?.trim()) {
-          try { new URL(data.video_url.trim()); }
+          const url = data.video_url.trim();
+          try { new URL(url); }
           catch { return 'Link do vídeo inválido. Cole a URL completa (https://...).'; }
+          // Padrão dos festivais BR (Joinville, Catanduva, SESI): seletiva por
+          // vídeo único, não playlist. Rejeita URLs com `list=` ou /playlist —
+          // jurado precisa de 1 link de 1 vídeo (sem navegar entre vários).
+          const lower = url.toLowerCase();
+          const hasListParam = /[?&]list=/.test(lower);
+          const isPlaylistRoute = /youtube\.com\/playlist\b/.test(lower);
+          if (hasListParam || isPlaylistRoute) {
+            return 'Cole o link de UM vídeo específico (não playlist). Remova `&list=...` da URL ou copie de novo direto do vídeo.';
+          }
         }
       }
       // Modo Trilha (não-seletiva): nada obrigatório — pode "anexar depois".

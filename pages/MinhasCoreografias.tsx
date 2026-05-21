@@ -586,6 +586,12 @@ const MinhasCoreografias = () => {
       setActionError(p => ({ ...p, [regId]: 'Link inválido. Use URL completa (https://...).' }));
       return;
     }
+    // Mesma validação anti-playlist do Wizard: jurado precisa de 1 vídeo único.
+    const lower = url.toLowerCase();
+    if (/[?&]list=/.test(lower) || /youtube\.com\/playlist\b/.test(lower)) {
+      setActionError(p => ({ ...p, [regId]: 'Cole o link de UM vídeo (não playlist). Remova `&list=...` ou copie de novo direto do vídeo.' }));
+      return;
+    }
     try {
       const { error } = await supabase
         .from('registrations')
