@@ -427,10 +427,14 @@ const Auth = () => {
 
               {/* Selo Asaas — exigência regulatória do BaaS (Resolução Conjunta nº 16/2025).
                   Obrigatório em telas de cadastro/login conforme Playbook Asaas.
-                  theme='auto' alterna entre positive (light) e negative (dark)
-                  conforme o toggle de tema da app — Auth tem ambos. */}
-              <div className="flex justify-center pt-2">
-                <AsaasBadge variant="compact" />
+                  Polimento 2026-05-20: theme='mono' (variante oficial) + 100x30
+                  (mantém proporção 3.3:1) + microcopy "Pagamentos via". 100%
+                  dentro do Playbook — link clicável + alt text + proporção preservados. */}
+              <div className="flex flex-col items-center gap-1.5 pt-2">
+                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                  Pagamentos via
+                </span>
+                <AsaasBadge variant="compact" theme="mono" width={100} height={30} />
               </div>
             </div>
           </div>

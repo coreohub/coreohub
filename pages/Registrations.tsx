@@ -9,6 +9,7 @@ import {
 import { supabase } from '../services/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { refundRegistration } from '../services/refundService';
+import EventPickerSheet from '../components/EventPickerSheet';
 
 const Registrations = () => {
   const [registrations, setRegistrations] = useState<any[]>([]);
@@ -452,22 +453,16 @@ const Registrations = () => {
           <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Controle mestre do festival</p>
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:shrink-0">
-          {/* Edition selector */}
+          {/* Edition selector — EventPickerSheet custom (bottom sheet em mobile,
+              dropdown ancorado em desktop). Substitui <select> nativo do Android
+              que renderiza como bottom sheet ruim sem controle visual. */}
           {allEvents.length > 0 && (
-            <div className="relative w-full sm:w-auto">
-              <select
-                value={selectedEventId ?? ''}
-                onChange={e => setSelectedEventId(e.target.value)}
-                className="w-full sm:w-auto appearance-none pl-4 pr-9 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 transition-all cursor-pointer truncate dark:[color-scheme:dark]"
-              >
-                {allEvents.map(ev => (
-                  <option key={ev.id} value={ev.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
-                    {ev.edition_year ? `${ev.edition_year} — ` : ''}{ev.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            </div>
+            <EventPickerSheet
+              events={allEvents}
+              selectedEventId={selectedEventId}
+              onSelect={setSelectedEventId}
+              className="w-full sm:w-auto"
+            />
           )}
           <div className="flex items-center gap-2">
             <button onClick={fetchData} className="p-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-400 hover:text-[#ff0068] transition-all shrink-0">

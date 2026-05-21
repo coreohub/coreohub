@@ -13,6 +13,7 @@ import GuiaDoProdutor from '../components/GuiaDoProdutor';
 import ProducerAlerts from '../components/ProducerAlerts';
 import ProducerBalanceCard from '../components/ProducerBalanceCard';
 import DemoOnboardingCard from '../components/DemoOnboardingCard';
+import EventPickerSheet from '../components/EventPickerSheet';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 const MetricCard = ({ title, value, sub, icon: Icon, trend, warn }: any) => (
@@ -333,22 +334,15 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap md:flex-nowrap md:shrink-0">
-          {/* Edition selector */}
+          {/* Edition selector — EventPickerSheet custom (bottom sheet em mobile,
+              dropdown ancorado em desktop). */}
           {allEvents.length > 0 && (
-            <div className="relative flex-1 md:flex-none">
-              <select
-                value={selectedEventId ?? ''}
-                onChange={e => setSelectedEventId(e.target.value)}
-                className="w-full appearance-none pl-4 pr-9 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white outline-none focus:border-[#ff0068]/50 transition-all cursor-pointer dark:[color-scheme:dark]"
-              >
-                {allEvents.map(ev => (
-                  <option key={ev.id} value={ev.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
-                    {ev.edition_year ? `${ev.edition_year} — ` : ''}{ev.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            </div>
+            <EventPickerSheet
+              events={allEvents}
+              selectedEventId={selectedEventId}
+              onSelect={setSelectedEventId}
+              className="flex-1 md:flex-none"
+            />
           )}
 
           <button

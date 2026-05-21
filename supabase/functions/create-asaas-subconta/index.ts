@@ -309,6 +309,44 @@ Deno.serve(async (req) => {
       console.warn('[create-asaas-subconta] subconta sem apiKey — PIX não registrado automaticamente (caso comum em recuperação)')
     }
 
+    // ── KYC status: GET /myAccount/documents pra obter onboardingUrl + status ─
+    // Feature #42: sem isso o produtor descobre só DEPOIS que Pix nativo
+    // exige KYC completo (RG/CNH + selfie + comprovante). Capturando aqui,
+    // o banner em /account-settings → Pagamentos guia ele direto.
+    // Best-effort: erro nunca bloqueia criação da subconta.
+    if (apiKeyParaPix) {
+      try {
+        const docsRes = await fetch(`${ASAAS_BASE_URL}/myAccount/documents`, {
+          headers: {
+            'access_token': apiKeyParaPix,
+            'Content-Type': 'application/json',
+          },
+        })
+        if (docsRes.ok) {
+          const docsData = await docsRes.json()
+          // Resposta oficial Asaas (memória asaas_subconta_onboarding_kyc.md):
+          //   { onboardingUrl, status, data: [{ type, status, ... }] }
+          // Status raiz: NOT_SENT / PENDING / APPROVED / REJECTED
+          const onboardingUrl = docsData?.onboardingUrl ?? null
+          const kycStatus     = docsData?.status ?? 'NOT_SENT'
+          await supabase
+            .from('profiles')
+            .update({
+              asaas_onboarding_url: onboardingUrl,
+              asaas_kyc_status:     kycStatus,
+              asaas_kyc_checked_at: new Date().toISOString(),
+            })
+            .eq('id', user.id)
+          console.log(`[create-asaas-subconta] KYC ${kycStatus} url=${onboardingUrl ? 'set' : 'null'}`)
+        } else {
+          const body = await docsRes.text().catch(() => '')
+          console.warn(`[create-asaas-subconta] GET /myAccount/documents falhou (${docsRes.status}): ${body.slice(0, 200)}`)
+        }
+      } catch (kycErr) {
+        console.warn('[create-asaas-subconta] erro consulta KYC:', (kycErr as Error).message)
+      }
+    }
+
     console.log(`[create-asaas-subconta] subconta ${isRecovered ? 'recuperada' : 'criada'} para ${user.id}: ${subcontaData.id}`)
 
     return new Response(

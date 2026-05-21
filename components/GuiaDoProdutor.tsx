@@ -133,8 +133,15 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
 
   if (loading) return <GuiaSkeleton />;
 
-  // Produtor já fechou o guia depois de completar tudo — some pra sempre.
-  if (dismissedAt) return null;
+  // Dismiss permanente quando completou tudo, OU temporário (14 dias) quando
+  // produtor fechou estando incompleto (volta a aparecer pra lembrar).
+  // Stripe/Linear/Slack usam variação parecida — onboarding incompleto reaparece
+  // pra não frustrar quem tá bloqueado por KYC sem virar nag screen permanente.
+  if (dismissedAt) {
+    if (allDone) return null;
+    const daysSince = (Date.now() - new Date(dismissedAt).getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSince < 14) return null;
+  }
 
   if (allDone) {
     return (
@@ -172,25 +179,39 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
       animate={{ opacity: 1, y: 0 }}
       className="bg-white dark:bg-white/5 rounded-3xl border border-slate-200 dark:border-white/5 overflow-hidden"
     >
-      <div className="px-6 py-4 border-b border-slate-200 dark:border-white/5 flex items-center justify-between">
-        <div>
+      <div className="px-6 py-4 border-b border-slate-200 dark:border-white/5 flex items-center justify-between gap-3">
+        <div className="min-w-0">
           <span className="text-[10px] font-black text-[#ff0068] uppercase tracking-[0.3em]">Passo a passo</span>
           <h2 className="text-base font-black uppercase tracking-tighter leading-tight">Guia do Produtor</h2>
         </div>
-        <div className="flex items-center gap-1.5">
-          {[1, 2, 3].map(s => (
-            <div
-              key={s}
-              className={`h-1.5 rounded-full transition-all duration-500 ${
-                getStatus(s) === 'done'   ? 'bg-emerald-500 w-7' :
-                getStatus(s) === 'active' ? 'bg-[#ff0068] w-9' :
-                                            'bg-slate-300 dark:bg-white/10 w-4'
-              }`}
-            />
-          ))}
-          <span className="ml-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            {Math.max(0, activeStep - 1)}/3
-          </span>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-1.5">
+            {[1, 2, 3].map(s => (
+              <div
+                key={s}
+                className={`h-1.5 rounded-full transition-all duration-500 ${
+                  getStatus(s) === 'done'   ? 'bg-emerald-500 w-7' :
+                  getStatus(s) === 'active' ? 'bg-[#ff0068] w-9' :
+                                              'bg-slate-300 dark:bg-white/10 w-4'
+                }`}
+              />
+            ))}
+            <span className="ml-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              {Math.max(0, activeStep - 1)}/3
+            </span>
+          </div>
+          {/* Esconder por 14 dias — produtor bloqueado por KYC/sem tempo pode
+              tirar o guia da vista sem perder o progresso. Volta a aparecer
+              em 14d se ainda incompleto. */}
+          <button
+            onClick={handleDismiss}
+            disabled={dismissing}
+            title="Esconder por 14 dias"
+            aria-label="Esconder guia por enquanto"
+            className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 dark:hover:text-white border border-transparent hover:border-slate-200 dark:hover:border-white/10 transition-all disabled:opacity-50"
+          >
+            <X size={11} /> Esconder
+          </button>
         </div>
       </div>
 

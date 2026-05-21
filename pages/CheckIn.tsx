@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
+import { isRegistrationPaid } from '../utils/registrationStatus';
 
 interface CheckInItem {
   id: string;
@@ -83,7 +84,7 @@ const CheckIn = () => {
 
   /* ── manual check-in toggle ── */
   const handleToggle = async (item: CheckInItem) => {
-    if (item.status_pagamento !== 'CONFIRMADO') return;
+    if (!isRegistrationPaid(item.status_pagamento)) return;
     const newStatus = item.check_in_status === 'OK' ? null : 'OK';
     const now = newStatus === 'OK' ? new Date().toISOString() : null;
 
@@ -116,7 +117,7 @@ const CheckIn = () => {
         setScanResult({ type: 'duplicate', message: `Já credenciado${t ? ' às ' + t : ''}.`, name: item.nome_coreografia, kind: 'INSCRITO' });
         return;
       }
-      if (item.status_pagamento !== 'CONFIRMADO') {
+      if (!isRegistrationPaid(item.status_pagamento)) {
         setScanResult({ type: 'error', message: 'Pagamento não confirmado. Procure o coordenador.', name: item.nome_coreografia, kind: 'INSCRITO' });
         return;
       }
@@ -381,7 +382,7 @@ const CheckIn = () => {
           </div>
         ) : filtered.map(item => {
           const checkedIn   = item.check_in_status === 'OK';
-          const pago        = item.status_pagamento === 'CONFIRMADO';
+          const pago        = isRegistrationPaid(item.status_pagamento);
           const trilhaOk    = !!(item.trilha_url);
           const canCheckIn  = pago;
 

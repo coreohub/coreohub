@@ -789,6 +789,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     asaas_wallet_id?: string;
     cpf_cnpj?: string;
     pix_key?: string;
+    asaas_onboarding_url?: string | null;
+    asaas_kyc_status?: string | null;
   } | null>(null);
   const [isAdmin, setIsAdmin]                   = useState(false);
   const [asaasLoading, setAsaasLoading]         = useState(false);
@@ -886,7 +888,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       setCurrentUserId(user.id);
       const { data: profile } = await supabase
         .from('profiles')
-        .select('asaas_subconta_id, asaas_wallet_id, cpf_cnpj, pix_key, role, is_super_admin, producer_terms_version')
+        .select('asaas_subconta_id, asaas_wallet_id, cpf_cnpj, pix_key, role, is_super_admin, producer_terms_version, asaas_onboarding_url, asaas_kyc_status')
         .eq('id', user.id)
         .single();
       setAsaasProfile(profile);
@@ -4330,6 +4332,46 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               <div className="p-6">
                 {asaasProfile?.asaas_subconta_id ? (
                   <div className="space-y-4">
+                    {/* Banner KYC (feature #42) — produtor com subconta criada mas
+                        verificação Asaas pendente. Sem isso, Pix nativo não libera
+                        e produtor descobre só quando tenta receber. Link expira
+                        em ~30 dias mas pode ser regerado clicando em "Reconectar". */}
+                    {asaasProfile?.asaas_kyc_status && asaasProfile.asaas_kyc_status !== 'APPROVED' && (
+                      <div className="flex items-start gap-3 p-4 rounded-2xl border border-amber-500/30 bg-amber-500/5">
+                        <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center justify-center shrink-0">
+                          <AlertCircle size={16} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-black uppercase tracking-tight text-amber-700 dark:text-amber-400">
+                            Complete sua verificação
+                          </p>
+                          <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed mt-1">
+                            Sua subconta foi criada, mas o <strong>Asaas precisa verificar sua identidade</strong> antes de liberar Pix nativo, cartão e demais funções. Envie RG/CNH + selfie + comprovante de residência pelo link abaixo (leva 2-7 dias úteis pra aprovação).
+                          </p>
+                          {asaasProfile.asaas_kyc_status === 'PENDING' && (
+                            <p className="text-[10px] text-amber-600 dark:text-amber-500 mt-1 font-bold uppercase tracking-widest">
+                              ⏳ Documentos enviados — aguardando análise do Asaas
+                            </p>
+                          )}
+                          {asaasProfile.asaas_kyc_status === 'REJECTED' && (
+                            <p className="text-[10px] text-rose-600 dark:text-rose-500 mt-1 font-bold uppercase tracking-widest">
+                              ⚠ Documentos recusados — reenvie pelo link
+                            </p>
+                          )}
+                        </div>
+                        {asaasProfile.asaas_onboarding_url && (
+                          <a
+                            href={asaasProfile.asaas_onboarding_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest bg-amber-500 hover:bg-amber-600 text-white transition-all"
+                          >
+                            Completar agora <ArrowUp size={11} className="rotate-45" />
+                          </a>
+                        )}
+                      </div>
+                    )}
+
                     {/* Histórico de taxas — referência transparente (cláusula 5
                         do Termo de Adesão). Mostra a taxa única que o produtor
                         já aceitou + link pro regulamento Asaas atualizado. */}
@@ -5963,9 +6005,21 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   />
                 </div>
 
-                {/* Categoria Livre toggle — só para subgêneros */}
+                {/* Exceções de validação — grupo opcional (categoria livre + trilha
+                    de repertório). Padrão Eventbrite/MindBody: toggles de exceção
+                    vêm agrupados sob header explícito pra reforçar que são
+                    independentes (podem marcar nenhum, um ou os dois). */}
                 {(genreModal.mode === 'add-sub' || genreModal.mode === 'edit-sub') && (
-                  <>
+                  <div className="space-y-2.5 pt-2">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        Exceções de validação <span className="text-slate-400 normal-case font-bold tracking-normal">(opcional)</span>
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                        Marque o que essa modalidade <strong>não valida</strong>. Pode marcar nenhum, um ou os dois.
+                      </p>
+                    </div>
+
                     <button
                       type="button"
                       onClick={() => setGenreModal(m => ({ ...m, tempFree: !m.tempFree }))}
@@ -5990,7 +6044,6 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         : <ToggleLeft  size={22} className="text-slate-400 shrink-0" />}
                     </button>
 
-                    {/* Trilha de Repertório toggle */}
                     <button
                       type="button"
                       onClick={() => setGenreModal(m => ({ ...m, tempShorterTrack: !m.tempShorterTrack }))}
@@ -6014,7 +6067,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         ? <ToggleRight size={22} className="text-violet-500 shrink-0" />
                         : <ToggleLeft  size={22} className="text-slate-400 shrink-0" />}
                     </button>
-                  </>
+                  </div>
                 )}
               </div>
 
