@@ -553,13 +553,53 @@ const MinhasCoreografias = () => {
    * ANTES de criar a fatura Asaas. Padrão Stripe/Sympla/Checkout.tsx legacy.
    * Server re-valida no create-aggregate-payment-asaas (dupla checagem +
    * incremento atômico do used_count).
+   *
+   * Se há fatura PENDENTE no banco, cancela silenciosamente ANTES de
+   * aplicar — fatura Asaas tem valor congelado; pra mudar precisa refazer.
+   * User não vê essa complexidade.
    */
-  const handleApplyAggregateCoupon = async (eventId: string, baseTotal: number) => {
+  const handleApplyAggregateCoupon = async (eventId: string, baseTotal: number, grupo?: Grupo) => {
     const code = aggregateCouponInputs[eventId]?.trim();
     if (!code) return;
     setApplyingAggregateCoupon(p => ({ ...p, [eventId]: true }));
     setAggregateCouponErrors(p => ({ ...p, [eventId]: null }));
     try {
+      // Se fatura PENDENTE existe, cancela ANTES de validar/aplicar — pra
+      // user sempre poder aplicar cupom (UI nunca trava por fatura existente).
+      const existingPayment = grupo?.payment;
+      if (existingPayment?.id) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cancel-aggregate-payment`,
+              {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${session.access_token}`,
+                  'Content-Type':  'application/json',
+                },
+                body: JSON.stringify({ payment_id: existingPayment.id }),
+              }
+            );
+            // Update local — tira payment + zera registrations linkadas.
+            setActivePayments(prev => {
+              const next = { ...prev };
+              delete next[eventId];
+              return next;
+            });
+            setRegistrations(prev => prev.map(r =>
+              r.payment_group_id === existingPayment.id
+                ? { ...r, payment_group_id: null, payment_url: null, payment_preference_id: null, charged_amount: null }
+                : r
+            ));
+          }
+        } catch (cancelErr) {
+          console.warn('[apply coupon] falha cancelar fatura existente:', (cancelErr as Error).message);
+          // Não bloqueia — tenta aplicar cupom mesmo assim.
+        }
+      }
+
       // userId cacheado no fetchAll inicial — evita round-trip extra a cada
       // click no botão "Aplicar".
       const { coupon, discount } = await validateCoupon(eventId, code, baseTotal, currentUserId ?? undefined);
@@ -1203,10 +1243,10 @@ const MinhasCoreografias = () => {
               : (faturaPendente?.value_total ?? grupo.totalPendente);
             const subtotal   = faturaSubtotal;
             const expiraDias = faturaPendente?.expires_at ? diasAte(faturaPendente.expires_at) : null;
-            // Cupom só pode ser APLICADO/REMOVIDO quando AINDA não há fatura
-            // no Asaas. Fatura PENDENTE é imutável (padrão Stripe/Sympla):
-            // mostra o cupom aplicado em modo readonly, sem botão de remover.
-            const podeAplicarCupom = !faturaPendente?.payment_url;
+            // "Tem cupom?" SEMPRE disponível. Se fatura PENDENTE existe sem
+            // cupom (user clicou Pagar antes de aplicar), o
+            // handleApplyAggregateCoupon cancela a fatura silenciosamente
+            // antes de validar. User não sente.
             const applied   = appliedAggregateCoupons[grupo.eventId];
             // Desconto: prioriza o aplicado client-side (input local), fallback
             // pro persistido na fatura PENDENTE.
@@ -1290,7 +1330,7 @@ const MinhasCoreografias = () => {
                       )}
                     </button>
                   </div>
-                ) : podeAplicarCupom && (
+                ) : (
                   showAggregateCoupon[grupo.eventId] ? (
                     <div className="space-y-2">
                       <div className="flex gap-2">
@@ -1305,13 +1345,13 @@ const MinhasCoreografias = () => {
                             setAggregateCouponInputs(p => ({ ...p, [grupo.eventId]: e.target.value.toUpperCase() }));
                             if (couponErr) setAggregateCouponErrors(p => ({ ...p, [grupo.eventId]: null }));
                           }}
-                          onKeyDown={e => { if (e.key === 'Enter') handleApplyAggregateCoupon(grupo.eventId, subtotal); }}
+                          onKeyDown={e => { if (e.key === 'Enter') handleApplyAggregateCoupon(grupo.eventId, subtotal, grupo); }}
                           disabled={isApplying}
                           placeholder="Código do cupom"
                           className="flex-1 px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-xs font-mono text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40 focus:border-[#ff0068]/50 uppercase disabled:opacity-50"
                         />
                         <button
-                          onClick={() => handleApplyAggregateCoupon(grupo.eventId, subtotal)}
+                          onClick={() => handleApplyAggregateCoupon(grupo.eventId, subtotal, grupo)}
                           disabled={isApplying || !(aggregateCouponInputs[grupo.eventId]?.trim())}
                           className="px-4 py-2 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-50 text-white rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shrink-0"
                         >
