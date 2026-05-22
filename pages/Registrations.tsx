@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { refundRegistration } from '../services/refundService';
 import EventPickerSheet from '../components/EventPickerSheet';
 import { maskCpfCnpj, unmaskCpfCnpj, validateCpf, maskData, parseDataISO } from '../utils/masks';
+import BailarinosEditor, { type BailarinoFormValue } from '../components/BailarinosEditor';
 
 const Registrations = () => {
   const [registrations, setRegistrations] = useState<any[]>([]);
@@ -101,28 +102,8 @@ const Registrations = () => {
     setEditValues({});
   };
 
-  // Sessão 4.2 item 2: mutadores do array de bailarinos durante edição inline.
-  // Sempre operam via setEditValues funcional pra não brigar com re-renders.
-  const updateBailarino = (i: number, key: string, val: string) => {
-    setEditValues(p => ({
-      ...p,
-      bailarinos: (p.bailarinos ?? []).map((b: any, j: number) =>
-        j === i ? { ...b, [key]: val } : b
-      ),
-    }));
-  };
-  const addBailarino = () => {
-    setEditValues(p => ({
-      ...p,
-      bailarinos: [...(p.bailarinos ?? []), { nome: '', cpf: '', data_nascimento: '', instagram_handle: '' }],
-    }));
-  };
-  const removeBailarino = (i: number) => {
-    setEditValues(p => ({
-      ...p,
-      bailarinos: (p.bailarinos ?? []).filter((_: any, j: number) => j !== i),
-    }));
-  };
+  // Mutadores agora vivem em components/BailarinosEditor.tsx (refactor 2026-05-22).
+  // O componente recebe `bailarinos` + `onChange` e gerencia add/remove/update internamente.
 
   const handleSaveEdit = async (regId: string) => {
     setSavingEdit(true);
@@ -1697,99 +1678,13 @@ const Registrations = () => {
                       )}
                     </h3>
                     {editing ? (
-                      <div className="space-y-2">
-                        {(() => {
-                          // Solo/Duo/Trio pedem @ por bailarino; Grupo/Conjunto pedem
-                          // 1 @ unico do grupo/coreografo (combinado em sessao anterior:
-                          // pedir @ de 4+ pessoas sobrecarrega o coreografo). Mesma regra
-                          // do Wizard publico (pages/InscricaoWizard.tsx:1531).
-                          const formato = editValues.formato_participacao ?? viewingReg.formato_participacao;
-                          const isGrupoLike = formato === 'Grupo' || formato === 'Conjunto';
-                          return (
-                            <>
-                              {(editValues.bailarinos ?? []).map((b: any, i: number) => (
-                                <div key={i} className="p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl space-y-2">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Bailarino {i + 1}</p>
-                                    <button
-                                      type="button"
-                                      onClick={() => removeBailarino(i)}
-                                      className="text-[9px] font-black uppercase tracking-widest text-rose-500 hover:text-rose-600 flex items-center gap-1"
-                                      title="Remover este bailarino"
-                                    >
-                                      <Trash2 size={10} /> Remover
-                                    </button>
-                                  </div>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    <input
-                                      type="text"
-                                      value={b.nome ?? ''}
-                                      onChange={e => updateBailarino(i, 'nome', e.target.value)}
-                                      placeholder="Nome completo"
-                                      className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068]"
-                                    />
-                                    <input
-                                      type="text"
-                                      inputMode="numeric"
-                                      value={b.cpf ?? ''}
-                                      onChange={e => updateBailarino(i, 'cpf', maskCpfCnpj(e.target.value))}
-                                      placeholder="CPF"
-                                      className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068]"
-                                    />
-                                    {/* Data digitavel DD/MM/AAAA (mais rapida que calendario nativo
-                                        pra ano antigo — padrao do Wizard publico). */}
-                                    <input
-                                      type="text"
-                                      inputMode="numeric"
-                                      value={b.data_nascimento ?? ''}
-                                      onChange={e => updateBailarino(i, 'data_nascimento', maskData(e.target.value))}
-                                      placeholder="DD/MM/AAAA"
-                                      maxLength={10}
-                                      className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068]"
-                                    />
-                                    {!isGrupoLike && (
-                                      <input
-                                        type="text"
-                                        value={b.instagram_handle ?? ''}
-                                        onChange={e => updateBailarino(i, 'instagram_handle', e.target.value.toLowerCase().replace(/^@/, ''))}
-                                        placeholder="instagram (sem @)"
-                                        className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068]"
-                                      />
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
-                              <button
-                                type="button"
-                                onClick={addBailarino}
-                                className="w-full px-3 py-2 border border-dashed border-slate-300 dark:border-white/15 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#ff0068] hover:border-[#ff0068]/50 transition-all"
-                              >
-                                + Adicionar bailarino
-                              </button>
-                              {/* @ unico do grupo/coreografo (Grupo/Conjunto). Padrao Wizard. */}
-                              {isGrupoLike && (
-                                <div className="p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl">
-                                  <label className="block text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
-                                    @ do grupo ou coreógrafo
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={editValues.instagram_principal ?? ''}
-                                    onChange={e => setEditValues(p => ({
-                                      ...p,
-                                      instagram_principal: e.target.value.toLowerCase().replace(/^@/, ''),
-                                    }))}
-                                    placeholder="nomedogrupo (sem @)"
-                                    maxLength={31}
-                                    className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068]"
-                                  />
-                                  <p className="text-[9px] text-slate-400 mt-1.5">Usado pra marcar nas divulgações. Pedir @ de cada bailarino do grupo sobrecarrega o coreógrafo — 1 @ por inscrição.</p>
-                                </div>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </div>
+                      <BailarinosEditor
+                        bailarinos={editValues.bailarinos ?? []}
+                        onChange={next => setEditValues(p => ({ ...p, bailarinos: next }))}
+                        formato={editValues.formato_participacao ?? viewingReg.formato_participacao ?? ''}
+                        instagramPrincipal={editValues.instagram_principal}
+                        onInstagramPrincipalChange={v => setEditValues(p => ({ ...p, instagram_principal: v }))}
+                      />
                     ) : (
                     <div className="space-y-2">
                       {viewingReg.bailarinos_detalhes.map((b: any, i: number) => {

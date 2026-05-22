@@ -6,7 +6,11 @@ import {
   Music2, Plus, Trash2, AlertCircle, Loader2, CheckCircle,
   Clapperboard, Calendar, MapPin, Clock, CreditCard, QrCode,
   ChevronRight, AlertTriangle, ShoppingCart, X, Video,
+  Users, Pencil, Save, RefreshCw, Lock as LockIcon,
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import BailarinosEditor, { type BailarinoFormValue } from '../components/BailarinosEditor';
+import { unmaskCpfCnpj, validateCpf, parseDataISO, maskCpfCnpj, maskData } from '../utils/masks';
 
 /* ══════════════════════════════════════════════════════════════
    TYPES
@@ -38,6 +42,7 @@ interface Registration {
   video_fee_status?:     string | null;
   video_approved_at?:    string | null;
   bailarinos_detalhes?:  any[] | null;
+  instagram_principal?:  string | null;
   /** Snapshot do video_selection_fee do evento no momento (preview de UI). */
   _videoFee?:            number;
   /** Hidratado do join com events */
@@ -132,6 +137,20 @@ const MinhasCoreografias = () => {
   const [videoLinkInput, setVideoLinkInput]  = useState('');
   const [actionError,  setActionError]       = useState<Record<string, string>>({});
 
+  // Sessão A1 (2026-05-22): inscrito edita dados dos próprios bailarinos
+  // direto na /minhas-coreografias. Modal centralizado quando editingBailarinos
+  // tem o id da reg. Editor reusado de components/BailarinosEditor.tsx.
+  const [editingBailarinos, setEditingBailarinos]   = useState<string | null>(null);
+  const [bailarinosForm, setBailarinosForm]         = useState<BailarinoFormValue[]>([]);
+  const [instagramPrincipalForm, setInstagramPrincipalForm] = useState<string>('');
+  const [savingBailarinos, setSavingBailarinos]     = useState(false);
+  const [bailarinosError, setBailarinosError]       = useState<string | null>(null);
+  // Map event_id → prazo_inscricao (YYYY-MM-DD) pra travar edição após deadline.
+  // Decisão 1B locked 2026-05-22: vazio = livre (produtor não definiu).
+  const [prazosPorEvento, setPrazosPorEvento] = useState<Record<string, string | null>>({});
+  // Map event_id → formacoes_config pra puxar min/max members da modalidade.
+  const [formacoesPorEvento, setFormacoesPorEvento] = useState<Record<string, any[]>>({});
+
   // Tabs no topo (padrão Sympla/Eventbrite). Default mostra "Próximas" se
   // tem pelo menos 1 evento futuro; senão "Todas".
   type Tab = 'all' | 'upcoming' | 'past' | 'selecao';
@@ -171,7 +190,7 @@ const MinhasCoreografias = () => {
           status, status_pagamento,
           payment_url, payment_preference_id, payment_id, payment_group_id,
           mod_fee, charged_amount, valor_pago, paid_at, created_at,
-          bailarinos_detalhes,
+          bailarinos_detalhes, instagram_principal,
           video_url, video_status, video_fee_status, video_approved_at
         `)
         .eq('user_id', user.id)
@@ -194,11 +213,20 @@ const MinhasCoreografias = () => {
             .in('id', eventIds),
           supabase
             .from('configuracoes')
-            .select('event_id, formatos_precos')
+            .select('event_id, formatos_precos, prazo_inscricao')
             .in('event_id', eventIds),
         ]);
         for (const ev of (eventsData  ?? [])) eventsMap[ev.id]        = ev;
         for (const cf of (configsData ?? [])) configsMap[cf.event_id] = cf;
+
+        // A1 (2026-05-22): popula prazo_inscricao + formacoes_config pra editor
+        // de bailarinos. Decisão 1B: prazo vazio = edição livre.
+        const prazos: Record<string, string | null> = {};
+        const formacoes: Record<string, any[]> = {};
+        for (const cf of (configsData ?? [])) prazos[cf.event_id] = cf.prazo_inscricao ?? null;
+        for (const ev of (eventsData ?? [])) formacoes[ev.id] = ev.formacoes_config ?? [];
+        setPrazosPorEvento(prazos);
+        setFormacoesPorEvento(formacoes);
       }
 
       // Helper: calcula o preço a mostrar pra uma inscrição. Espelha a lógica
@@ -613,6 +641,110 @@ const MinhasCoreografias = () => {
     }
   };
 
+  // A1 (2026-05-22): abre modal de edição de bailarinos. Clone profundo dos
+  // dados pra editValues + mascara CPF/data pra digitação confortável.
+  // RLS `inscrito_own_registrations` cobre o UPDATE — sem migration nova.
+  const startEditingBailarinos = (reg: Registration) => {
+    setEditingBailarinos(reg.id);
+    setBailarinosError(null);
+    setBailarinosForm(Array.isArray(reg.bailarinos_detalhes)
+      ? reg.bailarinos_detalhes.map((b: any) => ({
+          nome:             b?.nome ?? '',
+          cpf:              maskCpfCnpj(String(b?.cpf ?? '')),
+          // ISO YYYY-MM-DD → DD/MM/AAAA via maskData
+          data_nascimento:  b?.data_nascimento
+            ? maskData(String(b.data_nascimento).replace(/^(\d{4})-(\d{2})-(\d{2}).*$/, '$3$2$1'))
+            : '',
+          instagram_handle: b?.instagram_handle ?? '',
+        }))
+      : []);
+    setInstagramPrincipalForm(reg.instagram_principal ?? '');
+  };
+
+  const cancelEditingBailarinos = () => {
+    setEditingBailarinos(null);
+    setBailarinosForm([]);
+    setInstagramPrincipalForm('');
+    setBailarinosError(null);
+  };
+
+  const handleSaveBailarinos = async (reg: Registration) => {
+    setSavingBailarinos(true);
+    setBailarinosError(null);
+    try {
+      // Decisão 1B locked 2026-05-22: prazo vazio = edição livre. Se preenchido
+      // e expirado, trava.
+      if (reg.event_id) {
+        const prazo = prazosPorEvento[reg.event_id];
+        if (prazo) {
+          const today = new Date().toISOString().slice(0, 10);
+          if (prazo < today) {
+            throw new Error('Inscrições encerradas no evento. Peça pro produtor editar.');
+          }
+        }
+      }
+
+      const formato = reg.formato_participacao ?? '';
+      const isGrupoLike = formato === 'Grupo' || formato === 'Conjunto';
+
+      // Normaliza + valida bailarinos. Mesmo padrão de handleSaveEdit em
+      // pages/Registrations.tsx (commit b2f9649).
+      const normalized: any[] = [];
+      for (let i = 0; i < bailarinosForm.length; i++) {
+        const b = bailarinosForm[i];
+        const cpfDigits = unmaskCpfCnpj(String(b?.cpf ?? ''));
+        if (cpfDigits && cpfDigits.length === 11 && !validateCpf(cpfDigits)) {
+          throw new Error(`CPF inválido no bailarino ${i + 1}${b?.nome ? ` (${b.nome})` : ''}.`);
+        }
+        if (cpfDigits && cpfDigits.length !== 11) {
+          throw new Error(`CPF incompleto no bailarino ${i + 1}${b?.nome ? ` (${b.nome})` : ''}.`);
+        }
+        const dobMasked = String(b?.data_nascimento ?? '').trim();
+        let dobIso = '';
+        if (dobMasked) {
+          const iso = parseDataISO(dobMasked);
+          if (!iso) throw new Error(`Data de nascimento inválida no bailarino ${i + 1}: use DD/MM/AAAA.`);
+          dobIso = iso;
+        }
+        normalized.push({
+          nome:             String(b?.nome ?? '').trim(),
+          cpf:              cpfDigits,
+          data_nascimento:  dobIso,
+          instagram_handle: isGrupoLike
+            ? undefined
+            : (String(b?.instagram_handle ?? '').trim().toLowerCase().replace(/^@/, '') || undefined),
+        });
+      }
+
+      const igPrincipal = String(instagramPrincipalForm ?? '').trim().toLowerCase().replace(/^@/, '');
+      const patch: Record<string, any> = {
+        bailarinos_detalhes: normalized,
+        instagram_principal: isGrupoLike ? (igPrincipal || null) : null,
+      };
+
+      // .select('id') força PostgREST a retornar rows afetadas — detecta RLS
+      // bloqueando (mesmo padrão hardening de pages/Registrations.tsx).
+      const { data, error } = await supabase
+        .from('registrations')
+        .update(patch)
+        .eq('id', reg.id)
+        .select('id');
+
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('Sem permissão pra editar essa inscrição. Recarregue a página e tente de novo.');
+      }
+
+      // Atualiza state local pra refletir sem refetch.
+      setRegistrations(prev => prev.map(r => r.id === reg.id ? { ...r, ...patch } : r));
+      cancelEditingBailarinos();
+    } catch (e: any) {
+      setBailarinosError(e.message ?? 'Erro ao salvar.');
+    } finally {
+      setSavingBailarinos(false);
+    }
+  };
+
   const handleDelete = async (reg: Registration) => {
     setDeleting(true);
     setError(null);
@@ -889,6 +1021,17 @@ const MinhasCoreografias = () => {
                       </div>
 
                       <div className="flex items-center gap-1">
+                        {/* A1 (2026-05-22): editar bailarinos. Pendente OU pago.
+                            Decisão 1B: trava após prazo_inscricao se preenchido. */}
+                        {(st.tone === 'ok' || isPendente) && (
+                          <button
+                            onClick={() => startEditingBailarinos(reg)}
+                            className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 font-black text-[9px] uppercase tracking-widest flex items-center gap-1.5 transition-all"
+                            title="Editar nome, CPF, data de nascimento e Instagram dos bailarinos"
+                          >
+                            <Users size={11} /> Editar dados
+                          </button>
+                        )}
                         {st.tone === 'ok' && (
                           <>
                             <button
@@ -1140,6 +1283,109 @@ const MinhasCoreografias = () => {
           </div>
         </div>
       )}
+
+      {/* ══════════════════════════════════════════════════════════
+          A1 (2026-05-22) — Editor inline de bailarinos
+          Modal centralizado, reusando components/BailarinosEditor.
+          RLS `inscrito_own_registrations` cobre UPDATE.
+      ══════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {editingBailarinos && (() => {
+          const reg = registrations.find(r => r.id === editingBailarinos);
+          if (!reg) return null;
+          const formato = reg.formato_participacao ?? '';
+          const isGrupoLike = formato === 'Grupo' || formato === 'Conjunto';
+          // Tenta puxar min/max de formacoes_config do evento. Fallback amplo
+          // (1-50) se evento não definiu — não bloqueia UX.
+          const formacaoConfig = reg.event_id
+            ? (formacoesPorEvento[reg.event_id] ?? []).find((f: any) => f?.name?.toLowerCase?.() === formato.toLowerCase())
+            : null;
+          const minMembers = formacaoConfig?.min_members ?? 1;
+          const maxMembers = formacaoConfig?.max_members ?? (isGrupoLike ? 50 : 3);
+
+          return (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                onClick={() => !savingBailarinos && cancelEditingBailarinos()}
+                className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+                className="relative bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full max-h-[92dvh] overflow-y-auto shadow-2xl border border-slate-200 dark:border-white/10"
+              >
+                <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 px-6 py-4 flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] mb-1 flex items-center gap-1.5">
+                      <Pencil size={11} /> Editar bailarinos
+                    </p>
+                    <h2 className="font-black text-lg uppercase tracking-tight text-slate-900 dark:text-white leading-tight">
+                      {reg.nome_coreografia ?? 'Coreografia'}
+                    </h2>
+                    {formato && (
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        {formato}
+                        {reg.categoria ? ` · ${reg.categoria}` : ''}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => !savingBailarinos && cancelEditingBailarinos()}
+                    disabled={savingBailarinos}
+                    className="p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-all disabled:opacity-50"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="p-6 space-y-4">
+                  <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded-2xl">
+                    <AlertCircle size={12} className="text-amber-500 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-amber-700 dark:text-amber-400 leading-relaxed">
+                      <strong>CPF e data de nascimento são obrigatórios</strong> pra emitir certificado e validar faixa etária da categoria. Use DD/MM/AAAA na data.
+                    </p>
+                  </div>
+
+                  <BailarinosEditor
+                    bailarinos={bailarinosForm}
+                    onChange={setBailarinosForm}
+                    formato={formato}
+                    instagramPrincipal={instagramPrincipalForm}
+                    onInstagramPrincipalChange={setInstagramPrincipalForm}
+                    minMembers={minMembers}
+                    maxMembers={maxMembers}
+                  />
+
+                  {bailarinosError && (
+                    <div className="flex items-start gap-2 p-3 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-xl">
+                      <AlertTriangle size={12} className="text-rose-500 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-rose-700 dark:text-rose-400">{bailarinosError}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-white/10 px-6 py-4 flex items-center justify-end gap-2">
+                  <button
+                    onClick={cancelEditingBailarinos}
+                    disabled={savingBailarinos}
+                    className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-all disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => handleSaveBailarinos(reg)}
+                    disabled={savingBailarinos}
+                    className="px-4 py-2 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-[#ff0068]/20 flex items-center gap-1.5 disabled:opacity-60"
+                  >
+                    {savingBailarinos ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />}
+                    Salvar
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
     </div>
   );
 };
