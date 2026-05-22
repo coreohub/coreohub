@@ -567,27 +567,25 @@ const MinhasCoreografias = () => {
   };
 
   /**
-   * Cancela fatura agregada PENDENTE. Padrão Stripe/Sympla: cupom não pode
-   * ser trocado em fatura existente — inscrito cancela e refaz. Chamado pelo
-   * botão "Cancelar fatura" abaixo da linha verde readonly.
+   * Handler unificado do "X" pra remover cupom. UX padrão: user clica X →
+   * sistema decide silenciosamente:
+   *   - Sem fatura criada → só limpa state (mesmo handler do applied client).
+   *   - Com fatura PENDENTE + cupom → cancela fatura no Asaas + zera local.
+   *     Sem confirmação extra (click no X é intenção explícita).
    *
-   * UX em 2 passos: click → seta `confirmCancelPayment` → modal customizado
-   * com AnimatePresence pergunta confirmação → click "Sim" → executa.
-   * (window.confirm é blocking + screen-reader fraca; substituído.)
+   * Padrão Sympla/Stripe: o user não precisa entender a diferença entre
+   * "remover cupom client" e "cancelar fatura". A complexidade fica embutida.
    */
   const [cancellingPayment, setCancellingPayment]       = useState<string | null>(null);
-  const [confirmCancelPayment, setConfirmCancelPayment] = useState<Grupo | null>(null);
   const [partialCancelWarning, setPartialCancelWarning] = useState<string | null>(null);
 
-  const handleCancelAggregatePayment = (grupo: Grupo) => {
-    if (!grupo.payment?.id) return;
-    setConfirmCancelPayment(grupo);
-  };
-
-  const executeConfirmedCancel = async () => {
-    const grupo = confirmCancelPayment;
-    if (!grupo?.payment?.id) return;
-    const paymentId = grupo.payment.id;
+  const handleUnifiedRemoveCoupon = async (grupo: Grupo) => {
+    const faturaComCupom = grupo.payment?.id && grupo.payment?.coupon_id;
+    if (!faturaComCupom) {
+      handleRemoveAggregateCoupon(grupo.eventId);
+      return;
+    }
+    const paymentId = grupo.payment!.id;
     setCancellingPayment(paymentId);
     setError(null);
     setPartialCancelWarning(null);
@@ -606,21 +604,19 @@ const MinhasCoreografias = () => {
         }
       );
       const data = await resp.json();
-      if (!resp.ok) throw new Error(data?.error ?? 'Erro ao cancelar fatura.');
+      if (!resp.ok) throw new Error(data?.error ?? 'Erro ao remover cupom.');
 
-      // Edge function pode retornar status 'partial_cancel' quando Asaas
-      // retorna 5xx — fatura cancelada localmente mas pode ainda existir
-      // no Asaas. Avisa o inscrito.
+      // Edge function retorna 'partial_cancel' quando Asaas 5xx — banner âmbar
+      // avisa inscrito que pode haver desincronia.
       if (data?.status === 'partial_cancel') {
         setPartialCancelWarning(
-          'Fatura cancelada no app, mas o Asaas pode demorar a refletir. ' +
+          'Cupom removido, mas o Asaas pode demorar a refletir. ' +
           'Se você receber cobrança pelo link antigo, contate o produtor.'
         );
       }
 
-      // Update local em vez de fetchAll() — evita 6 round-trips pra refletir
-      // 1 mudança. Tira payment do activePayments + zera link das
-      // registrations que estavam apontando pra ele.
+      // Update local: tira payment do activePayments + zera link das
+      // registrations. ~6 round-trips a menos que await fetchAll().
       setActivePayments(prev => {
         const next = { ...prev };
         delete next[grupo.eventId];
@@ -631,9 +627,7 @@ const MinhasCoreografias = () => {
           ? { ...r, payment_group_id: null, payment_url: null, payment_preference_id: null, charged_amount: null }
           : r
       ));
-      // Limpa estados de cupom desse evento (libera input pra novo cupom).
       handleRemoveAggregateCoupon(grupo.eventId);
-      setConfirmCancelPayment(null);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -1252,73 +1246,40 @@ const MinhasCoreografias = () => {
                     <ChevronRight size={12} />
                   </button>
                 </div>
-                {/* Cupom: padrão Stripe/Sympla.
-                    - Fatura PENDENTE já criada COM cupom → linha verde readonly
-                      (sem botão remover — fatura imutável; pra trocar, inscrito
-                      cancela e recria).
-                    - Sem fatura + cupom aplicado client-side → linha verde com X.
-                    - Sem fatura + input aberto → input + botão "Aplicar" + erro inline.
-                    - Sem fatura + idle → link "Tem cupom?". */}
-                {!podeAplicarCupom && faturaTemCupom && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl">
-                      <CheckCircle size={16} className="text-emerald-500 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-mono font-black text-sm text-emerald-700 dark:text-emerald-400">
-                          {faturaPendente?.coupon_code ?? 'Cupom'}
-                        </p>
-                        <p className="text-[10px] text-emerald-600 dark:text-emerald-500">
-                          Desconto de {fmtMoney(faturaPendente?.discount_total ?? 0)} já aplicado nesta fatura
-                        </p>
-                      </div>
+                {/* Cupom: 1 padrão único de UI pros 3 estados.
+                    - Cupom aplicado (client-side OU em fatura PENDENTE) → linha
+                      verde com X "Remover cupom". User não vê diferença entre
+                      "remover do state" e "cancelar fatura" — o handler
+                      decide silenciosamente.
+                    - Input aberto (sem aplicado) → input + botão "Aplicar" + erro inline.
+                    - Idle → link "Tem cupom?". */}
+                {(applied || faturaTemCupom) ? (
+                  <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl">
+                    <CheckCircle size={16} className="text-emerald-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-mono font-black text-sm text-emerald-700 dark:text-emerald-400">
+                        {applied?.code ?? faturaPendente?.coupon_code ?? 'Cupom'}
+                      </p>
+                      <p className="text-[10px] text-emerald-600 dark:text-emerald-500">
+                        Desconto de {fmtMoney(applied?.discount ?? faturaPendente?.discount_total ?? 0)} aplicado
+                      </p>
                     </div>
                     <button
-                      onClick={() => handleCancelAggregatePayment(grupo)}
+                      onClick={() => handleUnifiedRemoveCoupon(grupo)}
                       disabled={cancellingPayment === faturaPendente?.id}
-                      className="text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-rose-500 disabled:opacity-50 flex items-center gap-1 transition-colors"
+                      className="p-1 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 disabled:opacity-50 rounded-lg"
+                      aria-label="Remover cupom"
+                      title="Remover cupom"
                     >
                       {cancellingPayment === faturaPendente?.id ? (
-                        <><Loader2 size={10} className="animate-spin" /> Cancelando...</>
+                        <Loader2 size={14} className="animate-spin" />
                       ) : (
-                        <>Cancelar fatura pra trocar cupom</>
+                        <X size={14} />
                       )}
                     </button>
                   </div>
-                )}
-                {/* Sem cupom mas com fatura PENDENTE — permite cancelar pra aplicar
-                    cupom novo. Padrão Stripe/Sympla. */}
-                {!podeAplicarCupom && !faturaTemCupom && faturaPendente && (
-                  <button
-                    onClick={() => handleCancelAggregatePayment(grupo)}
-                    disabled={cancellingPayment === faturaPendente.id}
-                    className="text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-rose-500 disabled:opacity-50 flex items-center gap-1 transition-colors"
-                  >
-                    {cancellingPayment === faturaPendente.id ? (
-                      <><Loader2 size={10} className="animate-spin" /> Cancelando...</>
-                    ) : (
-                      <>Cancelar fatura pra aplicar cupom</>
-                    )}
-                  </button>
-                )}
-                {podeAplicarCupom && (
-                  applied ? (
-                    <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl">
-                      <CheckCircle size={16} className="text-emerald-500 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-mono font-black text-sm text-emerald-700 dark:text-emerald-400">{applied.code}</p>
-                        <p className="text-[10px] text-emerald-600 dark:text-emerald-500">
-                          Desconto de {fmtMoney(applied.discount)} aplicado
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleRemoveAggregateCoupon(grupo.eventId)}
-                        className="p-1 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 rounded-lg"
-                        aria-label="Remover cupom"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ) : showAggregateCoupon[grupo.eventId] ? (
+                ) : podeAplicarCupom && (
+                  showAggregateCoupon[grupo.eventId] ? (
                     <div className="space-y-2">
                       <div className="flex gap-2">
                         <label htmlFor={`aggregate-coupon-${grupo.eventId}`} className="sr-only">
@@ -1661,48 +1622,6 @@ const MinhasCoreografias = () => {
             >
               Completar perfil
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════
-          CONFIRM CANCEL INVOICE
-          Padrão Stripe/Sympla: cupom não muda em fatura PENDENTE.
-          Inscrito cancela + refaz pra aplicar outro cupom.
-      ══════════════════════════════════════════════════════════ */}
-      {confirmCancelPayment && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-          role="dialog"
-          aria-labelledby="confirm-cancel-title"
-          aria-modal="true"
-        >
-          <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 shadow-2xl p-6">
-            <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle size={18} className="text-amber-500" />
-            </div>
-            <h3 id="confirm-cancel-title" className="font-black uppercase tracking-tight text-slate-900 dark:text-white text-center mb-2">
-              Cancelar esta fatura?
-            </h3>
-            <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 text-center leading-relaxed mb-6">
-              Você poderá aplicar outro cupom e gerar uma nova. Suas inscrições continuam ativas — apenas o pagamento agregado é cancelado.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setConfirmCancelPayment(null)}
-                disabled={cancellingPayment !== null}
-                className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-white/10 text-slate-500 font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-white/5"
-              >
-                Voltar
-              </button>
-              <button
-                onClick={executeConfirmedCancel}
-                disabled={cancellingPayment !== null}
-                className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {cancellingPayment !== null ? <Loader2 size={12} className="animate-spin" /> : 'Sim, cancelar'}
-              </button>
-            </div>
           </div>
         </div>
       )}
