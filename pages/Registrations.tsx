@@ -419,22 +419,17 @@ const Registrations = () => {
   // Aceitar ambos pra cobrir rows antigas até backfill.
   const isPago = (s?: string) => s === 'APROVADO' || s === 'CONFIRMADO';
 
-  /** Sessão 4.2 item 3: deteccao de inscricoes com dados incompletos dos
-   *  bailarinos. CPF e data de nascimento sao obrigatorios pra emitir
-   *  certificado e validar faixa etaria. Se a inscricao tem modalidade
-   *  preenchida mas o array bailarinos_detalhes esta vazio/ausente, tambem
-   *  conta como incompleto (caso classico: registro zumbi de PWA cache).
-   *  Helper visivel tanto pro filter quanto pro render do badge. */
-  const isBailarinoIncompleto = (b: any) =>
-    !String(b?.cpf ?? '').trim() || !String(b?.data_nascimento ?? '').trim() || !String(b?.nome ?? '').trim();
-  const hasIncompleteBailarinos = (reg: any): boolean => {
-    const bailarinos = reg.bailarinos_detalhes;
-    if (!Array.isArray(bailarinos) || bailarinos.length === 0) {
-      // Sem array mas com modalidade declarada — claramente faltam dados.
-      return Boolean(reg.formato_participacao);
-    }
-    return bailarinos.some(isBailarinoIncompleto);
-  };
+  /** 🚨 DESABILITADO 2026-05-22 (noite) — bug grosso de implementação:
+   *  o helper lia `bailarinos_detalhes` em registrations, mas esse JSONB SÓ
+   *  tem `{id, nome, instagram_handle}`. CPF e data_nascimento vivem na
+   *  tabela `elenco` (separada, vinculada por user_id, com row própria por
+   *  bailarino). Pra checar incompletude de verdade precisa JOIN com elenco
+   *  via os ids em bailarinos_detalhes.
+   *  Helper retorna `false` constante até refatorar — sem isso, o chip
+   *  "X com dados incompletos", o badge "DADOS PENDENTES" e o fundo amber
+   *  por bailarino apareciam pra 100% das inscrições (falso positivo). */
+  const isBailarinoIncompleto = (_b: any) => false;
+  const hasIncompleteBailarinos = (_reg: any): boolean => false;
 
   const violatingRegs = useMemo(() => {
     return registrations

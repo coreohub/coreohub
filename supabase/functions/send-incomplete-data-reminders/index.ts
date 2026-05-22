@@ -70,6 +70,21 @@ Deno.serve(async (req) => {
     return respond(401, { error: 'Unauthorized' })
   }
 
+  // 🚨 DESABILITADO 2026-05-22 (noite) — bug grosso de implementação:
+  // o helper hasIncompleteBailarinos olhava em registrations.bailarinos_detalhes
+  // que NÃO tem CPF nem data_nascimento (só id+nome+instagram). Os dados reais
+  // ficam na tabela `elenco` separada, vinculada via user_id.
+  // Resultado: a função marcava 100% das inscrições como "dados pendentes" e
+  // disparava notif falsa pra todos os inscritos pagos.
+  // No-op temporário até refatorar com JOIN em elenco. Cron continua agendado
+  // mas não insere nada (retorna ok com sent=0).
+  return respond(200, {
+    status: 'ok',
+    message: 'temporarily_disabled_pending_elenco_refactor',
+    sent: 0,
+  })
+
+  // eslint-disable-next-line no-unreachable
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
