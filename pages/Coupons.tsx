@@ -420,7 +420,7 @@ const Coupons: React.FC = () => {
                   value={form.code}
                   onChange={e => setForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
                   placeholder="EX: DANCE20"
-                  className="w-full font-mono font-bold bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50 uppercase"
+                  className="w-full font-mono font-bold bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40 focus:border-[#ff0068]/50 uppercase"
                 />
               </Field>
 
@@ -463,7 +463,7 @@ const Coupons: React.FC = () => {
                         setForm(f => ({ ...f, discount_value: Math.max(0, raw) }));
                       }
                     }}
-                    className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+                    className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40 focus:border-[#ff0068]/50"
                   />
                 </Field>
               </div>
@@ -476,7 +476,7 @@ const Coupons: React.FC = () => {
                     value={form.max_uses}
                     onChange={e => setForm(f => ({ ...f, max_uses: e.target.value }))}
                     placeholder="Ilimitado"
-                    className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                    className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40 focus:border-[#ff0068]/50"
                   />
                 </Field>
                 <Field label="Limite por inscrito (opcional)">
@@ -486,7 +486,7 @@ const Coupons: React.FC = () => {
                     value={form.max_uses_per_user}
                     onChange={e => setForm(f => ({ ...f, max_uses_per_user: e.target.value }))}
                     placeholder="Ilimitado"
-                    className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                    className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40 focus:border-[#ff0068]/50"
                   />
                 </Field>
               </div>
@@ -496,7 +496,7 @@ const Coupons: React.FC = () => {
                   type="date"
                   value={form.expires_at}
                   onChange={e => setForm(f => ({ ...f, expires_at: e.target.value }))}
-                  className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+                  className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40 focus:border-[#ff0068]/50"
                 />
               </Field>
 

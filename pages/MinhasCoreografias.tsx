@@ -177,6 +177,10 @@ const MinhasCoreografias = () => {
   // inscrições do user. Fonte de verdade dos dados pessoais (CPF/data/nome).
   // Refator 2026-06-01 — o JSONB só tem id+nome+instagram_handle por design.
   const [elencoById, setElencoById] = useState<ElencoById>({});
+  // ID do user autenticado, cacheado no fetchAll inicial. Evita round-trips
+  // extras a cada click em "Aplicar cupom" (que precisa validar
+  // max_uses_per_user via supabase.auth.getUser).
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Tabs no topo (padrão Sympla/Eventbrite). Default mostra "Próximas" se
   // tem pelo menos 1 evento futuro; senão "Todas".
@@ -195,6 +199,7 @@ const MinhasCoreografias = () => {
         navigate('/auth');
         return;
       }
+      setCurrentUserId(user.id);
 
       // Perfil pra checar CPF (necessário antes de gerar fatura agregada — A4).
       const { data: profile } = await supabase
@@ -543,9 +548,9 @@ const MinhasCoreografias = () => {
     setApplyingAggregateCoupon(p => ({ ...p, [eventId]: true }));
     setAggregateCouponErrors(p => ({ ...p, [eventId]: null }));
     try {
-      // Passa user.id pra validar max_uses_per_user (limite por inscrito).
-      const { data: { user } } = await supabase.auth.getUser();
-      const { coupon, discount } = await validateCoupon(eventId, code, baseTotal, user?.id);
+      // userId cacheado no fetchAll inicial — evita round-trip extra a cada
+      // click no botão "Aplicar".
+      const { coupon, discount } = await validateCoupon(eventId, code, baseTotal, currentUserId ?? undefined);
       setAppliedAggregateCoupons(p => ({ ...p, [eventId]: { id: coupon.id, code: coupon.code, discount } }));
     } catch (e: any) {
       setAggregateCouponErrors(p => ({ ...p, [eventId]: e?.message ?? 'Cupom inválido.' }));
@@ -565,17 +570,27 @@ const MinhasCoreografias = () => {
    * Cancela fatura agregada PENDENTE. Padrão Stripe/Sympla: cupom não pode
    * ser trocado em fatura existente — inscrito cancela e refaz. Chamado pelo
    * botão "Cancelar fatura" abaixo da linha verde readonly.
+   *
+   * UX em 2 passos: click → seta `confirmCancelPayment` → modal customizado
+   * com AnimatePresence pergunta confirmação → click "Sim" → executa.
+   * (window.confirm é blocking + screen-reader fraca; substituído.)
    */
-  const [cancellingPayment, setCancellingPayment] = useState<string | null>(null);
-  const handleCancelAggregatePayment = async (grupo: Grupo) => {
-    const payment = grupo.payment;
-    if (!payment?.id) return;
-    const ok = window.confirm(
-      'Cancelar esta fatura? Você poderá aplicar outro cupom e gerar uma nova. Isso não afeta inscrições já confirmadas.'
-    );
-    if (!ok) return;
-    setCancellingPayment(payment.id);
+  const [cancellingPayment, setCancellingPayment]       = useState<string | null>(null);
+  const [confirmCancelPayment, setConfirmCancelPayment] = useState<Grupo | null>(null);
+  const [partialCancelWarning, setPartialCancelWarning] = useState<string | null>(null);
+
+  const handleCancelAggregatePayment = (grupo: Grupo) => {
+    if (!grupo.payment?.id) return;
+    setConfirmCancelPayment(grupo);
+  };
+
+  const executeConfirmedCancel = async () => {
+    const grupo = confirmCancelPayment;
+    if (!grupo?.payment?.id) return;
+    const paymentId = grupo.payment.id;
+    setCancellingPayment(paymentId);
     setError(null);
+    setPartialCancelWarning(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada.');
@@ -587,13 +602,38 @@ const MinhasCoreografias = () => {
             'Authorization': `Bearer ${session.access_token}`,
             'Content-Type':  'application/json',
           },
-          body: JSON.stringify({ payment_id: payment.id }),
+          body: JSON.stringify({ payment_id: paymentId }),
         }
       );
       const data = await resp.json();
       if (!resp.ok) throw new Error(data?.error ?? 'Erro ao cancelar fatura.');
-      // Refaz fetch pra refletir o cancelamento no state.
-      await fetchAll();
+
+      // Edge function pode retornar status 'partial_cancel' quando Asaas
+      // retorna 5xx — fatura cancelada localmente mas pode ainda existir
+      // no Asaas. Avisa o inscrito.
+      if (data?.status === 'partial_cancel') {
+        setPartialCancelWarning(
+          'Fatura cancelada no app, mas o Asaas pode demorar a refletir. ' +
+          'Se você receber cobrança pelo link antigo, contate o produtor.'
+        );
+      }
+
+      // Update local em vez de fetchAll() — evita 6 round-trips pra refletir
+      // 1 mudança. Tira payment do activePayments + zera link das
+      // registrations que estavam apontando pra ele.
+      setActivePayments(prev => {
+        const next = { ...prev };
+        delete next[grupo.eventId];
+        return next;
+      });
+      setRegistrations(prev => prev.map(r =>
+        r.payment_group_id === paymentId
+          ? { ...r, payment_group_id: null, payment_url: null, payment_preference_id: null, charged_amount: null }
+          : r
+      ));
+      // Limpa estados de cupom desse evento (libera input pra novo cupom).
+      handleRemoveAggregateCoupon(grupo.eventId);
+      setConfirmCancelPayment(null);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -1235,7 +1275,7 @@ const MinhasCoreografias = () => {
                     <button
                       onClick={() => handleCancelAggregatePayment(grupo)}
                       disabled={cancellingPayment === faturaPendente?.id}
-                      className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-rose-500 disabled:opacity-50 flex items-center gap-1 transition-colors"
+                      className="text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-rose-500 disabled:opacity-50 flex items-center gap-1 transition-colors"
                     >
                       {cancellingPayment === faturaPendente?.id ? (
                         <><Loader2 size={10} className="animate-spin" /> Cancelando...</>
@@ -1251,7 +1291,7 @@ const MinhasCoreografias = () => {
                   <button
                     onClick={() => handleCancelAggregatePayment(grupo)}
                     disabled={cancellingPayment === faturaPendente.id}
-                    className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-rose-500 disabled:opacity-50 flex items-center gap-1 transition-colors"
+                    className="text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-rose-500 disabled:opacity-50 flex items-center gap-1 transition-colors"
                   >
                     {cancellingPayment === faturaPendente.id ? (
                       <><Loader2 size={10} className="animate-spin" /> Cancelando...</>
@@ -1622,6 +1662,66 @@ const MinhasCoreografias = () => {
               Completar perfil
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════
+          CONFIRM CANCEL INVOICE
+          Padrão Stripe/Sympla: cupom não muda em fatura PENDENTE.
+          Inscrito cancela + refaz pra aplicar outro cupom.
+      ══════════════════════════════════════════════════════════ */}
+      {confirmCancelPayment && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          role="dialog"
+          aria-labelledby="confirm-cancel-title"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 shadow-2xl p-6">
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle size={18} className="text-amber-500" />
+            </div>
+            <h3 id="confirm-cancel-title" className="font-black uppercase tracking-tight text-slate-900 dark:text-white text-center mb-2">
+              Cancelar esta fatura?
+            </h3>
+            <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 text-center leading-relaxed mb-6">
+              Você poderá aplicar outro cupom e gerar uma nova. Suas inscrições continuam ativas — apenas o pagamento agregado é cancelado.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmCancelPayment(null)}
+                disabled={cancellingPayment !== null}
+                className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-white/10 text-slate-500 font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-white/5"
+              >
+                Voltar
+              </button>
+              <button
+                onClick={executeConfirmedCancel}
+                disabled={cancellingPayment !== null}
+                className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {cancellingPayment !== null ? <Loader2 size={12} className="animate-spin" /> : 'Sim, cancelar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Banner de partial cancel (Asaas 5xx) — alerta inscrito que fatura
+          local foi cancelada mas Asaas pode estar desincronizado. */}
+      {partialCancelWarning && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[70] max-w-md w-[calc(100%-2rem)] p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-2xl shadow-lg flex items-start gap-3" role="alert">
+          <AlertTriangle size={16} className="text-amber-500 shrink-0 mt-0.5" />
+          <p className="text-[11px] font-bold text-amber-700 dark:text-amber-400 flex-1 leading-relaxed">
+            {partialCancelWarning}
+          </p>
+          <button
+            onClick={() => setPartialCancelWarning(null)}
+            className="text-amber-600 hover:text-amber-700 dark:text-amber-400 shrink-0"
+            aria-label="Fechar aviso"
+          >
+            <X size={14} />
+          </button>
         </div>
       )}
 

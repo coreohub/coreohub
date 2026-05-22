@@ -62,11 +62,16 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Cancela no Asaas (best-effort — se falhar, fatura fica órfã mas o
-    // cancelamento local segue). Asaas usa DELETE /payments/{id} pra cobranças
-    // não pagas ainda.
+    // Cancela no Asaas. Diferencia status:
+    //   2xx/404/410 → fatura já não está ativa no Asaas, segue normal
+    //   5xx        → Asaas fora do ar → cancelamento local segue, mas marca
+    //                  `partial` no response pra front avisar inscrito que
+    //                  pode haver desincronia temporária.
+    //   4xx outros → log e segue (fatura inválida, mas local cancela)
+    //   rede falha → trata como 5xx (parcial)
     const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY')  ?? ''
     const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? ''
+    let asaasCancelStatus: 'ok' | 'not_found' | 'partial' | 'skipped' = 'skipped'
     if (payment.asaas_payment_id && ASAAS_API_KEY && ASAAS_BASE_URL) {
       try {
         const delRes = await fetch(`${ASAAS_BASE_URL}/payments/${payment.asaas_payment_id}`, {
@@ -76,13 +81,24 @@ Deno.serve(async (req) => {
             'Content-Type': 'application/json',
           },
         })
-        if (!delRes.ok) {
+        if (delRes.ok) {
+          asaasCancelStatus = 'ok'
+        } else if (delRes.status === 404 || delRes.status === 410) {
+          asaasCancelStatus = 'not_found'
+          console.log(`[cancel-aggregate-payment] fatura ${payment.asaas_payment_id} já removida no Asaas (${delRes.status})`)
+        } else if (delRes.status >= 500) {
+          asaasCancelStatus = 'partial'
           const errText = await delRes.text()
-          console.warn(`[cancel-aggregate-payment] Asaas DELETE retornou ${delRes.status}: ${errText.slice(0, 200)}`)
-          // Não throw — segue com cancelamento local. Fatura órfã expira no Asaas.
+          console.warn(`[cancel-aggregate-payment] Asaas 5xx (${delRes.status}) — cancelamento partial: ${errText.slice(0, 200)}`)
+        } else {
+          // 4xx outros — log mas considera ok (Asaas rejeitou mas local segue).
+          asaasCancelStatus = 'ok'
+          const errText = await delRes.text()
+          console.warn(`[cancel-aggregate-payment] Asaas ${delRes.status}: ${errText.slice(0, 200)}`)
         }
       } catch (asaasErr) {
-        console.warn('[cancel-aggregate-payment] falha rede Asaas (segue cancelamento local):', (asaasErr as Error).message)
+        asaasCancelStatus = 'partial'
+        console.warn('[cancel-aggregate-payment] falha rede Asaas (partial):', (asaasErr as Error).message)
       }
     }
 
@@ -108,10 +124,16 @@ Deno.serve(async (req) => {
       // Não throw — payment já está cancelado, fluxo principal OK.
     }
 
+    // Sinaliza pro front quando Asaas falhou — UI mostra banner âmbar
+    // "fatura cancelada local mas Asaas pode demorar a refletir".
+    const responseStatus = asaasCancelStatus === 'partial' ? 'partial_cancel' : 'cancelled'
     return respond(200, {
-      status:     'cancelled',
+      status:        responseStatus,
       payment_id,
-      message:    'Fatura cancelada. Você pode aplicar outro cupom e gerar nova fatura.',
+      asaas_status:  asaasCancelStatus,
+      message:       asaasCancelStatus === 'partial'
+        ? 'Fatura cancelada localmente. Asaas pode demorar a refletir — se receber cobrança pelo link antigo, contate o produtor.'
+        : 'Fatura cancelada. Você pode aplicar outro cupom e gerar nova fatura.',
     })
   } catch (error: any) {
     console.error('[cancel-aggregate-payment] erro:', error.message)
