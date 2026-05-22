@@ -1090,12 +1090,16 @@ const MinhasCoreografias = () => {
                 {podeAplicarCupom && (
                   showAggregateCoupon[grupo.eventId] ? (
                     <div className="flex gap-2">
+                      <label htmlFor={`aggregate-coupon-${grupo.eventId}`} className="sr-only">
+                        Código do cupom de inscrição
+                      </label>
                       <input
+                        id={`aggregate-coupon-${grupo.eventId}`}
                         type="text"
                         value={aggregateCouponInputs[grupo.eventId] ?? ''}
                         onChange={e => setAggregateCouponInputs(p => ({ ...p, [grupo.eventId]: e.target.value.toUpperCase() }))}
                         placeholder="Código do cupom"
-                        className="flex-1 px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-xs font-mono text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50 uppercase"
+                        className="flex-1 px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-xs font-mono text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40 focus:border-[#ff0068]/50 uppercase"
                       />
                       <button
                         onClick={() => {
@@ -1323,12 +1327,16 @@ const MinhasCoreografias = () => {
                               quem não tem cupom — clica em "Tem cupom?" pra abrir. */}
                           {showCoupon[reg.id] ? (
                             <div className="flex gap-2">
+                              <label htmlFor={`selective-coupon-${reg.id}`} className="sr-only">
+                                Código do cupom de taxa de seletiva
+                              </label>
                               <input
+                                id={`selective-coupon-${reg.id}`}
                                 type="text"
                                 value={couponInputs[reg.id] ?? ''}
                                 onChange={e => setCouponInputs(p => ({ ...p, [reg.id]: e.target.value.toUpperCase() }))}
                                 placeholder="Código do cupom"
-                                className="flex-1 px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-xs font-mono text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500/50 uppercase"
+                                className="flex-1 px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-xs font-mono text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/50 uppercase"
                               />
                               <button
                                 onClick={() => { setShowCoupon(p => ({ ...p, [reg.id]: false })); setCouponInputs(p => ({ ...p, [reg.id]: '' })); }}
