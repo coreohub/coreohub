@@ -293,6 +293,19 @@ Deno.serve(async (req) => {
       if (coupon.max_uses != null && coupon.used_count >= coupon.max_uses) {
         throw new Error('Cupom esgotado.')
       }
+      // Limite por inscrito (20260605). Conta payments do mesmo user+coupon
+      // ainda ativos (PENDENTE) ou já pagos (APROVADO). Bloqueia re-uso.
+      if (coupon.max_uses_per_user != null) {
+        const { count } = await supabase
+          .from('payments')
+          .select('id', { count: 'exact', head: true })
+          .eq('coupon_id', coupon.id)
+          .eq('user_id', user.id)
+          .in('status', ['APROVADO', 'PENDENTE'])
+        if ((count ?? 0) >= coupon.max_uses_per_user) {
+          throw new Error(`Você já usou este cupom o limite permitido (${coupon.max_uses_per_user}x).`)
+        }
+      }
       validatedCoupon = coupon
 
       // Soma baseFee de todas as registrations pra distribuir desconto

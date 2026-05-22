@@ -47,11 +47,17 @@ export async function deleteCoupon(id: string): Promise<void> {
 /**
  * Valida um cupom para um evento e retorna o desconto calculado sobre o valor base.
  * Lança erro com mensagem amigável se inválido.
+ *
+ * Passe `userId` pra ativar checagem de `max_uses_per_user` (boa prática
+ * Sympla/MP — limita re-uso do mesmo cupom pelo mesmo inscrito). Sem userId,
+ * só valida limites globais. Server (edge function) re-valida com userId
+ * mesmo se cliente omitir.
  */
 export async function validateCoupon(
   eventId: string,
   code: string,
   baseValue: number,
+  userId?: string,
 ): Promise<{ coupon: Coupon; discount: number; finalValue: number }> {
   const normalizedCode = code.trim().toUpperCase();
   if (!normalizedCode) throw new Error('Informe o código do cupom.');
@@ -77,6 +83,25 @@ export async function validateCoupon(
 
   if (coupon.max_uses != null && coupon.used_count >= coupon.max_uses) {
     throw new Error('Cupom esgotado.');
+  }
+
+  // Limite por inscrito (20260605). Conta payments do mesmo user+coupon que
+  // já foram pagos OU redimidos (coupon_redeemed_at). Inclui faturas legacy
+  // pré-2026-06-04 via status=APROVADO.
+  const maxPerUser = (coupon as any).max_uses_per_user as number | null | undefined;
+  if (maxPerUser != null && userId) {
+    const { count, error: cntErr } = await supabase
+      .from('payments')
+      .select('id', { count: 'exact', head: true })
+      .eq('coupon_id', coupon.id)
+      .eq('user_id', userId)
+      .in('status', ['APROVADO', 'PENDENTE']);
+    if (cntErr) {
+      console.warn('[validateCoupon] erro contar usos por user:', cntErr.message);
+      // Não bloqueia — falha graciosa. Server re-valida.
+    } else if ((count ?? 0) >= maxPerUser) {
+      throw new Error(`Você já usou este cupom o limite permitido (${maxPerUser}x).`);
+    }
   }
 
   const discount = coupon.discount_type === 'percent'

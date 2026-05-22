@@ -54,12 +54,13 @@ const Coupons: React.FC = () => {
   };
 
   const emptyForm = {
-    code:           '',
-    discount_type:  'percent' as DiscountType,
-    discount_value: 10,
-    max_uses:       '' as string | number,
-    expires_at:     '',
-    setores:        ['inscription'] as SetorAtomic[],
+    code:               '',
+    discount_type:      'percent' as DiscountType,
+    discount_value:     10,
+    max_uses:           '' as string | number,
+    max_uses_per_user:  '' as string | number,
+    expires_at:         '',
+    setores:            ['inscription'] as SetorAtomic[],
   };
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
@@ -84,9 +85,10 @@ const Coupons: React.FC = () => {
       code:           c.code,
       discount_type:  c.discount_type,
       discount_value: c.discount_value,
-      max_uses:       c.max_uses ?? '',
-      expires_at:     c.expires_at ?? '',
-      setores:        scopeToSetores(c.scope),
+      max_uses:           c.max_uses ?? '',
+      max_uses_per_user:  (c as any).max_uses_per_user ?? '',
+      expires_at:         c.expires_at ?? '',
+      setores:            scopeToSetores(c.scope),
     });
     setFormError(null);
     setShowModal(true);
@@ -160,23 +162,25 @@ const Coupons: React.FC = () => {
     try {
       if (editingId) {
         await updateCoupon(editingId, {
-          code:           form.code.trim().toUpperCase(),
-          discount_type:  form.discount_type,
-          discount_value: form.discount_value,
-          max_uses:       form.max_uses === '' ? null : Number(form.max_uses),
-          expires_at:     form.expires_at || null,
-          scope:          scopeMapped,
-        });
+          code:               form.code.trim().toUpperCase(),
+          discount_type:      form.discount_type,
+          discount_value:     form.discount_value,
+          max_uses:           form.max_uses === '' ? null : Number(form.max_uses),
+          max_uses_per_user:  form.max_uses_per_user === '' ? null : Number(form.max_uses_per_user),
+          expires_at:         form.expires_at || null,
+          scope:              scopeMapped,
+        } as any);
       } else {
         await createCoupon({
-          event_id:       selectedEventId,
-          code:           form.code,
-          discount_type:  form.discount_type,
-          discount_value: form.discount_value,
-          max_uses:       form.max_uses === '' ? null : Number(form.max_uses),
-          expires_at:     form.expires_at || null,
-          scope:          scopeMapped,
-        });
+          event_id:           selectedEventId,
+          code:               form.code,
+          discount_type:      form.discount_type,
+          discount_value:     form.discount_value,
+          max_uses:           form.max_uses === '' ? null : Number(form.max_uses),
+          max_uses_per_user:  form.max_uses_per_user === '' ? null : Number(form.max_uses_per_user),
+          expires_at:         form.expires_at || null,
+          scope:              scopeMapped,
+        } as any);
       }
       setShowModal(false);
       setEditingId(null);
@@ -465,7 +469,7 @@ const Coupons: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Limite de usos (opcional)">
+                <Field label="Limite total de usos (opcional)">
                   <input
                     type="number"
                     min={1}
@@ -475,15 +479,26 @@ const Coupons: React.FC = () => {
                     className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
                   />
                 </Field>
-                <Field label="Expira em (opcional)">
+                <Field label="Limite por inscrito (opcional)">
                   <input
-                    type="date"
-                    value={form.expires_at}
-                    onChange={e => setForm(f => ({ ...f, expires_at: e.target.value }))}
-                    className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+                    type="number"
+                    min={1}
+                    value={form.max_uses_per_user}
+                    onChange={e => setForm(f => ({ ...f, max_uses_per_user: e.target.value }))}
+                    placeholder="Ilimitado"
+                    className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
                   />
                 </Field>
               </div>
+
+              <Field label="Expira em (opcional)">
+                <input
+                  type="date"
+                  value={form.expires_at}
+                  onChange={e => setForm(f => ({ ...f, expires_at: e.target.value }))}
+                  className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+                />
+              </Field>
 
               {/* Scope selector — multi-select via checkboxes. Produtor escolhe
                   em quais setores o cupom vale. Combinações suportadas mapeiam

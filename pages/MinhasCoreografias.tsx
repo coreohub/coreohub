@@ -543,7 +543,9 @@ const MinhasCoreografias = () => {
     setApplyingAggregateCoupon(p => ({ ...p, [eventId]: true }));
     setAggregateCouponErrors(p => ({ ...p, [eventId]: null }));
     try {
-      const { coupon, discount } = await validateCoupon(eventId, code, baseTotal);
+      // Passa user.id pra validar max_uses_per_user (limite por inscrito).
+      const { data: { user } } = await supabase.auth.getUser();
+      const { coupon, discount } = await validateCoupon(eventId, code, baseTotal, user?.id);
       setAppliedAggregateCoupons(p => ({ ...p, [eventId]: { id: coupon.id, code: coupon.code, discount } }));
     } catch (e: any) {
       setAggregateCouponErrors(p => ({ ...p, [eventId]: e?.message ?? 'Cupom inválido.' }));
