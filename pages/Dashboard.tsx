@@ -52,7 +52,7 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
       setError(null);
       const { data, error: err } = await supabase
         .from('registrations')
-        .select('id, status, trilha_url, nome:nome_coreografia, formacao:formato_participacao, categoria_nome:categoria, estilo_nome:estilo_danca')
+        .select('id, status, status_pagamento, trilha_url, nome:nome_coreografia, formacao:formato_participacao, formato_participacao, categoria_nome:categoria, estilo_nome:estilo_danca, bailarinos_detalhes')
         .eq('user_id', profile.id)
         .order('criado_em', { ascending: false });
       if (err) setError('Não foi possível carregar suas inscrições. Recarregue a página em instantes.');
@@ -67,6 +67,27 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
   const comTrilha  = coreografias.filter(c => c.trilha_url).length;
   const pagas      = coreografias.filter(c => c.status === 'PAGO').length;
   const pendentes  = coreografias.filter(c => c.status === 'AGUARDANDO_PAGAMENTO').length;
+
+  // A3 (2026-05-22): banner "dados pendentes" no topo. Conta inscrições pagas
+  // (status_pagamento APROVADO/CONFIRMADO) que tem bailarinos sem CPF/nome/data.
+  // Mesma lógica do helper hasIncompleteBailarinos em pages/Registrations.tsx
+  // e da edge function send-incomplete-data-reminders. Não detecta inscrições
+  // pendentes — produtor avisa via outro canal antes de pagar.
+  const isBailarinoIncompleto = (b: any) =>
+    !String(b?.cpf ?? '').trim() ||
+    !String(b?.nome ?? '').trim() ||
+    !String(b?.data_nascimento ?? '').trim();
+  const hasIncompleteBailarinos = (reg: any): boolean => {
+    const bailarinos = reg.bailarinos_detalhes;
+    if (!Array.isArray(bailarinos) || bailarinos.length === 0) {
+      return Boolean(reg.formato_participacao);
+    }
+    return bailarinos.some(isBailarinoIncompleto);
+  };
+  const dadosPendentes = coreografias.filter(c =>
+    (c.status_pagamento === 'APROVADO' || c.status_pagamento === 'CONFIRMADO') &&
+    hasIncompleteBailarinos(c)
+  ).length;
 
   const statusGeral = total === 0
     ? { label: 'Sem inscrições', color: 'text-slate-400' }
@@ -105,6 +126,38 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
         <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl text-sm text-rose-600 dark:text-rose-400">
           {error}
         </div>
+      )}
+
+      {/* ── A3 (2026-05-22): banner dados pendentes ──
+          Click leva pro /minhas-coreografias onde o inscrito pode editar
+          (botão "Editar dados" implementado em A1). Bloqueia certificado e
+          triagem etária — daí a urgência da mensagem. */}
+      {dadosPendentes > 0 && (
+        <button
+          onClick={() => navigate('/minhas-coreografias')}
+          className="w-full flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-2xl text-left hover:bg-amber-100 dark:hover:bg-amber-500/15 transition-all"
+        >
+          <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+            <AlertTriangle size={16} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 mb-1">
+              Dados pendentes
+            </p>
+            <p className="text-sm font-black text-slate-900 dark:text-white leading-tight">
+              {dadosPendentes === 1
+                ? 'Você tem 1 coreografia com bailarinos sem CPF, nome ou data de nascimento'
+                : `Você tem ${dadosPendentes} coreografias com bailarinos sem CPF, nome ou data de nascimento`}
+            </p>
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
+              Sem esses dados, certificado não emite e bailarinos podem ficar fora da triagem etária.
+            </p>
+          </div>
+          <div className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 shrink-0 self-center">
+            Completar
+            <ChevronRight size={12} />
+          </div>
+        </button>
       )}
 
       {/* ── Guia de Inscrição (apenas inscritos) ── */}
