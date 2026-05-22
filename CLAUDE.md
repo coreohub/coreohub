@@ -236,6 +236,36 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-05-22 (tarde/noite) — Sessão A (notificação Grazieli) ✅ SHIPADO
+6 commits (`b6e4444` → `0c9af1a`). Objetivo: garantir que quando a Grazieli abrir o app (via notificação in-app + WhatsApp manual), ela tem pra onde ir e como completar os 40 CPFs faltando em 10 inscrições do Usualdance. Sem A1+A2+A3, WhatsApp dela cairia em beco sem saída.
+
+**A2 — Edge function `send-incomplete-data-reminders`** (`b6e4444`): cron diário 09:30 BRT que varre registrations APROVADAS/CONFIRMADAS com bailarinos incompletos (CPF/nome/data_nascimento vazios) e insere notif in-app pro user. Idempotência por dia via `metadata->>'reminder_type' = 'dados_pendentes_YYYY-MM-DD'`. Sem email — WhatsApp manual é o canal de pressão. Texto da notif diferenciado pra zumbi (sem array de bailarinos) vs incompleto parcial. Cron agendado job_id 13.
+
+**A1 — Editor inline de bailarinos em `/minhas-coreografias`** (`ef818ae`): inscrito edita CPF/nome/data/Instagram dos próprios bailarinos sem precisar pedir pro produtor. Botão "Editar dados" em cada card (PENDENTE ou APROVADO/CONFIRMADO). Modal centralizado com novo componente compartilhado `components/BailarinosEditor.tsx` (refactor — `pages/Registrations.tsx` também passou a usar, removendo ~120 linhas de Tailwind inline). Decisão 1B locked: edita perene quando `prazo_inscricao` está vazio; trava com mensagem clara após expirar. Validação CPF + data ISO + Instagram lowercase. RLS `inscrito_own_registrations` cobre. `.select('id')` no `.update()` detecta bloqueio silencioso (mesmo hardening do painel do produtor).
+
+**A3 — Banner "dados pendentes" no `/dashboard`** (`4846055`): card amber sticky no topo quando inscrito tem ≥1 coreografia paga com bailarinos incompletos. CTA "Completar →" navega pra `/minhas-coreografias`. Helper `hasIncompleteBailarinos` replicado inline (mesma lógica do painel + edge function).
+
+**A4 — Storage state Playwright pra inscrito**: `scripts/playwright.auth.mjs` + `scripts/screenshot.mjs` ganham `--as=inscrito` no `validRoles`. `.env.local.example` agora documenta 3 contas (admin/produtor/inscrito). Conta `inscrito@coreohub.com` criada via Dashboard > Add User (signup endpoint do app retornou 500 — bug separado anotado em pendência operacional).
+
+**Fix crítico JWT decode anti-pattern** (`0c9af1a`): smoke E2E descobriu que `send-incomplete-data-reminders` + `send-trilha-reminders` usavam `authHeader === \`Bearer \${env.SUPABASE_SERVICE_ROLE_KEY}\`` — exatamente o anti-pattern documentado em [[feedback-jwt-role-check]] desde 2026-05-20. Causa: pg_cron envia JWT válido mas que pode ser de geração diferente do env (caso de rotação histórica). String não bate, retorna 401. Fix: decodifica payload do JWT + valida `role === 'service_role'` (Supabase platform já valida assinatura via verify_jwt=true antes da function rodar). Pattern já aplicado em `daily-release-funds/index.ts:63` desde 2026-05-20 — só não tinha sido replicado nas 2 funções novas. Ambas re-deployadas via CLI.
+
+**Conta `inscrito@coreohub.com` criada via Dashboard Add User** porque o signup endpoint do app está retornando 500 em prod. Bug crítico em produção (qualquer inscrito novo não consegue se cadastrar via app). Pendente investigar em `Authentication → Logs` ou Auth Hooks. Workaround: produtor cria conta manualmente pelo Dashboard.
+
+**Smoke E2E validado end-to-end**:
+- Como inscrito → `/dashboard` mostra banner amber "1 coreografia com dados pendentes" + Guia de Inscrição + cards do evento
+- `/minhas-coreografias` mostra card da inscrição mock com botão "EDITAR DADOS" + chips COMPETITIVA/JUNIOR/JAZZ + status CONFIRMADA
+- Cron invocado via `net.http_post` → status 200, `total_scanned: 11, total_pending: 11, sent: 11`
+- Sininho com badge "1" aparece no header em tempo real (realtime postgres_changes)
+
+**Decisões da sessão**:
+- Grazieli vai receber **1 notif consolidada** ("Você tem 10 coreografias com bailarinos sem CPF") em vez de 10 spammando o sino. Inserida manualmente via SQL (delete das 10 que o cron tinha inserido + insert da agregada). Em sessão futura vale agregar por user no próprio cron.
+- 10 outras contas no Auth são leads (logaram via Google/Email mas zero inscrições). Vale virar feature "Funil de leads" no painel produtor (P3 backlog).
+
+**Achados de auditoria**:
+- 11 users em `auth.users`, apenas Grazieli (10) e `inscrito@coreohub.com` (1 mock — agora deletado) tinham inscrição no Usualdance. Resto é signup sem follow-through. Não é bug, é funil de conversão.
+- Erro de console **400** em `/minhas-coreografias` quando user sem inscrição abre a página. Cosmético — UI renderiza empty state OK. Suspeita: query Supabase com IN ([]) vazio.
+- **5 crons agendados em prod** (`send-payment-reminders`, `expire-pending-payments`, `cleanup-orphan-tracks`, `send-trilha-reminders`, `send-incomplete-data-reminders`). 2 deles (`send-trilha-reminders` e a nova) tinham o anti-pattern JWT — agora corrigido. Os 3 antigos provavelmente já estavam OK (memória cita que `daily-release-funds` usa o pattern correto desde 2026-05-20).
+
 ### 2026-05-22 (madrugada — virou de domingo) — Bundle Sessão 4 + Opção B notificações ✅ SHIPADO
 Madrugada 21→22, 13 commits + 2 migrations + 3 edge function deploys. Maior sessão registrada nessa janela. Estrutura em 4 grandes blocos:
 
@@ -407,6 +437,8 @@ Priorização cronológica detalhada em `memory/MEMORY.md` + cada item tem sua m
 
 **✅ Bundle Sessão 4 + Opção B SHIPADO em 2026-05-22 (madrugada)** — 13 commits cobrindo Sessão 4.1 (P5+P8+sort+paginação) + UX review 5 commits (rename/chip/dados incompletos/editor bailarinos/drawer filtros) + fix crítico RLS UPDATE + B1/B2/B3/B5 do roadmap notificações. Detalhes em [[bundle-sessao-4-2-opcao-b-shipado]].
 
+**✅ Sessão A SHIPADA em 2026-05-22 (tarde/noite)** — 6 commits (b6e4444→0c9af1a) pra desbloquear notificação pra Grazieli completar dados: A1 editor inline de bailarinos no `/minhas-coreografias` + componente compartilhado `BailarinosEditor.tsx` (refactor), A2 cron `send-incomplete-data-reminders`, A3 banner "dados pendentes" no `/dashboard`, A4 storage state Playwright pra inscrito + fix JWT decode em 2 edge functions. Detalhes em [[sessao-a-grazieli-shipado]].
+
 **Nenhum P1 destravado em aberto.** Próximos itens precisam de ação externa (smoke test) ou viraram P2 (esforço maior).
 
 ### 🟨 P2 — Alto valor, esforço maior
@@ -432,7 +464,9 @@ Priorização cronológica detalhada em `memory/MEMORY.md` + cada item tem sua m
 - **`notifications.metadata` sem GIN index** — query `metadata->>'registration_id'` no idempotency check vira table scan. Sem dor enquanto <10k notifs. Criar `CREATE INDEX notifications_metadata_gin ON notifications USING GIN (metadata)` quando crescer.
 
 ### ⚠️ Pendência operacional
-- **Service_role_key precisa ser rotacionada** — vazou no transcript durante smoke 2026-05-21 (erro do bash com `source .env` malformado). User vai rotacionar quando puder. Atualizar 3 lugares depois: `.env` local, possível header de webhook no painel Asaas, secret no Supabase Functions (auto).
+- **🔴 Bug crítico em prod: signup `/auth/v1/signup` retorna 500** — descoberto 2026-05-22 noite. Qualquer inscrito novo que tente criar conta via app bate em erro. Workaround atual: produtor cria conta via Dashboard > Authentication > Add User. Investigar em **Authentication → Logs** OU **Authentication → Hooks** (talvez Auth Hook custom configurado por engano que falha). Sem isso, **nenhum inscrito novo se cadastra em produção**. Top 1 prioridade próxima sessão.
+- **Funil de leads no painel produtor** — 10 users em `auth.users` que logaram via Google/Email mas nunca completaram inscrição em nenhum evento. Vale virar feature: aba "Leads" em /qg-organizador com count e CTA "Lembrar de se inscrever via email". P3 backlog — sem urgência.
+- **Service_role_key precisa ser rotacionada** — vazou no transcript durante smoke 2026-05-21 (erro do bash com `source .env` malformado). User vai rotacionar quando puder. Atualizar 3 lugares depois: `.env` local, possível header de webhook no painel Asaas, secret no Supabase Functions (auto). NOTA: as edge functions agora usam JWT decode pra auth (não comparam string), então rotação não quebra crons.
 - **Subconta Hemer com saldo R$ ~0,00 (mais R$ 13,50 retidos no D+7 invisíveis na view padrão)** — sobra do smoke do D+7. A divergência saldo Asaas vs CoreoHub foi corrigida no fix `51c3046` (refund agora atualiza `platform_commissions`).
 - **Cron `send-trilha-reminders` agendado mas sem dados** — primeira execução 2026-05-22 09:00 BRT. Provavelmente passa direto porque evento Usualdance 2026 não tem `prazo_trilhas` setado em `configuracoes`. Pra ver cron funcionar de verdade: produtor configura prazo em `/configuracoes` ou edita SQL direto. Aceitável — é cron preparado pro futuro.
 - **Polimento residual:** `pages/ProducerDashboard.tsx:197` faz `select` em `platform_commissions` sem filtrar `refunded_at` (usado pra gráficos históricos). Não bloqueia, mas se algum chart derivar daí, mostra receita inflada. Anotado pra polir depois.
