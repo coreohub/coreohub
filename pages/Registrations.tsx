@@ -13,10 +13,24 @@ import { refundRegistration } from '../services/refundService';
 import EventPickerSheet from '../components/EventPickerSheet';
 import { maskCpfCnpj, unmaskCpfCnpj, validateCpf, maskData, parseDataISO } from '../utils/masks';
 import BailarinosEditor, { type BailarinoFormValue } from '../components/BailarinosEditor';
+import {
+  hasIncompleteBailarinos as hasIncompleteBailarinosUtil,
+  isElencoIncompleto,
+  collectAllBailarinosIds,
+  type ElencoById,
+  type ElencoRow,
+} from '../utils/bailarinos';
 
 const Registrations = () => {
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [filteredRegistrations, setFilteredRegistrations] = useState<any[]>([]);
+  // Map de rows da tabela `elenco` (id → row), hidratada via batch fetch
+  // após carregar as registrations. Fonte de verdade dos dados pessoais
+  // (CPF, data_nascimento, nome). O JSONB `bailarinos_detalhes` só tem
+  // `{id, nome, instagram_handle}` por design (ver pages/InscricaoWizard.tsx:826).
+  // RLS `producer_reads_event_elenco` (migration 20260601) libera o produtor
+  // a ler elenco dos bailarinos referenciados nas inscrições do evento dele.
+  const [elencoById, setElencoById] = useState<ElencoById>({});
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('ALL');
@@ -75,10 +89,11 @@ const Registrations = () => {
       estilo_danca:         reg.estilo_danca ?? '',
       tipo_apresentacao:    reg.tipo_apresentacao ?? '',
       // Sessão 4.2 item 2: clone profundo do array de bailarinos pra editor inline.
-      // CPF chega do banco sem máscara — aplicamos no display pra digitação confortável,
-      // limpamos no save. Instagram chega sem '@' (lowercase aplicada no input).
-      // Data nascimento exibida em DD/MM/AAAA (mais rapida que calendario nativo,
-      // padrao do InscricaoWizard) — convertida pra ISO no save.
+      // TODO etapa 5: ler CPF/data_nascimento de elencoById[b.id] (fonte real)
+      // em vez do JSONB (sempre vazio). Atualmente abre o editor com CPF/data
+      // em branco mesmo com dados completos em elenco — comportamento idêntico
+      // ao pré-refator, fix completo na etapa 5 junto com refator do save +
+      // BailarinosEditor + MinhasCoreografias.
       bailarinos: Array.isArray(reg.bailarinos_detalhes)
         ? reg.bailarinos_detalhes.map((b: any) => ({
             nome:              b?.nome ?? '',
@@ -319,6 +334,25 @@ const Registrations = () => {
       setRegistrations(enriched);
       setFilteredRegistrations(enriched);
 
+      // Hidrata elenco em batch. RLS `producer_reads_event_elenco` filtra
+      // automaticamente pelos ids referenciados nas inscrições do produtor.
+      // Sem isso, helper trataria tudo como incompleto (id no JSONB sem row
+      // visível = inconsistente). Aqui o JSONB é fonte da lista de ids; o
+      // elenco fornece os dados pessoais.
+      const allIds = collectAllBailarinosIds(enriched);
+      if (allIds.length > 0) {
+        const { data: elenco } = await supabase
+          .from('elenco')
+          .select('id, nome, cpf, data_nascimento')
+          .in('id', allIds);
+        const map: ElencoById = Object.fromEntries(
+          (elenco ?? []).map((e: ElencoRow) => [e.id, e])
+        );
+        setElencoById(map);
+      } else {
+        setElencoById({});
+      }
+
       if (cfg?.tolerancia) setToleranceRule(cfg.tolerancia);
       if (cfg?.age_reference) setAgeRefMode(cfg.age_reference as 'EVENT_DAY' | 'YEAR_END' | 'FIXED_DATE');
       if (cfg?.age_reference_date) setAgeRefFixed(cfg.age_reference_date);
@@ -419,17 +453,10 @@ const Registrations = () => {
   // Aceitar ambos pra cobrir rows antigas até backfill.
   const isPago = (s?: string) => s === 'APROVADO' || s === 'CONFIRMADO';
 
-  /** 🚨 DESABILITADO 2026-05-22 (noite) — bug grosso de implementação:
-   *  o helper lia `bailarinos_detalhes` em registrations, mas esse JSONB SÓ
-   *  tem `{id, nome, instagram_handle}`. CPF e data_nascimento vivem na
-   *  tabela `elenco` (separada, vinculada por user_id, com row própria por
-   *  bailarino). Pra checar incompletude de verdade precisa JOIN com elenco
-   *  via os ids em bailarinos_detalhes.
-   *  Helper retorna `false` constante até refatorar — sem isso, o chip
-   *  "X com dados incompletos", o badge "DADOS PENDENTES" e o fundo amber
-   *  por bailarino apareciam pra 100% das inscrições (falso positivo). */
-  const isBailarinoIncompleto = (_b: any) => false;
-  const hasIncompleteBailarinos = (_reg: any): boolean => false;
+  /** Re-habilitado 2026-06-01 (refator) — agora consulta `elencoById`
+   *  hidratado no fetchData. Detalhe da topologia em utils/bailarinos.ts. */
+  const isBailarinoIncompleto = (b: any) => isElencoIncompleto(elencoById[b?.id]);
+  const hasIncompleteBailarinos = (reg: any): boolean => hasIncompleteBailarinosUtil(reg, elencoById);
 
   const violatingRegs = useMemo(() => {
     return registrations
@@ -512,7 +539,7 @@ const Registrations = () => {
       });
     }
     setFilteredRegistrations(result);
-  }, [searchTerm, paymentFilter, modalidadeFilter, categoriaFilter, estiloFilter, inscritoFilter, tipoApresentacaoFilter, dateFilter, quickAlert, registrations]);
+  }, [searchTerm, paymentFilter, modalidadeFilter, categoriaFilter, estiloFilter, inscritoFilter, tipoApresentacaoFilter, dateFilter, quickAlert, registrations, elencoById]);
 
   // Sessão 4.1 sort: ordena depois de filtrar pra estabilizar a navegação por
   // página (sem reorder no meio da paginação).
@@ -608,7 +635,7 @@ const Registrations = () => {
       if (hasIncompleteBailarinos(r)) incompletos++;
     }
     return { vencendo, noTrilha, incompletos };
-  }, [registrations]);
+  }, [registrations, elencoById]);
 
   /* Stats no topo — cards de KPI (padrão Stripe Dashboard).
      Derivados de registrations (não filteredRegistrations) pra manter
@@ -1683,7 +1710,12 @@ const Registrations = () => {
                     ) : (
                     <div className="space-y-2">
                       {viewingReg.bailarinos_detalhes.map((b: any, i: number) => {
-                        const incompleto = isBailarinoIncompleto(b);
+                        // Lê dados pessoais reais da `elenco` via JOIN no JSONB.
+                        // Fallback no `b.nome` quando o JSONB tem o nome mas o
+                        // elenco ainda não foi hidratado (loading) — evita "—".
+                        const elenco = elencoById[b?.id];
+                        const incompleto = isElencoIncompleto(elenco);
+                        const nome = elenco?.nome ?? b.nome ?? `Bailarino ${i + 1}`;
                         return (
                           <div key={i} className={`flex items-center justify-between gap-3 p-3 rounded-xl ${
                             incompleto
@@ -1692,13 +1724,13 @@ const Registrations = () => {
                           }`}>
                             <div className="min-w-0 flex-1">
                               <p className="text-[12px] font-bold text-slate-900 dark:text-white truncate flex items-center gap-1.5">
-                                {b.nome ?? `Bailarino ${i + 1}`}
+                                {nome}
                                 {incompleto && (
                                   <AlertTriangle size={11} className="text-amber-500 shrink-0" />
                                 )}
                               </p>
                               <p className={`text-[10px] ${incompleto ? 'text-amber-700 dark:text-amber-400 font-bold' : 'text-slate-400'}`}>
-                                CPF {formatCpf(b.cpf)} · Nasc. {formatDateBR(b.data_nascimento)}
+                                CPF {formatCpf(elenco?.cpf)} · Nasc. {formatDateBR(elenco?.data_nascimento)}
                                 {incompleto && <span className="ml-1">· pedir ao inscrito</span>}
                               </p>
                             </div>
