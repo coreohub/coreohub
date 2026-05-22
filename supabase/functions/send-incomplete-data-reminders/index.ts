@@ -70,21 +70,10 @@ Deno.serve(async (req) => {
     return respond(401, { error: 'Unauthorized' })
   }
 
-  // 🚨 DESABILITADO 2026-05-22 (noite) — bug grosso de implementação:
-  // o helper hasIncompleteBailarinos olhava em registrations.bailarinos_detalhes
-  // que NÃO tem CPF nem data_nascimento (só id+nome+instagram). Os dados reais
-  // ficam na tabela `elenco` separada, vinculada via user_id.
-  // Resultado: a função marcava 100% das inscrições como "dados pendentes" e
-  // disparava notif falsa pra todos os inscritos pagos.
-  // No-op temporário até refatorar com JOIN em elenco. Cron continua agendado
-  // mas não insere nada (retorna ok com sent=0).
-  return respond(200, {
-    status: 'ok',
-    message: 'temporarily_disabled_pending_elenco_refactor',
-    sent: 0,
-  })
-
-  // eslint-disable-next-line no-unreachable
+  // Reabilitado 2026-06-01 (refator). Agora faz JOIN entre
+  // bailarinos_detalhes[].id e a tabela `elenco` (fonte de verdade dos dados
+  // pessoais). Helper inline espelha utils/bailarinos.ts pra evitar
+  // cross-environment import (Deno vs Vite).
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
@@ -108,22 +97,31 @@ Deno.serve(async (req) => {
   // Idempotency marker do dia. notif desse reg com esse marker = pulamos.
   const reminderType = `dados_pendentes_${todayBR}`
 
-  // Helper inline (sem cross-environment import) — espelha o helper
-  // hasIncompleteBailarinos / isBailarinoIncompleto de pages/Registrations.tsx.
-  // Triplice: CPF/nome/data_nascimento. Qualquer 1 vazio = incompleto.
-  const isBailarinoIncompleto = (b: any) =>
-    !String(b?.cpf ?? '').trim() ||
-    !String(b?.nome ?? '').trim() ||
-    !String(b?.data_nascimento ?? '').trim()
+  // Helper inline (sem cross-environment import) — espelha utils/bailarinos.ts.
+  // Triplice via JOIN com elenco: CPF/nome/data_nascimento. Qualquer 1 vazio =
+  // incompleto. Row em elenco ausente (id no JSONB sem match) = incompleto também.
+  type ElencoRow = { id: string; nome?: string | null; cpf?: string | null; data_nascimento?: string | null }
+  type ElencoById = Record<string, ElencoRow>
 
-  const hasIncompleteBailarinos = (reg: any): boolean => {
+  const isElencoIncompleto = (e?: ElencoRow | null): boolean => {
+    if (!e) return true
+    return (
+      !String(e.cpf ?? '').trim() ||
+      !String(e.data_nascimento ?? '').trim() ||
+      !String(e.nome ?? '').trim()
+    )
+  }
+
+  const hasIncompleteBailarinos = (reg: any, elencoById: ElencoById): boolean => {
     const bailarinos = reg.bailarinos_detalhes
     if (!Array.isArray(bailarinos) || bailarinos.length === 0) {
       // Sem array mas com modalidade declarada — registro zumbi (caso Grazieli
       // "Entre cordas e sonhos"). Conta como incompleto.
       return Boolean(reg.formato_participacao)
     }
-    return bailarinos.some(isBailarinoIncompleto)
+    const ids = bailarinos.map((b: any) => b?.id).filter(Boolean)
+    if (ids.length === 0) return Boolean(reg.formato_participacao)
+    return ids.some((id: string) => isElencoIncompleto(elencoById[id]))
   }
 
   type Registration = {
@@ -148,11 +146,31 @@ Deno.serve(async (req) => {
 
   if (regErr) return respond(500, { error: regErr.message })
 
+  // Hidrata elenco em batch. Service role bypassa RLS — pega todos os ids
+  // referenciados em bailarinos_detalhes de TODAS as registrations.
+  const allBailarinosIds = [...new Set(
+    (regs ?? []).flatMap((r: any) =>
+      Array.isArray(r.bailarinos_detalhes)
+        ? r.bailarinos_detalhes.map((b: any) => b?.id).filter(Boolean)
+        : []
+    )
+  )] as string[]
+
+  let elencoById: ElencoById = {}
+  if (allBailarinosIds.length > 0) {
+    const { data: elenco, error: elencoErr } = await supabase
+      .from('elenco')
+      .select('id, nome, cpf, data_nascimento')
+      .in('id', allBailarinosIds)
+    if (elencoErr) return respond(500, { error: elencoErr.message })
+    elencoById = Object.fromEntries((elenco ?? []).map((e: any) => [e.id, e as ElencoRow]))
+  }
+
   // Agrupa por user_id pra contar quantas inscrições do mesmo user estão
   // pendentes — UI pode mostrar "Você tem 3 coreografias com dados pendentes".
   // Mas a notif é por REGISTRATION (não por user agregado) pra navegar direto
   // pra inscrição específica via cta_url.
-  const pendentes = (regs ?? [] as Registration[]).filter(hasIncompleteBailarinos)
+  const pendentes = (regs ?? [] as Registration[]).filter((r: any) => hasIncompleteBailarinos(r, elencoById))
 
   if (pendentes.length === 0) {
     return respond(200, { status: 'ok', message: 'Nenhuma inscrição pendente hoje', today: todayBR, total_scanned: regs?.length ?? 0 })
