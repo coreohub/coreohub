@@ -9,6 +9,12 @@ import { motion } from 'framer-motion';
 import { Profile as UserProfile, UserRole } from '../types';
 import { supabase } from '../services/supabase';
 import GuiaDeInscricao from '../components/GuiaDeInscricao';
+import {
+  hasIncompleteBailarinos,
+  collectAllBailarinosIds,
+  type ElencoById,
+  type ElencoRow,
+} from '../utils/bailarinos';
 
 const INSCRITO_ROLES = new Set([
   UserRole.STUDIO_DIRECTOR,
@@ -45,6 +51,9 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
   const [loading, setLoading] = useState(true);
   // UX#12: erro silencioso virou erro visível.
   const [error, setError] = useState<string | null>(null);
+  // Map de rows da tabela `elenco` referenciadas pelas inscrições do inscrito.
+  // RLS `inscrito_own_elenco` (user_id = auth.uid) cobre — sem migration extra.
+  const [elencoById, setElencoById] = useState<ElencoById>({});
   const isInscrito = INSCRITO_ROLES.has(activeRole);
 
   useEffect(() => {
@@ -56,7 +65,22 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
         .eq('user_id', profile.id)
         .order('criado_em', { ascending: false });
       if (err) setError('Não foi possível carregar suas inscrições. Recarregue a página em instantes.');
-      if (data) setCoreografias(data);
+      if (data) {
+        setCoreografias(data);
+        // Hidrata elenco em batch. Fonte de verdade dos dados pessoais
+        // (CPF/data/nome) — o JSONB `bailarinos_detalhes` só tem id+nome+@.
+        const allIds = collectAllBailarinosIds(data);
+        if (allIds.length > 0) {
+          const { data: elenco } = await supabase
+            .from('elenco')
+            .select('id, nome, cpf, data_nascimento')
+            .in('id', allIds);
+          const map: ElencoById = Object.fromEntries(
+            (elenco ?? []).map((e: ElencoRow) => [e.id, e])
+          );
+          setElencoById(map);
+        }
+      }
       setLoading(false);
     };
     fetchCoreografias();
@@ -68,9 +92,15 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
   const pagas      = coreografias.filter(c => c.status === 'PAGO').length;
   const pendentes  = coreografias.filter(c => c.status === 'AGUARDANDO_PAGAMENTO').length;
 
-  // A3 helper hasIncompleteBailarinos REMOVIDO 2026-05-22 (noite). Lia em
-  // bailarinos_detalhes que não tem CPF/data_nascimento — falso positivo.
-  // Voltará com JOIN em elenco quando refatorado.
+  // A3 (2026-05-22 reabilitado em 2026-06-01): banner "dados pendentes" no
+  // topo. Conta inscrições pagas (APROVADO/CONFIRMADO) com bailarinos cuja
+  // row em `elenco` está sem CPF/nome/data_nascimento. Não detecta inscrições
+  // pendentes — produtor avisa via outro canal antes de pagar. Helper
+  // compartilhado em utils/bailarinos.ts faz JOIN via bailarinos_detalhes[].id.
+  const dadosPendentes = coreografias.filter(c =>
+    (c.status_pagamento === 'APROVADO' || c.status_pagamento === 'CONFIRMADO') &&
+    hasIncompleteBailarinos(c, elencoById)
+  ).length;
 
   const statusGeral = total === 0
     ? { label: 'Sem inscrições', color: 'text-slate-400' }
@@ -111,10 +141,37 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
         </div>
       )}
 
-      {/* A3 banner "dados pendentes" REMOVIDO 2026-05-22 (noite) — false
-          positive. Helper lia em registrations.bailarinos_detalhes (que não
-          tem CPF/nasc) em vez da tabela `elenco`. Voltará quando JOIN com
-          elenco estiver implementado corretamente. */}
+      {/* ── A3 banner "dados pendentes" ──
+          Reabilitado 2026-06-01 (refator). Click leva pro /minhas-coreografias
+          onde inscrito edita CPF/nasc do próprio elenco (etapa 5). Bloqueia
+          certificado e triagem etária — daí a urgência da mensagem. */}
+      {dadosPendentes > 0 && (
+        <button
+          onClick={() => navigate('/minhas-coreografias')}
+          className="w-full flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-2xl text-left hover:bg-amber-100 dark:hover:bg-amber-500/15 transition-all"
+        >
+          <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+            <AlertTriangle size={16} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 mb-1">
+              Dados pendentes
+            </p>
+            <p className="text-sm font-black text-slate-900 dark:text-white leading-tight">
+              {dadosPendentes === 1
+                ? 'Você tem 1 coreografia com bailarinos sem CPF, nome ou data de nascimento'
+                : `Você tem ${dadosPendentes} coreografias com bailarinos sem CPF, nome ou data de nascimento`}
+            </p>
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
+              Sem esses dados, certificado não emite e bailarinos podem ficar fora da triagem etária.
+            </p>
+          </div>
+          <div className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 shrink-0 self-center">
+            Completar
+            <ChevronRight size={12} />
+          </div>
+        </button>
+      )}
 
       {/* ── Guia de Inscrição (apenas inscritos) ── */}
       {isInscrito && (
