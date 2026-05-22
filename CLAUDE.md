@@ -226,6 +226,50 @@ Pasta `~/.claude/projects/.../memory/` tem contexto histórico denso. Em **toda 
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-05-22 (madrugada — virou de domingo) — Bundle Sessão 4 + Opção B notificações ✅ SHIPADO
+Madrugada 21→22, 13 commits + 2 migrations + 3 edge function deploys. Maior sessão registrada nessa janela. Estrutura em 4 grandes blocos:
+
+**Bloco 1 — Bundle Sessão 4.1 painel /registrations** (`415877b` + audit `5140051`):
+- **P5 comparativo edição anterior** — banner "vs edição 2025" com delta % de receita + inscrições quando produtor tem evento com `edition_year < atual` no dropdown. Mesmo princípio do `ResultsPanel.tsx:259`.
+- **P8 banner alertas inteligentes** — 3 chips no topo (vencendo 24h / trilhas pendentes / fora da faixa). Click filtra a lista direto ou pula pra aba TRIAGEM. Heurística "vencendo 24h" usa `created_at` entre 48-72h (default dueDate Asaas = +3d).
+- **Sort header** — click em Coreografia/Data/Valor/Pagamento alterna asc/desc. Default data desc.
+- **Paginação 50 rows** — só renderiza quando passa de 50; reset auto pra página 1 quando filtros/sort mudam.
+- **Audit fixes pós-shipping**: "Limpar filtros" não zerava `quickAlert`/`tipoApresentacaoFilter`/`dateFilter`; CSV exportava em ordem de banco ignorando sort visível.
+
+**Bloco 2 — UX review sequencial baseado em screenshots do user** (commits `1f9b9e5` → `b2f9649`, 5 commits):
+- **Item 1+4 (`1f9b9e5`)**: "Abrir no Asaas" → "Abrir fatura" no modal. Chip persistente "Filtrando: X (N resultados) [×]" quando quickAlert ativo — fix do bug visual em que todas as 10 inscrições do user matchavam o filtro de trilhas pendentes e nada parecia mudar.
+- **Item 3 (`f59d5f0`)**: alerta "X com dados incompletos" no banner P8 + badge "DADOS PENDENTES" no header da seção Bailarinos + fundo amber em cards individuais. Helper `hasIncompleteBailarinos` detecta 3 cenários (array ausente / array vazio com modalidade declarada / qualquer bailarino sem CPF/nome/nasc).
+- **Item 2 v1 (`30bb8da`)**: editor inline de bailarinos no modal — nome/CPF (`maskCpfCnpj`)/data/instagram. Botão "+ Adicionar bailarino" + "Remover" por linha.
+- **Item 6 (`f2abaa8`)**: drawer único de filtros estilo Sympla/Linear. Search + botão "Filtros (N)" no canto + chips rosa dos filtros ativos abaixo (com X individual + "Limpar tudo"). Modal centralizado com 7 selects empilhados.
+- **Item 2 v2 (`b2f9649`)**: revisão do editor de bailarino seguindo regra do Wizard público — Instagram per-bailarino só em Solo/Duo/Trio (`maxMembers <= 3`), 1 campo único `instagram_principal` no rodapé pra Grupo/Conjunto. Data nasc trocada de `<input type="date">` (calendário lento pra ano antigo) por input mascarado DD/MM/AAAA (`maskData` + `parseDataISO`). Save normaliza handles obsoletos quando muda modalidade.
+
+**Bloco 3 — Bug crítico RLS produtor UPDATE em registrations** (`ded2e3e` + migration `20260525`):
+Auditoria descobriu que a edit inline (modalidade/categoria/estilo/mostra desde sessão Grazieli + editor de bailarinos agora) **NUNCA funcionou pra produtor não-super-admin desde 2026-04-28**. Só existia policy `producer_reads_event_registrations` FOR SELECT + bypass de super_admin. PostgREST retornava 0 rows sem erro, modal fechava, React atualizava state, banco continuava intacto. F5 perdia tudo.
+- Migration `20260525_producer_updates_registrations.sql` aplicada em prod via Dashboard: nova policy FOR UPDATE com USING + WITH CHECK = produtor é `created_by` do evento; trigger `protect_registrations_status_columns` estendido pra também reverter `user_id`, `event_id`, `created_at` (impede produtor "roubar" inscrição mudando dono ou movendo entre eventos).
+- Hardening em `handleSaveEdit`: `.select('id')` no `.update()` força PostgREST a devolver as rows afetadas. Se RLS bloqueia, throw com mensagem clara em vez de bug silencioso.
+- **Validado em prod**: user logado como **produtor real do Usualdance** (não super_admin) editou CPF de bailarino DESERT FIRE → persistiu após F5 ✅.
+- **Benefício colateral importante**: outras 2 telas que faziam UPDATE em registrations também estavam silently broken: [pages/CheckIn.tsx:125](pages/CheckIn.tsx#L125) (check-in QR não persistia) e [pages/ResultsPanel.tsx:207-218](pages/ResultsPanel.tsx#L207-L218) (publicar resultados não publicava). Ambas agora funcionam pra produtor real. Validar em smoke quando rolar evento presencial.
+
+**Bloco 4 — Opção B notificações multi-canal** (commits `85310ea`, `681d275`, `0437548`):
+- **B5 PWA install tracking** (`85310ea`): plugou `trackEvent` no `usePWAInstall` hook. 5 eventos custom em GA4 + Meta Pixel paralelo via `fbq('trackCustom', ...)`: `pwa_install_available`, `pwa_install_prompt_shown`, `pwa_install_accepted/dismissed`, `pwa_installed`. Cada um carrega `display_mode` (browser/standalone). Try/catch defensivo — pixel bloqueado nunca quebra a feature.
+- **B1 schema in-app inbox** (`681d275`): migration `20260526_notifications_inbox.sql` aplicada em prod. Tabela `notifications` (12 cols: id/user_id/event_id/type/severity/title/body/cta_url/cta_label/metadata JSONB/read_at/created_at). RLS: user lê e atualiza próprias (trigger `protect_notifications_columns` impede mexer em tudo exceto `read_at`); super_admin bypass; INSERT/DELETE deliberadamente sem policy = só service_role e super_admin podem criar. 2 indices (partial em unread + full em created_at desc). RPC `mark_all_notifications_read()` SECURITY DEFINER pra bulk update.
+- **B2 NotificationBell** (`0437548`): componente novo `components/NotificationBell.tsx` plugado no Header entre toggle theme e user menu. Bell + badge rosa "1"→"9+" com contagem de não lidas. Dropdown popover (max 50 itens) com card por notif (ícone colorido por severity, título bold quando não lida, body line-clamp-2, tempo relativo "agora/há 5 min/há 2h/há 3d", CTA inline rosa). Realtime via `postgres_changes` filter `user_id=eq.${userId}` — inserts/updates aparecem sem refetch. Click marca lido optimistic + navega (URL relativa via React Router, absoluta abre nova aba). Botão "Tudo lido" usa o RPC. Empty state amigável.
+- **B3 send-trilha-reminders** (`0437548`): nova edge function deployed (`supabase functions deploy ...` rodado direto). Lê `configuracoes.prazo_trilhas` (TEXT YYYY-MM-DD) de todos eventos. Classifica em 2 janelas catch-up: '15d' (13-16d) e '5d' (3-6d). Pra cada evento na janela, pega registrations APROVADO sem trilha_url + user_id NOT NULL. Idempotência via tabela `notifications`: query filter por `metadata->>'registration_id'` + `metadata->>'reminder_type'`. Sem marker em registrations precisar de migration extra. Insere notif in-app primeiro + send-email best-effort (template novo `trilha_reminder` em send-email com 2 tons — last chance quando ≤5d). Hoje em America/Sao_Paulo via `Intl.DateTimeFormat({ timeZone: 'America/Sao_Paulo' })` pra evitar off-by-one do Deno UTC.
+- **Cron diário 09:00 BRT** agendado via `cron.schedule` (job_id 10). Mesmo padrão dos crons `send-payment-reminders`, `expire-pending-payments`, `cleanup-orphan-tracks` — usa `current_setting('app.settings.service_role_key', true)`.
+
+**Smoke validado**: INSERT manual de notif `severity=warning` → badge "1" apareceu no sino do user logado **sem F5** (realtime), dropdown abriu com card amarelo, click marcou lido (bolinha some) + navegou pra `/registrations`. End-to-end OK.
+
+**Decisões locked pra próxima sessão**:
+- Email "trilha faltando" usa `configuracoes.prazo_trilhas` (não data do evento). ✅ Já implementado em B3.
+- In-app inbox aprovado. ✅ B1+B2.
+- PWA install tracking conecta nos analytics existentes (GA4 master + Meta Pixel master) — sem novo provider. ✅ B5.
+- **B4 Push Web defer** — ~4h de esforço pra cobertura 15-30% (taxa típica de aceitar permissão). Faz sentido só depois do inbox virar baseline + algum produtor demandar.
+
+**Achados de auditoria pendentes** (não bloqueiam, anotados):
+- `audience_tickets`, `workshop_registrations`, `video_selections`, `aggregate_payments`, `coupons` — mesmo padrão "produtor só SELECT" pode estar silently broken. Auditoria sistemática ~2h numa sessão futura.
+- Performance: `send-trilha-reminders` faz 1 query de count por registration (otimizar pra bulk `IN`). `notifications.metadata` sem GIN index (criar quando crescer).
+- Cosméticos: `formatRelative` no Bell não atualiza com tempo passando (notif fica "agora" indefinidamente); limit 50 sem paginação no dropdown.
+
 ### 2026-05-21 (tarde) — Bundle P1-4 (residuais destravados) ✅ SHIPADO
 Commit `9463e66`. 4 itens da fila "destravados pra próxima sessão" — autorizados em bloco pelo user:
 - **Checkout.tsx** — UPDATE direto pra `'APROVADO'` (remove duplo CONFIRMADO→APROVADO legacy do cupom 100%). 1 query a menos por checkout gratuito.
@@ -351,12 +395,17 @@ Priorização cronológica detalhada em `memory/MEMORY.md` + cada item tem sua m
 
 **✅ Bundle P1 SHIPADO em 2026-05-20** (commit `5077112`) — 7 itens: #40 Exceções validação, Sweep status_pagamento + helper, Guia "Esconder 14d", #35 Selo Asaas mono, #36 Auditoria selo, #42 KYC banner, EventPickerSheet custom.
 
+**✅ Bundle Sessão 4 + Opção B SHIPADO em 2026-05-22 (madrugada)** — 13 commits cobrindo Sessão 4.1 (P5+P8+sort+paginação) + UX review 5 commits (rename/chip/dados incompletos/editor bailarinos/drawer filtros) + fix crítico RLS UPDATE + B1/B2/B3/B5 do roadmap notificações. Detalhes em [[bundle-sessao-4-2-opcao-b-shipado]].
+
 **Nenhum P1 destravado em aberto.** Próximos itens precisam de ação externa (smoke test) ou viraram P2 (esforço maior).
 
 ### 🟨 P2 — Alto valor, esforço maior
-- **Painel /registrations Sessão 4** — drill-down side panel + ações em massa + sort header + paginação. ~8-10h.
+- **Auditoria RLS sistemática outras tabelas** — `audience_tickets`, `workshop_registrations`, `video_selections`, `aggregate_payments`, `coupons` podem ter mesmo padrão "produtor só SELECT, UPDATE silently broken" que descobrimos em registrations 2026-05-22. Heurística: UI tem "Editar" pro produtor + tabela só tem `*_reads_*` policy + `super_admin_all_*`. ~2h. Decorrência da auditoria do bug RLS em [[bug-rls-producer-update-registrations]].
+- **Painel /registrations Sessão 4.2** — drill-down side panel + ações em massa + análise financeira (Top 5 estúdios, distribuição por modalidade). ~10h. Sessão 4.1 (quick wins) já shipada 2026-05-22.
+- **B4 Push Web (notificações)** — ~4h. Cobertura 15-30% (taxa típica de aceitar permissão). Faz sentido só depois do inbox virar baseline + algum produtor demandar. VAPID keys + permission UX + send-push edge function. Service Worker já existe via workbox.
 - **Phase 6 — Mesa de Som offline-first** (`#37`) — botão "Baixar pacote do evento" pré-cacheia trilhas + narrações no Cache API. Outbox de live_status. ~1-2 sprints.
 - **A19 — Testes automatizados** — Vitest + GitHub Actions + mock Supabase client. 3 PRs (webhook → sweep/KYC/reminders → seletiva/pricing). ~4-6h. Trigger: ~5 produtores ativos OU primeira regressão cara.
+- **Smoke pós-RLS fix em CheckIn + ResultsPanel** — produtor real testar QR check-in (persiste agora?) + "Publicar resultados" (atualiza banco agora?). Beneficio colateral do fix `ded2e3e` 2026-05-22. ~30min.
 - **Card Saldo: ler saldo real do Asaas via API** — hoje mostra `net_amount` esperado, pode divergir do saldo real se houver dívida pendente na subconta. UX a polir.
 - **Test E2E cenário 3 D+7** (botão Transferir agora) — defer pelo user em 2026-05-21. Cenários 1 + 1.5 + 2 passaram.
 - **Bundle index 891 kB** — warning Vite > 500kB. Code-split BarChart + jspdf ajudaria. LCP em 3G.
@@ -366,10 +415,18 @@ Priorização cronológica detalhada em `memory/MEMORY.md` + cada item tem sua m
 - **/LP nome festival + GA + vitrine na home** — bloqueado por decisão DNS (Hostinger → Cloudflare).
 - **Multi-jurado seletiva v1.1** — página `/jurado-seletiva` dedicada (modo blind). Infra de DB pronta. Quando algum produtor demandar.
 
+### 🪶 Cosméticos / pequenos achados de auditoria 2026-05-22
+- **NotificationBell `formatRelative` não re-renderiza** — notif fica "agora" mesmo passando 1h se dropdown ficar aberto. Fix futuro: `setInterval(forceUpdate, 60_000)`. Não bloqueia.
+- **NotificationBell sem paginação** — limit 50 hard. Quem receber 51+ perde as mais antigas. v1 acceptable. Adicionar "ver mais" quando necessário.
+- **`send-trilha-reminders` 1 query de count por registration** — pra evento com 200+ regs APROVADAS sem trilha, vira 200 round-trips. Otimizar pra bulk `IN` quando virar problema.
+- **`notifications.metadata` sem GIN index** — query `metadata->>'registration_id'` no idempotency check vira table scan. Sem dor enquanto <10k notifs. Criar `CREATE INDEX notifications_metadata_gin ON notifications USING GIN (metadata)` quando crescer.
+
 ### ⚠️ Pendência operacional
-- **Subconta Hemer com saldo R$ ~0,00 (mais R$ 13,50 retidos no D+7 invisíveis na view padrão)** — sobra do smoke do D+7. A divergência saldo Asaas vs CoreoHub foi corrigida no fix `51c3046` (refund agora atualiza `platform_commissions`).
 - **Service_role_key precisa ser rotacionada** — vazou no transcript durante smoke 2026-05-21 (erro do bash com `source .env` malformado). User vai rotacionar quando puder. Atualizar 3 lugares depois: `.env` local, possível header de webhook no painel Asaas, secret no Supabase Functions (auto).
+- **Subconta Hemer com saldo R$ ~0,00 (mais R$ 13,50 retidos no D+7 invisíveis na view padrão)** — sobra do smoke do D+7. A divergência saldo Asaas vs CoreoHub foi corrigida no fix `51c3046` (refund agora atualiza `platform_commissions`).
+- **Cron `send-trilha-reminders` agendado mas sem dados** — primeira execução 2026-05-22 09:00 BRT. Provavelmente passa direto porque evento Usualdance 2026 não tem `prazo_trilhas` setado em `configuracoes`. Pra ver cron funcionar de verdade: produtor configura prazo em `/configuracoes` ou edita SQL direto. Aceitável — é cron preparado pro futuro.
 - **Polimento residual:** `pages/ProducerDashboard.tsx:197` faz `select` em `platform_commissions` sem filtrar `refunded_at` (usado pra gráficos históricos). Não bloqueia, mas se algum chart derivar daí, mostra receita inflada. Anotado pra polir depois.
+- **Grazieli 40 bailarinos sem CPF** — confirmado via SQL: 10 inscrições do `gra_503@hotmail.com` no Usualdance, total 40 bailarinos com CPF=NULL e data_nascimento=NULL. Bloqueia certificado + triagem etária. User vai mandar WhatsApp manual cobrando. Inscrição "Entre cordas e sonhos- Studio de dança Grazieli Baldan" é zumbi mais grave (Solo com array `bailarinos_detalhes` vazio).
 
 ## Não fazer
 
