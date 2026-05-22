@@ -532,16 +532,11 @@ Deno.serve(async (req) => {
       })
       .in('id', registration_ids)
 
-    // Incrementa used_count do cupom (best-effort, mesmo padrão de
-    // create-payment-asaas e create-video-selection-payment). Conta como
-    // "uso" mesmo se inscrito não pagar — alinhado com a UX dos outros
-    // checkouts (cron de expiração não decrementa).
-    if (validatedCoupon) {
-      await supabase
-        .from('coupons')
-        .update({ used_count: Number(validatedCoupon.used_count ?? 0) + 1 })
-        .eq('id', validatedCoupon.id)
-    }
+    // Refator (b) 2026-06-01: incremento de `used_count` movido pro webhook
+    // PAYMENT_RECEIVED (branch AGG em asaas-webhook). Antes incrementava aqui
+    // na CRIAÇÃO — cupom contava como usado mesmo se inscrito cancelasse OU
+    // se a fatura Asaas falhasse depois. Idempotência via
+    // payments.coupon_redeemed_at (marker setado no webhook).
 
     // A10 (audit): email de confirmação da criação da fatura. Best-effort —
     // falha não bloqueia o fluxo principal (UI já tem a invoice_url no response).

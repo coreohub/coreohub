@@ -488,12 +488,39 @@ async function handleAggregatePayment(opts: {
     .from('payments')
     .update(paymentUpdate)
     .eq('id', paymentId)
-    .select('id, user_id, event_id, value_total, commission_total, producer_total')
+    .select('id, user_id, event_id, value_total, commission_total, producer_total, coupon_id, coupon_redeemed_at')
     .maybeSingle()
 
   if (payErr || !paymentRow) {
     console.error(`[asaas-webhook][aggregate] payment_id=${paymentId} não encontrado:`, payErr?.message)
     return respond({ status: 'error', reason: 'payment_not_found' })
+  }
+
+  // Refator (b) 2026-06-01: incremento idempotente de coupons.used_count.
+  // Só aqui (após pagamento confirmado) e nunca duas vezes (marker
+  // coupon_redeemed_at). Se webhook entregar 2x, o segundo NOOP.
+  if (statusInterno === 'APROVADO' && paymentRow.coupon_id && !paymentRow.coupon_redeemed_at) {
+    const { data: coupon } = await supabase
+      .from('coupons')
+      .select('used_count')
+      .eq('id', paymentRow.coupon_id)
+      .maybeSingle()
+    if (coupon) {
+      const { error: incErr } = await supabase
+        .from('coupons')
+        .update({ used_count: Number(coupon.used_count ?? 0) + 1 })
+        .eq('id', paymentRow.coupon_id)
+      if (incErr) {
+        console.warn(`[asaas-webhook][aggregate] erro incrementar used_count coupon=${paymentRow.coupon_id}:`, incErr.message)
+      } else {
+        // Marca como redimido pra próximo retry do webhook ser noop.
+        await supabase
+          .from('payments')
+          .update({ coupon_redeemed_at: new Date().toISOString() })
+          .eq('id', paymentId)
+        console.log(`[asaas-webhook][aggregate] coupon ${paymentRow.coupon_id} used_count++ (idempotente)`)
+      }
+    }
   }
 
   // Carrega registrations linkadas (faz independente do status, pra logging
