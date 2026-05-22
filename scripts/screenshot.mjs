@@ -33,11 +33,29 @@ const OUT_DIR = resolve(__dirname, '..', 'screenshots');
 
 const arg = process.argv[2];
 if (!arg) {
-  console.error('❌ Uso: node scripts/screenshot.mjs /rota[,/rota2,...]');
+  console.error('❌ Uso: node scripts/screenshot.mjs registrations[,qg-organizador,...]');
+  console.error('   (sem barra inicial — Git Bash no Windows converte /rota em path absoluto)');
   process.exit(1);
 }
 
-const routes = arg.split(',').map(r => r.trim()).filter(Boolean);
+// Tolerante a 3 formatos pra UX no Windows + Mac:
+//   - "registrations"      → /registrations (recomendado)
+//   - "/registrations"     → /registrations (POSIX shells / cmd Windows)
+//   - "C:/Program Files/Git/registrations" → /registrations (Git Bash mangling)
+const stripWindowsMangling = (s) => {
+  // Path absoluto Windows (C:\...\) → pega segmento final
+  if (/^[a-zA-Z]:[\\/]/.test(s)) return '/' + s.split(/[\\/]/).pop();
+  // Múltiplos slashes iniciais (workaround MSYS) → reduz pra 1
+  if (s.startsWith('//')) return '/' + s.replace(/^\/+/, '');
+  return s;
+};
+
+const routes = arg
+  .split(',')
+  .map(r => r.trim())
+  .filter(Boolean)
+  .map(stripWindowsMangling)
+  .map(r => (r.startsWith('/') ? r : `/${r}`));
 
 // Storage state opcional — se não existe, segue sem login (cobre rotas públicas).
 let hasState = false;

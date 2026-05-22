@@ -21,8 +21,10 @@ Workflow obrigatório do CoreoHub: depois de qualquer mudança visual estrutural
 ## Screenshot 1 rota
 
 ```powershell
-node scripts/screenshot.mjs /registrations
+node scripts/screenshot.mjs registrations
 ```
+
+⚠ **Sem barra inicial em Git Bash no Windows** — MSYS converte `/registrations` em `C:\Program Files\Git\registrations` (path mangling). O script normaliza ambos os formatos, mas o seguro é passar sem barra.
 
 Saída em `screenshots/`:
 - `registrations-desktop.png` (1440×900)

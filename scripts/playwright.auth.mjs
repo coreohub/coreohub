@@ -50,10 +50,19 @@ try {
   await page.fill('input[type="password"]', PASSWORD);
 
   console.log('→ Submetendo login');
-  await Promise.all([
-    page.waitForURL(url => !url.pathname.startsWith('/auth'), { timeout: 15000 }),
-    page.click('button[type="submit"], button:has-text("Entrar")'),
-  ]);
+  await page.click('button[type="submit"]');
+
+  // Auth.tsx tem aliases /auth e /login — race condition no waitForURL pode
+  // sair antes do token Supabase aparecer. Aguarda o token de verdade no
+  // localStorage como sinal autoritativo de "logado".
+  console.log('→ Aguardando token Supabase no localStorage');
+  await page.waitForFunction(() => {
+    const keys = Object.keys(localStorage);
+    return keys.some(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+  }, { timeout: 15000 });
+
+  // Espera mais um tick pra navegação após token settle (idle network).
+  await page.waitForLoadState('networkidle', { timeout: 10000 });
 
   console.log(`✓ Logado, URL atual: ${page.url()}`);
 
