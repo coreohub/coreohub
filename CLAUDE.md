@@ -236,7 +236,32 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
-### 2026-05-22 (tarde/noite) — Sessão A (notificação Grazieli) ✅ SHIPADO
+### 2026-05-22 (madrugada — virou de quinta) — 🚨 Sessão A DESABILITADA em prod por bug grosso
+
+Commit `4602573`. Após shipping da Sessão A (~6h antes), Grazieli avisou que cadastrou os 40 CPFs sim. Auditoria via SQL confirmou: **61 bailarinos em `elenco`, 61 com CPF, 61 com data_nascimento**. Tudo completo. Helper meu lia o lugar errado.
+
+**Bug**: helper `hasIncompleteBailarinos` em 3 lugares (`Registrations.tsx`, `Dashboard.tsx`, edge function) procurava `cpf`/`data_nascimento`/`nome` em `registrations.bailarinos_detalhes` — JSONB que SÓ tem `{id, nome, instagram_handle}` (referência leve). CPF/data ficam na tabela **`elenco` separada**, código `pages/InscricaoWizard.tsx:826-835` mostra isso explicitamente. Eu deveria ter aberto o INSERT antes de codar o helper.
+
+**Impactos em prod** (antes do disable):
+1. Cron rodou 09:30 BRT e inseriu notif falsa pra TODOS os inscritos pagos
+2. Banner amber no `/dashboard` aparecia pra todos
+3. Chip "X com dados incompletos" no painel `/registrations` sempre não-zero
+4. Badge "DADOS PENDENTES" + fundo amber por bailarino — idem
+5. User passou vergonha com cliente real
+
+**Fix temporário (`4602573`)**:
+- Edge function retorna 200 com `sent=0` cedo (no-op)
+- `hasIncompleteBailarinos` retorna `false` constante
+- Banner amber removido do Dashboard
+- Notif falsas deletadas via SQL no Dashboard
+
+**Mantido (não dão dano sozinhos)**: editor inline de bailarinos em `/minhas-coreografias`, componente `BailarinosEditor.tsx`, conta `inscrito@coreohub.com`, storage Playwright inscrito.
+
+**Top 1 próxima sessão**: refator com `elenco` JOIN (`plano_refactor_elenco_dados_pendentes.md`). Migration RLS elenco pro produtor + refator helper x3 + hidratar elencoById + refator editor pra UPSERT em elenco + re-habilitar edge function. ~5h.
+
+**Lição capturada**: antes de escrever helper que LÊ um campo, abrir o INSERT que ESCREVE nesse campo + confirmar shape exato. TS type permite shape vago `any[]`, mas conteúdo real é definido no INSERT. Reforço em [[feedback-consultar-memoria-antes-implementar]].
+
+### 2026-05-22 (tarde/noite) — Sessão A (notificação Grazieli) ⚠️ SHIPADO mas DESABILITADO mesma noite
 6 commits (`b6e4444` → `0c9af1a`). Objetivo: garantir que quando a Grazieli abrir o app (via notificação in-app + WhatsApp manual), ela tem pra onde ir e como completar os 40 CPFs faltando em 10 inscrições do Usualdance. Sem A1+A2+A3, WhatsApp dela cairia em beco sem saída.
 
 **A2 — Edge function `send-incomplete-data-reminders`** (`b6e4444`): cron diário 09:30 BRT que varre registrations APROVADAS/CONFIRMADAS com bailarinos incompletos (CPF/nome/data_nascimento vazios) e insere notif in-app pro user. Idempotência por dia via `metadata->>'reminder_type' = 'dados_pendentes_YYYY-MM-DD'`. Sem email — WhatsApp manual é o canal de pressão. Texto da notif diferenciado pra zumbi (sem array de bailarinos) vs incompleto parcial. Cron agendado job_id 13.
@@ -437,9 +462,22 @@ Priorização cronológica detalhada em `memory/MEMORY.md` + cada item tem sua m
 
 **✅ Bundle Sessão 4 + Opção B SHIPADO em 2026-05-22 (madrugada)** — 13 commits cobrindo Sessão 4.1 (P5+P8+sort+paginação) + UX review 5 commits (rename/chip/dados incompletos/editor bailarinos/drawer filtros) + fix crítico RLS UPDATE + B1/B2/B3/B5 do roadmap notificações. Detalhes em [[bundle-sessao-4-2-opcao-b-shipado]].
 
-**✅ Sessão A SHIPADA em 2026-05-22 (tarde/noite)** — 6 commits (b6e4444→0c9af1a) pra desbloquear notificação pra Grazieli completar dados: A1 editor inline de bailarinos no `/minhas-coreografias` + componente compartilhado `BailarinosEditor.tsx` (refactor), A2 cron `send-incomplete-data-reminders`, A3 banner "dados pendentes" no `/dashboard`, A4 storage state Playwright pra inscrito + fix JWT decode em 2 edge functions. Detalhes em [[sessao-a-grazieli-shipado]].
+**⚠️ Sessão A SHIPADA + DESABILITADA mesma noite 2026-05-22** — 6 commits (b6e4444→0c9af1a) + reverter `4602573`. Bug grosso: helper lia bailarinos_detalhes (id+nome+instagram) procurando CPF/data_nascimento que ficam em `elenco`. Feature "dados pendentes" desligada em prod. Detalhes em [[sessao-a-grazieli-shipado]].
 
-**Nenhum P1 destravado em aberto.** Próximos itens precisam de ação externa (smoke test) ou viraram P2 (esforço maior).
+### 🔴 TOP 1 PRÓXIMA SESSÃO — Refator com `elenco` JOIN (~5h)
+
+Plano completo em [[plano-refactor-elenco-dados-pendentes]]:
+- Migration RLS pro produtor ler `elenco` dos users das inscrições do evento dele
+- Refator helper `hasIncompleteBailarinos` em 3 lugares pra fazer JOIN com elenco
+- Hidratar `elencoById` no fetchData de Registrations.tsx + Dashboard.tsx + edge function
+- Refator render do modal pra mostrar CPF/data reais (não `—`)
+- Refator editor inline em `BailarinosEditor.tsx` pra UPSERT em `elenco`
+- Re-habilitar edge function `send-incomplete-data-reminders`
+- Smoke E2E como produtor + inscrito
+
+**Após essa sessão, todos os achados ficam corretos**: painel produtor mostra CPF real da Grazieli, editor edita o lugar certo, cron detecta inscrições REALMENTE incompletas (não falso positivo).
+
+
 
 ### 🟨 P2 — Alto valor, esforço maior
 - **Auditoria RLS sistemática outras tabelas** — `audience_tickets`, `workshop_registrations`, `video_selections`, `aggregate_payments`, `coupons` podem ter mesmo padrão "produtor só SELECT, UPDATE silently broken" que descobrimos em registrations 2026-05-22. Heurística: UI tem "Editar" pro produtor + tabela só tem `*_reads_*` policy + `super_admin_all_*`. ~2h. Decorrência da auditoria do bug RLS em [[bug-rls-producer-update-registrations]].
