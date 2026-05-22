@@ -1,0 +1,4 @@
+# PNGs gerados pelo scripts/screenshot.mjs — não comitar
+*.png
+*.report.json
+!.gitignore

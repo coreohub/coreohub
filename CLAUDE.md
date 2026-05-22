@@ -222,6 +222,15 @@ Pasta `~/.claude/projects/.../memory/` tem contexto histórico denso. Em **toda 
 2. `session_resume.md` — estado atual + pendências + decisões recentes.
 3. `MEMORY.md` — índice navegável.
 
+## Workflow obrigatório (decretado 2026-05-22)
+
+1. **Plano antes de feature grande** — apresentar abordagem em 3-5 bullets e aguardar OK. Feature grande = > 1h estimada OU mexe em múltiplos arquivos/sistemas. Microchange (label/ícone/padding) segue direto.
+2. **Playwright screenshot após mudança visual estrutural** — `node scripts/screenshot.mjs /rota` em 1440×900 (desktop) + 375×812 (mobile). Aplica a: componente novo, mudança estrutural, página com >20 linhas alteradas. NÃO aplica a microchange.
+3. **Validar contra Definition of Done** — funciona em desktop+mobile (screenshots cobrem), sem erros no console (`report.json` checa), segue design system (paleta `#FF0068`/`#E3FF0A`/`#1DE7F2`, Barlow+Inter, rounded-2xl/3xl), sem overflow horizontal (`report.json` checa).
+4. **Commit autônomo ao concluir etapa funcional** — sobrescreve default "only when requested". Commitar sem pedir confirmação.
+
+Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`+`screenshot`, nunca `click` em mutation). Detalhes operacionais em [[feedback-workflow-obrigatorio-dod]].
+
 ## Histórico recente (últimas ~2 semanas)
 
 Cronológico inverso. Detalhes individuais em `memory/`.
