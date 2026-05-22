@@ -16,6 +16,7 @@ import {
   type ElencoById,
   type ElencoRow,
 } from '../utils/bailarinos';
+import { validateCoupon } from '../services/couponService';
 
 /* ══════════════════════════════════════════════════════════════
    TYPES
@@ -68,6 +69,12 @@ interface AggregatePayment {
   user_id:          string;
   event_id:         string;
   value_total:      number;
+  /** Snapshot do desconto aplicado no momento da criação (cupom). Padrão
+   *  Stripe/Sympla: fatura PENDENTE é imutável — UI mostra o desconto
+   *  persistido quando inscrito volta. */
+  discount_total?:  number | null;
+  coupon_id?:       string | null;
+  coupon_code?:     string | null;
   asaas_payment_id: string | null;
   payment_url:      string | null;
   status:           string;
@@ -138,10 +145,16 @@ const MinhasCoreografias = () => {
   const [couponInputs, setCouponInputs]      = useState<Record<string, string>>({});
   const [showCoupon,   setShowCoupon]        = useState<Record<string, boolean>>({});
   // Cupom no agregado — keyed por event_id (1 cupom por fatura agregada).
-  // Aplicado só na CRIAÇÃO da fatura (handlePagarAgregado); fatura PENDENTE
-  // já criada no Asaas não consegue receber cupom retroativo.
-  const [aggregateCouponInputs, setAggregateCouponInputs] = useState<Record<string, string>>({});
-  const [showAggregateCoupon,   setShowAggregateCoupon]   = useState<Record<string, boolean>>({});
+  // Padrão Stripe/Sympla/Checkout.tsx: input + botão "Aplicar" → validateCoupon
+  // client-side (preview do desconto antes de pagar) → user confirma → server
+  // re-valida no momento da criação da fatura (dupla checagem).
+  // Aplicado só na CRIAÇÃO da fatura; fatura PENDENTE já criada no Asaas não
+  // recebe cupom retroativo (limitação v1).
+  const [aggregateCouponInputs,    setAggregateCouponInputs]    = useState<Record<string, string>>({});
+  const [showAggregateCoupon,      setShowAggregateCoupon]      = useState<Record<string, boolean>>({});
+  const [appliedAggregateCoupons,  setAppliedAggregateCoupons]  = useState<Record<string, { id: string; code: string; discount: number } | null>>({});
+  const [applyingAggregateCoupon,  setApplyingAggregateCoupon]  = useState<Record<string, boolean>>({});
+  const [aggregateCouponErrors,    setAggregateCouponErrors]    = useState<Record<string, string | null>>({});
   const [deleting,    setDeleting]           = useState(false);
   const [editingVideo, setEditingVideo]      = useState<string | null>(null);
   const [videoLinkInput, setVideoLinkInput]  = useState('');
@@ -328,14 +341,22 @@ const MinhasCoreografias = () => {
         setElencoById({});
       }
 
-      // Active payments: 1 PENDENTE por evento (no máximo).
+      // Active payments: 1 PENDENTE por evento (no máximo). JOIN com coupons
+      // pra ler o code aplicado (refator cupom 2026-06-01 — fatura PENDENTE
+      // exibe desconto persistido quando inscrito volta do gateway).
       const { data: payments } = await supabase
         .from('payments')
-        .select('id, user_id, event_id, value_total, asaas_payment_id, payment_url, status, expires_at, created_at, paid_at')
+        .select('id, user_id, event_id, value_total, discount_total, coupon_id, asaas_payment_id, payment_url, status, expires_at, created_at, paid_at, coupons(code)')
         .eq('user_id', user.id)
         .eq('status', 'PENDENTE');
       const map: Record<string, AggregatePayment> = {};
-      for (const p of (payments ?? [])) map[p.event_id] = p as AggregatePayment;
+      for (const p of (payments ?? [])) {
+        const coupon = (p as any).coupons as { code: string } | null;
+        map[p.event_id] = {
+          ...(p as any),
+          coupon_code: coupon?.code ?? null,
+        } as AggregatePayment;
+      }
       setActivePayments(map);
 
       // Workshops do user (best-effort — RLS pode bloquear se conta deletada)
@@ -510,6 +531,34 @@ const MinhasCoreografias = () => {
     return true;
   };
 
+  /**
+   * Aplica cupom client-side via validateCoupon — mostra preview do desconto
+   * ANTES de criar a fatura Asaas. Padrão Stripe/Sympla/Checkout.tsx legacy.
+   * Server re-valida no create-aggregate-payment-asaas (dupla checagem +
+   * incremento atômico do used_count).
+   */
+  const handleApplyAggregateCoupon = async (eventId: string, baseTotal: number) => {
+    const code = aggregateCouponInputs[eventId]?.trim();
+    if (!code) return;
+    setApplyingAggregateCoupon(p => ({ ...p, [eventId]: true }));
+    setAggregateCouponErrors(p => ({ ...p, [eventId]: null }));
+    try {
+      const { coupon, discount } = await validateCoupon(eventId, code, baseTotal);
+      setAppliedAggregateCoupons(p => ({ ...p, [eventId]: { id: coupon.id, code: coupon.code, discount } }));
+    } catch (e: any) {
+      setAggregateCouponErrors(p => ({ ...p, [eventId]: e?.message ?? 'Cupom inválido.' }));
+    } finally {
+      setApplyingAggregateCoupon(p => ({ ...p, [eventId]: false }));
+    }
+  };
+
+  const handleRemoveAggregateCoupon = (eventId: string) => {
+    setAppliedAggregateCoupons(p => ({ ...p, [eventId]: null }));
+    setAggregateCouponInputs(p => ({ ...p, [eventId]: '' }));
+    setAggregateCouponErrors(p => ({ ...p, [eventId]: null }));
+    setShowAggregateCoupon(p => ({ ...p, [eventId]: false }));
+  };
+
   const handlePagarAgregado = async (grupo: Grupo) => {
     if (!(await requireCpf())) return;
     if (grupo.pendentes.length === 0) return;
@@ -529,7 +578,11 @@ const MinhasCoreografias = () => {
         event_id:         grupo.eventId,
         registration_ids: grupo.pendentes.map(r => r.id),
       };
-      const couponCode = aggregateCouponInputs[grupo.eventId]?.trim();
+      // Cupom: prioriza o que foi APLICADO via botão (validado client-side).
+      // Fallback no input solto (pra retrocompat caso UI mude).
+      const appliedCode = appliedAggregateCoupons[grupo.eventId]?.code;
+      const rawCode = aggregateCouponInputs[grupo.eventId]?.trim();
+      const couponCode = appliedCode ?? rawCode;
       if (couponCode) body.coupon_code = couponCode;
 
       const resp = await fetch(
@@ -1044,14 +1097,26 @@ const MinhasCoreografias = () => {
 
           {/* CTA agregado quando há pendentes */}
           {grupo.pendentes.length > 0 && (() => {
-            // Se já tem fatura PENDENTE no Asaas, usa o valor dela. Senão, soma estimada.
-            const total = grupo.payment?.value_total ?? grupo.totalPendente;
-            const expiraDias = grupo.payment?.expires_at ? diasAte(grupo.payment.expires_at) : null;
-            // Cupom só aparece quando AINDA não há fatura no Asaas. Se já tem
-            // fatura PENDENTE, descontar via cupom exigiria cancelar + recriar
-            // — UX confusa, deixamos pra v2 (botão "Cancelar fatura" + recriar
-            // com cupom).
-            const podeAplicarCupom = !grupo.payment?.payment_url;
+            // Se já tem fatura PENDENTE no Asaas, usa o valor dela (já tem
+            // cupom embutido se foi aplicado). Senão, soma estimada client-side.
+            const faturaPendente = grupo.payment;
+            const faturaTemCupom = !!(faturaPendente?.coupon_id && (faturaPendente?.discount_total ?? 0) > 0);
+            const faturaSubtotal = faturaTemCupom
+              ? (faturaPendente!.value_total + (faturaPendente!.discount_total ?? 0))
+              : (faturaPendente?.value_total ?? grupo.totalPendente);
+            const subtotal   = faturaSubtotal;
+            const expiraDias = faturaPendente?.expires_at ? diasAte(faturaPendente.expires_at) : null;
+            // Cupom só pode ser APLICADO/REMOVIDO quando AINDA não há fatura
+            // no Asaas. Fatura PENDENTE é imutável (padrão Stripe/Sympla):
+            // mostra o cupom aplicado em modo readonly, sem botão de remover.
+            const podeAplicarCupom = !faturaPendente?.payment_url;
+            const applied   = appliedAggregateCoupons[grupo.eventId];
+            // Desconto: prioriza o aplicado client-side (input local), fallback
+            // pro persistido na fatura PENDENTE.
+            const discountAmount = applied?.discount ?? (faturaTemCupom ? (faturaPendente!.discount_total ?? 0) : 0);
+            const total          = Math.max(0, subtotal - discountAmount);
+            const isApplying = applyingAggregateCoupon[grupo.eventId] === true;
+            const couponErr  = aggregateCouponErrors[grupo.eventId] ?? null;
             return (
               <div className="px-5 py-4 bg-slate-50 dark:bg-white/[0.02] border-b border-slate-200 dark:border-white/5 space-y-3">
                 <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -1059,9 +1124,20 @@ const MinhasCoreografias = () => {
                     <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
                       Pagar todas
                     </p>
-                    <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5 tabular-nums">
-                      {fmtMoney(total)}
-                    </p>
+                    {discountAmount > 0 ? (
+                      <div className="mt-0.5">
+                        <p className="text-[10px] font-bold text-slate-400 line-through tabular-nums">
+                          {fmtMoney(subtotal)}
+                        </p>
+                        <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
+                          {fmtMoney(total)}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5 tabular-nums">
+                        {fmtMoney(total)}
+                      </p>
+                    )}
                     <p className="text-[10px] font-bold text-slate-400 mt-0.5">
                       {grupo.pendentes.length} coreografia{grupo.pendentes.length !== 1 ? 's' : ''} em 1 PIX
                       {expiraDias != null && expiraDias <= 7 && (
@@ -1085,31 +1161,86 @@ const MinhasCoreografias = () => {
                     <ChevronRight size={12} />
                   </button>
                 </div>
-                {/* Cupom: input colapsável, mesmo padrão da Seletiva. Aplicado
-                    no momento da criação da fatura via coupon_code no body. */}
+                {/* Cupom: padrão Stripe/Sympla.
+                    - Fatura PENDENTE já criada COM cupom → linha verde readonly
+                      (sem botão remover — fatura imutável; pra trocar, inscrito
+                      cancela e recria).
+                    - Sem fatura + cupom aplicado client-side → linha verde com X.
+                    - Sem fatura + input aberto → input + botão "Aplicar" + erro inline.
+                    - Sem fatura + idle → link "Tem cupom?". */}
+                {!podeAplicarCupom && faturaTemCupom && (
+                  <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl">
+                    <CheckCircle size={16} className="text-emerald-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-mono font-black text-sm text-emerald-700 dark:text-emerald-400">
+                        {faturaPendente?.coupon_code ?? 'Cupom'}
+                      </p>
+                      <p className="text-[10px] text-emerald-600 dark:text-emerald-500">
+                        Desconto de {fmtMoney(faturaPendente?.discount_total ?? 0)} já aplicado nesta fatura
+                      </p>
+                    </div>
+                  </div>
+                )}
                 {podeAplicarCupom && (
-                  showAggregateCoupon[grupo.eventId] ? (
-                    <div className="flex gap-2">
-                      <label htmlFor={`aggregate-coupon-${grupo.eventId}`} className="sr-only">
-                        Código do cupom de inscrição
-                      </label>
-                      <input
-                        id={`aggregate-coupon-${grupo.eventId}`}
-                        type="text"
-                        value={aggregateCouponInputs[grupo.eventId] ?? ''}
-                        onChange={e => setAggregateCouponInputs(p => ({ ...p, [grupo.eventId]: e.target.value.toUpperCase() }))}
-                        placeholder="Código do cupom"
-                        className="flex-1 px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-xs font-mono text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40 focus:border-[#ff0068]/50 uppercase"
-                      />
+                  applied ? (
+                    <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl">
+                      <CheckCircle size={16} className="text-emerald-500 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-mono font-black text-sm text-emerald-700 dark:text-emerald-400">{applied.code}</p>
+                        <p className="text-[10px] text-emerald-600 dark:text-emerald-500">
+                          Desconto de {fmtMoney(applied.discount)} aplicado
+                        </p>
+                      </div>
                       <button
-                        onClick={() => {
-                          setShowAggregateCoupon(p => ({ ...p, [grupo.eventId]: false }));
-                          setAggregateCouponInputs(p => ({ ...p, [grupo.eventId]: '' }));
-                        }}
-                        className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 px-2"
+                        onClick={() => handleRemoveAggregateCoupon(grupo.eventId)}
+                        className="p-1 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 rounded-lg"
+                        aria-label="Remover cupom"
                       >
-                        Cancelar
+                        <X size={14} />
                       </button>
+                    </div>
+                  ) : showAggregateCoupon[grupo.eventId] ? (
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <label htmlFor={`aggregate-coupon-${grupo.eventId}`} className="sr-only">
+                          Código do cupom de inscrição
+                        </label>
+                        <input
+                          id={`aggregate-coupon-${grupo.eventId}`}
+                          type="text"
+                          value={aggregateCouponInputs[grupo.eventId] ?? ''}
+                          onChange={e => {
+                            setAggregateCouponInputs(p => ({ ...p, [grupo.eventId]: e.target.value.toUpperCase() }));
+                            if (couponErr) setAggregateCouponErrors(p => ({ ...p, [grupo.eventId]: null }));
+                          }}
+                          onKeyDown={e => { if (e.key === 'Enter') handleApplyAggregateCoupon(grupo.eventId, subtotal); }}
+                          disabled={isApplying}
+                          placeholder="Código do cupom"
+                          className="flex-1 px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-xs font-mono text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40 focus:border-[#ff0068]/50 uppercase disabled:opacity-50"
+                        />
+                        <button
+                          onClick={() => handleApplyAggregateCoupon(grupo.eventId, subtotal)}
+                          disabled={isApplying || !(aggregateCouponInputs[grupo.eventId]?.trim())}
+                          className="px-4 py-2 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-50 text-white rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shrink-0"
+                        >
+                          {isApplying ? <Loader2 size={12} className="animate-spin" /> : 'Aplicar'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowAggregateCoupon(p => ({ ...p, [grupo.eventId]: false }));
+                            setAggregateCouponInputs(p => ({ ...p, [grupo.eventId]: '' }));
+                            setAggregateCouponErrors(p => ({ ...p, [grupo.eventId]: null }));
+                          }}
+                          className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 px-2"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                      {couponErr && (
+                        <p className="text-[10px] text-rose-500 flex items-center gap-1.5">
+                          <AlertCircle size={11} /> {couponErr}
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <button
