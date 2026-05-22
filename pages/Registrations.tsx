@@ -11,6 +11,7 @@ import { supabase } from '../services/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { refundRegistration } from '../services/refundService';
 import EventPickerSheet from '../components/EventPickerSheet';
+import { maskCpfCnpj, unmaskCpfCnpj, validateCpf } from '../utils/masks';
 
 const Registrations = () => {
   const [registrations, setRegistrations] = useState<any[]>([]);
@@ -68,6 +69,17 @@ const Registrations = () => {
       categoria:            reg.categoria ?? '',
       estilo_danca:         reg.estilo_danca ?? '',
       tipo_apresentacao:    reg.tipo_apresentacao ?? '',
+      // Sessão 4.2 item 2: clone profundo do array de bailarinos pra editor inline.
+      // CPF chega do banco sem máscara — aplicamos no display pra digitação confortável,
+      // limpamos no save. Instagram chega sem '@' (lowercase aplicada no input).
+      bailarinos: Array.isArray(reg.bailarinos_detalhes)
+        ? reg.bailarinos_detalhes.map((b: any) => ({
+            nome:              b?.nome ?? '',
+            cpf:               maskCpfCnpj(String(b?.cpf ?? '')),
+            data_nascimento:   b?.data_nascimento ?? '',
+            instagram_handle:  b?.instagram_handle ?? '',
+          }))
+        : [],
     });
   };
 
@@ -75,6 +87,29 @@ const Registrations = () => {
     setEditing(false);
     setEditError(null);
     setEditValues({});
+  };
+
+  // Sessão 4.2 item 2: mutadores do array de bailarinos durante edição inline.
+  // Sempre operam via setEditValues funcional pra não brigar com re-renders.
+  const updateBailarino = (i: number, key: string, val: string) => {
+    setEditValues(p => ({
+      ...p,
+      bailarinos: (p.bailarinos ?? []).map((b: any, j: number) =>
+        j === i ? { ...b, [key]: val } : b
+      ),
+    }));
+  };
+  const addBailarino = () => {
+    setEditValues(p => ({
+      ...p,
+      bailarinos: [...(p.bailarinos ?? []), { nome: '', cpf: '', data_nascimento: '', instagram_handle: '' }],
+    }));
+  };
+  const removeBailarino = (i: number) => {
+    setEditValues(p => ({
+      ...p,
+      bailarinos: (p.bailarinos ?? []).filter((_: any, j: number) => j !== i),
+    }));
   };
 
   const handleSaveEdit = async (regId: string) => {
@@ -86,6 +121,32 @@ const Registrations = () => {
       for (const k of ['formato_participacao', 'categoria', 'estilo_danca', 'tipo_apresentacao']) {
         const v = editValues[k]?.trim?.() ?? editValues[k];
         if (v !== undefined && v !== '') patch[k] = v;
+      }
+      // Sessão 4.2 item 2: bailarinos editáveis. Normaliza CPF (só dígitos),
+      // valida quando preenchido, força lowercase no instagram (lição 2026-05-19).
+      if (Array.isArray(editValues.bailarinos)) {
+        const normalized: any[] = [];
+        for (let i = 0; i < editValues.bailarinos.length; i++) {
+          const b = editValues.bailarinos[i];
+          const cpfDigits = unmaskCpfCnpj(String(b?.cpf ?? ''));
+          if (cpfDigits && cpfDigits.length === 11 && !validateCpf(cpfDigits)) {
+            throw new Error(`CPF inválido no bailarino ${i + 1}${b?.nome ? ` (${b.nome})` : ''}.`);
+          }
+          if (cpfDigits && cpfDigits.length !== 11) {
+            throw new Error(`CPF incompleto no bailarino ${i + 1}${b?.nome ? ` (${b.nome})` : ''}.`);
+          }
+          const dob = String(b?.data_nascimento ?? '').trim();
+          if (dob && !/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+            throw new Error(`Data de nascimento inválida no bailarino ${i + 1}.`);
+          }
+          normalized.push({
+            nome:              String(b?.nome ?? '').trim(),
+            cpf:               cpfDigits,
+            data_nascimento:   dob,
+            instagram_handle:  String(b?.instagram_handle ?? '').trim().toLowerCase().replace(/^@/, '') || undefined,
+          });
+        }
+        patch.bailarinos_detalhes = normalized;
       }
       const { error } = await supabase.from('registrations').update(patch).eq('id', regId);
       if (error) throw error;
@@ -1550,20 +1611,78 @@ const Registrations = () => {
                   )}
                 </section>
 
-                {/* Bailarinos */}
-                {Array.isArray(viewingReg.bailarinos_detalhes) && viewingReg.bailarinos_detalhes.length > 0 && (
+                {/* Bailarinos — readonly mostra quando há array com dados.
+                    Editor (Sessão 4.2 item 2) mostra sempre que editing=true
+                    pra permitir adicionar do zero numa inscrição sem dados. */}
+                {(editing || (Array.isArray(viewingReg.bailarinos_detalhes) && viewingReg.bailarinos_detalhes.length > 0)) && (
                   <section>
                     <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
-                      <Users size={12} /> Bailarinos ({viewingReg.bailarinos_detalhes.length})
+                      <Users size={12} /> Bailarinos ({editing ? (editValues.bailarinos?.length ?? 0) : viewingReg.bailarinos_detalhes.length})
                       {/* Sessão 4.2 item 3: badge agregado quando algum bailarino
                           tem CPF/nasc/nome faltando. Bloqueia emissão de certificado
                           e validação de faixa etária. */}
-                      {hasIncompleteBailarinos(viewingReg) && (
+                      {!editing && hasIncompleteBailarinos(viewingReg) && (
                         <span className="ml-1 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-500/30 rounded-full normal-case tracking-normal flex items-center gap-1">
                           <AlertTriangle size={10} /> dados pendentes
                         </span>
                       )}
                     </h3>
+                    {editing ? (
+                      <div className="space-y-2">
+                        {(editValues.bailarinos ?? []).map((b: any, i: number) => (
+                          <div key={i} className="p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Bailarino {i + 1}</p>
+                              <button
+                                type="button"
+                                onClick={() => removeBailarino(i)}
+                                className="text-[9px] font-black uppercase tracking-widest text-rose-500 hover:text-rose-600 flex items-center gap-1"
+                                title="Remover este bailarino"
+                              >
+                                <Trash2 size={10} /> Remover
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <input
+                                type="text"
+                                value={b.nome ?? ''}
+                                onChange={e => updateBailarino(i, 'nome', e.target.value)}
+                                placeholder="Nome completo"
+                                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068]"
+                              />
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={b.cpf ?? ''}
+                                onChange={e => updateBailarino(i, 'cpf', maskCpfCnpj(e.target.value))}
+                                placeholder="CPF"
+                                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068]"
+                              />
+                              <input
+                                type="date"
+                                value={b.data_nascimento ?? ''}
+                                onChange={e => updateBailarino(i, 'data_nascimento', e.target.value)}
+                                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]"
+                              />
+                              <input
+                                type="text"
+                                value={b.instagram_handle ?? ''}
+                                onChange={e => updateBailarino(i, 'instagram_handle', e.target.value.toLowerCase().replace(/^@/, ''))}
+                                placeholder="instagram (sem @)"
+                                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068]"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={addBailarino}
+                          className="w-full px-3 py-2 border border-dashed border-slate-300 dark:border-white/15 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#ff0068] hover:border-[#ff0068]/50 transition-all"
+                        >
+                          + Adicionar bailarino
+                        </button>
+                      </div>
+                    ) : (
                     <div className="space-y-2">
                       {viewingReg.bailarinos_detalhes.map((b: any, i: number) => {
                         const incompleto = isBailarinoIncompleto(b);
@@ -1594,6 +1713,7 @@ const Registrations = () => {
                         );
                       })}
                     </div>
+                    )}
                     {viewingReg.instagram_principal && (
                       <p className="text-[10px] text-slate-500 mt-2 flex items-center gap-1">
                         <Instagram size={11} /> Grupo/coreógrafo: <a href={`https://instagram.com/${viewingReg.instagram_principal.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="text-[#ff0068] hover:underline font-bold">{viewingReg.instagram_principal}</a>
