@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { refundRegistration } from '../services/refundService';
 import EventPickerSheet from '../components/EventPickerSheet';
 import { maskCpfCnpj, unmaskCpfCnpj, validateCpf, maskData, parseDataISO } from '../utils/masks';
-import BailarinosEditor, { type BailarinoFormValue } from '../components/BailarinosEditor';
+import BailarinosEditor from '../components/BailarinosEditor';
 import {
   hasIncompleteBailarinos as hasIncompleteBailarinosUtil,
   isElencoIncompleto,
@@ -478,6 +478,12 @@ const Registrations = () => {
   /**
    * Checks if a registration violates the age tolerance rule.
    * Returns { violates: boolean, outCount: number, totalCount: number, pct: number }
+   *
+   * Refator 2026-06-01: a `data_nascimento` é lida via JOIN com elencoById
+   * (fonte de verdade). O JSONB `bailarinos_detalhes` só tem id+nome+@ —
+   * b.data_nascimento sempre era undefined, então `outOfRange` ficava sempre
+   * vazio e toda triagem etária retornava false. Mesmo bug do refator de
+   * dados-pendentes ([[refactor-elenco-dados-pendentes-shipado]]).
    */
   const checkViolation = (reg: any) => {
     const bailarinos: any[] = reg.bailarinos_detalhes || [];
@@ -486,8 +492,9 @@ const Registrations = () => {
     }
     const refDate = resolveRefDate(reg.event_data);
     const outOfRange = bailarinos.filter(b => {
-      if (!b.data_nascimento) return false;
-      const age = calcAge(b.data_nascimento, refDate);
+      const dob = elencoById[b?.id]?.data_nascimento;
+      if (!dob) return false;
+      const age = calcAge(dob, refDate);
       return age < reg.cat_min_age || age > reg.cat_max_age;
     });
     const outCount = outOfRange.length;
@@ -507,8 +514,9 @@ const Registrations = () => {
   const isPago = (s?: string) => s === 'APROVADO' || s === 'CONFIRMADO';
 
   /** Re-habilitado 2026-06-01 (refator) — agora consulta `elencoById`
-   *  hidratado no fetchData. Detalhe da topologia em utils/bailarinos.ts. */
-  const isBailarinoIncompleto = (b: any) => isElencoIncompleto(elencoById[b?.id]);
+   *  hidratado no fetchData. Detalhe da topologia em utils/bailarinos.ts.
+   *  Render do modal usa `isElencoIncompleto(elencoById[b.id])` direto;
+   *  esse wrapper aqui serve só pro filter/useMemo de alertCounts. */
   const hasIncompleteBailarinos = (reg: any): boolean => hasIncompleteBailarinosUtil(reg, elencoById);
 
   const violatingRegs = useMemo(() => {
@@ -519,7 +527,7 @@ const Registrations = () => {
         return violates;
       })
       .map(r => ({ ...r, _violation: checkViolation(r) }));
-  }, [registrations, toleranceRule, ageRefMode, ageRefFixed, eventDate]); // eslint-disable-line
+  }, [registrations, toleranceRule, ageRefMode, ageRefFixed, eventDate, elencoById]); // eslint-disable-line
 
   // Só dispara fetchData quando selectedEventId já resolveu — antes disso, o
   // primeiro fetch trazia TODOS os registros (sem filter), depois o segundo
