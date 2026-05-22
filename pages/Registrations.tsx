@@ -730,6 +730,28 @@ const Registrations = () => {
           </div>
 
           <div className="bg-slate-100 dark:bg-slate-900/50 p-4 rounded-3xl border border-slate-200 dark:border-white/5 flex flex-col gap-3">
+            {/* Sessão 4.2 fix: chip persistente do filtro de alerta. Aparece dentro
+                do card de filtros quando quickAlert está ativo. Bug original: produtor
+                clicava "Trilhas pendentes" e visualmente nada mudava porque todos os
+                rows ja matchavam o filtro. Sem feedback, ele acha que o click falhou. */}
+            {quickAlert && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/40 rounded-2xl">
+                <Bell size={12} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                <p className="flex-1 text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">
+                  Filtrando: {quickAlert === 'vencendo' ? 'Vencendo em 24h' : 'Trilhas pendentes'}
+                  <span className="ml-2 text-amber-600 dark:text-amber-400/80 normal-case font-bold tracking-normal">
+                    ({filteredRegistrations.length} {filteredRegistrations.length === 1 ? 'resultado' : 'resultados'})
+                  </span>
+                </p>
+                <button
+                  onClick={() => setQuickAlert(null)}
+                  className="p-1.5 rounded-lg hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 transition-all shrink-0"
+                  title="Remover este filtro"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            )}
             <div className="flex-1 relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
               <input type="text" placeholder="Buscar coreografia, estúdio, inscrito ou e-mail..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]" />
@@ -1685,7 +1707,7 @@ const Registrations = () => {
                     className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-xl transition-all flex items-center gap-2"
                     title="Abrir fatura no Asaas (nova aba)"
                   >
-                    <ExternalLink size={12} /> Abrir no Asaas
+                    <ExternalLink size={12} /> Abrir fatura
                   </a>
                 )}
                 {(viewingReg.status_pagamento === 'CONFIRMADO' || viewingReg.status_pagamento === 'APROVADO') && (
