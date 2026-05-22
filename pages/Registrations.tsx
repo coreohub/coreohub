@@ -88,21 +88,25 @@ const Registrations = () => {
       categoria:            reg.categoria ?? '',
       estilo_danca:         reg.estilo_danca ?? '',
       tipo_apresentacao:    reg.tipo_apresentacao ?? '',
-      // Sessão 4.2 item 2: clone profundo do array de bailarinos pra editor inline.
-      // TODO etapa 5: ler CPF/data_nascimento de elencoById[b.id] (fonte real)
-      // em vez do JSONB (sempre vazio). Atualmente abre o editor com CPF/data
-      // em branco mesmo com dados completos em elenco — comportamento idêntico
-      // ao pré-refator, fix completo na etapa 5 junto com refator do save +
-      // BailarinosEditor + MinhasCoreografias.
+      // Refator 2026-06-01: CPF/data/nome reais vêm da `elenco` (JSONB
+      // bailarinos_detalhes só tem id+nome+@). elencoId carrega o id da row
+      // pra save fazer UPDATE em vez de INSERT. Produtor não cria bailarino
+      // novo aqui (canAddRemove=false no editor + RLS só FOR UPDATE).
       bailarinos: Array.isArray(reg.bailarinos_detalhes)
-        ? reg.bailarinos_detalhes.map((b: any) => ({
-            nome:              b?.nome ?? '',
-            cpf:               maskCpfCnpj(String(b?.cpf ?? '')),
-            data_nascimento:   b?.data_nascimento
-              ? maskData(String(b.data_nascimento).replace(/^(\d{4})-(\d{2})-(\d{2}).*$/, '$3$2$1'))
-              : '',
-            instagram_handle:  b?.instagram_handle ?? '',
-          }))
+        ? reg.bailarinos_detalhes.map((b: any) => {
+            const elenco = b?.id ? elencoById[b.id] : null;
+            const dobIso = String(elenco?.data_nascimento ?? '').trim();
+            const dobBR = dobIso
+              ? maskData(dobIso.replace(/^(\d{4})-(\d{2})-(\d{2}).*$/, '$3$2$1'))
+              : '';
+            return {
+              elencoId:         b?.id || undefined,
+              nome:             elenco?.nome ?? b?.nome ?? '',
+              cpf:              maskCpfCnpj(String(elenco?.cpf ?? '')),
+              data_nascimento:  dobBR,
+              instagram_handle: b?.instagram_handle ?? '',
+            };
+          })
         : [],
       // Solo/Duo/Trio → @ por bailarino; Grupo/Conjunto → 1 @ unico do grupo
       // (combinado em sessao anterior — pedir @ de 4+ bailarinos sobrecarrega o
@@ -137,10 +141,19 @@ const Registrations = () => {
       // sujeira se a inscrição mudar de modalidade).
       const formato = (patch.formato_participacao ?? editValues.formato_participacao ?? '') as string;
       const isGrupoLike = formato === 'Grupo' || formato === 'Conjunto';
+      // Refator 2026-06-01: dados pessoais persistem em `elenco`. Produtor faz
+      // SÓ UPDATE (RLS producer_updates_event_elenco em 20260602) — nunca
+      // INSERT/DELETE. canAddRemove=false no editor garante que o array do
+      // form nunca tem bailarino novo sem elencoId. Se aparecer (bug futuro),
+      // levanta erro claro.
+      let normalizedJsonb: any[] | undefined;
       if (Array.isArray(editValues.bailarinos)) {
-        const normalized: any[] = [];
+        const updates: Array<{ elencoId: string; nome: string; cpf: string; data_nascimento: string; instagram_handle?: string }> = [];
         for (let i = 0; i < editValues.bailarinos.length; i++) {
           const b = editValues.bailarinos[i];
+          if (!b?.elencoId) {
+            throw new Error(`Bailarino ${i + 1} sem id de elenco. Produtor não pode adicionar bailarinos — peça pro inscrito completar via /minhas-coreografias.`);
+          }
           const cpfDigits = unmaskCpfCnpj(String(b?.cpf ?? ''));
           if (cpfDigits && cpfDigits.length === 11 && !validateCpf(cpfDigits)) {
             throw new Error(`CPF inválido no bailarino ${i + 1}${b?.nome ? ` (${b.nome})` : ''}.`);
@@ -158,18 +171,58 @@ const Registrations = () => {
             }
             dobIso = iso;
           }
-          normalized.push({
-            nome:              String(b?.nome ?? '').trim(),
-            cpf:               cpfDigits,
-            data_nascimento:   dobIso,
-            // Em Grupo/Conjunto o handle individual nao e pedido — limpa pra
-            // nao manter dado obsoleto se modalidade mudou.
-            instagram_handle:  isGrupoLike
+          updates.push({
+            elencoId:         b.elencoId,
+            nome:             String(b?.nome ?? '').trim(),
+            cpf:              cpfDigits,
+            data_nascimento:  dobIso,
+            instagram_handle: isGrupoLike
               ? undefined
               : (String(b?.instagram_handle ?? '').trim().toLowerCase().replace(/^@/, '') || undefined),
           });
         }
-        patch.bailarinos_detalhes = normalized;
+
+        // Persiste cada UPDATE individual em elenco (RLS filtra por evento).
+        for (let i = 0; i < updates.length; i++) {
+          const u = updates[i];
+          const { data, error } = await supabase
+            .from('elenco')
+            .update({
+              nome:            u.nome,
+              cpf:             u.cpf,
+              data_nascimento: u.data_nascimento || null,
+            })
+            .eq('id', u.elencoId)
+            .select('id');
+          if (error) throw error;
+          if (!data || data.length === 0) {
+            throw new Error(`Sem permissão pra editar o bailarino ${i + 1}. Recarregue e tente de novo.`);
+          }
+        }
+
+        // Reconstrói bailarinos_detalhes (referência leve) preservando ids,
+        // atualizando nome e instagram_handle. CPF/data NÃO entram aqui — só
+        // moram em elenco.
+        normalizedJsonb = updates.map(u => ({
+          id:               u.elencoId,
+          nome:             u.nome,
+          instagram_handle: u.instagram_handle ?? null,
+        }));
+        patch.bailarinos_detalhes = normalizedJsonb;
+
+        // Hidrata elencoById local pra refletir sem refetch.
+        setElencoById(prev => {
+          const next = { ...prev };
+          for (const u of updates) {
+            next[u.elencoId] = {
+              id:              u.elencoId,
+              nome:            u.nome,
+              cpf:             u.cpf,
+              data_nascimento: u.data_nascimento || null,
+            };
+          }
+          return next;
+        });
       }
       // @ do grupo/coreografo (Grupo/Conjunto only). Em Solo/Duo/Trio limpa pra
       // nao guardar sujeira de uma edicao previa que era em outra modalidade.
@@ -1706,6 +1759,11 @@ const Registrations = () => {
                         formato={editValues.formato_participacao ?? viewingReg.formato_participacao ?? ''}
                         instagramPrincipal={editValues.instagram_principal}
                         onInstagramPrincipalChange={v => setEditValues(p => ({ ...p, instagram_principal: v }))}
+                        // Produtor só edita bailarinos existentes — sem INSERT/DELETE
+                        // em elenco (RLS producer_updates_event_elenco em 20260602
+                        // só dá FOR UPDATE). Pra adicionar, inscrito completa em
+                        // /minhas-coreografias.
+                        canAddRemove={false}
                       />
                     ) : (
                     <div className="space-y-2">

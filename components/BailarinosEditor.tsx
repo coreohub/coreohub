@@ -26,6 +26,10 @@ import { maskCpfCnpj, maskData } from '../utils/masks';
  */
 
 export interface BailarinoFormValue {
+  /** Id da row em `elenco` (fonte de verdade dos dados pessoais).
+   *  `undefined` = bailarino novo adicionado na sessão de edição (será INSERT
+   *  na elenco no save). Refator 2026-06-01 ([[plano-refactor-elenco-dados-pendentes]]). */
+  elencoId?: string;
   nome?: string;
   cpf?: string;
   data_nascimento?: string;
@@ -47,6 +51,11 @@ interface Props {
   /** Máximo de bailarinos permitido na modalidade. Bloqueia "Adicionar" quando
    *  já está no máximo. Default 99. */
   maxMembers?: number;
+  /** Quando false, oculta botões "Adicionar" e "Remover" — produtor edita
+   *  CPF/nome/data dos bailarinos já cadastrados pelo inscrito, mas não pode
+   *  alterar a composição (RLS `producer_updates_event_elenco` só dá UPDATE,
+   *  não INSERT/DELETE). Default true. */
+  canAddRemove?: boolean;
 }
 
 const BailarinosEditor: React.FC<Props> = ({
@@ -57,6 +66,7 @@ const BailarinosEditor: React.FC<Props> = ({
   formato,
   minMembers = 1,
   maxMembers = 99,
+  canAddRemove = true,
 }) => {
   const isGrupoLike = formato === 'Grupo' || formato === 'Conjunto';
 
@@ -80,15 +90,17 @@ const BailarinosEditor: React.FC<Props> = ({
             <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
               Bailarino {i + 1}
             </p>
-            <button
-              type="button"
-              onClick={() => remove(i)}
-              disabled={bailarinos.length <= minMembers}
-              className="text-[9px] font-black uppercase tracking-widest text-rose-500 hover:text-rose-600 flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
-              title={bailarinos.length <= minMembers ? `Mínimo ${minMembers} bailarino(s)` : 'Remover este bailarino'}
-            >
-              <Trash2 size={10} /> Remover
-            </button>
+            {canAddRemove && (
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                disabled={bailarinos.length <= minMembers}
+                className="text-[9px] font-black uppercase tracking-widest text-rose-500 hover:text-rose-600 flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                title={bailarinos.length <= minMembers ? `Mínimo ${minMembers} bailarino(s)` : 'Remover este bailarino'}
+              >
+                <Trash2 size={10} /> Remover
+              </button>
+            )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input
@@ -128,15 +140,17 @@ const BailarinosEditor: React.FC<Props> = ({
         </div>
       ))}
 
-      <button
-        type="button"
-        onClick={add}
-        disabled={bailarinos.length >= maxMembers}
-        className="w-full px-3 py-2 border border-dashed border-slate-300 dark:border-white/15 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#ff0068] hover:border-[#ff0068]/50 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-slate-500 disabled:hover:border-slate-300"
-        title={bailarinos.length >= maxMembers ? `Máximo ${maxMembers} bailarino(s) na modalidade ${formato}` : 'Adicionar bailarino'}
-      >
-        + Adicionar bailarino
-      </button>
+      {canAddRemove && (
+        <button
+          type="button"
+          onClick={add}
+          disabled={bailarinos.length >= maxMembers}
+          className="w-full px-3 py-2 border border-dashed border-slate-300 dark:border-white/15 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#ff0068] hover:border-[#ff0068]/50 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-slate-500 disabled:hover:border-slate-300"
+          title={bailarinos.length >= maxMembers ? `Máximo ${maxMembers} bailarino(s) na modalidade ${formato}` : 'Adicionar bailarino'}
+        >
+          + Adicionar bailarino
+        </button>
+      )}
 
       {isGrupoLike && onInstagramPrincipalChange && (
         <div className="p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl">

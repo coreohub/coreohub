@@ -11,6 +11,11 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import BailarinosEditor, { type BailarinoFormValue } from '../components/BailarinosEditor';
 import { unmaskCpfCnpj, validateCpf, parseDataISO, maskCpfCnpj, maskData } from '../utils/masks';
+import {
+  collectAllBailarinosIds,
+  type ElencoById,
+  type ElencoRow,
+} from '../utils/bailarinos';
 
 /* ══════════════════════════════════════════════════════════════
    TYPES
@@ -150,6 +155,10 @@ const MinhasCoreografias = () => {
   const [prazosPorEvento, setPrazosPorEvento] = useState<Record<string, string | null>>({});
   // Map event_id → formacoes_config pra puxar min/max members da modalidade.
   const [formacoesPorEvento, setFormacoesPorEvento] = useState<Record<string, any[]>>({});
+  // Map de rows da tabela `elenco` referenciadas em bailarinos_detalhes das
+  // inscrições do user. Fonte de verdade dos dados pessoais (CPF/data/nome).
+  // Refator 2026-06-01 — o JSONB só tem id+nome+instagram_handle por design.
+  const [elencoById, setElencoById] = useState<ElencoById>({});
 
   // Tabs no topo (padrão Sympla/Eventbrite). Default mostra "Próximas" se
   // tem pelo menos 1 evento futuro; senão "Todas".
@@ -296,6 +305,23 @@ const MinhasCoreografias = () => {
         _videoFee:     r.event_id ? Number(eventsMap[r.event_id]?.video_selection_fee ?? 0) : 0,
       }));
       setRegistrations(regs);
+
+      // Hidrata elenco em batch. Fonte de verdade dos dados pessoais —
+      // o JSONB bailarinos_detalhes só tem id+nome+@. RLS inscrito_own_elenco
+      // cobre (user_id = auth.uid).
+      const allBailarinosIds = collectAllBailarinosIds(regs);
+      if (allBailarinosIds.length > 0) {
+        const { data: elenco } = await supabase
+          .from('elenco')
+          .select('id, nome, cpf, data_nascimento')
+          .in('id', allBailarinosIds);
+        const map: ElencoById = Object.fromEntries(
+          (elenco ?? []).map((e: ElencoRow) => [e.id, e])
+        );
+        setElencoById(map);
+      } else {
+        setElencoById({});
+      }
 
       // Active payments: 1 PENDENTE por evento (no máximo).
       const { data: payments } = await supabase
@@ -647,16 +673,25 @@ const MinhasCoreografias = () => {
   const startEditingBailarinos = (reg: Registration) => {
     setEditingBailarinos(reg.id);
     setBailarinosError(null);
+    // Refator 2026-06-01: CPF/data/nome reais vêm da tabela `elenco` (JSONB
+    // bailarinos_detalhes só tem id+nome+@). elencoId carrega o id da row
+    // pra save fazer UPDATE em vez de INSERT.
     setBailarinosForm(Array.isArray(reg.bailarinos_detalhes)
-      ? reg.bailarinos_detalhes.map((b: any) => ({
-          nome:             b?.nome ?? '',
-          cpf:              maskCpfCnpj(String(b?.cpf ?? '')),
-          // ISO YYYY-MM-DD → DD/MM/AAAA via maskData
-          data_nascimento:  b?.data_nascimento
-            ? maskData(String(b.data_nascimento).replace(/^(\d{4})-(\d{2})-(\d{2}).*$/, '$3$2$1'))
-            : '',
-          instagram_handle: b?.instagram_handle ?? '',
-        }))
+      ? reg.bailarinos_detalhes.map((b: any) => {
+          const elenco = b?.id ? elencoById[b.id] : null;
+          // ISO YYYY-MM-DD → DD/MM/AAAA via maskData (input mascarado)
+          const dobIso = String(elenco?.data_nascimento ?? '').trim();
+          const dobBR = dobIso
+            ? maskData(dobIso.replace(/^(\d{4})-(\d{2})-(\d{2}).*$/, '$3$2$1'))
+            : '';
+          return {
+            elencoId:         b?.id || undefined,
+            nome:             elenco?.nome ?? b?.nome ?? '',
+            cpf:              maskCpfCnpj(String(elenco?.cpf ?? '')),
+            data_nascimento:  dobBR,
+            instagram_handle: b?.instagram_handle ?? '',
+          };
+        })
       : []);
     setInstagramPrincipalForm(reg.instagram_principal ?? '');
   };
@@ -687,9 +722,15 @@ const MinhasCoreografias = () => {
       const formato = reg.formato_participacao ?? '';
       const isGrupoLike = formato === 'Grupo' || formato === 'Conjunto';
 
-      // Normaliza + valida bailarinos. Mesmo padrão de handleSaveEdit em
-      // pages/Registrations.tsx (commit b2f9649).
-      const normalized: any[] = [];
+      // Normaliza + valida. Mesmas regras de handleSaveEdit em Registrations.
+      type Normalized = {
+        elencoId?: string;
+        nome: string;
+        cpf: string;
+        data_nascimento: string;
+        instagram_handle?: string;
+      };
+      const normalized: Normalized[] = [];
       for (let i = 0; i < bailarinosForm.length; i++) {
         const b = bailarinosForm[i];
         const cpfDigits = unmaskCpfCnpj(String(b?.cpf ?? ''));
@@ -707,6 +748,7 @@ const MinhasCoreografias = () => {
           dobIso = iso;
         }
         normalized.push({
+          elencoId:         b?.elencoId,
           nome:             String(b?.nome ?? '').trim(),
           cpf:              cpfDigits,
           data_nascimento:  dobIso,
@@ -716,9 +758,65 @@ const MinhasCoreografias = () => {
         });
       }
 
+      // Refator 2026-06-01: persistência em 2 passos.
+      //   1) UPSERT cada bailarino na `elenco` (fonte de verdade dos dados
+      //      pessoais). Com elencoId → UPDATE; sem → INSERT (bailarino novo
+      //      adicionado na sessão). Captura ids resultantes.
+      //   2) UPDATE `registrations.bailarinos_detalhes` com {id, nome,
+      //      instagram_handle} pra cada bailarino (referência leve).
+      // RLS inscrito_own_elenco (FOR ALL com user_id = auth.uid) cobre os 2
+      // caminhos pro inscrito. Adicionar/remover bailarino também tá ok
+      // porque inscrito é dono.
+      const resolvedIds: string[] = [];
+      for (let i = 0; i < normalized.length; i++) {
+        const b = normalized[i];
+        if (b.elencoId) {
+          // UPDATE existente. .select('id') detecta RLS bloqueando.
+          const { data, error } = await supabase
+            .from('elenco')
+            .update({
+              nome:            b.nome,
+              cpf:             b.cpf,
+              data_nascimento: b.data_nascimento || null,
+            })
+            .eq('id', b.elencoId)
+            .select('id');
+          if (error) throw error;
+          if (!data || data.length === 0) {
+            throw new Error(`Sem permissão pra editar o bailarino ${i + 1}. Recarregue e tente de novo.`);
+          }
+          resolvedIds.push(b.elencoId);
+        } else {
+          // INSERT novo. user_id = dono da inscrição (= auth.uid pro inscrito).
+          const { data, error } = await supabase
+            .from('elenco')
+            .insert({
+              user_id:         reg.user_id,
+              nome:            b.nome,
+              cpf:             b.cpf,
+              data_nascimento: b.data_nascimento || null,
+            })
+            .select('id')
+            .single();
+          if (error) throw error;
+          if (!data?.id) throw new Error(`Falha ao criar o bailarino ${i + 1}.`);
+          resolvedIds.push(data.id);
+        }
+      }
+
+      // Reconstrói bailarinos_detalhes (referência leve). Mantém apenas os
+      // bailarinos que ficaram no form — se inscrito removeu um, o id sai
+      // do JSONB. A row em elenco NÃO é deletada (pode estar em outras
+      // inscrições; limpeza fica pra cleanup-orphan-elencos futuro).
+      const bailarinosDetalhes = normalized.map((b, i) => ({
+        id:               resolvedIds[i],
+        nome:             b.nome,
+        instagram_handle: b.instagram_handle ?? null,
+      }));
+
       const igPrincipal = String(instagramPrincipalForm ?? '').trim().toLowerCase().replace(/^@/, '');
       const patch: Record<string, any> = {
-        bailarinos_detalhes: normalized,
+        bailarinos_detalhes: bailarinosDetalhes,
         instagram_principal: isGrupoLike ? (igPrincipal || null) : null,
       };
 
@@ -737,6 +835,21 @@ const MinhasCoreografias = () => {
 
       // Atualiza state local pra refletir sem refetch.
       setRegistrations(prev => prev.map(r => r.id === reg.id ? { ...r, ...patch } : r));
+      // Hidrata elencoById localmente com os dados que acabaram de gravar
+      // pra UI mostrar CPF/data sem refetch.
+      setElencoById(prev => {
+        const next = { ...prev };
+        for (let i = 0; i < normalized.length; i++) {
+          const b = normalized[i];
+          next[resolvedIds[i]] = {
+            id:              resolvedIds[i],
+            nome:            b.nome,
+            cpf:             b.cpf,
+            data_nascimento: b.data_nascimento || null,
+          };
+        }
+        return next;
+      });
       cancelEditingBailarinos();
     } catch (e: any) {
       setBailarinosError(e.message ?? 'Erro ao salvar.');
