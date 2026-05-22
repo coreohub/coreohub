@@ -29,7 +29,7 @@ const Registrations = () => {
   // Sessão 4.1 P8: alerta rápido (vencendo em 24h / trilhas pendentes). Click no
   // banner do topo seta esse filtro extra que sobrepõe os filtros normais.
   // 'fora_faixa' não entra aqui — vai pra aba TRIAGEM direto (regime separado).
-  const [quickAlert, setQuickAlert] = useState<'vencendo' | 'no_trilha' | null>(null);
+  const [quickAlert, setQuickAlert] = useState<'vencendo' | 'no_trilha' | 'incompletos' | null>(null);
   // Sessão 4.1 sort header: click na coluna alterna asc/desc. Default é data desc
   // (mais recentes primeiro, padrão Stripe/Linear).
   const [sortBy, setSortBy]   = useState<'data' | 'nome' | 'valor' | 'status'>('data');
@@ -334,6 +334,23 @@ const Registrations = () => {
   // Aceitar ambos pra cobrir rows antigas até backfill.
   const isPago = (s?: string) => s === 'APROVADO' || s === 'CONFIRMADO';
 
+  /** Sessão 4.2 item 3: deteccao de inscricoes com dados incompletos dos
+   *  bailarinos. CPF e data de nascimento sao obrigatorios pra emitir
+   *  certificado e validar faixa etaria. Se a inscricao tem modalidade
+   *  preenchida mas o array bailarinos_detalhes esta vazio/ausente, tambem
+   *  conta como incompleto (caso classico: registro zumbi de PWA cache).
+   *  Helper visivel tanto pro filter quanto pro render do badge. */
+  const isBailarinoIncompleto = (b: any) =>
+    !String(b?.cpf ?? '').trim() || !String(b?.data_nascimento ?? '').trim() || !String(b?.nome ?? '').trim();
+  const hasIncompleteBailarinos = (reg: any): boolean => {
+    const bailarinos = reg.bailarinos_detalhes;
+    if (!Array.isArray(bailarinos) || bailarinos.length === 0) {
+      // Sem array mas com modalidade declarada — claramente faltam dados.
+      return Boolean(reg.formato_participacao);
+    }
+    return bailarinos.some(isBailarinoIncompleto);
+  };
+
   const violatingRegs = useMemo(() => {
     return registrations
       .filter(r => isPago(r.status_pagamento))
@@ -391,6 +408,8 @@ const Registrations = () => {
       });
     } else if (quickAlert === 'no_trilha') {
       result = result.filter(reg => isPago(reg.status_pagamento) && !reg.trilha_url);
+    } else if (quickAlert === 'incompletos') {
+      result = result.filter(reg => hasIncompleteBailarinos(reg));
     }
     // Filtro por data — usa created_at (data da inscrição)
     if (dateFilter !== 'ALL') {
@@ -468,6 +487,7 @@ const Registrations = () => {
   const alertCounts = useMemo(() => {
     let vencendo = 0;
     let noTrilha = 0;
+    let incompletos = 0;
     for (const r of registrations) {
       if (r.status_pagamento === 'PENDENTE') {
         const raw = r.created_at ?? r.criado_em;
@@ -478,8 +498,9 @@ const Registrations = () => {
         }
       }
       if (isPago(r.status_pagamento) && !r.trilha_url) noTrilha++;
+      if (hasIncompleteBailarinos(r)) incompletos++;
     }
-    return { vencendo, noTrilha };
+    return { vencendo, noTrilha, incompletos };
   }, [registrations]);
 
   /* Stats no topo — cards de KPI (padrão Stripe Dashboard).
@@ -630,7 +651,7 @@ const Registrations = () => {
               tem ao menos 1 alerta ativo. Click no chip filtra a lista pra ver
               só essas. "Fora da faixa" pula direto pra aba TRIAGEM (regime
               separado, exige decisão do produtor). */}
-          {(alertCounts.vencendo > 0 || alertCounts.noTrilha > 0 || violatingRegs.length > 0) && (
+          {(alertCounts.vencendo > 0 || alertCounts.noTrilha > 0 || alertCounts.incompletos > 0 || violatingRegs.length > 0) && (
             <div className="flex flex-wrap items-center gap-2 p-3 bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded-2xl">
               <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 flex items-center gap-2 mr-1">
                 <Bell size={12} /> Atenção
@@ -659,6 +680,19 @@ const Registrations = () => {
                   title="Inscrições pagas que ainda não enviaram a trilha sonora"
                 >
                   <Music2 size={11} /> {alertCounts.noTrilha} trilha(s) pendente(s)
+                </button>
+              )}
+              {alertCounts.incompletos > 0 && (
+                <button
+                  onClick={() => setQuickAlert(q => q === 'incompletos' ? null : 'incompletos')}
+                  className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all flex items-center gap-1.5 ${
+                    quickAlert === 'incompletos'
+                      ? 'bg-amber-500 text-white border-amber-500'
+                      : 'bg-white dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30 hover:bg-amber-100 dark:hover:bg-amber-500/20'
+                  }`}
+                  title="Inscrições com bailarinos sem CPF ou data de nascimento — bloqueia certificado e validação etária"
+                >
+                  <AlertTriangle size={11} /> {alertCounts.incompletos} com dados incompletos
                 </button>
               )}
               {violatingRegs.length > 0 && (
@@ -738,7 +772,11 @@ const Registrations = () => {
               <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/40 rounded-2xl">
                 <Bell size={12} className="text-amber-600 dark:text-amber-400 shrink-0" />
                 <p className="flex-1 text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">
-                  Filtrando: {quickAlert === 'vencendo' ? 'Vencendo em 24h' : 'Trilhas pendentes'}
+                  Filtrando: {
+                    quickAlert === 'vencendo'    ? 'Vencendo em 24h' :
+                    quickAlert === 'no_trilha'   ? 'Trilhas pendentes' :
+                    'Dados incompletos'
+                  }
                   <span className="ml-2 text-amber-600 dark:text-amber-400/80 normal-case font-bold tracking-normal">
                     ({filteredRegistrations.length} {filteredRegistrations.length === 1 ? 'resultado' : 'resultados'})
                   </span>
@@ -1515,21 +1553,46 @@ const Registrations = () => {
                 {/* Bailarinos */}
                 {Array.isArray(viewingReg.bailarinos_detalhes) && viewingReg.bailarinos_detalhes.length > 0 && (
                   <section>
-                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><Users size={12} /> Bailarinos ({viewingReg.bailarinos_detalhes.length})</h3>
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
+                      <Users size={12} /> Bailarinos ({viewingReg.bailarinos_detalhes.length})
+                      {/* Sessão 4.2 item 3: badge agregado quando algum bailarino
+                          tem CPF/nasc/nome faltando. Bloqueia emissão de certificado
+                          e validação de faixa etária. */}
+                      {hasIncompleteBailarinos(viewingReg) && (
+                        <span className="ml-1 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-500/30 rounded-full normal-case tracking-normal flex items-center gap-1">
+                          <AlertTriangle size={10} /> dados pendentes
+                        </span>
+                      )}
+                    </h3>
                     <div className="space-y-2">
-                      {viewingReg.bailarinos_detalhes.map((b: any, i: number) => (
-                        <div key={i} className="flex items-center justify-between gap-3 p-3 bg-slate-50 dark:bg-white/5 rounded-xl">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[12px] font-bold text-slate-900 dark:text-white truncate">{b.nome ?? `Bailarino ${i + 1}`}</p>
-                            <p className="text-[10px] text-slate-400">CPF {formatCpf(b.cpf)} · Nasc. {formatDateBR(b.data_nascimento)}</p>
+                      {viewingReg.bailarinos_detalhes.map((b: any, i: number) => {
+                        const incompleto = isBailarinoIncompleto(b);
+                        return (
+                          <div key={i} className={`flex items-center justify-between gap-3 p-3 rounded-xl ${
+                            incompleto
+                              ? 'bg-amber-50 dark:bg-amber-500/5 border border-amber-300/60 dark:border-amber-500/20'
+                              : 'bg-slate-50 dark:bg-white/5'
+                          }`}>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[12px] font-bold text-slate-900 dark:text-white truncate flex items-center gap-1.5">
+                                {b.nome ?? `Bailarino ${i + 1}`}
+                                {incompleto && (
+                                  <AlertTriangle size={11} className="text-amber-500 shrink-0" />
+                                )}
+                              </p>
+                              <p className={`text-[10px] ${incompleto ? 'text-amber-700 dark:text-amber-400 font-bold' : 'text-slate-400'}`}>
+                                CPF {formatCpf(b.cpf)} · Nasc. {formatDateBR(b.data_nascimento)}
+                                {incompleto && <span className="ml-1">· pedir ao inscrito</span>}
+                              </p>
+                            </div>
+                            {b.instagram_handle && (
+                              <a href={`https://instagram.com/${b.instagram_handle.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="text-[#ff0068] hover:underline text-[10px] font-bold flex items-center gap-1 shrink-0">
+                                <Instagram size={11} /> {b.instagram_handle}
+                              </a>
+                            )}
                           </div>
-                          {b.instagram_handle && (
-                            <a href={`https://instagram.com/${b.instagram_handle.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="text-[#ff0068] hover:underline text-[10px] font-bold flex items-center gap-1 shrink-0">
-                              <Instagram size={11} /> {b.instagram_handle}
-                            </a>
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     {viewingReg.instagram_principal && (
                       <p className="text-[10px] text-slate-500 mt-2 flex items-center gap-1">
