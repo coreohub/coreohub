@@ -179,8 +179,20 @@ const Registrations = () => {
       // nao guardar sujeira de uma edicao previa que era em outra modalidade.
       const igPrincipal = String(editValues.instagram_principal ?? '').trim().toLowerCase().replace(/^@/, '');
       patch.instagram_principal = isGrupoLike ? (igPrincipal || null) : null;
-      const { error } = await supabase.from('registrations').update(patch).eq('id', regId);
+      // .select('id') força PostgREST a retornar as rows afetadas. Sem isso,
+      // RLS bloqueando o UPDATE retorna 200/204 com 0 rows e o front pensa que
+      // salvou. Bug descoberto na auditoria 2026-05-21: produtor sem policy
+      // UPDATE (migration 20260525) salvava no localStorage do React mas nao
+      // persistia no banco.
+      const { data, error } = await supabase
+        .from('registrations')
+        .update(patch)
+        .eq('id', regId)
+        .select('id');
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('Sem permissão pra editar essa inscrição. Aplique a migration 20260525 ou peça pro admin.');
+      }
       // Atualiza state local pra refletir mudança sem refetch.
       setRegistrations(prev => prev.map(r => r.id === regId ? { ...r, ...patch } : r));
       setViewingReg((prev: any) => prev && prev.id === regId ? { ...prev, ...patch } : prev);
