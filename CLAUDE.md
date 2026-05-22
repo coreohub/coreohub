@@ -31,8 +31,10 @@ Em produção: ~71 telas, ~30 componentes compartilhados, 31 edge functions Supa
 - **Status semânticos:** verde `#emerald-500` (success/disponível), âmbar `#amber-500` (atenção/retido), vermelho `#rose-500` (erro/destrutivo), azul céu `#sky-500` (info).
 
 **Tipografia:**
-- **Barlow Condensed** — títulos, headers, números grandes (estética esportiva/festival).
-- **Inter** — corpo, formulários, labels, texto secundário.
+- **Inter** — única fonte carregada hoje (pesos 300-700 via Google Fonts no `index.html`). Cobre títulos + corpo + labels.
+- ⚠ `Barlow Condensed` citado em commits/docs antigos mas **nunca foi importado**. Decisão pendente em [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md). Por enquanto, todos os títulos usam Inter com `font-black uppercase tracking-tighter`.
+
+**Catálogo completo de tokens, componentes e padrões em [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)** — fonte canônica pra "Segue o design system" da Definition of Done.
 
 **Estética visual:**
 - Bordas arredondadas generosas (`rounded-2xl`, `rounded-3xl`).
