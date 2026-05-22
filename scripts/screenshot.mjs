@@ -8,10 +8,11 @@
 // contra contas reais em prod.
 //
 // Uso:
-//   node scripts/screenshot.mjs /registrations
-//   node scripts/screenshot.mjs /registrations,/qg-organizador,/configuracoes
+//   node scripts/screenshot.mjs registrations                  # default: produtor
+//   node scripts/screenshot.mjs registrations --as=admin
+//   node scripts/screenshot.mjs registrations,qg-organizador --as=produtor
 //
-// Precisa rodar playwright.auth.mjs antes (gera storage state).
+// Precisa rodar playwright.auth.mjs antes (gera storage state pro role).
 //
 // Saída:
 //   screenshots/registrations-desktop.png
@@ -27,13 +28,23 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: resolve(__dirname, '..', '.env.local') });
 
+// Parse --as=role do CLI. Default = produtor (uso mais comum, sem bypass RLS).
+const asArg = process.argv.find(a => a.startsWith('--as='));
+const role = (asArg ? asArg.slice(5) : 'produtor').toLowerCase();
+const validRoles = ['admin', 'produtor'];
+if (!validRoles.includes(role)) {
+  console.error(`❌ Role "${role}" inválido. Use: --as=${validRoles.join(' | --as=')}`);
+  process.exit(1);
+}
+
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'https://app.coreohub.com';
-const STATE_PATH = resolve(__dirname, '.playwright-auth', 'storage.json');
+const STATE_PATH = resolve(__dirname, '.playwright-auth', `storage-${role}.json`);
 const OUT_DIR = resolve(__dirname, '..', 'screenshots');
 
-const arg = process.argv[2];
+// Primeiro arg posicional (que não comece com --) = rotas.
+const arg = process.argv.slice(2).find(a => !a.startsWith('--'));
 if (!arg) {
-  console.error('❌ Uso: node scripts/screenshot.mjs registrations[,qg-organizador,...]');
+  console.error('❌ Uso: node scripts/screenshot.mjs registrations[,qg-organizador,...] [--as=admin|produtor]');
   console.error('   (sem barra inicial — Git Bash no Windows converte /rota em path absoluto)');
   process.exit(1);
 }
@@ -61,7 +72,10 @@ const routes = arg
 let hasState = false;
 try { await access(STATE_PATH); hasState = true; } catch {}
 if (!hasState) {
-  console.warn('⚠ Sem storage state (rode playwright.auth.mjs primeiro). Seguindo SEM login.');
+  console.warn(`⚠ Sem storage state pra role "${role}". Rode "node scripts/playwright.auth.mjs --as=${role}" primeiro.`);
+  console.warn('   Seguindo SEM login (só rotas públicas vão renderizar corretamente).');
+} else {
+  console.log(`→ Role: ${role} (storage: ${STATE_PATH.split(/[\\/]/).slice(-2).join('/')})`);
 }
 
 const viewports = {
