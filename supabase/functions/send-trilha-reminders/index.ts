@@ -50,16 +50,27 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
 
-  // Auth: gate de service_role (decode JWT + check role — lição feedback-jwt-role-check).
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
-  const cronToken      = Deno.env.get('CRON_AUTH_TOKEN') ?? ''
-  const authHeader     = req.headers.get('Authorization') ?? ''
-  const cronHeader     = req.headers.get('x-cron-token') ?? ''
-  const okAuth =
-    (serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`) ||
-    (cronToken      && cronHeader === cronToken)
-  if (!okAuth) return respond(401, { error: 'Unauthorized' })
+  // Gate: decode JWT + check claim role (lição [[feedback-jwt-role-check]]).
+  // Robusto a rotação da service_role_key — pg_cron envia JWT que pode ser
+  // de outra geração válida mas com string diferente do env. Pattern correto
+  // já aplicado em daily-release-funds desde 2026-05-20.
+  const auth  = req.headers.get('authorization') ?? ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  let jwtRole = ''
+  try {
+    const payloadB64 = token.split('.')[1] ?? ''
+    if (payloadB64) {
+      const base64 = payloadB64.replace(/-/g, '+').replace(/_/g, '/')
+      const padded = base64 + '='.repeat((4 - base64.length % 4) % 4)
+      const payload = JSON.parse(atob(padded))
+      jwtRole = String(payload?.role ?? '')
+    }
+  } catch { /* JWT malformado — cai no 401 abaixo */ }
+  if (jwtRole !== 'service_role') {
+    return respond(401, { error: 'Unauthorized' })
+  }
 
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
     serviceRoleKey
