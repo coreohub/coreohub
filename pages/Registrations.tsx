@@ -2,7 +2,8 @@ import React, { useEffect, useState, useMemo } from 'react';
 import {
   Search, Download, RefreshCw,
   Trash2, AlertTriangle, X, DollarSign,
-  ShieldAlert, CheckCircle2, Clock, Users, Info, ChevronDown,
+  ShieldAlert, CheckCircle2, Clock, Users, Info, ChevronDown, ChevronUp,
+  ChevronLeft, ChevronRight, Bell,
   Undo2, Loader2, Eye, Music2, Video, Calendar, User, Instagram,
   TrendingUp, ExternalLink, Pencil, Save, Lock as LockIcon,
 } from 'lucide-react';
@@ -25,6 +26,27 @@ const Registrations = () => {
   const [tipoApresentacaoFilter, setTipoApresentacaoFilter] = useState<'ALL' | 'Competitiva' | 'Avaliada'>('ALL');
   // Sessão 3 P4 backlog painel produtor — filtro por range de data
   const [dateFilter, setDateFilter] = useState<'ALL' | 'today' | '7d' | '30d' | 'month'>('ALL');
+  // Sessão 4.1 P8: alerta rápido (vencendo em 24h / trilhas pendentes). Click no
+  // banner do topo seta esse filtro extra que sobrepõe os filtros normais.
+  // 'fora_faixa' não entra aqui — vai pra aba TRIAGEM direto (regime separado).
+  const [quickAlert, setQuickAlert] = useState<'vencendo' | 'no_trilha' | null>(null);
+  // Sessão 4.1 sort header: click na coluna alterna asc/desc. Default é data desc
+  // (mais recentes primeiro, padrão Stripe/Linear).
+  const [sortBy, setSortBy]   = useState<'data' | 'nome' | 'valor' | 'status'>('data');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  // Sessão 4.1 paginação: lista trava mobile com 50+ rows. PAGE_SIZE 50 cobre
+  // 90%+ dos festivais BR pequenos/médios sem precisar paginar.
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
+  // Sessão 4.1 P5 comparativo edição anterior. Quando o evento atual tem
+  // edition_year e existe outro evento do mesmo produtor com edition_year menor,
+  // computa receita + inscrições pagas pra mostrar delta no topo.
+  const [prevEdition, setPrevEdition] = useState<{
+    name: string;
+    edition_year: number;
+    receita: number;
+    inscricoes: number;
+  } | null>(null);
   const [refundModal, setRefundModal] = useState<any>(null);
   const [refundAmount, setRefundAmount] = useState<string>('');
   const [refundReason, setRefundReason] = useState('');
@@ -216,6 +238,34 @@ const Registrations = () => {
       if (cfg?.age_reference) setAgeRefMode(cfg.age_reference as 'EVENT_DAY' | 'YEAR_END' | 'FIXED_DATE');
       if (cfg?.age_reference_date) setAgeRefFixed(cfg.age_reference_date);
       if (cfg?.data_evento) setEventDate(cfg.data_evento);
+
+      // P5 backlog painel produtor — comparativo edição anterior. Procura no
+      // próprio dropdown (mesmo produtor) o evento com maior edition_year que
+      // ainda seja < edição atual. Não filtra por nome porque produtor pode
+      // ter renomeado entre edições (ex.: "Usualdance 2025" → "Festival Cultural
+      // Estúdio 2026"). Esse mesmo princípio do ResultsPanel.tsx:259.
+      const currentEvent = allEvents.find(e => e.id === selectedEventId);
+      if (currentEvent?.edition_year) {
+        const prev = allEvents
+          .filter(e => e.id !== selectedEventId && typeof e.edition_year === 'number' && e.edition_year < (currentEvent.edition_year as number))
+          .sort((a, b) => (b.edition_year ?? 0) - (a.edition_year ?? 0))[0];
+        if (prev) {
+          const { data: prevRegs } = await supabase
+            .from('registrations')
+            .select('status_pagamento, valor_pago, valor_total, mod_fee, charged_amount')
+            .eq('event_id', prev.id);
+          const pagas = (prevRegs ?? []).filter(r => r.status_pagamento === 'APROVADO' || r.status_pagamento === 'CONFIRMADO');
+          const receita = pagas.reduce((s, r) => {
+            const v = Number(r.valor_pago ?? r.valor_total ?? r.charged_amount ?? r.mod_fee ?? 0) || 0;
+            return s + v;
+          }, 0);
+          setPrevEdition({ name: prev.name, edition_year: prev.edition_year as number, receita, inscricoes: pagas.length });
+        } else {
+          setPrevEdition(null);
+        }
+      } else {
+        setPrevEdition(null);
+      }
     } catch (err) {
       console.error('Erro:', err);
     } finally {
@@ -327,6 +377,21 @@ const Registrations = () => {
     if (estiloFilter !== 'ALL')    result = result.filter(reg => reg.estilo_danca === estiloFilter);
     if (inscritoFilter !== 'ALL')  result = result.filter(reg => (reg.inscrito_nome ?? reg.profiles?.full_name) === inscritoFilter);
     if (tipoApresentacaoFilter !== 'ALL') result = result.filter(reg => reg.tipo_apresentacao === tipoApresentacaoFilter);
+    // Sessão 4.1 P8: filtro de alerta rápido. "Vencendo em 24h" usa o sinal
+    // implícito de prazo (default dueDate do Asaas = created_at + 3d) — pega
+    // PENDENTE criados há 48-72h. "Trilhas pendentes" = APROVADO sem trilha_url.
+    if (quickAlert === 'vencendo') {
+      result = result.filter(reg => {
+        if (reg.status_pagamento !== 'PENDENTE') return false;
+        const raw = reg.created_at ?? reg.criado_em;
+        const t = raw ? new Date(raw).getTime() : 0;
+        if (!t) return false;
+        const ageH = (Date.now() - t) / 3600_000;
+        return ageH >= 48 && ageH <= 72;
+      });
+    } else if (quickAlert === 'no_trilha') {
+      result = result.filter(reg => isPago(reg.status_pagamento) && !reg.trilha_url);
+    }
     // Filtro por data — usa created_at (data da inscrição)
     if (dateFilter !== 'ALL') {
       const now = new Date();
@@ -348,7 +413,74 @@ const Registrations = () => {
       });
     }
     setFilteredRegistrations(result);
-  }, [searchTerm, paymentFilter, modalidadeFilter, categoriaFilter, estiloFilter, inscritoFilter, tipoApresentacaoFilter, dateFilter, registrations]);
+  }, [searchTerm, paymentFilter, modalidadeFilter, categoriaFilter, estiloFilter, inscritoFilter, tipoApresentacaoFilter, dateFilter, quickAlert, registrations]);
+
+  // Sessão 4.1 sort: ordena depois de filtrar pra estabilizar a navegação por
+  // página (sem reorder no meio da paginação).
+  const sortedRegistrations = useMemo(() => {
+    const arr = [...filteredRegistrations];
+    arr.sort((a, b) => {
+      if (sortBy === 'nome') {
+        const av = String(a.nome_coreografia ?? '');
+        const bv = String(b.nome_coreografia ?? '');
+        return sortDir === 'asc' ? av.localeCompare(bv, 'pt-BR') : bv.localeCompare(av, 'pt-BR');
+      }
+      if (sortBy === 'status') {
+        const av = String(a.status_pagamento ?? '');
+        const bv = String(b.status_pagamento ?? '');
+        return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+      }
+      if (sortBy === 'valor') {
+        const av = Number(a.valor_pago ?? a.valor_total ?? a.charged_amount ?? a.mod_fee ?? 0) || 0;
+        const bv = Number(b.valor_pago ?? b.valor_total ?? b.charged_amount ?? b.mod_fee ?? 0) || 0;
+        return sortDir === 'asc' ? av - bv : bv - av;
+      }
+      // data (default)
+      const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return sortDir === 'asc' ? at - bt : bt - at;
+    });
+    return arr;
+  }, [filteredRegistrations, sortBy, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedRegistrations.length / PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const paginatedRegistrations = useMemo(() => {
+    return sortedRegistrations.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  }, [sortedRegistrations, safePage]);
+
+  // Reset pra página 1 quando filtros/sort/alerta mudam (evita ficar numa
+  // página vazia depois que o conjunto diminuiu).
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, paymentFilter, modalidadeFilter, categoriaFilter, estiloFilter, inscritoFilter, tipoApresentacaoFilter, dateFilter, quickAlert, sortBy, sortDir]);
+
+  // Helper de click no header pra alternar sort. Mesma coluna → inverte direção.
+  // Coluna nova → começa em desc (padrão Stripe/Linear pra listas).
+  const toggleSort = (col: 'data' | 'nome' | 'valor' | 'status') => {
+    if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortBy(col); setSortDir('desc'); }
+  };
+
+  // Sessão 4.1 P8: contadores dos alertas inteligentes. Derivados de registrations
+  // (não filteredRegistrations) — banner mostra estado macro do evento independente
+  // do filtro ativo.
+  const alertCounts = useMemo(() => {
+    let vencendo = 0;
+    let noTrilha = 0;
+    for (const r of registrations) {
+      if (r.status_pagamento === 'PENDENTE') {
+        const raw = r.created_at ?? r.criado_em;
+        const t = raw ? new Date(raw).getTime() : 0;
+        if (t) {
+          const ageH = (Date.now() - t) / 3600_000;
+          if (ageH >= 48 && ageH <= 72) vencendo++;
+        }
+      }
+      if (isPago(r.status_pagamento) && !r.trilha_url) noTrilha++;
+    }
+    return { vencendo, noTrilha };
+  }, [registrations]);
 
   /* Stats no topo — cards de KPI (padrão Stripe Dashboard).
      Derivados de registrations (não filteredRegistrations) pra manter
@@ -491,6 +623,96 @@ const Registrations = () => {
 
       {tab === 'LIST' ? (
         <div className="space-y-6">
+          {/* Sessão 4.1 P8: banner de alertas inteligentes. Só aparece quando
+              tem ao menos 1 alerta ativo. Click no chip filtra a lista pra ver
+              só essas. "Fora da faixa" pula direto pra aba TRIAGEM (regime
+              separado, exige decisão do produtor). */}
+          {(alertCounts.vencendo > 0 || alertCounts.noTrilha > 0 || violatingRegs.length > 0) && (
+            <div className="flex flex-wrap items-center gap-2 p-3 bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded-2xl">
+              <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 flex items-center gap-2 mr-1">
+                <Bell size={12} /> Atenção
+              </p>
+              {alertCounts.vencendo > 0 && (
+                <button
+                  onClick={() => setQuickAlert(q => q === 'vencendo' ? null : 'vencendo')}
+                  className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all flex items-center gap-1.5 ${
+                    quickAlert === 'vencendo'
+                      ? 'bg-amber-500 text-white border-amber-500'
+                      : 'bg-white dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30 hover:bg-amber-100 dark:hover:bg-amber-500/20'
+                  }`}
+                  title="Inscrições pendentes a 48-72h da criação (próximas do vencimento padrão Asaas)"
+                >
+                  <Clock size={11} /> {alertCounts.vencendo} vencendo em 24h
+                </button>
+              )}
+              {alertCounts.noTrilha > 0 && (
+                <button
+                  onClick={() => setQuickAlert(q => q === 'no_trilha' ? null : 'no_trilha')}
+                  className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all flex items-center gap-1.5 ${
+                    quickAlert === 'no_trilha'
+                      ? 'bg-amber-500 text-white border-amber-500'
+                      : 'bg-white dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30 hover:bg-amber-100 dark:hover:bg-amber-500/20'
+                  }`}
+                  title="Inscrições pagas que ainda não enviaram a trilha sonora"
+                >
+                  <Music2 size={11} /> {alertCounts.noTrilha} trilha(s) pendente(s)
+                </button>
+              )}
+              {violatingRegs.length > 0 && (
+                <button
+                  onClick={() => setTab('TRIAGEM')}
+                  className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border bg-white dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-all flex items-center gap-1.5"
+                  title="Bailarinos fora da faixa etária da categoria — abre aba Triagem"
+                >
+                  <ShieldAlert size={11} /> {violatingRegs.length} fora da faixa
+                </button>
+              )}
+              {quickAlert && (
+                <button
+                  onClick={() => setQuickAlert(null)}
+                  className="ml-auto px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-all flex items-center gap-1"
+                >
+                  <X size={11} /> Limpar
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Sessão 4.1 P5: comparativo edição anterior. Banner compacto antes
+              dos KPIs quando o produtor tem evento de edição anterior no dropdown.
+              Delta de receita + inscrições com cor verde/vermelha pra leitura
+              rápida. Padrão Stripe Dashboard "vs período anterior". */}
+          {prevEdition && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 p-3 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 rounded-2xl">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                <TrendingUp size={12} /> Vs edição {prevEdition.edition_year}
+              </p>
+              {(() => {
+                const deltaReceita = prevEdition.receita > 0
+                  ? ((stats.receita - prevEdition.receita) / prevEdition.receita) * 100
+                  : (stats.receita > 0 ? 100 : 0);
+                const deltaInsc = prevEdition.inscricoes > 0
+                  ? ((stats.confirmadas - prevEdition.inscricoes) / prevEdition.inscricoes) * 100
+                  : (stats.confirmadas > 0 ? 100 : 0);
+                const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(0)}%`;
+                const toneR = deltaReceita >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400';
+                const toneI = deltaInsc    >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400';
+                return (
+                  <>
+                    <p className="text-[11px] text-slate-700 dark:text-slate-200">
+                      Receita <span className={`font-black ${toneR}`}>{fmtPct(deltaReceita)}</span>
+                      <span className="text-slate-400"> (R$ {prevEdition.receita.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
+                    </p>
+                    <p className="text-[11px] text-slate-700 dark:text-slate-200">
+                      Inscrições <span className={`font-black ${toneI}`}>{fmtPct(deltaInsc)}</span>
+                      <span className="text-slate-400"> ({prevEdition.inscricoes})</span>
+                    </p>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
           {/* Stats cards — padrão Stripe Dashboard. KPIs do evento ativo,
               não respeitam filtros (visão macro mesmo com filtro estreito). */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
@@ -626,7 +848,7 @@ const Registrations = () => {
                 )}
               </div>
             ) : (
-              filteredRegistrations.map(reg => (
+              paginatedRegistrations.map(reg => (
                 <div
                   key={reg.id}
                   onClick={() => setViewingReg(reg)}
@@ -702,13 +924,23 @@ const Registrations = () => {
             <table className="w-full min-w-[640px] text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/5">
-                  <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Coreografia</th>
+                  {/* Sessão 4.1 sort header: click alterna direção. Ícone "≡" cinza
+                      indica coluna sortable, seta ↑/↓ rosa marca a ativa. */}
+                  <th onClick={() => toggleSort('nome')} className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest cursor-pointer hover:text-[#ff0068] transition-colors select-none">
+                    <span className="inline-flex items-center gap-1">Coreografia <SortIcon active={sortBy === 'nome'} dir={sortDir} /></span>
+                  </th>
                   <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden lg:table-cell">Inscrito</th>
                   <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden md:table-cell">Estúdio</th>
                   <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden xl:table-cell">Categoria</th>
-                  <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden xl:table-cell">Data</th>
-                  <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right hidden md:table-cell">Valor</th>
-                  <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Pagamento</th>
+                  <th onClick={() => toggleSort('data')} className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden xl:table-cell cursor-pointer hover:text-[#ff0068] transition-colors select-none">
+                    <span className="inline-flex items-center gap-1">Data <SortIcon active={sortBy === 'data'} dir={sortDir} /></span>
+                  </th>
+                  <th onClick={() => toggleSort('valor')} className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right hidden md:table-cell cursor-pointer hover:text-[#ff0068] transition-colors select-none">
+                    <span className="inline-flex items-center gap-1 justify-end w-full">Valor <SortIcon active={sortBy === 'valor'} dir={sortDir} /></span>
+                  </th>
+                  <th onClick={() => toggleSort('status')} className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center cursor-pointer hover:text-[#ff0068] transition-colors select-none">
+                    <span className="inline-flex items-center gap-1 justify-center w-full">Pagamento <SortIcon active={sortBy === 'status'} dir={sortDir} /></span>
+                  </th>
                   <th className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Ações</th>
                 </tr>
               </thead>
@@ -777,7 +1009,7 @@ const Registrations = () => {
                       )}
                     </td>
                   </tr>
-                ) : filteredRegistrations.map(reg => (
+                ) : paginatedRegistrations.map(reg => (
                   <tr
                     key={reg.id}
                     onClick={() => setViewingReg(reg)}
@@ -847,6 +1079,38 @@ const Registrations = () => {
               </tbody>
             </table>
           </div>
+
+          {/* Sessão 4.1 paginação: só aparece quando passa de PAGE_SIZE rows.
+              Compartilhado entre mobile e desktop — fica abaixo de qualquer um
+              dos dois renders. */}
+          {sortedRegistrations.length > PAGE_SIZE && (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-2 py-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                {((safePage - 1) * PAGE_SIZE) + 1}–{Math.min(safePage * PAGE_SIZE, sortedRegistrations.length)} de {sortedRegistrations.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={safePage <= 1}
+                  className="p-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:border-[#ff0068] hover:text-[#ff0068] transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:text-slate-700"
+                  title="Página anterior"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 min-w-[80px] text-center">
+                  Página {safePage} / {totalPages}
+                </p>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={safePage >= totalPages}
+                  className="p-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:border-[#ff0068] hover:text-[#ff0068] transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:text-slate-700"
+                  title="Próxima página"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         /* ── TRIAGEM DE REGULAMENTO ── */
@@ -1446,6 +1710,15 @@ const formatDateBR = (raw?: string | null): string => {
   const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!m) return raw;
   return `${m[3]}/${m[2]}/${m[1]}`;
+};
+
+/** Indicador de sort no header da tabela. "≡" cinza pra coluna sortable inativa,
+ *  ↑/↓ rosa pra coluna ativa (cor brand). Padrão Linear/Notion. */
+const SortIcon: React.FC<{ active: boolean; dir: 'asc' | 'desc' }> = ({ active, dir }) => {
+  if (!active) return <ChevronDown size={10} className="text-slate-300 dark:text-slate-600 opacity-60" />;
+  return dir === 'asc'
+    ? <ChevronUp size={10} className="text-[#ff0068]" />
+    : <ChevronDown size={10} className="text-[#ff0068]" />;
 };
 
 /** KPI card no topo da lista. Padrão Stripe Dashboard: número grande +
