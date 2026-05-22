@@ -627,6 +627,18 @@ const MinhasCoreografias = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada.');
 
+      // Reusa o cupom aplicado no card "PAGAR TODAS" (mesma sessão = mesma
+      // intenção do inscrito). Se nada aplicado, manda sem cupom.
+      const body: Record<string, any> = {
+        registration_id: reg.id,
+        event_id:        reg.event_id,
+      };
+      const eventId = reg.event_id ?? '';
+      const appliedCode = appliedAggregateCoupons[eventId]?.code;
+      const rawCode     = aggregateCouponInputs[eventId]?.trim();
+      const couponCode  = appliedCode ?? rawCode;
+      if (couponCode) body.coupon_code = couponCode;
+
       const resp = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-payment-asaas`,
         {
@@ -635,10 +647,7 @@ const MinhasCoreografias = () => {
             'Authorization': `Bearer ${session.access_token}`,
             'Content-Type':  'application/json',
           },
-          body: JSON.stringify({
-            registration_id: reg.id,
-            event_id:        reg.event_id,
-          }),
+          body: JSON.stringify(body),
         }
       );
       const data = await resp.json();
