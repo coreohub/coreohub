@@ -142,6 +142,18 @@ const MinhasCoreografias = () => {
   const [payingEvent, setPayingEvent]        = useState<string | null>(null);
   const [payingSingle, setPayingSingle]      = useState<string | null>(null);
   const [payingTaxa,   setPayingTaxa]        = useState<string | null>(null);
+  // Reseta os 3 "paying" quando a página volta do bfcache (user clica
+  // Voltar no browser depois de ir pro Asaas via window.location.href).
+  // Sem isso, o spinner do botão fica girando indefinidamente até F5.
+  useEffect(() => {
+    const reset = () => {
+      setPayingEvent(null);
+      setPayingSingle(null);
+      setPayingTaxa(null);
+    };
+    window.addEventListener('pageshow', reset);
+    return () => window.removeEventListener('pageshow', reset);
+  }, []);
   const [couponInputs, setCouponInputs]      = useState<Record<string, string>>({});
   const [showCoupon,   setShowCoupon]        = useState<Record<string, boolean>>({});
   // Cupom no agregado — keyed por event_id (1 cupom por fatura agregada).
