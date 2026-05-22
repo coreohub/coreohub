@@ -137,6 +137,11 @@ const MinhasCoreografias = () => {
   const [payingTaxa,   setPayingTaxa]        = useState<string | null>(null);
   const [couponInputs, setCouponInputs]      = useState<Record<string, string>>({});
   const [showCoupon,   setShowCoupon]        = useState<Record<string, boolean>>({});
+  // Cupom no agregado — keyed por event_id (1 cupom por fatura agregada).
+  // Aplicado só na CRIAÇÃO da fatura (handlePagarAgregado); fatura PENDENTE
+  // já criada no Asaas não consegue receber cupom retroativo.
+  const [aggregateCouponInputs, setAggregateCouponInputs] = useState<Record<string, string>>({});
+  const [showAggregateCoupon,   setShowAggregateCoupon]   = useState<Record<string, boolean>>({});
   const [deleting,    setDeleting]           = useState(false);
   const [editingVideo, setEditingVideo]      = useState<string | null>(null);
   const [videoLinkInput, setVideoLinkInput]  = useState('');
@@ -520,6 +525,13 @@ const MinhasCoreografias = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada. Faça login novamente.');
 
+      const body: Record<string, any> = {
+        event_id:         grupo.eventId,
+        registration_ids: grupo.pendentes.map(r => r.id),
+      };
+      const couponCode = aggregateCouponInputs[grupo.eventId]?.trim();
+      if (couponCode) body.coupon_code = couponCode;
+
       const resp = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-aggregate-payment-asaas`,
         {
@@ -528,10 +540,7 @@ const MinhasCoreografias = () => {
             'Authorization': `Bearer ${session.access_token}`,
             'Content-Type':  'application/json',
           },
-          body: JSON.stringify({
-            event_id:         grupo.eventId,
-            registration_ids: grupo.pendentes.map(r => r.id),
-          }),
+          body: JSON.stringify(body),
         }
       );
       const data = await resp.json();
@@ -1038,8 +1047,13 @@ const MinhasCoreografias = () => {
             // Se já tem fatura PENDENTE no Asaas, usa o valor dela. Senão, soma estimada.
             const total = grupo.payment?.value_total ?? grupo.totalPendente;
             const expiraDias = grupo.payment?.expires_at ? diasAte(grupo.payment.expires_at) : null;
+            // Cupom só aparece quando AINDA não há fatura no Asaas. Se já tem
+            // fatura PENDENTE, descontar via cupom exigiria cancelar + recriar
+            // — UX confusa, deixamos pra v2 (botão "Cancelar fatura" + recriar
+            // com cupom).
+            const podeAplicarCupom = !grupo.payment?.payment_url;
             return (
-              <div className="px-5 py-4 bg-slate-50 dark:bg-white/[0.02] border-b border-slate-200 dark:border-white/5">
+              <div className="px-5 py-4 bg-slate-50 dark:bg-white/[0.02] border-b border-slate-200 dark:border-white/5 space-y-3">
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div>
                     <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
@@ -1071,6 +1085,37 @@ const MinhasCoreografias = () => {
                     <ChevronRight size={12} />
                   </button>
                 </div>
+                {/* Cupom: input colapsável, mesmo padrão da Seletiva. Aplicado
+                    no momento da criação da fatura via coupon_code no body. */}
+                {podeAplicarCupom && (
+                  showAggregateCoupon[grupo.eventId] ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={aggregateCouponInputs[grupo.eventId] ?? ''}
+                        onChange={e => setAggregateCouponInputs(p => ({ ...p, [grupo.eventId]: e.target.value.toUpperCase() }))}
+                        placeholder="Código do cupom"
+                        className="flex-1 px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-xs font-mono text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50 uppercase"
+                      />
+                      <button
+                        onClick={() => {
+                          setShowAggregateCoupon(p => ({ ...p, [grupo.eventId]: false }));
+                          setAggregateCouponInputs(p => ({ ...p, [grupo.eventId]: '' }));
+                        }}
+                        className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 px-2"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowAggregateCoupon(p => ({ ...p, [grupo.eventId]: true }))}
+                      className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] hover:underline"
+                    >
+                      Tem cupom?
+                    </button>
+                  )
+                )}
               </div>
             );
           })()}

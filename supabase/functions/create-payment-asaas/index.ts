@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { registration_id, event_id, coupon_id } = await req.json()
+    const { registration_id, event_id, coupon_id, coupon_code } = await req.json()
     if (!registration_id || !event_id) {
       throw new Error('registration_id e event_id são obrigatórios.')
     }
@@ -138,16 +138,25 @@ Deno.serve(async (req) => {
     }
 
     // ── 5c. Aplicar cupom (se informado) ─────────────────────────────────────
+    // Aceita coupon_id (UUID — legacy do Checkout.tsx) OU coupon_code (texto
+    // — usado pelos checkouts da Seletiva e do carrinho agregado a partir
+    // de 2026-06-01). Lookup por code ILIKE pra UX (case-insensitive).
     let discountAmount = 0
     let validatedCoupon: any = null
-    if (coupon_id) {
-      const { data: coupon } = await supabase
+    if (coupon_id || (coupon_code && String(coupon_code).trim())) {
+      let couponQuery = supabase
         .from('coupons')
         .select('*')
-        .eq('id', coupon_id)
         .eq('event_id', event_id)
         .eq('is_active', true)
-        .maybeSingle()
+      if (coupon_id) {
+        couponQuery = couponQuery.eq('id', coupon_id)
+      } else {
+        couponQuery = couponQuery
+          .ilike('code', String(coupon_code).trim().toUpperCase())
+          .in('scope', ['inscription', 'both', 'all'])
+      }
+      const { data: coupon } = await couponQuery.maybeSingle()
 
       if (!coupon) throw new Error('Cupom inválido ou inativo.')
       if (coupon.expires_at && new Date(coupon.expires_at + 'T23:59:59').getTime() < Date.now()) {

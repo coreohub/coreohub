@@ -61,9 +61,10 @@ Deno.serve(async (req) => {
     })
 
   try {
-    const { registration_ids, event_id } = await req.json() as {
+    const { registration_ids, event_id, coupon_code } = await req.json() as {
       registration_ids?: string[]
       event_id?: string
+      coupon_code?: string
     }
 
     if (!event_id) throw new Error('event_id é obrigatório.')
@@ -265,13 +266,81 @@ Deno.serve(async (req) => {
       })
     }
 
+    // ── 5b. Aplicar cupom (se informado) ───────────────────────────────────
+    // Cupom reduz baseFee de cada registration linearmente (proporcional ao
+    // baseFee individual). Replica o comportamento do create-payment-asaas
+    // legacy: produtor absorve o desconto (ganha menos) e comissão também
+    // cai proporcionalmente. Inscrito paga menos.
+    //
+    // scope aceito: 'inscription' ou 'both' (compat com versão legacy do
+    // checkout single; expandiu pra 'all' em 2026-05-20).
+    let validatedCoupon: any = null
+    let discountTotal = 0
+    if (coupon_code && String(coupon_code).trim()) {
+      const normalizedCode = String(coupon_code).trim().toUpperCase()
+      const { data: coupon } = await supabase
+        .from('coupons')
+        .select('*')
+        .eq('event_id', event_id)
+        .ilike('code', normalizedCode)
+        .eq('is_active', true)
+        .in('scope', ['inscription', 'both', 'all'])
+        .maybeSingle()
+      if (!coupon) throw new Error('Cupom inválido ou inativo.')
+      if (coupon.expires_at && new Date(coupon.expires_at + 'T23:59:59').getTime() < Date.now()) {
+        throw new Error('Cupom expirado.')
+      }
+      if (coupon.max_uses != null && coupon.used_count >= coupon.max_uses) {
+        throw new Error('Cupom esgotado.')
+      }
+      validatedCoupon = coupon
+
+      // Soma baseFee de todas as registrations pra distribuir desconto
+      // proporcional. Em cupom 'fixed', limite no baseFee total pra não
+      // ficar negativo. Em 'percent', aplica o % igual em cada baseFee.
+      const baseFeeSum = priced.reduce((s, p) => s + p.baseFee, 0)
+      const totalDiscount = coupon.discount_type === 'percent'
+        ? parseFloat((baseFeeSum * (Number(coupon.discount_value) / 100)).toFixed(2))
+        : Math.min(Number(coupon.discount_value), baseFeeSum)
+
+      // Distribui linearmente. Última registration absorve o rounding diff.
+      let allocated = 0
+      for (let i = 0; i < priced.length; i++) {
+        const p = priced[i]
+        const isLast = i === priced.length - 1
+        const share = isLast
+          ? parseFloat((totalDiscount - allocated).toFixed(2))
+          : parseFloat((totalDiscount * (p.baseFee / baseFeeSum)).toFixed(2))
+        allocated = parseFloat((allocated + share).toFixed(2))
+
+        const newBase = parseFloat(Math.max(0, p.baseFee - share).toFixed(2))
+        const newCommission = parseFloat((newBase * (commissionPercent / 100)).toFixed(2))
+        const newCharged = feeMode === 'repassar'
+          ? parseFloat((newBase + newCommission).toFixed(2))
+          : newBase
+        const newProducer = feeMode === 'repassar'
+          ? newBase
+          : parseFloat((newBase - newCommission).toFixed(2))
+
+        priced[i] = {
+          ...p,
+          baseFee:    newBase,
+          charged:    newCharged,
+          producer:   newProducer,
+          commission: newCommission,
+        }
+      }
+      discountTotal = totalDiscount
+    }
+
     const valueTotal      = parseFloat(priced.reduce((s, p) => s + p.charged,    0).toFixed(2))
     const producerTotal   = parseFloat(priced.reduce((s, p) => s + p.producer,   0).toFixed(2))
     const commissionTotal = parseFloat(priced.reduce((s, p) => s + p.commission, 0).toFixed(2))
 
     console.log(
       `[create-aggregate-payment-asaas] user=${user.id} event=${event_id} N=${priced.length}` +
-      ` valueTotal=${valueTotal} producerTotal=${producerTotal} commissionTotal=${commissionTotal} mode=${feeMode}`
+      ` valueTotal=${valueTotal} producerTotal=${producerTotal} commissionTotal=${commissionTotal} mode=${feeMode}` +
+      (validatedCoupon ? ` coupon=${validatedCoupon.code} discount=${discountTotal}` : '')
     )
 
     // ── 6. Criar payment row PRIMEIRO (pra ter o UUID pro externalReference) ──
@@ -285,7 +354,8 @@ Deno.serve(async (req) => {
         value_total:       valueTotal,
         commission_total:  commissionTotal,
         producer_total:    producerTotal,
-        discount_total:    0,
+        discount_total:    discountTotal,
+        coupon_id:         validatedCoupon?.id ?? null,
         status:            'PENDENTE',
         expires_at:        expiresAt,
       })
@@ -307,7 +377,14 @@ Deno.serve(async (req) => {
     for (const p of priced) {
       const { data: row, error } = await supabase
         .from('registrations')
-        .update({ payment_group_id: paymentId, charged_amount: p.charged })
+        .update({
+          payment_group_id: paymentId,
+          charged_amount:   p.charged,
+          // Snapshot do cupom + desconto distribuído proporcionalmente. Webhook
+          // usa esses valores pra commission_amount per registration sem
+          // precisar recalcular cupom (idempotente).
+          coupon_id:        validatedCoupon?.id ?? null,
+        })
         .eq('id', p.reg.id)
         .is('payment_group_id', null)
         .select('id')
@@ -455,6 +532,17 @@ Deno.serve(async (req) => {
       })
       .in('id', registration_ids)
 
+    // Incrementa used_count do cupom (best-effort, mesmo padrão de
+    // create-payment-asaas e create-video-selection-payment). Conta como
+    // "uso" mesmo se inscrito não pagar — alinhado com a UX dos outros
+    // checkouts (cron de expiração não decrementa).
+    if (validatedCoupon) {
+      await supabase
+        .from('coupons')
+        .update({ used_count: Number(validatedCoupon.used_count ?? 0) + 1 })
+        .eq('id', validatedCoupon.id)
+    }
+
     // A10 (audit): email de confirmação da criação da fatura. Best-effort —
     // falha não bloqueia o fluxo principal (UI já tem a invoice_url no response).
     try {
@@ -510,6 +598,8 @@ Deno.serve(async (req) => {
         value_total:       valueTotal,
         producer_total:    producerTotal,
         commission_total:  commissionTotal,
+        discount_total:    discountTotal,
+        coupon_code:       validatedCoupon?.code ?? null,
         registration_count: priced.length,
         fee_mode:          feeMode,
       }),
