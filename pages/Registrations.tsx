@@ -11,7 +11,7 @@ import { supabase } from '../services/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { refundRegistration } from '../services/refundService';
 import EventPickerSheet from '../components/EventPickerSheet';
-import { maskCpfCnpj, unmaskCpfCnpj, validateCpf } from '../utils/masks';
+import { maskCpfCnpj, unmaskCpfCnpj, validateCpf, maskData, parseDataISO } from '../utils/masks';
 
 const Registrations = () => {
   const [registrations, setRegistrations] = useState<any[]>([]);
@@ -76,14 +76,22 @@ const Registrations = () => {
       // Sessão 4.2 item 2: clone profundo do array de bailarinos pra editor inline.
       // CPF chega do banco sem máscara — aplicamos no display pra digitação confortável,
       // limpamos no save. Instagram chega sem '@' (lowercase aplicada no input).
+      // Data nascimento exibida em DD/MM/AAAA (mais rapida que calendario nativo,
+      // padrao do InscricaoWizard) — convertida pra ISO no save.
       bailarinos: Array.isArray(reg.bailarinos_detalhes)
         ? reg.bailarinos_detalhes.map((b: any) => ({
             nome:              b?.nome ?? '',
             cpf:               maskCpfCnpj(String(b?.cpf ?? '')),
-            data_nascimento:   b?.data_nascimento ?? '',
+            data_nascimento:   b?.data_nascimento
+              ? maskData(String(b.data_nascimento).replace(/^(\d{4})-(\d{2})-(\d{2}).*$/, '$3$2$1'))
+              : '',
             instagram_handle:  b?.instagram_handle ?? '',
           }))
         : [],
+      // Solo/Duo/Trio → @ por bailarino; Grupo/Conjunto → 1 @ unico do grupo
+      // (combinado em sessao anterior — pedir @ de 4+ bailarinos sobrecarrega o
+      // coreografo na pratica). Padrao validado em InscricaoWizard.tsx:1531.
+      instagram_principal: reg.instagram_principal ?? '',
     });
   };
 
@@ -127,7 +135,12 @@ const Registrations = () => {
         if (v !== undefined && v !== '') patch[k] = v;
       }
       // Sessão 4.2 item 2: bailarinos editáveis. Normaliza CPF (só dígitos),
-      // valida quando preenchido, força lowercase no instagram (lição 2026-05-19).
+      // valida quando preenchido, força lowercase no instagram (lição 2026-05-19),
+      // converte data BR→ISO. Solo/Duo/Trio → @ por bailarino; Grupo/Conjunto →
+      // só @ principal (skip instagram_handle individual no save pra não persistir
+      // sujeira se a inscrição mudar de modalidade).
+      const formato = (patch.formato_participacao ?? editValues.formato_participacao ?? '') as string;
+      const isGrupoLike = formato === 'Grupo' || formato === 'Conjunto';
       if (Array.isArray(editValues.bailarinos)) {
         const normalized: any[] = [];
         for (let i = 0; i < editValues.bailarinos.length; i++) {
@@ -139,19 +152,33 @@ const Registrations = () => {
           if (cpfDigits && cpfDigits.length !== 11) {
             throw new Error(`CPF incompleto no bailarino ${i + 1}${b?.nome ? ` (${b.nome})` : ''}.`);
           }
-          const dob = String(b?.data_nascimento ?? '').trim();
-          if (dob && !/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
-            throw new Error(`Data de nascimento inválida no bailarino ${i + 1}.`);
+          // Data vem mascarada (DD/MM/AAAA) — converte pra ISO. Vazia passa direto.
+          const dobMasked = String(b?.data_nascimento ?? '').trim();
+          let dobIso = '';
+          if (dobMasked) {
+            const iso = parseDataISO(dobMasked);
+            if (!iso) {
+              throw new Error(`Data de nascimento inválida no bailarino ${i + 1}: use DD/MM/AAAA.`);
+            }
+            dobIso = iso;
           }
           normalized.push({
             nome:              String(b?.nome ?? '').trim(),
             cpf:               cpfDigits,
-            data_nascimento:   dob,
-            instagram_handle:  String(b?.instagram_handle ?? '').trim().toLowerCase().replace(/^@/, '') || undefined,
+            data_nascimento:   dobIso,
+            // Em Grupo/Conjunto o handle individual nao e pedido — limpa pra
+            // nao manter dado obsoleto se modalidade mudou.
+            instagram_handle:  isGrupoLike
+              ? undefined
+              : (String(b?.instagram_handle ?? '').trim().toLowerCase().replace(/^@/, '') || undefined),
           });
         }
         patch.bailarinos_detalhes = normalized;
       }
+      // @ do grupo/coreografo (Grupo/Conjunto only). Em Solo/Duo/Trio limpa pra
+      // nao guardar sujeira de uma edicao previa que era em outra modalidade.
+      const igPrincipal = String(editValues.instagram_principal ?? '').trim().toLowerCase().replace(/^@/, '');
+      patch.instagram_principal = isGrupoLike ? (igPrincipal || null) : null;
       const { error } = await supabase.from('registrations').update(patch).eq('id', regId);
       if (error) throw error;
       // Atualiza state local pra refletir mudança sem refetch.
@@ -1659,58 +1686,97 @@ const Registrations = () => {
                     </h3>
                     {editing ? (
                       <div className="space-y-2">
-                        {(editValues.bailarinos ?? []).map((b: any, i: number) => (
-                          <div key={i} className="p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl space-y-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Bailarino {i + 1}</p>
+                        {(() => {
+                          // Solo/Duo/Trio pedem @ por bailarino; Grupo/Conjunto pedem
+                          // 1 @ unico do grupo/coreografo (combinado em sessao anterior:
+                          // pedir @ de 4+ pessoas sobrecarrega o coreografo). Mesma regra
+                          // do Wizard publico (pages/InscricaoWizard.tsx:1531).
+                          const formato = editValues.formato_participacao ?? viewingReg.formato_participacao;
+                          const isGrupoLike = formato === 'Grupo' || formato === 'Conjunto';
+                          return (
+                            <>
+                              {(editValues.bailarinos ?? []).map((b: any, i: number) => (
+                                <div key={i} className="p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl space-y-2">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Bailarino {i + 1}</p>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeBailarino(i)}
+                                      className="text-[9px] font-black uppercase tracking-widest text-rose-500 hover:text-rose-600 flex items-center gap-1"
+                                      title="Remover este bailarino"
+                                    >
+                                      <Trash2 size={10} /> Remover
+                                    </button>
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <input
+                                      type="text"
+                                      value={b.nome ?? ''}
+                                      onChange={e => updateBailarino(i, 'nome', e.target.value)}
+                                      placeholder="Nome completo"
+                                      className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068]"
+                                    />
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      value={b.cpf ?? ''}
+                                      onChange={e => updateBailarino(i, 'cpf', maskCpfCnpj(e.target.value))}
+                                      placeholder="CPF"
+                                      className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068]"
+                                    />
+                                    {/* Data digitavel DD/MM/AAAA (mais rapida que calendario nativo
+                                        pra ano antigo — padrao do Wizard publico). */}
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      value={b.data_nascimento ?? ''}
+                                      onChange={e => updateBailarino(i, 'data_nascimento', maskData(e.target.value))}
+                                      placeholder="DD/MM/AAAA"
+                                      maxLength={10}
+                                      className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068]"
+                                    />
+                                    {!isGrupoLike && (
+                                      <input
+                                        type="text"
+                                        value={b.instagram_handle ?? ''}
+                                        onChange={e => updateBailarino(i, 'instagram_handle', e.target.value.toLowerCase().replace(/^@/, ''))}
+                                        placeholder="instagram (sem @)"
+                                        className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068]"
+                                      />
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
                               <button
                                 type="button"
-                                onClick={() => removeBailarino(i)}
-                                className="text-[9px] font-black uppercase tracking-widest text-rose-500 hover:text-rose-600 flex items-center gap-1"
-                                title="Remover este bailarino"
+                                onClick={addBailarino}
+                                className="w-full px-3 py-2 border border-dashed border-slate-300 dark:border-white/15 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#ff0068] hover:border-[#ff0068]/50 transition-all"
                               >
-                                <Trash2 size={10} /> Remover
+                                + Adicionar bailarino
                               </button>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              <input
-                                type="text"
-                                value={b.nome ?? ''}
-                                onChange={e => updateBailarino(i, 'nome', e.target.value)}
-                                placeholder="Nome completo"
-                                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068]"
-                              />
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={b.cpf ?? ''}
-                                onChange={e => updateBailarino(i, 'cpf', maskCpfCnpj(e.target.value))}
-                                placeholder="CPF"
-                                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068]"
-                              />
-                              <input
-                                type="date"
-                                value={b.data_nascimento ?? ''}
-                                onChange={e => updateBailarino(i, 'data_nascimento', e.target.value)}
-                                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]"
-                              />
-                              <input
-                                type="text"
-                                value={b.instagram_handle ?? ''}
-                                onChange={e => updateBailarino(i, 'instagram_handle', e.target.value.toLowerCase().replace(/^@/, ''))}
-                                placeholder="instagram (sem @)"
-                                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068]"
-                              />
-                            </div>
-                          </div>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={addBailarino}
-                          className="w-full px-3 py-2 border border-dashed border-slate-300 dark:border-white/15 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#ff0068] hover:border-[#ff0068]/50 transition-all"
-                        >
-                          + Adicionar bailarino
-                        </button>
+                              {/* @ unico do grupo/coreografo (Grupo/Conjunto). Padrao Wizard. */}
+                              {isGrupoLike && (
+                                <div className="p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl">
+                                  <label className="block text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
+                                    @ do grupo ou coreógrafo
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={editValues.instagram_principal ?? ''}
+                                    onChange={e => setEditValues(p => ({
+                                      ...p,
+                                      instagram_principal: e.target.value.toLowerCase().replace(/^@/, ''),
+                                    }))}
+                                    placeholder="nomedogrupo (sem @)"
+                                    maxLength={31}
+                                    className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068]"
+                                  />
+                                  <p className="text-[9px] text-slate-400 mt-1.5">Usado pra marcar nas divulgações. Pedir @ de cada bailarino do grupo sobrecarrega o coreógrafo — 1 @ por inscrição.</p>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     ) : (
                     <div className="space-y-2">
