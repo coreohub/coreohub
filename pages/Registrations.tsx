@@ -516,7 +516,7 @@ const Registrations = () => {
   }, [registrations]);
 
   const handleExportCSV = () => {
-    if (filteredRegistrations.length === 0) return;
+    if (sortedRegistrations.length === 0) return;
     const headers = [
       'Data', 'Coreografia', 'Modalidade', 'Tipo', 'Estúdio',
       'Categoria', 'Estilo', 'Inscrito', 'Email', 'WhatsApp',
@@ -526,7 +526,10 @@ const Registrations = () => {
       const s = v == null ? '' : String(v);
       return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const rows = filteredRegistrations.map(r => [
+    // Auditoria 2026-05-21: exporta na ordem do sort visível (sortedRegistrations),
+    // não a ordem padrão do banco (filteredRegistrations). Quando o produtor ordena
+    // por Valor pra ver as inscrições mais caras no topo, o CSV deve refletir isso.
+    const rows = sortedRegistrations.map(r => [
       r.created_at ? new Date(r.created_at).toLocaleString('pt-BR') : '',
       r.nome_coreografia ?? '',
       r.formato_participacao ?? '',
@@ -834,11 +837,18 @@ const Registrations = () => {
                     <p className="text-slate-500 font-black uppercase text-xs">Nenhuma inscrição encontrada</p>
                     <button
                       onClick={() => {
+                        // Auditoria: zera TODOS os filtros, incluindo os que
+                        // o user pode ter ativado de outro lugar (alerta no
+                        // banner, chip de mostra, filtro de data).
                         setSearchTerm('');
                         setPaymentFilter('ALL');
                         setModalidadeFilter('ALL');
                         setCategoriaFilter('ALL');
                         setEstiloFilter('ALL');
+                        setInscritoFilter('ALL');
+                        setTipoApresentacaoFilter('ALL');
+                        setDateFilter('ALL');
+                        setQuickAlert(null);
                       }}
                       className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-[#ff0068]/10 text-[#ff0068] border border-[#ff0068]/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0068] hover:text-white transition-all"
                     >
@@ -994,12 +1004,17 @@ const Registrations = () => {
                           <p className="text-slate-500 font-black uppercase text-xs">Nenhuma inscrição encontrada</p>
                           <button
                             onClick={() => {
+                              // Auditoria: zera TODOS os filtros, incluindo
+                              // alerta rápido, mostra e data.
                               setSearchTerm('');
                               setPaymentFilter('ALL');
                               setModalidadeFilter('ALL');
                               setCategoriaFilter('ALL');
                               setEstiloFilter('ALL');
                               setInscritoFilter('ALL');
+                              setTipoApresentacaoFilter('ALL');
+                              setDateFilter('ALL');
+                              setQuickAlert(null);
                             }}
                             className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-[#ff0068]/10 text-[#ff0068] border border-[#ff0068]/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0068] hover:text-white transition-all"
                           >
