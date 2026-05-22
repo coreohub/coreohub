@@ -49,17 +49,10 @@ Em Tailwind direto, prefira `bg-[#ff0068]` / `text-[#ff0068]` (padrão mais usad
 
 ### Fontes carregadas
 
-- **Inter** — corpo, formulários, labels, texto geral. Carregada do Google Fonts em `index.html` com pesos 300/400/500/600/700.
+- **Inter** — fonte única oficial. Cobre títulos, corpo, formulários, labels, números grandes. Carregada do Google Fonts em `index.html` com pesos 300/400/500/600/700.
+- **Monospace do sistema** — fallback nativo via classe Tailwind `font-mono`. Usada pra exibir IDs (`payment_id`), CPFs e códigos. Sem fonte mono importada — pega do SO (`Consolas` no Windows, `Menlo` no macOS).
 
-### ⚠ Reality vs intent — Barlow Condensed
-
-O `CLAUDE.md` cita "Barlow Condensed pra títulos" mas **a fonte não está sendo importada em nenhum lugar** (nem `index.html`, nem `@font-face`, nem CSS). Os elementos que deveriam usar Barlow Condensed (h1/h2 com `font-black uppercase tracking-tighter italic`) caem no fallback de `--font-sans` = Inter.
-
-**Decisão pendente** — quando formalizar o tipo:
-- **Opção A**: importar Barlow Condensed e ajustar componentes pra usar (ex.: `font-display` classe nova).
-- **Opção B**: remover menção do CLAUDE.md e oficializar Inter como única fonte (estado atual).
-
-Por enquanto, o doc trata como **só Inter**.
+Estética "esportiva/festival" alcançada com **Inter ExtraBold + uppercase + tracking-tighter + italic** nos títulos (decisão oficializada 2026-05-22 — historicamente o `CLAUDE.md` citava `Barlow Condensed` mas a fonte nunca foi importada e o app sempre rodou com Inter).
 
 ### Padrões de uso
 
@@ -377,11 +370,10 @@ Use helpers de `utils/masks.ts`:
 
 ## ⚠ Gaps a fechar (estado atual)
 
-1. **Barlow Condensed não importada** apesar do CLAUDE.md citar. Decisão pendente — importar ou remover menção.
-2. **Sem alias semânticos pra cores brand** — código usa `bg-[#ff0068]` direto em vez de `bg-brand-primary`. Funciona porque o token CSS `@theme` está declarado, mas a maioria do código usa hex literal por inércia.
-3. **Sem componentes encapsulados** — não tem `<Button variant="primary">` ou `<Card>`. Cada uso é Tailwind inline. Migração pra componentes encapsulados é não-trivial (~10-15h) e fica como debt técnico até virar dor.
-4. **Sem spacing tokens semânticos** — `gap-2/3/4` usado direto. Padronização tácita (mais usados: `gap-3` entre cards, `gap-4` entre seções).
-5. **Tokens de animação inconsistentes** — alguns componentes usam `duration-300`, outros `transition-all` (default 150ms), outros `duration-700`. Sem regra clara.
+1. **Sem alias semânticos pra cores brand** — código usa `bg-[#ff0068]` direto em vez de `bg-brand-primary`. Funciona porque o token CSS `@theme` está declarado, mas a maioria do código usa hex literal por inércia.
+2. **Sem componentes encapsulados** — não tem `<Button variant="primary">` ou `<Card>`. Cada uso é Tailwind inline. Migração pra componentes encapsulados é não-trivial (~10-15h) e fica como debt técnico até virar dor.
+3. **Sem spacing tokens semânticos** — `gap-2/3/4` usado direto. Padronização tácita (mais usados: `gap-3` entre cards, `gap-4` entre seções).
+4. **Tokens de animação inconsistentes** — alguns componentes usam `duration-300`, outros `transition-all` (default 150ms), outros `duration-700`. Sem regra clara.
 
 ## Referências cruzadas
 
