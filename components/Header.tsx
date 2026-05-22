@@ -4,6 +4,7 @@ import { Menu, Moon, Sun, ChevronDown, Check, User, Sparkles, LogOut } from 'luc
 import { UserRole, Profile as UserProfile } from '../types';
 import { getInitials } from '../utils/formatters';
 import BrandIcon from './BrandIcon';
+import NotificationBell from './NotificationBell';
 import { supabase } from '../services/supabase';
 
 interface HeaderProps {
@@ -121,6 +122,10 @@ const Header = ({ toggleSidebar, profile, theme, toggleTheme, activeRole, setAct
             </div>
           </div>
         )}
+
+        {/* Sininho de notificações (Sessão 4.2 B2). Só aparece se há user
+            autenticado — profile.id vem do Supabase Auth. */}
+        {profile?.id && <NotificationBell userId={profile.id} />}
 
         <button onClick={toggleTheme} className="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900 rounded-xl border border-slate-200 dark:border-white/5 transition-all">
           {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}

@@ -867,6 +867,64 @@ function buildAggregateReminder(p: AggregateReminderPayload) {
   }
 }
 
+// ─── Lembrete de trilha sonora (Sessão 4.2 B3 — 2026-05-22) ─────────────────
+
+interface TrilhaReminderPayload {
+  inscritoNome?:  string
+  inscritoEmail:  string
+  produtorEmail?: string
+  eventoNome?:    string
+  coreografia?:   string
+  prazoTrilha:    string   // formatado em PT-BR (sáb, 14 de junho de 2026)
+  diasRestantes:  number   // 15 ou 5 (ou catch-up entre)
+  ctaUrl:         string   // link pra /minhas-coreografias ou /central-de-midia
+}
+
+function buildTrilhaReminder(p: TrilhaReminderPayload) {
+  const isLastChance = p.diasRestantes <= 5
+  const urgencyColor = isLastChance ? '#dc2626' : '#f59e0b'
+  const urgencyBg    = isLastChance ? '#fef2f2' : '#fffbeb'
+  const urgencyBd    = isLastChance ? '#fecaca' : '#fde68a'
+
+  const titulo = isLastChance
+    ? `Faltam ${p.diasRestantes} dia${p.diasRestantes !== 1 ? 's' : ''} — envie a trilha sonora`
+    : `Lembrete: trilha sonora até ${p.prazoTrilha}`
+
+  const intro = `Olá ${escape(p.inscritoNome ?? 'bailarino(a)')}, ${
+    p.coreografia
+      ? `a coreografia <strong>${escape(p.coreografia)}</strong>`
+      : 'uma das suas coreografias'
+  }${p.eventoNome ? ` no <strong>${escape(p.eventoNome)}</strong>` : ''} ainda não tem trilha sonora enviada. Sem ela, a coreografia não pode subir ao palco.`
+
+  const contentHtml = `
+    <div style="margin-top:4px;padding:18px;border:2px solid ${urgencyBd};border-radius:14px;background:${urgencyBg};">
+      <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:${urgencyColor};">
+        ${isLastChance ? '⚠ Faltam ' + p.diasRestantes + ' dia' + (p.diasRestantes !== 1 ? 's' : '') : '🎵 Lembrete de trilha'}
+      </p>
+      <p style="margin:8px 0 0;font-size:24px;font-weight:900;color:#0b0b0f;">${escape(p.prazoTrilha)}</p>
+      <p style="margin:4px 0 0;font-size:13px;color:#64748b;font-weight:600;">
+        Prazo final pra envio da trilha sonora
+      </p>
+    </div>
+    <p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      ${isLastChance
+        ? 'Depois do prazo a coreografia pode ser desclassificada — o evento precisa fechar o cronograma com as trilhas em mãos.'
+        : 'Suba o arquivo de áudio (MP3/WAV) pelo CoreoHub. Verifica também os dados dos bailarinos (CPF e data de nascimento) — sem eles não emitimos certificado.'}
+    </p>`
+
+  return {
+    subject: `${p.eventoNome ? `[${p.eventoNome}] ` : ''}${isLastChance ? '⚠ Trilha sonora em ' + p.diasRestantes + ' dias' : 'Lembrete: trilha sonora pendente'}`,
+    html: baseLayout({
+      preheader: `Sua coreografia precisa de trilha até ${p.prazoTrilha}.`,
+      title: titulo,
+      intro,
+      contentHtml,
+      ctaLabel: 'Enviar trilha',
+      ctaUrl: p.ctaUrl,
+    }),
+  }
+}
+
 // ─── Seletiva por vídeo (Modelo 3 — Sessão seletiva 2026-05-19) ────────────
 
 interface VideoFeePaidUploadReadyPayload {
@@ -1265,6 +1323,18 @@ Deno.serve(async (req) => {
         if (!p.inscritoEmail) throw new Error('inscritoEmail é obrigatório')
         if (!p.invoiceUrl)    throw new Error('invoiceUrl é obrigatório')
         const tpl = buildAggregateReminder(p)
+        to = p.inscritoEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        replyTo = p.produtorEmail
+        break
+      }
+      case 'trilha_reminder': {
+        const p = payload as unknown as TrilhaReminderPayload
+        if (!p.inscritoEmail) throw new Error('inscritoEmail é obrigatório')
+        if (!p.prazoTrilha)   throw new Error('prazoTrilha é obrigatório')
+        const tpl = buildTrilhaReminder(p)
         to = p.inscritoEmail
         subject = tpl.subject
         html = tpl.html
