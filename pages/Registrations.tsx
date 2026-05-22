@@ -3,7 +3,7 @@ import {
   Search, Download, RefreshCw,
   Trash2, AlertTriangle, X, DollarSign,
   ShieldAlert, CheckCircle2, Clock, Users, Info, ChevronDown, ChevronUp,
-  ChevronLeft, ChevronRight, Bell,
+  ChevronLeft, ChevronRight, Bell, SlidersHorizontal,
   Undo2, Loader2, Eye, Music2, Video, Calendar, User, Instagram,
   TrendingUp, ExternalLink, Pencil, Save, Lock as LockIcon,
 } from 'lucide-react';
@@ -48,6 +48,10 @@ const Registrations = () => {
     receita: number;
     inscricoes: number;
   } | null>(null);
+  // Sessão 4.2 item 6: drawer único de filtros (padrão Sympla/Linear). Hoje
+  // os 7 selects ocupam 2 linhas no desktop. Drawer abre on-demand, mostra
+  // chips dos filtros ativos sempre visíveis (com X pra remover individual).
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [refundModal, setRefundModal] = useState<any>(null);
   const [refundAmount, setRefundAmount] = useState<string>('');
   const [refundReason, setRefundReason] = useState('');
@@ -535,6 +539,33 @@ const Registrations = () => {
     setPage(1);
   }, [searchTerm, paymentFilter, modalidadeFilter, categoriaFilter, estiloFilter, inscritoFilter, tipoApresentacaoFilter, dateFilter, quickAlert, sortBy, sortDir]);
 
+  // Sessão 4.2 item 6: contador de filtros ativos (exclui search/quickAlert porque
+  // têm UI própria). Mostrado em badge no botão "Filtros".
+  const activeFiltersCount = useMemo(() => {
+    let n = 0;
+    if (paymentFilter !== 'ALL') n++;
+    if (dateFilter !== 'ALL') n++;
+    if (modalidadeFilter !== 'ALL') n++;
+    if (categoriaFilter !== 'ALL') n++;
+    if (estiloFilter !== 'ALL') n++;
+    if (tipoApresentacaoFilter !== 'ALL') n++;
+    if (inscritoFilter !== 'ALL') n++;
+    return n;
+  }, [paymentFilter, dateFilter, modalidadeFilter, categoriaFilter, estiloFilter, tipoApresentacaoFilter, inscritoFilter]);
+
+  // Reset de todos os filtros (botão "Limpar tudo" do drawer + empty state).
+  const resetAllFilters = () => {
+    setSearchTerm('');
+    setPaymentFilter('ALL');
+    setModalidadeFilter('ALL');
+    setCategoriaFilter('ALL');
+    setEstiloFilter('ALL');
+    setInscritoFilter('ALL');
+    setTipoApresentacaoFilter('ALL');
+    setDateFilter('ALL');
+    setQuickAlert(null);
+  };
+
   // Helper de click no header pra alternar sort. Mesma coluna → inverte direção.
   // Coluna nova → começa em desc (padrão Stripe/Linear pra listas).
   const toggleSort = (col: 'data' | 'nome' | 'valor' | 'status') => {
@@ -851,67 +882,66 @@ const Registrations = () => {
                 </button>
               </div>
             )}
-            <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-              <input type="text" placeholder="Buscar coreografia, estúdio, inscrito ou e-mail..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]" />
-            </div>
-            {/* Ordem otimizada pra mobile (2 col): Pagamento/Data → Modalidade/Categoria
-                → Estilo/Mostra (par lógico, "estilo Hip Hop + mostra competitiva")
-                → Inscrito (col-span-2). Em desktop vira 5 col automático. */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
-              <select value={paymentFilter} onChange={e => setPaymentFilter(e.target.value)} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]">
-                <option value="ALL"        className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Pagamento: Todos</option>
-                <option value="APROVADO"   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Confirmado</option>
-                <option value="PENDENTE"   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Pendente</option>
-                <option value="VENCIDO"    className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Vencido</option>
-                <option value="ESTORNADO"  className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Estornado</option>
-                <option value="EXPIRADO"   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Expirado</option>
-              </select>
-              {/* Sessão 3 P4: filtro por range de data */}
-              <select value={dateFilter} onChange={e => setDateFilter(e.target.value as any)} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]">
-                <option value="ALL"   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Data: Todas</option>
-                <option value="today" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Hoje</option>
-                <option value="7d"    className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">7 dias</option>
-                <option value="30d"   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">30 dias</option>
-                <option value="month" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Este mês</option>
-              </select>
-              <select value={modalidadeFilter} onChange={e => setModalidadeFilter(e.target.value)} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]">
-                <option value="ALL"   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Modalidade: Todas</option>
-                <option value="Solo"  className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Solo</option>
-                <option value="Duo"   className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Duo</option>
-                <option value="Trio"  className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Trio</option>
-                <option value="Grupo" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Grupo</option>
-              </select>
-              <select value={categoriaFilter} onChange={e => setCategoriaFilter(e.target.value)} disabled={categoriasDisponiveis.length === 0} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark] disabled:opacity-50">
-                <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Categoria: Todas</option>
-                {categoriasDisponiveis.map(c => (
-                  <option key={c} value={c} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{c}</option>
-                ))}
-              </select>
-              <select value={estiloFilter} onChange={e => setEstiloFilter(e.target.value)} disabled={estilosDisponiveis.length === 0} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark] disabled:opacity-50">
-                <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Estilo: Todos</option>
-                {estilosDisponiveis.map(e => (
-                  <option key={e} value={e} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{e}</option>
-                ))}
-              </select>
-              {/* Pedido Usualdance 2026-05-19: filtrar Competitiva/Avaliada.
-                  Posicionado ao lado de Estilo (par lógico "estilo+mostra"). */}
-              <select
-                value={tipoApresentacaoFilter}
-                onChange={e => setTipoApresentacaoFilter(e.target.value as 'ALL' | 'Competitiva' | 'Avaliada')}
-                className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]"
+            {/* Sessão 4.2 item 6: search bar + botão "Filtros" único. Antes os 7
+                selects ocupavam 2 linhas no desktop. Agora ficam num drawer
+                on-demand, mostrando chips dos filtros ativos abaixo. Padrão
+                Sympla/Linear. */}
+            <div className="flex items-center gap-2">
+              <div className="flex-1 relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                <input type="text" placeholder="Buscar coreografia, estúdio, inscrito ou e-mail..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]" />
+              </div>
+              <button
+                onClick={() => setFiltersOpen(true)}
+                className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all flex items-center gap-2 shrink-0 ${
+                  activeFiltersCount > 0
+                    ? 'bg-[#ff0068]/10 text-[#ff0068] border-[#ff0068]/30 hover:bg-[#ff0068]/15'
+                    : 'bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-white/5 hover:border-[#ff0068]/30'
+                }`}
+                title={activeFiltersCount > 0 ? `${activeFiltersCount} filtro(s) ativo(s)` : 'Abrir filtros'}
               >
-                <option value="ALL"          className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Mostra: Todas</option>
-                <option value="Competitiva"  className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Mostra Competitiva</option>
-                <option value="Avaliada"     className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Mostra Avaliada</option>
-              </select>
-              <select value={inscritoFilter} onChange={e => setInscritoFilter(e.target.value)} disabled={inscritosDisponiveis.length === 0} className="col-span-2 lg:col-span-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/5 rounded-2xl px-3 py-3 text-[10px] font-black uppercase text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark] disabled:opacity-50">
-                <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Inscrito: Todos</option>
-                {inscritosDisponiveis.map(n => (
-                  <option key={n} value={n} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">{n}</option>
-                ))}
-              </select>
+                <SlidersHorizontal size={14} />
+                <span className="hidden sm:inline">Filtros</span>
+                {activeFiltersCount > 0 && (
+                  <span className="px-1.5 py-0.5 bg-[#ff0068] text-white rounded-full text-[9px] font-black min-w-[18px] text-center">
+                    {activeFiltersCount}
+                  </span>
+                )}
+              </button>
             </div>
+            {/* Chips de filtros ativos — feedback explícito do que está aplicado.
+                Cada chip tem X pra remover individualmente sem abrir drawer. */}
+            {activeFiltersCount > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {paymentFilter !== 'ALL' && (
+                  <ActiveFilterChip label={`Pagto: ${paymentFilter === 'APROVADO' ? 'Confirmado' : paymentFilter.charAt(0) + paymentFilter.slice(1).toLowerCase()}`} onRemove={() => setPaymentFilter('ALL')} />
+                )}
+                {dateFilter !== 'ALL' && (
+                  <ActiveFilterChip label={`Data: ${dateFilter === 'today' ? 'Hoje' : dateFilter === '7d' ? '7 dias' : dateFilter === '30d' ? '30 dias' : 'Este mês'}`} onRemove={() => setDateFilter('ALL')} />
+                )}
+                {modalidadeFilter !== 'ALL' && (
+                  <ActiveFilterChip label={`Modalidade: ${modalidadeFilter}`} onRemove={() => setModalidadeFilter('ALL')} />
+                )}
+                {categoriaFilter !== 'ALL' && (
+                  <ActiveFilterChip label={`Categoria: ${categoriaFilter}`} onRemove={() => setCategoriaFilter('ALL')} />
+                )}
+                {estiloFilter !== 'ALL' && (
+                  <ActiveFilterChip label={`Estilo: ${estiloFilter}`} onRemove={() => setEstiloFilter('ALL')} />
+                )}
+                {tipoApresentacaoFilter !== 'ALL' && (
+                  <ActiveFilterChip label={`Mostra: ${tipoApresentacaoFilter}`} onRemove={() => setTipoApresentacaoFilter('ALL')} />
+                )}
+                {inscritoFilter !== 'ALL' && (
+                  <ActiveFilterChip label={`Inscrito: ${inscritoFilter}`} onRemove={() => setInscritoFilter('ALL')} />
+                )}
+                <button
+                  onClick={resetAllFilters}
+                  className="px-2 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-rose-500 transition-all"
+                >
+                  Limpar tudo
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Mobile: cards (md:hidden). Em desktop renderiza a table abaixo.
@@ -1912,6 +1942,110 @@ const Registrations = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Sessão 4.2 item 6: drawer único de filtros. Modal centralizado (mesmo
+          padrão visual dos outros modals do projeto). Contém os 7 selects que
+          antes ficavam empilhados na tela. */}
+      <AnimatePresence>
+        {filtersOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setFiltersOpen(false)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              className="relative bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full max-h-[85dvh] overflow-y-auto shadow-2xl border border-slate-200 dark:border-white/10"
+            >
+              <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 px-6 py-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal size={16} className="text-[#ff0068]" />
+                  <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Filtros</h2>
+                  {activeFiltersCount > 0 && (
+                    <span className="px-2 py-0.5 bg-[#ff0068] text-white rounded-full text-[10px] font-black">
+                      {activeFiltersCount}
+                    </span>
+                  )}
+                </div>
+                <button onClick={() => setFiltersOpen(false)} className="p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-all">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-6 space-y-3">
+                <FilterSelectLabel label="Pagamento">
+                  <select value={paymentFilter} onChange={e => setPaymentFilter(e.target.value)} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-[12px] font-bold text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]">
+                    <option value="ALL">Todos</option>
+                    <option value="APROVADO">Confirmado</option>
+                    <option value="PENDENTE">Pendente</option>
+                    <option value="VENCIDO">Vencido</option>
+                    <option value="ESTORNADO">Estornado</option>
+                    <option value="EXPIRADO">Expirado</option>
+                  </select>
+                </FilterSelectLabel>
+                <FilterSelectLabel label="Data">
+                  <select value={dateFilter} onChange={e => setDateFilter(e.target.value as any)} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-[12px] font-bold text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]">
+                    <option value="ALL">Todas</option>
+                    <option value="today">Hoje</option>
+                    <option value="7d">7 dias</option>
+                    <option value="30d">30 dias</option>
+                    <option value="month">Este mês</option>
+                  </select>
+                </FilterSelectLabel>
+                <FilterSelectLabel label="Modalidade">
+                  <select value={modalidadeFilter} onChange={e => setModalidadeFilter(e.target.value)} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-[12px] font-bold text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]">
+                    <option value="ALL">Todas</option>
+                    <option value="Solo">Solo</option>
+                    <option value="Duo">Duo</option>
+                    <option value="Trio">Trio</option>
+                    <option value="Grupo">Grupo</option>
+                  </select>
+                </FilterSelectLabel>
+                <FilterSelectLabel label="Categoria">
+                  <select value={categoriaFilter} onChange={e => setCategoriaFilter(e.target.value)} disabled={categoriasDisponiveis.length === 0} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-[12px] font-bold text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark] disabled:opacity-50">
+                    <option value="ALL">Todas</option>
+                    {categoriasDisponiveis.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </FilterSelectLabel>
+                <FilterSelectLabel label="Estilo / Gênero">
+                  <select value={estiloFilter} onChange={e => setEstiloFilter(e.target.value)} disabled={estilosDisponiveis.length === 0} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-[12px] font-bold text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark] disabled:opacity-50">
+                    <option value="ALL">Todos</option>
+                    {estilosDisponiveis.map(e => <option key={e} value={e}>{e}</option>)}
+                  </select>
+                </FilterSelectLabel>
+                <FilterSelectLabel label="Tipo de Mostra">
+                  <select value={tipoApresentacaoFilter} onChange={e => setTipoApresentacaoFilter(e.target.value as 'ALL' | 'Competitiva' | 'Avaliada')} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-[12px] font-bold text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]">
+                    <option value="ALL">Todas</option>
+                    <option value="Competitiva">Mostra Competitiva</option>
+                    <option value="Avaliada">Mostra Avaliada</option>
+                  </select>
+                </FilterSelectLabel>
+                <FilterSelectLabel label="Inscrito">
+                  <select value={inscritoFilter} onChange={e => setInscritoFilter(e.target.value)} disabled={inscritosDisponiveis.length === 0} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-[12px] font-bold text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark] disabled:opacity-50">
+                    <option value="ALL">Todos</option>
+                    {inscritosDisponiveis.map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </FilterSelectLabel>
+              </div>
+              <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-white/10 px-6 py-4 flex items-center justify-between gap-3">
+                <button
+                  onClick={resetAllFilters}
+                  disabled={activeFiltersCount === 0 && !searchTerm && !quickAlert}
+                  className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-rose-500 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Limpar tudo
+                </button>
+                <button
+                  onClick={() => setFiltersOpen(false)}
+                  className="px-6 py-2.5 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-[#ff0068]/20"
+                >
+                  Aplicar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -1940,6 +2074,32 @@ const SortIcon: React.FC<{ active: boolean; dir: 'asc' | 'desc' }> = ({ active, 
     ? <ChevronUp size={10} className="text-[#ff0068]" />
     : <ChevronDown size={10} className="text-[#ff0068]" />;
 };
+
+/** Chip de filtro ativo (Sessão 4.2 item 6). Mostra "Categoria: Junior" com X
+ *  pra remoção rápida — padrão Sympla/Linear. Tom rosa pra dar afetividade
+ *  com o botão Filtros (mesma família visual). */
+const ActiveFilterChip: React.FC<{ label: string; onRemove: () => void }> = ({ label, onRemove }) => (
+  <span className="inline-flex items-center gap-1 pl-2 pr-1 py-1 bg-[#ff0068]/10 dark:bg-[#ff0068]/15 text-[#ff0068] border border-[#ff0068]/30 rounded-lg text-[10px] font-black uppercase tracking-widest">
+    {label}
+    <button
+      type="button"
+      onClick={onRemove}
+      className="p-0.5 hover:bg-[#ff0068]/20 rounded transition-all"
+      title="Remover este filtro"
+    >
+      <X size={10} />
+    </button>
+  </span>
+);
+
+/** Label + container pros selects dentro do drawer de filtros. Padrão "form
+ *  estruturado" — label small caps acima do controle, espaçamento generoso. */
+const FilterSelectLabel: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <div>
+    <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">{label}</label>
+    {children}
+  </div>
+);
 
 /** KPI card no topo da lista. Padrão Stripe Dashboard: número grande +
  *  label + ícone tonalizado. Tom controla cor do ícone/borda esquerda. */
