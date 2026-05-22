@@ -559,6 +559,46 @@ const MinhasCoreografias = () => {
     setShowAggregateCoupon(p => ({ ...p, [eventId]: false }));
   };
 
+  /**
+   * Cancela fatura agregada PENDENTE. Padrão Stripe/Sympla: cupom não pode
+   * ser trocado em fatura existente — inscrito cancela e refaz. Chamado pelo
+   * botão "Cancelar fatura" abaixo da linha verde readonly.
+   */
+  const [cancellingPayment, setCancellingPayment] = useState<string | null>(null);
+  const handleCancelAggregatePayment = async (grupo: Grupo) => {
+    const payment = grupo.payment;
+    if (!payment?.id) return;
+    const ok = window.confirm(
+      'Cancelar esta fatura? Você poderá aplicar outro cupom e gerar uma nova. Isso não afeta inscrições já confirmadas.'
+    );
+    if (!ok) return;
+    setCancellingPayment(payment.id);
+    setError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada.');
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cancel-aggregate-payment`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type':  'application/json',
+          },
+          body: JSON.stringify({ payment_id: payment.id }),
+        }
+      );
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data?.error ?? 'Erro ao cancelar fatura.');
+      // Refaz fetch pra refletir o cancelamento no state.
+      await fetchAll();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setCancellingPayment(null);
+    }
+  };
+
   const handlePagarAgregado = async (grupo: Grupo) => {
     if (!(await requireCpf())) return;
     if (grupo.pendentes.length === 0) return;
@@ -1178,17 +1218,45 @@ const MinhasCoreografias = () => {
                     - Sem fatura + input aberto → input + botão "Aplicar" + erro inline.
                     - Sem fatura + idle → link "Tem cupom?". */}
                 {!podeAplicarCupom && faturaTemCupom && (
-                  <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl">
-                    <CheckCircle size={16} className="text-emerald-500 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-mono font-black text-sm text-emerald-700 dark:text-emerald-400">
-                        {faturaPendente?.coupon_code ?? 'Cupom'}
-                      </p>
-                      <p className="text-[10px] text-emerald-600 dark:text-emerald-500">
-                        Desconto de {fmtMoney(faturaPendente?.discount_total ?? 0)} já aplicado nesta fatura
-                      </p>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl">
+                      <CheckCircle size={16} className="text-emerald-500 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-mono font-black text-sm text-emerald-700 dark:text-emerald-400">
+                          {faturaPendente?.coupon_code ?? 'Cupom'}
+                        </p>
+                        <p className="text-[10px] text-emerald-600 dark:text-emerald-500">
+                          Desconto de {fmtMoney(faturaPendente?.discount_total ?? 0)} já aplicado nesta fatura
+                        </p>
+                      </div>
                     </div>
+                    <button
+                      onClick={() => handleCancelAggregatePayment(grupo)}
+                      disabled={cancellingPayment === faturaPendente?.id}
+                      className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-rose-500 disabled:opacity-50 flex items-center gap-1 transition-colors"
+                    >
+                      {cancellingPayment === faturaPendente?.id ? (
+                        <><Loader2 size={10} className="animate-spin" /> Cancelando...</>
+                      ) : (
+                        <>Cancelar fatura pra trocar cupom</>
+                      )}
+                    </button>
                   </div>
+                )}
+                {/* Sem cupom mas com fatura PENDENTE — permite cancelar pra aplicar
+                    cupom novo. Padrão Stripe/Sympla. */}
+                {!podeAplicarCupom && !faturaTemCupom && faturaPendente && (
+                  <button
+                    onClick={() => handleCancelAggregatePayment(grupo)}
+                    disabled={cancellingPayment === faturaPendente.id}
+                    className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-rose-500 disabled:opacity-50 flex items-center gap-1 transition-colors"
+                  >
+                    {cancellingPayment === faturaPendente.id ? (
+                      <><Loader2 size={10} className="animate-spin" /> Cancelando...</>
+                    ) : (
+                      <>Cancelar fatura pra aplicar cupom</>
+                    )}
+                  </button>
                 )}
                 {podeAplicarCupom && (
                   applied ? (
