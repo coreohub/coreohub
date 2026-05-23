@@ -179,26 +179,33 @@ Deno.serve(async (req) => {
       timeZone: 'America/Sao_Paulo',
     }).format(new Date(`${target.prazo}T12:00:00Z`))
 
+    // Bulk fetch idempotency markers + profiles em vez de N+1 (1 round-trip
+    // por reg = 2N queries pra evento com 200+ inscrições). Idempotency check
+    // depende do GIN index em notifications.metadata (migration 20260608).
+    const regUserIds = [...new Set((regs as Registration[]).map(r => r.user_id).filter(Boolean))] as string[]
+
+    const { data: alreadyNotified } = await supabase
+      .from('notifications')
+      .select('metadata')
+      .in('user_id', regUserIds)
+      .eq('type', 'trilha_faltando')
+      .filter('metadata->>reminder_type', 'eq', target.window)
+    const alreadyByRegId = new Set<string>()
+    for (const n of (alreadyNotified ?? [])) {
+      const rid = (n as any).metadata?.registration_id
+      if (rid) alreadyByRegId.add(String(rid))
+    }
+
+    const { data: profilesRows } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('id', regUserIds)
+    const profileById = Object.fromEntries((profilesRows ?? []).map((p: any) => [p.id, p]))
+
     for (const reg of regs as Registration[]) {
-      // Idempotência: checa se já tem notif desse reg + janela. Service_role
-      // ignora RLS então a query funciona pra qualquer user_id.
-      const { count: alreadySent } = await supabase
-        .from('notifications')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', reg.user_id!)
-        .eq('type', 'trilha_faltando')
-        .filter('metadata->>registration_id', 'eq', reg.id)
-        .filter('metadata->>reminder_type', 'eq', target.window)
+      if (alreadyByRegId.has(reg.id)) { skipped++; continue }
 
-      if ((alreadySent ?? 0) > 0) { skipped++; continue }
-
-      // Profile do inscrito (email pro envio).
-      const { data: inscrito } = await supabase
-        .from('profiles')
-        .select('full_name, email')
-        .eq('id', reg.user_id!)
-        .maybeSingle()
-
+      const inscrito = profileById[reg.user_id!]
       if (!inscrito?.email) { skipped++; continue }
 
       const ctaUrl = `${appUrl}/minhas-coreografias`

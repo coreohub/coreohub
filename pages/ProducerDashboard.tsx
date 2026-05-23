@@ -194,7 +194,9 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
           ),
           supabase.from('judges').select('id,is_active'),
           supabase.from('registrations').select('id,check_in_status').eq('event_id', selectedEventId),
-          supabase.from('platform_commissions').select('gross_amount,net_amount,commission_amount,created_at').eq('event_id', selectedEventId).order('created_at', { ascending: true }),
+          // refunded_at IS NULL pra não inflar receita histórica com comissões
+          // já estornadas (espelha filtro do daily-release-funds + ProducerBalanceCard).
+          supabase.from('platform_commissions').select('gross_amount,net_amount,commission_amount,refund_amount,created_at').eq('event_id', selectedEventId).is('refunded_at', null).order('created_at', { ascending: true }),
         ]);
         setCommissions(comms ?? []);
 
@@ -254,8 +256,9 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const label = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
       const cur = buckets.get(key) ?? { month: label, gross: 0, net: 0, fee: 0 };
-      cur.gross += Number(c.gross_amount ?? 0);
-      cur.net   += Number(c.net_amount ?? 0);
+      const refund = Number(c.refund_amount ?? 0);
+      cur.gross += Math.max(Number(c.gross_amount ?? 0) - refund, 0);
+      cur.net   += Math.max(Number(c.net_amount ?? 0) - refund, 0);
       cur.fee   += Number(c.commission_amount ?? 0);
       buckets.set(key, cur);
     }

@@ -376,14 +376,33 @@ const MinhasCoreografias = () => {
       }
       setActivePayments(map);
 
-      // Workshops do user (best-effort — RLS pode bloquear se conta deletada)
+      // Workshops do user (best-effort — RLS pode bloquear se conta deletada).
+      // Sem embed PostgREST `workshops(...)` porque dispara 400 cosmético no
+      // console quando a query roda em condições específicas. Fetch em 2 passos:
+      // registrations -> in() dos workshop_ids. Espelha o mesmo padrão de
+      // registrations->events (linha 224 acima).
       try {
-        const { data: ws } = await supabase
-          .from('workshop_registrations')
-          .select('id, workshop_id, buyer_email, buyer_name, status_pagamento, preco_pago, paid_at, access_token, created_at, workshops(id, event_id, title, date_from, instructor_name)')
-          .eq('buyer_email', user.email ?? '')
-          .order('created_at', { ascending: false });
-        setWorkshops(ws ?? []);
+        const userEmail = user.email ?? '';
+        let ws: any[] = [];
+        if (userEmail) {
+          const { data: wsRaw } = await supabase
+            .from('workshop_registrations')
+            .select('id, workshop_id, buyer_email, buyer_name, status_pagamento, preco_pago, paid_at, access_token, created_at')
+            .eq('buyer_email', userEmail)
+            .order('created_at', { ascending: false });
+          const wsList = wsRaw ?? [];
+          const wsIds = Array.from(new Set(wsList.map((r: any) => r.workshop_id).filter(Boolean)));
+          let wsMap: Record<string, any> = {};
+          if (wsIds.length > 0) {
+            const { data: wks } = await supabase
+              .from('workshops')
+              .select('id, event_id, title, date_from, instructor_name')
+              .in('id', wsIds);
+            for (const w of (wks ?? [])) wsMap[w.id] = w;
+          }
+          ws = wsList.map((r: any) => ({ ...r, workshops: wsMap[r.workshop_id] ?? null }));
+        }
+        setWorkshops(ws);
       } catch { setWorkshops([]); }
 
       // Ingressos de plateia ficam em /ingressos (persona separada — público

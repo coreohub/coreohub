@@ -64,9 +64,18 @@ const NotificationBell: React.FC<Props> = ({ userId }) => {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(false);
+  // Tick a cada 60s pra forçar re-render do formatRelative (notif fica "agora"
+  // indefinidamente se o componente não re-renderizar). Cheap — só dispara
+  // re-cálculo de strings, não refetch.
+  const [, setMinuteTick] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
 
   const unreadCount = items.filter(n => !n.read_at).length;
+
+  useEffect(() => {
+    const id = setInterval(() => setMinuteTick(t => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   // Fetch inicial + realtime subscription. Reseta quando userId muda
   // (impersonação de super_admin, por exemplo).
