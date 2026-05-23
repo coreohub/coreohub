@@ -138,14 +138,31 @@ Deno.serve(async (req) => {
       baseFee = parseFloat(Math.max(0, baseFee - discountAmount).toFixed(2))
       if (baseFee <= 0) {
         // Cupom zerou a taxa — pula cobrança, marca waived e libera upload.
+        // Como NÃO há fatura Asaas (e nem webhook PAYMENT_RECEIVED),
+        // increment fica AQUI mesmo + grava coupon_redeemed_at na própria
+        // registration pra prevenir double-increment se waived disparar 2x
+        // (re-tentativa do front, race). Marker compartilhado com fluxo
+        // single legacy (20260606).
+        const { data: regBefore } = await supabase
+          .from('registrations')
+          .select('coupon_redeemed_at')
+          .eq('id', registration_id)
+          .maybeSingle()
         await supabase
           .from('registrations')
-          .update({ video_fee_status: 'waived' })
+          .update({
+            video_fee_status:    'waived',
+            coupon_id:           coupon.id,
+            coupon_redeemed_at:  new Date().toISOString(),
+          })
           .eq('id', registration_id)
-        await supabase
-          .from('coupons')
-          .update({ used_count: Number(coupon.used_count ?? 0) + 1 })
-          .eq('id', coupon.id)
+        // Só incrementa se ainda não tinha marker (idempotente vs retry).
+        if (!regBefore?.coupon_redeemed_at) {
+          await supabase
+            .from('coupons')
+            .update({ used_count: Number(coupon.used_count ?? 0) + 1 })
+            .eq('id', coupon.id)
+        }
         return new Response(
           JSON.stringify({
             waived: true,
@@ -239,16 +256,17 @@ Deno.serve(async (req) => {
         video_fee_payment_id: payData.id,
         video_fee_status:     'pending',
         status_pagamento:     'AGUARDANDO_VIDEO',
+        // Snapshot do cupom — webhook VS vai usar pra incrementar
+        // used_count idempotente quando PAYMENT_RECEIVED chegar.
+        coupon_id:            validatedCoupon?.id ?? null,
       })
       .eq('id', registration_id)
 
-    // Incrementa uso do cupom (best-effort)
-    if (validatedCoupon) {
-      await supabase
-        .from('coupons')
-        .update({ used_count: Number(validatedCoupon.used_count ?? 0) + 1 })
-        .eq('id', validatedCoupon.id)
-    }
+    // Refator 2026-06-01 (espelha 50c1fd3 do single): increment de
+    // used_count MOVIDO pro webhook PAYMENT_RECEIVED. Antes contava na
+    // criação → inflava se inscrito cancelasse sem pagar. Idempotência via
+    // marker registrations.coupon_redeemed_at (compartilhado com fluxo
+    // single legacy, migration 20260606).
 
     console.log(
       `[create-video-selection-payment] registration=${registration_id} payment=${payData.id} ` +

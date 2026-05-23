@@ -840,6 +840,40 @@ async function handleVideoSelectionFee(opts: {
       .eq('id', registrationId)
   }
 
+  // Refator 2026-06-01 (espelha branch single + AGG): incremento idempotente
+  // do coupons.used_count. coupon_id snapshot foi gravado em registrations
+  // pelo create-video-selection-payment. Marker registrations.coupon_redeemed_at
+  // evita double-increment em retry de webhook.
+  if (statusInterno === 'APROVADO') {
+    const { data: regCoupon } = await supabase
+      .from('registrations')
+      .select('coupon_id, coupon_redeemed_at')
+      .eq('id', registrationId)
+      .maybeSingle()
+    if (regCoupon?.coupon_id && !regCoupon.coupon_redeemed_at) {
+      const { data: coupon } = await supabase
+        .from('coupons')
+        .select('used_count')
+        .eq('id', regCoupon.coupon_id)
+        .maybeSingle()
+      if (coupon) {
+        const { error: incErr } = await supabase
+          .from('coupons')
+          .update({ used_count: Number(coupon.used_count ?? 0) + 1 })
+          .eq('id', regCoupon.coupon_id)
+        if (incErr) {
+          console.warn(`[asaas-webhook][video_selection] erro increment used_count:`, incErr.message)
+        } else {
+          await supabase
+            .from('registrations')
+            .update({ coupon_redeemed_at: new Date().toISOString() })
+            .eq('id', registrationId)
+          console.log(`[asaas-webhook][video_selection] coupon ${regCoupon.coupon_id} used_count++ (idempotente)`)
+        }
+      }
+    }
+  }
+
   // Se APROVADO, contabiliza split + dispara sweep + email
   if (statusInterno === 'APROVADO') {
     const { data: reg } = await supabase
