@@ -109,7 +109,11 @@ Deno.serve(async (req) => {
       .eq('id', payment_id)
     if (updPayErr) throw new Error(`Erro ao cancelar fatura: ${updPayErr.message}`)
 
-    const { error: updRegErr } = await supabase
+    // .select('id') retorna rows afetadas — sem isso, RLS/trigger bloqueando
+    // silently passa despercebido (mesma armadilha do bug RLS produtor de
+    // 2026-05-21). Log conta pra debug. Service role bypassa RLS, então 0
+    // rows = filter não bateu (race ou payment_id errado).
+    const { data: affectedRegs, error: updRegErr } = await supabase
       .from('registrations')
       .update({
         payment_group_id:      null,
@@ -119,9 +123,15 @@ Deno.serve(async (req) => {
         coupon_id:             null,
       })
       .eq('payment_group_id', payment_id)
+      .select('id')
     if (updRegErr) {
       console.warn('[cancel-aggregate-payment] erro ao desligar registrations:', updRegErr.message)
       // Não throw — payment já está cancelado, fluxo principal OK.
+    } else {
+      console.log(
+        `[cancel-aggregate-payment] desligou ${affectedRegs?.length ?? 0} registration(s) ` +
+        `do payment_group_id=${payment_id}`
+      )
     }
 
     // Sinaliza pro front quando Asaas falhou — UI mostra banner âmbar

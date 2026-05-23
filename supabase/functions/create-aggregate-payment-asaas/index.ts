@@ -108,6 +108,23 @@ Deno.serve(async (req) => {
     if (regs.length !== registration_ids.length) {
       throw new Error('Uma ou mais inscrições não foram encontradas.')
     }
+    // Coleta payment_group_ids potencialmente "fantasmas" pra batch-check
+    // antes do loop de validação. Cenário: user clicou PAGAR TUDO → cancelou
+    // (UI ou direto via webhook) → clicou PAGAR SÓ ESTA → registration ainda
+    // carrega payment_group_id antigo apontando pra payment já CANCELADO.
+    // Antes: erro "já está em fatura agregada" travava o user.
+    // Agora: detectamos payment morto + zeramos o ponteiro + seguimos.
+    const ghostGroupIds = [...new Set(regs.map(r => r.payment_group_id).filter(Boolean))] as string[]
+    const ghostMap: Record<string, string> = {}
+    if (ghostGroupIds.length > 0) {
+      const { data: paymentsStatus } = await supabase
+        .from('payments')
+        .select('id, status')
+        .in('id', ghostGroupIds)
+      for (const p of (paymentsStatus ?? [])) ghostMap[p.id] = p.status
+    }
+
+    const ghostsToClear: string[] = []
     for (const r of regs) {
       if (r.user_id !== user.id) {
         throw new Error('Sem permissão: inscrição não pertence ao usuário autenticado.')
@@ -119,10 +136,38 @@ Deno.serve(async (req) => {
         throw new Error(`Inscrição "${r.nome_coreografia ?? r.id}" já está em status ${r.status_pagamento}.`)
       }
       if (r.payment_group_id) {
-        throw new Error(
-          `Inscrição "${r.nome_coreografia ?? r.id}" já está em uma fatura agregada. ` +
-          'Cancele a fatura existente antes de gerar uma nova.'
-        )
+        const status = ghostMap[r.payment_group_id]
+        // Payment ATIVO (PENDENTE/APROVADO) — não deixa criar nova fatura.
+        if (status === 'PENDENTE' || status === 'APROVADO') {
+          throw new Error(
+            `Inscrição "${r.nome_coreografia ?? r.id}" já está em uma fatura agregada ativa. ` +
+            'Cancele ou pague a fatura existente antes de gerar uma nova.'
+          )
+        }
+        // Payment morto (CANCELADO/VENCIDO/ESTORNADO/EXPIRADO) OU ponteiro
+        // órfão (payment foi deletado). Marca pra zerar o ponteiro abaixo.
+        ghostsToClear.push(r.id)
+      }
+    }
+
+    // Zera ponteiros fantasmas antes de prosseguir. Service_role bypassa
+    // trigger protect_registrations_status_columns.
+    if (ghostsToClear.length > 0) {
+      const { error: ghostErr } = await supabase
+        .from('registrations')
+        .update({
+          payment_group_id:      null,
+          payment_url:           null,
+          payment_preference_id: null,
+          charged_amount:        null,
+          coupon_id:             null,
+        })
+        .in('id', ghostsToClear)
+        .select('id')
+      if (ghostErr) {
+        console.warn(`[create-aggregate-payment-asaas] erro limpar ghosts:`, ghostErr.message)
+      } else {
+        console.log(`[create-aggregate-payment-asaas] limpou ${ghostsToClear.length} ponteiro(s) fantasma(s)`)
       }
     }
 
