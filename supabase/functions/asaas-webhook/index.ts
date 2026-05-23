@@ -1231,8 +1231,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Atualizar status da inscrição
-    const { error: updErr } = await supabase
+    // Atualizar status da inscrição. select() pra ler coupon_id +
+    // coupon_redeemed_at do mesmo round-trip e processar increment idempotente
+    // logo abaixo.
+    const { data: updatedReg, error: updErr } = await supabase
       .from('registrations')
       .update({
         status_pagamento: statusInterno,
@@ -1240,9 +1242,37 @@ Deno.serve(async (req) => {
         payment_method:   payment.billingType ?? null,
       })
       .eq('id', registrationId)
+      .select('id, coupon_id, coupon_redeemed_at')
+      .maybeSingle()
 
     if (updErr) {
       console.error('[asaas-webhook] erro ao atualizar inscrição:', updErr.message)
+    }
+
+    // Refator 2026-06-01: incremento idempotente de coupons.used_count.
+    // Espelha o que foi feito no branch AGG (commit 1ab8806). Marker
+    // registrations.coupon_redeemed_at evita double-increment em retry.
+    if (statusInterno === 'APROVADO' && updatedReg?.coupon_id && !updatedReg.coupon_redeemed_at) {
+      const { data: coupon } = await supabase
+        .from('coupons')
+        .select('used_count')
+        .eq('id', updatedReg.coupon_id)
+        .maybeSingle()
+      if (coupon) {
+        const { error: incErr } = await supabase
+          .from('coupons')
+          .update({ used_count: Number(coupon.used_count ?? 0) + 1 })
+          .eq('id', updatedReg.coupon_id)
+        if (incErr) {
+          console.warn(`[asaas-webhook][single] erro increment used_count coupon=${updatedReg.coupon_id}:`, incErr.message)
+        } else {
+          await supabase
+            .from('registrations')
+            .update({ coupon_redeemed_at: new Date().toISOString() })
+            .eq('id', registrationId)
+          console.log(`[asaas-webhook][single] coupon ${updatedReg.coupon_id} used_count++ (idempotente)`)
+        }
+      }
     }
 
     // Se aprovado, registrar comissão e enviar emails

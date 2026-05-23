@@ -306,13 +306,12 @@ Deno.serve(async (req) => {
       await supabase.from('registrations').update(updatePayload).eq('id', registration_id)
     }
 
-    // ── 10b. Incrementa uso do cupom (best-effort) ───────────────────────────
-    if (validatedCoupon) {
-      await supabase
-        .from('coupons')
-        .update({ used_count: Number(validatedCoupon.used_count ?? 0) + 1 })
-        .eq('id', validatedCoupon.id)
-    }
+    // ── 10b. Incremento de used_count MOVIDO pro webhook PAYMENT_RECEIVED ───
+    // Refator 2026-06-01 (espelha 1ab8806 do aggregate). Antes incrementava
+    // aqui na criação — inflava used_count quando user cancelava sem pagar.
+    // Agora idempotente via marker registrations.coupon_redeemed_at (migration
+    // 20260606). Webhook branch single confere o marker antes de incrementar
+    // e seta após sucesso. Retry de webhook vira noop.
 
     return new Response(
       JSON.stringify({
