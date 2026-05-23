@@ -492,18 +492,17 @@ Priorização cronológica detalhada em `memory/MEMORY.md` + cada item tem sua m
 
 **⚠️ Sessão A SHIPADA + DESABILITADA mesma noite 2026-05-22** — 6 commits (b6e4444→0c9af1a) + reverter `4602573`. Bug grosso: helper lia bailarinos_detalhes (id+nome+instagram) procurando CPF/data_nascimento que ficam em `elenco`. Feature "dados pendentes" desligada em prod. Detalhes em [[sessao-a-grazieli-shipado]].
 
-### 🔴 TOP 1 PRÓXIMA SESSÃO — Bundle de 6 polimentos solo (~2h30, sem precisar de SQL/Dashboard)
+### ✅ Bundle 6 polimentos solo SHIPADO 2026-05-23
 
-Itens que dá pra atacar 100% sozinho (puro código + commit + deploy):
+Commits `f7d605c` + `81d2d0f`. Sessão curta (~2h), zero SQL no Dashboard pedido ao user:
 
-1. **400 em `/minhas-coreografias`** — embed `workshop_registrations → workshops(...)` quando user sem inscrição. Cosmético antigo, ~20min. `pages/MinhasCoreografias.tsx:344`.
-2. **Polimento `ProducerDashboard.tsx:197`** — `select platform_commissions` sem filtrar `refunded_at` (gráficos podem inflar receita). ~10min, 1 linha.
-3. **NotificationBell — formatRelative não atualiza** (notif fica "agora" indefinidamente até dropdown reabrir). ~15min. `components/NotificationBell.tsx`, `setInterval(forceUpdate, 60_000)` no useEffect.
-4. **GIN index `notifications.metadata`** — idempotency check `metadata->>'registration_id'` vira table scan quando >10k notifs. Migration nova `CREATE INDEX ... USING GIN`. ~5min.
-5. **send-trilha-reminders bulk** — N+1 anotado em CLAUDE.md: 1 query de count por registration. Refatorar pra `.in()` bulk. ~30min.
-6. **Atualizar memory + CLAUDE.md** com sessão. ~15min.
+1. **400 em /minhas-coreografias** — embed `workshops(...)` trocado por 2 queries (`workshop_registrations` + `.in()` dos workshop_ids). Espelha padrão `registrations → events` na mesma página.
+2. **ProducerDashboard refund_amount** — filtro `.is('refunded_at', null)` + subtrai `refund_amount` em `monthlyRevenue`. Receita histórica não infla mais com comissões estornadas.
+3. **NotificationBell formatRelative tick** — `setInterval(setMinuteTick, 60_000)` força re-render. Notif não fica "agora" indefinidamente.
+4. **Migration 20260608 — índices em notifications.metadata** — 2 btree expression (`->>'reminder_type'`, `->>'registration_id'`) + 1 GIN default. Lição: `->>` NÃO usa GIN com `jsonb_path_ops` nem `jsonb_ops`. **Pendente de aplicar no Dashboard**.
+5. **send-trilha-reminders bulk** — `.in('user_id', regUserIds)` por evento em vez de 2 queries por registration. Evento com 200 inscritos: 400 round-trips → 2. Deployed via CLI.
 
-Total: ~2h30. Nenhum precisa de SQL no Dashboard nem teste manual do user. Smoke via Playwright + reports.
+Detalhes em [[bundle-polimentos-solo-2026-05-23]].
 
 ### ⚠️ Anteriormente TOP 1 — Refator com `elenco` JOIN (~5h) ✅ SHIPADO em 2026-05-22 (noite)
 
@@ -537,10 +536,10 @@ Plano completo em [[plano-refactor-elenco-dados-pendentes]]:
 - **Multi-jurado seletiva v1.1** — página `/jurado-seletiva` dedicada (modo blind). Infra de DB pronta. Quando algum produtor demandar.
 
 ### 🪶 Cosméticos / pequenos achados de auditoria 2026-05-22
-- **NotificationBell `formatRelative` não re-renderiza** — notif fica "agora" mesmo passando 1h se dropdown ficar aberto. Fix futuro: `setInterval(forceUpdate, 60_000)`. Não bloqueia.
 - **NotificationBell sem paginação** — limit 50 hard. Quem receber 51+ perde as mais antigas. v1 acceptable. Adicionar "ver mais" quando necessário.
-- **`send-trilha-reminders` 1 query de count por registration** — pra evento com 200+ regs APROVADAS sem trilha, vira 200 round-trips. Otimizar pra bulk `IN` quando virar problema.
-- **`notifications.metadata` sem GIN index** — query `metadata->>'registration_id'` no idempotency check vira table scan. Sem dor enquanto <10k notifs. Criar `CREATE INDEX notifications_metadata_gin ON notifications USING GIN (metadata)` quando crescer.
+- **Migration 20260608 pendente de aplicar** — 3 índices em `notifications.metadata` (2 btree expression + 1 GIN default). Sem ela, o bulk fetch de `send-trilha-reminders` shipado em 2026-05-23 ainda faz table scan no `metadata->>'reminder_type'`. Cole no SQL Editor quando puder. Detalhes em [[bundle-polimentos-solo-2026-05-23]].
+
+Resolvidos em 2026-05-23 (`f7d605c`+`81d2d0f`): NotificationBell `formatRelative` re-renderiza via `setInterval` 60s; `send-trilha-reminders` agora bulk fetch (2 queries por evento); `notifications.metadata` migration criada (pendente de aplicar — fora isso, código está pronto).
 
 ### ⚠️ Pendência operacional
 - **🔴 Bug crítico em prod: signup `/auth/v1/signup` retorna 500** — descoberto 2026-05-22 noite. Qualquer inscrito novo que tente criar conta via app bate em erro. Workaround atual: produtor cria conta via Dashboard > Authentication > Add User. Investigar em **Authentication → Logs** OU **Authentication → Hooks** (talvez Auth Hook custom configurado por engano que falha). Sem isso, **nenhum inscrito novo se cadastra em produção**. Top 1 prioridade próxima sessão.
