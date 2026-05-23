@@ -92,8 +92,8 @@ Service role + chaves de provider ficam em **Supabase Functions Secrets** (Dashb
 | `hooks/` | Hooks custom (`useT.ts` i18n do terminal). |
 | `i18n/` | Dicionários PT/EN/ES (só terminal do júri, 130+ chaves). |
 | `utils/` | Masks, formatters, error humanizer (`humanizeSupabaseError`). |
-| `supabase/migrations/` (90+) | SQL versionado, formato `YYYYMMDD_descricao.sql`. |
-| `supabase/functions/` (31) | Edge Deno, 1 pasta por function. Compartilhado em `_shared/`. |
+| `supabase/migrations/` (95+) | SQL versionado, formato `YYYYMMDD_descricao.sql`. |
+| `supabase/functions/` (32) | Edge Deno, 1 pasta por function. Compartilhado em `_shared/`. |
 | `api/` | Endpoints Vercel (raros — preferir edge function Supabase). |
 | `scripts/` | Utilitários ad-hoc de manutenção. |
 | `docs/` | Documentação operacional (asaas-setup, phase5-offline-testing, carrinho-sessao3-rollout). |
@@ -105,8 +105,9 @@ Service role + chaves de provider ficam em **Supabase Functions Secrets** (Dashb
 ## Edge functions principais (31 totais)
 
 Pagamentos:
-- `asaas-webhook` — fonte da verdade. Branches: AT (audience ticket), WS (workshop), AGG (carrinho agregado), VS (taxa seletiva vídeo), legacy single registration.
+- `asaas-webhook` — fonte da verdade. Branches: AT (audience ticket), WS (workshop), AGG (carrinho agregado), VS (taxa seletiva vídeo), legacy single registration. Branch AGG incrementa `coupons.used_count` idempotente via marker `payments.coupon_redeemed_at` (refator 2026-06-01).
 - `create-asaas-subconta`, `create-payment-asaas`, `create-aggregate-payment-asaas`, `create-audience-ticket`, `create-workshop-registration`, `create-video-selection-payment`
+- `cancel-aggregate-payment` — cancela fatura PENDENTE no Asaas (DELETE /payments/{id}) + zera local. Diferencia 4xx/5xx Asaas (response `partial_cancel` quando 5xx). Usado pelo "X Remover cupom" em /minhas-coreografias.
 - `refund-asaas-payment`, `refund-audience-ticket`, `process-video-refund`
 - `daily-release-funds` (cron 03:00 UTC — Settlement D+7), `manual-transfer-now` (botão "Transferir agora")
 - `expire-pending-payments`, `send-payment-reminders`
@@ -195,6 +196,7 @@ supabase functions deploy <name> --project-ref ghpltzzijlvykiytwslu
 - **Asaas BaaS** — subconta por produtor + split automático. Termo v1.2 cobre taxas + janela D+7. Em `pages/AccountSettings.tsx` (tab Pagamentos) + `pages/TermoProdutor.tsx`.
 - **Settlement D+7** — repasse fica retido 7 dias na subconta pra cobrir refunds. Webhook insere `release_at = paid_at + 7d` em `platform_commissions`. Cron `daily-release-funds` libera no D+7. Botão "Transferir agora" antecipa. Sem D+7, Asaas deixa subconta negativa quando refund acontece pós-sweep (validado em smoke 2026-05-20).
 - **Carrinho/fatura agregada** — Wizard cria registration PENDENTE, `/minhas-coreografias` agrupa, 1 PIX pra N inscrições. Prefixo `AGG:` no `externalReference` Asaas. Comissão distribuída proporcional via `charged_amount` snapshot.
+- **Cupom no aggregate** — input "Tem cupom?" no card "PAGAR TODAS" → botão "Aplicar" valida client-side via `validateCoupon` → linha verde + X "Remover cupom" (padrão Stripe/Sympla). `coupon_code` no body de `create-aggregate-payment-asaas` distribui desconto linearmente nos `baseFee` de cada registration. `used_count` incrementa SÓ no webhook PAYMENT_RECEIVED via marker `payments.coupon_redeemed_at` (idempotente). Limite por inscrito via `coupons.max_uses_per_user`. Refator completo em 2026-06-01.
 - **Seletiva por vídeo** — 3 modelos (regulamento aberto / taxa única / taxa A análise + taxa B inscrição). Prefixo `VS:` no externalReference. Multi-jurado infra pronta no banco, UI v1 só single producer.
 - **Modo Terminal (kiosk)** — `localStorage.coreohub_tablet_kiosk_mode = 'true'`. Tablet vira terminal isolado, app redireciona pra `/judge-login/<UUID>`. Auth via PIN 4 dígitos.
 - **Phase 5 offline-first do júri** — terminal tem IndexedDB outbox (`services/offlineStore.ts`) + drainer com backoff. Submits queue local, sync quando volta online. Idempotência via `evaluations.client_uuid` (UNIQUE INDEX parcial).
@@ -235,6 +237,32 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 ## Histórico recente (últimas ~2 semanas)
 
 Cronológico inverso. Detalhes individuais em `memory/`.
+
+### 2026-05-22 (noite — maratona cupom UX + idempotência + cleanup) ✅ SHIPADO
+16+ commits (`e66ca37` → `b6c8031`). Sessão mais longa registrada. Cobriu refator dados-pendentes (top1 da sessão anterior), cupom no fluxo agregado/single/seletiva ponta-a-ponta, UX padrão Stripe/Sympla, idempotência via webhook, +3 pendências separadas resolvidas no fim. Detalhes em [[refactor-elenco-dados-pendentes-shipado]] + [[cupom-aggregate-shipado]].
+
+**Refator dados-pendentes (6 commits `e66ca37` → `f57a9cb`)**: helper `hasIncompleteBailarinos` antes lia `bailarinos_detalhes` (JSONB com só id+nome+@) procurando CPF/data_nascimento que ficam na tabela `elenco`. Refator: migrations RLS pro produtor ler `elenco` filtrado por subquery LATERAL nos bailarinos_detalhes das inscrições do evento dele (não vaza elenco entre produtores). 3 frontends + edge function `send-incomplete-data-reminders` agora consultam `elencoById` hidratado em batch. Editor inline em Registrations + MinhasCoreografias faz UPSERT em elenco (não no JSONB). Falso positivo "10 com dados incompletos" eliminado em prod.
+
+**checkViolation (`d5f8488`)**: mesmo bug do dados-pendentes — triagem etária lia `b.data_nascimento` do JSONB (sempre undefined) → outOfRange sempre vazio → aba TRIAGEM nunca funcionou. Fix: lê via elencoById (deps atualizadas).
+
+**Cupom no fluxo agregado (10 commits `b5c2be4` → `b6c8031`)**: o refator do carrinho de 2026-05-19 deixou cupom órfão no `Checkout.tsx` — Wizard navega direto pra `/minhas-coreografias` sem passar por lá. Implementado fim-a-fim:
+- Edge `create-aggregate-payment-asaas` aceita `coupon_code`, distribui desconto linearmente nos baseFee, persiste `coupon_id` em payments+registrations
+- Edge `create-payment-asaas` (single) aceita `coupon_code` além de `coupon_id`
+- Edge `cancel-aggregate-payment` nova — cancela fatura PENDENTE no Asaas (DELETE /payments/{id}) + zera local. Diferencia 4xx/5xx (response `partial_cancel` quando 5xx)
+- Webhook (branches AGG, single, video_selection) incrementa `used_count` idempotente via markers `payments.coupon_redeemed_at` + `registrations.coupon_redeemed_at`. Retry de webhook vira noop. Cancelar antes de pagar não infla used_count.
+- UI padrão Stripe/Sympla: "Tem cupom?" sempre visível → botão Aplicar (validateCoupon client) → linha verde com X "Remover cupom" unificado pros 2 estados (applied client + fatura PENDENTE com cupom). Click X dispara cancel silencioso se há fatura. UX padrão Sympla — vocabulário do user, não interno.
+- `coupons.max_uses_per_user` (limite por inscrito) — boa prática Sympla/MP. Validado client+server (dupla checagem).
+- Edge function aggregate detecta "ghost pointer" (registration.payment_group_id apontando pra payment morto): zera silenciosamente e segue. Resolve race condition do user que clica PAGAR TUDO → PAGAR SÓ ESTA → PAGAR TUDO em sequência.
+- Spinner travado pós-bfcache fixado (listener `pageshow`).
+
+**3 pendências separadas resolvidas (`b6c8031`)**:
+1. Idempotência seletiva — `create-video-selection-payment` + webhook branch VS espelha o que foi feito no aggregate/single.
+2. DROP policies fantasmas em `registrations` — "Acesso Total Registrations" + "Permitir Atualização" (ambas com `true/true`, criadas via Dashboard manual, esquecidas). Risco de segurança alto (qualquer authenticated UPDATE qualquer registration).
+3. Crons 401 — `app.settings.service_role_key` NULL em prod fazia 5 crons retornarem 401. Reagendados via `cron.schedule` com chave hardcoded em texto (visível só pra superuser). 6 crons HARDCODED OK. Pendência: se rotacionar service_role, rodar `DO $$` block de novo (anotado em [[feedback-cron-app-settings-null]]).
+
+**Migrations aplicadas em prod (7)**: 20260601 (RLS produtor lê elenco) → 20260602 (RLS produtor UPDATE elenco) → 20260603 (payments.coupon_id) → 20260604 (payments.coupon_redeemed_at) → 20260605 (coupons.max_uses_per_user) → 20260606 (registrations.coupon_redeemed_at) → 20260607 (DROP policies fantasmas).
+
+**Lições dolorosas anotadas**: vocabulário do user > implementação ("Cancelar fatura" → "Remover cupom"), pesquisar boas práticas ANTES de propor UI, sempre unificar UI pelo gesto não pela complexidade interna, bfcache preserva React state (listener `pageshow` resolve), SQL diagnóstico antes de hipótese.
 
 ### 2026-05-22 (madrugada — virou de quinta) — 🚨 Sessão A DESABILITADA em prod por bug grosso
 
@@ -464,7 +492,20 @@ Priorização cronológica detalhada em `memory/MEMORY.md` + cada item tem sua m
 
 **⚠️ Sessão A SHIPADA + DESABILITADA mesma noite 2026-05-22** — 6 commits (b6e4444→0c9af1a) + reverter `4602573`. Bug grosso: helper lia bailarinos_detalhes (id+nome+instagram) procurando CPF/data_nascimento que ficam em `elenco`. Feature "dados pendentes" desligada em prod. Detalhes em [[sessao-a-grazieli-shipado]].
 
-### 🔴 TOP 1 PRÓXIMA SESSÃO — Refator com `elenco` JOIN (~5h)
+### 🔴 TOP 1 PRÓXIMA SESSÃO — Bundle de 6 polimentos solo (~2h30, sem precisar de SQL/Dashboard)
+
+Itens que dá pra atacar 100% sozinho (puro código + commit + deploy):
+
+1. **400 em `/minhas-coreografias`** — embed `workshop_registrations → workshops(...)` quando user sem inscrição. Cosmético antigo, ~20min. `pages/MinhasCoreografias.tsx:344`.
+2. **Polimento `ProducerDashboard.tsx:197`** — `select platform_commissions` sem filtrar `refunded_at` (gráficos podem inflar receita). ~10min, 1 linha.
+3. **NotificationBell — formatRelative não atualiza** (notif fica "agora" indefinidamente até dropdown reabrir). ~15min. `components/NotificationBell.tsx`, `setInterval(forceUpdate, 60_000)` no useEffect.
+4. **GIN index `notifications.metadata`** — idempotency check `metadata->>'registration_id'` vira table scan quando >10k notifs. Migration nova `CREATE INDEX ... USING GIN`. ~5min.
+5. **send-trilha-reminders bulk** — N+1 anotado em CLAUDE.md: 1 query de count por registration. Refatorar pra `.in()` bulk. ~30min.
+6. **Atualizar memory + CLAUDE.md** com sessão. ~15min.
+
+Total: ~2h30. Nenhum precisa de SQL no Dashboard nem teste manual do user. Smoke via Playwright + reports.
+
+### ⚠️ Anteriormente TOP 1 — Refator com `elenco` JOIN (~5h) ✅ SHIPADO em 2026-05-22 (noite)
 
 Plano completo em [[plano-refactor-elenco-dados-pendentes]]:
 - Migration RLS pro produtor ler `elenco` dos users das inscrições do evento dele
