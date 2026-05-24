@@ -505,3 +505,13 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/send-email/deno.json"
 entrypoint = "./functions/send-email/index.ts"
+
+# Auth Send Email Hook — substitui o SMTP nativo do Supabase pelo nosso
+# pipeline Resend. Supabase Auth chama esta função sem JWT, então verify_jwt
+# = false. A segurança vem da verificação HMAC do header webhook-signature
+# (Standard Webhooks spec) usando SEND_EMAIL_HOOK_SECRET. Configurar em
+# Dashboard → Auth → Hooks → "Send Email Hook" apontando pra esta URL.
+[functions.auth-email-hook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/auth-email-hook/index.ts"
