@@ -19,9 +19,11 @@
 // Importante: esta função DEVE rodar com `verify_jwt = false` no config —
 // Supabase Auth chama sem JWT (assina via HMAC no header webhook-signature).
 
-// Usa Web Crypto (crypto.subtle) em vez de node:crypto pra portabilidade no
-// runtime do Supabase Edge (Deno). Padrão recomendado pela própria Supabase
-// nas docs de Send Email Hook.
+// Usa a lib `standardwebhooks` recomendada pelas próprias docs do Supabase
+// pra evitar bugs sutis de parsing/encoding na verificação HMAC. Spec:
+// https://supabase.com/docs/guides/auth/auth-hooks/send-email-hook
+
+import { Webhook } from 'https://esm.sh/standardwebhooks@1.0.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin':  '*',
@@ -71,73 +73,24 @@ interface HookPayload {
   }
 }
 
-// ─── HMAC verification (Standard Webhooks spec) ──────────────────────────────
-// O secret no Supabase tem prefixo `v1,whsec_` — a parte após `whsec_` é base64
-// do segredo bruto. Assinamos `${id}.${timestamp}.${body}` com HMAC-SHA256.
-function base64ToBytes(b64: string): Uint8Array {
-  const bin = atob(b64)
-  const out = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
-  return out
-}
-function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false
-  let diff = 0
-  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i]
-  return diff === 0
-}
-
-async function verifyHookSignature(
+// ─── HMAC verification (lib standardwebhooks) ────────────────────────────────
+// A lib aceita o secret como vier (com ou sem `whsec_` ou `v1,whsec_`) e faz
+// todo o parsing/encoding/timing-safe-compare por dentro. Recomendada pelas
+// docs oficiais do Supabase.
+function verifyHookSignature(
   rawBody: string,
-  webhookId: string,
-  webhookTimestamp: string,
-  webhookSignature: string,
+  headers: Record<string, string>,
   rawSecret: string,
-): Promise<boolean> {
-  if (!webhookId || !webhookTimestamp || !webhookSignature || !rawSecret) return false
-
-  // Reject timestamps mais de 5min fora do clock (replay defense)
-  const ts = Number(webhookTimestamp)
-  if (!Number.isFinite(ts)) return false
-  const now = Math.floor(Date.now() / 1000)
-  if (Math.abs(now - ts) > 300) return false
-
-  // Strip prefixo `v1,whsec_` se vier inteiro do Dashboard
-  const secretBase64 = rawSecret.startsWith('v1,whsec_')
-    ? rawSecret.slice('v1,whsec_'.length)
-    : rawSecret.startsWith('whsec_')
-      ? rawSecret.slice('whsec_'.length)
-      : rawSecret
-
-  let secretBytes: Uint8Array
+): { ok: true; payload: HookPayload } | { ok: false; error: string } {
+  // standardwebhooks aceita só a parte após `v1,` — strip prefixo se vier completo
+  const secret = rawSecret.startsWith('v1,') ? rawSecret.slice(3) : rawSecret
   try {
-    secretBytes = base64ToBytes(secretBase64)
-  } catch {
-    return false
+    const wh = new Webhook(secret)
+    const verified = wh.verify(rawBody, headers) as HookPayload
+    return { ok: true, payload: verified }
+  } catch (e) {
+    return { ok: false, error: (e as Error).message }
   }
-
-  const signedPayload = `${webhookId}.${webhookTimestamp}.${rawBody}`
-
-  const key = await crypto.subtle.importKey(
-    'raw',
-    secretBytes,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  )
-  const sigBuf = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signedPayload))
-  const expected = new Uint8Array(sigBuf)
-
-  // Header pode trazer múltiplas assinaturas separadas por espaço:
-  //   "v1,base64sig1 v1,base64sig2"
-  for (const part of webhookSignature.split(' ')) {
-    const b64 = part.split(',')[1]
-    if (!b64) continue
-    let candidate: Uint8Array
-    try { candidate = base64ToBytes(b64) } catch { continue }
-    if (timingSafeEqual(candidate, expected)) return true
-  }
-  return false
 }
 
 // ─── Template render ──────────────────────────────────────────────────────────
@@ -373,6 +326,10 @@ async function sendViaResend(to: string, subject: string, html: string): Promise
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
+  // Top-level try: garante que qualquer crash retorna 500 com causa legível
+  // em vez de o runtime devolver "Unexpected status code returned from hook: 500"
+  // sem nada nos logs.
+  try {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -382,8 +339,7 @@ Deno.serve(async (req) => {
 
   const rawBody = await req.text()
 
-  // 1. Verifica HMAC do webhook (Standard Webhooks). Sem isso, qualquer um na
-  //    internet pode triggar email via essa URL — risco de spam + abuso da quota.
+  // 1. Verifica HMAC do webhook (Standard Webhooks) via lib oficial.
   const secret = Deno.env.get('SEND_EMAIL_HOOK_SECRET') ?? ''
   if (!secret) {
     console.error('[auth-email-hook] SEND_EMAIL_HOOK_SECRET não configurada')
@@ -392,36 +348,34 @@ Deno.serve(async (req) => {
     })
   }
 
-  const webhookId        = req.headers.get('webhook-id')        ?? ''
-  const webhookTimestamp = req.headers.get('webhook-timestamp') ?? ''
-  const webhookSignature = req.headers.get('webhook-signature') ?? ''
+  // standardwebhooks lib quer um objeto com headers em lower-case keys
+  const headers: Record<string, string> = {
+    'webhook-id':        req.headers.get('webhook-id')        ?? '',
+    'webhook-timestamp': req.headers.get('webhook-timestamp') ?? '',
+    'webhook-signature': req.headers.get('webhook-signature') ?? '',
+  }
 
-  if (!(await verifyHookSignature(rawBody, webhookId, webhookTimestamp, webhookSignature, secret))) {
-    console.warn('[auth-email-hook] HMAC inválido, rejeitando')
-    return new Response(JSON.stringify({ error: 'Invalid signature' }), {
+  const verifyResult = verifyHookSignature(rawBody, headers, secret)
+  if (!verifyResult.ok) {
+    console.error(`[auth-email-hook] HMAC verify falhou: ${verifyResult.error}`)
+    return new Response(JSON.stringify({ error: `Invalid signature: ${verifyResult.error}` }), {
       status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
 
-  // 2. Parse payload
-  let payload: HookPayload
-  try {
-    payload = JSON.parse(rawBody) as HookPayload
-  } catch {
-    return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
-      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-  }
-
+  const payload = verifyResult.payload
   if (!payload?.user?.email || !payload?.email_data?.email_action_type) {
+    console.error('[auth-email-hook] payload incompleto:', JSON.stringify(payload).slice(0, 200))
     return new Response(JSON.stringify({ error: 'Missing required fields' }), {
       status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
 
-  // 3. Render + envia
+  // 2. Render + envia
   try {
+    console.log(`[auth-email-hook] rendering type=${payload.email_data.email_action_type} to=${payload.user.email}`)
     const { subject, html } = renderEmail(payload)
+    console.log(`[auth-email-hook] sending via Resend, subject="${subject}", html length=${html.length}`)
     await sendViaResend(payload.user.email, subject, html)
     console.log(`[auth-email-hook] ok type=${payload.email_data.email_action_type} user=${payload.user.id}`)
     return new Response(JSON.stringify({}), {
@@ -429,10 +383,17 @@ Deno.serve(async (req) => {
     })
   } catch (e) {
     const msg = (e as Error).message
-    console.error('[auth-email-hook] falha no envio:', msg)
-    // Retorna 500 pra Supabase mostrar erro genérico ao user. O log fica no
-    // dashboard de edge functions pra investigação.
+    console.error('[auth-email-hook] falha no envio Resend:', msg)
     return new Response(JSON.stringify({ error: msg }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+
+  } catch (e) {
+    const msg = (e as Error).message
+    const stack = (e as Error).stack ?? ''
+    console.error('[auth-email-hook] crash top-level:', msg, '\n', stack)
+    return new Response(JSON.stringify({ error: `crash: ${msg}` }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
