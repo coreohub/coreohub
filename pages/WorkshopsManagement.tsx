@@ -631,15 +631,19 @@ const BuyersModal: React.FC<{ workshop: WorkshopRow; onClose: () => void }> = ({
     try {
       const newVal = !buyer.attended;
       const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from('workshop_registrations')
         .update({
           attended: newVal,
           attended_at: newVal ? new Date().toISOString() : null,
           attended_by: newVal ? user?.id ?? null : null,
         })
-        .eq('id', buyer.id);
+        .eq('id', buyer.id)
+        .select('id');
       if (error) throw error;
+      if (!updated || updated.length === 0) {
+        throw new Error('Sem permissão pra marcar presença. Aplique as migrations 20260610-12.');
+      }
       setBuyers(prev => prev.map(b => b.id === buyer.id
         ? { ...b, attended: newVal, attended_at: newVal ? new Date().toISOString() : null }
         : b));

@@ -145,12 +145,19 @@ const CheckIn = () => {
         return;
       }
       const now = new Date().toISOString();
-      const { error: upErr } = await supabase
+      const { data: updated, error: upErr } = await supabase
         .from('audience_tickets')
         .update({ check_in_status: 'OK', check_in_at: now })
-        .eq('id', id);
+        .eq('id', id)
+        .select('id');
       if (upErr) {
         setScanResult({ type: 'error', message: `Falha ao marcar: ${upErr.message}`, name: ticket.buyer_name, kind: 'INGRESSO' });
+        return;
+      }
+      // RLS pode retornar 0 rows sem erro se a policy bloquear silently.
+      // .select('id') força PostgREST a devolver o que foi afetado.
+      if (!updated || updated.length === 0) {
+        setScanResult({ type: 'error', message: 'Sem permissão pra marcar este ingresso. Acione o coordenador.', name: ticket.buyer_name, kind: 'INGRESSO' });
         return;
       }
       const meiaSuffix = ticket.ticket_type_kind === 'meia' ? ' (verificar documento de meia)' : '';
@@ -183,12 +190,17 @@ const CheckIn = () => {
       }
       const now = new Date().toISOString();
       const { data: { user } } = await supabase.auth.getUser();
-      const { error: upErr } = await supabase
+      const { data: updated, error: upErr } = await supabase
         .from('workshop_registrations')
         .update({ attended: true, attended_at: now, attended_by: user?.id ?? null })
-        .eq('id', ws.id);
+        .eq('id', ws.id)
+        .select('id');
       if (upErr) {
         setScanResult({ type: 'error', message: `Falha ao marcar: ${upErr.message}`, name: ws.buyer_name, kind: 'WORKSHOP' });
+        return;
+      }
+      if (!updated || updated.length === 0) {
+        setScanResult({ type: 'error', message: 'Sem permissão pra marcar este workshop. Acione o coordenador.', name: ws.buyer_name, kind: 'WORKSHOP' });
         return;
       }
       setScanResult({ type: 'success', message: `${workshopName ?? 'Workshop'} — presença marcada!`, name: ws.buyer_name, kind: 'WORKSHOP' });

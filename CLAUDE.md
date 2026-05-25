@@ -548,8 +548,18 @@ Plano completo em [[plano-refactor-elenco-dados-pendentes]]:
 
 
 
-### 🟨 P2 — Alto valor, esforço maior
-- **Auditoria RLS sistemática outras tabelas** — `audience_tickets`, `workshop_registrations`, `video_selections`, `aggregate_payments`, `coupons` podem ter mesmo padrão "produtor só SELECT, UPDATE silently broken" que descobrimos em registrations 2026-05-22. Heurística: UI tem "Editar" pro produtor + tabela só tem `*_reads_*` policy + `super_admin_all_*`. ~2h. Decorrência da auditoria do bug RLS em [[bug-rls-producer-update-registrations]].
+#### ✅ Auditoria RLS protect triggers SHIPADA 2026-05-25
+
+3 migrations + hardening. Diagnóstico revelou que 4 das 5 tabelas JÁ tinham policy UPDATE pro produtor — o gap real era FALTA de trigger de proteção de colunas sensíveis. Produtor podia editar `preco_pago`/`payment_id`/`refund_amount` em audience_tickets/workshop_registrations + `used_count` em coupons direto via UPDATE.
+
+- `20260610_protect_audience_tickets_columns.sql` — bloqueia financeiro, refund, snapshot do tipo; permite check-in + nome/telefone.
+- `20260611_protect_workshop_registrations_columns.sql` — mesmo padrão; permite `attended` + correção de nome.
+- `20260612_protect_coupons_columns.sql` — bloqueia `used_count` (só webhook); permite código/valor/limite/status/escopo.
+- Hardening `.select('id')` em CheckIn.tsx (2 UPDATEs) + WorkshopsManagement.tsx (toggleAttended) — throw se 0 rows.
+
+Smoke Playwright 6/6 OK (errors=0, overflow=false). Migrations **pendentes de aplicar manualmente no Dashboard**. Detalhes em [[auditoria-rls-protect-triggers-shipado]].
+
+## 🟨 P2 — Alto valor, esforço maior
 - **Painel /registrations Sessão 4.2** — drill-down side panel + ações em massa + análise financeira (Top 5 estúdios, distribuição por modalidade). ~10h. Sessão 4.1 (quick wins) já shipada 2026-05-22.
 - **B4 Push Web (notificações)** — ~4h. Cobertura 15-30% (taxa típica de aceitar permissão). Faz sentido só depois do inbox virar baseline + algum produtor demandar. VAPID keys + permission UX + send-push edge function. Service Worker já existe via workbox.
 - **Phase 6 — Mesa de Som offline-first** (`#37`) — botão "Baixar pacote do evento" pré-cacheia trilhas + narrações no Cache API. Outbox de live_status. ~1-2 sprints.
