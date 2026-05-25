@@ -548,7 +548,16 @@ Plano completo em [[plano-refactor-elenco-dados-pendentes]]:
 
 
 
-#### ✅ Auditoria RLS protect triggers SHIPADA 2026-05-25
+#### ✅ Hardening .select('id') CheckIn + ResultsPanel SHIPADO 2026-05-25
+
+Commit `b86d524`. Cobre o beneficio colateral do fix `ded2e3e` 2026-05-22: 2 telas que faziam UPDATE em `registrations` ficaram silently broken pra produtor não-super-admin até a migration `20260525` ser aplicada — e nunca tinham hardening contra regressão futura. Agora `.select('id')` + throw se 0 rows.
+
+- `pages/CheckIn.tsx:125` (QR scan registration) — antes modal mostrava "Check-in realizado!" mesmo com RLS bloqueando, banco ficava intacto.
+- `pages/ResultsPanel.tsx:202-226` (Publicar resultados) — hardening na primeira iteração do loop, aborta cedo se bloqueado em vez de marchar pelo loop inteiro.
+
+Smoke Playwright 4/4 OK. Validação E2E de mutation real (smoke manual ~30min) ainda pendente do user — opcional, comportamento já validado em `/registrations` no smoke 2026-05-21.
+
+### ✅ Auditoria RLS protect triggers SHIPADA 2026-05-25
 
 3 migrations + hardening. Diagnóstico revelou que 4 das 5 tabelas JÁ tinham policy UPDATE pro produtor — o gap real era FALTA de trigger de proteção de colunas sensíveis. Produtor podia editar `preco_pago`/`payment_id`/`refund_amount` em audience_tickets/workshop_registrations + `used_count` em coupons direto via UPDATE.
 
@@ -564,7 +573,6 @@ Smoke Playwright 6/6 OK (errors=0, overflow=false). Migrations aplicadas em prod
 - **B4 Push Web (notificações)** — ~4h. Cobertura 15-30% (taxa típica de aceitar permissão). Faz sentido só depois do inbox virar baseline + algum produtor demandar. VAPID keys + permission UX + send-push edge function. Service Worker já existe via workbox.
 - **Phase 6 — Mesa de Som offline-first** (`#37`) — botão "Baixar pacote do evento" pré-cacheia trilhas + narrações no Cache API. Outbox de live_status. ~1-2 sprints.
 - **A19 — Testes automatizados** — Vitest + GitHub Actions + mock Supabase client. 3 PRs (webhook → sweep/KYC/reminders → seletiva/pricing). ~4-6h. Trigger: ~5 produtores ativos OU primeira regressão cara.
-- **Smoke pós-RLS fix em CheckIn + ResultsPanel** — produtor real testar QR check-in (persiste agora?) + "Publicar resultados" (atualiza banco agora?). Beneficio colateral do fix `ded2e3e` 2026-05-22. ~30min.
 - **Card Saldo: ler saldo real do Asaas via API** — hoje mostra `net_amount` esperado, pode divergir do saldo real se houver dívida pendente na subconta. UX a polir.
 - **Test E2E cenário 3 D+7** (botão Transferir agora) — defer pelo user em 2026-05-21. Cenários 1 + 1.5 + 2 passaram.
 - **Bundle index 891 kB** — warning Vite > 500kB. Code-split BarChart + jspdf ajudaria. LCP em 3G.
