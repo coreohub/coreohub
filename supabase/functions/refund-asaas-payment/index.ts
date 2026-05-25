@@ -57,9 +57,67 @@ Deno.serve(async (req) => {
     const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
     const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
 
+    // Pra partial refund em payment com split, Asaas exige `splitRefunds` —
+    // sem isso, ele tenta deduzir TODO o valor do "main charge" (a parte
+    // master CoreoHub, que é só a comissão). Resultado: erro invalid_action
+    // "Valor da cobrança insuficiente para o estorno solicitado". Bug
+    // descoberto 2026-05-25 nos logs do refund da BREAK NÃO PARA.
+    // Solução: buscar split original (platform_commissions + producer wallet)
+    // e enviar splitRefunds proporcional.
+    const requestedAmount = (amount && Number(amount) > 0) ? Number(amount) : null
+
     const refundBody: any = {}
-    if (amount && Number(amount) > 0) refundBody.value = Number(amount)
+    if (requestedAmount !== null) refundBody.value = requestedAmount
     if (reason) refundBody.description = reason
+
+    // Só monta splitRefunds em partial refund. Full refund (sem value)
+    // o Asaas distribui proporcional automaticamente.
+    if (requestedAmount !== null) {
+      const [{ data: commission }, { data: producerProfile }] = await Promise.all([
+        supabase
+          .from('platform_commissions')
+          .select('gross_amount, net_amount, commission_amount')
+          .eq('asaas_payment_id', coreo.payment_id)
+          .maybeSingle(),
+        event?.created_by
+          ? supabase
+              .from('profiles')
+              .select('asaas_wallet_id')
+              .eq('id', event.created_by)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+      ])
+
+      if (commission && producerProfile?.asaas_wallet_id) {
+        const grossAmount     = Number(commission.gross_amount ?? 0)
+        const producerNetOrig = Number(commission.net_amount ?? 0)
+        // Proporção do split: quanto da cobrança total veio do producer.
+        // ex: gross=40, producer_net=36 → 0.9 → refund R$ 36 cobra R$ 32,40
+        // do producer wallet + R$ 3,60 do master (comissão estornada).
+        const producerShareRatio = grossAmount > 0 ? producerNetOrig / grossAmount : 0
+        const producerRefundShare = parseFloat(
+          (requestedAmount * producerShareRatio).toFixed(2)
+        )
+        if (producerRefundShare > 0) {
+          refundBody.splitRefunds = [
+            {
+              walletId: producerProfile.asaas_wallet_id,
+              value: producerRefundShare,
+            },
+          ]
+          console.log(
+            `[refund-asaas-payment] partial refund split: total=${requestedAmount}` +
+            ` producer=${producerRefundShare} ratio=${producerShareRatio.toFixed(3)}`
+          )
+        }
+      } else {
+        console.warn(
+          `[refund-asaas-payment] partial refund SEM splitRefunds —` +
+          ` commission_found=${!!commission} wallet_found=${!!producerProfile?.asaas_wallet_id}` +
+          `. Asaas pode rejeitar com invalid_action.`
+        )
+      }
+    }
 
     const refundRes = await fetch(`${ASAAS_BASE_URL}/payments/${coreo.payment_id}/refund`, {
       method: 'POST',
