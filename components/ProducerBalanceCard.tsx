@@ -17,6 +17,30 @@ interface Props {
   producerId: string;
 }
 
+// Cache do saldo Asaas em sessionStorage: 5min de TTL evita martelar a API
+// a cada navegação entre rotas internas (Stripe/MP fazem o mesmo padrão).
+const ASAAS_CACHE_KEY = 'coreohub:asaas-balance';
+const ASAAS_CACHE_TTL_MS = 5 * 60 * 1000;
+
+function readAsaasCache(producerId: string): { value: number; fetchedAt: number } | null {
+  try {
+    const raw = sessionStorage.getItem(`${ASAAS_CACHE_KEY}:${producerId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { value: number; fetchedAt: number };
+    if (Date.now() - parsed.fetchedAt > ASAAS_CACHE_TTL_MS) return null;
+    return parsed;
+  } catch { return null; }
+}
+
+function writeAsaasCache(producerId: string, value: number) {
+  try {
+    sessionStorage.setItem(
+      `${ASAAS_CACHE_KEY}:${producerId}`,
+      JSON.stringify({ value, fetchedAt: Date.now() }),
+    );
+  } catch { /* sessionStorage cheio/bloqueado — ignora silenciosamente */ }
+}
+
 /**
  * Card "Saldo" do /qg-organizador — settlement period D+7.
  * Mostra 2 buckets (retido vs disponível) + botão "Transferir agora" que
@@ -30,10 +54,11 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
   const [feedback, setFeedback]   = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
   const [asaasBalance, setAsaasBalance] = useState<{ value: number; fetchedAt: number } | null>(null);
 
-  // Carrega comissões do DB local. `withAsaas=true` também consulta o saldo
-  // real da subconta Asaas em paralelo (botão refresh manual). Mount inicial
-  // e realtime usam só o local pra não martelar a API Asaas a cada webhook.
-  const load = useCallback(async (withAsaas = false) => {
+  // Carrega comissões do DB local. `withAsaas`:
+  //   - 'force': sempre chama a API Asaas (botão refresh manual)
+  //   - 'cached': usa cache da session se fresco (<5min); senão chama API
+  //   - 'skip': só DB local (realtime triggers, evita N chamadas Asaas)
+  const load = useCallback(async (withAsaas: 'force' | 'cached' | 'skip' = 'skip') => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     const targetId = user?.id ?? producerId;
@@ -46,7 +71,20 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
       .is('refunded_at', null)
       .gt('net_amount', 0);
 
-    const asaasPromise = withAsaas
+    // Decide se chama a API Asaas: força (refresh manual) ou cache miss.
+    let asaasNeedsFetch = false;
+    if (withAsaas === 'force') {
+      asaasNeedsFetch = true;
+    } else if (withAsaas === 'cached') {
+      const cached = readAsaasCache(targetId);
+      if (cached) {
+        setAsaasBalance(cached);
+      } else {
+        asaasNeedsFetch = true;
+      }
+    }
+
+    const asaasPromise = asaasNeedsFetch
       ? supabase.functions.invoke('get-producer-asaas-balance', { body: {} })
       : Promise.resolve(null);
 
@@ -58,23 +96,28 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
       setPending((localRes.data ?? []) as PendingCommission[]);
     }
 
-    if (withAsaas && asaasRes) {
+    if (asaasNeedsFetch && asaasRes) {
       const { data: asaasData, error: asaasErr } = asaasRes as { data: any; error: any };
       if (asaasErr || asaasData?.status !== 'ok') {
-        const reason = asaasData?.message ?? asaasData?.reason ?? asaasErr?.message ?? 'erro_desconhecido';
-        setFeedback({ kind: 'err', msg: `Não foi possível consultar o Asaas: ${reason}` });
+        // Cache miss inicial é silencioso (produtor pode não ter Asaas conectado).
+        // Refresh manual sinaliza o erro.
+        if (withAsaas === 'force') {
+          const reason = asaasData?.message ?? asaasData?.reason ?? asaasErr?.message ?? 'erro_desconhecido';
+          setFeedback({ kind: 'err', msg: `Não foi possível consultar o Asaas: ${reason}` });
+        }
       } else {
-        setAsaasBalance({
-          value:     Number(asaasData.balance ?? 0),
-          fetchedAt: Date.now(),
-        });
+        const value = Number(asaasData.balance ?? 0);
+        setAsaasBalance({ value, fetchedAt: Date.now() });
+        writeAsaasCache(targetId, value);
       }
     }
 
     setLoading(false);
   }, [producerId]);
 
-  useEffect(() => { load(false); }, [load]);
+  // Mount inicial: usa cache se fresco. Fora do cache TTL, dispara fetch
+  // em background — saldo Asaas aparece sem o user precisar clicar.
+  useEffect(() => { load('cached'); }, [load]);
 
   // Realtime: cron daily-release-funds marca released_at em commissions sem o
   // produtor ouvir nada. Sem subscribe, card mostra retido velho até refresh.
@@ -91,7 +134,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
           schema: 'public',
           table: 'platform_commissions',
           filter: `producer_id=eq.${user.id}`,
-        }, () => { load(); })
+        }, () => { load('skip'); })
         .subscribe();
     })();
     return () => {
@@ -144,7 +187,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
         msg:  `Transferência disparada: R$ ${released.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} a caminho do seu PIX.`,
       });
       setModalOpen(false);
-      await load(true);
+      await load('force');
     } catch (e: any) {
       setFeedback({ kind: 'err', msg: e?.message ?? 'Erro ao processar transferência.' });
     } finally {
@@ -194,7 +237,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
             </p>
           </div>
           <button
-            onClick={() => load(true)}
+            onClick={() => load('force')}
             disabled={loading}
             title="Atualizar saldo"
             className="p-2 rounded-xl text-slate-400 hover:text-[#ff0068] hover:bg-slate-100 dark:hover:bg-white/5 transition-all disabled:opacity-50"
@@ -269,23 +312,40 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
           </span>
         </div>
 
-        {/* Saldo real Asaas — só aparece após primeiro clique no refresh
-            manual. Mostra divergência em âmbar se diferir do CoreoHub (refund
-            parcial, taxas, dívida pré-D+7). Padrão Stripe/MP. */}
-        {asaasBalance && (
-          <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-white/5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px]">
-            <ShieldCheck size={11} className="text-slate-400" />
-            <span className="text-slate-500">Saldo real Asaas:</span>
-            <strong className="font-black text-slate-700 dark:text-slate-300">
-              {fmtBRL(asaasBalance.value)}
-            </strong>
-            {Math.abs(asaasBalance.value - total) > 0.01 && (
-              <span className="text-[10px] text-amber-600 dark:text-amber-400">
-                • diverge em {fmtBRL(asaasBalance.value - total)}
-              </span>
-            )}
-          </div>
-        )}
+        {/* Saldo real Asaas — fetcha em background no mount (cache 5min).
+            Diferencia 2 cenários de divergência:
+            - Asaas < CoreoHub: dívida pendente (refund parcial pós-sweep)
+            - Asaas > CoreoHub: crédito não rastreado (ajuste manual Asaas) */}
+        {asaasBalance && (() => {
+          const diff = asaasBalance.value - total;
+          const hasDivergence = Math.abs(diff) > 0.01;
+          const isDebt = diff < -0.01;
+          return (
+            <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-white/5 space-y-2">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px]">
+                <ShieldCheck size={11} className="text-slate-400" />
+                <span className="text-slate-500">Saldo real Asaas:</span>
+                <strong className="font-black text-slate-700 dark:text-slate-300">
+                  {fmtBRL(asaasBalance.value)}
+                </strong>
+                {hasDivergence && (
+                  <span className={`text-[10px] font-black ${isDebt ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                    • {isDebt ? '−' : '+'}{fmtBRL(Math.abs(diff))}
+                  </span>
+                )}
+              </div>
+              {hasDivergence && isDebt && (
+                <div className="flex items-start gap-2 p-2.5 rounded-xl bg-rose-500/5 border border-rose-500/20 text-[10px] text-rose-700 dark:text-rose-300 leading-relaxed">
+                  <AlertTriangle size={11} className="shrink-0 mt-0.5" />
+                  <span>
+                    Saldo no Asaas menor que o esperado. Pode ser dívida pendente de reembolso
+                    ou taxa não rastreada. Verifique a fatura na sua subconta Asaas.
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </motion.div>
 
       {/* Modal de confirmação */}

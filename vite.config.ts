@@ -83,6 +83,22 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
-      }
+      },
+      build: {
+        rollupOptions: {
+          output: {
+            // Vendor splitting pra reduzir o index bundle (930 kB → ~500 kB
+            // esperado). Cada vendor vira chunk separado cacheável entre
+            // deploys (deps mudam menos que app code).
+            manualChunks: {
+              'vendor-react':    ['react', 'react-dom', 'react-router-dom'],
+              'vendor-motion':   ['framer-motion'],
+              'vendor-supabase': ['@supabase/supabase-js'],
+              'vendor-icons':    ['lucide-react'],
+              'vendor-dnd':      ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
+            },
+          },
+        },
+      },
     };
 });
