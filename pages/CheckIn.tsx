@@ -122,7 +122,19 @@ const CheckIn = () => {
         return;
       }
       const now = new Date().toISOString();
-      await supabase.from('registrations').update({ check_in_status: 'OK', check_in_at: now }).eq('id', id);
+      const { data: updated, error: upErr } = await supabase
+        .from('registrations')
+        .update({ check_in_status: 'OK', check_in_at: now })
+        .eq('id', id)
+        .select('id');
+      if (upErr) {
+        setScanResult({ type: 'error', message: `Falha ao marcar: ${upErr.message}`, name: item.nome_coreografia, kind: 'INSCRITO' });
+        return;
+      }
+      if (!updated || updated.length === 0) {
+        setScanResult({ type: 'error', message: 'Sem permissão pra marcar este check-in. Acione o coordenador.', name: item.nome_coreografia, kind: 'INSCRITO' });
+        return;
+      }
       setItems(prev => prev.map(i => i.id === id ? { ...i, check_in_status: 'OK', check_in_at: now } : i));
       setScanResult({ type: 'success', message: 'Check-in realizado!', name: item.nome_coreografia, kind: 'INSCRITO' });
       return;

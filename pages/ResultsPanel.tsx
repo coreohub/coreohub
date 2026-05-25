@@ -202,24 +202,35 @@ const ResultsPanel = () => {
   const handlePublish = async () => {
     setPublishing(true);
     try {
+      let firstCheck = true;
       for (const entries of Object.values(groupedByGenreCat)) {
         for (let i = 0; i < entries.length; i++) {
-          await supabase.from('registrations').update({
+          const { data, error } = await supabase.from('registrations').update({
             classificacao_final: i + 1,
             media_final:         entries[i].average_score,
             resultado_publicado: true,
-          }).eq('id', entries[i].id);
+          }).eq('id', entries[i].id).select('id');
+          if (error) throw error;
+          // Primeira iteração: aborta cedo se RLS bloqueia silently (0 rows).
+          // Lição bug-rls-producer-update-registrations.
+          if (firstCheck) {
+            if (!data || data.length === 0) {
+              throw new Error('Sem permissão pra publicar resultados. Verifique se está logado como produtor do evento.');
+            }
+            firstCheck = false;
+          }
         }
       }
       for (const r of avaliada) {
-        await supabase.from('registrations').update({
+        const { error } = await supabase.from('registrations').update({
           media_final: null, resultado_publicado: true,
         }).eq('id', r.id);
+        if (error) throw error;
       }
       alert('Resultados publicados com sucesso!');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Erro ao publicar resultados.');
+      alert(err?.message ?? 'Erro ao publicar resultados.');
     } finally {
       setPublishing(false);
     }
