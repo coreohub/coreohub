@@ -817,17 +817,14 @@ const MinhasCoreografias = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada.');
 
-      // Reusa o cupom aplicado no card "PAGAR TODAS" (mesma sessão = mesma
-      // intenção do inscrito). Se nada aplicado, manda sem cupom.
+      // Cupom NÃO aplicado em single payment (decisão de produto 2026-05-25).
+      // Cupom só funciona em "PAGAR TUDO" (aggregate) — padrão Stripe/Sympla/
+      // iFood/Hotmart de 1 cupom por sessão de checkout. Evita exploit onde
+      // cupom valor fixo + max_uses_per_user > 1 daria desconto > prorrateado.
       const body: Record<string, any> = {
         registration_id: reg.id,
         event_id:        reg.event_id,
       };
-      const eventId = reg.event_id ?? '';
-      const appliedCode = appliedAggregateCoupons[eventId]?.code;
-      const rawCode     = aggregateCouponInputs[eventId]?.trim();
-      const couponCode  = appliedCode ?? rawCode;
-      if (couponCode) body.coupon_code = couponCode;
 
       const resp = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-payment-asaas`,
@@ -1317,11 +1314,54 @@ const MinhasCoreografias = () => {
             const isApplying = applyingAggregateCoupon[grupo.eventId] === true;
             const couponErr  = aggregateCouponErrors[grupo.eventId] ?? null;
             return (
-              <>
-              {/* CUPOM BANNER — fora do card "PAGAR TODAS" pra deixar claro
-                  que o desconto aplica em qualquer pagamento abaixo (Pagar
-                  tudo OU Pagar só esta). Padrão Stripe/Hotmart 2026-05. */}
-              <div className="px-5 py-3 bg-gradient-to-r from-[#ff0068]/[0.04] to-[#ff0068]/[0.02] dark:from-[#ff0068]/10 dark:to-[#ff0068]/5 border-b border-slate-200 dark:border-white/5 space-y-2">
+              <div className="px-5 py-4 bg-slate-50 dark:bg-white/[0.02] border-b border-slate-200 dark:border-white/5 space-y-3">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                      Pagar todas
+                    </p>
+                    {discountAmount > 0 ? (
+                      <div className="mt-0.5">
+                        <p className="text-[10px] font-bold text-slate-400 line-through tabular-nums">
+                          {fmtMoney(subtotal)}
+                        </p>
+                        <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
+                          {fmtMoney(total)}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5 tabular-nums">
+                        {fmtMoney(total)}
+                      </p>
+                    )}
+                    <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                      {grupo.pendentes.length} coreografia{grupo.pendentes.length !== 1 ? 's' : ''} em 1 PIX
+                      {expiraDias != null && expiraDias <= 7 && (
+                        <span className="text-slate-500 ml-2">
+                          · {expiraDias === 0 ? 'Vence hoje' : `Vence em ${expiraDias} dia${expiraDias !== 1 ? 's' : ''}`}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handlePagarAgregado(grupo)}
+                    disabled={payingEvent === grupo.eventId}
+                    className="flex items-center gap-2 px-5 py-3 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-40 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 transition-all"
+                  >
+                    {payingEvent === grupo.eventId ? (
+                      <Loader2 size={13} className="animate-spin" />
+                    ) : (
+                      <ShoppingCart size={13} />
+                    )}
+                    Pagar tudo
+                    <ChevronRight size={12} />
+                  </button>
+                </div>
+                {/* Cupom — exclusivo de PAGAR TUDO (decisão de produto 2026-05-25).
+                    Padrão Stripe/Sympla/iFood/Hotmart: 1 cupom por sessão de
+                    checkout, aplica no total. Cupom não passa pra single payment
+                    (linha "Pagar só esta") — evita exploit com cupom valor fixo
+                    + max_uses_per_user > 1. */}
                 {(applied || faturaTemCupom) ? (
                   <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl">
                     <CheckCircle size={16} className="text-emerald-500 shrink-0" />
@@ -1330,7 +1370,7 @@ const MinhasCoreografias = () => {
                         {applied?.code ?? faturaPendente?.coupon_code ?? 'Cupom'}
                       </p>
                       <p className="text-[10px] text-emerald-600 dark:text-emerald-500">
-                        {fmtMoney(applied?.discount ?? faturaPendente?.discount_total ?? 0)} de desconto · vale em Pagar tudo ou Pagar só esta
+                        {fmtMoney(applied?.discount ?? faturaPendente?.discount_total ?? 0)} de desconto
                       </p>
                     </div>
                     <button
@@ -1404,51 +1444,6 @@ const MinhasCoreografias = () => {
                   )
                 )}
               </div>
-              <div className="px-5 py-4 bg-slate-50 dark:bg-white/[0.02] border-b border-slate-200 dark:border-white/5 space-y-3">
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
-                      Pagar todas
-                    </p>
-                    {discountAmount > 0 ? (
-                      <div className="mt-0.5">
-                        <p className="text-[10px] font-bold text-slate-400 line-through tabular-nums">
-                          {fmtMoney(subtotal)}
-                        </p>
-                        <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
-                          {fmtMoney(total)}
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5 tabular-nums">
-                        {fmtMoney(total)}
-                      </p>
-                    )}
-                    <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-                      {grupo.pendentes.length} coreografia{grupo.pendentes.length !== 1 ? 's' : ''} em 1 PIX
-                      {expiraDias != null && expiraDias <= 7 && (
-                        <span className="text-slate-500 ml-2">
-                          · {expiraDias === 0 ? 'Vence hoje' : `Vence em ${expiraDias} dia${expiraDias !== 1 ? 's' : ''}`}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handlePagarAgregado(grupo)}
-                    disabled={payingEvent === grupo.eventId}
-                    className="flex items-center gap-2 px-5 py-3 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-40 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 transition-all"
-                  >
-                    {payingEvent === grupo.eventId ? (
-                      <Loader2 size={13} className="animate-spin" />
-                    ) : (
-                      <ShoppingCart size={13} />
-                    )}
-                    Pagar tudo
-                    <ChevronRight size={12} />
-                  </button>
-                </div>
-              </div>
-              </>
             );
           })()}
 
