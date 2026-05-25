@@ -14,7 +14,11 @@ import AsaasBadge from '../components/AsaasBadge';
 // 1.1 → 1.2 (2026-05-21): adiciona cláusula 6 sobre prazo de liberação
 // de repasses (janela D+7 + antecipação manual sob risco). Cláusulas
 // 6-11 da v1.1 foram renumeradas pra 7-12.
-export const TERMO_PRODUTOR_VERSION = '1.2';
+// 1.2 → 1.3 (2026-05-25): reescreve 6.3 (antecipação não é "sob risco":
+// CoreoHub absorve gap via mecanismo BaaS, padrão Stripe/MP); adiciona
+// cláusula 7-bis (refunds devem passar pela Plataforma — refund out-of-band
+// não dispensa comissão CoreoHub e pode causar inconsistência).
+export const TERMO_PRODUTOR_VERSION = '1.3';
 
 const TermoProdutor: React.FC = () => {
   const navigate = useNavigate();
@@ -204,20 +208,14 @@ const TermoProdutor: React.FC = () => {
             </p>
             <p className="mb-2">
               6.3. <strong>Antecipação manual ("Transferir agora"):</strong> a Plataforma disponibiliza no painel do Produtor a opção
-              de antecipar a transferência do saldo retido a qualquer momento, antes do encerramento da janela de 7 dias.
-              Ao optar pela antecipação, o Produtor declara estar ciente e concorda integralmente que:
+              de antecipar a transferência do saldo retido a qualquer momento, antes do encerramento da janela de 7 dias, sem custo adicional.
+              Caso ocorra reembolso, estorno, MED ou chargeback nas vendas correspondentes após a antecipação e o saldo da subconta Asaas
+              for insuficiente para cobrir o valor devolvido, a <strong>CoreoHub absorve temporariamente</strong> o gap como garantidora
+              da subconta BaaS e recupera o valor automaticamente nos próximos pagamentos recebidos do Produtor, conforme mecanismo padrão
+              de subcontas BaaS Asaas. O Produtor <strong>não precisa enviar PIX manual</strong> para a Plataforma neste cenário.
+              Aplica-se subsidiariamente a autorização expressa de débito automático prevista na cláusula 7 para casos excepcionais
+              em que o Produtor deixe de operar antes da recuperação completa do gap.
             </p>
-            <ul className="list-disc list-inside space-y-1.5 ml-2 mb-2">
-              <li>
-                Caso ocorra <strong>reembolso, estorno, MED ou chargeback</strong> nas vendas correspondentes dentro dos 7 dias
-                seguintes à confirmação do pagamento, e o saldo da subconta Asaas for <strong>insuficiente</strong> para cobrir o valor
-                devolvido, o Produtor obriga-se a <strong>repor o valor</strong> via PIX para a Plataforma no prazo de 7 (sete) dias
-                corridos contados da notificação.
-              </li>
-              <li>
-                Aplica-se subsidiariamente à antecipação a autorização expressa de débito automático prevista na cláusula 7.
-              </li>
-            </ul>
             <p>
               6.4. A janela de 7 dias e o mecanismo de antecipação podem ser ajustados pela Plataforma mediante prévio aviso ao
               Produtor, em especial para acomodar exigências regulatórias, mudanças no contrato com o Asaas ou ajustes
@@ -245,10 +243,18 @@ const TermoProdutor: React.FC = () => {
               débito automático do Asaas para compensar valores em aberto, incluindo, mas não se limitando a, ressarcimento de
               chargebacks, estornos, multas regulatórias e ajustes operacionais relacionados às suas vendas.
             </p>
-            <p>
+            <p className="mb-2">
               Caso o Produtor permaneça inadimplente, a CoreoHub poderá: (i) suspender a criação de novos eventos ou novas
               vendas até regularização; (ii) reter valores futuros creditados em qualquer subconta de titularidade do Produtor
               vinculada à CoreoHub; (iii) acionar as medidas legais cabíveis para cobrança.
+            </p>
+            <p>
+              <strong>Reembolsos devem ser processados exclusivamente pelo painel da Plataforma.</strong> O Produtor compromete-se a
+              não realizar reembolsos diretos ao bailarino (via PIX pessoal, transferência bancária ou qualquer canal externo)
+              sem registro correspondente na CoreoHub. Reembolsos out-of-band <strong>não dispensam a comissão</strong> devida à
+              Plataforma, podem gerar inconsistência entre saldo Asaas e carteira CoreoHub, e dificultam a defesa em eventual
+              chargeback. Casos excepcionais (ex: bailarino sem acesso ao método original) devem ser comunicados previamente à
+              CoreoHub via canal de suporte.
             </p>
           </section>
 

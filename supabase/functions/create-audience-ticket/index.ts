@@ -396,6 +396,11 @@ Deno.serve(async (req) => {
         dueDate:           dueDateStr,
         description,
         externalReference: externalRef,
+        // Redireciona comprador de volta pra CoreoHub após pagar.
+        callback: {
+          successUrl:   `${ALLOWED_ORIGIN}/pagamento-sucesso?ref=${encodeURIComponent(externalRef)}`,
+          autoRedirect: true,
+        },
         split: [
           {
             walletId:   producer.asaas_wallet_id,

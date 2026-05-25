@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
 
     const { data: coreo } = await supabase
       .from('registrations')
-      .select('id, payment_id, event_id, status_pagamento, refunded_at')
+      .select('id, payment_id, event_id, status_pagamento, refunded_at, nome_coreografia, user_id, valor_pago')
       .eq('id', registration_id)
       .single()
 
@@ -36,10 +36,10 @@ Deno.serve(async (req) => {
     if (!coreo.payment_id) throw new Error('Inscrição sem payment_id Asaas — não foi paga via Asaas.')
     if (coreo.status_pagamento !== 'APROVADO') throw new Error('Apenas pagamentos aprovados podem ser reembolsados.')
 
-    // Confere autorização
+    // Confere autorização + busca dados do evento pra email
     const { data: event } = await supabase
       .from('events')
-      .select('created_by')
+      .select('created_by, nome')
       .eq('id', coreo.event_id)
       .single()
 
@@ -79,22 +79,91 @@ Deno.serve(async (req) => {
     const refundedAmount = Number(refundData.value ?? amount ?? 0)
     const now = new Date().toISOString()
 
-    // Atualiza coreografia
+    // Atualiza coreografia. status='CANCELADA' alinha o ciclo de vida com
+    // status_pagamento='ESTORNADO' — antes ficava em AGUARDANDO_PAGAMENTO
+    // dando impressão de incoerência (status_pagamento ESTORNADO mas status
+    // "aguardando pagamento" no detalhe). 'CANCELADA' já é o token usado em
+    // pages/Dashboard.tsx + pages/CentralDeMidia.tsx pra renderizar.
     await supabase
       .from('registrations')
       .update({
-        refunded_at:     now,
-        refund_amount:   refundedAmount,
-        refund_reason:   reason ?? null,
+        status:           'CANCELADA',
         status_pagamento: 'ESTORNADO',
+        refunded_at:      now,
+        refund_amount:    refundedAmount,
+        refund_reason:    reason ?? null,
       })
       .eq('id', registration_id)
 
     // Atualiza tabela de comissões (espelho)
-    await supabase
+    const { data: commissions } = await supabase
       .from('platform_commissions')
       .update({ refunded_at: now, refund_amount: refundedAmount })
       .eq('asaas_payment_id', coreo.payment_id)
+      .select('commission_amount')
+
+    const commissionRefunded = commissions?.reduce((sum, c) => sum + Number(c.commission_amount ?? 0), 0) ?? 0
+
+    // ─── Emails de confirmação (best-effort) ──────────────────────────────
+    // Busca dados pra montar payloads. Falha aqui NÃO reverte o refund —
+    // dinheiro já saiu do Asaas e voltou pro inscrito.
+    try {
+      const [{ data: inscrito }, { data: produtor }] = await Promise.all([
+        coreo.user_id
+          ? supabase.from('profiles').select('email, full_name').eq('id', coreo.user_id).maybeSingle()
+          : Promise.resolve({ data: null }),
+        event?.created_by
+          ? supabase.from('profiles').select('email, full_name').eq('id', event.created_by).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ])
+
+      const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
+      const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+      const FRONTEND_URL = Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'
+
+      const fireEmail = (type: string, payload: Record<string, unknown>) =>
+        fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${SERVICE_ROLE}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ type, payload }),
+        }).catch(err => console.warn(`[refund-asaas-payment] email ${type} falhou:`, err?.message ?? err))
+
+      // Inscrito (somente se tem user_id + email)
+      if (inscrito?.email) {
+        fireEmail('refund_confirmed_registrant', {
+          inscritoNome:   inscrito.full_name,
+          inscritoEmail:  inscrito.email,
+          coreoNome:      (coreo as any).nome_coreografia,
+          eventoNome:     event?.nome,
+          refundAmount:   refundedAmount,
+          paidAmount:     Number((coreo as any).valor_pago ?? 0),
+          refundReason:   reason ?? null,
+          produtorEmail:  produtor?.email,
+          appUrl:         FRONTEND_URL,
+        })
+      }
+
+      // Produtor (sempre, se temos email)
+      if (produtor?.email) {
+        fireEmail('refund_confirmed_producer', {
+          produtorNome:       produtor.full_name,
+          produtorEmail:      produtor.email,
+          inscritoNome:       inscrito?.full_name,
+          inscritoEmail:      inscrito?.email,
+          coreoNome:          (coreo as any).nome_coreografia,
+          eventoNome:         event?.nome,
+          refundAmount:       refundedAmount,
+          commissionRefunded: commissionRefunded,
+          refundReason:       reason ?? null,
+          appUrl:             FRONTEND_URL,
+        })
+      }
+    } catch (emailErr: any) {
+      console.warn('[refund-asaas-payment] emails skip:', emailErr?.message ?? emailErr)
+    }
 
     return new Response(
       JSON.stringify({

@@ -492,6 +492,19 @@ Priorização cronológica detalhada em `memory/MEMORY.md` + cada item tem sua m
 
 **⚠️ Sessão A SHIPADA + DESABILITADA mesma noite 2026-05-22** — 6 commits (b6e4444→0c9af1a) + reverter `4602573`. Bug grosso: helper lia bailarinos_detalhes (id+nome+instagram) procurando CPF/data_nascimento que ficam em `elenco`. Feature "dados pendentes" desligada em prod. Detalhes em [[sessao-a-grazieli-shipado]].
 
+### ✅ Bundle fluxo pagamento + refund polido SHIPADO 2026-05-25
+
+6 itens descobertos durante smoke D+7 cenário 3:
+
+1. **Callback Asaas (`successUrl` + `autoRedirect`)** — 5 edge functions de create-payment passam callback pra `/pagamento-sucesso`. Inscrito não fica preso na tela da fatura Asaas após pagar.
+2. **refund-asaas-payment**: atualiza `status='CANCELADA'` junto com `status_pagamento='ESTORNADO'` (antes `status` ficava em AGUARDANDO_PAGAMENTO gerando incoerência) + dispara 2 emails best-effort.
+3. **Templates `refund_confirmed_registrant` + `refund_confirmed_producer`** em send-email — inscrito recebe valor estornado + prazo, produtor recebe valor + comissão estornada + nota sobre mecanismo BaaS (master absorve gap, sem PIX manual).
+4. **Guard refund duplicado** em `Registrations.tsx:handleOpenRefund` — alert se `status_pagamento === 'ESTORNADO'` ou `refunded_at` presente. Resolve bug `40000000000000` no input quando state local stale renderizou botão indevido.
+5. **Copy "Antecipação sob risco" reescrita** em ProducerBalanceCard — alinhada com Stripe/MP (sem warning amber, foco em "imediata + sem taxa"). Remove menção falsa de "precisará repor via PIX" (Asaas BaaS master absorve automaticamente).
+6. **Termo do Produtor v1.2 → v1.3** — 6.3 reescrito (antecipação não é "sob risco", master absorve gap) + 7-bis novo (refunds obrigatoriamente pelo painel, refund out-of-band não dispensa comissão).
+
+7 edge functions redeployadas. Build OK. Smoke Playwright 6/6 OK. Detalhes em [[bundle-fluxo-pagamento-refund-polido]].
+
 ### ✅ Fix CPF (coluna canônica + modal contextual) SHIPADO 2026-05-25
 
 Commit `8357e1d`. Resolve bug histórico desde 2026-04-24 (~1 mês em prod).

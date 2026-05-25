@@ -254,6 +254,14 @@ const Registrations = () => {
   };
 
   const handleOpenRefund = (reg: any) => {
+    // Guard: rejeita silently se já estornada. O botão FOI mostrado mesmo
+    // em ESTORNADO em ~1 caso reportado (provavelmente state local stale
+    // entre webhook e refresh). Sem o guard, modal abria com valor zumbi
+    // e produtor podia tentar refund duplicado contra Asaas.
+    if (reg?.status_pagamento === 'ESTORNADO' || reg?.refunded_at) {
+      alert('Esta inscrição já foi reembolsada.');
+      return;
+    }
     setRefundModal(reg);
     // Pré-preenche com valor pago (padrão Asaas/Stripe). Produtor edita
     // pra reembolso parcial. Tenta valor_total → valor_pago (legacy) → vazio.
@@ -274,7 +282,7 @@ const Registrations = () => {
         reason:          refundReason || undefined,
       });
       setRegistrations(prev => prev.map(r => r.id === refundModal.id
-        ? { ...r, status_pagamento: 'ESTORNADO', refunded_at: new Date().toISOString(), refund_amount: result.refund_amount }
+        ? { ...r, status: 'CANCELADA', status_pagamento: 'ESTORNADO', refunded_at: new Date().toISOString(), refund_amount: result.refund_amount }
         : r));
       setRefundModal(null);
     } catch (e: any) {

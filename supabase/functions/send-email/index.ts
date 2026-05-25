@@ -1129,6 +1129,111 @@ function buildLeadReengagement(p: LeadReengagementPayload) {
   }
 }
 
+// ─── Refund (reembolso) ────────────────────────────────────────────────────
+
+interface RefundRegistrantPayload {
+  inscritoNome?:    string
+  inscritoEmail:    string
+  coreoNome?:       string
+  eventoNome?:      string
+  /** Valor estornado (R$). Pode ser parcial. */
+  refundAmount:     number
+  /** Valor originalmente pago (R$) — mostra como contexto se diferir de refundAmount. */
+  paidAmount?:      number
+  /** Motivo do reembolso (opcional, mostrado se preenchido pelo produtor). */
+  refundReason?:    string | null
+  produtorEmail?:   string | null
+  appUrl?:          string
+}
+
+function buildRefundRegistrant(p: RefundRegistrantPayload) {
+  const isPartial = typeof p.paidAmount === 'number' && Math.abs(p.paidAmount - p.refundAmount) > 0.01
+  const reasonBlock = p.refundReason
+    ? `<tr><td style="padding:8px 0;border-bottom:1px solid #f1f5f9;">
+         <p style="margin:0;font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#94a3b8;font-weight:700;">Motivo</p>
+         <p style="margin:4px 0 0;font-size:14px;color:#0b0b0f;font-weight:600;">${escape(p.refundReason)}</p>
+       </td></tr>`
+    : ''
+
+  const linhas = [
+    p.eventoNome ? infoRow('Evento', escape(p.eventoNome)) : '',
+    p.coreoNome  ? infoRow('Coreografia', escape(p.coreoNome)) : '',
+    infoRow('Valor estornado', `<strong style="color:#16a34a;">${escape(money(p.refundAmount))}</strong>`),
+    isPartial && typeof p.paidAmount === 'number' ? infoRow('Valor pago original', escape(money(p.paidAmount))) : '',
+    reasonBlock,
+  ].filter(Boolean).join('')
+
+  const contentHtml = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>
+    <div style="margin-top:24px;padding:16px;border-radius:12px;background:#f0fdf4;border:1px solid #bbf7d0;">
+      <p style="margin:0;font-size:13px;line-height:1.55;color:#166534;">
+        O valor será creditado no método de pagamento original (PIX, cartão ou boleto). Prazo médio: até 2 dias úteis pra PIX, até 1 fatura pra cartão.
+      </p>
+    </div>
+    <p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      Se você não solicitou este reembolso ou tem dúvidas, responda esta mensagem.
+    </p>`
+
+  return {
+    subject: `Reembolso processado — ${money(p.refundAmount)}${p.coreoNome ? ` (${p.coreoNome})` : ''}`,
+    html: baseLayout({
+      preheader: `Reembolso de ${money(p.refundAmount)} processado.`,
+      title: 'Reembolso processado',
+      intro: `Olá ${escape(p.inscritoNome ?? 'bailarino(a)')}, seu reembolso foi processado pelo produtor e o valor está a caminho.`,
+      contentHtml,
+    }),
+  }
+}
+
+interface RefundProducerPayload {
+  produtorNome?:      string
+  produtorEmail:      string
+  inscritoNome?:      string
+  inscritoEmail?:     string
+  coreoNome?:         string
+  eventoNome?:        string
+  /** Valor estornado pro inscrito (R$). */
+  refundAmount:       number
+  /** Comissão CoreoHub estornada (R$). Aparece em destaque pra produtor entender impacto. */
+  commissionRefunded?: number
+  refundReason?:      string | null
+  appUrl?:            string
+}
+
+function buildRefundProducer(p: RefundProducerPayload) {
+  const linhas = [
+    p.eventoNome ? infoRow('Evento', escape(p.eventoNome)) : '',
+    p.coreoNome  ? infoRow('Coreografia', escape(p.coreoNome)) : '',
+    p.inscritoNome ? infoRow('Inscrito', escape(p.inscritoNome)) : '',
+    p.inscritoEmail ? infoRow('Email do inscrito', escape(p.inscritoEmail)) : '',
+    infoRow('Valor estornado', `<strong>${escape(money(p.refundAmount))}</strong>`),
+    typeof p.commissionRefunded === 'number'
+      ? infoRow('Comissão estornada', `<span style="color:#dc2626;">−${escape(money(p.commissionRefunded))}</span>`)
+      : '',
+    p.refundReason ? infoRow('Motivo', escape(p.refundReason)) : '',
+  ].filter(Boolean).join('')
+
+  const contentHtml = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>
+    <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      O valor sai da sua subconta Asaas automaticamente. Se a subconta ficar negativa,
+      a master CoreoHub absorve temporariamente e recupera nos próximos pagamentos recebidos —
+      você não precisa enviar PIX manual.
+    </p>`
+
+  return {
+    subject: `Reembolso processado${p.coreoNome ? ` — ${p.coreoNome}` : ''}`,
+    html: baseLayout({
+      preheader: `Reembolso de ${money(p.refundAmount)} processado pelo painel.`,
+      title: 'Reembolso processado',
+      intro: `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, o reembolso solicitado foi processado pelo Asaas.`,
+      contentHtml,
+      ctaLabel: 'Ver no painel',
+      ctaUrl: `${p.appUrl ?? 'https://app.coreohub.com'}/qg-organizador`,
+    }),
+  }
+}
+
 function buildPayoutReleased(p: PayoutReleasedPayload) {
   const pixLine = p.pixKeyPartial
     ? `<p style="margin:6px 0 0;font-size:13px;line-height:1.55;color:#475569;">
@@ -1188,6 +1293,8 @@ interface SendEmailRequest {
     | 'video_rejected'
     | 'payout_released'
     | 'lead_reengagement'
+    | 'refund_confirmed_registrant'
+    | 'refund_confirmed_producer'
   payload: Record<string, unknown>
 }
 
@@ -1457,6 +1564,28 @@ Deno.serve(async (req) => {
         html = tpl.html
         festivalName = p.eventoNome
         replyTo = p.produtorEmail ?? undefined
+        break
+      }
+      case 'refund_confirmed_registrant': {
+        const p = payload as unknown as RefundRegistrantPayload
+        if (!p.inscritoEmail) throw new Error('inscritoEmail é obrigatório')
+        if (typeof p.refundAmount !== 'number') throw new Error('refundAmount é obrigatório')
+        const tpl = buildRefundRegistrant(p)
+        to = p.inscritoEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        replyTo = p.produtorEmail ?? undefined
+        break
+      }
+      case 'refund_confirmed_producer': {
+        const p = payload as unknown as RefundProducerPayload
+        if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
+        if (typeof p.refundAmount !== 'number') throw new Error('refundAmount é obrigatório')
+        const tpl = buildRefundProducer(p)
+        to = p.produtorEmail
+        subject = tpl.subject
+        html = tpl.html
         break
       }
       default:

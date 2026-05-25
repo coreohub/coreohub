@@ -307,8 +307,8 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
         <div className="mt-4 flex items-start gap-2 text-[10px] text-slate-500">
           <Info size={11} className="shrink-0 mt-0.5" />
           <span>
-            Você pode antecipar quando quiser. Se houver reembolso nos próximos 7 dias,
-            precisa repor o valor via PIX.
+            Saldo retido é repassado automático após 7 dias. Você pode antecipar
+            quando quiser — sem taxa.
           </span>
         </div>
 
@@ -335,11 +335,12 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
                 )}
               </div>
               {hasDivergence && isDebt && (
-                <div className="flex items-start gap-2 p-2.5 rounded-xl bg-rose-500/5 border border-rose-500/20 text-[10px] text-rose-700 dark:text-rose-300 leading-relaxed">
+                <div className="flex items-start gap-2 p-2.5 rounded-xl bg-amber-500/5 border border-amber-500/20 text-[10px] text-amber-700 dark:text-amber-300 leading-relaxed">
                   <AlertTriangle size={11} className="shrink-0 mt-0.5" />
                   <span>
-                    Saldo no Asaas menor que o esperado. Pode ser dívida pendente de reembolso
-                    ou taxa não rastreada. Verifique a fatura na sua subconta Asaas.
+                    Saldo Asaas menor que o esperado — geralmente é débito recente
+                    de reembolso ainda sendo recuperado por pagamentos futuros.
+                    Sem ação necessária da sua parte.
                   </span>
                 </div>
               )}
@@ -395,13 +396,14 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
               </div>
 
               {retido > 0 && (
-                <div className="rounded-2xl border-2 border-amber-500/40 bg-amber-500/10 p-4 flex items-start gap-3">
-                  <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                  <div className="text-[11px] text-amber-800 dark:text-amber-200 leading-relaxed">
-                    <strong className="block mb-1">Antecipação sob risco.</strong>
-                    Se algum bailarino solicitar reembolso dentro dos próximos 7 dias e
-                    sua subconta não tiver saldo pra cobrir, <strong>você precisará repor o valor</strong> via PIX.
-                    Recomendado: aguardar a liberação automática.
+                <div className="rounded-2xl border border-sky-500/30 bg-sky-500/5 p-4 flex items-start gap-3">
+                  <Info size={16} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+                  <div className="text-[11px] text-sky-800 dark:text-sky-200 leading-relaxed">
+                    <strong className="block mb-1">Antecipação imediata.</strong>
+                    O saldo retido seria liberado automaticamente em até 7 dias —
+                    antecipando agora você recebe na hora. Reembolsos nos próximos
+                    7 dias são absorvidos pela CoreoHub e recuperados nos
+                    próximos pagamentos recebidos (sem PIX manual).
                   </div>
                 </div>
               )}

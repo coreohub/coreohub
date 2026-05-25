@@ -240,6 +240,11 @@ Deno.serve(async (req) => {
         dueDate:           dueDateStr,
         description:       `Taxa de seletiva — ${coreo.nome_coreografia ?? coreo.nome ?? 'Coreografia'} | ${event.name}`,
         externalReference: `VS:${registration_id}`,
+        // Redireciona inscrito de volta pra CoreoHub após pagar.
+        callback: {
+          successUrl:   `${ALLOWED_ORIGIN}/pagamento-sucesso?ref=${encodeURIComponent(`VS:${registration_id}`)}`,
+          autoRedirect: true,
+        },
         split: [{ walletId: producer.asaas_wallet_id, fixedValue: producerAmount }],
       }),
     })

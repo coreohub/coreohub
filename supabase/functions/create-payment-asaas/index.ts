@@ -263,6 +263,13 @@ Deno.serve(async (req) => {
         dueDate:           dueDateStr,
         description:       `Inscrição - ${coreo.nome ?? 'Coreografia'} | ${event.name}`,
         externalReference: registration_id,
+        // Redireciona inscrito de volta pra CoreoHub após pagar (Asaas docs:
+        // successUrl precisa estar no mesmo domínio cadastrado na conta).
+        // autoRedirect=true (default): redirect automático após confirmação.
+        callback: {
+          successUrl:   `${ALLOWED_ORIGIN}/pagamento-sucesso?ref=${encodeURIComponent(registration_id)}`,
+          autoRedirect: true,
+        },
         split: [
           {
             walletId:   producer.asaas_wallet_id,
