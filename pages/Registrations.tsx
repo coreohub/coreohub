@@ -11,7 +11,7 @@ import { supabase } from '../services/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { refundRegistration } from '../services/refundService';
 import EventPickerSheet from '../components/EventPickerSheet';
-import { maskCpfCnpj, unmaskCpfCnpj, validateCpf, maskData, parseDataISO } from '../utils/masks';
+import { maskCpfCnpj, unmaskCpfCnpj, validateCpf, maskData, parseDataISO, maskMoeda, parseMoeda } from '../utils/masks';
 import BailarinosEditor from '../components/BailarinosEditor';
 import {
   hasIncompleteBailarinos as hasIncompleteBailarinosUtil,
@@ -265,8 +265,12 @@ const Registrations = () => {
     setRefundModal(reg);
     // Pré-preenche com valor pago (padrão Asaas/Stripe). Produtor edita
     // pra reembolso parcial. Tenta valor_total → valor_pago (legacy) → vazio.
-    const valorPago = reg?.valor_total ?? reg?.valor_pago ?? null;
-    setRefundAmount(valorPago != null && Number(valorPago) > 0 ? String(valorPago) : '');
+    // Usa maskMoeda (centavos progressivos, formato "R$ 40,00") em vez de
+    // type=number que sofre com spinner, scroll, autofill — bug reportado
+    // 2026-05-25 onde modal abria com "3600548411111" por acumulação.
+    const valorPago = Number(reg?.valor_total ?? reg?.valor_pago ?? 0);
+    const cents = Math.round(valorPago * 100);
+    setRefundAmount(cents > 0 ? maskMoeda(String(cents)) : '');
     setRefundReason('');
     setRefundError(null);
   };
@@ -276,9 +280,10 @@ const Registrations = () => {
     setRefunding(true);
     setRefundError(null);
     try {
+      const parsedAmount = refundAmount ? parseMoeda(refundAmount) : 0;
       const result = await refundRegistration({
         registration_id: refundModal.id,
-        amount:          refundAmount ? Number(refundAmount) : undefined,
+        amount:          parsedAmount > 0 ? parsedAmount : undefined,
         reason:          refundReason || undefined,
       });
       setRegistrations(prev => prev.map(r => r.id === refundModal.id
@@ -1568,13 +1573,13 @@ const Registrations = () => {
                 <div>
                   <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Valor a reembolsar</label>
                   <input
-                    type="number"
-                    min={0}
-                    step={0.01}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
                     value={refundAmount}
-                    onChange={e => setRefundAmount(e.target.value)}
-                    placeholder="0,00"
-                    className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500/50"
+                    onChange={e => setRefundAmount(maskMoeda(e.target.value))}
+                    placeholder="R$ 0,00"
+                    className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500/50 tabular-nums"
                   />
                   {(refundModal?.valor_total ?? refundModal?.valor_pago) != null && (
                     <p className="text-[10px] text-slate-500 mt-1.5">
