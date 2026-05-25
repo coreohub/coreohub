@@ -92,7 +92,10 @@ export default defineConfig(({ mode }) => {
             // deploys (deps mudam menos que app code).
             manualChunks: {
               'vendor-react':    ['react', 'react-dom', 'react-router-dom'],
-              'vendor-motion':   ['framer-motion'],
+              // 'motion' (novo nome) + 'framer-motion' (legacy alias) co-existem
+              // como pacotes separados — 26+ páginas usam 'motion/react' enquanto
+              // outros componentes usam 'framer-motion'. Splitar ambos.
+              'vendor-motion':   ['framer-motion', 'motion'],
               'vendor-supabase': ['@supabase/supabase-js'],
               'vendor-icons':    ['lucide-react'],
               'vendor-dnd':      ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
