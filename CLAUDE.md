@@ -549,9 +549,8 @@ Plano completo em [[plano-refactor-elenco-dados-pendentes]]:
 
 ### 🪶 Cosméticos / pequenos achados de auditoria 2026-05-22
 - **NotificationBell sem paginação** — limit 50 hard. Quem receber 51+ perde as mais antigas. v1 acceptable. Adicionar "ver mais" quando necessário.
-- **Migration 20260608 pendente de aplicar** — 3 índices em `notifications.metadata` (2 btree expression + 1 GIN default). Sem ela, o bulk fetch de `send-trilha-reminders` shipado em 2026-05-23 ainda faz table scan no `metadata->>'reminder_type'`. Cole no SQL Editor quando puder. Detalhes em [[bundle-polimentos-solo-2026-05-23]].
 
-Resolvidos em 2026-05-23 (`f7d605c`+`81d2d0f`): NotificationBell `formatRelative` re-renderiza via `setInterval` 60s; `send-trilha-reminders` agora bulk fetch (2 queries por evento); `notifications.metadata` migration criada (pendente de aplicar — fora isso, código está pronto).
+Resolvidos em 2026-05-23 (`f7d605c`+`81d2d0f`+`87cc593`) + 2026-05-24 (aplicação): NotificationBell `formatRelative` re-renderiza via `setInterval` 60s; `send-trilha-reminders` agora bulk fetch (2 queries por evento); `notifications.metadata` indexes aplicadas em prod 2026-05-24 (2 btree expression + 1 GIN); contraste cyan no card Funil de Leads corrigido pro light mode (`text-cyan-700 dark:text-[#1de7f2]`).
 
 ### ⚠️ Pendência operacional
 - ~~**🔴 Bug crítico em prod: signup `/auth/v1/signup` retorna 500**~~ ✅ **FIXADO 2026-05-24**. Causa raiz dupla — SMTP nativo Supabase frágil + domínio `coreohub.com` no Resend com SPF subdomain `send` faltando (removido por engano em 2026-05-18 achando que era AWS SES legacy, era Resend). Fix: edge function `auth-email-hook` (Send Email Hook via Resend) deployada + 2 records DNS recriados no Cloudflare. Detalhes em [[bug-signup-500-fixado-2026-05-24]]. **Benefício colateral**: todos os emails transacionais (`send-email`) voltaram a funcionar — estavam quebrados desde 05-18 sem ninguém notar.
