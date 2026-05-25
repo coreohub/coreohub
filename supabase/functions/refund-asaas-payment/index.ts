@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     // Confere autorização + busca dados do evento pra email
     const { data: event } = await supabase
       .from('events')
-      .select('created_by, nome')
+      .select('created_by, name')
       .eq('id', coreo.event_id)
       .single()
 
@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
           inscritoNome:   inscrito.full_name,
           inscritoEmail:  inscrito.email,
           coreoNome:      (coreo as any).nome_coreografia,
-          eventoNome:     event?.nome,
+          eventoNome:     event?.name,
           refundAmount:   refundedAmount,
           paidAmount:     Number((coreo as any).valor_pago ?? 0),
           refundReason:   reason ?? null,
@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
           inscritoNome:       inscrito?.full_name,
           inscritoEmail:      inscrito?.email,
           coreoNome:          (coreo as any).nome_coreografia,
-          eventoNome:         event?.nome,
+          eventoNome:         event?.name,
           refundAmount:       refundedAmount,
           commissionRefunded: commissionRefunded,
           refundReason:       reason ?? null,
