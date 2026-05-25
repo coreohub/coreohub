@@ -6,7 +6,7 @@ import {
   Music2, Plus, Trash2, AlertCircle, Loader2, CheckCircle,
   Clapperboard, Calendar, MapPin, Clock, CreditCard, QrCode,
   ChevronRight, AlertTriangle, ShoppingCart, X, Video,
-  Users, Pencil, Save, RefreshCw, Lock as LockIcon,
+  Users, Pencil, Save, RefreshCw, Lock as LockIcon, Tag,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import BailarinosEditor, { type BailarinoFormValue } from '../components/BailarinosEditor';
@@ -1317,6 +1317,93 @@ const MinhasCoreografias = () => {
             const isApplying = applyingAggregateCoupon[grupo.eventId] === true;
             const couponErr  = aggregateCouponErrors[grupo.eventId] ?? null;
             return (
+              <>
+              {/* CUPOM BANNER — fora do card "PAGAR TODAS" pra deixar claro
+                  que o desconto aplica em qualquer pagamento abaixo (Pagar
+                  tudo OU Pagar só esta). Padrão Stripe/Hotmart 2026-05. */}
+              <div className="px-5 py-3 bg-gradient-to-r from-[#ff0068]/[0.04] to-[#ff0068]/[0.02] dark:from-[#ff0068]/10 dark:to-[#ff0068]/5 border-b border-slate-200 dark:border-white/5 space-y-2">
+                {(applied || faturaTemCupom) ? (
+                  <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl">
+                    <CheckCircle size={16} className="text-emerald-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-mono font-black text-sm text-emerald-700 dark:text-emerald-400">
+                        {applied?.code ?? faturaPendente?.coupon_code ?? 'Cupom'}
+                      </p>
+                      <p className="text-[10px] text-emerald-600 dark:text-emerald-500">
+                        Desconto de {fmtMoney(applied?.discount ?? faturaPendente?.discount_total ?? 0)} — aplica a qualquer pagamento abaixo
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleUnifiedRemoveCoupon(grupo)}
+                      disabled={cancellingPayment === faturaPendente?.id}
+                      className="p-1 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 disabled:opacity-50 rounded-lg"
+                      aria-label="Remover cupom"
+                      title="Remover cupom"
+                    >
+                      {cancellingPayment === faturaPendente?.id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <X size={14} />
+                      )}
+                    </button>
+                  </div>
+                ) : (
+                  showAggregateCoupon[grupo.eventId] ? (
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        Cupom · aplica a qualquer pagamento
+                      </p>
+                      <div className="flex gap-2">
+                        <label htmlFor={`aggregate-coupon-${grupo.eventId}`} className="sr-only">
+                          Código do cupom de inscrição
+                        </label>
+                        <input
+                          id={`aggregate-coupon-${grupo.eventId}`}
+                          type="text"
+                          value={aggregateCouponInputs[grupo.eventId] ?? ''}
+                          onChange={e => {
+                            setAggregateCouponInputs(p => ({ ...p, [grupo.eventId]: e.target.value.toUpperCase() }));
+                            if (couponErr) setAggregateCouponErrors(p => ({ ...p, [grupo.eventId]: null }));
+                          }}
+                          onKeyDown={e => { if (e.key === 'Enter') handleApplyAggregateCoupon(grupo.eventId, subtotal, grupo); }}
+                          disabled={isApplying}
+                          placeholder="Código do cupom"
+                          className="flex-1 px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-xs font-mono text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40 focus:border-[#ff0068]/50 uppercase disabled:opacity-50"
+                        />
+                        <button
+                          onClick={() => handleApplyAggregateCoupon(grupo.eventId, subtotal, grupo)}
+                          disabled={isApplying || !(aggregateCouponInputs[grupo.eventId]?.trim())}
+                          className="px-4 py-2 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-50 text-white rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shrink-0"
+                        >
+                          {isApplying ? <Loader2 size={12} className="animate-spin" /> : 'Aplicar'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowAggregateCoupon(p => ({ ...p, [grupo.eventId]: false }));
+                            setAggregateCouponInputs(p => ({ ...p, [grupo.eventId]: '' }));
+                            setAggregateCouponErrors(p => ({ ...p, [grupo.eventId]: null }));
+                          }}
+                          className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 px-2"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                      {couponErr && (
+                        <p className="text-[10px] text-rose-500 flex items-center gap-1.5">
+                          <AlertCircle size={11} /> {couponErr}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowAggregateCoupon(p => ({ ...p, [grupo.eventId]: true }))}
+                      className="text-[10px] font-black uppercase tracking-widest text-[#ff0068] hover:underline flex items-center gap-1.5"
+                    >
+                      <Tag size={12} /> Tem cupom? — aplica a qualquer pagamento abaixo
+                    </button>
+                  )
+                )}
+              </div>
               <div className="px-5 py-4 bg-slate-50 dark:bg-white/[0.02] border-b border-slate-200 dark:border-white/5 space-y-3">
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div>
@@ -1360,92 +1447,8 @@ const MinhasCoreografias = () => {
                     <ChevronRight size={12} />
                   </button>
                 </div>
-                {/* Cupom: 1 padrão único de UI pros 3 estados.
-                    - Cupom aplicado (client-side OU em fatura PENDENTE) → linha
-                      verde com X "Remover cupom". User não vê diferença entre
-                      "remover do state" e "cancelar fatura" — o handler
-                      decide silenciosamente.
-                    - Input aberto (sem aplicado) → input + botão "Aplicar" + erro inline.
-                    - Idle → link "Tem cupom?". */}
-                {(applied || faturaTemCupom) ? (
-                  <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl">
-                    <CheckCircle size={16} className="text-emerald-500 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-mono font-black text-sm text-emerald-700 dark:text-emerald-400">
-                        {applied?.code ?? faturaPendente?.coupon_code ?? 'Cupom'}
-                      </p>
-                      <p className="text-[10px] text-emerald-600 dark:text-emerald-500">
-                        Desconto de {fmtMoney(applied?.discount ?? faturaPendente?.discount_total ?? 0)} aplicado
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleUnifiedRemoveCoupon(grupo)}
-                      disabled={cancellingPayment === faturaPendente?.id}
-                      className="p-1 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 disabled:opacity-50 rounded-lg"
-                      aria-label="Remover cupom"
-                      title="Remover cupom"
-                    >
-                      {cancellingPayment === faturaPendente?.id ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <X size={14} />
-                      )}
-                    </button>
-                  </div>
-                ) : (
-                  showAggregateCoupon[grupo.eventId] ? (
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <label htmlFor={`aggregate-coupon-${grupo.eventId}`} className="sr-only">
-                          Código do cupom de inscrição
-                        </label>
-                        <input
-                          id={`aggregate-coupon-${grupo.eventId}`}
-                          type="text"
-                          value={aggregateCouponInputs[grupo.eventId] ?? ''}
-                          onChange={e => {
-                            setAggregateCouponInputs(p => ({ ...p, [grupo.eventId]: e.target.value.toUpperCase() }));
-                            if (couponErr) setAggregateCouponErrors(p => ({ ...p, [grupo.eventId]: null }));
-                          }}
-                          onKeyDown={e => { if (e.key === 'Enter') handleApplyAggregateCoupon(grupo.eventId, subtotal, grupo); }}
-                          disabled={isApplying}
-                          placeholder="Código do cupom"
-                          className="flex-1 px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-xs font-mono text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40 focus:border-[#ff0068]/50 uppercase disabled:opacity-50"
-                        />
-                        <button
-                          onClick={() => handleApplyAggregateCoupon(grupo.eventId, subtotal, grupo)}
-                          disabled={isApplying || !(aggregateCouponInputs[grupo.eventId]?.trim())}
-                          className="px-4 py-2 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-50 text-white rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shrink-0"
-                        >
-                          {isApplying ? <Loader2 size={12} className="animate-spin" /> : 'Aplicar'}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowAggregateCoupon(p => ({ ...p, [grupo.eventId]: false }));
-                            setAggregateCouponInputs(p => ({ ...p, [grupo.eventId]: '' }));
-                            setAggregateCouponErrors(p => ({ ...p, [grupo.eventId]: null }));
-                          }}
-                          className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 px-2"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                      {couponErr && (
-                        <p className="text-[10px] text-rose-500 flex items-center gap-1.5">
-                          <AlertCircle size={11} /> {couponErr}
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setShowAggregateCoupon(p => ({ ...p, [grupo.eventId]: true }))}
-                      className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] hover:underline"
-                    >
-                      Tem cupom?
-                    </button>
-                  )
-                )}
               </div>
+              </>
             );
           })()}
 
