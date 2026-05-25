@@ -529,7 +529,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
           <div className="p-6 grid grid-cols-3 gap-4">
             <div className="text-center">
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Leads</p>
-              <p className="text-3xl font-black text-[#1de7f2] mt-1">{leadFunnel.leads}</p>
+              <p className="text-3xl font-black text-cyan-700 dark:text-[#1de7f2] mt-1">{leadFunnel.leads}</p>
               <p className="text-[10px] text-slate-500 mt-1 leading-tight">criaram conta vinda da vitrine, não se inscreveram</p>
             </div>
             <div className="text-center border-l border-r border-slate-200 dark:border-white/10">
