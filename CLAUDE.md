@@ -557,7 +557,7 @@ Plano completo em [[plano-refactor-elenco-dados-pendentes]]:
 - `20260612_protect_coupons_columns.sql` — bloqueia `used_count` (só webhook); permite código/valor/limite/status/escopo.
 - Hardening `.select('id')` em CheckIn.tsx (2 UPDATEs) + WorkshopsManagement.tsx (toggleAttended) — throw se 0 rows.
 
-Smoke Playwright 6/6 OK (errors=0, overflow=false). Migrations **pendentes de aplicar manualmente no Dashboard**. Detalhes em [[auditoria-rls-protect-triggers-shipado]].
+Smoke Playwright 6/6 OK (errors=0, overflow=false). Migrations aplicadas em prod 2026-05-25. Detalhes em [[auditoria-rls-protect-triggers-shipado]].
 
 ## 🟨 P2 — Alto valor, esforço maior
 - **Painel /registrations Sessão 4.2** — drill-down side panel + ações em massa + análise financeira (Top 5 estúdios, distribuição por modalidade). ~10h. Sessão 4.1 (quick wins) já shipada 2026-05-22.
