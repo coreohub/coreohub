@@ -142,6 +142,13 @@ const MinhasCoreografias = () => {
   const [payingEvent, setPayingEvent]        = useState<string | null>(null);
   const [payingSingle, setPayingSingle]      = useState<string | null>(null);
   const [payingTaxa,   setPayingTaxa]        = useState<string | null>(null);
+  // Modal contextual de CPF (padrão Stripe/Sympla): em vez de navegar pra
+  // /profile completo (tela com 8 campos), abre modal com 1 campo só, salva,
+  // banner some, fluxo de pagamento continua sem detour. Refator 2026-05-25.
+  const [cpfModalOpen, setCpfModalOpen]      = useState(false);
+  const [cpfDraft, setCpfDraft]              = useState('');
+  const [cpfSaving, setCpfSaving]            = useState(false);
+  const [cpfError, setCpfError]              = useState<string | null>(null);
   // Reseta os 3 "paying" quando a página volta do bfcache (user clica
   // Voltar no browser depois de ir pro Asaas via window.location.href).
   // Sem isso, o spinner do botão fica girando indefinidamente até F5.
@@ -560,11 +567,47 @@ const MinhasCoreografias = () => {
     const cpf = prof?.cpf_cnpj?.replace(/\D/g, '') ?? '';
     setProfileCpf(prof?.cpf_cnpj ?? null);
     if (!cpf) {
-      setError('Pra pagar você precisa completar seu CPF no perfil.');
-      navigate('/profile');
+      // Antes navegava pra /profile (tela com 8 campos) — atrito alto.
+      // Agora abre modal contextual com 1 campo. Refator 2026-05-25.
+      setCpfDraft('');
+      setCpfError(null);
+      setCpfModalOpen(true);
       return false;
     }
     return true;
+  };
+
+  /** Save do CPF via modal contextual. Persiste em ambas as colunas
+   *  (cpf_cnpj canônica + document legada por dual-write) pra match com
+   *  o que o Profile.tsx agora faz desde 2026-05-25. */
+  const handleSaveCpfFromModal = async () => {
+    const digits = unmaskCpfCnpj(cpfDraft);
+    if (digits.length !== 11) {
+      setCpfError('CPF precisa ter 11 dígitos.');
+      return;
+    }
+    if (!validateCpf(digits)) {
+      setCpfError('CPF inválido — confere os dígitos.');
+      return;
+    }
+    setCpfSaving(true);
+    setCpfError(null);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Sessão expirada — faça login de novo.');
+      const { error: upErr } = await supabase
+        .from('profiles')
+        .update({ cpf_cnpj: digits, document: digits })
+        .eq('id', user.id);
+      if (upErr) throw upErr;
+      // Atualiza state local pra banner sumir imediatamente sem refetch.
+      setProfileCpf(digits);
+      setCpfModalOpen(false);
+    } catch (e: any) {
+      setCpfError(e.message ?? 'Erro ao salvar CPF.');
+    } finally {
+      setCpfSaving(false);
+    }
   };
 
   /**
@@ -1688,14 +1731,101 @@ const MinhasCoreografias = () => {
               Pra gerar a fatura, complete seu CPF no perfil.
             </p>
             <button
-              onClick={() => navigate('/profile')}
+              onClick={() => { setCpfDraft(''); setCpfError(null); setCpfModalOpen(true); }}
               className="mt-2 px-3 py-1.5 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-xl font-black text-[9px] uppercase tracking-widest"
             >
-              Completar perfil
+              Adicionar CPF
             </button>
           </div>
         </div>
       )}
+
+      {/* Modal contextual de CPF (padrão Stripe/Sympla): coleta inline o
+          único dado faltando pro fluxo de pagamento, sem detour pra /profile.
+          Refator 2026-05-25 — banner amarelo agora abre este modal. */}
+      <AnimatePresence>
+        {cpfModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={(e) => { if (e.target === e.currentTarget && !cpfSaving) setCpfModalOpen(false); }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cpf-modal-title"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
+              transition={{ duration: 0.15 }}
+              className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 shadow-2xl overflow-hidden"
+            >
+              <div className="px-6 pt-6 pb-2 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#ff0068]">Passo final</p>
+                  <h3 id="cpf-modal-title" className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white mt-1 italic">
+                    Adicionar CPF
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed normal-case">
+                    Necessário pra gerar a fatura Asaas. Salvamos no seu perfil — não pedimos de novo na próxima compra.
+                  </p>
+                </div>
+                {!cpfSaving && (
+                  <button
+                    onClick={() => setCpfModalOpen(false)}
+                    className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 shrink-0"
+                    aria-label="Fechar"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+
+              <form
+                onSubmit={(e) => { e.preventDefault(); handleSaveCpfFromModal(); }}
+                className="px-6 pb-6 pt-4 space-y-4"
+              >
+                <div>
+                  <label htmlFor="cpf-modal-input" className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 ml-2">
+                    CPF
+                  </label>
+                  <input
+                    id="cpf-modal-input"
+                    type="text"
+                    inputMode="numeric"
+                    autoFocus
+                    value={cpfDraft}
+                    onChange={(e) => { setCpfDraft(maskCpfCnpj(e.target.value)); setCpfError(null); }}
+                    placeholder="000.000.000-00"
+                    disabled={cpfSaving}
+                    className="mt-1.5 w-full px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-base text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068] focus:ring-2 focus:ring-[#ff0068]/20 transition-all font-mono tracking-wider"
+                    maxLength={14}
+                  />
+                  {cpfError && (
+                    <p className="mt-2 text-[11px] text-rose-500 font-bold flex items-center gap-1.5">
+                      <AlertCircle size={12} /> {cpfError}
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={cpfSaving || unmaskCpfCnpj(cpfDraft).length !== 11}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {cpfSaving ? (
+                    <><Loader2 size={14} className="animate-spin" /> Salvando…</>
+                  ) : (
+                    <><CheckCircle size={14} /> Salvar e continuar</>
+                  )}
+                </button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Banner de partial cancel (Asaas 5xx) — alerta inscrito que fatura
           local foi cancelada mas Asaas pode estar desincronizado. */}

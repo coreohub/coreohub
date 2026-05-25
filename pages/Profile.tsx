@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import imageCompression from 'browser-image-compression';
 import { supabase } from '../services/supabase';
 import {
@@ -86,6 +87,14 @@ interface FormState {
 }
 
 const MeuPerfil = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Suporta deep link "preciso completar X campo pra continuar tarefa Y":
+  // Profile aceita ?return=<path> e navega de volta após save com sucesso.
+  // Padrão Stripe/Asana — sem o user precisar voltar manualmente via sidebar.
+  // Whitelist de paths internos (impede open redirect attack via ?return=https://...).
+  const rawReturn = searchParams.get('return') ?? '';
+  const returnPath = rawReturn.startsWith('/') && !rawReturn.startsWith('//') ? rawReturn : null;
   const [profile, setProfile]   = useState<any | null>(null);
   const [form, setForm]         = useState<FormState>({
     full_name: '', whatsapp: '', instagram: '',
@@ -195,7 +204,13 @@ const MeuPerfil = () => {
           whatsapp:   data.whatsapp   || '',
           instagram:  data.instagram  || '',
           location:   data.location   || '',
-          document:   data.document   ? maskDoc(data.document) : '',
+          // Lê preferencialmente cpf_cnpj (coluna canônica usada pelos fluxos
+          // de pagamento Asaas desde 2026-04-24). Fallback pra `document`
+          // (coluna legada) só pra users antigos que salvaram antes do refator
+          // — na primeira save deste perfil, o valor migra pra cpf_cnpj.
+          document:   data.cpf_cnpj
+                        ? maskDoc(data.cpf_cnpj)
+                        : data.document ? maskDoc(data.document) : '',
           dance_role: data.dance_role || '',
           avatar_url: data.avatar_url || '',
         });
@@ -245,18 +260,28 @@ const MeuPerfil = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      const docDigits = form.document.replace(/\D/g, '');
       const { error: err } = await supabase.from('profiles').update({
         full_name:  form.full_name.trim(),
         whatsapp:   form.whatsapp,
         instagram:  form.instagram.replace('@', ''),
         location:   form.location,
-        document:   form.document.replace(/\D/g, ''),
+        // cpf_cnpj é a coluna canônica (Asaas + checkout). document mantida
+        // por dual-write pra compat até depreciar oficialmente.
+        cpf_cnpj:   docDigits || null,
+        document:   docDigits || null,
         dance_role: form.dance_role,
         avatar_url: form.avatar_url || null,
       }).eq('id', user.id);
       if (err) throw err;
       setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      // Se veio com ?return=<path> (deep link de fluxo interrompido), navega
+      // de volta após 1.2s — dá tempo do user ver o toast "Salvo!"
+      if (returnPath) {
+        setTimeout(() => navigate(returnPath), 1200);
+      } else {
+        setTimeout(() => setSaved(false), 3000);
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
