@@ -444,33 +444,44 @@ Deno.serve(async (req) => {
 
     const description = `Workshop: ${workshop.name}`
 
-    const payRes = await fetch(`${ASAAS_BASE_URL}/payments`, {
+    const basePayload = {
+      customer:          customerId,
+      billingType:       'UNDEFINED',
+      value:             chargedAmount,
+      dueDate:           dueDateStr,
+      description,
+      externalReference: externalRef,
+      split: [
+        {
+          walletId:   walletId,
+          fixedValue: producerAmount,
+        },
+      ],
+      // Notificações configuradas no customer (notificationDisabled),
+      // não por payment — suporte Asaas confirmou 2026-05-18.
+    }
+    const callbackPayload = {
+      successUrl:   `${ALLOWED_ORIGIN}/pagamento-sucesso?ref=${encodeURIComponent(externalRef)}`,
+      autoRedirect: true,
+    }
+
+    let payRes = await fetch(`${ASAAS_BASE_URL}/payments`, {
       method: 'POST',
       headers: asaasHeaders,
-      body: JSON.stringify({
-        customer:          customerId,
-        billingType:       'UNDEFINED',
-        value:             chargedAmount,
-        dueDate:           dueDateStr,
-        description,
-        externalReference: externalRef,
-        // Redireciona aluno de volta pra CoreoHub após pagar.
-        callback: {
-          successUrl:   `${ALLOWED_ORIGIN}/pagamento-sucesso?ref=${encodeURIComponent(externalRef)}`,
-          autoRedirect: true,
-        },
-        split: [
-          {
-            walletId:   walletId,
-            fixedValue: producerAmount,
-          },
-        ],
-        // Notificações configuradas no customer (notificationDisabled),
-        // não por payment — suporte Asaas confirmou 2026-05-18.
-      }),
+      body: JSON.stringify({ ...basePayload, callback: callbackPayload }),
     })
+    let payData = await payRes.json()
 
-    const payData = await payRes.json()
+    // Fallback: subconta sem domínio → retry sem callback.
+    if (!payRes.ok && isDomainCallbackError(payData)) {
+      console.warn('[create-workshop-registration] subconta sem dominio cadastrado, retry sem callback')
+      payRes = await fetch(`${ASAAS_BASE_URL}/payments`, {
+        method: 'POST',
+        headers: asaasHeaders,
+        body: JSON.stringify(basePayload),
+      })
+      payData = await payRes.json()
+    }
 
     if (!payRes.ok) {
       await supabase.from('workshop_registrations').delete().eq('id', registrationId)
@@ -516,3 +527,12 @@ Deno.serve(async (req) => {
     return json({ error: message }, 400)
   }
 })
+
+// Detecta recusa Asaas quando subconta não tem domínio cadastrado.
+function isDomainCallbackError(payData: any): boolean {
+  if (!payData?.errors || !Array.isArray(payData.errors)) return false
+  return payData.errors.some((e: any) => {
+    const desc = String(e?.description ?? '').toLowerCase()
+    return desc.includes('domínio') || desc.includes('dominio') || desc.includes('cadastre um site')
+  })
+}

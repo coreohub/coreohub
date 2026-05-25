@@ -253,35 +253,46 @@ Deno.serve(async (req) => {
     dueDate.setDate(dueDate.getDate() + 3)
     const dueDateStr = dueDate.toISOString().split('T')[0]
 
-    const payRes = await fetch(`${ASAAS_BASE_URL}/payments`, {
+    // Tenta com callback (redirect pós-pagamento). Asaas rejeita se a subconta
+    // não tem domínio cadastrado nas Informações Comerciais — nesse caso,
+    // fallback automático sem callback (mantém UX antiga: inscrito pode ficar
+    // na tela Asaas após pagar). Self-healing quando subconta tiver domínio.
+    const basePayload = {
+      customer:          customerId,
+      billingType:       'UNDEFINED', // inscrito escolhe: PIX, cartão ou boleto
+      value:             chargedAmount,
+      dueDate:           dueDateStr,
+      description:       `Inscrição - ${coreo.nome ?? 'Coreografia'} | ${event.name}`,
+      externalReference: registration_id,
+      split: [
+        {
+          walletId:   producer.asaas_wallet_id,
+          fixedValue: producerAmount,
+        },
+      ],
+    }
+    const callbackPayload = {
+      successUrl:   `${ALLOWED_ORIGIN}/pagamento-sucesso?ref=${encodeURIComponent(registration_id)}`,
+      autoRedirect: true,
+    }
+
+    let payRes = await fetch(`${ASAAS_BASE_URL}/payments`, {
       method: 'POST',
       headers: asaasHeaders,
-      body: JSON.stringify({
-        customer:          customerId,
-        billingType:       'UNDEFINED', // inscrito escolhe: PIX, cartão ou boleto
-        value:             chargedAmount,
-        dueDate:           dueDateStr,
-        description:       `Inscrição - ${coreo.nome ?? 'Coreografia'} | ${event.name}`,
-        externalReference: registration_id,
-        // Redireciona inscrito de volta pra CoreoHub após pagar (Asaas docs:
-        // successUrl precisa estar no mesmo domínio cadastrado na conta).
-        // autoRedirect=true (default): redirect automático após confirmação.
-        callback: {
-          successUrl:   `${ALLOWED_ORIGIN}/pagamento-sucesso?ref=${encodeURIComponent(registration_id)}`,
-          autoRedirect: true,
-        },
-        split: [
-          {
-            walletId:   producer.asaas_wallet_id,
-            fixedValue: producerAmount,
-          },
-        ],
-        // Notificações são configuradas a nível de CUSTOMER (notificationDisabled
-        // na criação), não por payment — suporte Asaas confirmou 2026-05-18.
-      }),
+      body: JSON.stringify({ ...basePayload, callback: callbackPayload }),
     })
+    let payData = await payRes.json()
 
-    const payData = await payRes.json()
+    // Fallback: subconta sem domínio nas Informações Comerciais → retry sem callback.
+    if (!payRes.ok && isDomainCallbackError(payData)) {
+      console.warn('[create-payment-asaas] subconta sem dominio cadastrado, retry sem callback')
+      payRes = await fetch(`${ASAAS_BASE_URL}/payments`, {
+        method: 'POST',
+        headers: asaasHeaders,
+        body: JSON.stringify(basePayload),
+      })
+      payData = await payRes.json()
+    }
 
     if (!payRes.ok) {
       console.error('[create-payment-asaas] erro Asaas:', payData)
@@ -340,3 +351,16 @@ Deno.serve(async (req) => {
     )
   }
 })
+
+// Detecta a recusa específica do Asaas quando subconta não tem domínio
+// cadastrado em Informações Comerciais. Resposta típica:
+//   { errors: [{ code: "invalid_callback", description: "Não há nenhum
+//     domínio configurado em sua conta. Cadastre um site em Minha Conta
+//     na aba Informações." }] }
+function isDomainCallbackError(payData: any): boolean {
+  if (!payData?.errors || !Array.isArray(payData.errors)) return false
+  return payData.errors.some((e: any) => {
+    const desc = String(e?.description ?? '').toLowerCase()
+    return desc.includes('domínio') || desc.includes('dominio') || desc.includes('cadastre um site')
+  })
+}

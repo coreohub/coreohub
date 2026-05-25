@@ -532,21 +532,20 @@ Deno.serve(async (req) => {
       ? `${priced.length} coreografia(s): ${descricaoCoreos} | ${event.name}`
       : `${priced.length} coreografias: ${descricaoCoreos}... | ${event.name}`
 
-    const paymentPayload = {
+    const basePayload = {
       customer:          customerId,
       billingType:       'UNDEFINED',
       value:             valueTotal,
       dueDate:           dueDateStr,
       description,
       externalReference: `AGG:${paymentId}`,
-      // Redireciona inscrito de volta pra CoreoHub após pagar.
-      callback: {
-        successUrl:   `${ALLOWED_ORIGIN}/pagamento-sucesso?ref=${encodeURIComponent(paymentId)}`,
-        autoRedirect: true,
-      },
       split: [
         { walletId: producer.asaas_wallet_id, fixedValue: producerTotal },
       ],
+    }
+    const callbackPayload = {
+      successUrl:   `${ALLOWED_ORIGIN}/pagamento-sucesso?ref=${encodeURIComponent(paymentId)}`,
+      autoRedirect: true,
     }
     // A8 (audit): NÃO logar payload bruto (contém customer CPF/email + walletId
     // do produtor). Log resumido — info suficiente pra debug sem secrets.
@@ -555,13 +554,24 @@ Deno.serve(async (req) => {
       ` externalRef=AGG:${paymentId} split=${producerTotal}`
     )
 
-    const payRes = await fetch(`${ASAAS_BASE_URL}/payments`, {
+    let payRes = await fetch(`${ASAAS_BASE_URL}/payments`, {
       method: 'POST',
       headers: asaasHeaders,
-      body: JSON.stringify(paymentPayload),
+      body: JSON.stringify({ ...basePayload, callback: callbackPayload }),
     })
+    let payParsed = await safeJson(payRes)
 
-    const payParsed = await safeJson(payRes)
+    // Fallback: subconta sem domínio nas Informações Comerciais → retry sem callback.
+    if (!payParsed.ok && isDomainCallbackError(payParsed.data)) {
+      console.warn('[create-aggregate-payment-asaas] subconta sem dominio cadastrado, retry sem callback')
+      payRes = await fetch(`${ASAAS_BASE_URL}/payments`, {
+        method: 'POST',
+        headers: asaasHeaders,
+        body: JSON.stringify(basePayload),
+      })
+      payParsed = await safeJson(payRes)
+    }
+
     if (!payParsed.ok) {
       console.error(
         `[create-aggregate-payment-asaas] create payment falhou status=${payRes.status}` +
@@ -683,4 +693,14 @@ async function rollback(supabase: any, paymentId: string, registrationIds: strin
   } catch (e) {
     console.error('[create-aggregate-payment-asaas] rollback falhou:', (e as Error).message)
   }
+}
+
+// Detecta a recusa específica do Asaas quando subconta não tem domínio
+// cadastrado em Informações Comerciais.
+function isDomainCallbackError(payData: any): boolean {
+  if (!payData?.errors || !Array.isArray(payData.errors)) return false
+  return payData.errors.some((e: any) => {
+    const desc = String(e?.description ?? '').toLowerCase()
+    return desc.includes('domínio') || desc.includes('dominio') || desc.includes('cadastre um site')
+  })
 }

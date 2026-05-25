@@ -33,8 +33,12 @@ const PRODUTOR_ROLES = new Set([
   UserRole.COREOHUB_ADMIN,
 ]);
 
+// Label "Painel" alinhado com padrão BR de SaaS (Stripe BR, Sympla Painel
+// do Produtor, Mercado Pago). 'QG' era jargão interno, fora do mercado e
+// inconsistente com o título "DASHBOARD ADMINISTRATIVO" na tela. Pesquisa
+// 2026-05-25.
 const buildProdutorNav = () => [
-  { path: '/qg-organizador',   label: 'QG',        icon: Gavel         },
+  { path: '/qg-organizador',   label: 'Painel',    icon: LayoutDashboard },
   { path: '/registrations',    label: 'Inscrições', icon: ClipboardList },
   { path: '/manage-schedule',  label: 'Crono',     icon: Calendar      },
   { path: '__more__',          label: 'Mais',      icon: MoreHorizontal },

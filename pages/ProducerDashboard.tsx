@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
+import { UserRole } from '../types';
 import { supabase } from '../services/supabase';
 import {
   DollarSign, Users, Music, AlertCircle, TrendingUp,
@@ -104,6 +105,16 @@ interface ProducerDashboardProps {
 }
 
 const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
+  // Guard de role: inscrito (ou qualquer not-ORGANIZER e not-super_admin) que
+  // navegue direto pra /qg-organizador é redirecionado pro /dashboard. Antes,
+  // o painel renderizava pra qualquer authenticated — Cultural Estúdio
+  // (inscrito) viu "NOVO EVENTO" e quase criou um evento sem querer.
+  // Lição: rotas operacionais do produtor precisam de gate de role além
+  // do PrivateRoute (auth-only).
+  if (profile?.role !== UserRole.ORGANIZER && !profile?.is_super_admin) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -327,10 +338,10 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1">
             <div className="w-1.5 h-1.5 bg-[#ff0068] rounded-full animate-pulse shadow-[0_0_8px_#ff0068]" />
-            <span className="text-[9px] font-black text-[#ff0068] uppercase tracking-[0.3em]">QG do Produtor</span>
+            <span className="text-[9px] font-black text-[#ff0068] uppercase tracking-[0.3em]">Painel do Produtor</span>
           </div>
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter uppercase text-slate-900 dark:text-white">
-            Dashboard <span className="text-[#ff0068] italic">Administrativo</span>
+            Painel <span className="text-[#ff0068] italic">do Produtor</span>
           </h1>
           {eventData?.nome_evento && (
             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">

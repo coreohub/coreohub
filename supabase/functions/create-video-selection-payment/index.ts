@@ -230,25 +230,38 @@ Deno.serve(async (req) => {
     dueDate.setDate(dueDate.getDate() + 3)
     const dueDateStr = dueDate.toISOString().split('T')[0]
 
-    const payRes = await fetch(`${ASAAS_BASE_URL}/payments`, {
+    const basePayload = {
+      customer:          customerId,
+      billingType:       'UNDEFINED',
+      value:             chargedAmount,
+      dueDate:           dueDateStr,
+      description:       `Taxa de seletiva — ${coreo.nome_coreografia ?? coreo.nome ?? 'Coreografia'} | ${event.name}`,
+      externalReference: `VS:${registration_id}`,
+      split: [{ walletId: producer.asaas_wallet_id, fixedValue: producerAmount }],
+    }
+    const callbackPayload = {
+      successUrl:   `${ALLOWED_ORIGIN}/pagamento-sucesso?ref=${encodeURIComponent(`VS:${registration_id}`)}`,
+      autoRedirect: true,
+    }
+
+    let payRes = await fetch(`${ASAAS_BASE_URL}/payments`, {
       method: 'POST',
       headers: asaasHeaders,
-      body: JSON.stringify({
-        customer:          customerId,
-        billingType:       'UNDEFINED',
-        value:             chargedAmount,
-        dueDate:           dueDateStr,
-        description:       `Taxa de seletiva — ${coreo.nome_coreografia ?? coreo.nome ?? 'Coreografia'} | ${event.name}`,
-        externalReference: `VS:${registration_id}`,
-        // Redireciona inscrito de volta pra CoreoHub após pagar.
-        callback: {
-          successUrl:   `${ALLOWED_ORIGIN}/pagamento-sucesso?ref=${encodeURIComponent(`VS:${registration_id}`)}`,
-          autoRedirect: true,
-        },
-        split: [{ walletId: producer.asaas_wallet_id, fixedValue: producerAmount }],
-      }),
+      body: JSON.stringify({ ...basePayload, callback: callbackPayload }),
     })
-    const payData = await payRes.json()
+    let payData = await payRes.json()
+
+    // Fallback: subconta sem domínio → retry sem callback.
+    if (!payRes.ok && isDomainCallbackError(payData)) {
+      console.warn('[create-video-selection-payment] subconta sem dominio cadastrado, retry sem callback')
+      payRes = await fetch(`${ASAAS_BASE_URL}/payments`, {
+        method: 'POST',
+        headers: asaasHeaders,
+        body: JSON.stringify(basePayload),
+      })
+      payData = await payRes.json()
+    }
+
     if (!payRes.ok) {
       console.error('[create-video-selection-payment] erro Asaas:', payData)
       throw new Error(payData.errors?.[0]?.description ?? 'Erro ao criar cobrança de seletiva')
@@ -298,3 +311,12 @@ Deno.serve(async (req) => {
     )
   }
 })
+
+// Detecta recusa Asaas quando subconta não tem domínio cadastrado.
+function isDomainCallbackError(payData: any): boolean {
+  if (!payData?.errors || !Array.isArray(payData.errors)) return false
+  return payData.errors.some((e: any) => {
+    const desc = String(e?.description ?? '').toLowerCase()
+    return desc.includes('domínio') || desc.includes('dominio') || desc.includes('cadastre um site')
+  })
+}
