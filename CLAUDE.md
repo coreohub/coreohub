@@ -513,13 +513,13 @@ Detalhes em [[fix-cpf-modal-contextual-2026-05-25]].
 
 Commit `59c5eb8`. Resolve [[plano-leads-reengajamento]] aprovado em 2026-05-22.
 
-1. **Migration** `20260609_profiles_entry_event_id.sql` — coluna `entry_event_id UUID REFERENCES events(id)` + índice partial. **Pendente de aplicar**.
+1. **Migration** `20260609_profiles_entry_event_id.sql` — coluna `entry_event_id UUID REFERENCES events(id)` + índice partial. Aplicada em prod.
 2. **Captura no signup** — `Auth.tsx` ao resolver `eventContext` do redirectTo, grava `event.id` em localStorage. No callback `SIGNED_IN`, se user é "primeira sessão" (created_at < 10min) E profile.entry_event_id IS NULL, faz UPDATE. Idempotente, não sobrescreve em re-logins.
 3. **Template `lead_reengagement`** no send-email — branded CoreoHub com cover + badge urgência âmbar (<= 3 dias) + CTA "Inscrever agora". Subject `[Nome] Faltam X dias pra fechar inscrição`.
 4. **Edge function `send-lead-reengagement-emails`** — cron candidate filtrando por email confirmado + age >= 7d + zero registrations + zero notif anterior `lead_reengagement` (single-shot via tabela notifications). JWT role check (lição [[feedback-jwt-role-check]]). Deployed.
 5. **Card "Funil de Conversão"** no ProducerDashboard — 3 números por evento (Leads/Iniciadas/Pagas) + 2 taxas. Sem expor emails (LGPD). Aparece só quando há dados.
 
-**Pendente do user**: aplicar migration + backfill SQL pros 5 leads existentes + agendar cron diário (SQLs prontos em [[leads-reengajamento-shipado]]).
+Migration aplicada, backfill rodado e cron agendado. Funil 100% operacional.
 
 ### ✅ Bundle 6 polimentos solo SHIPADO 2026-05-23
 
@@ -528,7 +528,7 @@ Commits `f7d605c` + `81d2d0f`. Sessão curta (~2h), zero SQL no Dashboard pedido
 1. **400 em /minhas-coreografias** — embed `workshops(...)` trocado por 2 queries (`workshop_registrations` + `.in()` dos workshop_ids). Espelha padrão `registrations → events` na mesma página.
 2. **ProducerDashboard refund_amount** — filtro `.is('refunded_at', null)` + subtrai `refund_amount` em `monthlyRevenue`. Receita histórica não infla mais com comissões estornadas.
 3. **NotificationBell formatRelative tick** — `setInterval(setMinuteTick, 60_000)` força re-render. Notif não fica "agora" indefinidamente.
-4. **Migration 20260608 — índices em notifications.metadata** — 2 btree expression (`->>'reminder_type'`, `->>'registration_id'`) + 1 GIN default. Lição: `->>` NÃO usa GIN com `jsonb_path_ops` nem `jsonb_ops`. **Pendente de aplicar no Dashboard**.
+4. **Migration 20260608 — índices em notifications.metadata** — 2 btree expression (`->>'reminder_type'`, `->>'registration_id'`) + 1 GIN default. Aplicada em prod 2026-05-25 (commit `6cbc038`). Lição: `->>` NÃO usa GIN com `jsonb_path_ops` nem `jsonb_ops`.
 5. **send-trilha-reminders bulk** — `.in('user_id', regUserIds)` por evento em vez de 2 queries por registration. Evento com 200 inscritos: 400 round-trips → 2. Deployed via CLI.
 
 Detalhes em [[bundle-polimentos-solo-2026-05-23]].
@@ -573,10 +573,7 @@ Resolvidos em 2026-05-23 (`f7d605c`+`81d2d0f`+`87cc593`) + 2026-05-24 (aplicaç�
 - ~~**🔴 Bug crítico em prod: signup `/auth/v1/signup` retorna 500**~~ ✅ **FIXADO 2026-05-24**. Causa raiz dupla — SMTP nativo Supabase frágil + domínio `coreohub.com` no Resend com SPF subdomain `send` faltando (removido por engano em 2026-05-18 achando que era AWS SES legacy, era Resend). Fix: edge function `auth-email-hook` (Send Email Hook via Resend) deployada + 2 records DNS recriados no Cloudflare. Detalhes em [[bug-signup-500-fixado-2026-05-24]]. **Benefício colateral**: todos os emails transacionais (`send-email`) voltaram a funcionar — estavam quebrados desde 05-18 sem ninguém notar.
 - **Funil de leads no painel produtor** — 10 users em `auth.users` que logaram via Google/Email mas nunca completaram inscrição em nenhum evento. Vale virar feature: aba "Leads" em /qg-organizador com count e CTA "Lembrar de se inscrever via email". P3 backlog — sem urgência.
 - **Service_role_key precisa ser rotacionada** — vazou no transcript durante smoke 2026-05-21 (erro do bash com `source .env` malformado). User vai rotacionar quando puder. Atualizar 3 lugares depois: `.env` local, possível header de webhook no painel Asaas, secret no Supabase Functions (auto). NOTA: as edge functions agora usam JWT decode pra auth (não comparam string), então rotação não quebra crons.
-- **Subconta Hemer com saldo R$ ~0,00 (mais R$ 13,50 retidos no D+7 invisíveis na view padrão)** — sobra do smoke do D+7. A divergência saldo Asaas vs CoreoHub foi corrigida no fix `51c3046` (refund agora atualiza `platform_commissions`).
 - **Cron `send-trilha-reminders` agendado mas sem dados** — primeira execução 2026-05-22 09:00 BRT. Provavelmente passa direto porque evento Usualdance 2026 não tem `prazo_trilhas` setado em `configuracoes`. Pra ver cron funcionar de verdade: produtor configura prazo em `/configuracoes` ou edita SQL direto. Aceitável — é cron preparado pro futuro.
-- **Polimento residual:** `pages/ProducerDashboard.tsx:197` faz `select` em `platform_commissions` sem filtrar `refunded_at` (usado pra gráficos históricos). Não bloqueia, mas se algum chart derivar daí, mostra receita inflada. Anotado pra polir depois.
-- **Grazieli 40 bailarinos sem CPF** — confirmado via SQL: 10 inscrições do `gra_503@hotmail.com` no Usualdance, total 40 bailarinos com CPF=NULL e data_nascimento=NULL. Bloqueia certificado + triagem etária. User vai mandar WhatsApp manual cobrando. Inscrição "Entre cordas e sonhos- Studio de dança Grazieli Baldan" é zumbi mais grave (Solo com array `bailarinos_detalhes` vazio).
 
 ## Não fazer
 
