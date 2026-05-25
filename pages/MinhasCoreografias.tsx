@@ -1330,7 +1330,7 @@ const MinhasCoreografias = () => {
                         {applied?.code ?? faturaPendente?.coupon_code ?? 'Cupom'}
                       </p>
                       <p className="text-[10px] text-emerald-600 dark:text-emerald-500">
-                        Desconto de {fmtMoney(applied?.discount ?? faturaPendente?.discount_total ?? 0)} — aplica a qualquer pagamento abaixo
+                        {fmtMoney(applied?.discount ?? faturaPendente?.discount_total ?? 0)} de desconto · vale em Pagar tudo ou Pagar só esta
                       </p>
                     </div>
                     <button
@@ -1351,7 +1351,7 @@ const MinhasCoreografias = () => {
                   showAggregateCoupon[grupo.eventId] ? (
                     <div className="space-y-2">
                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                        Cupom · aplica a qualquer pagamento
+                        Cupom de desconto
                       </p>
                       <div className="flex gap-2">
                         <label htmlFor={`aggregate-coupon-${grupo.eventId}`} className="sr-only">
@@ -1399,7 +1399,7 @@ const MinhasCoreografias = () => {
                       onClick={() => setShowAggregateCoupon(p => ({ ...p, [grupo.eventId]: true }))}
                       className="text-[10px] font-black uppercase tracking-widest text-[#ff0068] hover:underline flex items-center gap-1.5"
                     >
-                      <Tag size={12} /> Tem cupom? — aplica a qualquer pagamento abaixo
+                      <Tag size={12} /> Tem cupom de desconto?
                     </button>
                   )
                 )}
