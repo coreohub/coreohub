@@ -492,6 +492,23 @@ Priorização cronológica detalhada em `memory/MEMORY.md` + cada item tem sua m
 
 **⚠️ Sessão A SHIPADA + DESABILITADA mesma noite 2026-05-22** — 6 commits (b6e4444→0c9af1a) + reverter `4602573`. Bug grosso: helper lia bailarinos_detalhes (id+nome+instagram) procurando CPF/data_nascimento que ficam em `elenco`. Feature "dados pendentes" desligada em prod. Detalhes em [[sessao-a-grazieli-shipado]].
 
+### ✅ Fix CPF (coluna canônica + modal contextual) SHIPADO 2026-05-25
+
+Commit `8357e1d`. Resolve bug histórico desde 2026-04-24 (~1 mês em prod).
+
+**Causa**: `Profile.tsx` escrevia/lia da coluna legada `document` enquanto **todo o sistema** (4 edge functions de pagamento + Checkout + Wizard + MinhasCoreografias + AccountSettings) usa `cpf_cnpj` (canônica desde a integração Asaas). Inscrito completava perfil, banner "CPF NECESSÁRIO PRA PAGAR" nunca sumia, fluxo travado. User passou vergonha frente a cliente real.
+
+**Fix em 3 camadas**:
+1. **Schema** — `Profile.tsx` dual-write em `cpf_cnpj` + `document` (leitura prefere canônica, fallback legada)
+2. **UX modal contextual** — Banner em `/minhas-coreografias` agora abre modal com 1 campo só (padrão Stripe/Sympla). Save inline → state local atualiza → banner some sem refetch. `requireCpf()` também abre o modal em vez de navegar. A11y completo (role=dialog, aria-modal, label, autoFocus, ESC fecha).
+3. **`?return=<path>`** — Profile aceita deep link com whitelist de paths internos. Após save, navega de volta automaticamente. Aplicável a qualquer fluxo futuro.
+
+**Backfill SQL** aplicado em prod (idempotente): `UPDATE profiles SET cpf_cnpj = document WHERE cpf_cnpj IS NULL AND document IS NOT NULL`.
+
+Smoke E2E validado: CPF `340.014.208-56` salvo via modal → SQL confirma `cpf_cnpj = '34001420856'` + `document = '34001420856'` → F5 → banner sumiu → fluxo destravado.
+
+Detalhes em [[fix-cpf-modal-contextual-2026-05-25]].
+
 ### ✅ Funil de leads + reengajamento SHIPADO 2026-05-24
 
 Commit `59c5eb8`. Resolve [[plano-leads-reengajamento]] aprovado em 2026-05-22.
