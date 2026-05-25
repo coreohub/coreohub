@@ -52,7 +52,7 @@ const Auth = () => {
 
   // Quando o login vem de um deep link de festival, mostra contexto do evento
   // pra reduzir confusão ("estou me inscrevendo em qual mostra?")
-  const [eventContext, setEventContext] = useState<{ name: string; coverUrl: string | null } | null>(null);
+  const [eventContext, setEventContext] = useState<{ id: string; name: string; coverUrl: string | null } | null>(null);
 
   useEffect(() => {
     if (!redirectTo) { setEventContext(null); return; }
@@ -65,12 +65,58 @@ const Auth = () => {
     (async () => {
       const { data } = await supabase
         .from('events')
-        .select('name, cover_url')
+        .select('id, name, cover_url')
         .eq(filterCol, idOrSlug)
         .maybeSingle();
-      if (data?.name) setEventContext({ name: data.name, coverUrl: data.cover_url ?? null });
+      if (data?.id && data?.name) {
+        setEventContext({ id: data.id, name: data.name, coverUrl: data.cover_url ?? null });
+        // Funil de leads: persiste evento de origem antes do signup. Lido no
+        // callback SIGNED_IN pra gravar em profiles.entry_event_id. Plano em
+        // [[plano-leads-reengajamento]] — habilita email de reengajamento
+        // contextualizado quando o lead não converte em N dias.
+        try {
+          localStorage.setItem('coreohub_lead_entry_event_id', data.id);
+          localStorage.setItem('coreohub_lead_entry_at', String(Date.now()));
+        } catch { /* localStorage off — ignora silenciosamente */ }
+      }
     })();
   }, [redirectTo]);
+
+  // Funil de leads: grava entry_event_id no profile quando user faz signup
+  // vindo da vitrine pública. Só grava se:
+  //   1) user foi criado recentemente (< 10min — heurística "primeira sessão")
+  //   2) localStorage tem o evento de origem (salvo quando eventContext resolveu)
+  //   3) profile.entry_event_id ainda está NULL (não sobrescreve em re-logins)
+  // Não falha o flow de auth se algo der errado — best-effort silencioso.
+  const persistLeadEntryEventId = async (userId: string, createdAtIso?: string) => {
+    try {
+      const entryEventId = localStorage.getItem('coreohub_lead_entry_event_id');
+      if (!entryEventId) return;
+
+      // Só associa em "primeira sessão" — evita sobrescrever lead antigo se
+      // user já logado revisita a vitrine de outro evento e re-loga.
+      if (createdAtIso) {
+        const ageMs = Date.now() - new Date(createdAtIso).getTime();
+        if (ageMs > 10 * 60 * 1000) {
+          localStorage.removeItem('coreohub_lead_entry_event_id');
+          localStorage.removeItem('coreohub_lead_entry_at');
+          return;
+        }
+      }
+
+      // UPDATE com filtro entry_event_id IS NULL → idempotente e não sobrescreve.
+      await supabase
+        .from('profiles')
+        .update({ entry_event_id: entryEventId })
+        .eq('id', userId)
+        .is('entry_event_id', null);
+
+      localStorage.removeItem('coreohub_lead_entry_event_id');
+      localStorage.removeItem('coreohub_lead_entry_at');
+    } catch {
+      /* best-effort — não bloqueia signup se UPDATE falhar */
+    }
+  };
 
   // Decide a tela inicial pós-login com base no role do user. Produtor
   // (ORGANIZER) cai direto no /qg-organizador. Demais roles vão pro
@@ -96,6 +142,7 @@ const Auth = () => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         setIsAuthenticating(true);
+        await persistLeadEntryEventId(session.user.id, session.user.created_at);
         const path = await resolveLandingPath(session.user.id);
         setTimeout(() => navigate(path), 0);
       }
@@ -111,6 +158,7 @@ const Auth = () => {
         // setTimeout(..., 0) garante que o navigate roda fora do lock de auth.
         // resolveLandingPath roda DENTRO do timeout (não no callback) — sem deadlock.
         setTimeout(async () => {
+          await persistLeadEntryEventId(session.user.id, session.user.created_at);
           const path = await resolveLandingPath(session.user.id);
           navigate(path);
         }, 0);

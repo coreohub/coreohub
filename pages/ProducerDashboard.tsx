@@ -122,6 +122,12 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
   const [latestRegistrations, setLatestRegistrations] = useState<any[]>([]);
   const [filteredRegs, setFilteredRegs] = useState<any[]>([]);
   const [commissions, setCommissions] = useState<any[]>([]);
+  // Funil de leads (entry_event_id no profile). Só números agregados — sem
+  // expor emails (LGPD + padrão Sympla/Eventbrite). Plano em
+  // [[plano-leads-reengajamento]].
+  const [leadFunnel, setLeadFunnel] = useState<{ leads: number; started: number; paid: number }>({
+    leads: 0, started: 0, paid: 0,
+  });
 
   /* ── Edition selector ── */
   const [allEvents, setAllEvents] = useState<{ id: string; name: string; slug?: string; is_public?: boolean; edition_year?: number; start_date?: string; formacoes_config?: any[] }[]>([]);
@@ -223,6 +229,35 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
         setEventData(cfg);
         setLatestRegistrations(recentRegs || []);
         setFilteredRegs(recentRegs || []);
+
+        // Funil de leads: 3 contagens agregadas do evento selecionado.
+        // - started: inscrições iniciadas (distintos user_id em registrations)
+        // - paid:    inscrições com pagamento aprovado
+        // - leads:   profiles que entraram via vitrine deste evento e nunca
+        //            iniciaram inscrição (em qualquer evento)
+        try {
+          const isPagoStatus = (s?: string) => s === 'APROVADO' || s === 'CONFIRMADO';
+          const userIdsWithReg = [...new Set((allRegs ?? []).map((r: any) => r.user_id).filter(Boolean))];
+          const userIdsPago    = [...new Set((allRegs ?? []).filter((r: any) => isPagoStatus(r.status_pagamento)).map((r: any) => r.user_id).filter(Boolean))];
+
+          let leadsQuery = supabase
+            .from('profiles')
+            .select('id', { count: 'exact', head: true })
+            .eq('entry_event_id', selectedEventId);
+          if (userIdsWithReg.length > 0) {
+            leadsQuery = leadsQuery.not('id', 'in', `(${userIdsWithReg.join(',')})`);
+          }
+          const { count: leadsCount } = await leadsQuery;
+
+          setLeadFunnel({
+            leads:   leadsCount ?? 0,
+            started: userIdsWithReg.length,
+            paid:    userIdsPago.length,
+          });
+        } catch {
+          // Funnel é nice-to-have — se falhar, zera silenciosamente.
+          setLeadFunnel({ leads: 0, started: 0, paid: 0 });
+        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -476,6 +511,53 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Funil de leads — métrica agregada (sem expor emails, LGPD) */}
+      {!loading && (leadFunnel.leads + leadFunnel.started + leadFunnel.paid > 0) && (
+        <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-3xl overflow-hidden">
+          <div className="p-6 border-b border-slate-200 dark:border-white/5 flex items-center gap-3">
+            <div className="p-2 bg-[#1de7f2]/10 text-[#1de7f2] rounded-xl border border-[#1de7f2]/20">
+              <BarChart3 size={16} />
+            </div>
+            <div>
+              <h2 className="text-sm font-black uppercase text-slate-900 dark:text-white tracking-tight italic">Funil de Conversão</h2>
+              <p className="text-[10px] text-slate-500">Do lead à inscrição paga — só números agregados, sem expor emails</p>
+            </div>
+          </div>
+          <div className="p-6 grid grid-cols-3 gap-4">
+            <div className="text-center">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Leads</p>
+              <p className="text-3xl font-black text-[#1de7f2] mt-1">{leadFunnel.leads}</p>
+              <p className="text-[10px] text-slate-500 mt-1 leading-tight">criaram conta vinda da vitrine, não se inscreveram</p>
+            </div>
+            <div className="text-center border-l border-r border-slate-200 dark:border-white/10">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Iniciadas</p>
+              <p className="text-3xl font-black text-[#ff0068] mt-1">{leadFunnel.started}</p>
+              <p className="text-[10px] text-slate-500 mt-1 leading-tight">
+                {leadFunnel.leads > 0
+                  ? `${Math.round((leadFunnel.started / (leadFunnel.leads + leadFunnel.started)) * 100)}% de conversão`
+                  : 'inscrições começadas'}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Pagas</p>
+              <p className="text-3xl font-black text-emerald-500 mt-1">{leadFunnel.paid}</p>
+              <p className="text-[10px] text-slate-500 mt-1 leading-tight">
+                {leadFunnel.started > 0
+                  ? `${Math.round((leadFunnel.paid / leadFunnel.started) * 100)}% de conclusão`
+                  : 'pagamentos confirmados'}
+              </p>
+            </div>
+          </div>
+          {leadFunnel.leads > 0 && (
+            <div className="px-6 pb-5 -mt-2">
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                <span className="font-black text-[#1de7f2]">{leadFunnel.leads} lead{leadFunnel.leads !== 1 ? 's' : ''}</span> receberá email de reengajamento contextualizado quando faltar prazo curto pra inscrição. Sem nada manual.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

@@ -515,3 +515,12 @@ entrypoint = "./functions/send-email/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/auth-email-hook/index.ts"
+
+# Cron de reengajamento de leads — usuários que criaram conta vinda da vitrine
+# pública mas nunca completaram inscrição. Dispara email contextualizado por
+# evento (não broadcast). Single-shot por user (idempotência via tabela
+# notifications). Plano completo em [[plano-leads-reengajamento]].
+[functions.send-lead-reengagement-emails]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/send-lead-reengagement-emails/index.ts"

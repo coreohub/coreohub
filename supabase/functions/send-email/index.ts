@@ -1068,6 +1068,67 @@ interface PayoutReleasedPayload {
   appUrl?:                 string
 }
 
+// ─── Lead reengagement (funil) ───────────────────────────────────────────────
+
+interface LeadReengagementPayload {
+  /** Email do lead (destino). */
+  leadEmail:          string
+  /** Nome amigável pra abertura (full_name ou parte antes do @ no email). */
+  leadNome?:          string
+  /** Nome do evento de origem (vitrine que o lead visitou). */
+  eventoNome:         string
+  /** Slug do evento — usado pra montar link de vitrine. */
+  eventoSlug?:        string | null
+  /** Cover URL do evento (opcional) — adiciona contexto visual no email. */
+  eventoCover?:       string | null
+  /** Dias restantes até prazo_inscricao do evento. Mostrado em destaque. */
+  diasRestantes:      number
+  /** Email do produtor (reply-to) — bailarino que responde fala com produtor. */
+  produtorEmail?:     string | null
+  appUrl?:            string
+}
+
+function buildLeadReengagement(p: LeadReengagementPayload) {
+  const slug = p.eventoSlug ?? ''
+  const ctaUrl = slug
+    ? `${p.appUrl ?? 'https://coreohub.com'}/evento/${slug}`
+    : `${p.appUrl ?? 'https://app.coreohub.com'}/dashboard`
+
+  const urgencyColor = p.diasRestantes <= 3 ? '#f59e0b' : '#ff0068'
+  const urgencyBg    = p.diasRestantes <= 3 ? '#fffbeb' : '#fff5f8'
+  const urgencyBorder= p.diasRestantes <= 3 ? '#fde68a' : '#ff0068'
+
+  const coverBlock = p.eventoCover
+    ? `<div style="margin-bottom:18px;border-radius:14px;overflow:hidden;">
+         <img src="${escape(p.eventoCover)}" alt="${escape(p.eventoNome)}" width="100%" style="display:block;width:100%;height:auto;" />
+       </div>`
+    : ''
+
+  const contentHtml = `
+    ${coverBlock}
+    <div style="margin-top:4px;padding:22px;border-radius:14px;background:${urgencyBg};border:2px solid ${urgencyBorder};text-align:center;">
+      <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:${urgencyColor};">Faltam</p>
+      <p style="margin:8px 0 0;font-size:36px;font-weight:900;color:#0b0b0f;letter-spacing:-.02em;">${p.diasRestantes} ${p.diasRestantes === 1 ? 'dia' : 'dias'}</p>
+      <p style="margin:6px 0 0;font-size:13px;line-height:1.55;color:#475569;">pra fechar inscrição em <strong>${escape(p.eventoNome)}</strong></p>
+    </div>
+    <p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      Você criou conta no CoreoHub mas ainda não confirmou sua participação. Garanta sua vaga antes que o prazo feche.
+    </p>`
+
+  return {
+    subject: `[${p.eventoNome}] Faltam ${p.diasRestantes} ${p.diasRestantes === 1 ? 'dia' : 'dias'} pra fechar inscrição`,
+    html: baseLayout({
+      preheader: `Faltam ${p.diasRestantes} dias pra fechar inscrição em ${p.eventoNome}.`,
+      title: 'Sua vaga ainda está aberta',
+      intro: `Olá ${escape(p.leadNome ?? 'bailarino(a)')}, você visitou a página do <strong>${escape(p.eventoNome)}</strong> mas ainda não se inscreveu.`,
+      contentHtml,
+      ctaLabel: 'Inscrever agora',
+      ctaUrl,
+      footerNote: 'Você está recebendo este email porque criou conta no CoreoHub mas ainda não completou inscrição. Se não quiser participar, basta ignorar.',
+    }),
+  }
+}
+
 function buildPayoutReleased(p: PayoutReleasedPayload) {
   const pixLine = p.pixKeyPartial
     ? `<p style="margin:6px 0 0;font-size:13px;line-height:1.55;color:#475569;">
@@ -1126,6 +1187,7 @@ interface SendEmailRequest {
     | 'video_approved_inscription_ready'
     | 'video_rejected'
     | 'payout_released'
+    | 'lead_reengagement'
   payload: Record<string, unknown>
 }
 
@@ -1382,6 +1444,19 @@ Deno.serve(async (req) => {
         to = p.produtorEmail
         subject = tpl.subject
         html = tpl.html
+        break
+      }
+      case 'lead_reengagement': {
+        const p = payload as unknown as LeadReengagementPayload
+        if (!p.leadEmail) throw new Error('leadEmail é obrigatório')
+        if (!p.eventoNome) throw new Error('eventoNome é obrigatório')
+        if (typeof p.diasRestantes !== 'number') throw new Error('diasRestantes é obrigatório')
+        const tpl = buildLeadReengagement(p)
+        to = p.leadEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        replyTo = p.produtorEmail ?? undefined
         break
       }
       default:
