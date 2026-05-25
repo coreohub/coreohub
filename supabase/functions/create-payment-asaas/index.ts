@@ -141,9 +141,33 @@ Deno.serve(async (req) => {
     // Aceita coupon_id (UUID — legacy do Checkout.tsx) OU coupon_code (texto
     // — usado pelos checkouts da Seletiva e do carrinho agregado a partir
     // de 2026-06-01). Lookup por code ILIKE pra UX (case-insensitive).
+    //
+    // Anti-exploit (decisão de produto 2026-05-25): cupom em single payment
+    // só é permitido quando há ≤1 inscrição PENDENTE do user nesse evento.
+    // Cenário com múltiplas pendentes deve usar AGGREGATE flow ("Pagar tudo")
+    // pra evitar abuse de cupom valor fixo + max_uses_per_user > 1 dando
+    // desconto maior que prorrateado.
     let discountAmount = 0
     let validatedCoupon: any = null
     if (coupon_id || (coupon_code && String(coupon_code).trim())) {
+      const { count: pendingCount } = await supabase
+        .from('registrations')
+        .select('id', { count: 'exact', head: true })
+        .eq('event_id', event_id)
+        .eq('user_id', user.id)
+        .eq('status_pagamento', 'PENDENTE')
+      if ((pendingCount ?? 0) > 1) {
+        console.warn(
+          `[create-payment-asaas] cupom bloqueado em single payment —` +
+          ` user=${user.id} event=${event_id} pendentes=${pendingCount}.` +
+          ` Use AGGREGATE flow ("Pagar tudo").`
+        )
+        throw new Error(
+          'Cupom em pagamento individual não é permitido quando há múltiplas inscrições pendentes. ' +
+          'Use "Pagar tudo" pra aplicar o desconto.'
+        )
+      }
+
       let couponQuery = supabase
         .from('coupons')
         .select('*')
