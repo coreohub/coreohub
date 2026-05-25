@@ -492,6 +492,18 @@ Priorização cronológica detalhada em `memory/MEMORY.md` + cada item tem sua m
 
 **⚠️ Sessão A SHIPADA + DESABILITADA mesma noite 2026-05-22** — 6 commits (b6e4444→0c9af1a) + reverter `4602573`. Bug grosso: helper lia bailarinos_detalhes (id+nome+instagram) procurando CPF/data_nascimento que ficam em `elenco`. Feature "dados pendentes" desligada em prod. Detalhes em [[sessao-a-grazieli-shipado]].
 
+### ✅ Funil de leads + reengajamento SHIPADO 2026-05-24
+
+Commit `59c5eb8`. Resolve [[plano-leads-reengajamento]] aprovado em 2026-05-22.
+
+1. **Migration** `20260609_profiles_entry_event_id.sql` — coluna `entry_event_id UUID REFERENCES events(id)` + índice partial. **Pendente de aplicar**.
+2. **Captura no signup** — `Auth.tsx` ao resolver `eventContext` do redirectTo, grava `event.id` em localStorage. No callback `SIGNED_IN`, se user é "primeira sessão" (created_at < 10min) E profile.entry_event_id IS NULL, faz UPDATE. Idempotente, não sobrescreve em re-logins.
+3. **Template `lead_reengagement`** no send-email — branded CoreoHub com cover + badge urgência âmbar (<= 3 dias) + CTA "Inscrever agora". Subject `[Nome] Faltam X dias pra fechar inscrição`.
+4. **Edge function `send-lead-reengagement-emails`** — cron candidate filtrando por email confirmado + age >= 7d + zero registrations + zero notif anterior `lead_reengagement` (single-shot via tabela notifications). JWT role check (lição [[feedback-jwt-role-check]]). Deployed.
+5. **Card "Funil de Conversão"** no ProducerDashboard — 3 números por evento (Leads/Iniciadas/Pagas) + 2 taxas. Sem expor emails (LGPD). Aparece só quando há dados.
+
+**Pendente do user**: aplicar migration + backfill SQL pros 5 leads existentes + agendar cron diário (SQLs prontos em [[leads-reengajamento-shipado]]).
+
 ### ✅ Bundle 6 polimentos solo SHIPADO 2026-05-23
 
 Commits `f7d605c` + `81d2d0f`. Sessão curta (~2h), zero SQL no Dashboard pedido ao user:
