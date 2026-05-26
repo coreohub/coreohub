@@ -72,12 +72,15 @@ Deno.serve(async (req) => {
 
     // Só monta splitRefunds em partial refund. Full refund (sem value)
     // o Asaas distribui proporcional automaticamente.
+    // IMPORTANTE: query por registration_id (não asaas_payment_id) pra evitar
+    // ambiguidade em AGG payments com N registrations compartilhando o mesmo
+    // asaas_payment_id (.maybeSingle ia retornar null por múltiplas rows).
     if (requestedAmount !== null) {
       const [{ data: commission }, { data: producerProfile }] = await Promise.all([
         supabase
           .from('platform_commissions')
           .select('gross_amount, net_amount, commission_amount')
-          .eq('asaas_payment_id', coreo.payment_id)
+          .eq('registration_id', registration_id)
           .maybeSingle(),
         event?.created_by
           ? supabase
@@ -91,9 +94,6 @@ Deno.serve(async (req) => {
       if (commission && producerProfile?.asaas_wallet_id) {
         const grossAmount     = Number(commission.gross_amount ?? 0)
         const producerNetOrig = Number(commission.net_amount ?? 0)
-        // Proporção do split: quanto da cobrança total veio do producer.
-        // ex: gross=40, producer_net=36 → 0.9 → refund R$ 36 cobra R$ 32,40
-        // do producer wallet + R$ 3,60 do master (comissão estornada).
         const producerShareRatio = grossAmount > 0 ? producerNetOrig / grossAmount : 0
         const producerRefundShare = parseFloat(
           (requestedAmount * producerShareRatio).toFixed(2)
@@ -107,19 +107,24 @@ Deno.serve(async (req) => {
           ]
           console.log(
             `[refund-asaas-payment] partial refund split: total=${requestedAmount}` +
-            ` producer=${producerRefundShare} ratio=${producerShareRatio.toFixed(3)}`
+            ` producer=${producerRefundShare} ratio=${producerShareRatio.toFixed(3)}` +
+            ` walletId=${producerProfile.asaas_wallet_id}`
           )
         }
       } else {
         console.warn(
           `[refund-asaas-payment] partial refund SEM splitRefunds —` +
           ` commission_found=${!!commission} wallet_found=${!!producerProfile?.asaas_wallet_id}` +
-          `. Asaas pode rejeitar com invalid_action.`
+          ` registration_id=${registration_id}`
         )
       }
     }
 
-    const refundRes = await fetch(`${ASAAS_BASE_URL}/payments/${coreo.payment_id}/refund`, {
+    // Try-and-fallback: se Asaas rejeitar com "split não encontrado", o split
+    // configurado nesse payment difere do esperado (ex: wallet_id mudou entre
+    // pagamento e refund, ou AGG flow usou estrutura diferente). Retry sem
+    // splitRefunds — Asaas usa default (deduzir do main charge).
+    let refundRes = await fetch(`${ASAAS_BASE_URL}/payments/${coreo.payment_id}/refund`, {
       method: 'POST',
       headers: {
         'access_token': ASAAS_API_KEY,
@@ -127,8 +132,26 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify(refundBody),
     })
+    let refundData = await refundRes.json()
 
-    const refundData = await refundRes.json()
+    const isSplitNotFound = !refundRes.ok && refundData?.errors?.some((e: any) =>
+      String(e?.description ?? '').toLowerCase().includes('split')
+    )
+
+    if (isSplitNotFound && refundBody.splitRefunds) {
+      console.warn('[refund-asaas-payment] split nao encontrado — retry sem splitRefunds')
+      const { splitRefunds: _, ...bodyWithoutSplit } = refundBody
+      refundRes = await fetch(`${ASAAS_BASE_URL}/payments/${coreo.payment_id}/refund`, {
+        method: 'POST',
+        headers: {
+          'access_token': ASAAS_API_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(bodyWithoutSplit),
+      })
+      refundData = await refundRes.json()
+    }
+
     if (!refundRes.ok) {
       console.error('[refund-asaas-payment] erro Asaas:', refundData)
       throw new Error(refundData.errors?.[0]?.description ?? 'Erro ao processar reembolso no Asaas.')
