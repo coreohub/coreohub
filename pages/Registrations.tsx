@@ -6,6 +6,7 @@ import {
   ChevronLeft, ChevronRight, Bell, SlidersHorizontal,
   Undo2, Loader2, Eye, Music2, Video, Calendar, User, Instagram,
   TrendingUp, ExternalLink, Pencil, Save, Lock as LockIcon,
+  BarChart3,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -67,6 +68,10 @@ const Registrations = () => {
   // os 7 selects ocupam 2 linhas no desktop. Drawer abre on-demand, mostra
   // chips dos filtros ativos sempre visíveis (com X pra remover individual).
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Sessão 4.2 PR3: card "Análise Financeira" colapsável. Default fechado
+  // pra não sobrecarregar visão inicial — produtor abre quando quer
+  // explorar quem são os top estúdios / distribuição etc.
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [refundModal, setRefundModal] = useState<any>(null);
   const [refundAmount, setRefundAmount] = useState<string>('');
   const [refundReason, setRefundReason] = useState('');
@@ -729,6 +734,70 @@ const Registrations = () => {
     return { total, confirmadas, pendentes, receita, receitaPrevista };
   }, [registrations]);
 
+  /* Sessão 4.2 — Análise Financeira (PR3 de 3).
+     Widgets agregados pra produtor entender de onde vem a receita:
+     - Top 5 estúdios por valor confirmado
+     - Distribuição por modalidade (SOLO/DUO/TRIO/GRUPO)
+     - Receita por categoria (INFANTIL/JUNIOR/ADULTO/etc)
+     - Cupons mais usados (do que foi efetivamente aplicado)
+     Padrão Stripe Dashboard / Sympla Painel — KPIs derivados, sem mexer no
+     fluxo principal. Cálculo client-side (dataset pequeno, <1000 rows). */
+  const analytics = useMemo(() => {
+    const valorDe = (r: any) => Number(r.valor_pago ?? r.valor_total ?? r.charged_amount ?? r.mod_fee ?? 0) || 0;
+    const pagas = registrations.filter(r => isPago(r.status_pagamento));
+
+    // Top 5 estúdios (por valor confirmado)
+    const estudioMap = new Map<string, { nome: string; total: number; count: number }>();
+    for (const r of pagas) {
+      const nome = r.estudio ?? r.inscrito_nome ?? r.profiles?.full_name ?? 'Sem estúdio';
+      const cur = estudioMap.get(nome) ?? { nome, total: 0, count: 0 };
+      cur.total += valorDe(r);
+      cur.count += 1;
+      estudioMap.set(nome, cur);
+    }
+    const topEstudios = [...estudioMap.values()]
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+
+    // Distribuição por modalidade
+    const modalidadeMap = new Map<string, number>();
+    for (const r of registrations) {
+      const m = r.formato_participacao ?? r.tipo_apresentacao ?? 'Sem modalidade';
+      modalidadeMap.set(m, (modalidadeMap.get(m) ?? 0) + 1);
+    }
+    const totalReg = registrations.length || 1;
+    const porModalidade = [...modalidadeMap.entries()]
+      .map(([nome, count]) => ({ nome, count, pct: Math.round((count / totalReg) * 100) }))
+      .sort((a, b) => b.count - a.count);
+
+    // Receita por categoria (só de pagas)
+    const categoriaMap = new Map<string, number>();
+    for (const r of pagas) {
+      const c = r.categoria ?? 'Sem categoria';
+      categoriaMap.set(c, (categoriaMap.get(c) ?? 0) + valorDe(r));
+    }
+    const porCategoria = [...categoriaMap.entries()]
+      .map(([nome, total]) => ({ nome, total }))
+      .sort((a, b) => b.total - a.total);
+
+    // Cupons aplicados (registrations com coupon_id + discount_amount)
+    const cupomMap = new Map<string, { code: string; count: number; descontoTotal: number }>();
+    for (const r of registrations) {
+      const code = r.coupon_code ?? (r.coupon_id ? 'Cupom' : null);
+      if (!code) continue;
+      const desc = Number(r.discount_amount ?? 0) || 0;
+      const cur = cupomMap.get(code) ?? { code, count: 0, descontoTotal: 0 };
+      cur.count += 1;
+      cur.descontoTotal += desc;
+      cupomMap.set(code, cur);
+    }
+    const topCupons = [...cupomMap.values()]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3);
+
+    return { topEstudios, porModalidade, porCategoria, topCupons };
+  }, [registrations]);
+
   /* Listas únicas pros dropdowns de filtro. Derivadas do dataset bruto pra
      não sumir opções quando o user já filtrou. */
   const categoriasDisponiveis = useMemo(() => {
@@ -970,6 +1039,161 @@ const Registrations = () => {
                 edição sem ter que filtrar e somar mentalmente. */}
             <StatCard icon={<TrendingUp size={14} />}   label="Prevista"    value={`R$ ${stats.receitaPrevista.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} tone="slate" />
           </div>
+
+          {/* Sessão 4.2 PR3 — Análise Financeira. Card colapsável com:
+              - Top 5 estúdios (de onde vem a receita)
+              - Distribuição por modalidade (gargalos de vagas)
+              - Receita por categoria (faixa etária mais rentável)
+              - Cupons usados (qual campanha trouxe inscritos)
+              Default fechado pra preservar visão limpa. */}
+          {(analytics.topEstudios.length > 0 || analytics.porModalidade.length > 0) && (
+            <div className="bg-slate-100 dark:bg-slate-900/50 rounded-3xl border border-slate-200 dark:border-white/5 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setAnalyticsOpen(o => !o)}
+                className="w-full flex items-center justify-between p-4 hover:bg-slate-200/40 dark:hover:bg-white/5 transition-colors"
+                aria-expanded={analyticsOpen}
+              >
+                <div className="flex items-center gap-2">
+                  <BarChart3 size={14} className="text-[#ff0068]" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-300">
+                    Análise Financeira
+                  </span>
+                  {!analyticsOpen && (
+                    <span className="text-[9px] font-bold text-slate-400 normal-case tracking-normal ml-1">
+                      · {analytics.topEstudios.length} {analytics.topEstudios.length === 1 ? 'estúdio' : 'estúdios'} confirmados
+                    </span>
+                  )}
+                </div>
+                <ChevronDown
+                  size={14}
+                  className={`text-slate-400 transition-transform ${analyticsOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              {analyticsOpen && (
+                <div className="p-4 pt-0 grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  {/* Top 5 Estúdios */}
+                  <div className="bg-white dark:bg-white/[0.02] rounded-2xl border border-slate-200 dark:border-white/5 p-4">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-3">
+                      Top Estúdios · receita confirmada
+                    </p>
+                    {analytics.topEstudios.length === 0 ? (
+                      <p className="text-[10px] text-slate-400">Nenhum pagamento confirmado ainda</p>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {analytics.topEstudios.map((e, idx) => {
+                          const maxTotal = analytics.topEstudios[0]?.total ?? 1;
+                          const pct = (e.total / maxTotal) * 100;
+                          return (
+                            <div key={e.nome}>
+                              <div className="flex items-baseline justify-between gap-2 mb-1">
+                                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 truncate flex items-center gap-1.5">
+                                  <span className="text-[8px] font-black text-slate-400 w-3">{idx + 1}.</span>
+                                  {e.nome}
+                                </span>
+                                <span className="text-[11px] font-black text-[#ff0068] tabular-nums shrink-0">
+                                  R$ {e.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                              <div className="h-1 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-[#ff0068]/70"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              <p className="text-[9px] text-slate-400 mt-1">
+                                {e.count} {e.count === 1 ? 'coreografia' : 'coreografias'}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Distribuição por modalidade */}
+                  <div className="bg-white dark:bg-white/[0.02] rounded-2xl border border-slate-200 dark:border-white/5 p-4">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-3">
+                      Por modalidade · % do total
+                    </p>
+                    {analytics.porModalidade.length === 0 ? (
+                      <p className="text-[10px] text-slate-400">Sem inscrições</p>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {analytics.porModalidade.map(m => (
+                          <div key={m.nome}>
+                            <div className="flex items-baseline justify-between gap-2 mb-1">
+                              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 truncate">
+                                {m.nome}
+                              </span>
+                              <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 tabular-nums shrink-0">
+                                {m.pct}%
+                              </span>
+                            </div>
+                            <div className="h-1 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-emerald-500/70"
+                                style={{ width: `${m.pct}%` }}
+                              />
+                            </div>
+                            <p className="text-[9px] text-slate-400 mt-1">
+                              {m.count} {m.count === 1 ? 'inscrição' : 'inscrições'}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Receita por categoria + Cupons */}
+                  <div className="bg-white dark:bg-white/[0.02] rounded-2xl border border-slate-200 dark:border-white/5 p-4 space-y-4">
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-3">
+                        Por categoria · receita
+                      </p>
+                      {analytics.porCategoria.length === 0 ? (
+                        <p className="text-[10px] text-slate-400">Sem confirmados</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {analytics.porCategoria.map(c => (
+                            <div key={c.nome} className="flex items-baseline justify-between gap-2">
+                              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 truncate">
+                                {c.nome}
+                              </span>
+                              <span className="text-[11px] font-black text-slate-700 dark:text-slate-200 tabular-nums shrink-0">
+                                R$ {c.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {analytics.topCupons.length > 0 && (
+                      <div className="pt-3 border-t border-slate-200 dark:border-white/5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">
+                          Cupons aplicados
+                        </p>
+                        <div className="space-y-1">
+                          {analytics.topCupons.map(cp => (
+                            <div key={cp.code} className="flex items-baseline justify-between gap-2">
+                              <span className="text-[11px] font-mono font-black text-[#ff0068] truncate">
+                                {cp.code}
+                              </span>
+                              <span className="text-[10px] text-slate-500 tabular-nums shrink-0">
+                                {cp.count}× · −R$ {cp.descontoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="bg-slate-100 dark:bg-slate-900/50 p-4 rounded-3xl border border-slate-200 dark:border-white/5 flex flex-col gap-3">
             {/* Sessão 4.2 fix: chip persistente do filtro de alerta. Aparece dentro
