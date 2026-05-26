@@ -72,6 +72,12 @@ const Registrations = () => {
   // pra não sobrecarregar visão inicial — produtor abre quando quer
   // explorar quem são os top estúdios / distribuição etc.
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  // Sessão 4.2 PR3 — bulk actions (ações em massa).
+  // Set<id> evita duplicatas e dá O(1) pra toggle. Só desktop (table view)
+  // por enquanto — mobile (cards) precisaria de "selection mode" toggle.
+  // Action bar flutuante embaixo quando ≥1 selecionado.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkActionFeedback, setBulkActionFeedback] = useState<string | null>(null);
   const [refundModal, setRefundModal] = useState<any>(null);
   const [refundAmount, setRefundAmount] = useState<string>('');
   const [refundReason, setRefundReason] = useState('');
@@ -683,6 +689,101 @@ const Registrations = () => {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [viewingReg, sortedRegistrations]);
+
+  // Sessão 4.2 PR3 — bulk action helpers.
+  const toggleSelected = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const allVisibleIds = useMemo(() => paginatedRegistrations.map((r: any) => r.id), [paginatedRegistrations]);
+  const allVisibleSelected = allVisibleIds.length > 0 && allVisibleIds.every((id: string) => selectedIds.has(id));
+  const someVisibleSelected = allVisibleIds.some((id: string) => selectedIds.has(id));
+
+  const toggleSelectAllVisible = () => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        allVisibleIds.forEach((id: string) => next.delete(id));
+      } else {
+        allVisibleIds.forEach((id: string) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  // Bulk actions: export CSV das selecionadas, copia emails, copia WhatsApps.
+  const selectedRegs = useMemo(
+    () => sortedRegistrations.filter((r: any) => selectedIds.has(r.id)),
+    [sortedRegistrations, selectedIds],
+  );
+
+  const showBulkFeedback = (msg: string) => {
+    setBulkActionFeedback(msg);
+    setTimeout(() => setBulkActionFeedback(null), 2500);
+  };
+
+  const handleBulkExportCSV = () => {
+    if (selectedRegs.length === 0) return;
+    const headers = ['Data', 'Coreografia', 'Modalidade', 'Tipo', 'Estúdio', 'Categoria', 'Estilo', 'Inscrito', 'Email', 'WhatsApp', 'Status Inscrição', 'Status Pagamento', 'Valor (R$)'];
+    const escape = (v: any) => {
+      const s = v == null ? '' : String(v);
+      return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = selectedRegs.map((r: any) => [
+      r.created_at ? new Date(r.created_at).toLocaleString('pt-BR') : '',
+      r.nome_coreografia ?? '', r.formato_participacao ?? '', r.tipo_apresentacao ?? '',
+      r.estudio ?? '', r.categoria ?? '', r.estilo_danca ?? '',
+      r.profiles?.full_name ?? r.inscrito_nome ?? '',
+      r.profiles?.email ?? r.inscrito_email ?? '',
+      r.profiles?.whatsapp ?? r.inscrito_whatsapp ?? '',
+      r.status ?? '', r.status_pagamento ?? '',
+      String(r.valor_pago ?? r.valor_total ?? r.charged_amount ?? ''),
+    ].map(escape).join(';'));
+    const csv = '﻿' + [headers.join(';'), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `inscricoes-selecionadas-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showBulkFeedback(`${selectedRegs.length} ${selectedRegs.length === 1 ? 'inscrição exportada' : 'inscrições exportadas'}`);
+  };
+
+  const handleBulkCopyEmails = () => {
+    const emails = [...new Set(
+      selectedRegs.map((r: any) => r.profiles?.email ?? r.inscrito_email).filter(Boolean)
+    )];
+    if (emails.length === 0) {
+      showBulkFeedback('Nenhum e-mail encontrado nas selecionadas');
+      return;
+    }
+    navigator.clipboard.writeText(emails.join(', ')).then(() => {
+      showBulkFeedback(`${emails.length} ${emails.length === 1 ? 'e-mail copiado' : 'e-mails copiados'}`);
+    }).catch(() => showBulkFeedback('Erro ao copiar — verifique permissão de clipboard'));
+  };
+
+  const handleBulkCopyWhatsapps = () => {
+    const wpps = [...new Set(
+      selectedRegs.map((r: any) => r.profiles?.whatsapp ?? r.inscrito_whatsapp).filter(Boolean)
+    )];
+    if (wpps.length === 0) {
+      showBulkFeedback('Nenhum WhatsApp encontrado nas selecionadas');
+      return;
+    }
+    navigator.clipboard.writeText(wpps.join(', ')).then(() => {
+      showBulkFeedback(`${wpps.length} ${wpps.length === 1 ? 'WhatsApp copiado' : 'WhatsApps copiados'}`);
+    }).catch(() => showBulkFeedback('Erro ao copiar — verifique permissão de clipboard'));
+  };
 
   const activeFiltersCount = useMemo(() => {
     let n = 0;
@@ -1447,6 +1548,18 @@ const Registrations = () => {
             <table className="w-full min-w-[640px] text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/5">
+                  {/* Sessão 4.2 PR3 — checkbox "select all visible" no header */}
+                  <th className="px-4 sm:px-6 py-5 w-10 hidden md:table-cell">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      ref={el => { if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected; }}
+                      onChange={toggleSelectAllVisible}
+                      onClick={e => e.stopPropagation()}
+                      className="w-4 h-4 rounded border-slate-300 dark:border-white/20 text-[#ff0068] focus:ring-2 focus:ring-[#ff0068]/40 cursor-pointer"
+                      aria-label="Selecionar todas visíveis"
+                    />
+                  </th>
                   {/* Sessão 4.1 sort header: click alterna direção. Ícone "≡" cinza
                       indica coluna sortable, seta ↑/↓ rosa marca a ativa. */}
                   <th onClick={() => toggleSort('nome')} className="px-4 sm:px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest cursor-pointer hover:text-[#ff0068] transition-colors select-none">
@@ -1469,10 +1582,10 @@ const Registrations = () => {
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                 {isLoading ? (
-                  <tr><td colSpan={8} className="py-20 text-center"><RefreshCw className="animate-spin mx-auto text-[#ff0068]" size={32} /></td></tr>
+                  <tr><td colSpan={9} className="py-20 text-center"><RefreshCw className="animate-spin mx-auto text-[#ff0068]" size={32} /></td></tr>
                 ) : filteredRegistrations.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center">
+                    <td colSpan={9} className="py-16 text-center">
                       {/* 2 estados de vazio diferentes:
                           1) Sem inscrições nenhuma no evento → CTA pra compartilhar
                              o link público (chama bailarinos pra se inscreverem).
@@ -1541,9 +1654,21 @@ const Registrations = () => {
                   <tr
                     key={reg.id}
                     onClick={() => setViewingReg(reg)}
-                    className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group cursor-pointer"
+                    className={`hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group cursor-pointer ${selectedIds.has(reg.id) ? 'bg-[#ff0068]/[0.03] dark:bg-[#ff0068]/10' : ''}`}
                     title="Ver detalhes da inscrição"
                   >
+                    {/* Sessão 4.2 PR3 — checkbox individual. stopPropagation
+                        pra não disparar o setViewingReg da row. */}
+                    <td className="px-4 sm:px-6 py-6 w-10 hidden md:table-cell" onClick={e => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(reg.id)}
+                        onChange={() => toggleSelected(reg.id)}
+                        onClick={e => e.stopPropagation()}
+                        className="w-4 h-4 rounded border-slate-300 dark:border-white/20 text-[#ff0068] focus:ring-2 focus:ring-[#ff0068]/40 cursor-pointer"
+                        aria-label={`Selecionar ${reg.nome_coreografia ?? 'inscrição'}`}
+                      />
+                    </td>
                     <td className="px-4 sm:px-8 py-6">
                       <p className="font-black text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-[#ff0068] transition-colors">{reg.nome_coreografia}</p>
                       <p className="text-[9px] text-[#ff0068] font-bold uppercase tracking-widest">{reg.tipo_apresentacao}</p>
@@ -2420,6 +2545,68 @@ const Registrations = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Sessão 4.2 PR3 — action bar flutuante quando ≥1 selecionado.
+          Sticky bottom, slide-in from below. Mostra count + ações:
+          Exportar CSV / Copiar e-mails / Copiar WhatsApps / Limpar.
+          Aria-live anuncia feedback (acessibilidade). */}
+      <AnimatePresence>
+        {selectedIds.size > 0 && (
+          <motion.div
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 280 }}
+            className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 hidden md:flex items-center gap-3 px-5 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl shadow-2xl border border-slate-800 dark:border-slate-200"
+            role="region"
+            aria-label="Ações em massa"
+          >
+            <span className="text-[10px] font-black uppercase tracking-widest">
+              {selectedIds.size} {selectedIds.size === 1 ? 'selecionada' : 'selecionadas'}
+            </span>
+            <div className="w-px h-6 bg-slate-700 dark:bg-slate-300" />
+            <button
+              onClick={handleBulkExportCSV}
+              className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-white/10 dark:hover:bg-slate-900/10 flex items-center gap-1.5 transition-all"
+              title="Exportar selecionadas como CSV"
+            >
+              <Download size={12} /> CSV
+            </button>
+            <button
+              onClick={handleBulkCopyEmails}
+              className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-white/10 dark:hover:bg-slate-900/10 flex items-center gap-1.5 transition-all"
+              title="Copiar e-mails das selecionadas"
+            >
+              <User size={12} /> E-mails
+            </button>
+            <button
+              onClick={handleBulkCopyWhatsapps}
+              className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-white/10 dark:hover:bg-slate-900/10 flex items-center gap-1.5 transition-all"
+              title="Copiar WhatsApps das selecionadas"
+            >
+              <Instagram size={12} /> WhatsApp
+            </button>
+            <div className="w-px h-6 bg-slate-700 dark:bg-slate-300" />
+            <button
+              onClick={clearSelection}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white dark:hover:text-slate-900 hover:bg-white/10 dark:hover:bg-slate-900/10 transition-all"
+              title="Limpar seleção"
+              aria-label="Limpar seleção"
+            >
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {bulkActionFeedback && (
+        <div
+          className="fixed bottom-20 md:bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-emerald-500 text-white rounded-xl shadow-lg text-[10px] font-black uppercase tracking-widest"
+          role="status"
+          aria-live="polite"
+        >
+          {bulkActionFeedback}
+        </div>
+      )}
     </div>
   );
 };
