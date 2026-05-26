@@ -2003,8 +2003,10 @@ const Registrations = () => {
       {/* Modal "Ver Detalhes" — pedido produtor Usualdance 2026-05-18.
           Estilo Notion/Linear: linha clicável abre painel lateral/modal
           com tudo sobre a inscrição. Padrão dashboard moderno. */}
-      <AnimatePresence>
-        {viewingReg && (() => {
+      {/* AnimatePresence removida — incompat com createPortal fez o panel
+          nao mountar ao clicar. Enter animation (initial→animate) ainda
+          funciona via motion.div abaixo; exit animation perdida. */}
+      {viewingReg && (() => {
           // Sessão 4.2 PR2 — drill-down side panel.
           // Desktop: slide-in from right (padrão Notion/Linear/Stripe Dashboard).
           // Mobile: modal centralizado (mantém UX original em telas pequenas).
@@ -2468,7 +2470,6 @@ const Registrations = () => {
           document.body
           );
         })()}
-      </AnimatePresence>
 
       {/* Sessão 4.2 item 6: drawer único de filtros. Modal centralizado (mesmo
           padrão visual dos outros modals do projeto). Contém os 7 selects que
