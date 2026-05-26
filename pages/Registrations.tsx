@@ -2037,27 +2037,21 @@ const Registrations = () => {
               aria-labelledby="reg-panel-title"
               className="relative bg-white dark:bg-slate-900 max-w-2xl w-full max-h-[90vh] sm:max-h-screen sm:h-screen sm:w-[34rem] sm:max-w-none rounded-3xl sm:rounded-l-3xl sm:rounded-r-none overflow-y-auto shadow-2xl"
             >
-              {/* Header sticky com nav prev/next (drill-down side panel) */}
-              <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 px-6 py-4 flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] mb-1">
-                    {viewingReg.tipo_apresentacao ?? '—'}
-                    {idxAtual >= 0 && (
-                      <span className="ml-2 text-slate-400 normal-case tracking-normal">
-                        · {idxAtual + 1}/{sortedRegistrations.length}
-                      </span>
-                    )}
-                  </p>
-                  <h2 id="reg-panel-title" className="font-black text-lg uppercase tracking-tight text-slate-900 dark:text-white leading-tight">{viewingReg.nome_coreografia ?? 'Sem nome'}</h2>
-                  {viewingReg.estudio && <p className="text-[11px] text-slate-500 mt-1">{viewingReg.estudio}</p>}
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {/* Nav prev/next — só desktop, ajuda revisar lista sem fechar */}
-                  <div className="hidden sm:flex items-center gap-0.5 mr-1">
+              {/* Header sticky refatorado em 2 linhas (revisao 2026-05-25):
+                  - Linha 1 (toolbar): nav prev/next + EDITAR + X. SEMPRE visivel,
+                    botoes nunca comprimidos pelo titulo. Layout consistente
+                    independente de tamanho do nome da coreografia.
+                  - Linha 2 (titulo): tipo + numero + h2 nome + estudio. Pode
+                    truncar via min-w-0 sem afetar a toolbar acima. */}
+              <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10">
+                {/* Toolbar: prev/next | EDITAR | X */}
+                <div className="px-4 sm:px-6 py-2.5 flex items-center justify-between border-b border-slate-100 dark:border-white/5">
+                  {/* Esquerda: nav prev/next (só desktop) */}
+                  <div className="flex items-center gap-0.5">
                     <button
                       onClick={() => navTo(regAnterior)}
                       disabled={!regAnterior}
-                      className="p-2 text-slate-500 hover:text-[#ff0068] hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg transition-all"
+                      className="hidden sm:inline-flex p-1.5 text-slate-500 hover:text-[#ff0068] hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg transition-all"
                       title="Inscrição anterior (← seta esquerda)"
                       aria-label="Inscrição anterior"
                     >
@@ -2066,25 +2060,48 @@ const Registrations = () => {
                     <button
                       onClick={() => navTo(regProxima)}
                       disabled={!regProxima}
-                      className="p-2 text-slate-500 hover:text-[#ff0068] hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg transition-all"
+                      className="hidden sm:inline-flex p-1.5 text-slate-500 hover:text-[#ff0068] hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg transition-all"
                       title="Próxima inscrição (→ seta direita)"
                       aria-label="Próxima inscrição"
                     >
                       <ChevronRight size={16} />
                     </button>
+                    {idxAtual >= 0 && (
+                      <span className="hidden sm:inline text-[9px] font-black uppercase tracking-widest text-slate-400 ml-2">
+                        {idxAtual + 1}/{sortedRegistrations.length}
+                      </span>
+                    )}
                   </div>
-                  {!editing && (
+                  {/* Direita: EDITAR + X */}
+                  <div className="flex items-center gap-2">
+                    {!editing && (
+                      <button
+                        onClick={() => startEditing(viewingReg)}
+                        className="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg transition-all flex items-center gap-1.5"
+                        title="Editar dados da inscrição"
+                      >
+                        <Pencil size={12} /> Editar
+                      </button>
+                    )}
                     <button
-                      onClick={() => startEditing(viewingReg)}
-                      className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-xl transition-all flex items-center gap-1.5"
-                      title="Editar dados da inscrição"
+                      onClick={() => { cancelEditing(); setViewingReg(null); }}
+                      className="p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-all"
+                      title="Fechar (Esc)"
+                      aria-label="Fechar"
                     >
-                      <Pencil size={12} /> Editar
+                      <X size={18} />
                     </button>
-                  )}
-                  <button onClick={() => { cancelEditing(); setViewingReg(null); }} className="p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-all" title="Fechar (Esc)">
-                    <X size={20} />
-                  </button>
+                  </div>
+                </div>
+                {/* Titulo: tipo, h2 nome, estudio */}
+                <div className="px-4 sm:px-6 py-3 min-w-0">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] mb-1">
+                    {viewingReg.tipo_apresentacao ?? '—'}
+                  </p>
+                  <h2 id="reg-panel-title" className="font-black text-lg uppercase tracking-tight text-slate-900 dark:text-white leading-tight break-words">
+                    {viewingReg.nome_coreografia ?? 'Sem nome'}
+                  </h2>
+                  {viewingReg.estudio && <p className="text-[11px] text-slate-500 mt-1 truncate">{viewingReg.estudio}</p>}
                 </div>
               </div>
 
