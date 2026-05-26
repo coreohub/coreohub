@@ -6,7 +6,7 @@ import {
   ChevronLeft, ChevronRight, Bell, SlidersHorizontal,
   Undo2, Loader2, Eye, Music2, Video, Calendar, User, Instagram,
   TrendingUp, ExternalLink, Pencil, Save, Lock as LockIcon,
-  BarChart3,
+  BarChart3, MessageCircle,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -2020,7 +2020,7 @@ const Registrations = () => {
             setViewingReg(reg);
           };
           return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center sm:items-stretch sm:justify-end p-4 sm:p-0">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center sm:items-stretch sm:justify-end p-4 sm:p-0">
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => { cancelEditing(); setViewingReg(null); }}
@@ -2032,6 +2032,9 @@ const Registrations = () => {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 40 }}
               transition={{ type: 'spring', damping: 25, stiffness: 240 }}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="reg-panel-title"
               className="relative bg-white dark:bg-slate-900 max-w-2xl w-full max-h-[90vh] sm:max-h-screen sm:h-screen sm:w-[34rem] sm:max-w-none rounded-3xl sm:rounded-l-3xl sm:rounded-r-none overflow-y-auto shadow-2xl"
             >
               {/* Header sticky com nav prev/next (drill-down side panel) */}
@@ -2045,7 +2048,7 @@ const Registrations = () => {
                       </span>
                     )}
                   </p>
-                  <h2 className="font-black text-lg uppercase tracking-tight text-slate-900 dark:text-white leading-tight">{viewingReg.nome_coreografia ?? 'Sem nome'}</h2>
+                  <h2 id="reg-panel-title" className="font-black text-lg uppercase tracking-tight text-slate-900 dark:text-white leading-tight">{viewingReg.nome_coreografia ?? 'Sem nome'}</h2>
                   {viewingReg.estudio && <p className="text-[11px] text-slate-500 mt-1">{viewingReg.estudio}</p>}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -2584,7 +2587,7 @@ const Registrations = () => {
               className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-white/10 dark:hover:bg-slate-900/10 flex items-center gap-1.5 transition-all"
               title="Copiar WhatsApps das selecionadas"
             >
-              <Instagram size={12} /> WhatsApp
+              <MessageCircle size={12} /> WhatsApp
             </button>
             <div className="w-px h-6 bg-slate-700 dark:bg-slate-300" />
             <button
