@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Search, Download, RefreshCw,
   Trash2, AlertTriangle, X, DollarSign,
@@ -2009,6 +2010,12 @@ const Registrations = () => {
           // Mobile: modal centralizado (mantém UX original em telas pequenas).
           // Nav prev/next via arrow keys + botões no header (sem fechar pra
           // abrir próxima — navegação fluida pra produtor revisar lista).
+          //
+          // PORTAL pra escapar do stacking context do <main relative z-10>
+          // do PrivateLayout. Sem portal, o panel z-[60] ficava aprisionado
+          // dentro do main e era pintado ABAIXO do Header (sticky z-50 no
+          // parent context). Renderizando direto em document.body, z-[60]
+          // funciona globalmente. Padrão Stripe Dashboard / Linear.
           const idxAtual    = sortedRegistrations.findIndex((r: any) => r.id === viewingReg.id);
           const regAnterior = idxAtual > 0 ? sortedRegistrations[idxAtual - 1] : null;
           const regProxima  = idxAtual >= 0 && idxAtual < sortedRegistrations.length - 1
@@ -2019,7 +2026,7 @@ const Registrations = () => {
             cancelEditing();
             setViewingReg(reg);
           };
-          return (
+          return createPortal(
           <div className="fixed inset-0 z-[60] flex items-center justify-center sm:items-stretch sm:justify-end p-4 sm:p-0">
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -2457,7 +2464,8 @@ const Registrations = () => {
                 </button>
               </div>
             </motion.div>
-          </div>
+          </div>,
+          document.body
           );
         })()}
       </AnimatePresence>
