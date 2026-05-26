@@ -662,6 +662,28 @@ const Registrations = () => {
 
   // Sessão 4.2 item 6: contador de filtros ativos (exclui search/quickAlert porque
   // têm UI própria). Mostrado em badge no botão "Filtros".
+  // Sessão 4.2 PR2 — keyboard nav no drill-down side panel.
+  // ←/→ navega entre inscrições (sortedRegistrations ordem visível). Esc fecha.
+  // Só ativa quando o panel está aberto pra não interferir com outros atalhos.
+  useEffect(() => {
+    if (!viewingReg) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const idx = sortedRegistrations.findIndex((r: any) => r.id === viewingReg.id);
+      if (e.key === 'Escape') { cancelEditing(); setViewingReg(null); return; }
+      if (e.key === 'ArrowLeft' && idx > 0) {
+        cancelEditing();
+        setViewingReg(sortedRegistrations[idx - 1]);
+      }
+      if (e.key === 'ArrowRight' && idx >= 0 && idx < sortedRegistrations.length - 1) {
+        cancelEditing();
+        setViewingReg(sortedRegistrations[idx + 1]);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [viewingReg, sortedRegistrations]);
+
   const activeFiltersCount = useMemo(() => {
     let n = 0;
     if (paymentFilter !== 'ALL') n++;
@@ -1856,25 +1878,73 @@ const Registrations = () => {
           Estilo Notion/Linear: linha clicável abre painel lateral/modal
           com tudo sobre a inscrição. Padrão dashboard moderno. */}
       <AnimatePresence>
-        {viewingReg && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        {viewingReg && (() => {
+          // Sessão 4.2 PR2 — drill-down side panel.
+          // Desktop: slide-in from right (padrão Notion/Linear/Stripe Dashboard).
+          // Mobile: modal centralizado (mantém UX original em telas pequenas).
+          // Nav prev/next via arrow keys + botões no header (sem fechar pra
+          // abrir próxima — navegação fluida pra produtor revisar lista).
+          const idxAtual    = sortedRegistrations.findIndex((r: any) => r.id === viewingReg.id);
+          const regAnterior = idxAtual > 0 ? sortedRegistrations[idxAtual - 1] : null;
+          const regProxima  = idxAtual >= 0 && idxAtual < sortedRegistrations.length - 1
+            ? sortedRegistrations[idxAtual + 1]
+            : null;
+          const navTo = (reg: any) => {
+            if (!reg) return;
+            cancelEditing();
+            setViewingReg(reg);
+          };
+          return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center sm:items-stretch sm:justify-end p-4 sm:p-0">
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setViewingReg(null)}
+              onClick={() => { cancelEditing(); setViewingReg(null); }}
               className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-              className="relative bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+              key={viewingReg.id}
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 40 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 240 }}
+              className="relative bg-white dark:bg-slate-900 max-w-2xl w-full max-h-[90vh] sm:max-h-screen sm:h-screen sm:w-[34rem] sm:max-w-none rounded-3xl sm:rounded-l-3xl sm:rounded-r-none overflow-y-auto shadow-2xl"
             >
-              {/* Header sticky */}
+              {/* Header sticky com nav prev/next (drill-down side panel) */}
               <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 px-6 py-4 flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] mb-1">{viewingReg.tipo_apresentacao ?? '—'}</p>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] mb-1">
+                    {viewingReg.tipo_apresentacao ?? '—'}
+                    {idxAtual >= 0 && (
+                      <span className="ml-2 text-slate-400 normal-case tracking-normal">
+                        · {idxAtual + 1}/{sortedRegistrations.length}
+                      </span>
+                    )}
+                  </p>
                   <h2 className="font-black text-lg uppercase tracking-tight text-slate-900 dark:text-white leading-tight">{viewingReg.nome_coreografia ?? 'Sem nome'}</h2>
                   {viewingReg.estudio && <p className="text-[11px] text-slate-500 mt-1">{viewingReg.estudio}</p>}
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
+                  {/* Nav prev/next — só desktop, ajuda revisar lista sem fechar */}
+                  <div className="hidden sm:flex items-center gap-0.5 mr-1">
+                    <button
+                      onClick={() => navTo(regAnterior)}
+                      disabled={!regAnterior}
+                      className="p-2 text-slate-500 hover:text-[#ff0068] hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg transition-all"
+                      title="Inscrição anterior (← seta esquerda)"
+                      aria-label="Inscrição anterior"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <button
+                      onClick={() => navTo(regProxima)}
+                      disabled={!regProxima}
+                      className="p-2 text-slate-500 hover:text-[#ff0068] hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg transition-all"
+                      title="Próxima inscrição (→ seta direita)"
+                      aria-label="Próxima inscrição"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
                   {!editing && (
                     <button
                       onClick={() => startEditing(viewingReg)}
@@ -1884,7 +1954,7 @@ const Registrations = () => {
                       <Pencil size={12} /> Editar
                     </button>
                   )}
-                  <button onClick={() => { cancelEditing(); setViewingReg(null); }} className="p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-all">
+                  <button onClick={() => { cancelEditing(); setViewingReg(null); }} className="p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-all" title="Fechar (Esc)">
                     <X size={20} />
                   </button>
                 </div>
@@ -2243,7 +2313,8 @@ const Registrations = () => {
               </div>
             </motion.div>
           </div>
-        )}
+          );
+        })()}
       </AnimatePresence>
 
       {/* Sessão 4.2 item 6: drawer único de filtros. Modal centralizado (mesmo
