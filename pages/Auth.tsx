@@ -344,10 +344,10 @@ const Auth = () => {
           <div className="space-y-8">
             <div className="text-center space-y-2">
               <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                {authMode === 'login' ? 'Bem-vindo de Volta' : 'Comece sua Jornada'}
+                {authMode === 'login' ? 'Acesse sua conta' : 'Comece sua Jornada'}
               </h2>
               <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest">
-                {authMode === 'login' ? 'Acesse sua conta' : 'Crie seu perfil de acesso'}
+                {authMode === 'login' ? 'Entre com seu e-mail e senha' : 'Crie seu perfil de acesso'}
               </p>
             </div>
 
@@ -434,7 +434,7 @@ const Auth = () => {
                     </div>
                   ) : (
                     <>
-                      <span>{authMode === 'login' ? 'Entrar no Palco' : 'Criar Minha Conta'}</span>
+                      <span>{authMode === 'login' ? 'Entrar' : 'Criar Minha Conta'}</span>
                       <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                     </>
                   )}
@@ -470,7 +470,7 @@ const Auth = () => {
                 onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
                 className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-[#ff0068] transition-colors"
               >
-                {authMode === 'login' ? 'Não tem conta? Criar Nova Conta' : 'Já tem conta? Entrar'}
+                {authMode === 'login' ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Entrar'}
               </button>
 
               {/* Esqueci a senha — magic link como recovery (não signup).
