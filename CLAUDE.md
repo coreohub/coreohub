@@ -238,6 +238,24 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-05-27 — Prêmios com valor R$ + DEMO/Regulamento IA atualizados ✅ SHIPADO
+3 commits (`ae0e4f4` → `0752eda`).
+
+**Premiação valor R$ + template Coreógrafo(a) (`ae0e4f4`, `74e3be3`, `d2d0284`)**:
+- Campo `valor?: number` em `SpecialAward` ([AccountSettings.tsx:236](pages/AccountSettings.tsx#L236), JudgeTerminal TS-only, vitrine pública em emerald quando >0).
+- Descrições padrão dos templates **limpadas** (poluíam — só nome + descrição opcional + valor).
+- Novo template **"Melhor Coreógrafo(a)"** (id `tpl_coreografo_pessoa`) — premia a pessoa, separado de "Melhor Coreografia" (a obra). ID do template original `tpl_coreografo` preservado pra não quebrar premios já salvos (merge por id).
+- Templates **NÃO editáveis no nome** (decisão de produto: template = sugestão consistente de mercado, custom = liberdade). Descrição/valor editáveis dão flexibilidade.
+- 6 `aria-label` adicionados nos inputs de prêmio.
+- **Incidente**: durante refactor removi declaração do state `editingAwardId` por engano → tab Prêmios quebrou com ReferenceError em prod (~10min). Fix em `74e3be3`. Lição [[feedback-smoke-tabs]]: smoke do Playwright só carrega URL default, NÃO navega tabs — mudança em tab específica precisa validação manual da tab.
+
+**DEMO + Regulamento IA cobrindo features novas (`0752eda`)**:
+- **seed-demo-event**: 6 prêmios (com Coreógrafo(a)) + 3 com valor R$; bailarinos com **CPF válido (módulo 11) + data_nascimento** inseridos em `elenco` real (IDs em bailarinos_detalhes) — elimina banner falso "dados pendentes" no Dashboard do demo; cleanup deleta só elenco do demo (preserva real); cupons com `max_uses_per_user`.
+- **gemini-analysis**: schema ganha `prizes[].valor` (instrução forte anti-alucinação "só se PDF citar explícito"), `formacoes[].min/max_performers`, `bonifications[]` (bolsas/intercâmbios textuais).
+- **RegulationAIParser + geminiService**: propaga `valor` no merge (preserva existentes via dedup por nome).
+- 2 edge functions redeployadas. Build OK.
+- **NF emission**: decisão de NÃO implementar agora (produtor MEI Hemer não emite NF automática; demanda vira WhatsApp manual).
+
 ### 2026-05-22 (noite — maratona cupom UX + idempotência + cleanup) ✅ SHIPADO
 16+ commits (`e66ca37` → `b6c8031`). Sessão mais longa registrada. Cobriu refator dados-pendentes (top1 da sessão anterior), cupom no fluxo agregado/single/seletiva ponta-a-ponta, UX padrão Stripe/Sympla, idempotência via webhook, +3 pendências separadas resolvidas no fim. Detalhes em [[refactor-elenco-dados-pendentes-shipado]] + [[cupom-aggregate-shipado]].
 
