@@ -581,14 +581,70 @@ Smoke Playwright 4/4 OK. Validação E2E de mutation real (smoke manual ~30min) 
 
 Smoke Playwright 6/6 OK (errors=0, overflow=false). Migrations aplicadas em prod 2026-05-25. Detalhes em [[auditoria-rls-protect-triggers-shipado]].
 
+### ✅ Sessão 4.2 painel /registrations COMPLETA SHIPADA 2026-05-26
+
+Item P2 mais aguardado do backlog. 7 commits totais entregando 3 features grandes + 4 correções de revisão + 1 fix arquitetural de stacking context.
+
+| Hash | Tema |
+|---|---|
+| `31f17fb` | **PR1 — Análise Financeira** colapsável (Top 5 estúdios + Modalidade % + Receita por categoria + Cupons aplicados) |
+| `30cc858` | **PR2 — Drill-down side panel** (slide-in desktop + nav prev/next `←` `→` + indicador `X/Y` + Esc fecha) |
+| `74437fc` | **PR3 — Bulk actions** (checkboxes + action bar flutuante: Exportar CSV/Copiar e-mails/Copiar WhatsApps) |
+| `12e4035` | Fix revisão: Instagram→MessageCircle icon + role=dialog + z-[60] |
+| `203c560` | Refactor header em 2 linhas (toolbar fixa garantindo EDITAR + X sempre visíveis) |
+| `ac5ae4f` | **Fix crítico**: `createPortal` pra escapar stacking context de `<main relative z-10>` do PrivateLayout |
+| `52f07de` | Remove `AnimatePresence` ao redor do portal (incompatível com Framer Motion) |
+
+**Lição arquitetural registrada em [[licao-createPortal-stacking-context]]**: modais/side panels em páginas dentro do PrivateLayout SEMPRE precisam de `createPortal(panel, document.body)`. z-index direto não basta — fica preso no stacking context do `<main z-10>`.
+
+Detalhes em [[bundle-sessao-4-2-completa-shipado]].
+
+### ✅ Refactor cupom: só em PAGAR TUDO (aggregate) SHIPADO 2026-05-26
+
+Decisão de produto baseada em pesquisa de mercado universal (Stripe/Sympla/iFood/Hotmart/Eventbrite — todos cupom único por sessão de checkout). Resolve exploit identificado: cupom valor fixo + `max_uses_per_user > 1` permitia inscrito ganhar desconto MAIOR usando "PAGAR SÓ ESTA" em cada inscrição individualmente.
+
+Commits:
+- `5ec7f41` — Frontend: cupom UI volta pra dentro do card PAGAR TUDO. `handlePagarSingle` deixa de enviar `coupon_code`.
+- `b6b4f2a` — Copy alinhado (header "CUPOM DE DESCONTO", padrão Sympla/Hotmart/Magalu).
+- `8af3eaa` — Backend defesa em profundidade: `create-payment-asaas` bloqueia request com cupom se user tem múltiplas pendentes no evento. Preserva caso Checkout.tsx (pós-wizard com 1 inscrição).
+
+Detalhes em [[decisao-cupom-so-pagar-tudo]].
+
+### ✅ Auth.tsx copy alinhada mercado BR SHIPADO 2026-05-26
+
+Commit `95b4843` (feito pelo user durante a sessão). Pesquisa de mercado: BR SaaS usa "Acesse sua conta" / "Entrar" / "Cadastre-se" como padrão (Sympla/iFood/Nubank/Hotmart/Spotify).
+
+- "BEM-VINDO DE VOLTA" → "ACESSE SUA CONTA" (mais neutro pra primeira vez)
+- Subtítulo: "Entre com seu e-mail e senha" (instrução)
+- Botão "ENTRAR NO PALCO" → "ENTRAR" (padrão BR)
+- "Não tem conta? Criar Nova Conta" → "Cadastre-se" (sem redundância)
+
+### ✅ Bundle refund partial com splitRefunds SHIPADO 2026-05-25/26
+
+Continuação do bundle fluxo pagamento+refund. Logs do Supabase Edge Function revelaram a causa exata do erro "Valor da cobrança insuficiente" no refund de BREAK NÃO PARA:
+
+```json
+{ "errors": [{ "code": "invalid_action",
+  "description": "Valor da cobrança insuficiente para o estorno solicitado." }] }
+```
+
+Asaas API: em partial refund de payment com split, **sem `splitRefunds` Asaas tenta deduzir o valor INTEIRO do main charge (master, que só tem comissão)**. Doc oficial: "When both value and splitRefunds are informed, total refund equals value, with part coming from splits and remaining balance deducted from main charge."
+
+Commit `a9036d5` — `refund-asaas-payment` calcula `producerShareRatio = net/gross` e envia `splitRefunds: [{ walletId, value: producerRefundShare }]`.
+
+Commit `49b1d33` — fallback robusto:
+1. Query `platform_commissions` por `registration_id` (não `asaas_payment_id`) pra evitar ambiguidade em AGG flow com N rows.
+2. Try-and-fallback: se Asaas devolver erro com "split" na descrição, retry sem `splitRefunds`. Asaas deduz tudo do main charge (pode falhar com "insuficiente" se valor parcial > master charge).
+
+**Workaround conhecido**: **full refund (sem `value` no body)** funciona sempre — Asaas distribui proporcional automaticamente. Validado em prod 2026-05-26: refund de NOVINHO R$ 50 via painel CoreoHub passou; Mercado Pago confirmou crédito de R$ 40 pra Cultural Estúdio; Asaas marcou cobrança como estornada; CoreoHub painel atualizou `status='CANCELADA'` + `status_pagamento='ESTORNADO'`.
+
+**Pendência**: fix permanente partial refund precisa buscar `walletId` direto do payment Asaas via `GET /payments/{id}` (em vez de usar `profiles.asaas_wallet_id` que pode divergir do walletId original do split). ~30min — defer pra quando produtor demandar partial refund frequente.
+
 ## 🟨 P2 — Alto valor, esforço maior
-- **Painel /registrations Sessão 4.2** — drill-down side panel + ações em massa + análise financeira (Top 5 estúdios, distribuição por modalidade). ~10h. Sessão 4.1 (quick wins) já shipada 2026-05-22.
 - **B4 Push Web (notificações)** — ~4h. Cobertura 15-30% (taxa típica de aceitar permissão). Faz sentido só depois do inbox virar baseline + algum produtor demandar. VAPID keys + permission UX + send-push edge function. Service Worker já existe via workbox.
 - **Phase 6 — Mesa de Som offline-first** (`#37`) — botão "Baixar pacote do evento" pré-cacheia trilhas + narrações no Cache API. Outbox de live_status. ~1-2 sprints.
 - **A19 — Testes automatizados** — Vitest + GitHub Actions + mock Supabase client. 3 PRs (webhook → sweep/KYC/reminders → seletiva/pricing). ~4-6h. Trigger: ~5 produtores ativos OU primeira regressão cara.
-- **Card Saldo: ler saldo real do Asaas via API** — hoje mostra `net_amount` esperado, pode divergir do saldo real se houver dívida pendente na subconta. UX a polir.
-- **Test E2E cenário 3 D+7** (botão Transferir agora) — defer pelo user em 2026-05-21. Cenários 1 + 1.5 + 2 passaram.
-- **Bundle index 891 kB** — warning Vite > 500kB. Code-split BarChart + jspdf ajudaria. LCP em 3G.
+- **Fix permanente partial refund (`GET /payments/{id}` pra walletId real)** — ~30min. Defer até produtor demandar partial refund frequente. Workaround atual: full refund (deixa campo vazio no modal) funciona sempre.
 
 ### 🟩 P3 — Aguardando trigger externo
 - **TED como payout alternativo** — plano + taxas pronto, congelado até alguém pedir.
@@ -601,10 +657,9 @@ Smoke Playwright 6/6 OK (errors=0, overflow=false). Migrations aplicadas em prod
 Resolvidos em 2026-05-23 (`f7d605c`+`81d2d0f`+`87cc593`) + 2026-05-24 (aplicação): NotificationBell `formatRelative` re-renderiza via `setInterval` 60s; `send-trilha-reminders` agora bulk fetch (2 queries por evento); `notifications.metadata` indexes aplicadas em prod 2026-05-24 (2 btree expression + 1 GIN); contraste cyan no card Funil de Leads corrigido pro light mode (`text-cyan-700 dark:text-[#1de7f2]`).
 
 ### ⚠️ Pendência operacional
-- ~~**🔴 Bug crítico em prod: signup `/auth/v1/signup` retorna 500**~~ ✅ **FIXADO 2026-05-24**. Causa raiz dupla — SMTP nativo Supabase frágil + domínio `coreohub.com` no Resend com SPF subdomain `send` faltando (removido por engano em 2026-05-18 achando que era AWS SES legacy, era Resend). Fix: edge function `auth-email-hook` (Send Email Hook via Resend) deployada + 2 records DNS recriados no Cloudflare. Detalhes em [[bug-signup-500-fixado-2026-05-24]]. **Benefício colateral**: todos os emails transacionais (`send-email`) voltaram a funcionar — estavam quebrados desde 05-18 sem ninguém notar.
-- **Funil de leads no painel produtor** — 10 users em `auth.users` que logaram via Google/Email mas nunca completaram inscrição em nenhum evento. Vale virar feature: aba "Leads" em /qg-organizador com count e CTA "Lembrar de se inscrever via email". P3 backlog — sem urgência.
-- **Service_role_key precisa ser rotacionada** — vazou no transcript durante smoke 2026-05-21 (erro do bash com `source .env` malformado). User vai rotacionar quando puder. Atualizar 3 lugares depois: `.env` local, possível header de webhook no painel Asaas, secret no Supabase Functions (auto). NOTA: as edge functions agora usam JWT decode pra auth (não comparam string), então rotação não quebra crons.
-- **Cron `send-trilha-reminders` agendado mas sem dados** — primeira execução 2026-05-22 09:00 BRT. Provavelmente passa direto porque evento Usualdance 2026 não tem `prazo_trilhas` setado em `configuracoes`. Pra ver cron funcionar de verdade: produtor configura prazo em `/configuracoes` ou edita SQL direto. Aceitável — é cron preparado pro futuro.
+- **Service_role_key precisa ser rotacionada** — vazou no transcript durante smoke 2026-05-21 (erro do bash com `source .env` malformado). User vai rotacionar quando puder. Edge functions usam JWT decode pra auth, então rotação não quebra crons.
+- **Cron `send-trilha-reminders` agendado mas sem dados** — preparado pro futuro. Dispara vazio até produtor configurar `prazo_trilhas` em `/configuracoes`.
+- **NF emission** — produtor MEI Hemer não emite NF automática. Caso surgir demanda (cliente pediu), responder via WhatsApp manual. Plataforma fica como está. Decisão 2026-05-26: NÃO implementar agora.
 
 ## Não fazer
 
