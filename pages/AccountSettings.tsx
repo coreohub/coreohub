@@ -1396,7 +1396,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [newAwardValor, setNewAwardValor]         = useState('');
   // Edição inline de custom award já criado. State global é updated direto
   // — input Valor é derivado de award.valor mascarado.
-  // (editingAwardId já existe declarado abaixo — não duplicar)
+  const [editingAwardId, setEditingAwardId]       = useState<string | null>(null);
 
   const toggleAward = (id: string) => {
     setAwardsTouched(true);
