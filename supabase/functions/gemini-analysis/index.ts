@@ -73,10 +73,15 @@ const schema = {
         items: {
           type: 'object',
           properties: {
-            name:     { type: 'string' },
-            max_time: { type: 'string' },
-            fee:      { type: 'number' },
-            format:   { type: 'string', enum: ['RANKING', 'PEDAGOGICAL', 'GRADUATED'] },
+            name:           { type: 'string' },
+            max_time:       { type: 'string' },
+            fee:            { type: 'number' },
+            format:         { type: 'string', enum: ['RANKING', 'PEDAGOGICAL', 'GRADUATED'] },
+            // Limites de bailarinos por modalidade. Ex: Solo=1/1, Duo=2/2,
+            // Trio=3/3, Grupo=4/15, Conjunto=16/30. Extrair quando regulamento
+            // citar explicitamente ("Grupo: de 4 a 15 bailarinos").
+            min_performers: { type: 'number' },
+            max_performers: { type: 'number' },
           },
           required: ['name', 'max_time', 'fee', 'format'],
         },
@@ -111,9 +116,22 @@ const schema = {
             // 'TODOS' (default) = aplica a qualquer gênero. Use exatamente
             // o mesmo nome canônico que aparece em genres/event_styles_structured.
             genre:       { type: 'string' },
+            // Valor monetário em R$ (decimal). Extrair APENAS quando o PDF
+            // citar explicitamente valor em dinheiro (ex: "Melhor Grupo
+            // R$ 5.000,00"). NÃO inferir nem inventar valores — se o
+            // regulamento só menciona "troféu" ou "bolsa", deixar omitido.
+            valor:       { type: 'number' },
           },
           required: ['name', 'description'],
         },
+      },
+      // Bonificações por colocação descritas em texto livre.
+      // Captura linhas como "1º lugar recebe R$ 1.000 adicional",
+      // "Top 3 ganham bolsa de estudos", etc. Produtor lê e configura
+      // manualmente no painel se quiser estruturar.
+      bonifications: {
+        type: 'array',
+        items: { type: 'string' },
       },
       // ── Item #34 do backlog (extensão pós-Workshops/Tier 2): ───────────
       audience_tickets: {
@@ -353,6 +371,9 @@ ATENÇÃO ANTI-CONFUSÃO (palavras enganosas):
 • refund_policy: texto da política de cancelamento e reembolso quando o regulamento menciona. Ex "Cancelamentos até 15 dias antes do evento: reembolso de 80%. Após esse prazo: sem reembolso. Em caso de cancelamento do evento por força maior, reembolso integral em até 30 dias."
 • prizes[].formation: quando o prêmio especial é restrito a uma modalidade específica, preencha com o nome dela. Ex "Melhor Grupo da Noite" → formation='Grupo'; "Melhor Solo Masculino" → formation='Solo'. Se o prêmio se aplica a qualquer modalidade, use 'TODOS' (default). Exemplos comuns que NÃO restringem: "Melhor Bailarino(a)", "Revelação", "Melhor Coreografia" → todos viram 'TODOS'.
 • prizes[].genre: quando o prêmio é específico de um gênero/estilo, preencha. Ex "Melhor Coreógrafo Jazz" → genre='Jazz'; "Revelação Hip Hop" → genre='Hip Hop'; "Melhor Variação Clássica" → genre='Ballet Clássico'. Use EXATAMENTE o mesmo nome canônico que aparece em genres/event_styles_structured. Se o prêmio se aplica a qualquer gênero (ex: "Melhor Iluminação", "Melhor Figurino"), use 'TODOS' (default). Quando o regulamento diz "Em cada gênero será premiado o Melhor Coreógrafo", DUPLIQUE o prêmio uma vez por gênero ofertado — gera 1 prize por gênero com nome "Melhor Coreógrafo Jazz", "Melhor Coreógrafo Ballet", etc.
+• prizes[].valor: valor monetário em R$ (number, decimal). PREENCHA APENAS quando o regulamento citar EXPLICITAMENTE o valor em dinheiro do prêmio. Ex "Melhor Grupo da Noite: R$ 5.000,00" → valor=5000. "Melhor Coreógrafo recebe R$ 1.500" → valor=1500. NÃO INFIRA, NÃO INVENTE. Se o prêmio é só "troféu", "medalha", "bolsa de estudos", "intercâmbio", "kit de produtos" sem valor em R$ declarado, OMITA o campo valor. Quando o regulamento diz "premiação total de R$ 50.000 dividida entre os ganhadores", NÃO distribua — deixe valor omitido e capture o texto em bonifications.
+• formacoes[].min_performers / max_performers: limites de bailarinos por modalidade quando regulamento detalha. Ex "Solo: 1 bailarino" → min=1, max=1. "Duo: 2 bailarinos" → min=2, max=2. "Trio: 3" → min=3, max=3. "Grupo: 4 a 15 bailarinos" → min=4, max=15. "Conjunto: 16 a 30" → min=16, max=30. Se regulamento não cita números, OMITA — não infira por convenção (Solo geralmente é 1 mas pode haver exceção).
+• bonifications: array de strings com bonificações por colocação, descrições de bolsas, intercâmbios e premiações estruturadas que não se encaixam em prizes[]. Ex ["1º lugar Geral recebe bolsa integral na CIA do festival", "Top 3 ganham R$ 1.000 cada em material", "Coreógrafos premiados recebem intercâmbio em workshop"]. Texto literal do regulamento, sem reformular.
 • aceita_danca_inclusiva: festival aceita dança inclusiva / coreografias com bailarinos PCD? boolean.
 • nivel_tecnico_enabled: festival tem eixo técnico (Iniciante/Intermediário/Avançado) além de categoria por idade? boolean.
 • stage_safety_interval_seconds: intervalo de segurança entre apresentações em SEGUNDOS. Ex "intervalo de 30s entre coreografias" → 30.
@@ -438,6 +459,9 @@ ATENÇÃO ANTI-CONFUSÃO (palavras enganosas):
 • refund_policy: texto da política de cancelamento e reembolso quando o regulamento menciona. Ex "Cancelamentos até 15 dias antes do evento: reembolso de 80%. Após esse prazo: sem reembolso. Em caso de cancelamento do evento por força maior, reembolso integral em até 30 dias."
 • prizes[].formation: quando o prêmio especial é restrito a uma modalidade específica, preencha com o nome dela. Ex "Melhor Grupo da Noite" → formation='Grupo'; "Melhor Solo Masculino" → formation='Solo'. Se o prêmio se aplica a qualquer modalidade, use 'TODOS' (default). Exemplos comuns que NÃO restringem: "Melhor Bailarino(a)", "Revelação", "Melhor Coreografia" → todos viram 'TODOS'.
 • prizes[].genre: quando o prêmio é específico de um gênero/estilo, preencha. Ex "Melhor Coreógrafo Jazz" → genre='Jazz'; "Revelação Hip Hop" → genre='Hip Hop'; "Melhor Variação Clássica" → genre='Ballet Clássico'. Use EXATAMENTE o mesmo nome canônico que aparece em genres/event_styles_structured. Se o prêmio se aplica a qualquer gênero (ex: "Melhor Iluminação", "Melhor Figurino"), use 'TODOS' (default). Quando o regulamento diz "Em cada gênero será premiado o Melhor Coreógrafo", DUPLIQUE o prêmio uma vez por gênero ofertado — gera 1 prize por gênero com nome "Melhor Coreógrafo Jazz", "Melhor Coreógrafo Ballet", etc.
+• prizes[].valor: valor monetário em R$ (number, decimal). PREENCHA APENAS quando o regulamento citar EXPLICITAMENTE o valor em dinheiro do prêmio. Ex "Melhor Grupo da Noite: R$ 5.000,00" → valor=5000. "Melhor Coreógrafo recebe R$ 1.500" → valor=1500. NÃO INFIRA, NÃO INVENTE. Se o prêmio é só "troféu", "medalha", "bolsa de estudos", "intercâmbio", "kit de produtos" sem valor em R$ declarado, OMITA o campo valor. Quando o regulamento diz "premiação total de R$ 50.000 dividida entre os ganhadores", NÃO distribua — deixe valor omitido e capture o texto em bonifications.
+• formacoes[].min_performers / max_performers: limites de bailarinos por modalidade quando regulamento detalha. Ex "Solo: 1 bailarino" → min=1, max=1. "Duo: 2 bailarinos" → min=2, max=2. "Trio: 3" → min=3, max=3. "Grupo: 4 a 15 bailarinos" → min=4, max=15. "Conjunto: 16 a 30" → min=16, max=30. Se regulamento não cita números, OMITA — não infira por convenção (Solo geralmente é 1 mas pode haver exceção).
+• bonifications: array de strings com bonificações por colocação, descrições de bolsas, intercâmbios e premiações estruturadas que não se encaixam em prizes[]. Ex ["1º lugar Geral recebe bolsa integral na CIA do festival", "Top 3 ganham R$ 1.000 cada em material", "Coreógrafos premiados recebem intercâmbio em workshop"]. Texto literal do regulamento, sem reformular.
 • aceita_danca_inclusiva: festival aceita dança inclusiva / coreografias com bailarinos PCD? boolean.
 • nivel_tecnico_enabled: festival tem eixo técnico (Iniciante/Intermediário/Avançado) além de categoria por idade? boolean.
 • stage_safety_interval_seconds: intervalo de segurança entre apresentações em SEGUNDOS. Ex "intervalo de 30s entre coreografias" → 30.

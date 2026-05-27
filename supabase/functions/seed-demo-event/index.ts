@@ -325,9 +325,9 @@ const DEMO_WORKSHOPS = [
 // ─── Cupons demo ──────────────────────────────────────────────────────────
 // Mix de scopes pra testar todos os fluxos
 const DEMO_COUPONS = [
-  { code: 'FAMILIA10',  scope: 'audience',  discount_type: 'percent', discount_value: 10, max_uses: 50, descricao: '10% off pra famílias na plateia' },
-  { code: 'WORKSHOP20', scope: 'workshop',  discount_type: 'percent', discount_value: 20, max_uses: 30, descricao: '20% off em workshops' },
-  { code: 'DEMO50',     scope: 'all',       discount_type: 'percent', discount_value: 50, max_uses: 5,  descricao: 'Cupom demo — 50% off em tudo (limitado)' },
+  { code: 'FAMILIA10',  scope: 'audience',  discount_type: 'percent', discount_value: 10, max_uses: 50, max_uses_per_user: 2,    descricao: '10% off pra famílias na plateia (até 2 por inscrito)' },
+  { code: 'WORKSHOP20', scope: 'workshop',  discount_type: 'percent', discount_value: 20, max_uses: 30, max_uses_per_user: null, descricao: '20% off em workshops (sem limite por inscrito)' },
+  { code: 'DEMO50',     scope: 'all',       discount_type: 'percent', discount_value: 50, max_uses: 5,  max_uses_per_user: 1,    descricao: 'Cupom demo — 50% off em tudo (limitado, 1 por inscrito)' },
 ]
 
 const JURADOS = [
@@ -361,11 +361,12 @@ const JURADOS = [
 ]
 
 const PREMIOS_ESPECIAIS = [
-  { id: 'tpl_bailarino', name: 'Melhor Bailarino(a)', enabled: true, isTemplate: true, formation: 'Solo', description: 'Para o destaque solo da noite' },
-  { id: 'tpl_revelacao', name: 'Prêmio Revelação', enabled: true, isTemplate: true, formation: 'TODOS', description: 'Para a nova promessa do palco' },
-  { id: 'tpl_coreografo', name: 'Melhor Coreografia', enabled: true, isTemplate: true, formation: 'TODOS', description: 'Para a obra coreográfica mais marcante' },
-  { id: 'tpl_grupo', name: 'Melhor Grupo da Noite', enabled: true, isTemplate: true, formation: 'Grupo', description: 'Para o grupo de maior impacto' },
-  { id: 'tpl_figurino', name: 'Melhor Figurino', enabled: true, isTemplate: false, formation: 'TODOS', description: 'Para a melhor produção visual' },
+  { id: 'tpl_bailarino',        name: 'Melhor Bailarino(a)',   enabled: true, isTemplate: true,  formation: 'Solo',  genre: 'TODOS', description: '', valor: 500 },
+  { id: 'tpl_revelacao',        name: 'Prêmio Revelação',      enabled: true, isTemplate: true,  formation: 'TODOS', genre: 'TODOS', description: '' },
+  { id: 'tpl_coreografo',       name: 'Melhor Coreografia',    enabled: true, isTemplate: true,  formation: 'TODOS', genre: 'TODOS', description: '', valor: 1000 },
+  { id: 'tpl_coreografo_pessoa',name: 'Melhor Coreógrafo(a)',  enabled: true, isTemplate: true,  formation: 'TODOS', genre: 'TODOS', description: '' },
+  { id: 'tpl_grupo',            name: 'Melhor Grupo da Noite', enabled: true, isTemplate: true,  formation: 'Grupo', genre: 'TODOS', description: '', valor: 2000 },
+  { id: 'tpl_figurino',         name: 'Melhor Figurino',       enabled: true, isTemplate: false, formation: 'TODOS', genre: 'TODOS', description: '' },
 ]
 
 const CRITERIOS_PADRAO = [
@@ -400,6 +401,43 @@ const formacaoSize = (formacao: string): number => {
     case 'Grupo': return 5 + Math.floor(Math.random() * 6) // 5-10
     default: return 1
   }
+}
+
+// CPF fake válido (algoritmo módulo 11). Necessário pra elenco do demo —
+// sem isso o helper hasIncompleteBailarinos marca bailarino como "dados
+// pendentes" e Dashboard mostra banner falso (memória refactor-elenco-
+// dados-pendentes-shipado, 2026-05-22).
+const generateValidCpf = (): string => {
+  const digits: number[] = []
+  for (let i = 0; i < 9; i++) digits.push(Math.floor(Math.random() * 10))
+  const calcDigit = (arr: number[]): number => {
+    let sum = 0
+    const base = arr.length + 1
+    for (let i = 0; i < arr.length; i++) sum += arr[i] * (base - i)
+    const mod = (sum * 10) % 11
+    return mod === 10 ? 0 : mod
+  }
+  digits.push(calcDigit(digits))
+  digits.push(calcDigit(digits))
+  return digits.join('')
+}
+
+// Data de nascimento aleatória dentro da faixa etária da categoria.
+// Usa today menos N anos pra cobrir min/max age. Retorna ISO YYYY-MM-DD.
+const generateBirthDate = (categoria: string): string => {
+  const ranges: Record<string, [number, number]> = {
+    'Infantil':     [6, 11],
+    'Juvenil':      [12, 17],
+    'Adulto':       [18, 35],
+    'Profissional': [22, 45],
+  }
+  const [minAge, maxAge] = ranges[categoria] ?? [10, 30]
+  const age = minAge + Math.floor(Math.random() * (maxAge - minAge + 1))
+  const today = new Date()
+  const birthYear = today.getFullYear() - age
+  const birthMonth = Math.floor(Math.random() * 12)
+  const birthDay = 1 + Math.floor(Math.random() * 27)
+  return `${birthYear}-${String(birthMonth + 1).padStart(2, '0')}-${String(birthDay).padStart(2, '0')}`
 }
 
 Deno.serve(async (req) => {
@@ -463,6 +501,28 @@ Deno.serve(async (req) => {
     await supa.from('platform_commissions').delete().in('event_id', ids)
     // audience_tickets: CASCADE em events, mas explicitar acelera + libera FK
     await supa.from('audience_tickets').delete().in('event_id', ids)
+    // elenco demo: bailarinos criados pelo seed não têm CASCADE (JSONB não é FK).
+    // Estratégia: captura IDs referenciados em bailarinos_detalhes das
+    // registrations dos eventos demo, depois deleta esses elenco rows.
+    // Não pega elenco real do produtor (inscrições em outros eventos).
+    try {
+      const { data: demoRegs } = await supa
+        .from('registrations')
+        .select('bailarinos_detalhes')
+        .in('event_id', ids)
+      const elencoIdsToDelete = new Set<string>()
+      for (const reg of (demoRegs ?? [])) {
+        const arr = Array.isArray(reg.bailarinos_detalhes) ? reg.bailarinos_detalhes : []
+        for (const b of arr) {
+          if (b && typeof b.id === 'string') elencoIdsToDelete.add(b.id)
+        }
+      }
+      if (elencoIdsToDelete.size > 0) {
+        await supa.from('elenco').delete().in('id', Array.from(elencoIdsToDelete))
+      }
+    } catch (e) {
+      console.warn('Falha ao deletar elenco demo:', e)
+    }
     // ── Workshops Etapa 1: workshops têm event_id CASCADE, mas standalone (NULL)
     //    são scopados por created_by. workshop_lots e workshop_registrations têm
     //    CASCADE em workshops.id, então só precisamos deletar workshops.
@@ -771,17 +831,68 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
     //   - status: PENDENTE | APROVADA | DESCLASSIFICADA (nao CANCELADA)
     //   - cidade/uf NAO existem em registrations (so em events)
     const totalRegs = 50
-    const registrationsToInsert: any[] = []
+
+    // ── PASSO 1: pré-computa metadados das registrations + bailarinos crus ──
+    // (precisa rodar antes de inserir elenco pra poder gerar ID por bailarino)
+    type RegMeta = {
+      coreo: typeof COREOGRAFIAS[number]
+      formato: string
+      estudio: typeof ESTUDIOS[number]
+      categoria: string
+      numBailarinos: number
+      bailarinosRaw: { nome: string; cpf: string; data_nascimento: string }[]
+    }
+    const regMetas: RegMeta[] = []
     for (let i = 0; i < totalRegs; i++) {
       const coreo = COREOGRAFIAS[i % COREOGRAFIAS.length]
       const formato = pick(FORMACOES)
       const estudio  = pick(ESTUDIOS)
       const categoria = pick(CATEGORIAS)
       const numBailarinos = formacaoSize(formato)
-      const bailarinos_detalhes = Array.from({ length: numBailarinos }, () => ({
-        full_name: randomNomeCompleto(),
-        cpf: `${Math.floor(Math.random() * 1e11)}`.padStart(11, '0'),
+      const bailarinosRaw = Array.from({ length: numBailarinos }, () => ({
+        nome:            randomNomeCompleto(),
+        cpf:             generateValidCpf(),
+        data_nascimento: generateBirthDate(categoria),
       }))
+      regMetas.push({ coreo, formato, estudio, categoria, numBailarinos, bailarinosRaw })
+    }
+
+    // ── PASSO 2: insere TODOS os bailarinos em `elenco` num batch ──
+    // user_id = produtor do demo (memória licao-rls-elenco — RLS permite
+    // produtor ler elenco referenciado em bailarinos_detalhes do evento dele).
+    const elencoBatch = regMetas.flatMap(m =>
+      m.bailarinosRaw.map(b => ({
+        user_id:         user.id,
+        nome:            b.nome,
+        cpf:             b.cpf,
+        data_nascimento: b.data_nascimento,
+      }))
+    )
+    const { data: elencoCreated, error: elencoErr } = await supa
+      .from('elenco')
+      .insert(elencoBatch)
+      .select('id, nome, cpf, data_nascimento')
+    if (elencoErr) {
+      await supa.from('events').delete().eq('id', eventId)
+      return json({ error: 'db_error', detail: `elenco: ${elencoErr.message}` }, 500)
+    }
+
+    // Reconstrói bailarinos_detalhes com IDs reais do elenco recém-criado.
+    // Mantém ordem: elenco rows vêm na ordem do insert (cada flat slot
+    // corresponde a 1 bailarino em sequência).
+    let elencoCursor = 0
+    const registrationsToInsert: any[] = []
+    for (let i = 0; i < totalRegs; i++) {
+      const m = regMetas[i]
+      const { coreo, formato, estudio, categoria } = m
+      const bailarinos_detalhes = m.bailarinosRaw.map(() => {
+        const e = elencoCreated![elencoCursor++]
+        return {
+          id:               e.id,
+          nome:             e.nome,
+          instagram_handle: null,
+        }
+      })
 
       // 90% APROVADA, 5% PENDENTE, 5% DESCLASSIFICADA
       const r = Math.random()
@@ -983,16 +1094,44 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
     //    pra produtor testar fluxo de aprovar/reprovar em /seletiva-video.
     //    video_url = placeholder publico (Big Buck Bunny). O importante eh
     //    o produtor testar os botoes de aprovar/reprovar — nao o player.
+    //    Bailarinos vão pra `elenco` (CPF+data) — mesma lógica do bloco 5.
     const submittedAt = new Date().toISOString()
-    const seletivaToInsert = COREOGRAFIAS_SELETIVA.map((coreo, i) => {
+    const seletivaMetas = COREOGRAFIAS_SELETIVA.map(coreo => {
       const formato = pick(FORMACOES)
       const estudio = pick(ESTUDIOS)
       const categoria = pick(CATEGORIAS)
       const numBailarinos = formacaoSize(formato)
-      const bailarinos_detalhes = Array.from({ length: numBailarinos }, () => ({
-        full_name: randomNomeCompleto(),
-        cpf: `${Math.floor(Math.random() * 1e11)}`.padStart(11, '0'),
+      const bailarinosRaw = Array.from({ length: numBailarinos }, () => ({
+        nome:            randomNomeCompleto(),
+        cpf:             generateValidCpf(),
+        data_nascimento: generateBirthDate(categoria),
       }))
+      return { coreo, formato, estudio, categoria, bailarinosRaw }
+    })
+    const seletivaElencoBatch = seletivaMetas.flatMap(m =>
+      m.bailarinosRaw.map(b => ({
+        user_id:         user.id,
+        nome:            b.nome,
+        cpf:             b.cpf,
+        data_nascimento: b.data_nascimento,
+      }))
+    )
+    const { data: seletivaElenco, error: seletivaElencoErr } = await supa
+      .from('elenco')
+      .insert(seletivaElencoBatch)
+      .select('id, nome')
+    if (seletivaElencoErr) {
+      console.warn('Falha ao inserir elenco da seletiva:', seletivaElencoErr.message)
+    }
+    let seletivaCursor = 0
+    const seletivaToInsert = seletivaMetas.map((m, i) => {
+      const { coreo, formato, estudio, categoria } = m
+      const bailarinos_detalhes = m.bailarinosRaw.map(() => {
+        const e = seletivaElenco?.[seletivaCursor++]
+        return e
+          ? { id: e.id, nome: e.nome, instagram_handle: null }
+          : { nome: m.bailarinosRaw[0].nome }  // fallback se elenco falhou
+      })
       return {
         event_id: eventId,
         nome_coreografia: coreo.nome,
@@ -1167,7 +1306,7 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
         for (let i = 0; i < numRegs; i++) {
           const isFem = Math.random() < 0.7
           const nome = randomNomeCompleto(isFem)
-          const cpf = `${Math.floor(Math.random() * 1e11)}`.padStart(11, '0')
+          const cpf = generateValidCpf()
           const phone = `119${Math.floor(Math.random() * 1e8).toString().padStart(8, '0')}`
           // Mix de status: 60% APROVADO (pago), 15% GRATUITO (combo grátis),
           // 10% CORTESIA, 10% PENDENTE, 5% CANCELADO
@@ -1220,6 +1359,7 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       discount_type: c.discount_type,
       discount_value: c.discount_value,
       max_uses: c.max_uses,
+      max_uses_per_user: c.max_uses_per_user,
       used_count: 0,
       is_active: true,
       scope: c.scope,
@@ -1237,7 +1377,7 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       const t = DEMO_INGRESSOS[typeIdx]
       const isFem = Math.random() < 0.55
       const nome = randomNomeCompleto(isFem)
-      const cpf = `${Math.floor(Math.random() * 1e11)}`.padStart(11, '0')
+      const cpf = generateValidCpf()
       const r = Math.random()
       // 75% APROVADO, 10% PENDENTE, 8% CANCELADO, 5% ESTORNADO, 2% CORTESIA
       let status = 'APROVADO'

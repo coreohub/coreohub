@@ -267,6 +267,9 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
             genre:       p.genre     && p.genre.trim()     ? p.genre.trim()     : 'TODOS',
             isTemplate:  false,
             enabled:     true,
+            // Valor R$ extraído quando o PDF cita explicitamente.
+            // Gemini schema retorna number; omite quando regulamento não cita.
+            ...(typeof p.valor === 'number' && p.valor > 0 ? { valor: p.valor } : {}),
           }));
 
         if (newOnes.length > 0) {

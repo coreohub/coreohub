@@ -92,7 +92,14 @@ export interface RegulationExtract {
      *  categoria não tem sub-faixas no regulamento. */
     sub_categories?: { name: string; min_age: number; max_age: number }[];
   }[]
-  formacoes: { name: string; max_time: string; fee: number; format: 'RANKING' | 'PEDAGOGICAL' | 'GRADUATED' }[]
+  formacoes: {
+    name: string;
+    max_time: string;
+    fee: number;
+    format: 'RANKING' | 'PEDAGOGICAL' | 'GRADUATED';
+    min_performers?: number;
+    max_performers?: number;
+  }[]
   criteria: { name: string; weight: number; description: string }[]
   prizes: {
     name: string;
@@ -101,7 +108,11 @@ export interface RegulationExtract {
     formation?: string;
     /** Gênero-alvo do prêmio (Ballet/Jazz/Hip Hop/...). 'TODOS' = sem restrição. */
     genre?: string;
+    /** Valor monetário em R$ (decimal). Extraído quando PDF cita explicitamente. */
+    valor?: number;
   }[]
+  /** Bonificações por colocação textuais ("1º lugar R$ 1.000", etc). */
+  bonifications?: string[]
   tiebreaker_rules: string | null
   // Item #34 do backlog (2026-05-04): extração estendida pós-Workshops/Tier 2
   audience_tickets: AudienceTicketExtract[]
@@ -151,6 +162,7 @@ function buildEmptyExtract(): RegulationExtract {
     event_styles_structured: [], refund_policy: null,
     aceita_danca_inclusiva: null, nivel_tecnico_enabled: null,
     stage_safety_interval_seconds: null, social_links: null, cover_url_hint: null,
+    bonifications: [],
     summary: '',
   }
 }
@@ -199,6 +211,7 @@ function parseRawExtract(raw: any): RegulationExtract {
     stage_safety_interval_seconds: raw.stage_safety_interval_seconds ?? null,
     social_links:               raw.social_links               ?? null,
     cover_url_hint:             raw.cover_url_hint             ?? null,
+    bonifications:              Array.isArray(raw.bonifications) ? raw.bonifications : [],
     summary:                    raw.summary                    ?? '',
   }
 }
