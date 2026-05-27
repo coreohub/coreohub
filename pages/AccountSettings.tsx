@@ -243,14 +243,18 @@ interface SpecialAward {
    *  Permite prêmios específicos por estilo (ex: "Melhor Coreógrafo Jazz"). */
   genre: string;
   description: string;
+  /** Valor monetário do prêmio em R$ (decimal). Opcional — undefined = sem
+   *  prêmio em dinheiro (só troféu/bolsa/etc). Quando preenchido, vitrine
+   *  pública exibe em destaque rosa. Decisão de produto 2026-05-27. */
+  valor?: number;
 }
 
 const AWARD_TEMPLATES: Omit<SpecialAward, 'enabled'>[] = [
-  { id: 'tpl_bailarino',  name: 'Melhor Bailarino(a)',   isTemplate: true, formation: 'TODOS',  genre: 'TODOS', description: 'Destaque individual de interpretação e técnica.' },
-  { id: 'tpl_revelacao',  name: 'Prêmio Revelação',      isTemplate: true, formation: 'TODOS',  genre: 'TODOS', description: 'Apresentação mais surpreendente da noite.' },
-  { id: 'tpl_coreografo', name: 'Melhor Coreografia',    isTemplate: true, formation: 'TODOS',  genre: 'TODOS', description: 'Reconhece a obra coreográfica mais marcante.' },
-  { id: 'tpl_grupo',      name: 'Melhor Grupo da Noite', isTemplate: true, formation: 'Grupo',  genre: 'TODOS', description: 'Prêmio exclusivo para formações em grupo.' },
-  { id: 'tpl_figurino',   name: 'Melhor Figurino',       isTemplate: true, formation: 'TODOS',  genre: 'TODOS', description: 'Destaque na produção visual e adequação ao tema.' },
+  { id: 'tpl_bailarino',  name: 'Melhor Bailarino(a)',   isTemplate: true, formation: 'TODOS',  genre: 'TODOS', description: '' },
+  { id: 'tpl_revelacao',  name: 'Prêmio Revelação',      isTemplate: true, formation: 'TODOS',  genre: 'TODOS', description: '' },
+  { id: 'tpl_coreografo', name: 'Melhor Coreografia',    isTemplate: true, formation: 'TODOS',  genre: 'TODOS', description: '' },
+  { id: 'tpl_grupo',      name: 'Melhor Grupo da Noite', isTemplate: true, formation: 'Grupo',  genre: 'TODOS', description: '' },
+  { id: 'tpl_figurino',   name: 'Melhor Figurino',       isTemplate: true, formation: 'TODOS',  genre: 'TODOS', description: '' },
 ];
 
 const AWARD_ICONS: Record<string, React.ElementType> = {
@@ -1387,8 +1391,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [newAwardFormation, setNewAwardFormation] = useState('TODOS');
   const [newAwardGenre, setNewAwardGenre]         = useState('TODOS');
   const [newAwardDesc, setNewAwardDesc]           = useState('');
-  // ID do prêmio customizado sendo editado inline (null = nenhum em edição)
-  const [editingAwardId, setEditingAwardId]       = useState<string | null>(null);
+  // Sessão 2026-05-27 — campo Valor opcional no form. Mantido como string
+  // maskMoeda no UI, convertido pra number (parseMoeda) no salvar.
+  const [newAwardValor, setNewAwardValor]         = useState('');
+  // Edição inline de custom award já criado. State global é updated direto
+  // — input Valor é derivado de award.valor mascarado.
+  // (editingAwardId já existe declarado abaixo — não duplicar)
 
   const toggleAward = (id: string) => {
     setAwardsTouched(true);
@@ -1408,6 +1416,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const addCustomAward = () => {
     if (!newAwardName.trim()) return;
     setAwardsTouched(true);
+    const valorNum = newAwardValor ? parseMoeda(newAwardValor) : 0;
     const award: SpecialAward = {
       id:          `custom_${Date.now()}`,
       name:        newAwardName.trim(),
@@ -1416,10 +1425,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       formation:   newAwardFormation,
       genre:       newAwardGenre,
       description: newAwardDesc.trim(),
+      ...(valorNum > 0 ? { valor: valorNum } : {}),
     };
     setAwards(prev => [...prev, award]);
     setNewAwardName('');
     setNewAwardDesc('');
+    setNewAwardValor('');
     setNewAwardFormation('TODOS');
     setNewAwardGenre('TODOS');
   };
@@ -1437,6 +1448,23 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const updateAwardDescription = (id: string, description: string) => {
     setAwardsTouched(true);
     setAwards(prev => prev.map(a => a.id === id ? { ...a, description } : a));
+  };
+
+  const updateAwardValor = (id: string, valor: number | undefined) => {
+    setAwardsTouched(true);
+    setAwards(prev => prev.map(a => {
+      if (a.id !== id) return a;
+      if (valor && valor > 0) return { ...a, valor };
+      // Remove campo valor quando zerado pra não persistir 0 sem motivo
+      const { valor: _drop, ...rest } = a;
+      return rest as SpecialAward;
+    }));
+  };
+
+  // Helper: deriva string mascarada do número decimal pra display em input.
+  const awardValorMasked = (valor: number | undefined): string => {
+    if (!valor || valor <= 0) return '';
+    return maskMoeda(String(Math.round(valor * 100)));
   };
 
   /* modal de gênero */
@@ -5439,10 +5467,37 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         </button>
                       </div>
 
-                      {/* Formation + Genre selectors — shown when enabled */}
+                      {/* Formation + Genre + Descrição + Valor — shown when enabled */}
                       {award.enabled && (
                         <div className="px-4 pb-3 space-y-2 border-t border-[#ff0068]/10">
+                          {/* Descrição opcional (editável + deletável) */}
                           <div className="flex items-start gap-2 pt-2">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 shrink-0 pt-1.5 w-16">Descrição:</span>
+                            <input
+                              type="text"
+                              value={award.description ?? ''}
+                              onChange={e => updateAwardDescription(award.id, e.target.value)}
+                              placeholder="Ex: Troféu Grand Prix (opcional)"
+                              className="flex-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-lg px-2.5 py-1.5 text-[10px] text-slate-700 dark:text-slate-300 focus:outline-none focus:border-[#ff0068]/50"
+                            />
+                          </div>
+                          {/* Valor R$ opcional */}
+                          <div className="flex items-start gap-2">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 shrink-0 pt-1.5 w-16">Valor R$:</span>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              autoComplete="off"
+                              value={awardValorMasked(award.valor)}
+                              onChange={e => {
+                                const num = parseMoeda(maskMoeda(e.target.value));
+                                updateAwardValor(award.id, num > 0 ? num : undefined);
+                              }}
+                              placeholder="Opcional — ex: R$ 500,00"
+                              className="flex-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-lg px-2.5 py-1.5 text-[10px] font-mono text-emerald-700 dark:text-emerald-400 focus:outline-none focus:border-[#ff0068]/50"
+                            />
+                          </div>
+                          <div className="flex items-start gap-2">
                             <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 shrink-0 pt-1 w-16">Modalidade:</span>
                             <div className="flex flex-wrap gap-1.5">
                               {formationOptions.map(opt => (
@@ -5527,15 +5582,32 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                               type="text"
                               value={award.description ?? ''}
                               onChange={e => updateAwardDescription(award.id, e.target.value)}
-                              placeholder="Descrição opcional"
+                              placeholder="Descrição opcional (ex: Troféu Grand Prix)"
                               className="w-full bg-white dark:bg-slate-950 border border-indigo-300 dark:border-indigo-500/40 rounded-lg px-2.5 py-1.5 text-[10px] text-slate-700 dark:text-slate-300 focus:outline-none focus:border-indigo-500"
+                            />
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              autoComplete="off"
+                              value={awardValorMasked(award.valor)}
+                              onChange={e => {
+                                const num = parseMoeda(maskMoeda(e.target.value));
+                                updateAwardValor(award.id, num > 0 ? num : undefined);
+                              }}
+                              placeholder="Valor R$ (opcional)"
+                              className="w-full bg-white dark:bg-slate-950 border border-indigo-300 dark:border-indigo-500/40 rounded-lg px-2.5 py-1.5 text-[10px] font-mono text-emerald-700 dark:text-emerald-400 focus:outline-none focus:border-indigo-500"
                             />
                           </div>
                         ) : (
                           <div>
                             <p className="text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white">{award.name}</p>
+                            {(award.valor && award.valor > 0) ? (
+                              <p className="text-[10px] font-black tabular-nums text-emerald-600 dark:text-emerald-400 mt-0.5">
+                                {award.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </p>
+                            ) : null}
                             {award.description && (
-                              <p className="text-[9px] text-slate-400">{award.description}</p>
+                              <p className="text-[9px] text-slate-400 mt-0.5">{award.description}</p>
                             )}
                           </div>
                         )}
@@ -5615,6 +5687,15 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     onChange={e => setNewAwardDesc(e.target.value)}
                     placeholder="Descrição opcional (ex: Votado pelo público presente)"
                     className="w-full bg-transparent border border-slate-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all placeholder:text-slate-400"
+                  />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={newAwardValor}
+                    onChange={e => setNewAwardValor(maskMoeda(e.target.value))}
+                    placeholder="Valor R$ (opcional — ex: R$ 500,00)"
+                    className="w-full bg-transparent border border-slate-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm font-mono text-emerald-700 dark:text-emerald-400 focus:outline-none focus:border-[#ff0068]/50 transition-all placeholder:text-slate-400"
                   />
                   <div className="space-y-2">
                     <div>

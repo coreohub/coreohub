@@ -1095,19 +1095,30 @@ const PublicEventPage = () => {
               <Trophy size={24} className="text-[#ff0068]" /> Premiação
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {enabledAwards.map((award: any) => (
-                <div key={award.id} className="bg-white/5 border border-white/10 rounded-2xl p-5">
-                  <p className="font-black uppercase text-sm tracking-tight">{award.name}</p>
-                  {award.description && (
-                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">{award.description}</p>
-                  )}
-                  {award.formation && award.formation !== 'TODOS' && (
-                    <span className="inline-block mt-2 px-2 py-1 rounded-full bg-[#ff0068]/10 text-[#ff0068] text-[9px] font-black uppercase tracking-widest">
-                      {award.formation}
-                    </span>
-                  )}
-                </div>
-              ))}
+              {enabledAwards.map((award: any) => {
+                // Sessão 2026-05-27 — card refatorado:
+                // Nome → Valor R$ (se > 0, destaque emerald) → Descrição (se preenchida)
+                // → badge formation (se != TODOS). Sem descrições padrão poluindo.
+                const valor = typeof award.valor === 'number' && award.valor > 0 ? award.valor : null;
+                return (
+                  <div key={award.id} className="bg-white/5 border border-white/10 rounded-2xl p-5">
+                    <p className="font-black uppercase text-sm tracking-tight">{award.name}</p>
+                    {valor && (
+                      <p className="text-lg font-black text-emerald-400 tabular-nums mt-1">
+                        {valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </p>
+                    )}
+                    {award.description && (
+                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">{award.description}</p>
+                    )}
+                    {award.formation && award.formation !== 'TODOS' && (
+                      <span className="inline-block mt-2 px-2 py-1 rounded-full bg-[#ff0068]/10 text-[#ff0068] text-[9px] font-black uppercase tracking-widest">
+                        {award.formation}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

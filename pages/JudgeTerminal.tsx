@@ -52,6 +52,10 @@ interface SpecialAward {
    *  aparece na deliberação de coreografias do mesmo gênero. */
   genre: string;
   description: string;
+  /** Valor monetário do prêmio (R$ decimal). Opcional. Terminal NÃO exibe
+   *  por enquanto (minimalismo — jurado avalia técnica, não peso do prêmio).
+   *  Campo aqui só pra TS compilar e config persistir. */
+  valor?: number;
 }
 
 const AWARD_ICON_MAP: Record<string, React.ElementType> = {
