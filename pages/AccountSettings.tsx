@@ -252,17 +252,19 @@ interface SpecialAward {
 const AWARD_TEMPLATES: Omit<SpecialAward, 'enabled'>[] = [
   { id: 'tpl_bailarino',  name: 'Melhor Bailarino(a)',   isTemplate: true, formation: 'TODOS',  genre: 'TODOS', description: '' },
   { id: 'tpl_revelacao',  name: 'Prêmio Revelação',      isTemplate: true, formation: 'TODOS',  genre: 'TODOS', description: '' },
-  { id: 'tpl_coreografo', name: 'Melhor Coreografia',    isTemplate: true, formation: 'TODOS',  genre: 'TODOS', description: '' },
-  { id: 'tpl_grupo',      name: 'Melhor Grupo da Noite', isTemplate: true, formation: 'Grupo',  genre: 'TODOS', description: '' },
+  { id: 'tpl_coreografo',       name: 'Melhor Coreografia',    isTemplate: true, formation: 'TODOS',  genre: 'TODOS', description: '' },
+  { id: 'tpl_coreografo_pessoa',name: 'Melhor Coreógrafo(a)',  isTemplate: true, formation: 'TODOS',  genre: 'TODOS', description: '' },
+  { id: 'tpl_grupo',            name: 'Melhor Grupo da Noite', isTemplate: true, formation: 'Grupo',  genre: 'TODOS', description: '' },
   { id: 'tpl_figurino',   name: 'Melhor Figurino',       isTemplate: true, formation: 'TODOS',  genre: 'TODOS', description: '' },
 ];
 
 const AWARD_ICONS: Record<string, React.ElementType> = {
-  tpl_bailarino:  Star,
-  tpl_revelacao:  Zap,
-  tpl_coreografo: Crown,
-  tpl_grupo:      Users,
-  tpl_figurino:   Award,
+  tpl_bailarino:         Star,
+  tpl_revelacao:         Zap,
+  tpl_coreografo:        Crown,
+  tpl_coreografo_pessoa: Crown,
+  tpl_grupo:             Users,
+  tpl_figurino:          Award,
 };
 
 const customAwardIcon = (name: string): React.ElementType => {
@@ -5478,6 +5480,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                               value={award.description ?? ''}
                               onChange={e => updateAwardDescription(award.id, e.target.value)}
                               placeholder="Ex: Troféu Grand Prix (opcional)"
+                              aria-label={`Descrição do prêmio ${award.name}`}
                               className="flex-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-lg px-2.5 py-1.5 text-[10px] text-slate-700 dark:text-slate-300 focus:outline-none focus:border-[#ff0068]/50"
                             />
                           </div>
@@ -5494,6 +5497,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                                 updateAwardValor(award.id, num > 0 ? num : undefined);
                               }}
                               placeholder="Opcional — ex: R$ 500,00"
+                              aria-label={`Valor em reais do prêmio ${award.name}`}
                               className="flex-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-lg px-2.5 py-1.5 text-[10px] font-mono text-emerald-700 dark:text-emerald-400 focus:outline-none focus:border-[#ff0068]/50"
                             />
                           </div>
@@ -5576,6 +5580,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                               onChange={e => updateAwardName(award.id, e.target.value)}
                               placeholder="Nome do prêmio"
                               autoFocus
+                              aria-label="Nome do prêmio customizado"
                               className="w-full bg-white dark:bg-slate-950 border border-indigo-300 dark:border-indigo-500/40 rounded-lg px-2.5 py-1.5 text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
                             />
                             <input
@@ -5583,6 +5588,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                               value={award.description ?? ''}
                               onChange={e => updateAwardDescription(award.id, e.target.value)}
                               placeholder="Descrição opcional (ex: Troféu Grand Prix)"
+                              aria-label="Descrição do prêmio customizado"
                               className="w-full bg-white dark:bg-slate-950 border border-indigo-300 dark:border-indigo-500/40 rounded-lg px-2.5 py-1.5 text-[10px] text-slate-700 dark:text-slate-300 focus:outline-none focus:border-indigo-500"
                             />
                             <input
@@ -5595,6 +5601,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                                 updateAwardValor(award.id, num > 0 ? num : undefined);
                               }}
                               placeholder="Valor R$ (opcional)"
+                              aria-label="Valor em reais do prêmio customizado"
                               className="w-full bg-white dark:bg-slate-950 border border-indigo-300 dark:border-indigo-500/40 rounded-lg px-2.5 py-1.5 text-[10px] font-mono text-emerald-700 dark:text-emerald-400 focus:outline-none focus:border-indigo-500"
                             />
                           </div>
@@ -5679,6 +5686,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     onChange={e => setNewAwardName(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && addCustomAward()}
                     placeholder="Ex: Melhor Figurino, Prêmio do Público..."
+                    aria-label="Nome do novo prêmio especial"
                     className="w-full bg-transparent border border-slate-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all placeholder:text-slate-400"
                   />
                   <input
@@ -5686,6 +5694,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     value={newAwardDesc}
                     onChange={e => setNewAwardDesc(e.target.value)}
                     placeholder="Descrição opcional (ex: Votado pelo público presente)"
+                    aria-label="Descrição do novo prêmio especial"
                     className="w-full bg-transparent border border-slate-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all placeholder:text-slate-400"
                   />
                   <input
@@ -5695,6 +5704,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     value={newAwardValor}
                     onChange={e => setNewAwardValor(maskMoeda(e.target.value))}
                     placeholder="Valor R$ (opcional — ex: R$ 500,00)"
+                    aria-label="Valor em reais do novo prêmio especial"
                     className="w-full bg-transparent border border-slate-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm font-mono text-emerald-700 dark:text-emerald-400 focus:outline-none focus:border-[#ff0068]/50 transition-all placeholder:text-slate-400"
                   />
                   <div className="space-y-2">
