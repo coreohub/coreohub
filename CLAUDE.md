@@ -238,6 +238,25 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-05-28 — Blindagem do label governo + workshop gratuito ✅ SHIPADO
+1 commit (`2af8c21`) + migration `20260613_protect_event_type.sql` aplicada em prod.
+
+**Brecha identificada**: qualquer produtor podia marcar o próprio evento como "Governamental" no [CreateEvent.tsx:291](pages/CreateEvent.tsx#L291), escapando da etiqueta oficial CoreoHub-tem-contrato e poluindo o filtro Governo do super-admin. Inscrição vira grátis (já tinha [create-payment-asaas:58](supabase/functions/create-payment-asaas/index.ts#L58) bloqueando cobrança em governo), mas integridade da classificação fica corrompida. Coluna `event_type` também não estava no trigger `protect_commission_columns`, então dava pra mudar via curl direto.
+
+**Fix em 3 frentes**:
+- **CreateEvent.tsx**: remove o card "Governamental" do self-service. Produtor só cria "Privado". Substitui pelo helper card emerald explicando como rodar evento gratuito sem governo: taxa R$ 0 nas formações → Checkout detecta + mostra "GRATUITO" + APROVADO sem Asaas (fluxo já existia em [Checkout.tsx:213-226](pages/Checkout.tsx#L213-L226)).
+- **Migration `20260613_protect_event_type.sql`**: estende trigger pra cobrir `event_type`. Padrão idêntico ao das outras colunas financeiras desde [20260429](supabase/migrations/20260429_protect_commission_columns.sql). Super-admin (COREOHUB_ADMIN) e service_role continuam podendo (seed-demo-event precisa setar event_type ao criar demo).
+- **SuperAdmin.tsx**: quando super-admin troca `event_type` pra `government` no EventCommissionModal, aplica default `politica_ingressos='GRATUITO'` (boa prática BR: editais públicos quase sempre têm entrada franca). Espelha em events + configuracoes. Best-effort.
+
+**Polimento workshop** (mesmo commit):
+- Badge "Gratuito" emerald em [WorkshopsManagement.tsx:443](pages/WorkshopsManagement.tsx#L443) quando preço efetivo (`activeLot.preco ?? preco_padrao`) é 0 E não tem `gratis_para_inscritos`. Antes ficava só "R$ 0,00" ambíguo. Paraleliza com a política "Gratuito" dos ingressos.
+
+**Decisões registradas** (não implementadas — viraram backlog):
+- **"Vendas de Ingressos" mantém o nome**: colisão com `/ingressos` da página de comprador (MyTickets em [Ingressos.tsx](pages/Ingressos.tsx)). Padrão Sympla/Eventbrite: produtor vê "vendas", comprador vê "meus ingressos". Renomear quebraria a semântica.
+- **Tipos de ingresso continuam na aba GERAL**: sem o rename, migrar criação pra página de Vendas perderia coerência semântica (página fica focada em sales).
+- **Gap "produtor 100% grátis"** [[backlog-modelo-comercial-evento-gratis]]: produtor pode rodar evento Privado com taxa 0 + workshops grátis + ingressos grátis usando toda infra (IA Gemini, narração ElevenLabs, Júri Terminal, certificados) sem gerar receita. 4 modelos de mercado mapeados — recomendação Setup fee por evento grátis (~R$ 297-997, padrão Bizzabo/Cvent, ~3h implementação). Decisão comercial pendente.
+- **Painel de contrato governo**: user vai pensar se modela dentro da CoreoHub ou usa ERP separado. Plano técnico (tabela `government_contracts` + super admin section) escrito em `~/.claude/plans/modular-forging-scroll.md` mas NÃO implementado.
+
 ### 2026-05-27 — Prêmios com valor R$ + DEMO/Regulamento IA atualizados ✅ SHIPADO
 3 commits (`ae0e4f4` → `0752eda`).
 
