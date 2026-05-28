@@ -339,6 +339,22 @@ const SuperAdmin = () => {
 
     const { error: updErr } = await supabase.from('events').update(update).eq('id', eventEdit.id);
     if (updErr) { alert('Falha ao salvar: ' + updErr.message); return; }
+
+    // Quando super-admin acabou de marcar um evento como Governamental, aplica
+    // default sensato: politica_ingressos='GRATUITO' (boa prática 2026-05-28
+    // pra editais públicos — entrada franca é o padrão; prefeitura pode trocar
+    // depois se o edital permitir bilheteria). Espelha em configuracoes e
+    // events (multi-tenant + legacy). Best-effort: erro aqui não reverte o
+    // save da comissão (operação principal já confirmou).
+    if (patch.event_type === 'government' && eventEdit.event_type !== 'government') {
+      try {
+        await supabase.from('events').update({ politica_ingressos: 'GRATUITO' }).eq('id', eventEdit.id);
+        await supabase.from('configuracoes').update({ politica_ingressos: 'GRATUITO' }).eq('id', String(eventEdit.id));
+      } catch (e) {
+        console.warn('Falha ao aplicar default politica_ingressos=GRATUITO:', e);
+      }
+    }
+
     setEventsList(list => list.map(e => e.id === eventEdit.id ? { ...e, ...patch } : e));
     setEventEdit(null);
   };

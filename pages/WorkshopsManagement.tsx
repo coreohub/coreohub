@@ -441,6 +441,14 @@ const WorkshopsManagement: React.FC = () => {
                         {eventName && <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">📌 {eventName}</span>}
                         {!w.event_id && <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Avulso</span>}
                         {w.gratis_para_inscritos && <span className="text-[10px] font-black uppercase tracking-wider bg-violet-500/15 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full">Grátis p/ inscritos</span>}
+                        {/* Indicador explícito quando preço efetivo é zero (workshop totalmente
+                            gratuito, não só pra inscritos). Sem isso o card mostrava só "R$ 0,00"
+                            que confunde — ambiguidade entre "não cadastrei preço" e "é grátis".
+                            Decisão 2026-05-28: bandeira emerald explícita pra paralelismo com a
+                            política "Gratuito" dos ingressos. */}
+                        {(activeLot?.preco ?? w.preco_padrao ?? 0) === 0 && !w.gratis_para_inscritos && (
+                          <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full">Gratuito</span>
+                        )}
                       </div>
                       <h3 className="text-xl font-black text-slate-900 dark:text-white">{w.name}</h3>
                       <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-slate-600 dark:text-slate-400">

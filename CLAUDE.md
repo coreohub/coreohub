@@ -663,6 +663,7 @@ Commit `49b1d33` — fallback robusto:
 - **Phase 6 — Mesa de Som offline-first** (`#37`) — botão "Baixar pacote do evento" pré-cacheia trilhas + narrações no Cache API. Outbox de live_status. ~1-2 sprints.
 - **A19 — Testes automatizados** — Vitest + GitHub Actions + mock Supabase client. 3 PRs (webhook → sweep/KYC/reminders → seletiva/pricing). ~4-6h. Trigger: ~5 produtores ativos OU primeira regressão cara.
 - **Fix permanente partial refund (`GET /payments/{id}` pra walletId real)** — ~30min. Defer até produtor demandar partial refund frequente. Workaround atual: full refund (deixa campo vazio no modal) funciona sempre.
+- **Modelo comercial pra evento privado 100% grátis** — gap identificado 2026-05-28. Hoje produtor pode criar evento Privado com taxa R$ 0 + workshops grátis + ingressos grátis → usa toda a infra da CoreoHub (IA regulamento, narração ElevenLabs, Júri Terminal offline, certificados) sem gerar receita. Decisão pendente entre 4 modelos de mercado: A) Sympla-style (subsidia, aposta no funil), B) Setup fee por evento grátis (~R$ 297-997, **recomendado**: alinha com Bizzabo/Cvent, implementação pequena via Asaas single payment + `events.setup_fee_paid_at`), C) Subscription mensal opcional (estilo CompetitionSuite), D) Freemium com feature gating. Decisão é comercial, não técnica. Esforço técnico ~3h depois da decisão. Detalhes em [[backlog-modelo-comercial-evento-gratis]].
 
 ### 🟩 P3 — Aguardando trigger externo
 - **TED como payout alternativo** — plano + taxas pronto, congelado até alguém pedir.

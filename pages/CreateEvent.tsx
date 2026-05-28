@@ -270,38 +270,19 @@ const CreateEvent = () => {
             {activeTab === 'general' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 
-                {/* Tipo do evento */}
-                <div className="md:col-span-2 space-y-2">
-                  <label className={labelCls}>Tipo do Evento</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, event_type: 'private' })}
-                      className={`p-5 rounded-2xl border text-left transition-all ${
-                        formData.event_type === 'private'
-                          ? 'bg-[#ff0068]/10 border-[#ff0068]'
-                          : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/5 hover:border-[#ff0068]/40'
-                      }`}
-                    >
-                      <p className="text-[10px] font-black uppercase tracking-widest text-[#ff0068]">Privado</p>
-                      <p className="text-xs font-bold mt-1 text-slate-700 dark:text-slate-300">
-                        Com cobrança de inscrição via Asaas (split automático).
-                      </p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, event_type: 'government' })}
-                      className={`p-5 rounded-2xl border text-left transition-all ${
-                        formData.event_type === 'government'
-                          ? 'bg-emerald-500/10 border-emerald-500'
-                          : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/5 hover:border-emerald-500/40'
-                      }`}
-                    >
-                      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500">Governamental</p>
-                      <p className="text-xs font-bold mt-1 text-slate-700 dark:text-slate-300">
-                        Inscrição gratuita, sem gateway. Ideal para JOMI/prefeituras.
-                      </p>
-                    </button>
+                {/* Helper: como rodar evento gratuito sem cobrança de inscrição.
+                    O type "Governamental" foi removido do self-service em 2026-05-28
+                    (só super-admin marca governo via /super-admin quando há contrato).
+                    Produtor que quer inscrição grátis usa este caminho. */}
+                <div className="md:col-span-2 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 flex items-start gap-3">
+                  <div className="p-1.5 bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0 mt-0.5">
+                    <Info size={14} />
+                  </div>
+                  <div className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                    <p className="font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 text-[10px] mb-1">
+                      Pra fazer um evento gratuito
+                    </p>
+                    Crie o evento normalmente e, em <strong>Configurações → Formações</strong>, defina a taxa como <strong>R$ 0</strong>. O inscrito verá "Gratuito" no checkout e confirma sem pagar. Sem Asaas, sem comissão.
                   </div>
                 </div>
 
