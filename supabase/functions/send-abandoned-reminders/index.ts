@@ -212,6 +212,8 @@ Deno.serve(async (req) => {
     const producerEmail = ev?.created_by ? producerEmailById.get(ev.created_by) : undefined
 
     // 5) Envia email best-effort + notif in-app + marker.
+    // Timeout 10s por email — se send-email/Resend travar, cron não pendura
+    // até o limite do edge runtime (review 2026-05-28).
     try {
       const emailRes = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
         method:  'POST',
@@ -229,6 +231,7 @@ Deno.serve(async (req) => {
             ctaUrl:          `${appUrl}/minhas-coreografias`,
           },
         }),
+        signal: AbortSignal.timeout(10_000),
       })
       const emailOk = emailRes.ok
       if (!emailOk) {

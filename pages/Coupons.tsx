@@ -181,6 +181,17 @@ const Coupons: React.FC = () => {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // A11y review 2026-05-28: Escape fecha o drawer de drill-down quando aberto.
+  // Listener global montado só quando drillCoupon != null pra não vazar.
+  useEffect(() => {
+    if (!drillCoupon) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDrillCoupon(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drillCoupon]);
+
   const handleSave = async () => {
     setFormError(null);
     if (!selectedEventId) return;
@@ -493,6 +504,7 @@ const Coupons: React.FC = () => {
                             disabled={!usable}
                             onClick={() => usable && openDrill(c)}
                             title={usable ? 'Ver quem usou' : 'Ainda sem usos'}
+                            aria-label={usable ? `Ver quem usou o cupom ${c.code}` : `Cupom ${c.code} ainda sem usos`}
                             className={`text-left ${wrapper}`}
                           >
                             {c.max_uses != null ? (
@@ -754,18 +766,26 @@ const Coupons: React.FC = () => {
           Renderizado via createPortal pra escapar do stacking context do
           PrivateLayout (<main relative z-10>) — sem isso o drawer ficaria
           aprisionado e o Header z-50 pintaria por cima. Lição
-          [[licao-createPortal-stacking-context]]. */}
+          [[licao-createPortal-stacking-context]].
+          A11y (review 2026-05-28): role=dialog + aria-modal + aria-labelledby
+          pro screen reader anunciar abertura. Escape fecha. */}
       {drillCoupon && createPortal(
-        <div className="fixed inset-0 z-[60] flex">
+        <div
+          className="fixed inset-0 z-[60] flex"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="drill-coupon-title"
+        >
           <div
             className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
             onClick={() => setDrillCoupon(null)}
+            aria-hidden="true"
           />
           <div className="relative ml-auto w-full sm:max-w-xl h-full bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-white/10 flex flex-col">
             <header className="px-6 py-4 border-b border-slate-200 dark:border-white/10 flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Quem usou</p>
-                <h3 className="text-lg font-black uppercase tracking-tight italic text-slate-900 dark:text-white truncate">{drillCoupon.code}</h3>
+                <h3 id="drill-coupon-title" className="text-lg font-black uppercase tracking-tight italic text-slate-900 dark:text-white truncate">{drillCoupon.code}</h3>
                 {couponPerf[drillCoupon.id] && (
                   <p className="text-[11px] text-slate-500 mt-1">
                     <span className="font-bold text-emerald-600 dark:text-emerald-400">{fmtBRL(couponPerf[drillCoupon.id].revenue)}</span>
@@ -778,6 +798,7 @@ const Coupons: React.FC = () => {
               </div>
               <button
                 onClick={() => setDrillCoupon(null)}
+                aria-label="Fechar drawer"
                 className="p-2 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5"
               >
                 <X size={18} />

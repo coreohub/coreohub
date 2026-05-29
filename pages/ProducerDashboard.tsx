@@ -583,12 +583,18 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
                 <p className="text-[10px] text-slate-500">Da visita ao palco — sem expor emails (LGPD)</p>
               </div>
             </div>
-            {/* Cohort selector — padrão Mixpanel/Amplitude */}
-            <div className="flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-white/5 rounded-xl p-1 border border-slate-200 dark:border-white/10">
+            {/* Cohort selector — padrão Mixpanel/Amplitude.
+                A11y: aria-pressed indica seleção pro leitor de tela. */}
+            <div
+              className="flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-white/5 rounded-xl p-1 border border-slate-200 dark:border-white/10"
+              role="group"
+              aria-label="Selecionar período do funil"
+            >
               {(['all', 'month', 'week'] as const).map(c => (
                 <button
                   key={c}
                   onClick={() => setFunnelCohort(c)}
+                  aria-pressed={funnelCohort === c}
                   className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${
                     funnelCohort === c
                       ? 'bg-[#ff0068] text-white shadow-sm shadow-[#ff0068]/30'
@@ -637,10 +643,12 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
                   : 'confirmados'}
               </p>
             </div>
-            {/* Compareceu (fundo) */}
+            {/* Compareceu (fundo) — brand-lime (#E3FF0A do DESIGN_SYSTEM,
+                contraste no dark mode). Antes violet-500 que não está na
+                paleta; sky conflitaria com Visitas. */}
             <div className="text-center sm:border-l border-slate-200 dark:border-white/10">
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Compareceu</p>
-              <p className="text-2xl sm:text-3xl font-black text-violet-500 mt-1 tabular-nums">{leadFunnel.attended}</p>
+              <p className="text-2xl sm:text-3xl font-black text-lime-600 dark:text-[#E3FF0A] mt-1 tabular-nums">{leadFunnel.attended}</p>
               <p className="text-[10px] text-slate-500 mt-1 leading-tight">
                 {leadFunnel.paid > 0
                   ? `${Math.round((leadFunnel.attended / leadFunnel.paid) * 100)}% no-show`
