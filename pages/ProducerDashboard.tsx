@@ -133,12 +133,22 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
   const [latestRegistrations, setLatestRegistrations] = useState<any[]>([]);
   const [filteredRegs, setFilteredRegs] = useState<any[]>([]);
   const [commissions, setCommissions] = useState<any[]>([]);
-  // Funil de leads (entry_event_id no profile). Só números agregados — sem
-  // expor emails (LGPD + padrão Sympla/Eventbrite). Plano em
-  // [[plano-leads-reengajamento]].
-  const [leadFunnel, setLeadFunnel] = useState<{ leads: number; started: number; paid: number }>({
-    leads: 0, started: 0, paid: 0,
-  });
+  // Funil de conversão 5 etapas (Bloco 2 — 2026-05-28). Padrão Stripe
+  // Checkout / Eventbrite Insights: Visitas → Leads → Iniciadas → Pagas
+  // → Compareceu. Antes só 3 etapas (Leads/Iniciadas/Pagas) — expandido
+  // pra mostrar funil completo de ponta a ponta.
+  const [leadFunnel, setLeadFunnel] = useState<{
+    visits: number;
+    leads: number;
+    started: number;
+    paid: number;
+    attended: number;
+  }>({ visits: 0, leads: 0, started: 0, paid: 0, attended: 0 });
+
+  // Bloco 6: filtro de coorte temporal pro funil. Padrão Mixpanel/Amplitude
+  // — produtor escolhe janela pra ver conversão de campanha recente vs
+  // histórico. 'all' = sem corte; 'week' = últimos 7 dias; 'month' = 30 dias.
+  const [funnelCohort, setFunnelCohort] = useState<'all' | 'week' | 'month'>('all');
 
   /* ── Edition selector ── */
   const [allEvents, setAllEvents] = useState<{ id: string; name: string; slug?: string; is_public?: boolean; edition_year?: number; start_date?: string; formacoes_config?: any[] }[]>([]);
@@ -241,16 +251,44 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
         setLatestRegistrations(recentRegs || []);
         setFilteredRegs(recentRegs || []);
 
-        // Funil de leads: 3 contagens agregadas do evento selecionado.
-        // - started: inscrições iniciadas (distintos user_id em registrations)
-        // - paid:    inscrições com pagamento aprovado
-        // - leads:   profiles que entraram via vitrine deste evento e nunca
-        //            iniciaram inscrição (em qualquer evento)
+        // Funil de conversão 5 etapas com filtro de coorte (Blocos 2+6).
+        // Stages: Visitas (events.view_count) → Leads (profiles.entry_event_id
+        // sem registration) → Iniciadas (distinct user_id em registrations)
+        // → Pagas (APROVADO/CONFIRMADO) → Compareceu (check_in_status='OK').
         try {
           const isPagoStatus = (s?: string) => s === 'APROVADO' || s === 'CONFIRMADO';
-          const userIdsWithReg = [...new Set((allRegs ?? []).map((r: any) => r.user_id).filter(Boolean))];
-          const userIdsPago    = [...new Set((allRegs ?? []).filter((r: any) => isPagoStatus(r.status_pagamento)).map((r: any) => r.user_id).filter(Boolean))];
 
+          // Cohort cutoff: filtra por created_at conforme janela escolhida.
+          const cohortCutoff = (() => {
+            if (funnelCohort === 'week')  return Date.now() - 7  * 24 * 60 * 60 * 1000;
+            if (funnelCohort === 'month') return Date.now() - 30 * 24 * 60 * 60 * 1000;
+            return 0; // all
+          })();
+          const inCohort = (createdAt?: string | null) => {
+            if (cohortCutoff === 0) return true;
+            if (!createdAt) return false;
+            return new Date(createdAt).getTime() >= cohortCutoff;
+          };
+
+          const cohortRegs = (allRegs ?? []).filter((r: any) => inCohort(r.created_at));
+          const userIdsWithReg = [...new Set(cohortRegs.map((r: any) => r.user_id).filter(Boolean))];
+          const userIdsPago    = [...new Set(cohortRegs.filter((r: any) => isPagoStatus(r.status_pagamento)).map((r: any) => r.user_id).filter(Boolean))];
+          const userIdsAttended = [...new Set(cohortRegs.filter((r: any) => r.check_in_status === 'OK').map((r: any) => r.user_id).filter(Boolean))];
+
+          // Visitas: view_count agregado do evento. Não tem cohort por design
+          // (é contador acumulado). Quando coorte != 'all', mostra "—" pra não
+          // confundir.
+          let visitsCount = 0;
+          if (funnelCohort === 'all') {
+            const { data: ev } = await supabase
+              .from('events')
+              .select('view_count')
+              .eq('id', selectedEventId)
+              .maybeSingle();
+            visitsCount = Number(ev?.view_count ?? 0);
+          }
+
+          // Leads no cohort: profiles.entry_event_id + created_at filtro.
           let leadsQuery = supabase
             .from('profiles')
             .select('id', { count: 'exact', head: true })
@@ -258,16 +296,21 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
           if (userIdsWithReg.length > 0) {
             leadsQuery = leadsQuery.not('id', 'in', `(${userIdsWithReg.join(',')})`);
           }
+          if (cohortCutoff > 0) {
+            leadsQuery = leadsQuery.gte('created_at', new Date(cohortCutoff).toISOString());
+          }
           const { count: leadsCount } = await leadsQuery;
 
           setLeadFunnel({
-            leads:   leadsCount ?? 0,
-            started: userIdsWithReg.length,
-            paid:    userIdsPago.length,
+            visits:   visitsCount,
+            leads:    leadsCount ?? 0,
+            started:  userIdsWithReg.length,
+            paid:     userIdsPago.length,
+            attended: userIdsAttended.length,
           });
         } catch {
           // Funnel é nice-to-have — se falhar, zera silenciosamente.
-          setLeadFunnel({ leads: 0, started: 0, paid: 0 });
+          setLeadFunnel({ visits: 0, leads: 0, started: 0, paid: 0, attended: 0 });
         }
       } catch (e) {
         console.error(e);
@@ -276,7 +319,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
       }
     };
     fetchAll();
-  }, [selectedEventId]);
+  }, [selectedEventId, funnelCohort]);
 
   useEffect(() => {
     if (!searchTerm) { setFilteredRegs(latestRegistrations); return; }
@@ -525,40 +568,83 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
         </div>
       )}
 
-      {/* Funil de leads — métrica agregada (sem expor emails, LGPD) */}
-      {!loading && (leadFunnel.leads + leadFunnel.started + leadFunnel.paid > 0) && (
+      {/* Funil de Conversão 5 etapas (Bloco 2 — 2026-05-28).
+          Padrão Stripe Checkout / Eventbrite Insights / Sympla Connect.
+          Filtro de coorte (Bloco 6) — semana/mês/total — padrão Mixpanel. */}
+      {!loading && (leadFunnel.visits + leadFunnel.leads + leadFunnel.started + leadFunnel.paid + leadFunnel.attended > 0) && (
         <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-3xl overflow-hidden">
-          <div className="p-6 border-b border-slate-200 dark:border-white/5 flex items-center gap-3">
-            <div className="p-2 bg-[#1de7f2]/10 text-[#1de7f2] rounded-xl border border-[#1de7f2]/20">
-              <BarChart3 size={16} />
+          <div className="p-6 border-b border-slate-200 dark:border-white/5 flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="p-2 bg-[#1de7f2]/10 text-[#1de7f2] rounded-xl border border-[#1de7f2]/20 shrink-0">
+                <BarChart3 size={16} />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-sm font-black uppercase text-slate-900 dark:text-white tracking-tight italic">Funil de Conversão</h2>
+                <p className="text-[10px] text-slate-500">Da visita ao palco — sem expor emails (LGPD)</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-sm font-black uppercase text-slate-900 dark:text-white tracking-tight italic">Funil de Conversão</h2>
-              <p className="text-[10px] text-slate-500">Do lead à inscrição paga — só números agregados, sem expor emails</p>
+            {/* Cohort selector — padrão Mixpanel/Amplitude */}
+            <div className="flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-white/5 rounded-xl p-1 border border-slate-200 dark:border-white/10">
+              {(['all', 'month', 'week'] as const).map(c => (
+                <button
+                  key={c}
+                  onClick={() => setFunnelCohort(c)}
+                  className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${
+                    funnelCohort === c
+                      ? 'bg-[#ff0068] text-white shadow-sm shadow-[#ff0068]/30'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  {c === 'all' ? 'Todo período' : c === 'month' ? '30d' : '7d'}
+                </button>
+              ))}
             </div>
           </div>
-          <div className="p-6 grid grid-cols-3 gap-4">
+          <div className="p-6 grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4">
+            {/* Visitas (topo) — só faz sentido em 'all' (contador acumulado) */}
             <div className="text-center">
-              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Leads</p>
-              <p className="text-3xl font-black text-cyan-700 dark:text-[#1de7f2] mt-1">{leadFunnel.leads}</p>
-              <p className="text-[10px] text-slate-500 mt-1 leading-tight">criaram conta vinda da vitrine, não se inscreveram</p>
-            </div>
-            <div className="text-center border-l border-r border-slate-200 dark:border-white/10">
-              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Iniciadas</p>
-              <p className="text-3xl font-black text-[#ff0068] mt-1">{leadFunnel.started}</p>
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Visitas</p>
+              <p className="text-2xl sm:text-3xl font-black text-sky-600 dark:text-sky-400 mt-1 tabular-nums">
+                {funnelCohort === 'all' ? leadFunnel.visits : '—'}
+              </p>
               <p className="text-[10px] text-slate-500 mt-1 leading-tight">
-                {leadFunnel.leads > 0
-                  ? `${Math.round((leadFunnel.started / (leadFunnel.leads + leadFunnel.started)) * 100)}% de conversão`
-                  : 'inscrições começadas'}
+                {funnelCohort === 'all' ? 'vitrine pública' : 'só "todo período"'}
               </p>
             </div>
-            <div className="text-center">
+            {/* Leads */}
+            <div className="text-center sm:border-l border-slate-200 dark:border-white/10">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Leads</p>
+              <p className="text-2xl sm:text-3xl font-black text-cyan-700 dark:text-[#1de7f2] mt-1 tabular-nums">{leadFunnel.leads}</p>
+              <p className="text-[10px] text-slate-500 mt-1 leading-tight">criaram conta, não inscreveram</p>
+            </div>
+            {/* Iniciadas */}
+            <div className="text-center sm:border-l border-slate-200 dark:border-white/10">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Iniciadas</p>
+              <p className="text-2xl sm:text-3xl font-black text-[#ff0068] mt-1 tabular-nums">{leadFunnel.started}</p>
+              <p className="text-[10px] text-slate-500 mt-1 leading-tight">
+                {leadFunnel.leads > 0
+                  ? `${Math.round((leadFunnel.started / (leadFunnel.leads + leadFunnel.started)) * 100)}% conv`
+                  : 'inscrições'}
+              </p>
+            </div>
+            {/* Pagas */}
+            <div className="text-center sm:border-l border-slate-200 dark:border-white/10">
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Pagas</p>
-              <p className="text-3xl font-black text-emerald-500 mt-1">{leadFunnel.paid}</p>
+              <p className="text-2xl sm:text-3xl font-black text-emerald-500 mt-1 tabular-nums">{leadFunnel.paid}</p>
               <p className="text-[10px] text-slate-500 mt-1 leading-tight">
                 {leadFunnel.started > 0
-                  ? `${Math.round((leadFunnel.paid / leadFunnel.started) * 100)}% de conclusão`
-                  : 'pagamentos confirmados'}
+                  ? `${Math.round((leadFunnel.paid / leadFunnel.started) * 100)}% conclusão`
+                  : 'confirmados'}
+              </p>
+            </div>
+            {/* Compareceu (fundo) */}
+            <div className="text-center sm:border-l border-slate-200 dark:border-white/10">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Compareceu</p>
+              <p className="text-2xl sm:text-3xl font-black text-violet-500 mt-1 tabular-nums">{leadFunnel.attended}</p>
+              <p className="text-[10px] text-slate-500 mt-1 leading-tight">
+                {leadFunnel.paid > 0
+                  ? `${Math.round((leadFunnel.attended / leadFunnel.paid) * 100)}% no-show`
+                  : 'check-in no dia'}
               </p>
             </div>
           </div>

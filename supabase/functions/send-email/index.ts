@@ -867,6 +867,57 @@ function buildAggregateReminder(p: AggregateReminderPayload) {
   }
 }
 
+// ─── Inscrição abandonada (Bloco 8 — 2026-05-28) ───────────────────────────
+// Padrão Sympla/Hotmart/Stripe Checkout: recupera quem começou inscrição mas
+// não foi pro checkout. Cron `send-abandoned-reminders` varre registrations
+// PENDENTE > 24h sem payment_id e dispara este email 1x via marker em
+// notifications. Recovery rate típico 15-25% no mercado de eventos.
+
+interface AbandonedRegistrationPayload {
+  inscritoNome?:    string
+  inscritoEmail:    string
+  produtorEmail?:   string
+  eventoNome?:      string
+  qtdPendentes:     number  // pode ter múltiplas coreos pendentes
+  primeiraCoreo?:   string  // nome da primeira pra dar contexto
+  ctaUrl:           string  // /minhas-coreografias
+  valorEstimado?:   number  // soma dos baseFees pendentes (se conhecido)
+}
+
+function buildAbandonedRegistration(p: AbandonedRegistrationPayload) {
+  const intro = `Olá ${escape(p.inscritoNome ?? 'bailarino(a)')}, você começou ${p.qtdPendentes === 1 ? 'uma inscrição' : `${p.qtdPendentes} inscrições`}${p.eventoNome ? ` no <strong>${escape(p.eventoNome)}</strong>` : ''} mas ainda não finalizou o pagamento. As inscrições pendentes ficam guardadas e você termina quando puder.`
+
+  const contentHtml = `
+    <div style="margin-top:4px;padding:18px;border:2px solid #fde68a;border-radius:14px;background:#fffbeb;">
+      <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#f59e0b;">
+        ⏳ Inscrição pendente
+      </p>
+      <p style="margin:8px 0 0;font-size:18px;font-weight:900;color:#0b0b0f;line-height:1.3;">
+        ${escape(p.primeiraCoreo ?? 'Sua coreografia')}${p.qtdPendentes > 1 ? ` e mais ${p.qtdPendentes - 1}` : ''}
+      </p>
+      ${p.valorEstimado && p.valorEstimado > 0 ? `
+        <p style="margin:6px 0 0;font-size:13px;color:#64748b;font-weight:600;">
+          Total estimado: <strong>${escape(money(p.valorEstimado))}</strong>
+        </p>
+      ` : ''}
+    </div>
+    <p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      Termine agora pra garantir sua vaga. Se for desistir, tudo bem — o produtor cancela depois automaticamente.
+    </p>`
+
+  return {
+    subject: `${p.eventoNome ? `[${p.eventoNome}] ` : ''}Você esqueceu de finalizar sua inscrição?`,
+    html: baseLayout({
+      preheader: `${p.qtdPendentes} inscrição(ões) pendente(s) — finalize quando puder.`,
+      title: 'Falta pouco pra entrar no palco',
+      intro,
+      contentHtml,
+      ctaLabel: 'Continuar minha inscrição',
+      ctaUrl: p.ctaUrl,
+    }),
+  }
+}
+
 // ─── Lembrete de trilha sonora (Sessão 4.2 B3 — 2026-05-22) ─────────────────
 
 interface TrilhaReminderPayload {
@@ -1504,6 +1555,20 @@ Deno.serve(async (req) => {
         if (!p.inscritoEmail) throw new Error('inscritoEmail é obrigatório')
         if (!p.prazoTrilha)   throw new Error('prazoTrilha é obrigatório')
         const tpl = buildTrilhaReminder(p)
+        to = p.inscritoEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        replyTo = p.produtorEmail
+        break
+      }
+      case 'abandoned_registration': {
+        // Bloco 8 (2026-05-28): cron envia 24h após criar inscrição pendente
+        // sem payment_id. Recupera 15-25% em mercados como Sympla/Hotmart.
+        const p = payload as unknown as AbandonedRegistrationPayload
+        if (!p.inscritoEmail) throw new Error('inscritoEmail é obrigatório')
+        if (!p.ctaUrl)        throw new Error('ctaUrl é obrigatório')
+        const tpl = buildAbandonedRegistration(p)
         to = p.inscritoEmail
         subject = tpl.subject
         html = tpl.html

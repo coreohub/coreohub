@@ -43,6 +43,51 @@ const Auth = () => {
   const queryParams = new URLSearchParams(location.search);
   const redirectTo = location.state?.redirectTo ?? queryParams.get('redirectTo');
 
+  // Captura source do lead (UTM) na primeira visita à tela de auth. Ordem
+  // de precedência (padrão GA4/Mixpanel):
+  //   1) utm_source explícito na URL atual
+  //   2) document.referrer (mapeia host → fonte conhecida)
+  //   3) 'direct' como fallback
+  // Persiste em localStorage pra sobreviver ao roundtrip de OAuth/email.
+  // Lido no SIGNED_IN handler junto com entry_event_id.
+  useEffect(() => {
+    try {
+      // Não sobrescreve se já capturou nesta sessão (preserva fonte da primeira chegada).
+      if (localStorage.getItem('coreohub_lead_entry_source')) return;
+
+      const utm = queryParams.get('utm_source')?.trim().toLowerCase();
+      if (utm) {
+        localStorage.setItem('coreohub_lead_entry_source', utm);
+        return;
+      }
+
+      const ref = document.referrer;
+      if (ref) {
+        const refHost = (() => { try { return new URL(ref).host.toLowerCase(); } catch { return ''; } })();
+        // Mapa simples host → source canônica (mercado BR de dança usa muito).
+        // Padrão GA4 "default channel grouping" reduzido.
+        const inferred =
+          refHost.includes('instagram.com') ? 'instagram' :
+          refHost.includes('facebook.com')  ? 'facebook'  :
+          refHost.includes('whatsapp.com') || refHost.includes('wa.me') ? 'whatsapp' :
+          refHost.includes('youtube.com')  ? 'youtube'  :
+          refHost.includes('tiktok.com')   ? 'tiktok'   :
+          refHost.includes('google.')      ? 'google'   :
+          refHost.includes('bing.com')     ? 'bing'     :
+          refHost && !refHost.includes(window.location.host) ? 'referral' : null;
+        if (inferred) {
+          localStorage.setItem('coreohub_lead_entry_source', inferred);
+          return;
+        }
+      }
+
+      localStorage.setItem('coreohub_lead_entry_source', 'direct');
+    } catch {
+      /* localStorage off — ignora */
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null);
@@ -81,6 +126,38 @@ const Auth = () => {
       }
     })();
   }, [redirectTo]);
+
+  // Funil de leads: grava entry_source (UTM/referrer) — independente de
+  // ter entry_event_id (lead pode chegar direto pela landing sem passar
+  // pela vitrine de um evento). UPDATE só toca rows com entry_source IS NULL
+  // → primeira sessão, idempotente. Best-effort silencioso (migration 20260617).
+  const persistLeadEntrySource = async (userId: string, createdAtIso?: string) => {
+    try {
+      const entrySource = localStorage.getItem('coreohub_lead_entry_source');
+      if (!entrySource) return;
+
+      // Só associa em "primeira sessão" (< 10min de criação) — mesmo critério
+      // do entry_event_id. Evita poluir fonte se user antigo re-loga vindo
+      // de outra campanha.
+      if (createdAtIso) {
+        const ageMs = Date.now() - new Date(createdAtIso).getTime();
+        if (ageMs > 10 * 60 * 1000) {
+          localStorage.removeItem('coreohub_lead_entry_source');
+          return;
+        }
+      }
+
+      await supabase
+        .from('profiles')
+        .update({ entry_source: entrySource })
+        .eq('id', userId)
+        .is('entry_source', null);
+
+      localStorage.removeItem('coreohub_lead_entry_source');
+    } catch {
+      /* best-effort */
+    }
+  };
 
   // Funil de leads: grava entry_event_id no profile quando user faz signup
   // vindo da vitrine pública. Só grava se:
@@ -143,6 +220,7 @@ const Auth = () => {
       if (session?.user) {
         setIsAuthenticating(true);
         await persistLeadEntryEventId(session.user.id, session.user.created_at);
+        await persistLeadEntrySource(session.user.id, session.user.created_at);
         const path = await resolveLandingPath(session.user.id);
         setTimeout(() => navigate(path), 0);
       }
@@ -159,6 +237,7 @@ const Auth = () => {
         // resolveLandingPath roda DENTRO do timeout (não no callback) — sem deadlock.
         setTimeout(async () => {
           await persistLeadEntryEventId(session.user.id, session.user.created_at);
+          await persistLeadEntrySource(session.user.id, session.user.created_at);
           const path = await resolveLandingPath(session.user.id);
           navigate(path);
         }, 0);

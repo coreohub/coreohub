@@ -122,8 +122,14 @@ Deno.serve(async (req) => {
         .eq('is_active', true)
         .maybeSingle()
       if (!coupon) throw new Error('Cupom inválido ou inativo.')
-      if (!['video_selection', 'all'].includes(coupon.scope ?? '')) {
-        throw new Error(`Cupom não é válido pra taxa de seletiva (escopo=${coupon.scope}).`)
+      // Filtro multi-scope (migration 20260615): aceita scopes array novo
+      // ou scope legacy enum. Período de transição.
+      const scopesArr: string[] = Array.isArray(coupon.scopes) ? coupon.scopes : []
+      const scopeLegacy: string = String(coupon.scope ?? '')
+      const isValidScope = scopesArr.includes('video_selection')
+        || ['video_selection', 'all'].includes(scopeLegacy)
+      if (!isValidScope) {
+        throw new Error(`Cupom não é válido pra taxa de seletiva.`)
       }
       if (coupon.expires_at && new Date(coupon.expires_at + 'T23:59:59').getTime() < Date.now()) {
         throw new Error('Cupom expirado.')

@@ -176,9 +176,11 @@ Deno.serve(async (req) => {
       if (coupon_id) {
         couponQuery = couponQuery.eq('id', coupon_id)
       } else {
+        // Filtro multi-scope (migration 20260615): 'inscription' no array
+        // scopes OU scope legacy. Período de transição.
         couponQuery = couponQuery
           .ilike('code', String(coupon_code).trim().toUpperCase())
-          .in('scope', ['inscription', 'both', 'all'])
+          .or('scopes.cs.{inscription},scope.in.(inscription,both,all)')
       }
       const { data: coupon } = await couponQuery.maybeSingle()
 

@@ -390,6 +390,19 @@ const Registrations = () => {
         profilesById = Object.fromEntries((profs || []).map(p => [p.id, p]));
       }
 
+      // Bloco 4 (2026-05-28): hidrata códigos dos cupons usados. Side panel
+      // e card Análise Financeira mostram código real (SARAHTINEL, etc) em
+      // vez de "Cupom" genérico. 1 query — RLS já filtra cupons do evento.
+      const couponIdsUsed = [...new Set((data || []).map((r: any) => r.coupon_id).filter(Boolean))];
+      let couponCodeById: Record<string, string> = {};
+      if (couponIdsUsed.length > 0) {
+        const { data: cps } = await supabase
+          .from('coupons')
+          .select('id, code')
+          .in('id', couponIdsUsed);
+        couponCodeById = Object.fromEntries((cps || []).map((c: any) => [c.id, c.code]));
+      }
+
       // Fetch separado do evento ativo (modal + empty state precisam).
       // Não pode ser embed na query principal porque travava o query
       // inteiro em prod (ver bug 2026-05-18).
@@ -408,6 +421,9 @@ const Registrations = () => {
         ...r,
         profiles: r.user_id ? profilesById[r.user_id] ?? null : null,
         events: activeEvent,
+        // Bloco 4: surface coupon_code virtual a partir do JOIN com coupons.
+        // Usado pelo side panel + Análise Financeira (Sessão 4.2).
+        coupon_code: r.coupon_id ? couponCodeById[r.coupon_id] ?? null : null,
       }));
       setRegistrations(enriched);
       setFilteredRegistrations(enriched);
@@ -2338,7 +2354,14 @@ const Registrations = () => {
                     <DetailItem label="Método" value={viewingReg.payment_method ?? viewingReg.metodo_pagamento} />
                     <DetailItem label="ID Asaas" value={viewingReg.payment_id} mono />
                     {viewingReg.coupon_id && (
-                      <DetailItem label="Cupom aplicado" value={`R$ ${Number(viewingReg.discount_amount ?? 0).toFixed(2)} de desconto`} />
+                      <DetailItem
+                        label="Cupom aplicado"
+                        value={
+                          (viewingReg as any).coupon_code
+                            ? `${(viewingReg as any).coupon_code} · R$ ${Number(viewingReg.discount_amount ?? 0).toFixed(2)} de desconto`
+                            : `R$ ${Number(viewingReg.discount_amount ?? 0).toFixed(2)} de desconto`
+                        }
+                      />
                     )}
                     <DetailItem label="Status da inscrição" value={viewingReg.status} />
                   </dl>

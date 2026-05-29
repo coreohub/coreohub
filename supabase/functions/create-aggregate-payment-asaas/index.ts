@@ -317,8 +317,9 @@ Deno.serve(async (req) => {
     // legacy: produtor absorve o desconto (ganha menos) e comissão também
     // cai proporcionalmente. Inscrito paga menos.
     //
-    // scope aceito: 'inscription' ou 'both' (compat com versão legacy do
-    // checkout single; expandiu pra 'all' em 2026-05-20).
+    // Filtro multi-scope (migration 20260615): cupom aceito se 'inscription'
+    // está no array scopes OU se scope legacy ainda aponta pra
+    // inscription/both/all. Período de transição pós-migration scopes TEXT[].
     let validatedCoupon: any = null
     let discountTotal = 0
     if (coupon_code && String(coupon_code).trim()) {
@@ -329,7 +330,7 @@ Deno.serve(async (req) => {
         .eq('event_id', event_id)
         .ilike('code', normalizedCode)
         .eq('is_active', true)
-        .in('scope', ['inscription', 'both', 'all'])
+        .or('scopes.cs.{inscription},scope.in.(inscription,both,all)')
         .maybeSingle()
       if (!coupon) throw new Error('Cupom inválido ou inativo.')
       if (coupon.expires_at && new Date(coupon.expires_at + 'T23:59:59').getTime() < Date.now()) {

@@ -249,10 +249,13 @@ export interface Coupon {
   used_count: number;
   expires_at?: string | null;
   is_active: boolean;
-  /** Escopo: inscription = só inscrições. audience = só plateia. workshop = só workshops.
-   *  video_selection = só taxa de seletiva de vídeo. both = inscrição+plateia (legacy).
-   *  all = todos. */
+  /** DEPRECATED 2026-05-28: substituído por `scopes` array. Mantido durante
+   *  transição (~2 semanas pro PWA cache rolar). Edge functions leem ambos. */
   scope?: 'inscription' | 'audience' | 'workshop' | 'video_selection' | 'both' | 'all';
+  /** Array de surfaces onde o cupom aplica. Substitui scope a partir da
+   *  migration 20260615. Subset de: inscription | audience | workshop |
+   *  video_selection. Vazio nunca (CHECK constraint força cardinality >= 1). */
+  scopes?: ('inscription' | 'audience' | 'workshop' | 'video_selection')[];
   created_at: string;
 }
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../services/supabase';
 import {
   listCouponsByEvent, createCoupon, updateCoupon, deleteCoupon,
@@ -24,33 +25,25 @@ const Coupons: React.FC = () => {
   const [showModal, setShowModal]         = useState(false);
   const [editingId, setEditingId]         = useState<string | null>(null);
 
-  // Scope no banco: 6 valores possíveis (mora em types.ts/Coupon.scope).
-  // UI usa multi-select de 4 setores (Inscrição/Plateia/Workshop/Seletiva)
-  // e MAPEIA pras combinações válidas do banco atual no save:
-  //   1 setor → valor direto
-  //   inscription + audience → 'both'
-  //   todos os 4 → 'all'
-  //   outras combinações → erro (migration de array fica como backlog)
-  type Scope = 'inscription' | 'audience' | 'workshop' | 'video_selection' | 'both' | 'all';
+  // Multi-scope estrutural (migration 20260615): cupom guarda array
+  // `scopes TEXT[]` permitindo qualquer combinação 1-4 das surfaces.
+  // Coluna legacy `scope` ainda lida durante transição (PWA cache antigo).
   type SetorAtomic = 'inscription' | 'audience' | 'workshop' | 'video_selection';
 
-  /** Decompõe scope do banco em set de setores atômicos. */
-  const scopeToSetores = (scope?: string | null): SetorAtomic[] => {
-    if (!scope) return ['inscription'];
-    if (scope === 'both') return ['inscription', 'audience'];
-    if (scope === 'all')  return ['inscription', 'audience', 'workshop', 'video_selection'];
-    return [scope as SetorAtomic];
-  };
-
-  /** Mapeia set de setores pro valor único do banco. Retorna null se combinação
-   *  não é suportada pelo enum atual. */
-  const setoresToScope = (setores: SetorAtomic[]): Scope | null => {
-    const set = new Set(setores);
-    if (set.size === 0) return null;
-    if (set.size === 1) return setores[0] as Scope;
-    if (set.size === 4) return 'all';
-    if (set.size === 2 && set.has('inscription') && set.has('audience')) return 'both';
-    return null; // combinação não suportada
+  /** Lê setores do cupom — prioriza scopes array; fallback pra scope legacy
+   *  pra cupons criados antes da migration ou por bundle antigo. */
+  const readSetoresFromCoupon = (c: { scopes?: string[] | null; scope?: string | null }): SetorAtomic[] => {
+    if (Array.isArray(c.scopes) && c.scopes.length > 0) {
+      return c.scopes.filter(s =>
+        s === 'inscription' || s === 'audience' || s === 'workshop' || s === 'video_selection'
+      ) as SetorAtomic[];
+    }
+    // Fallback: deriva de scope legacy.
+    const sc = c.scope;
+    if (!sc) return ['inscription'];
+    if (sc === 'both') return ['inscription', 'audience'];
+    if (sc === 'all')  return ['inscription', 'audience', 'workshop', 'video_selection'];
+    return [sc as SetorAtomic];
   };
 
   const emptyForm = {
@@ -64,6 +57,27 @@ const Coupons: React.FC = () => {
   };
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Bloco 4+7 (2026-05-28): performance e drill-down do cupom.
+  // Performance agregada (count + R$ vendido + R$ desconto) por coupon_id,
+  // visível inline na linha. Drill-down (lista de quem usou) carregado sob
+  // demanda quando user clica no contador. Padrão Stripe Dashboard /
+  // Sympla "Performance do cupom" / Hotmart "Vendas do cupom".
+  type CouponPerf = { count: number; revenue: number; discount: number };
+  const [couponPerf, setCouponPerf] = useState<Record<string, CouponPerf>>({});
+  // Drill-down: items detalhados do cupom selecionado. Lazy load.
+  type UsageItem = {
+    source: 'registration' | 'audience_ticket' | 'workshop' | 'aggregate';
+    id: string;
+    buyer: string;
+    detail: string;
+    amount: number;
+    discount: number;
+    paid_at: string | null;
+  };
+  const [drillCoupon, setDrillCoupon] = useState<Coupon | null>(null);
+  const [drillItems, setDrillItems] = useState<UsageItem[] | null>(null);
+  const [drillLoading, setDrillLoading] = useState(false);
 
   const toggleSetor = (s: SetorAtomic) => {
     setForm(f => {
@@ -88,7 +102,7 @@ const Coupons: React.FC = () => {
       max_uses:           c.max_uses ?? '',
       max_uses_per_user:  (c as any).max_uses_per_user ?? '',
       expires_at:         c.expires_at ?? '',
-      setores:            scopeToSetores(c.scope),
+      setores:            readSetoresFromCoupon(c as any),
     });
     setFormError(null);
     setShowModal(true);
@@ -123,6 +137,41 @@ const Coupons: React.FC = () => {
       const list = await listCouponsByEvent(selectedEventId);
       setCoupons(list);
       setError(null);
+
+      // Bloco 7: agrega performance por cupom. 4 fontes possíveis: aggregate
+      // payments (carrinho/Sessão 2), registrations (single legado),
+      // audience_tickets, workshop_registrations. Roda em paralelo, agrupa
+      // por coupon_id. video_selections.coupon_id ainda não populado em
+      // larga escala — fica fora do v1 (pode entrar depois).
+      const couponIds = list.map(c => c.id);
+      if (couponIds.length > 0) {
+        const [
+          { data: aggPays },
+          { data: regs },
+          { data: audTickets },
+          { data: wsRegs },
+        ] = await Promise.all([
+          supabase.from('payments').select('coupon_id, value_total, discount_total').in('coupon_id', couponIds).eq('status', 'APROVADO'),
+          supabase.from('registrations').select('coupon_id, valor_pago, discount_amount').in('coupon_id', couponIds).in('status_pagamento', ['APROVADO', 'CONFIRMADO']),
+          supabase.from('audience_tickets').select('coupon_id, preco, discount_amount').in('coupon_id', couponIds).eq('status_pagamento', 'APROVADO'),
+          supabase.from('workshop_registrations').select('coupon_id, preco_pago, discount_amount').in('coupon_id', couponIds).eq('status_pagamento', 'APROVADO'),
+        ]);
+        const perf: Record<string, CouponPerf> = {};
+        const bump = (id: string | null, rev: number, disc: number) => {
+          if (!id) return;
+          if (!perf[id]) perf[id] = { count: 0, revenue: 0, discount: 0 };
+          perf[id].count += 1;
+          perf[id].revenue += rev;
+          perf[id].discount += disc;
+        };
+        for (const p of aggPays ?? [])  bump(p.coupon_id, Number(p.value_total ?? 0),  Number(p.discount_total ?? 0));
+        for (const r of regs ?? [])     bump(r.coupon_id, Number(r.valor_pago ?? 0),   Number(r.discount_amount ?? 0));
+        for (const a of audTickets ?? []) bump(a.coupon_id, Number(a.preco ?? 0),       Number(a.discount_amount ?? 0));
+        for (const w of wsRegs ?? [])     bump(w.coupon_id, Number(w.preco_pago ?? 0),  Number(w.discount_amount ?? 0));
+        setCouponPerf(perf);
+      } else {
+        setCouponPerf({});
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -141,46 +190,48 @@ const Coupons: React.FC = () => {
       setFormError('Percentual não pode ser maior que 100%.');
       return;
     }
-    // Mapeia setores selecionados pro scope único do banco. Combinações não
-    // suportadas pelo enum atual bloqueiam o salvar com mensagem clara.
-    const scopeMapped = setoresToScope(form.setores);
-    if (!scopeMapped) {
-      if (form.setores.length === 0) {
-        setFormError('Selecione ao menos um setor onde o cupom se aplica.');
-      } else {
-        setFormError('Combinação atual não suportada. Selecione: 1 setor, Inscrição + Plateia, ou os 4 setores juntos.');
-      }
+    // Multi-scope: salva array direto. Sem restrição de combinação (migration
+    // 20260615 substituiu o enum por TEXT[]). Mantém scope legacy sincronizado
+    // pra cupons consumidos por edge functions ainda no fallback.
+    if (form.setores.length === 0) {
+      setFormError('Selecione ao menos um setor onde o cupom se aplica.');
       return;
     }
-    // Cupom 100% off não funciona pra plateia (Asaas exige valor > 0).
-    // Inscrição também é problemática mas existe fluxo gratuito separado.
-    if (form.discount_type === 'percent' && form.discount_value === 100 && scopeMapped !== 'inscription') {
-      setFormError('Cupom 100% off não é suportado em ingressos de plateia (Asaas exige cobrança > 0). Use desconto parcial ou crie cortesia direta.');
+    // Cupom 100% off não funciona em surfaces que vão pro gateway (Asaas exige
+    // valor > 0). Inscrição tem fluxo gratuito separado, então só bloqueia
+    // 100% em cupons que cobrem plateia/workshop/seletiva.
+    const cobreApenasInscricao = form.setores.length === 1 && form.setores[0] === 'inscription';
+    if (form.discount_type === 'percent' && form.discount_value === 100 && !cobreApenasInscricao) {
+      setFormError('Cupom 100% off só é suportado quando cobre apenas inscrição. Em plateia/workshop/seletiva, Asaas exige cobrança > 0. Use desconto parcial ou crie cortesia direta.');
       return;
     }
+    // Scope legacy: mantém em sync pra cupons consumidos por edge functions
+    // ainda no fallback (período de transição). Deriva da combinação atual:
+    //   1 setor → próprio nome
+    //   inscription+audience → 'both' (preserva semântica histórica)
+    //   todos os 4 → 'all'
+    //   outras → 'inscription' (fallback seguro; quem importar legado lê scopes)
+    const setoresSet = new Set(form.setores);
+    let scopeLegacy: string = 'inscription';
+    if (form.setores.length === 1) scopeLegacy = form.setores[0];
+    else if (form.setores.length === 4) scopeLegacy = 'all';
+    else if (setoresSet.has('inscription') && setoresSet.has('audience') && form.setores.length === 2) scopeLegacy = 'both';
     setSaving(true);
     try {
+      const payload = {
+        code:               form.code.trim().toUpperCase(),
+        discount_type:      form.discount_type,
+        discount_value:     form.discount_value,
+        max_uses:           form.max_uses === '' ? null : Number(form.max_uses),
+        max_uses_per_user:  form.max_uses_per_user === '' ? null : Number(form.max_uses_per_user),
+        expires_at:         form.expires_at || null,
+        scope:              scopeLegacy,
+        scopes:             form.setores,
+      };
       if (editingId) {
-        await updateCoupon(editingId, {
-          code:               form.code.trim().toUpperCase(),
-          discount_type:      form.discount_type,
-          discount_value:     form.discount_value,
-          max_uses:           form.max_uses === '' ? null : Number(form.max_uses),
-          max_uses_per_user:  form.max_uses_per_user === '' ? null : Number(form.max_uses_per_user),
-          expires_at:         form.expires_at || null,
-          scope:              scopeMapped,
-        } as any);
+        await updateCoupon(editingId, payload as any);
       } else {
-        await createCoupon({
-          event_id:           selectedEventId,
-          code:               form.code,
-          discount_type:      form.discount_type,
-          discount_value:     form.discount_value,
-          max_uses:           form.max_uses === '' ? null : Number(form.max_uses),
-          max_uses_per_user:  form.max_uses_per_user === '' ? null : Number(form.max_uses_per_user),
-          expires_at:         form.expires_at || null,
-          scope:              scopeMapped,
-        } as any);
+        await createCoupon({ event_id: selectedEventId, ...payload } as any);
       }
       setShowModal(false);
       setEditingId(null);
@@ -210,6 +261,110 @@ const Coupons: React.FC = () => {
 
   const fmtDiscount = (c: Coupon) =>
     c.discount_type === 'percent' ? `${c.discount_value}%` : `R$ ${c.discount_value.toFixed(2)}`;
+
+  const fmtBRL = (n: number) =>
+    n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  /** Carrega lista detalhada de quem usou o cupom (4 fontes). Roda só quando
+   *  produtor clica em "ver uses" — evita query pesada no carregamento. */
+  const openDrill = async (c: Coupon) => {
+    setDrillCoupon(c);
+    setDrillItems(null);
+    setDrillLoading(true);
+    try {
+      const [
+        { data: aggPays },
+        { data: regs },
+        { data: audTickets },
+        { data: wsRegs },
+      ] = await Promise.all([
+        supabase.from('payments')
+          .select('id, value_total, discount_total, paid_at, registrations:registrations(nome_coreografia, estudio, profiles:user_id(full_name, email))')
+          .eq('coupon_id', c.id)
+          .order('paid_at', { ascending: false })
+          .limit(200),
+        supabase.from('registrations')
+          .select('id, nome_coreografia, estudio, valor_pago, discount_amount, paid_at, profiles:user_id(full_name, email)')
+          .eq('coupon_id', c.id)
+          .in('status_pagamento', ['APROVADO', 'CONFIRMADO'])
+          .order('paid_at', { ascending: false })
+          .limit(200),
+        supabase.from('audience_tickets')
+          .select('id, buyer_name, buyer_email, ticket_type_nome, preco, discount_amount, paid_at')
+          .eq('coupon_id', c.id)
+          .eq('status_pagamento', 'APROVADO')
+          .order('paid_at', { ascending: false })
+          .limit(200),
+        supabase.from('workshop_registrations')
+          .select('id, full_name, email, workshop_id, preco_pago, discount_amount, paid_at, workshops:workshop_id(name)')
+          .eq('coupon_id', c.id)
+          .eq('status_pagamento', 'APROVADO')
+          .order('paid_at', { ascending: false })
+          .limit(200),
+      ]);
+      const items: UsageItem[] = [];
+      for (const p of (aggPays as any[]) ?? []) {
+        const regsArr = Array.isArray(p.registrations) ? p.registrations : [];
+        const first = regsArr[0];
+        const prof  = Array.isArray(first?.profiles) ? first.profiles[0] : first?.profiles;
+        items.push({
+          source: 'aggregate',
+          id: String(p.id),
+          buyer: prof?.full_name ?? prof?.email ?? '—',
+          detail: `Carrinho · ${regsArr.length} inscrição(ões)`,
+          amount: Number(p.value_total ?? 0),
+          discount: Number(p.discount_total ?? 0),
+          paid_at: p.paid_at ?? null,
+        });
+      }
+      for (const r of (regs as any[]) ?? []) {
+        const prof = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
+        items.push({
+          source: 'registration',
+          id: String(r.id),
+          buyer: prof?.full_name ?? prof?.email ?? r.estudio ?? '—',
+          detail: `Inscrição · ${r.nome_coreografia}`,
+          amount: Number(r.valor_pago ?? 0),
+          discount: Number(r.discount_amount ?? 0),
+          paid_at: r.paid_at ?? null,
+        });
+      }
+      for (const a of (audTickets as any[]) ?? []) {
+        items.push({
+          source: 'audience_ticket',
+          id: String(a.id),
+          buyer: a.buyer_name ?? a.buyer_email ?? '—',
+          detail: `Plateia · ${a.ticket_type_nome}`,
+          amount: Number(a.preco ?? 0),
+          discount: Number(a.discount_amount ?? 0),
+          paid_at: a.paid_at ?? null,
+        });
+      }
+      for (const w of (wsRegs as any[]) ?? []) {
+        const wsName = Array.isArray(w.workshops) ? w.workshops[0]?.name : w.workshops?.name;
+        items.push({
+          source: 'workshop',
+          id: String(w.id),
+          buyer: w.full_name ?? w.email ?? '—',
+          detail: `Workshop · ${wsName ?? '—'}`,
+          amount: Number(w.preco_pago ?? 0),
+          discount: Number(w.discount_amount ?? 0),
+          paid_at: w.paid_at ?? null,
+        });
+      }
+      items.sort((a, b) => {
+        const aT = a.paid_at ? new Date(a.paid_at).getTime() : 0;
+        const bT = b.paid_at ? new Date(b.paid_at).getTime() : 0;
+        return bT - aT;
+      });
+      setDrillItems(items);
+    } catch (e: any) {
+      console.warn('[Coupons] drill-down falhou:', e?.message);
+      setDrillItems([]);
+    } finally {
+      setDrillLoading(false);
+    }
+  };
 
   const isExhausted = (c: Coupon) => c.max_uses != null && c.used_count >= c.max_uses;
   const isExpired   = (c: Coupon) =>
@@ -326,16 +481,40 @@ const Coupons: React.FC = () => {
                     </td>
                     <td className="px-4 sm:px-6 py-4 font-black text-[#ff0068]">{fmtDiscount(c)}</td>
                     <td className="px-4 sm:px-6 py-4 hidden md:table-cell">
-                      {c.max_uses != null ? (
-                        <div className="flex items-center gap-3">
-                          <div className="flex-1 max-w-[100px] h-2 bg-slate-100 dark:bg-white/10 rounded-full overflow-hidden">
-                            <div className="h-full bg-[#ff0068]" style={{ width: `${Math.min(100, (c.used_count / c.max_uses) * 100)}%` }} />
-                          </div>
-                          <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{c.used_count}/{c.max_uses}</span>
-                        </div>
-                      ) : (
-                        <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{c.used_count} usos · ilimitado</span>
-                      )}
+                      {(() => {
+                        const perf = couponPerf[c.id];
+                        const usable = c.used_count > 0;
+                        const wrapper = usable
+                          ? 'cursor-pointer hover:text-[#ff0068] transition-colors'
+                          : 'cursor-default';
+                        return (
+                          <button
+                            type="button"
+                            disabled={!usable}
+                            onClick={() => usable && openDrill(c)}
+                            title={usable ? 'Ver quem usou' : 'Ainda sem usos'}
+                            className={`text-left ${wrapper}`}
+                          >
+                            {c.max_uses != null ? (
+                              <div className="flex items-center gap-3">
+                                <div className="flex-1 max-w-[100px] h-2 bg-slate-100 dark:bg-white/10 rounded-full overflow-hidden">
+                                  <div className="h-full bg-[#ff0068]" style={{ width: `${Math.min(100, (c.used_count / c.max_uses) * 100)}%` }} />
+                                </div>
+                                <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{c.used_count}/{c.max_uses}</span>
+                              </div>
+                            ) : (
+                              <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{c.used_count} usos · ilimitado</span>
+                            )}
+                            {perf && perf.count > 0 && (
+                              <div className="mt-1 text-[10px] text-slate-500">
+                                <span className="text-emerald-600 dark:text-emerald-400 font-bold">{fmtBRL(perf.revenue)}</span>
+                                <span className="mx-1">·</span>
+                                <span className="text-rose-600 dark:text-rose-400 font-bold">-{fmtBRL(perf.discount)}</span>
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 sm:px-6 py-4 text-xs text-slate-600 dark:text-slate-400 hidden lg:table-cell">
                       {c.expires_at ? (
@@ -569,6 +748,71 @@ const Coupons: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Bloco 4: Drill-down drawer — lista quem usou o cupom selecionado.
+          Renderizado via createPortal pra escapar do stacking context do
+          PrivateLayout (<main relative z-10>) — sem isso o drawer ficaria
+          aprisionado e o Header z-50 pintaria por cima. Lição
+          [[licao-createPortal-stacking-context]]. */}
+      {drillCoupon && createPortal(
+        <div className="fixed inset-0 z-[60] flex">
+          <div
+            className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
+            onClick={() => setDrillCoupon(null)}
+          />
+          <div className="relative ml-auto w-full sm:max-w-xl h-full bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-white/10 flex flex-col">
+            <header className="px-6 py-4 border-b border-slate-200 dark:border-white/10 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Quem usou</p>
+                <h3 className="text-lg font-black uppercase tracking-tight italic text-slate-900 dark:text-white truncate">{drillCoupon.code}</h3>
+                {couponPerf[drillCoupon.id] && (
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">{fmtBRL(couponPerf[drillCoupon.id].revenue)}</span>
+                    {' vendido · '}
+                    <span className="font-bold text-rose-600 dark:text-rose-400">{fmtBRL(couponPerf[drillCoupon.id].discount)}</span>
+                    {' de desconto · '}
+                    {couponPerf[drillCoupon.id].count} pedido(s)
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => setDrillCoupon(null)}
+                className="p-2 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5"
+              >
+                <X size={18} />
+              </button>
+            </header>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {drillLoading && (
+                <div className="flex justify-center py-12">
+                  <Loader2 size={20} className="animate-spin text-[#ff0068]" />
+                </div>
+              )}
+              {!drillLoading && drillItems && drillItems.length === 0 && (
+                <p className="text-center text-xs text-slate-400 py-8 italic">Sem pedidos pagos com este cupom ainda.</p>
+              )}
+              {!drillLoading && drillItems?.map(it => (
+                <div key={`${it.source}-${it.id}`} className="p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl">
+                  <div className="flex justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-bold text-sm text-slate-900 dark:text-white truncate">{it.buyer}</p>
+                      <p className="text-[11px] text-slate-500 truncate">{it.detail}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-black text-emerald-600 dark:text-emerald-400">{fmtBRL(it.amount)}</p>
+                      <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400">-{fmtBRL(it.discount)}</p>
+                    </div>
+                  </div>
+                  {it.paid_at && (
+                    <p className="text-[10px] text-slate-400 mt-1">{new Date(it.paid_at).toLocaleString('pt-BR')}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

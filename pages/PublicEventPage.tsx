@@ -230,6 +230,31 @@ const PublicEventPage = () => {
     );
     try { sessionStorage.setItem('coreohub_viewed_' + eventId, String(Date.now())); }
     catch { /* sessionStorage indisponível — segue sem flag */ }
+
+    // Bloco 2 (2026-05-28): incrementa events.view_count pro topo do funil
+    // de conversão do produtor. Dedup client-side via localStorage TTL 30min
+    // (mesma janela do GA4 "session"). Cookies cross-origin entre coreohub.com
+    // e supabase.co não funcionam — por isso dedup é local.
+    try {
+      const VIEW_TTL_MS = 30 * 60 * 1000;
+      const viewKey = 'cohub_view_' + eventId;
+      const lastView = Number(localStorage.getItem(viewKey) ?? 0);
+      const now = Date.now();
+      if (now - lastView > VIEW_TTL_MS) {
+        localStorage.setItem(viewKey, String(now));
+        const url = (import.meta as any).env?.VITE_SUPABASE_URL as string;
+        if (url) {
+          // Best-effort fire-and-forget — não bloqueia render.
+          fetch(`${url}/functions/v1/track-event-view`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ event_id: eventId }),
+            keepalive: true,
+          }).catch(() => { /* offline / blocked — ignora */ });
+        }
+      }
+    } catch { /* localStorage off — segue sem contagem */ }
+
     setViewTracked(true);
   }, [event, pixelsReady, viewTracked]);
 

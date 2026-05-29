@@ -20,6 +20,10 @@ export async function createCoupon(input: {
   expires_at?: string | null;
   // Tier 2/3: workshop e video_selection adicionados em 2026-05-19/2026-05-20.
   scope?: 'inscription' | 'audience' | 'workshop' | 'video_selection' | 'both' | 'all';
+  /** Multi-scope estrutural (migration 20260615). UI grava ambos durante
+   *  período de transição: scopes é a fonte da verdade futura, scope mantém
+   *  cupons consumidos por edge functions ainda no fallback. */
+  scopes?: ('inscription' | 'audience' | 'workshop' | 'video_selection')[];
 }): Promise<Coupon> {
   const { data, error } = await supabase
     .from('coupons')
@@ -27,6 +31,8 @@ export async function createCoupon(input: {
       ...input,
       code: input.code.trim().toUpperCase(),
       scope: input.scope ?? 'inscription',
+      // CHECK constraint exige cardinality >= 1; default inscription se omitido.
+      scopes: input.scopes && input.scopes.length > 0 ? input.scopes : ['inscription'],
     })
     .select()
     .single();
@@ -62,13 +68,15 @@ export async function validateCoupon(
   const normalizedCode = code.trim().toUpperCase();
   if (!normalizedCode) throw new Error('Informe o código do cupom.');
 
+  // Filtro multi-scope (migration 20260615): 'inscription' no array scopes
+  // OU scope legacy ainda inclui inscription/both/all (transição PWA cache).
   const { data, error } = await supabase
     .from('coupons')
     .select('*')
     .eq('event_id', eventId)
     .eq('code', normalizedCode)
     .eq('is_active', true)
-    .in('scope', ['inscription', 'both'])
+    .or('scopes.cs.{inscription},scope.in.(inscription,both,all)')
     .maybeSingle();
 
   if (error) throw error;

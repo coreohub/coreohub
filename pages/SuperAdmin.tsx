@@ -64,6 +64,14 @@ const SuperAdmin = () => {
   const [eventSearch, setEventSearch]   = useState('');
   const [eventFilter, setEventFilter]   = useState<'all' | 'private' | 'government' | 'free'>('all');
   const [eventEdit, setEventEdit]       = useState<EventRow | null>(null);
+  // Bloco 1 (2026-05-28): leads sem atribuição. Acompanha aquisição global —
+  // signups que NÃO vieram da vitrine de um evento específico. Padrão
+  // Sympla/Eventbrite: plataforma é dona desses leads.
+  const [unattributedSignups, setUnattributedSignups] = useState<{
+    total: number;
+    last30d: number;
+    bySource: Record<string, number>;
+  }>({ total: 0, last30d: 0, bySource: {} });
 
   /* Modal de convite */
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -119,6 +127,7 @@ const SuperAdmin = () => {
           { data: profs },
           { data: evs },
           inviteList,
+          { data: unattribProfs },
         ] = await Promise.all([
           supabase.from('platform_commissions')
             .select('*')
@@ -129,7 +138,32 @@ const SuperAdmin = () => {
             .select('id, name, slug, created_by, start_date, event_type, commission_type, commission_percent, commission_fixed, fee_mode, is_public')
             .order('start_date', { ascending: false }),
           listInvites(),
+          // Bloco 1: leads sem atribuição. Filtros: role != COREOHUB_ADMIN
+          // (super-admin não conta como lead) E entry_event_id IS NULL.
+          // Inclui created_at + entry_source pra breakdown 30d + by source.
+          supabase.from('profiles')
+            .select('created_at, entry_source')
+            .is('entry_event_id', null)
+            .neq('role', 'COREOHUB_ADMIN'),
         ]);
+
+        // Bloco 1: agrega métricas de leads sem atribuição.
+        if (Array.isArray(unattribProfs)) {
+          const cutoff30dAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+          let last30d = 0;
+          const bySource: Record<string, number> = {};
+          for (const p of unattribProfs as Array<{ created_at: string; entry_source: string | null }>) {
+            const createdAt = new Date(p.created_at).getTime();
+            if (createdAt >= cutoff30dAgo) last30d += 1;
+            const src = (p.entry_source ?? 'desconhecido').toLowerCase();
+            bySource[src] = (bySource[src] ?? 0) + 1;
+          }
+          setUnattributedSignups({
+            total: unattribProfs.length,
+            last30d,
+            bySource,
+          });
+        }
 
         setCommissions(comms ?? []);
         setInvites(inviteList);
@@ -508,6 +542,52 @@ const SuperAdmin = () => {
               tone={stats.refundsCount30d > 0 ? 'rose' : 'pink'}
             />
           </div>
+
+          {/* Bloco 1 (2026-05-28): leads sem atribuição.
+              Padrão Sympla/Eventbrite: plataforma é dona dos signups sem evento.
+              Acompanha crescimento orgânico + breakdown por fonte (UTM/referrer). */}
+          {unattributedSignups.total > 0 && (
+            <div className="mt-4 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-3xl overflow-hidden">
+              <div className="p-6 border-b border-slate-200 dark:border-white/5 flex items-center gap-3">
+                <div className="p-2 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 rounded-xl border border-cyan-500/20">
+                  <Users size={16} />
+                </div>
+                <div>
+                  <h2 className="text-sm font-black uppercase text-slate-900 dark:text-white tracking-tight italic">Signups sem atribuição</h2>
+                  <p className="text-[10px] text-slate-500">Leads que criaram conta sem vir da vitrine de um evento específico — aquisição orgânica da plataforma</p>
+                </div>
+              </div>
+              <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="text-center">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Total</p>
+                  <p className="text-3xl font-black text-cyan-600 dark:text-cyan-400 mt-1">{unattributedSignups.total}</p>
+                  <p className="text-[10px] text-slate-500 mt-1">all-time</p>
+                </div>
+                <div className="text-center lg:border-l lg:border-r border-slate-200 dark:border-white/10">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Últimos 30 dias</p>
+                  <p className="text-3xl font-black text-emerald-500 mt-1">{unattributedSignups.last30d}</p>
+                  <p className="text-[10px] text-slate-500 mt-1">{unattributedSignups.total > 0 ? `${Math.round((unattributedSignups.last30d / unattributedSignups.total) * 100)}% do total` : ''}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Por fonte</p>
+                  <div className="space-y-1">
+                    {Object.entries(unattributedSignups.bySource)
+                      .sort((a, b) => b[1] - a[1])
+                      .slice(0, 5)
+                      .map(([src, count]) => (
+                        <div key={src} className="flex justify-between text-[11px]">
+                          <span className="text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wide">{src}</span>
+                          <span className="font-black text-slate-900 dark:text-white tabular-nums">{count}</span>
+                        </div>
+                      ))}
+                    {Object.keys(unattributedSignups.bySource).length === 0 && (
+                      <p className="text-[10px] text-slate-500 italic">Sem dados de fonte (captura UTM a partir de hoje)</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Alertas operacionais — sinais que exigem ação. Só renderiza se houver
               algum sinal positivo, pra não poluir o painel quando tá tudo ok. */}
