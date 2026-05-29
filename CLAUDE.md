@@ -238,6 +238,35 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-05-28 (noite) — Cupom multi-scope + Funil 5 etapas + Drill-down + UTM + Recovery ✅ SHIPADO
+1 commit (`b2ff5a7`) + 4 migrations (`20260615`–`20260618`) aplicadas em prod + cron `send-abandoned-reminders` agendado (job_id 33).
+
+Sessão grande (~6h) consolidando 8 blocos tematicamente coesos sobre **conversão e cupom**. Pesquisa de mercado em cada bloco (Stripe/Sympla/Eventbrite/Mixpanel/Bizzabo). Detalhes em [[bundle-conversao-cupom-shipado]].
+
+**Bloco 1 — Super-admin "Signups sem atribuição"**: card no `/super-admin` agrega `profiles WHERE entry_event_id IS NULL`. Total + 30d + breakdown por `entry_source`. Padrão Sympla/Eventbrite: plataforma é dona dos leads não-atribuídos.
+
+**Bloco 2 — Funil 5 etapas (Visitas → Leads → Iniciadas → Pagas → Compareceu)**:
+- Migration `20260618` + RPC `increment_event_view_count` (service_role only).
+- Edge function `track-event-view` deployada — dedup client via localStorage TTL 30min (cookies cross-origin entre coreohub.com e supabase.co não funcionam).
+- `PublicEventPage.tsx` dispara fire-and-forget no useEffect de view_event.
+- `ProducerDashboard.tsx` card antigo 3 → 5 etapas. Padrão Stripe Checkout / Eventbrite Insights.
+
+**Bloco 3 — Cupom multi-scope estrutural**: migra `coupons.scope TEXT` enum (6 valores) → `coupons.scopes TEXT[]` array (15 combinações). Backfill: `'both'` → `[inscription, audience]`, `'all'` → 4 surfaces, else `[scope]`. Índice GIN + CHECK constraint cardinality>=1. Coluna legacy `scope` mantida durante transição (~2 semanas pra rolar PWA cache) — edge functions filtram com `OR`. UI Coupons.tsx aceita qualquer combinação 1-4; mensagem "Combinação não suportada" sumiu. RPCs `validate_audience_coupon` + `validate_workshop_coupon` v2 com filtro `ANY(scopes)`. 5 edge functions redeployadas. types.ts: `Coupon.scopes?` array; `scope` deprecated.
+
+**Bloco 4+7 — Drill-down "Quem usou" + Performance R$**: hook `refresh` em [Coupons.tsx](pages/Coupons.tsx) agrega counter+revenue+discount por `coupon_id` em 4 fontes (payments aggregate, registrations, audience_tickets, workshop_registrations). Inline na coluna: `7 usos · R$ 1.260 · -R$ 252`. Click no contador abre Drawer via `createPortal(document.body)` — lição [[licao-createPortal-stacking-context]] aplicada. `Registrations.tsx fetchData` agora hidrata `couponCodeById` (1 query). Side panel mostra código real (`SARAHTINEL · R$ 20,00 de desconto`) — antes era genérico "Cupom".
+
+**Bloco 5 — UTM source no signup** (migration `20260617`): `profiles.entry_source TEXT` + índice partial. `Auth.tsx` captura UTM param ou infere de `document.referrer` (instagram/facebook/whatsapp/google/youtube/tiktok/bing/referral) ou `'direct'`. `persistLeadEntrySource` separado do `persistLeadEntryEventId` — captura mesmo signups direct (sem evento). Padrão GA4 default channel grouping.
+
+**Bloco 6 — Coorte temporal no funil**: seletor "Todo período / 30d / 7d" no header do card. Aplica `gte('created_at')` em todas as queries do funil. Visitas só aparecem em "Todo período" (view_count é acumulado, não tem cohort por design — mostra "—" nas janelas). Padrão Mixpanel/Amplitude.
+
+**Bloco 8 — Email "Você esqueceu de finalizar sua inscrição?"**:
+- Template `buildAbandonedRegistration` + case `'abandoned_registration'` em send-email. Subject: `[Evento] Você esqueceu de finalizar sua inscrição?`.
+- Edge function `send-abandoned-reminders` deployada (JWT decode + role check). Critério: `status_pagamento=PENDENTE` + `payment_id IS NULL` + `payment_group_id IS NULL` + `created_at` em [24h, 7d] + `user_id NOT NULL`. Agrupa por (user_id, event_id). Idempotência single-shot via notif type `abandoned_registration`. Skip se `prazo_inscricao < today`. Limit 500 por execução.
+- Cron `send-abandoned-reminders` agendado job_id 33 (10:30 BRT diário). Vai disparar vazio até houver inscrições abandonadas reais.
+- Recovery rate típico Sympla/Hotmart: 15-25%.
+
+**Decisão registrada (não implementada)**: cupom com produtos específicos (Stripe-style por modalidade/categoria/workshop/ticket_type) defer no P2 até produtor pedir granularidade.
+
 ### 2026-05-28 — Blindagem do label governo + workshop gratuito ✅ SHIPADO
 1 commit (`2af8c21`) + migration `20260613_protect_event_type.sql` aplicada em prod.
 
