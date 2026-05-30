@@ -5624,7 +5624,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                             <button
                               key={opt}
                               onClick={() => setAwardFormation(award.id, opt)}
-                              className={`px-2 py-0.5 rounded-lg text-[7px] font-black uppercase tracking-widest border transition-all ${
+                              className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest border transition-all ${
                                 award.formation === opt
                                   ? 'bg-indigo-500 border-indigo-500 text-white'
                                   : 'border-slate-200 dark:border-white/10 text-slate-400 hover:border-indigo-400/40'
@@ -5641,7 +5641,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                               <button
                                 key={opt}
                                 onClick={() => setAwardGenre(award.id, opt)}
-                                className={`px-2 py-0.5 rounded-lg text-[7px] font-black uppercase tracking-widest border transition-all ${
+                                className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest border transition-all ${
                                   (award.genre ?? 'TODOS') === opt
                                     ? 'bg-violet-500 border-violet-500 text-white'
                                     : 'border-slate-200 dark:border-white/10 text-slate-400 hover:border-violet-400/40'

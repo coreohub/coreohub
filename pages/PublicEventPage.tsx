@@ -7,7 +7,7 @@ import {
   Calendar, MapPin, Music, Ticket, ExternalLink,
   ChevronRight, Trophy, Clock, Star, Loader2, ArrowLeft, Youtube, Radio,
   Share2, Copy, Check, Instagram, Globe, MessageCircle, Mail, FileText, Download,
-  GraduationCap, Video,
+  GraduationCap, Video, Plus, Minus,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import BrandIcon from '../components/BrandIcon';
@@ -58,6 +58,9 @@ const PublicEventPage = () => {
   // Gêneros + modalidades estruturados (event_styles). Renderizado em seção
   // própria na vitrine pra inscrito ver de cara o leque técnico do festival.
   const [publicGenres, setPublicGenres] = useState<Array<{ name: string; sub_types: Array<{ name: string }> }>>([]);
+  // Carrinho multi-tipo de ingressos: mapa realIdx(string) → quantidade.
+  // React state local (não localStorage) — sessão zera ao sair, padrão Sympla.
+  const [cart, setCart] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!idOrSlug) return;
@@ -87,6 +90,7 @@ const PublicEventPage = () => {
             regulation_pdf_url,
             programacao_config, ingressos_config, formacoes_config, patrocinadores_config,
             politica_ingressos, audience_sales_enabled,
+            audience_max_per_purchase, audience_max_per_cpf,
             producer_ga4_id, producer_meta_pixel_id
           `)
           .eq(filterCol, idOrSlug)
@@ -349,6 +353,30 @@ const PublicEventPage = () => {
   // Prefere slug nas URLs públicas pra link bonito compartilhável (Fase 1 — Padronização).
   // UUID como fallback se slug não existir.
   const slugOrId = event.slug ?? event.id;
+
+  // Carrinho multi-tipo: limite total por compra (respeita config do evento) +
+  // totais de quantidade/valor pra sticky bar. Valor é o de face (preview);
+  // taxa/cupom só aparecem no checkout (padrão Sympla mostra face value).
+  const maxPurchase = Math.max(1, Math.min(
+    Number(event.audience_max_per_purchase ?? 6),
+    Number(event.audience_max_per_cpf ?? 6),
+  ));
+  const cartTotalQty = Object.values(cart).reduce((s, n) => s + n, 0);
+  const cartTotalBRL = Object.entries(cart).reduce((sum, [k, q]) => {
+    const t = Array.isArray(event.ingressos_config) ? event.ingressos_config[Number(k)] : null;
+    if (!t) return sum;
+    const r = resolveLote(Array.isArray(t.lotes) ? t.lotes : null, todayISO());
+    const p = r ? Number(r.lote.preco ?? 0) : Number(t.preco ?? 0);
+    return sum + p * q;
+  }, 0);
+  const setTypeQty = (idx: number, qty: number) => {
+    setCart(c => {
+      const next = { ...c };
+      if (qty <= 0) delete next[String(idx)];
+      else next[String(idx)] = qty;
+      return next;
+    });
+  };
   const localCidadeUf = [event.city, event.state].filter(Boolean).join(' / ');
   // Local específico (ex: "Concha Acústica Prof. Geraldo") + cidade pra contexto.
   // Botão "Ver no Google Maps" usa URL oficial sem API key (zero custo, mobile abre
@@ -898,16 +926,51 @@ const PublicEventPage = () => {
                             </span>
                           ) : null}
 
-                          {/* Botão de compra: prioriza checkout interno quando habilitado */}
-                          {salesEnabled && preco > 0 && !soldOut && (
-                            <button
-                              type="button"
-                              onClick={() => navigate(`/checkout-ingresso/${idOrSlug}/${realIdx}`)}
-                              className="self-start inline-flex items-center gap-1.5 px-4 py-2 mt-2 bg-[#ff0068] text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:scale-105 transition-all"
-                            >
-                              <Ticket size={12} /> Comprar
-                            </button>
-                          )}
+                          {/* Carrinho multi-tipo: +/− por tipo (padrão Sympla/Eventbrite).
+                              Some "Comprar" individual; total vai pra sticky bar. */}
+                          {salesEnabled && preco > 0 && !soldOut && (() => {
+                            const key = String(realIdx);
+                            const qty = cart[key] ?? 0;
+                            const isMeia = String(t.nome).toLowerCase().includes('meia');
+                            const remaining = stock?.remaining ?? Infinity;
+                            const typeCap = Math.min(isMeia ? 1 : 99, remaining);
+                            const atGlobalMax = cartTotalQty >= maxPurchase;
+                            if (qty === 0) {
+                              return (
+                                <button
+                                  type="button"
+                                  disabled={atGlobalMax}
+                                  onClick={() => setTypeQty(realIdx, 1)}
+                                  title={atGlobalMax ? `Máximo de ${maxPurchase} ingressos por compra` : undefined}
+                                  className="self-start inline-flex items-center gap-1.5 px-4 py-2 mt-2 bg-[#ff0068] text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:scale-105 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                >
+                                  <Plus size={12} /> Adicionar
+                                </button>
+                              );
+                            }
+                            return (
+                              <div className="self-start inline-flex items-center gap-3 mt-2">
+                                <button
+                                  type="button"
+                                  aria-label="Remover um"
+                                  onClick={() => setTypeQty(realIdx, qty - 1)}
+                                  className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center"
+                                >
+                                  <Minus size={14} />
+                                </button>
+                                <span className="text-base font-black tabular-nums w-5 text-center">{qty}</span>
+                                <button
+                                  type="button"
+                                  aria-label="Adicionar um"
+                                  disabled={qty >= typeCap || atGlobalMax}
+                                  onClick={() => setTypeQty(realIdx, Math.min(typeCap, qty + 1))}
+                                  className="w-8 h-8 rounded-lg bg-[#ff0068]/80 hover:bg-[#ff0068] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
+                                >
+                                  <Plus size={14} />
+                                </button>
+                              </div>
+                            );
+                          })()}
                           {!salesEnabled && t.link && (
                             <a
                               href={t.link}
@@ -1126,15 +1189,15 @@ const PublicEventPage = () => {
                 // → badge formation (se != TODOS). Sem descrições padrão poluindo.
                 const valor = typeof award.valor === 'number' && award.valor > 0 ? award.valor : null;
                 return (
-                  <div key={award.id} className="bg-white/5 border border-white/10 rounded-2xl p-5">
-                    <p className="font-black uppercase text-sm tracking-tight">{award.name}</p>
+                  <div key={award.id} className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-5">
+                    <p className="font-black uppercase text-sm tracking-tight text-slate-900 dark:text-white">{award.name}</p>
                     {valor && (
-                      <p className="text-lg font-black text-emerald-400 tabular-nums mt-1">
+                      <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 tabular-nums mt-1">
                         {valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </p>
                     )}
                     {award.description && (
-                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">{award.description}</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">{award.description}</p>
                     )}
                     {award.formation && award.formation !== 'TODOS' && (
                       <span className="inline-block mt-2 px-2 py-1 rounded-full bg-[#ff0068]/10 text-[#ff0068] text-[9px] font-black uppercase tracking-widest">

@@ -1,33 +1,31 @@
 /**
  * Edge Function: create-audience-ticket
  *
- * Tier 1: cria ingresso de plateia (guest checkout, sem login) e gera cobrança
- * Asaas com split pra subconta do produtor.
+ * Venda de ingressos de plateia (guest checkout, sem login) com split Asaas pra
+ * subconta do produtor. Suporta CARRINHO MULTI-TIPO: 1 pagamento pra N tipos
+ * (ex: 2 Inteiras + 1 Meia). 1 só cobrança Asaas, 1 group_id, lista de QRs.
  *
  * verify_jwt=false porque é checkout público. Validamos no payload.
  *
  * Body POST JSON:
  * {
- *   event_id:        UUID,
- *   ticket_type_idx: number,    // índice em events.ingressos_config
- *   buyer: {
- *     name:  string,
- *     email: string,
- *     cpf:   string,            // dígitos limpos ou formatado
- *     phone?: string,
- *   },
- *   quantity?:    number,        // default 1; respeita audience_max_per_purchase
- *   coupon_code?: string         // Tier 2: cupom de plateia (scope='audience'|'both')
+ *   event_id: UUID,
+ *   // multi-tipo (preferido):
+ *   items: [{ ticket_type_idx: number, quantity: number }, ...],
+ *   // OU legado monotipo (compat PWA cache / links antigos):
+ *   ticket_type_idx: number,
+ *   quantity?: number,
+ *   buyer: { name, email, cpf, phone? },
+ *   coupon_code?: string    // cupom aplicado no carrinho inteiro (cart-level)
  * }
  *
  * Resposta sucesso (201):
  * {
- *   tickets: [{ id, access_token }],   // 1+ por compra (family ticket)
- *   group_id: UUID|null,                // != null quando family ticket (qty > 1)
+ *   tickets: [{ id, access_token }],   // 1+ por compra
+ *   group_id: UUID|null,                // != null quando carrinho tem >1 ticket
  *   payment_id, invoice_url,
- *   charged_amount, producer_amount, commission_amount,
- *   discount_amount,
- *   fee_mode
+ *   charged_amount, producer_amount, commission_amount, discount_amount,
+ *   coupon_code, fee_mode, external_reference
  * }
  */
 
@@ -45,6 +43,8 @@ const json = (data: unknown, status = 200) =>
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
+
+const round2 = (n: number) => parseFloat(n.toFixed(2))
 
 // Valida CPF formato + dígito verificador (mod-11)
 function isValidCpf(cpf: string): boolean {
@@ -78,6 +78,38 @@ function extractClientIp(req: Request): string {
   return 'unknown'
 }
 
+// Detecta kind por nome (heurística simples; produtor pode customizar via tipo explícito futuramente)
+function detectKind(nome: string, explicitKind?: string): string {
+  if (explicitKind) return explicitKind
+  const n = String(nome).toLowerCase()
+  if (n.includes('meia')) return 'meia'
+  if (n.includes('solidári') || n.includes('solidari')) return 'solidaria'
+  if (n.includes('cortes')) return 'cortesia'
+  return 'inteira'
+}
+
+// Resolve preço vigente do tipo respeitando lotes (fallback p/ preco direto).
+function resolvePreco(ticketType: any): number {
+  const lotes: Array<{ data_virada: string | null; preco: number }> =
+    Array.isArray(ticketType.lotes) ? ticketType.lotes : []
+  const todayISO = new Date().toISOString().slice(0, 10)
+  if (lotes.length > 0) {
+    const idx = lotes.findIndex(l => !l.data_virada || l.data_virada >= todayISO)
+    const lote = idx >= 0 ? lotes[idx] : lotes[lotes.length - 1]
+    return Number(lote?.preco ?? 0)
+  }
+  return Number(ticketType.preco ?? 0)
+}
+
+// Detecta recusa Asaas quando subconta não tem domínio cadastrado.
+function isDomainCallbackError(payData: any): boolean {
+  if (!payData?.errors || !Array.isArray(payData.errors)) return false
+  return payData.errors.some((e: any) => {
+    const desc = String(e?.description ?? '').toLowerCase()
+    return desc.includes('domínio') || desc.includes('dominio') || desc.includes('cadastre um site')
+  })
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -88,20 +120,21 @@ Deno.serve(async (req) => {
     const {
       event_id,
       ticket_type_idx,
+      items: rawItems,
       buyer,
       quantity: qtyRaw,
       coupon_code,
     } = body as {
       event_id?: string
       ticket_type_idx?: number
+      items?: Array<{ ticket_type_idx?: number; quantity?: number }>
       buyer?: { name?: string; email?: string; cpf?: string; phone?: string }
       quantity?: number
       coupon_code?: string
     }
 
-    // ── Validações ────────────────────────────────────────────────────────────
+    // ── Validações básicas ───────────────────────────────────────────────────
     if (!event_id) throw new Error('event_id obrigatório')
-    if (typeof ticket_type_idx !== 'number') throw new Error('ticket_type_idx obrigatório')
     if (!buyer?.name?.trim()) throw new Error('Nome do comprador obrigatório')
     if (!buyer?.email || !isValidEmail(buyer.email)) throw new Error('Email inválido')
     if (!buyer?.cpf) throw new Error('CPF obrigatório')
@@ -109,7 +142,21 @@ Deno.serve(async (req) => {
     const cpfLimpo = buyer.cpf.replace(/\D/g, '')
     if (!isValidCpf(cpfLimpo)) throw new Error('CPF inválido (dígito verificador não bate)')
 
-    const quantity = Math.max(1, Math.min(20, Number(qtyRaw ?? 1)))
+    // ── Normaliza carrinho: items[] (multi-tipo) OU legado ticket_type_idx ───
+    // Merge por idx (caso o cliente mande o mesmo tipo repetido).
+    const mergedQty = new Map<number, number>()
+    const sourceItems: Array<{ ticket_type_idx?: number; quantity?: number }> =
+      Array.isArray(rawItems) && rawItems.length > 0
+        ? rawItems
+        : (typeof ticket_type_idx === 'number'
+            ? [{ ticket_type_idx, quantity: qtyRaw ?? 1 }]
+            : [])
+    if (sourceItems.length === 0) throw new Error('Carrinho vazio')
+    for (const it of sourceItems) {
+      if (typeof it.ticket_type_idx !== 'number') throw new Error('ticket_type_idx obrigatório em cada item')
+      const q = Math.max(1, Math.min(20, Number(it.quantity ?? 1)))
+      mergedQty.set(it.ticket_type_idx, (mergedQty.get(it.ticket_type_idx) ?? 0) + q)
+    }
 
     const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
     const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
@@ -120,7 +167,6 @@ Deno.serve(async (req) => {
     )
 
     // ── Rate limit por IP (anti-spam) ────────────────────────────────────────
-    // Máx 10 tentativas em 5min por IP. Chuta 429 se exceder.
     const clientIp = extractClientIp(req)
     if (clientIp !== 'unknown') {
       const { data: rlData, error: rlErr } = await supabase.rpc('rate_limit_check', {
@@ -130,7 +176,6 @@ Deno.serve(async (req) => {
         p_max_attempts: 10,
       })
       if (rlErr) {
-        // Falha do rate limit não bloqueia request (defensive — banco pode estar lento)
         console.warn('[create-audience-ticket] rate_limit_check falhou:', rlErr.message)
       } else {
         const row = Array.isArray(rlData) ? rlData[0] : rlData
@@ -141,14 +186,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── Evento + tipo de ingresso ────────────────────────────────────────────
+    // ── Evento + tipos de ingresso ───────────────────────────────────────────
     const { data: event, error: evErr } = await supabase
       .from('events')
       .select(`
         id, name, created_by, ingressos_config, event_date,
         audience_commission_percent, audience_fee_mode,
         audience_max_per_cpf, audience_max_per_purchase, audience_sales_enabled,
-        politica_ingressos
+        audience_reservation_minutes, politica_ingressos
       `)
       .eq('id', event_id)
       .single()
@@ -160,7 +205,6 @@ Deno.serve(async (req) => {
     if (event.politica_ingressos !== 'INTERNO') {
       throw new Error('Este evento não vende ingressos pela plataforma')
     }
-    // Defesa em profundidade: backend também valida evento expirado.
     if (event.event_date) {
       const deadline = new Date(event.event_date + 'T23:59:59')
       if (deadline.getTime() < Date.now()) {
@@ -169,56 +213,57 @@ Deno.serve(async (req) => {
     }
 
     const ingressos: any[] = Array.isArray(event.ingressos_config) ? event.ingressos_config : []
-    const ticketType = ingressos[ticket_type_idx]
-    if (!ticketType?.nome) throw new Error('Tipo de ingresso inválido')
 
-    // Resolve lote vigente. Defesa em profundidade: backend recalcula, não confia
-    // no client. Lote vigente = primeiro com data_virada >= hoje (ou null).
-    // Fallback pra ticketType.preco quando não há lotes (compat com tipos antigos).
-    const lotes: Array<{ data_virada: string | null; preco: number }> =
-      Array.isArray(ticketType.lotes) ? ticketType.lotes : []
-    const todayISO = new Date().toISOString().slice(0, 10)
-    let preco: number
-    if (lotes.length > 0) {
-      const idx = lotes.findIndex(l => !l.data_virada || l.data_virada >= todayISO)
-      const lote = idx >= 0 ? lotes[idx] : lotes[lotes.length - 1]
-      preco = Number(lote?.preco ?? 0)
-    } else {
-      preco = Number(ticketType.preco ?? 0)
+    // ── Resolve cada item (preço/kind/estoque) ───────────────────────────────
+    type ResolvedItem = {
+      idx: number
+      nome: string
+      kind: string
+      quantity: number
+      precoUnit: number          // preço de face vigente (sem desconto)
+      quantidadeTotal: number | null
     }
-    if (preco <= 0) throw new Error('Preço do ingresso inválido')
+    const resolved: ResolvedItem[] = []
+    let totalQty = 0
+    let totalBase = 0
+    for (const [idx, quantity] of mergedQty.entries()) {
+      const t = ingressos[idx]
+      if (!t?.nome) throw new Error('Tipo de ingresso inválido')
+      const precoUnit = resolvePreco(t)
+      if (precoUnit <= 0) throw new Error(`Preço inválido para "${t.nome}"`)
+      const kind = detectKind(t.nome, t.kind)
+      const quantidadeTotal: number | null =
+        t.quantidade_total != null && Number(t.quantidade_total) > 0 ? Number(t.quantidade_total) : null
+      resolved.push({ idx, nome: String(t.nome), kind, quantity, precoUnit, quantidadeTotal })
+      totalQty += quantity
+      totalBase += precoUnit * quantity
+    }
+    totalBase = round2(totalBase)
 
-    // Detecta kind por nome (heurística simples; produtor pode customizar via tipo explícito futuramente)
-    const nomeLower = String(ticketType.nome).toLowerCase()
-    const kind: string = ticketType.kind
-      ?? (nomeLower.includes('meia') ? 'meia'
-        : nomeLower.includes('solidári') || nomeLower.includes('solidari') ? 'solidaria'
-        : nomeLower.includes('cortes') ? 'cortesia'
-        : 'inteira')
-
-    // ── Limites antifraude ───────────────────────────────────────────────────
+    // ── Limites antifraude (max por compra, somando o carrinho) ──────────────
     const maxPerPurchase = Number(event.audience_max_per_purchase ?? 6)
     const maxPerCpf      = Number(event.audience_max_per_cpf ?? 6)
-
-    // Validação inicial de quantity (a SQL function valida limites por CPF
-    // atomicamente sob advisory lock; aqui só pré-filtra max por compra).
-    if (quantity > maxPerPurchase) {
+    if (totalQty > maxPerPurchase) {
       throw new Error(`Limite de ${maxPerPurchase} ingressos por compra`)
     }
+    // Lei 12.933: no máximo 1 meia no carrinho inteiro
+    const meiaQty = resolved.filter(r => r.kind === 'meia').reduce((s, r) => s + r.quantity, 0)
+    if (meiaQty > 1) {
+      throw new Error('Lei 12.933: meia-entrada limitada a 1 por CPF')
+    }
 
-    // ── Cupom de plateia (Tier 2) ────────────────────────────────────────────
-    // Validamos no servidor pra defesa em profundidade. Cliente envia código,
-    // backend recalcula desconto. used_count é incrementado dentro da RPC
-    // try_reserve_audience_tickets atomicamente.
+    // ── Cupom de plateia (cart-level) ────────────────────────────────────────
+    // Desconto calculado sobre o TOTAL do carrinho, distribuído proporcionalmente
+    // por tipo (mesma filosofia do aggregate de inscrições). used_count é
+    // incrementado dentro da RPC atomicamente.
     let couponId: string | null = null
     let couponCode: string | null = null
-    let discountPerTicket = 0   // desconto absoluto POR TICKET (após cálculo)
+    let discountTotal = 0
     if (coupon_code && coupon_code.trim()) {
-      const baseValueUnit = preco // desconto calculado em cima do preço unitário
       const { data: cv, error: cErr } = await supabase.rpc('validate_audience_coupon', {
         p_event_id: event_id,
         p_code: coupon_code,
-        p_base_value: baseValueUnit,
+        p_base_value: totalBase,
       })
       if (cErr) {
         console.warn('[create-audience-ticket] erro validate_audience_coupon:', cErr.message)
@@ -230,35 +275,60 @@ Deno.serve(async (req) => {
       }
       couponId = row.coupon_id
       couponCode = row.code
-      discountPerTicket = parseFloat(Number(row.discount).toFixed(2))
+      discountTotal = round2(Number(row.discount))
     }
 
-    // ── Calcular valores ─────────────────────────────────────────────────────
+    // ── Calcula valores por tipo (distribui desconto + comissão + split) ─────
     const commissionPercent = Number(event.audience_commission_percent ?? 10)
     const feeMode           = (event as any).audience_fee_mode ?? 'repassar'
-    const baseFeeUnit       = parseFloat((preco - discountPerTicket).toFixed(2))
-    if (baseFeeUnit < 0) throw new Error('Desconto maior que o preço base')
-    const commissionUnit    = parseFloat((baseFeeUnit * (commissionPercent / 100)).toFixed(2))
 
-    let chargedUnit: number
-    let producerUnit: number
-    if (feeMode === 'repassar') {
-      chargedUnit  = parseFloat((baseFeeUnit + commissionUnit).toFixed(2))
-      producerUnit = baseFeeUnit
-    } else {
-      chargedUnit  = baseFeeUnit
-      producerUnit = parseFloat((baseFeeUnit - commissionUnit).toFixed(2))
-    }
-    if (chargedUnit <= 0) {
+    let chargedTotal = 0
+    let producerTotal = 0
+    let commissionTotal = 0
+    let discountApplied = 0
+
+    const rpcItems = resolved.map(r => {
+      const typeBase = r.precoUnit * r.quantity
+      // Distribui o desconto total proporcional à participação do tipo.
+      const typeDiscount = totalBase > 0 ? round2(discountTotal * (typeBase / totalBase)) : 0
+      const discountPerTicket = round2(typeDiscount / r.quantity)
+      const baseFeeUnit = round2(r.precoUnit - discountPerTicket)
+      if (baseFeeUnit < 0) throw new Error('Desconto maior que o preço base')
+      const commissionUnit = round2(baseFeeUnit * (commissionPercent / 100))
+      let chargedUnit: number
+      let producerUnit: number
+      if (feeMode === 'repassar') {
+        chargedUnit  = round2(baseFeeUnit + commissionUnit)
+        producerUnit = baseFeeUnit
+      } else {
+        chargedUnit  = baseFeeUnit
+        producerUnit = round2(baseFeeUnit - commissionUnit)
+      }
+      chargedTotal    += round2(chargedUnit * r.quantity)
+      producerTotal   += round2(producerUnit * r.quantity)
+      commissionTotal += round2(commissionUnit * r.quantity)
+      discountApplied += round2(discountPerTicket * r.quantity)
+      return {
+        ticket_type_id:      String(r.idx),
+        ticket_type_nome:    r.nome,
+        kind:                r.kind,
+        quantity:            r.quantity,
+        preco:               baseFeeUnit,
+        commission_amount:   commissionUnit,
+        producer_amount:     producerUnit,
+        discount_per_ticket: discountPerTicket,
+        quantidade_total:    r.quantidadeTotal,
+      }
+    })
+    chargedTotal    = round2(chargedTotal)
+    producerTotal   = round2(producerTotal)
+    commissionTotal = round2(commissionTotal)
+    discountApplied = round2(discountApplied)
+
+    if (chargedTotal <= 0) {
       // Cupom 100% off → cobrança inválida no Asaas. Bloqueamos por enquanto.
-      // (Cortesia gratuita seria um fluxo separado — Tier 3.)
       throw new Error('Valor final zero não suportado. Use cupom com desconto parcial.')
     }
-
-    const chargedTotal    = parseFloat((chargedUnit * quantity).toFixed(2))
-    const producerTotal   = parseFloat((producerUnit * quantity).toFixed(2))
-    const commissionTotal = parseFloat((commissionUnit * quantity).toFixed(2))
-    const discountTotal   = parseFloat((discountPerTicket * quantity).toFixed(2))
 
     // ── Wallet do produtor ───────────────────────────────────────────────────
     const { data: producer } = await supabase
@@ -271,41 +341,23 @@ Deno.serve(async (req) => {
       throw new Error('Produtor não conectou conta Asaas. Venda indisponível.')
     }
 
-    // ── Estoque + reserva: lê config do tipo (Tier 2) ────────────────────────
-    // ingressos_config[].quantidade_total = limite total (NULL/undef = ilimitado)
-    const quantidadeTotal: number | null =
-      ticketType.quantidade_total != null && ticketType.quantidade_total > 0
-        ? Number(ticketType.quantidade_total)
-        : null
-    // Janela da reserva temporária (default 10min). Configurável no evento.
     const reservedMinutes = Number((event as any).audience_reservation_minutes ?? 10)
 
-    // ── Reserva atômica via SQL function (advisory lock por CPF+evento) ─────
-    // Garante que count + insert acontecem sob lock — race condition de
-    // requests simultâneos não burla limite por CPF, Lei 12.933 nem estoque.
+    // ── Reserva atômica via RPC v2 (advisory locks determinísticos) ──────────
     const { data: reserveData, error: reserveErr } = await supabase.rpc(
-      'try_reserve_audience_tickets',
+      'try_reserve_audience_tickets_v2',
       {
-        p_event_id:           event_id,
-        p_cpf:                cpfLimpo,
-        p_kind:               kind,
-        p_quantity:           quantity,
-        p_max_per_cpf:        maxPerCpf,
-        p_ticket_type_id:     String(ticket_type_idx),
-        p_ticket_type_nome:   String(ticketType.nome),
-        p_preco:              baseFeeUnit,
-        p_buyer_name:         buyer.name!.trim(),
-        p_buyer_email:        buyer.email!.trim().toLowerCase(),
-        p_buyer_phone:        buyer.phone?.replace(/\D/g, '') || null,
-        p_commission_amount:  commissionUnit,
-        p_producer_amount:    producerUnit,
-        p_fee_mode:           feeMode,
-        // Tier 2:
-        p_quantidade_total:   quantidadeTotal,
-        p_reserved_minutes:   reservedMinutes,
-        p_coupon_id:          couponId,
-        p_coupon_code:        couponCode,
-        p_discount_per_ticket: discountPerTicket,
+        p_event_id:        event_id,
+        p_cpf:             cpfLimpo,
+        p_buyer_name:      buyer.name!.trim(),
+        p_buyer_email:     buyer.email!.trim().toLowerCase(),
+        p_buyer_phone:     buyer.phone?.replace(/\D/g, '') || null,
+        p_max_per_cpf:     maxPerCpf,
+        p_fee_mode:        feeMode,
+        p_reserved_minutes: reservedMinutes,
+        p_coupon_id:       couponId,
+        p_coupon_code:     couponCode,
+        p_items:           rpcItems,
       }
     )
 
@@ -321,7 +373,6 @@ Deno.serve(async (req) => {
       error_message: string | null
     }>
 
-    // SQL function retorna 1 row com error_message preenchido em caso de erro
     if (reserveRows.length === 0 || (reserveRows[0].error_message && !reserveRows[0].ticket_id)) {
       throw new Error(reserveRows[0]?.error_message ?? 'Falha ao reservar ingresso')
     }
@@ -329,20 +380,16 @@ Deno.serve(async (req) => {
     const createdTickets = reserveRows
       .filter(r => r.ticket_id)
       .map(r => ({ id: r.ticket_id!, access_token: r.access_token! }))
-
     const groupId = reserveRows.find(r => r.group_id)?.group_id ?? null
 
-    if (createdTickets.length === 0) {
-      throw new Error('Nenhum ticket reservado')
-    }
+    if (createdTickets.length === 0) throw new Error('Nenhum ticket reservado')
 
-    // externalReference: prefix "AT:" pro webhook discriminar audience vs registration.
-    // Usa o id do PRIMEIRO ticket criado (webhook propaga status pros demais via payment_id).
-    // Distinto do groupId acima — esse é só o "âncora" no Asaas.
+    // externalReference: prefix "AT:" pro webhook discriminar. Usa o id do
+    // PRIMEIRO ticket — webhook propaga status pros demais via payment_id.
     const externalRefId = createdTickets[0].id
     const externalRef = `AT:${externalRefId}`
 
-    // ── Criar customer Asaas ────────────────────────────────────────────────
+    // ── Customer Asaas ────────────────────────────────────────────────────────
     const asaasHeaders = {
       'access_token': ASAAS_API_KEY,
       'Content-Type': 'application/json',
@@ -364,12 +411,11 @@ Deno.serve(async (req) => {
           email:    buyer.email,
           cpfCnpj:  cpfLimpo,
           ...(buyer.phone ? { mobilePhone: buyer.phone.replace(/\D/g, '') } : {}),
-          notificationDisabled: true, // CoreoHub usa Resend, evita Taxa de Mensageria
+          notificationDisabled: true,
         }),
       })
       const custData = await custRes.json()
       if (!custRes.ok) {
-        // Rollback dos tickets
         await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
         console.error('[create-audience-ticket] erro customer:', custData)
         throw new Error(custData.errors?.[0]?.description ?? 'Erro ao criar customer Asaas')
@@ -377,14 +423,16 @@ Deno.serve(async (req) => {
       customerId = custData.id
     }
 
-    // ── Criar cobrança ──────────────────────────────────────────────────────
+    // ── Cobrança ──────────────────────────────────────────────────────────────
     const dueDate = new Date()
     dueDate.setDate(dueDate.getDate() + 3)
     const dueDateStr = dueDate.toISOString().split('T')[0]
 
-    const description = quantity > 1
-      ? `${quantity}x ${ticketType.nome} - ${event.name}`
-      : `${ticketType.nome} - ${event.name}`
+    // Descrição: "2x Inteira, 1x Meia - Evento" (multi) ou "Inteira - Evento" (1)
+    const itemsDesc = resolved.map(r => `${r.quantity}x ${r.nome}`).join(', ')
+    const description = totalQty > 1
+      ? `${itemsDesc} - ${event.name}`
+      : `${resolved[0].nome} - ${event.name}`
 
     const basePayload = {
       customer:          customerId,
@@ -399,8 +447,6 @@ Deno.serve(async (req) => {
           fixedValue: producerTotal,
         },
       ],
-      // Notificações configuradas no customer (notificationDisabled),
-      // não por payment — suporte Asaas confirmou 2026-05-18.
     }
     const callbackPayload = {
       successUrl:   `${ALLOWED_ORIGIN}/pagamento-sucesso?ref=${encodeURIComponent(externalRef)}`,
@@ -431,7 +477,7 @@ Deno.serve(async (req) => {
       throw new Error(payData.errors?.[0]?.description ?? 'Erro ao criar cobrança no Asaas')
     }
 
-    // ── Persistir payment_id e payment_url em todos os tickets do grupo ─────
+    // ── Persiste payment_id + payment_url em todos os tickets ────────────────
     await supabase
       .from('audience_tickets')
       .update({
@@ -441,9 +487,9 @@ Deno.serve(async (req) => {
       .in('id', createdTickets.map(t => t.id))
 
     console.log(
-      `[create-audience-ticket] ok event=${event_id} qty=${quantity} kind=${kind}` +
+      `[create-audience-ticket] ok event=${event_id} qty=${totalQty} types=${resolved.length}` +
       ` charged=${chargedTotal} producer=${producerTotal} commission=${commissionTotal}` +
-      ` discount=${discountTotal} coupon=${couponCode ?? '-'} group=${groupId ?? 'solo'}` +
+      ` discount=${discountApplied} coupon=${couponCode ?? '-'} group=${groupId ?? 'solo'}` +
       ` payment=${payData.id}`
     )
 
@@ -455,7 +501,7 @@ Deno.serve(async (req) => {
       charged_amount:    chargedTotal,
       producer_amount:   producerTotal,
       commission_amount: commissionTotal,
-      discount_amount:   discountTotal,
+      discount_amount:   discountApplied,
       coupon_code:       couponCode,
       fee_mode:          feeMode,
       external_reference: externalRef,
@@ -465,12 +511,3 @@ Deno.serve(async (req) => {
     return json({ error: error.message }, 400)
   }
 })
-
-// Detecta recusa Asaas quando subconta não tem domínio cadastrado.
-function isDomainCallbackError(payData: any): boolean {
-  if (!payData?.errors || !Array.isArray(payData.errors)) return false
-  return payData.errors.some((e: any) => {
-    const desc = String(e?.description ?? '').toLowerCase()
-    return desc.includes('domínio') || desc.includes('dominio') || desc.includes('cadastre um site')
-  })
-}

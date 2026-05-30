@@ -532,7 +532,7 @@ function buildAudienceTicketConfirmation(p: AudienceTicketPayload) {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${eventInfo}</table>
     ${ticketBlocks}
     <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#475569;">
-      Guarde este email — o link de cada ingresso é seu comprovante. Se você comprou ${isMulti ? 'mais de um' : 'mais de um ingresso'}, cada pessoa precisa do seu próprio QR.
+      Guarde este email — o link de cada ingresso é seu comprovante.${isMulti ? ' Cada pessoa precisa do seu próprio QR na entrada.' : ''}
     </p>`
 
   return {
