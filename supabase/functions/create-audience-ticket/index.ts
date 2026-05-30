@@ -343,23 +343,55 @@ Deno.serve(async (req) => {
 
     const reservedMinutes = Number((event as any).audience_reservation_minutes ?? 10)
 
-    // ── Reserva atômica via RPC v2 (advisory locks determinísticos) ──────────
-    const { data: reserveData, error: reserveErr } = await supabase.rpc(
-      'try_reserve_audience_tickets_v2',
-      {
+    // ── Reserva atômica via RPC ──────────────────────────────────────────────
+    // Carrinho de 1 tipo → RPC v1 (try_reserve_audience_tickets, sempre presente
+    // em prod): mantém o checkout monotipo funcionando mesmo se esta função for
+    // publicada antes da migration do v2. Carrinho multi-tipo → RPC v2.
+    const buyerName  = buyer.name!.trim()
+    const buyerEmail = buyer.email!.trim().toLowerCase()
+    const buyerPhone = buyer.phone?.replace(/\D/g, '') || null
+    let reserveData: any
+    let reserveErr: any
+    if (rpcItems.length === 1) {
+      const it = rpcItems[0]
+      const r = await supabase.rpc('try_reserve_audience_tickets', {
+        p_event_id:           event_id,
+        p_cpf:                cpfLimpo,
+        p_kind:               it.kind,
+        p_quantity:           it.quantity,
+        p_max_per_cpf:        maxPerCpf,
+        p_ticket_type_id:     it.ticket_type_id,
+        p_ticket_type_nome:   it.ticket_type_nome,
+        p_preco:              it.preco,
+        p_buyer_name:         buyerName,
+        p_buyer_email:        buyerEmail,
+        p_buyer_phone:        buyerPhone,
+        p_commission_amount:  it.commission_amount,
+        p_producer_amount:    it.producer_amount,
+        p_fee_mode:           feeMode,
+        p_quantidade_total:   it.quantidade_total,
+        p_reserved_minutes:   reservedMinutes,
+        p_coupon_id:          couponId,
+        p_coupon_code:        couponCode,
+        p_discount_per_ticket: it.discount_per_ticket,
+      })
+      reserveData = r.data; reserveErr = r.error
+    } else {
+      const r = await supabase.rpc('try_reserve_audience_tickets_v2', {
         p_event_id:        event_id,
         p_cpf:             cpfLimpo,
-        p_buyer_name:      buyer.name!.trim(),
-        p_buyer_email:     buyer.email!.trim().toLowerCase(),
-        p_buyer_phone:     buyer.phone?.replace(/\D/g, '') || null,
+        p_buyer_name:      buyerName,
+        p_buyer_email:     buyerEmail,
+        p_buyer_phone:     buyerPhone,
         p_max_per_cpf:     maxPerCpf,
         p_fee_mode:        feeMode,
         p_reserved_minutes: reservedMinutes,
         p_coupon_id:       couponId,
         p_coupon_code:     couponCode,
         p_items:           rpcItems,
-      }
-    )
+      })
+      reserveData = r.data; reserveErr = r.error
+    }
 
     if (reserveErr) {
       console.error('[create-audience-ticket] erro RPC reserve:', reserveErr.message)

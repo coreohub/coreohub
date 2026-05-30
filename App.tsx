@@ -511,7 +511,11 @@ const App: React.FC = () => {
         <Route path="/festivais" element={<Suspense fallback={<PageLoader />}><Festivais /></Suspense>} />
         <Route path="/evento/:idOrSlug" element={<Suspense fallback={<PageLoader />}><PublicEventPage /></Suspense>} />
         <Route path="/u/:code" element={<Suspense fallback={<PageLoader />}><ShortCodeRedirect /></Suspense>} />
-        {/* Tier 1 paid tickets — todas públicas (guest checkout / acesso por token) */}
+        {/* Ingressos de plateia — todas públicas (guest checkout / acesso por token).
+            Carrinho multi-tipo via /checkout-ingresso/<slug> (state.cart da vitrine);
+            a rota legada com :ticketTypeIdx vira cart {idx:1} dentro do componente
+            (cobre links antigos compartilhados via WhatsApp/Instagram). */}
+        <Route path="/checkout-ingresso/:idOrSlug" element={<Suspense fallback={<PageLoader />}><CheckoutIngresso /></Suspense>} />
         <Route path="/checkout-ingresso/:idOrSlug/:ticketTypeIdx" element={<Suspense fallback={<PageLoader />}><CheckoutIngresso /></Suspense>} />
         <Route path="/meu-ingresso/:token" element={<Suspense fallback={<PageLoader />}><MeuIngresso /></Suspense>} />
         {/* Workshops Etapa 1 — todas públicas (vitrine + guest checkout + voucher por token) */}

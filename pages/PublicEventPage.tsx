@@ -1359,7 +1359,34 @@ const PublicEventPage = () => {
 
         {/* Link redundante removido — politica_ingressos=EXTERNO acima ja
             renderiza o botao "Comprar Ingressos" quando aplicavel (#11) */}
+
+        {/* Espaçador pra sticky bar não cobrir o último bloco */}
+        {cartTotalQty > 0 && <div className="h-24" aria-hidden="true" />}
       </div>
+
+      {/* Sticky bar do carrinho — aparece quando há ≥1 ingresso selecionado.
+          Mostra qty + total de face; checkout exibe taxa/cupom (padrão Sympla). */}
+      {cartTotalQty > 0 && (
+        <div className="fixed bottom-0 inset-x-0 z-50 bg-[#0b0b0f]/95 backdrop-blur border-t border-[#ff0068]/30 shadow-[0_-8px_30px_rgba(0,0,0,0.5)]">
+          <div className="max-w-5xl mx-auto px-4 sm:px-8 py-3 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                {cartTotalQty} ingresso{cartTotalQty === 1 ? '' : 's'}
+              </p>
+              <p className="text-lg font-black text-white tabular-nums leading-tight">
+                R$ {formatPrecoBR(cartTotalBRL)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate(`/checkout-ingresso/${slugOrId}`, { state: { cart } })}
+              className="inline-flex items-center gap-2 px-5 sm:px-7 py-3 bg-[#ff0068] text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-all shrink-0"
+            >
+              <Ticket size={14} /> Ir pro carrinho <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

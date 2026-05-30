@@ -1,29 +1,33 @@
 /**
- * CheckoutIngresso — Tier 1 paid tickets, guest checkout (sem login).
+ * CheckoutIngresso — ingressos de plateia, guest checkout (sem login).
+ *
+ * Carrinho MULTI-TIPO: comprador mistura tipos (2 Inteiras + 1 Meia) num só
+ * pagamento. 1 cobrança Asaas, lista de QRs por email. Padrão Sympla/Eventbrite.
+ *
+ * Rotas:
+ *   /checkout-ingresso/<idOrSlug>           ← carrinho via location.state.cart (vitrine)
+ *   /checkout-ingresso/<idOrSlug>/<idx>     ← legado: link antigo de 1 tipo (vira cart {idx:1})
  *
  * Fluxo:
- *   /evento/<slug> → click "Comprar" no tipo de ingresso
- *   /checkout-ingresso/<idOrSlug>/<ticketTypeIdx> ← AQUI
- *   form (nome+email+CPF+fone) + escolha de quantidade (respeita audience_max_per_purchase)
- *   → POST create-audience-ticket → redirect Asaas → webhook confirma e libera ingresso
- *   → comprador recebe email com link /meu-ingresso/<token>
- *
- * Uma página, sem wizard (Baymard +35% conversão).
+ *   vitrine (+/− por tipo) → "Ir pro carrinho" → AQUI (resumo editável + dados)
+ *   → POST create-audience-ticket (items[]) → redirect Asaas → webhook confirma
+ *   → comprador recebe email com 1 link /meu-ingresso/<token> por ingresso.
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import {
   Ticket, Loader2, AlertCircle, ArrowLeft, ShieldCheck, User as UserIcon, Mail, Phone, FileText, Minus, Plus,
-  Tag, X, Check,
+  Tag, X, Check, Trash2,
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
-import { resolveLote, todayISO, formatDataBR, diffDias, type Lote } from '../utils/lotes';
+import { resolveLote, todayISO, type Lote } from '../utils/lotes';
 
 const formatBRL = (n: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n ?? 0);
+const round2 = (n: number) => parseFloat((n ?? 0).toFixed(2));
 
 // CPF validation (mod-11)
 const isValidCpf = (cpf: string): boolean => {
@@ -51,12 +55,49 @@ const formatPhone = (v: string) => {
   return d.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2');
 };
 
+const detectKind = (nome: string): string => {
+  const n = String(nome ?? '').toLowerCase();
+  if (n.includes('meia')) return 'meia';
+  if (n.includes('solidári') || n.includes('solidari')) return 'solidaria';
+  if (n.includes('cortes')) return 'cortesia';
+  return 'inteira';
+};
+
+type LineItem = {
+  idx: number;
+  nome: string;
+  kind: string;
+  precoUnit: number;
+  qty: number;
+  loteNome: string | null;
+  quantidadeTotal: number | null;
+};
+
 export default function CheckoutIngresso() {
-  const { idOrSlug, ticketTypeIdx } = useParams<{ idOrSlug: string; ticketTypeIdx: string }>();
+  const { idOrSlug, ticketTypeIdx } = useParams<{ idOrSlug: string; ticketTypeIdx?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Carrinho inicial: location.state.cart (vitrine) OU :ticketTypeIdx (link legado).
+  const initialCart = useMemo<Record<string, number>>(() => {
+    const st = (location.state as any)?.cart;
+    if (st && typeof st === 'object' && Object.keys(st).length > 0) {
+      const c: Record<string, number> = {};
+      for (const [k, v] of Object.entries(st)) {
+        const n = Math.floor(Number(v));
+        if (n > 0) c[String(k)] = n;
+      }
+      if (Object.keys(c).length > 0) return c;
+    }
+    if (ticketTypeIdx !== undefined) {
+      const i = parseInt(ticketTypeIdx, 10);
+      if (Number.isFinite(i)) return { [String(i)]: 1 };
+    }
+    return {};
+  }, []); // só no mount
 
   const [event, setEvent] = useState<any>(null);
-  const [ticketType, setTicketType] = useState<any>(null);
+  const [cart, setCart] = useState<Record<string, number>>(initialCart);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,20 +105,20 @@ export default function CheckoutIngresso() {
   const [email, setEmail] = useState('');
   const [cpf, setCpf]     = useState('');
   const [phone, setPhone] = useState('');
-  const [quantity, setQuantity] = useState(1);
   const [paying, setPaying] = useState(false);
-  // Mitigation #7: comprador precisa aceitar política de reembolso antes de pagar
   const [refundAccepted, setRefundAccepted] = useState(false);
-  // Tier 2: cupom + estoque
-  const [stock, setStock] = useState<{ sold: number; remaining: number | null; sold_out: boolean } | null>(null);
+
+  // Estoque por idx + cupom
+  const [stockByIdx, setStockByIdx] = useState<Record<string, { remaining: number | null; sold_out: boolean }>>({});
   const [couponInput, setCouponInput] = useState('');
-  const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number; final_value: number } | null>(null);
+  const [appliedCouponCode, setAppliedCouponCode] = useState<string | null>(null);
+  const [couponDiscount, setCouponDiscount] = useState(0);          // desconto sobre o total do carrinho
   const [couponError, setCouponError] = useState<string | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
 
   // ─── Hidrata evento ────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!idOrSlug || ticketTypeIdx === undefined) return;
+    if (!idOrSlug) return;
     (async () => {
       setLoading(true);
       try {
@@ -88,16 +129,11 @@ export default function CheckoutIngresso() {
           .select('id, name, slug, event_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos')
           .eq(filterCol, idOrSlug)
           .maybeSingle();
-        if (evErr || !ev) {
-          setError('Evento não encontrado.');
-          return;
-        }
+        if (evErr || !ev) { setError('Evento não encontrado.'); return; }
         if (!ev.audience_sales_enabled || ev.politica_ingressos !== 'INTERNO') {
           setError('Venda de ingressos não está disponível para este evento.');
           return;
         }
-        // Validação de evento expirado — não vende ingresso pra evento que já passou.
-        // Usa T23:59:59 do dia do evento como deadline (permite comprar até o fim do dia).
         if (ev.event_date) {
           const deadline = new Date(ev.event_date + 'T23:59:59');
           if (deadline.getTime() < Date.now()) {
@@ -105,167 +141,205 @@ export default function CheckoutIngresso() {
             return;
           }
         }
-        const ingressos: any[] = Array.isArray(ev.ingressos_config) ? ev.ingressos_config : [];
-        const idx = parseInt(ticketTypeIdx, 10);
-        const t = ingressos[idx];
-        if (!t?.nome) {
-          setError('Tipo de ingresso inválido.');
-          return;
-        }
-        // Resolve lote vigente (se houver lotes); senão usa preco direto
-        const lotes: Lote[] = Array.isArray(t.lotes) ? t.lotes : [];
-        const r = resolveLote(lotes);
-        const precoVigente = r ? Number(r.lote.preco ?? 0) : Number(t.preco ?? 0);
-        if (precoVigente <= 0) {
-          setError('Tipo de ingresso inválido.');
-          return;
-        }
         setEvent(ev);
-        setTicketType({ ...t, _idx: idx, _precoVigente: precoVigente, _loteVigente: r });
-
-        // Tier 2: estoque do tipo (se quantidade_total definida)
-        if (t.quantidade_total != null && Number(t.quantidade_total) > 0) {
-          const { data: stockRows } = await supabase.rpc('get_audience_stock', {
-            p_event_id: ev.id,
-            p_types: [{ id: String(idx), total: Number(t.quantidade_total) }],
-          });
-          const row = Array.isArray(stockRows) ? stockRows[0] : null;
-          if (row) setStock({ sold: row.sold, remaining: row.remaining, sold_out: row.sold_out });
-        }
+        // Sanitiza o cart contra os tipos válidos do evento (descarta idx morto).
+        const ingressos: any[] = Array.isArray(ev.ingressos_config) ? ev.ingressos_config : [];
+        setCart(prev => {
+          const next: Record<string, number> = {};
+          for (const [k, q] of Object.entries(prev)) {
+            const t = ingressos[Number(k)];
+            if (t?.nome && q > 0) next[k] = q;
+          }
+          return next;
+        });
       } finally {
         setLoading(false);
       }
     })();
-  }, [idOrSlug, ticketTypeIdx]);
+  }, [idOrSlug]);
 
-  // ─── Polling de estoque a cada 30s (auditoria item 9) ────────────────────
-  // Tickets podem esgotar enquanto o usuário preenche o form. Refresh em
-  // background mantém o badge "Esgotado/Últimos N" + cap de quantity vivos.
-  useEffect(() => {
-    if (!event?.id || !ticketType?._idx == null) return;
-    const total = ticketType?.quantidade_total;
-    if (total == null || Number(total) <= 0) return;
-    const tick = async () => {
-      const { data: stockRows } = await supabase.rpc('get_audience_stock', {
-        p_event_id: event.id,
-        p_types: [{ id: String(ticketType._idx), total: Number(total) }],
-      });
-      const row = Array.isArray(stockRows) ? stockRows[0] : null;
-      if (row) setStock({ sold: row.sold, remaining: row.remaining, sold_out: row.sold_out });
-    };
-    const interval = setInterval(tick, 30_000);
-    return () => clearInterval(interval);
-  }, [event?.id, ticketType?._idx, ticketType?.quantidade_total]);
+  // ─── Linhas do carrinho (resolve preço vigente + kind + estoque) ──────────
+  const lines = useMemo<LineItem[]>(() => {
+    if (!event) return [];
+    const ingressos: any[] = Array.isArray(event.ingressos_config) ? event.ingressos_config : [];
+    const today = todayISO();
+    return Object.entries(cart)
+      .map(([k, qty]) => {
+        const idx = Number(k);
+        const t = ingressos[idx];
+        if (!t?.nome || qty <= 0) return null;
+        const lotes: Lote[] = Array.isArray(t.lotes) ? t.lotes : [];
+        const r = resolveLote(lotes, today);
+        const precoUnit = r ? Number(r.lote.preco ?? 0) : Number(t.preco ?? 0);
+        const quantidadeTotal = t.quantidade_total != null && Number(t.quantidade_total) > 0
+          ? Number(t.quantidade_total) : null;
+        return {
+          idx,
+          nome: String(t.nome),
+          kind: detectKind(t.nome),
+          precoUnit,
+          qty,
+          loteNome: r?.lote?.nome ?? null,
+          quantidadeTotal,
+        } as LineItem;
+      })
+      .filter(Boolean)
+      .sort((a, b) => a!.idx - b!.idx) as LineItem[];
+  }, [event, cart]);
 
-  // ─── Tipo (kind) e regras especiais ───────────────────────────────────────
-  const kind = useMemo<string>(() => {
-    if (!ticketType) return 'inteira';
-    const n = String(ticketType.nome ?? '').toLowerCase();
-    if (n.includes('meia')) return 'meia';
-    if (n.includes('solidári') || n.includes('solidari')) return 'solidaria';
-    if (n.includes('cortes')) return 'cortesia';
-    return 'inteira';
-  }, [ticketType]);
-
-  const isMeia = kind === 'meia';
   const maxPurchase = Math.max(1, Math.min(
     Number(event?.audience_max_per_purchase ?? 6),
     Number(event?.audience_max_per_cpf ?? 6),
   ));
-  // Lei 12.933: meia tem hard limit 1
-  const effectiveMax = isMeia ? 1 : maxPurchase;
+  const totalQty = lines.reduce((s, l) => s + l.qty, 0);
 
-  // ─── Cálculo de preço com fee_mode + cupom ────────────────────────────────
-  const breakdown = useMemo(() => {
-    if (!event || !ticketType) return null;
-    const precoUnit = Number(ticketType._precoVigente ?? ticketType.preco ?? 0);
-    // RPC validate_audience_coupon retornou desconto em cima de baseValueUnit (preço unitário)
-    const discountUnit = couponApplied ? Number(couponApplied.discount.toFixed(2)) : 0;
-    const baseUnit = Math.max(0, Number((precoUnit - discountUnit).toFixed(2)));
-    const commPct = Number(event.audience_commission_percent ?? 10);
-    const commUnit = Number((baseUnit * (commPct / 100)).toFixed(2));
-    const feeMode = event.audience_fee_mode ?? 'repassar';
-    const chargedUnit = feeMode === 'repassar' ? Number((baseUnit + commUnit).toFixed(2)) : baseUnit;
-    const totalCharged = Number((chargedUnit * quantity).toFixed(2));
-    const totalBase    = Number((precoUnit * quantity).toFixed(2));
-    const totalDiscount = Number((discountUnit * quantity).toFixed(2));
-    const totalFee     = Number((commUnit * quantity).toFixed(2));
-    return {
-      baseUnit, commUnit, chargedUnit, feeMode,
-      totalBase, totalDiscount, totalFee, totalCharged,
+  // ─── Estoque: carrega + faz polling 30s pros tipos do carrinho ────────────
+  useEffect(() => {
+    if (!event?.id) return;
+    const typesWithLimit = lines
+      .filter(l => l.quantidadeTotal != null)
+      .map(l => ({ id: String(l.idx), total: l.quantidadeTotal }));
+    if (typesWithLimit.length === 0) { setStockByIdx({}); return; }
+    let cancelled = false;
+    const tick = async () => {
+      const { data: rows } = await supabase.rpc('get_audience_stock', {
+        p_event_id: event.id,
+        p_types: typesWithLimit,
+      });
+      if (cancelled || !Array.isArray(rows)) return;
+      const map: Record<string, { remaining: number | null; sold_out: boolean }> = {};
+      for (const r of rows as Array<{ ticket_type_id: string; remaining: number | null; sold_out: boolean }>) {
+        map[String(r.ticket_type_id)] = { remaining: r.remaining, sold_out: r.sold_out };
+      }
+      setStockByIdx(map);
     };
-  }, [event, ticketType, quantity, couponApplied]);
+    void tick();
+    const interval = setInterval(tick, 30_000);
+    return () => { cancelled = true; clearInterval(interval); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [event?.id, JSON.stringify(lines.map(l => [l.idx, l.quantidadeTotal]))]);
 
-  // ─── Cupom: aplicar / remover ─────────────────────────────────────────────
+  // ─── Edição de quantidade (respeita meia=1, estoque, máx por compra) ──────
+  const setLineQty = (idx: number, nextQty: number) => {
+    setCart(prev => {
+      const line = lines.find(l => l.idx === idx);
+      const isMeia = line?.kind === 'meia';
+      const remaining = stockByIdx[String(idx)]?.remaining ?? Infinity;
+      const typeCap = Math.min(isMeia ? 1 : 99, remaining);
+      // Garante que o total não estoura o limite por compra.
+      const othersQty = Object.entries(prev).reduce((s, [k, q]) => s + (Number(k) === idx ? 0 : q), 0);
+      const globalCap = Math.max(0, maxPurchase - othersQty);
+      const clamped = Math.max(0, Math.min(nextQty, typeCap, globalCap));
+      const next = { ...prev };
+      if (clamped <= 0) delete next[String(idx)];
+      else next[String(idx)] = clamped;
+      return next;
+    });
+  };
+
+  // ─── Cupom: aplica + re-valida quando o total muda (cart-level) ───────────
+  const totalBase = useMemo(() => round2(lines.reduce((s, l) => s + l.precoUnit * l.qty, 0)), [lines]);
+
+  const validateCoupon = async (code: string): Promise<{ discount: number } | { error: string }> => {
+    const { data, error: invokeErr } = await supabase.functions.invoke('validate-audience-coupon', {
+      body: { event_id: event.id, code, base_value: totalBase },
+    });
+    if (invokeErr) return { error: invokeErr.message ?? 'Cupom inválido' };
+    if (data?.error) return { error: data.error };
+    if (!data?.code) return { error: 'Cupom inválido' };
+    return { discount: Number(data.discount) };
+  };
+
   const handleApplyCoupon = async () => {
-    if (!event || !ticketType || couponLoading) return;
-    const code = couponInput.trim();
+    if (!event || couponLoading) return;
+    const code = couponInput.trim().toUpperCase();
     if (!code) return;
     setCouponError(null);
     setCouponLoading(true);
     try {
-      const baseValueUnit = Number(ticketType._precoVigente ?? ticketType.preco ?? 0);
-      // supabase.functions.invoke adiciona apikey + Authorization automaticamente.
-      // Sem isso o roteamento Supabase rejeita antes mesmo de chegar na função
-      // → "Failed to fetch" no browser (erro de CORS preflight).
-      const { data, error: invokeErr } = await supabase.functions.invoke('validate-audience-coupon', {
-        body: { event_id: event.id, code, base_value: baseValueUnit },
-      });
-      if (invokeErr) throw new Error(invokeErr.message ?? 'Cupom inválido');
-      if (data?.error) throw new Error(data.error);
-      if (!data?.code) throw new Error('Cupom inválido');
-      setCouponApplied({ code: data.code, discount: data.discount, final_value: data.final_value });
-    } catch (e: any) {
-      setCouponError(e.message ?? 'Cupom inválido');
-      setCouponApplied(null);
+      const res = await validateCoupon(code);
+      if ('error' in res) { setCouponError(res.error); setAppliedCouponCode(null); setCouponDiscount(0); return; }
+      setAppliedCouponCode(code);
+      setCouponDiscount(round2(res.discount));
     } finally {
       setCouponLoading(false);
     }
   };
   const handleRemoveCoupon = () => {
-    setCouponApplied(null);
+    setAppliedCouponCode(null);
+    setCouponDiscount(0);
     setCouponInput('');
     setCouponError(null);
   };
 
-  // Limite de quantidade efetivo considera estoque restante
-  const stockMax = stock?.remaining ?? Infinity;
-  const finalEffectiveMax = Math.min(effectiveMax, stockMax);
+  // Re-valida o cupom quando o carrinho muda (desconto depende do total).
   useEffect(() => {
-    if (quantity > finalEffectiveMax) setQuantity(Math.max(1, Math.floor(finalEffectiveMax)));
-  }, [finalEffectiveMax, quantity]);
+    if (!event || !appliedCouponCode || totalBase <= 0) return;
+    let cancelled = false;
+    (async () => {
+      const res = await validateCoupon(appliedCouponCode);
+      if (cancelled) return;
+      if ('error' in res) { setCouponError(res.error); setAppliedCouponCode(null); setCouponDiscount(0); }
+      else setCouponDiscount(round2(res.discount));
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalBase, appliedCouponCode]);
+
+  // ─── Breakdown (replica a distribuição do edge p/ bater com a cobrança) ───
+  const breakdown = useMemo(() => {
+    if (!event || lines.length === 0) return null;
+    const commPct = Number(event.audience_commission_percent ?? 10);
+    const feeMode = event.audience_fee_mode ?? 'repassar';
+    const discountTotal = Math.min(couponDiscount, totalBase);
+    let chargedTotal = 0, commTotal = 0, discountApplied = 0;
+    for (const l of lines) {
+      const typeBase = l.precoUnit * l.qty;
+      const typeDiscount = totalBase > 0 ? round2(discountTotal * (typeBase / totalBase)) : 0;
+      const discountPerTicket = round2(typeDiscount / l.qty);
+      const baseFeeUnit = round2(l.precoUnit - discountPerTicket);
+      const commUnit = round2(baseFeeUnit * (commPct / 100));
+      const chargedUnit = feeMode === 'repassar' ? round2(baseFeeUnit + commUnit) : baseFeeUnit;
+      chargedTotal += round2(chargedUnit * l.qty);
+      commTotal += round2(commUnit * l.qty);
+      discountApplied += round2(discountPerTicket * l.qty);
+    }
+    return {
+      feeMode,
+      totalBase,
+      totalDiscount: round2(discountApplied),
+      totalFee: round2(commTotal),
+      totalCharged: round2(chargedTotal),
+    };
+  }, [event, lines, totalBase, couponDiscount]);
 
   // ─── Submit ────────────────────────────────────────────────────────────────
-  const isSoldOut = stock?.sold_out === true;
-  const canSubmit = !!name.trim() && !!email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-    && isValidCpf(cpf) && quantity >= 1 && quantity <= finalEffectiveMax && !paying && !isSoldOut;
+  const anySoldOut = lines.some(l => stockByIdx[String(l.idx)]?.sold_out === true);
+  const canSubmit = !!name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    && isValidCpf(cpf) && totalQty >= 1 && !paying && !anySoldOut;
 
   const handlePay = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!canSubmit || !event || !ticketType) return;
+    if (!canSubmit || !event) return;
     setPaying(true);
     setError(null);
     try {
-      // supabase.functions.invoke = adiciona apikey + Authorization (anon key)
-      // automaticamente — sem isso roteamento Supabase rejeita.
       const { data, error: invokeErr } = await supabase.functions.invoke('create-audience-ticket', {
         body: {
           event_id: event.id,
-          ticket_type_idx: ticketType._idx,
+          items: lines.map(l => ({ ticket_type_idx: l.idx, quantity: l.qty })),
           buyer: {
             name: name.trim(),
             email: email.trim().toLowerCase(),
             cpf: cpf.replace(/\D/g, ''),
             phone: phone.replace(/\D/g, '') || undefined,
           },
-          quantity,
-          coupon_code: couponApplied?.code ?? undefined,
+          coupon_code: appliedCouponCode ?? undefined,
         },
       });
       if (invokeErr) throw new Error(invokeErr.message ?? 'Erro ao gerar pagamento. Tente novamente.');
       if (data?.error) throw new Error(data.error);
       if (!data?.invoice_url) throw new Error('URL de pagamento não retornada.');
-      // Redireciona pro Asaas
       window.location.href = data.invoice_url;
     } catch (err: any) {
       setError(err.message ?? String(err));
@@ -297,6 +371,25 @@ export default function CheckoutIngresso() {
     );
   }
 
+  // Carrinho vazio (refresh sem state, ou removeu tudo) → volta pro evento.
+  if (event && lines.length === 0) {
+    return (
+      <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
+          <Ticket className="text-slate-500 mx-auto mb-3" size={32} />
+          <p className="text-white font-bold mb-2">Seu carrinho está vazio</p>
+          <p className="text-sm text-slate-400 mb-4">Escolha os ingressos na página do evento.</p>
+          <button
+            onClick={() => navigate(`/evento/${idOrSlug}`)}
+            className="inline-flex items-center gap-2 text-xs font-black text-[#ff0068] uppercase tracking-widest"
+          >
+            <ArrowLeft size={14} /> Ver ingressos
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0b0b0f] text-white">
       {event?.cover_url && (
@@ -315,123 +408,81 @@ export default function CheckoutIngresso() {
         </button>
 
         <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter mb-1">
-          Comprar ingresso
+          Seu carrinho
         </h1>
         <p className="text-sm text-slate-400 mb-6">{event.name}</p>
 
-        {/* Tipo de ingresso + quantidade */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4">
-          <div className="flex items-baseline justify-between mb-3">
-            <div>
-              <p className="text-[10px] font-black text-[#ff0068] uppercase tracking-widest">{ticketType.nome}</p>
-              {ticketType._loteVigente?.lote?.nome && (
-                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">{ticketType._loteVigente.lote.nome}</p>
-              )}
-              {ticketType.obs && <p className="text-xs text-slate-400 mt-0.5">{ticketType.obs}</p>}
-            </div>
-            <p className="text-xl font-black text-white">{formatBRL(ticketType._precoVigente ?? ticketType.preco)}</p>
-          </div>
-
-          {/* Hint de próximo lote: cria urgência (Sympla/Eventbrite +18-25% conversão Baymard) */}
-          {(() => {
-            const r = ticketType._loteVigente;
-            if (!r?.proximo || !r.lote.data_virada) return null;
-            if (Number(r.proximo.preco) <= Number(r.lote.preco)) return null;
-            const dias = diffDias(todayISO(), r.lote.data_virada);
-            const color = dias < 1 ? 'text-rose-400 bg-rose-500/10 border-rose-500/30'
-              : dias < 7 ? 'text-amber-300 bg-amber-500/10 border-amber-500/30'
-              : 'text-slate-300 bg-white/5 border-white/10';
+        {/* Resumo editável do carrinho */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4 space-y-3">
+          <p className="text-xs font-black text-slate-300 uppercase tracking-widest">Ingressos</p>
+          {lines.map(l => {
+            const remaining = stockByIdx[String(l.idx)]?.remaining ?? Infinity;
+            const isMeia = l.kind === 'meia';
+            const typeCap = Math.min(isMeia ? 1 : 99, remaining);
+            const atGlobalMax = totalQty >= maxPurchase;
+            const soldOut = stockByIdx[String(l.idx)]?.sold_out === true;
             return (
-              <div className={`rounded-xl px-3 py-2 mb-3 border text-[11px] font-bold ${color}`}>
-                {dias < 1
-                  ? <>⚠ Aumenta amanhã para {formatBRL(Number(r.proximo.preco))}</>
-                  : <>⏱ Próximo lote: {formatBRL(Number(r.proximo.preco))} em {formatDataBR(r.lote.data_virada)}</>}
+              <div key={l.idx} className="flex items-center justify-between gap-3 border-t border-white/5 pt-3 first:border-t-0 first:pt-0">
+                <div className="min-w-0">
+                  <p className="text-sm font-black uppercase tracking-tight text-white truncate">{l.nome}</p>
+                  {l.loteNome && (
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">{l.loteNome}</p>
+                  )}
+                  <p className="text-xs text-slate-400 mt-0.5">{formatBRL(l.precoUnit)} cada</p>
+                  {soldOut && <p className="text-[10px] font-bold text-rose-300 mt-0.5">Esgotado</p>}
+                  {!soldOut && remaining !== Infinity && remaining <= 10 && (
+                    <p className="text-[10px] font-bold text-amber-300 mt-0.5">Últimos {remaining}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    aria-label="Remover um"
+                    onClick={() => setLineQty(l.idx, l.qty - 1)}
+                    className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center"
+                  >
+                    {l.qty <= 1 ? <Trash2 size={14} /> : <Minus size={14} />}
+                  </button>
+                  <span className="text-base font-black tabular-nums w-5 text-center">{l.qty}</span>
+                  <button
+                    type="button"
+                    aria-label="Adicionar um"
+                    disabled={l.qty >= typeCap || atGlobalMax}
+                    onClick={() => setLineQty(l.idx, l.qty + 1)}
+                    className="w-8 h-8 rounded-lg bg-[#ff0068]/80 hover:bg-[#ff0068] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    <Plus size={14} />
+                  </button>
+                </div>
               </div>
             );
-          })()}
-
-          {isMeia && (
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2 mb-3 flex items-start gap-2">
-              <AlertCircle size={14} className="text-amber-400 mt-0.5 shrink-0" />
-              <p className="text-[11px] text-amber-200">
-                <strong>Lei 12.933:</strong> meia-entrada é nominativa e limitada a 1 por CPF. Na entrada, apresente documento que comprove o benefício (ID estudantil, ID jovem, idoso, PCD).
-              </p>
-            </div>
+          })}
+          {totalQty >= maxPurchase && (
+            <p className="text-[10px] text-slate-500 text-right pt-1">Máx. {maxPurchase} ingressos por compra.</p>
           )}
-
-          {/* Tier 2: estoque baixo / esgotado */}
-          {isSoldOut ? (
-            <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2 mb-3 flex items-center gap-2">
-              <AlertCircle size={14} className="text-rose-400 shrink-0" />
-              <p className="text-[11px] text-rose-200 font-bold">Esgotado — não há mais ingressos deste tipo.</p>
-            </div>
-          ) : stock && stock.remaining != null && stock.remaining <= 10 ? (
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2 mb-3 flex items-center gap-2">
-              <AlertCircle size={14} className="text-amber-400 shrink-0" />
-              <p className="text-[11px] text-amber-200 font-bold">⚠ Últimos {stock.remaining} ingressos disponíveis</p>
-            </div>
-          ) : null}
-
-          {/* Quantidade */}
-          <div className="flex items-center justify-between border-t border-white/10 pt-3">
-            <p className="text-xs uppercase font-black tracking-widest text-slate-400">Quantidade</p>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                disabled={quantity <= 1 || isSoldOut}
-                className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-30 flex items-center justify-center"
-              >
-                <Minus size={14} />
-              </button>
-              <span className="text-lg font-black tabular-nums w-6 text-center">{quantity}</span>
-              <button
-                type="button"
-                onClick={() => setQuantity(q => Math.min(finalEffectiveMax, q + 1))}
-                disabled={quantity >= finalEffectiveMax || isSoldOut}
-                className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-30 flex items-center justify-center"
-              >
-                <Plus size={14} />
-              </button>
-            </div>
-          </div>
-          {isMeia && (
-            <p className="text-[10px] text-slate-500 text-right mt-1">
-              Limite legal de 1 para meia-entrada.
-            </p>
-          )}
-          {!isMeia && finalEffectiveMax < maxPurchase && stock && stock.remaining != null && (
-            <p className="text-[10px] text-slate-500 text-right mt-1">
-              Apenas {finalEffectiveMax} ingresso{finalEffectiveMax === 1 ? '' : 's'} disponíve{finalEffectiveMax === 1 ? 'l' : 'is'}.
-            </p>
-          )}
-          {!isMeia && finalEffectiveMax === maxPurchase && (
-            <p className="text-[10px] text-slate-500 text-right mt-1">
-              Máx. {maxPurchase} por compra.
+          {lines.some(l => l.kind === 'meia') && (
+            <p className="text-[10px] text-amber-300/80 pt-1 flex items-start gap-1.5">
+              <AlertCircle size={11} className="mt-0.5 shrink-0" />
+              <span><strong>Lei 12.933:</strong> meia-entrada é nominativa e limitada a 1 por CPF. Apresente o documento que comprove o benefício na entrada.</span>
             </p>
           )}
         </div>
 
-        {/* Cupom de desconto (Tier 2) */}
+        {/* Cupom de desconto */}
         <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4">
           <p className="text-xs font-black text-slate-300 uppercase tracking-widest mb-3 flex items-center gap-1.5">
             <Tag size={12} className="text-[#ff0068]" /> Cupom de desconto
           </p>
-          {couponApplied ? (
+          {appliedCouponCode ? (
             <div className="flex items-center justify-between gap-3 px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
               <div className="flex items-center gap-2 min-w-0">
                 <Check size={14} className="text-emerald-400 shrink-0" />
                 <div className="min-w-0">
-                  <p className="text-xs font-black uppercase tracking-widest text-emerald-300 truncate">{couponApplied.code}</p>
-                  <p className="text-[10px] text-emerald-200">−{formatBRL(couponApplied.discount)} por ingresso</p>
+                  <p className="text-xs font-black uppercase tracking-widest text-emerald-300 truncate">{appliedCouponCode}</p>
+                  <p className="text-[10px] text-emerald-200">−{formatBRL(couponDiscount)} no total</p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={handleRemoveCoupon}
-                className="p-1 rounded-lg text-slate-400 hover:text-rose-400"
-                aria-label="Remover cupom"
-              >
+              <button type="button" onClick={handleRemoveCoupon} className="p-1 rounded-lg text-slate-400 hover:text-rose-400" aria-label="Remover cupom">
                 <X size={14} />
               </button>
             </div>
@@ -467,46 +518,22 @@ export default function CheckoutIngresso() {
           <p className="text-xs font-black text-slate-300 uppercase tracking-widest mb-2">Dados do comprador</p>
 
           <Field label="Nome completo" icon={<UserIcon size={14} />} htmlFor="buyer-name">
-            <input
-              id="buyer-name"
-              name="name"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Seu nome"
-              autoComplete="name"
-              required
-              className="bg-transparent w-full text-sm outline-none placeholder:text-slate-600"
-            />
+            <input id="buyer-name" name="name" value={name} onChange={e => setName(e.target.value)}
+              placeholder="Seu nome" autoComplete="name" required
+              className="bg-transparent w-full text-sm outline-none placeholder:text-slate-600" />
           </Field>
 
           <Field label="Email" icon={<Mail size={14} />} htmlFor="buyer-email">
-            <input
-              id="buyer-email"
-              name="email"
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="seu@email.com"
-              autoComplete="email"
-              required
-              className="bg-transparent w-full text-sm outline-none placeholder:text-slate-600"
-            />
+            <input id="buyer-email" name="email" type="email" value={email} onChange={e => setEmail(e.target.value)}
+              placeholder="seu@email.com" autoComplete="email" required
+              className="bg-transparent w-full text-sm outline-none placeholder:text-slate-600" />
           </Field>
 
           <Field label="CPF" icon={<FileText size={14} />} hint="Obrigatório por lei" htmlFor="buyer-cpf">
-            <input
-              id="buyer-cpf"
-              name="cpf"
-              value={cpf}
-              onChange={e => setCpf(formatCpf(e.target.value))}
-              inputMode="numeric"
-              placeholder="000.000.000-00"
-              autoComplete="off"
-              required
-              className="bg-transparent w-full text-sm outline-none placeholder:text-slate-600 font-mono tracking-wide"
-            />
+            <input id="buyer-cpf" name="cpf" value={cpf} onChange={e => setCpf(formatCpf(e.target.value))}
+              inputMode="numeric" placeholder="000.000.000-00" autoComplete="off" required
+              className="bg-transparent w-full text-sm outline-none placeholder:text-slate-600 font-mono tracking-wide" />
           </Field>
-          {/* Validação visível do CPF — evita botão "silenciosamente desabilitado" */}
           {cpf.replace(/\D/g, '').length === 11 && !isValidCpf(cpf) && (
             <p className="text-[10px] text-rose-300 -mt-2 flex items-center gap-1">
               <AlertCircle size={10} /> CPF inválido — verifique se digitou corretamente
@@ -514,37 +541,23 @@ export default function CheckoutIngresso() {
           )}
 
           <Field label="Telefone (opcional)" icon={<Phone size={14} />} htmlFor="buyer-phone">
-            <input
-              id="buyer-phone"
-              name="phone"
-              value={phone}
-              onChange={e => setPhone(formatPhone(e.target.value))}
-              inputMode="tel"
-              type="tel"
-              placeholder="(00) 00000-0000"
-              autoComplete="tel"
-              className="bg-transparent w-full text-sm outline-none placeholder:text-slate-600 font-mono tracking-wide"
-            />
+            <input id="buyer-phone" name="phone" value={phone} onChange={e => setPhone(formatPhone(e.target.value))}
+              inputMode="tel" type="tel" placeholder="(00) 00000-0000" autoComplete="tel"
+              className="bg-transparent w-full text-sm outline-none placeholder:text-slate-600 font-mono tracking-wide" />
           </Field>
         </div>
 
-        {/* Resumo */}
+        {/* Resumo de valores */}
         {breakdown && (
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4 space-y-2">
-            <Row label={`${quantity}× ${ticketType.nome}`} value={formatBRL(breakdown.totalBase)} />
+            {lines.map(l => (
+              <Row key={l.idx} label={`${l.qty}× ${l.nome}`} value={formatBRL(l.precoUnit * l.qty)} />
+            ))}
             {breakdown.totalDiscount > 0 && (
-              <Row
-                label={`Cupom ${couponApplied?.code ?? ''}`}
-                value={`−${formatBRL(breakdown.totalDiscount)}`}
-                hint="Aplicado por ingresso."
-              />
+              <Row label={`Cupom ${appliedCouponCode ?? ''}`} value={`−${formatBRL(breakdown.totalDiscount)}`} />
             )}
             {breakdown.feeMode === 'repassar' && (
-              <Row
-                label="Taxa de serviço"
-                value={formatBRL(breakdown.totalFee)}
-                hint="Cobrada pela plataforma."
-              />
+              <Row label="Taxa de serviço" value={formatBRL(breakdown.totalFee)} hint="Cobrada pela plataforma." />
             )}
             <div className="border-t border-white/10 pt-2 mt-2 flex items-baseline justify-between">
               <p className="font-black uppercase text-sm">Total</p>
@@ -563,13 +576,8 @@ export default function CheckoutIngresso() {
           </div>
         )}
 
-        {/* Bloco legal: política de reembolso (CDC art. 49) + recomendação PIX */}
         <div className="mb-4">
-          <CheckoutLegalNotice
-            accepted={refundAccepted}
-            onAcceptedChange={setRefundAccepted}
-            theme="dark"
-          />
+          <CheckoutLegalNotice accepted={refundAccepted} onAcceptedChange={setRefundAccepted} theme="dark" />
         </div>
 
         <button
@@ -586,12 +594,11 @@ export default function CheckoutIngresso() {
         <div className="mt-4 flex items-center justify-center gap-2 text-[10px] text-slate-500">
           <ShieldCheck size={12} className="text-emerald-400" />
           Pagamento seguro processado por
-          {/* Página tem fundo dark fixo (bg-[#0b0b0f]) — força negative independente do tema da app */}
           <AsaasBadge theme="negative" />
         </div>
 
         <p className="text-[10px] text-slate-500 text-center mt-3 leading-relaxed">
-          Após confirmar o pagamento (PIX/cartão/boleto), você recebe seu ingresso digital com QR no email.
+          Após confirmar o pagamento (PIX/cartão/boleto), você recebe seus ingressos digitais com QR no email.
         </p>
       </div>
     </div>
