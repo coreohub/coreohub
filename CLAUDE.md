@@ -730,8 +730,8 @@ Commit `49b1d33` — fallback robusto:
 
 ### 🟩 P3 — Aguardando trigger externo
 - **TED como payout alternativo** — plano + taxas pronto, congelado até alguém pedir.
-- **/LP nome festival + GA + vitrine na home** — bloqueado por decisão DNS (Hostinger → Cloudflare).
-- **Multi-jurado seletiva v1.1** — página `/jurado-seletiva` dedicada (modo blind). Infra de DB pronta. Quando algum produtor demandar.
+- **Vitrine na home + nome do festival na URL raiz** — GA/pixels JÁ implementados (`services/analytics.ts`, `producerAnalytics.ts`, `utmTracking.ts`, `ProducerPixels.tsx`, gtag no `index.html`). Landing existe em `/lp`. O que falta: rota `/` mostra `RootRedirect` (vai pra login/kiosk), não a vitrine; migrar `coreohub.com` → vitrine na home + nome do festival na URL raiz segue **bloqueado por decisão DNS** (Hostinger → Cloudflare). Vitrine pública já vive em `/festivais`.
+- **Multi-jurado seletiva v1.1** — página `/jurado-seletiva` dedicada (modo blind). Confirmado 2026-05-30: rota/componente NÃO existem; hoje só `/seletiva-video` (painel produtor single-judge) avalia. **Infra de DB 100% pronta** (migration `20260604`): tabela `video_evaluations` (UNIQUE registration+judge, RLS produtor), trigger `fn_aggregate_video_evaluations` (majority/unanimous + conditional override + revoga aprovação se muda voto), colunas `events.video_evaluators_count`/`video_evaluation_rule`, flag `judges.can_evaluate_video`. Falta SÓ a UI do jurado + edge function de submit. Quando algum produtor demandar.
 
 ### 🪶 Cosméticos / pequenos achados de auditoria 2026-05-22
 - **NotificationBell sem paginação** — limit 50 hard. Quem receber 51+ perde as mais antigas. v1 acceptable. Adicionar "ver mais" quando necessário.
