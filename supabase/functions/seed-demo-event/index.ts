@@ -205,13 +205,17 @@ const DEMO_PATROCINADORES = [
 // Tipos de ingresso pra audiencia (politica INTERNO)
 // quantidade_total ilustra os 3 estados de estoque na vitrine do carrinho:
 //   - Inteira: estoque alto (200) → vende normal, sem badge.
-//   - Meia: estoque baixo (14) → com ~6 vendidos no seed, "Últimos N" âmbar.
+//   - Meia: estoque baixo (12) → badge "Últimos N" âmbar GARANTIDO. A Meia
+//     recebe 8 tickets no seed (loop i%3); ativos (APROVADO + PENDENTE sem
+//     reserved_until) variam 2-8, logo remaining cai em [4, 10] — sempre <= 10
+//     (dispara o badge) e sempre > 0 (nunca esgota). Determinístico apesar do
+//     status aleatório de cada ticket.
 //   - Solidária: sem quantidade_total → ilimitada, sem badge.
-// O seed insere ~8 tickets de cada tipo (loop i%3) direto na tabela — não passa
-// pela RPC de reserva, então estoque baixo não quebra o seed.
+// O seed insere ~8 tickets de cada tipo direto na tabela — não passa pela RPC
+// de reserva, então estoque baixo não quebra o seed.
 const DEMO_INGRESSOS = [
   { nome: 'Inteira',         preco: 30, obs: 'Acesso aos 2 dias de festival',           link: '', quantidade_total: 200 },
-  { nome: 'Meia-entrada',    preco: 15, obs: 'Estudante, idoso, doador de sangue',      link: '', quantidade_total: 14  },
+  { nome: 'Meia-entrada',    preco: 15, obs: 'Estudante, idoso, doador de sangue',      link: '', quantidade_total: 12  },
   { nome: 'Solidária',       preco: 20, obs: 'Inteira + 1kg de alimento não-perecível', link: '' },
 ]
 
