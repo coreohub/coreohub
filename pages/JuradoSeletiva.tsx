@@ -130,14 +130,18 @@ const JuradoSeletiva: React.FC = () => {
     setSubmitting(true);
     setError(null);
     try {
+      const votedIdx = cursor;
       await submitVideoEvaluation(current.id, decision, {
         feedback: feedback.trim() || undefined,
         score: scoreNum,
       });
-      // Remove o item votado da fila e avança.
-      setQueue(prev => prev.filter((_, i) => i !== cursor));
+      // Remove o item votado: o próximo "desliza" pra mesma posição `cursor`.
+      // Novo length = queue.length - 1, então o último índice válido é
+      // queue.length - 2. Clampa o cursor pra não estourar quando o último
+      // item da fila foi votado.
+      setQueue(prev => prev.filter((_, i) => i !== votedIdx));
+      setCursor(c => Math.max(0, Math.min(c, queue.length - 2)));
       setTotalVoted(v => v + 1);
-      setCursor(c => Math.min(c, Math.max(0, queue.length - 2)));
       resetForm();
     } catch (e: any) {
       setError('Não foi possível salvar seu voto. Tente novamente.');
@@ -151,7 +155,7 @@ const JuradoSeletiva: React.FC = () => {
   // ─── Render ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
         <Loader2 size={32} className="animate-spin text-[#ff0068]" />
       </div>
     );
@@ -245,6 +249,10 @@ const JuradoSeletiva: React.FC = () => {
                   title={`Vídeo ${current.numero}`}
                   className="absolute inset-0 w-full h-full"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  // URL é controlada pelo inscrito — sandbox limita o que o conteúdo
+                  // embutido pode fazer (scripts do player sim, top-navigation não).
+                  sandbox="allow-scripts allow-same-origin allow-presentation"
+                  referrerPolicy="strict-origin-when-cross-origin"
                   allowFullScreen
                 />
               </div>
@@ -277,7 +285,7 @@ const JuradoSeletiva: React.FC = () => {
                         type="button"
                         onClick={() => setDecision(d.value)}
                         aria-pressed={active}
-                        className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl border font-black text-[10px] uppercase tracking-widest transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 ${active ? d.activeCls : `bg-transparent ${d.cls}`}`}
+                        className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl border font-black text-[10px] uppercase tracking-widest transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 ${active ? d.activeCls : `bg-transparent ${d.cls}`}`}
                       >
                         <Icon size={18} /> {d.label}
                       </button>
