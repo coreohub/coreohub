@@ -203,9 +203,15 @@ const DEMO_PATROCINADORES = [
 ]
 
 // Tipos de ingresso pra audiencia (politica INTERNO)
+// quantidade_total ilustra os 3 estados de estoque na vitrine do carrinho:
+//   - Inteira: estoque alto (200) → vende normal, sem badge.
+//   - Meia: estoque baixo (14) → com ~6 vendidos no seed, "Últimos N" âmbar.
+//   - Solidária: sem quantidade_total → ilimitada, sem badge.
+// O seed insere ~8 tickets de cada tipo (loop i%3) direto na tabela — não passa
+// pela RPC de reserva, então estoque baixo não quebra o seed.
 const DEMO_INGRESSOS = [
-  { nome: 'Inteira',         preco: 30, obs: 'Acesso aos 2 dias de festival',           link: '' },
-  { nome: 'Meia-entrada',    preco: 15, obs: 'Estudante, idoso, doador de sangue',      link: '' },
+  { nome: 'Inteira',         preco: 30, obs: 'Acesso aos 2 dias de festival',           link: '', quantidade_total: 200 },
+  { nome: 'Meia-entrada',    preco: 15, obs: 'Estudante, idoso, doador de sangue',      link: '', quantidade_total: 14  },
   { nome: 'Solidária',       preco: 20, obs: 'Inteira + 1kg de alimento não-perecível', link: '' },
 ]
 
@@ -323,12 +329,27 @@ const DEMO_WORKSHOPS = [
 ]
 
 // ─── Cupons demo ──────────────────────────────────────────────────────────
-// Mix de scopes pra testar todos os fluxos
+// Mix de scopes pra testar todos os fluxos. `scopes` (TEXT[]) é a coluna
+// canônica desde a migration 20260615; `scope` legacy fica em sync pro fallback
+// das edge functions em transição (espelha o dual-write da Coupons.tsx).
+// INSCRICAO+PLATEIA exibe a combinação multi-scope (o valor da feature scopes[]).
 const DEMO_COUPONS = [
-  { code: 'FAMILIA10',  scope: 'audience',  discount_type: 'percent', discount_value: 10, max_uses: 50, max_uses_per_user: 2,    descricao: '10% off pra famílias na plateia (até 2 por inscrito)' },
-  { code: 'WORKSHOP20', scope: 'workshop',  discount_type: 'percent', discount_value: 20, max_uses: 30, max_uses_per_user: null, descricao: '20% off em workshops (sem limite por inscrito)' },
-  { code: 'DEMO50',     scope: 'all',       discount_type: 'percent', discount_value: 50, max_uses: 5,  max_uses_per_user: 1,    descricao: 'Cupom demo — 50% off em tudo (limitado, 1 por inscrito)' },
+  { code: 'FAMILIA10',  scopes: ['audience'],                 discount_type: 'percent', discount_value: 10, max_uses: 50, max_uses_per_user: 2,    descricao: '10% off pra famílias na plateia (até 2 por inscrito)' },
+  { code: 'WORKSHOP20', scopes: ['workshop'],                 discount_type: 'percent', discount_value: 20, max_uses: 30, max_uses_per_user: null, descricao: '20% off em workshops (sem limite por inscrito)' },
+  { code: 'CHEGAJUNTO', scopes: ['inscription', 'audience'],  discount_type: 'percent', discount_value: 15, max_uses: 40, max_uses_per_user: 1,    descricao: '15% off na inscrição + ingresso de plateia (multi-setor)' },
+  { code: 'DEMO50',     scopes: ['inscription', 'audience', 'workshop', 'video_selection'], discount_type: 'percent', discount_value: 50, max_uses: 5, max_uses_per_user: 1, descricao: 'Cupom demo — 50% off em tudo (limitado, 1 por inscrito)' },
 ]
+
+// Deriva o `scope` legacy (single) a partir do array `scopes`, espelhando a
+// regra da Coupons.tsx: 1 setor → próprio nome; 4 setores → 'all';
+// inscription+audience → 'both'; outras combinações → 'inscription' (fallback).
+function deriveScopeLegacy(scopes: string[]): string {
+  if (scopes.length === 1) return scopes[0]
+  if (scopes.length === 4) return 'all'
+  const s = new Set(scopes)
+  if (scopes.length === 2 && s.has('inscription') && s.has('audience')) return 'both'
+  return 'inscription'
+}
 
 const JURADOS = [
   {
@@ -1362,7 +1383,8 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       max_uses_per_user: c.max_uses_per_user,
       used_count: 0,
       is_active: true,
-      scope: c.scope,
+      scopes: c.scopes,                      // canônico (TEXT[], migration 20260615)
+      scope: deriveScopeLegacy(c.scopes),    // legacy em sync pro fallback
     }))
     const { error: cpErr } = await supa.from('coupons').insert(couponsToInsert)
     if (cpErr) console.warn('Falha coupons:', cpErr.message)
