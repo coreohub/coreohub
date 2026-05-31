@@ -1,0 +1,32 @@
+name: CI
+
+# Roda type-check + testes unitários a cada push/PR pra main.
+# A19 Parte A (2026-05-30): rede de segurança pra lógica que toca dinheiro
+# (comissão, split, PIX, lotes, status de pagamento). GitHub Actions free tier
+# cobre de sobra (~1min por run).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Type check
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test

@@ -179,7 +179,7 @@ export default function CheckoutIngresso() {
           kind: detectKind(t.nome),
           precoUnit,
           qty,
-          loteNome: r?.lote?.nome ?? null,
+          loteNome: (r?.lote as any)?.nome ?? null,
           quantidadeTotal,
         } as LineItem;
       })

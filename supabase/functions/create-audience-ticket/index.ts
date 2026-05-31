@@ -30,6 +30,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { computeAudienceCart, round2 } from '../_shared/audience-pricing.ts'
 
 const ALLOWED_ORIGIN = Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'
 const corsHeaders = {
@@ -43,8 +44,6 @@ const json = (data: unknown, status = 200) =>
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
-
-const round2 = (n: number) => parseFloat(n.toFixed(2))
 
 // Valida CPF formato + dígito verificador (mod-11)
 function isValidCpf(cpf: string): boolean {
@@ -279,51 +278,26 @@ Deno.serve(async (req) => {
     }
 
     // ── Calcula valores por tipo (distribui desconto + comissão + split) ─────
+    // Matemática extraída pra _shared/audience-pricing (A19) — mesma fonte que
+    // o breakdown do CheckoutIngresso deve replicar. Testada em tests/.
     const commissionPercent = Number(event.audience_commission_percent ?? 10)
     const feeMode           = (event as any).audience_fee_mode ?? 'repassar'
 
-    let chargedTotal = 0
-    let producerTotal = 0
-    let commissionTotal = 0
-    let discountApplied = 0
-
-    const rpcItems = resolved.map(r => {
-      const typeBase = r.precoUnit * r.quantity
-      // Distribui o desconto total proporcional à participação do tipo.
-      const typeDiscount = totalBase > 0 ? round2(discountTotal * (typeBase / totalBase)) : 0
-      const discountPerTicket = round2(typeDiscount / r.quantity)
-      const baseFeeUnit = round2(r.precoUnit - discountPerTicket)
-      if (baseFeeUnit < 0) throw new Error('Desconto maior que o preço base')
-      const commissionUnit = round2(baseFeeUnit * (commissionPercent / 100))
-      let chargedUnit: number
-      let producerUnit: number
-      if (feeMode === 'repassar') {
-        chargedUnit  = round2(baseFeeUnit + commissionUnit)
-        producerUnit = baseFeeUnit
-      } else {
-        chargedUnit  = baseFeeUnit
-        producerUnit = round2(baseFeeUnit - commissionUnit)
-      }
-      chargedTotal    += round2(chargedUnit * r.quantity)
-      producerTotal   += round2(producerUnit * r.quantity)
-      commissionTotal += round2(commissionUnit * r.quantity)
-      discountApplied += round2(discountPerTicket * r.quantity)
-      return {
-        ticket_type_id:      String(r.idx),
-        ticket_type_nome:    r.nome,
-        kind:                r.kind,
-        quantity:            r.quantity,
-        preco:               baseFeeUnit,
-        commission_amount:   commissionUnit,
-        producer_amount:     producerUnit,
-        discount_per_ticket: discountPerTicket,
-        quantidade_total:    r.quantidadeTotal,
-      }
+    const pricing = computeAudienceCart({
+      resolved: resolved.map(r => ({
+        idx: r.idx, nome: r.nome, kind: r.kind,
+        quantity: r.quantity, precoUnit: r.precoUnit, quantidadeTotal: r.quantidadeTotal,
+      })),
+      totalBase,
+      discountTotal,
+      commissionPercent,
+      feeMode,
     })
-    chargedTotal    = round2(chargedTotal)
-    producerTotal   = round2(producerTotal)
-    commissionTotal = round2(commissionTotal)
-    discountApplied = round2(discountApplied)
+    const rpcItems        = pricing.items
+    const chargedTotal    = pricing.chargedTotal
+    const producerTotal   = pricing.producerTotal
+    const commissionTotal = pricing.commissionTotal
+    const discountApplied = pricing.discountApplied
 
     if (chargedTotal <= 0) {
       // Cupom 100% off → cobrança inválida no Asaas. Bloqueamos por enquanto.
