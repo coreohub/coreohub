@@ -74,7 +74,7 @@ npm run preview       # serve dist/ localmente pra testar
 npm run lint          # tsc --noEmit (type check, não tem ESLint configurado)
 ```
 
-**Não tem testes automatizados.** A19 do backlog é montar Vitest + GitHub Actions, ainda em aberto.
+**Testes (A19 Parte A, shipado 2026-05-30):** Vitest com 81 testes de lógica pura que toca dinheiro (`tests/`, rodam em ~340ms). `npm test` (run único) ou `npm run test:watch`. Cobre lotes/preço, máscaras+validação CPF/CNPJ, status de pagamento, PIX/payout (`detectPixType`, `isKycPendingError`), e distribuição de comissão/cupom do carrinho multi-tipo (`_shared/audience-pricing.ts`). GitHub Actions (`.github/workflows/ci.yml`) roda lint + test em cada push/PR pra main. **Parte B (integração Asaas sandbox) deferida** — alto atrito com 1 produtor. `npm run lint` (tsc) agora só checa o frontend (tsconfig exclui `supabase/functions`/`api`/`scripts` — edge Deno tem runtime próprio).
 
 `.env.local` exige:
 - `VITE_SUPABASE_URL`
@@ -238,6 +238,15 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 ## Histórico recente (últimas ~2 semanas)
 
 Cronológico inverso. Detalhes individuais em `memory/`.
+
+### 2026-05-30 — A19 Parte A: testes automatizados ✅ SHIPADO
+1 commit (`2f5181a`) + edge `create-audience-ticket` redeployada. Primeira rede de segurança automatizada do projeto. Detalhes em [[backlog-testes-automatizados-a19]].
+
+- **Vitest 2.1.9** + **81 testes** (`tests/`, ~340ms) cobrindo lógica pura que toca dinheiro: lotes/preço, máscaras+CPF/CNPJ, status pagamento (regressão APROVADO vs CONFIRMADO), PIX/payout (`detectPixType`/`isKycPendingError`), distribuição comissão/cupom do carrinho.
+- **Extração**: matemática de comissão/split saiu de inline na edge pra `_shared/audience-pricing.ts` (`computeAudienceCart`) — testável + não diverge do CheckoutIngresso. Edge importa de lá.
+- **CI** `.github/workflows/ci.yml`: lint + test em cada push/PR (free tier).
+- **Fix colateral**: `npm run lint` estava QUEBRADO (tsc varria edge Deno → centenas de erros). `tsconfig` agora exclui `supabase/functions`/`api`/`scripts`. Pegou 1 type error real no CheckoutIngresso (`lote.nome`).
+- **Decisão**: só Parte A (lógica pura). Parte B (integração Asaas sandbox) deferida — atrito de credencial sandbox + secret não compensa com 1 produtor.
 
 ### 2026-05-30 — Multi-jurado seletiva de vídeo v1.1 ✅ SHIPADO
 1 commit (`98f0b94`, +701 linhas) + edge `judge-login` redeployada. Backend de agregação já existia (migration `20260604`); faltava só o lado do jurado. Detalhes em [[plano-multi-jurado-seletiva-v1-1]].
@@ -732,7 +741,7 @@ Commit `49b1d33` — fallback robusto:
 ## 🟨 P2 — Alto valor, esforço maior
 - **B4 Push Web (notificações)** — ~4h. Cobertura 15-30% (taxa típica de aceitar permissão). Faz sentido só depois do inbox virar baseline + algum produtor demandar. VAPID keys + permission UX + send-push edge function. Service Worker já existe via workbox.
 - **Phase 6 — Mesa de Som offline-first** (`#37`) — botão "Baixar pacote do evento" pré-cacheia trilhas + narrações no Cache API. Outbox de live_status. ~1-2 sprints.
-- **A19 — Testes automatizados** — Vitest + GitHub Actions + mock Supabase client. 3 PRs (webhook → sweep/KYC/reminders → seletiva/pricing). ~4-6h. Trigger: ~5 produtores ativos OU primeira regressão cara.
+- ✅ **A19 Parte A — Testes automatizados SHIPADO 2026-05-30** (commit `2f5181a`): Vitest + 81 testes de lógica pura + GitHub Actions CI. Detalhes em [[backlog-testes-automatizados-a19]]. **Parte B (integração Asaas sandbox)** segue deferida — precisa credencial sandbox + secret no GitHub; trigger: ~5 produtores ativos OU primeira regressão cara de integração.
 - **Fix permanente partial refund (`GET /payments/{id}` pra walletId real)** — ~30min. Defer até produtor demandar partial refund frequente. Workaround atual: full refund (deixa campo vazio no modal) funciona sempre.
 - ✅ **Carrinho de ingressos multi-tipo na vitrine — SHIPADO 2026-05-30** (commits `0b726c7` + `aab5ddd`, migration `20260619` aplicada). Ver "Features chave" + Histórico recente acima e [[carrinho-ingressos-multi-tipo-shipado]]. Pendente só smoke E2E ponta-a-ponta (sem evento INTERNO com venda ativa em prod pra testar com PIX real).
 - **Cupom com produtos específicos (Stripe-style)** — defer 2026-05-28. Hoje cupom aplica em "setor" (Inscrição/Plateia/Workshop/Seletiva). Granularidade fina seria 4 colunas opcionais em `coupons`: `applies_to_formations TEXT[]` (Solo/Duo), `applies_to_categories TEXT[]` (Junior/Adulto), `applies_to_workshops UUID[]` (FK), `applies_to_ticket_types TEXT[]` (Meia/Inteira). Vazio = aplica em qualquer. Padrão Stripe/Sympla/Hotmart, mas overkill pra v1 — produtores hoje criam cupons que aplicam no setor inteiro. ~3h. Trigger: produtor pedir granularidade ("quero cupom só pra Solo, não pra Grupo").
@@ -755,7 +764,7 @@ Resolvidos em 2026-05-23 (`f7d605c`+`81d2d0f`+`87cc593`) + 2026-05-24 (aplicaç�
 
 ## Não fazer
 
-- ❌ Sem testes ainda (A19 backlog) — validar manualmente em prod, com `npm run build` antes de commit.
+- ✅ Testes existem agora (A19 Parte A): rodar `npm test` (81 testes lógica pura) + `npm run lint` + `npm run build` antes de commit não-trivial. Integração com Asaas ainda valida manual em prod (Parte B deferida).
 - ❌ Sem `--no-verify` em commits sem motivo explícito.
 - ❌ Sem service role no frontend (vai vazar em bundle).
 - ❌ Sem `auth.includes(serviceKey)` em edge function (usar decode + role check).
