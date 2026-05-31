@@ -940,9 +940,10 @@ const PublicEventPage = () => {
                                 <button
                                   type="button"
                                   disabled={atGlobalMax}
+                                  aria-label={`Adicionar ${t.nome} ao carrinho`}
                                   onClick={() => setTypeQty(realIdx, 1)}
                                   title={atGlobalMax ? `Máximo de ${maxPurchase} ingressos por compra` : undefined}
-                                  className="self-start inline-flex items-center gap-1.5 px-4 py-2 mt-2 bg-[#ff0068] text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:scale-105 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                  className="self-start inline-flex items-center gap-1.5 px-4 py-2 mt-2 bg-[#ff0068] text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:scale-105 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
                                 >
                                   <Plus size={12} /> Adicionar
                                 </button>
@@ -952,19 +953,20 @@ const PublicEventPage = () => {
                               <div className="self-start inline-flex items-center gap-3 mt-2">
                                 <button
                                   type="button"
-                                  aria-label="Remover um"
+                                  aria-label={qty <= 1 ? `Remover ${t.nome} do carrinho` : `Diminuir quantidade de ${t.nome}`}
                                   onClick={() => setTypeQty(realIdx, qty - 1)}
-                                  className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center"
+                                  className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]"
                                 >
                                   <Minus size={14} />
                                 </button>
                                 <span className="text-base font-black tabular-nums w-5 text-center">{qty}</span>
                                 <button
                                   type="button"
-                                  aria-label="Adicionar um"
+                                  aria-label={`Adicionar um ${t.nome}`}
                                   disabled={qty >= typeCap || atGlobalMax}
+                                  title={atGlobalMax ? `Máximo de ${maxPurchase} ingressos por compra` : (qty >= typeCap ? 'Limite deste tipo atingido' : undefined)}
                                   onClick={() => setTypeQty(realIdx, Math.min(typeCap, qty + 1))}
-                                  className="w-8 h-8 rounded-lg bg-[#ff0068]/80 hover:bg-[#ff0068] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
+                                  className="w-8 h-8 rounded-lg bg-[#ff0068]/80 hover:bg-[#ff0068] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]"
                                 >
                                   <Plus size={14} />
                                 </button>
@@ -1367,7 +1369,7 @@ const PublicEventPage = () => {
       {/* Sticky bar do carrinho — aparece quando há ≥1 ingresso selecionado.
           Mostra qty + total de face; checkout exibe taxa/cupom (padrão Sympla). */}
       {cartTotalQty > 0 && (
-        <div className="fixed bottom-0 inset-x-0 z-50 bg-[#0b0b0f]/95 backdrop-blur border-t border-[#ff0068]/30 shadow-[0_-8px_30px_rgba(0,0,0,0.5)]">
+        <div className="fixed bottom-0 inset-x-0 z-[60] bg-[#0b0b0f]/95 backdrop-blur border-t border-[#ff0068]/30 shadow-[0_-8px_30px_rgba(0,0,0,0.5)]">
           <div className="max-w-5xl mx-auto px-4 sm:px-8 py-3 flex items-center justify-between gap-4">
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -1380,7 +1382,7 @@ const PublicEventPage = () => {
             <button
               type="button"
               onClick={() => navigate(`/checkout-ingresso/${slugOrId}`, { state: { cart } })}
-              className="inline-flex items-center gap-2 px-5 sm:px-7 py-3 bg-[#ff0068] text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-all shrink-0"
+              className="inline-flex items-center gap-2 px-5 sm:px-7 py-3 bg-[#ff0068] text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0f] shrink-0 shadow-lg shadow-[#ff0068]/20"
             >
               <Ticket size={14} /> Ir pro carrinho <ChevronRight size={14} />
             </button>

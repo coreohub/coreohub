@@ -437,19 +437,20 @@ export default function CheckoutIngresso() {
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    aria-label="Remover um"
+                    aria-label={l.qty <= 1 ? `Remover ${l.nome} do carrinho` : `Diminuir quantidade de ${l.nome}`}
                     onClick={() => setLineQty(l.idx, l.qty - 1)}
-                    className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center"
+                    className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0f]"
                   >
                     {l.qty <= 1 ? <Trash2 size={14} /> : <Minus size={14} />}
                   </button>
                   <span className="text-base font-black tabular-nums w-5 text-center">{l.qty}</span>
                   <button
                     type="button"
-                    aria-label="Adicionar um"
+                    aria-label={`Adicionar um ${l.nome}`}
                     disabled={l.qty >= typeCap || atGlobalMax}
+                    title={atGlobalMax ? `Máximo de ${maxPurchase} ingressos por compra` : (l.qty >= typeCap ? 'Limite deste tipo atingido' : undefined)}
                     onClick={() => setLineQty(l.idx, l.qty + 1)}
-                    className="w-8 h-8 rounded-lg bg-[#ff0068]/80 hover:bg-[#ff0068] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
+                    className="w-8 h-8 rounded-lg bg-[#ff0068]/80 hover:bg-[#ff0068] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0f]"
                   >
                     <Plus size={14} />
                   </button>
@@ -584,7 +585,7 @@ export default function CheckoutIngresso() {
           type="submit"
           disabled={!canSubmit || !refundAccepted}
           title={!refundAccepted ? 'Aceite a política de reembolso para prosseguir' : undefined}
-          className="w-full py-4 bg-[#ff0068] hover:bg-[#ff0068]/90 disabled:bg-white/10 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
+          className="w-full py-4 bg-[#ff0068] hover:bg-[#ff0068]/90 disabled:bg-white/10 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#ff0068]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0f]"
         >
           {paying ? <Loader2 className="animate-spin" size={16} /> : <Ticket size={16} />}
           {paying ? 'Gerando pagamento...' : 'Continuar pro pagamento'}
