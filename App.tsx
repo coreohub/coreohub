@@ -84,6 +84,7 @@ const VideoSelection           = lazy(() => import('./pages/VideoSelection'));
 // (refactor 2026-05-19, padrão Sympla/Eventbrite). Redirect 301 abaixo.
 const RegulationAIParser       = lazy(() => import('./pages/RegulationAIParser'));
 const JudgeLogin               = lazy(() => import('./pages/JudgeLogin'));
+const JuradoSeletiva           = lazy(() => import('./pages/JuradoSeletiva'));
 const TermoProdutor            = lazy(() => import('./pages/TermoProdutor'));
 
 const PageLoader = () => (
@@ -483,6 +484,7 @@ const App: React.FC = () => {
         <Route path="/judge-terminal" element={<JudgeTerminalRoute privateRouteProps={privateRouteProps} />} />
         <Route path="/deliberacao" element={<JudgeStandaloneRoute><Deliberacao /></JudgeStandaloneRoute>} />
         <Route path="/conferencia" element={<JudgeStandaloneRoute><Conferencia /></JudgeStandaloneRoute>} />
+        <Route path="/jurado-seletiva" element={<JudgeStandaloneRoute><JuradoSeletiva /></JudgeStandaloneRoute>} />
         <Route path="/deliberacoes" element={<PrivateRoute {...privateRouteProps}><Deliberacoes /></PrivateRoute>} />
         <Route path="/judge-practice" element={<PrivateRoute {...privateRouteProps}><JudgePractice /></PrivateRoute>} />
         <Route path="/equipe-jurados-config" element={<PrivateRoute {...privateRouteProps}><JudgeManagement /></PrivateRoute>} />

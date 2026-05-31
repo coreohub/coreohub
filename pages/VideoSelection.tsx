@@ -33,6 +33,9 @@ interface EventVideoConfig {
   video_selection_fee_required: boolean;
   video_fee_refund_policy: 'no_refund' | 'full_refund' | 'partial_refund';
   video_fee_partial_refund_percent: number;  // 0-100, default 50
+  // Multi-jurado v1.1
+  video_evaluators_count: number;             // 1 = produtor decide solo; >=2 = banca via /jurado-seletiva
+  video_evaluation_rule: 'majority' | 'unanimous';
 }
 
 interface ProdutorEvent {
@@ -86,6 +89,8 @@ const VideoSelection: React.FC = () => {
     video_selection_fee_required: false,
     video_fee_refund_policy: 'no_refund',
     video_fee_partial_refund_percent: 50,
+    video_evaluators_count: 1,
+    video_evaluation_rule: 'majority',
   });
   const [savingConfig, setSavingConfig] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
@@ -157,7 +162,7 @@ const VideoSelection: React.FC = () => {
   const loadEventConfig = async (eventId: string) => {
     const { data: evt } = await supabase
       .from('events')
-      .select('video_selection_enabled, video_submission_deadline, video_selection_fee, video_selection_fee_required, video_fee_refund_policy, video_fee_partial_refund_percent')
+      .select('video_selection_enabled, video_submission_deadline, video_selection_fee, video_selection_fee_required, video_fee_refund_policy, video_fee_partial_refund_percent, video_evaluators_count, video_evaluation_rule')
       .eq('id', eventId)
       .maybeSingle();
     if (evt) {
@@ -168,6 +173,8 @@ const VideoSelection: React.FC = () => {
         video_selection_fee_required:      evt.video_selection_fee_required ?? false,
         video_fee_refund_policy:           evt.video_fee_refund_policy ?? 'no_refund',
         video_fee_partial_refund_percent:  Number(evt.video_fee_partial_refund_percent ?? 50),
+        video_evaluators_count:            Number(evt.video_evaluators_count ?? 1),
+        video_evaluation_rule:             (evt.video_evaluation_rule ?? 'majority') as 'majority' | 'unanimous',
       });
     }
   };
@@ -284,6 +291,8 @@ const VideoSelection: React.FC = () => {
           video_selection_fee_required:      config.video_selection_fee_required,
           video_fee_refund_policy:           config.video_fee_refund_policy,
           video_fee_partial_refund_percent:  config.video_fee_partial_refund_percent,
+          video_evaluators_count:            Math.max(1, Number(config.video_evaluators_count) || 1),
+          video_evaluation_rule:             config.video_evaluation_rule,
         })
         .eq('id', selectedEventId);
       if (error) throw error;
@@ -478,6 +487,71 @@ const VideoSelection: React.FC = () => {
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068] transition-all"
                   />
                   <p className="text-[9px] text-slate-400">Ex: 50 = devolve metade da taxa em caso de reprovação.</p>
+                </div>
+              )}
+
+              {/* Banca de jurados (multi-jurado v1.1) */}
+              {config.video_selection_enabled && (
+                <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-white/10">
+                  <div className="flex items-center gap-2">
+                    <Users size={14} className="text-[#ff0068]" />
+                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Banca de jurados</label>
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="evaluators-count" className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Quantos jurados avaliam cada vídeo</label>
+                    <input
+                      id="evaluators-count"
+                      type="text"
+                      inputMode="numeric"
+                      value={String(config.video_evaluators_count ?? 1)}
+                      onChange={e => {
+                        const digits = e.target.value.replace(/\D/g, '').slice(0, 2);
+                        const n = digits ? Math.max(1, parseInt(digits, 10)) : 1;
+                        setConfig(p => ({ ...p, video_evaluators_count: n }));
+                      }}
+                      placeholder="1"
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068] transition-all"
+                    />
+                    <p className="text-[9px] text-slate-400">
+                      1 = você decide sozinho neste painel. 2 ou mais = banca avalia às cegas em <span className="font-mono">/jurado-seletiva</span> (cada jurado entra pelo PIN).
+                    </p>
+                  </div>
+
+                  {/* Aviso: número par pode empatar (decisão de produto 2026-05-30) */}
+                  {config.video_evaluators_count >= 2 && config.video_evaluators_count % 2 === 0 && config.video_evaluation_rule === 'majority' && (
+                    <div className="flex items-start gap-2 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20">
+                      <Info size={13} className="text-amber-500 shrink-0 mt-0.5" />
+                      <p className="text-[10px] text-amber-700 dark:text-amber-400 font-bold leading-relaxed">
+                        Use um número <strong>ímpar</strong> de jurados (3, 5…) pra evitar empate na maioria. Com {config.video_evaluators_count} jurados, um empate deixa o vídeo aguardando — você desempata manualmente.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Regra de decisão (só quando multi) */}
+                  {config.video_evaluators_count >= 2 && (
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Regra de decisão</label>
+                      <div className="flex gap-2">
+                        {([
+                          { v: 'majority' as const,  l: 'Maioria' },
+                          { v: 'unanimous' as const, l: 'Unânime' },
+                        ]).map(opt => (
+                          <button
+                            key={opt.v}
+                            onClick={() => setConfig(p => ({ ...p, video_evaluation_rule: opt.v }))}
+                            className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${config.video_evaluation_rule === opt.v ? 'bg-[#ff0068] text-white shadow-lg shadow-[#ff0068]/20' : 'bg-slate-100 dark:bg-white/5 text-slate-500 border border-slate-200 dark:border-white/10'}`}
+                          >
+                            {opt.l}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[9px] text-slate-400">
+                        {config.video_evaluation_rule === 'unanimous'
+                          ? 'Todos os jurados precisam aprovar. Qualquer reprovação reprova o vídeo.'
+                          : 'Mais da metade aprova. Qualquer jurado pode pedir "condicional" (re-envio).'}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -738,9 +812,28 @@ const VideoSelection: React.FC = () => {
                   />
                 </div>
 
-                {/* Decision buttons — cada um com label + sub-explicação visível
+                {/* Multi-jurado: produtor NÃO decide solo — a banca avalia às
+                    cegas em /jurado-seletiva. Painel vira read-only (mostra só
+                    o status agregado pelos jurados, não deixa o produtor votar). */}
+                {config.video_evaluators_count >= 2 ? (
+                  <div className="space-y-2">
+                    <p className="text-xs font-black text-slate-500 uppercase tracking-widest">Decisão</p>
+                    <div className="flex items-start gap-3 p-4 rounded-2xl bg-sky-500/10 border border-sky-500/20">
+                      <Users size={16} className="text-sky-500 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <p className="text-xs font-black text-sky-700 dark:text-sky-400 uppercase tracking-tight">
+                          Avaliação por banca ({config.video_evaluators_count} jurados · {config.video_evaluation_rule === 'unanimous' ? 'unânime' : 'maioria'})
+                        </p>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                          Os jurados avaliam às cegas em <span className="font-mono">/jurado-seletiva</span> (PIN). O status acima é calculado automaticamente quando os votos fecham. Você não decide individualmente neste modo.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                /* Decision buttons — cada um com label + sub-explicação visível
                     (em mobile tooltip não funciona; mostrar texto direto evita
-                    confusão no que cada decisão faz). */}
+                    confusão no que cada decisão faz). */
                 <div className="space-y-2">
                   <p className="text-xs font-black text-slate-500 uppercase tracking-widest">Decisão</p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -792,6 +885,7 @@ const VideoSelection: React.FC = () => {
                     </button>
                   </div>
                 </div>
+                )}
               </div>
             </motion.div>
           </div>

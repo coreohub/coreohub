@@ -185,6 +185,21 @@ Deno.serve(async (req) => {
     // Sucesso: zera o contador
     await supa.from('judge_login_attempts').delete().eq('judge_id', judge_id)
 
+    // Multi-jurado v1.1: sinaliza se há seletiva de vídeo com banca (>=2) ativa
+    // no evento atual do produtor E este jurado pode avaliar vídeo. Frontend usa
+    // pra oferecer "Seletiva de Vídeo" vs "Terminal de Palco" pós-PIN.
+    let videoSelectionAvailable = false
+    if (judge.can_evaluate_video !== false) {
+      const { data: ev } = await supa
+        .from('events')
+        .select('video_selection_enabled, video_evaluators_count')
+        .eq('created_by', producer.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      videoSelectionAvailable = !!ev?.video_selection_enabled && (ev?.video_evaluators_count ?? 1) >= 2
+    }
+
     return json({
       ok: true,
       judge: {
@@ -193,6 +208,7 @@ Deno.serve(async (req) => {
         language: judge.language ?? 'pt-BR',
         competencias_generos: judge.competencias_generos ?? [],
       },
+      video_selection_available: videoSelectionAvailable,
     })
   }
 
@@ -557,6 +573,138 @@ Deno.serve(async (req) => {
       aggregate: aggregate ?? [],
       registrations: regs ?? [],
     })
+  }
+
+  // ─── action: get-video-queue (fila da seletiva de vídeo, modo blind) ──────
+  // Multi-jurado v1.1: lista vídeos submetidos do evento ativo que ESTE jurado
+  // ainda não avaliou. Modo blind — esconde estúdio/coreógrafo/inscrito (só
+  // nº de ordem + modalidade/categoria/estilo + vídeo). Anti-viés.
+  if (action === 'get-video-queue') {
+    const { judge_id } = body ?? {}
+    if (!judge_id) return json({ ok: false, reason: 'missing_fields' }, 400)
+
+    const judge = await verifyJudge(judge_id)
+    if (!judge) return json({ ok: false, reason: 'judge_not_found' }, 404)
+    // Produtor pode restringir quais jurados avaliam vídeo.
+    if (judge.can_evaluate_video === false) {
+      return json({ ok: false, reason: 'not_allowed_to_evaluate_video' }, 403)
+    }
+
+    // Evento ativo + config de seletiva
+    const { data: event } = await supa
+      .from('events')
+      .select('id, name, slug, video_selection_enabled, video_evaluators_count, video_evaluation_rule')
+      .eq('created_by', producer.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (!event?.id || !event.video_selection_enabled) {
+      return json({ ok: true, event: event ?? null, queue: [], my_votes: [], evaluators_count: 1, rule: 'majority' })
+    }
+
+    // Vídeos aguardando avaliação (submitted) do evento
+    const { data: regs } = await supa
+      .from('registrations')
+      .select('id, video_url, video_status, ordem_apresentacao, estilo_danca, categoria, tipo_apresentacao, formacao, formato_participacao')
+      .eq('event_id', event.id)
+      .eq('video_status', 'submitted')
+      .not('video_url', 'is', null)
+      .order('ordem_apresentacao', { ascending: true })
+
+    // Avaliações já feitas por ESTE jurado (pra remover da fila + permitir editar)
+    const regIds = (regs ?? []).map((r: any) => r.id)
+    let myVotes: any[] = []
+    if (regIds.length > 0) {
+      const { data: votes } = await supa
+        .from('video_evaluations')
+        .select('registration_id, decision, feedback, score')
+        .eq('judge_id', judge_id)
+        .in('registration_id', regIds)
+      myVotes = votes ?? []
+    }
+    const votedSet = new Set(myVotes.map(v => v.registration_id))
+
+    // Modo blind: número sequencial (não revela ordem real se quiser; usa índice
+    // estável por id) + dados técnicos. NUNCA manda estúdio/coreógrafo/nome.
+    const queue = (regs ?? [])
+      .filter((r: any) => !votedSet.has(r.id))
+      .map((r: any, i: number) => ({
+        id:        r.id,
+        numero:    i + 1,
+        video_url: r.video_url,
+        estilo:    r.estilo_danca ?? null,
+        categoria: r.categoria ?? null,
+        formacao:  r.formacao ?? r.formato_participacao ?? null,
+        tipo:      r.tipo_apresentacao ?? null,
+      }))
+
+    return json({
+      ok: true,
+      event: { id: event.id, name: event.name, slug: event.slug },
+      evaluators_count: event.video_evaluators_count ?? 1,
+      rule: event.video_evaluation_rule ?? 'majority',
+      queue,
+      my_votes: myVotes,
+      remaining: queue.length,
+      total_voted: myVotes.length,
+    })
+  }
+
+  // ─── action: submit-video-evaluation (jurado vota num vídeo) ──────────────
+  // UPSERT em video_evaluations. Trigger fn_aggregate_video_evaluations recomputa
+  // registrations.video_status automaticamente (não calculamos status aqui).
+  if (action === 'submit-video-evaluation') {
+    const { judge_id, registration_id, decision, feedback, score } = body ?? {}
+    if (!judge_id || !registration_id || !decision) {
+      return json({ ok: false, reason: 'missing_fields' }, 400)
+    }
+    if (!['approve', 'reject', 'conditional'].includes(decision)) {
+      return json({ ok: false, reason: 'invalid_decision' }, 400)
+    }
+
+    const judge = await verifyJudge(judge_id)
+    if (!judge) return json({ ok: false, reason: 'judge_not_found' }, 404)
+    if (judge.can_evaluate_video === false) {
+      return json({ ok: false, reason: 'not_allowed_to_evaluate_video' }, 403)
+    }
+
+    // Valida registration pertence a um evento do produtor + multi-jurado ativo
+    const { data: reg } = await supa
+      .from('registrations')
+      .select('id, event_id, events!inner(created_by, video_evaluators_count)')
+      .eq('id', registration_id)
+      .maybeSingle()
+    if (!reg || (reg as any).events?.created_by !== producer.id) {
+      return json({ ok: false, reason: 'registration_not_found_or_not_yours' }, 403)
+    }
+    if (((reg as any).events?.video_evaluators_count ?? 1) < 2) {
+      // Modo solo decide via VideoSelection.tsx — não aceita voto de jurado.
+      return json({ ok: false, reason: 'event_not_multi_judge' }, 400)
+    }
+
+    // Score opcional (0-10). Decisão de produto 2026-05-30.
+    let scoreVal: number | null = null
+    if (score !== undefined && score !== null && score !== '') {
+      const n = Number(score)
+      if (Number.isNaN(n) || n < 0 || n > 10) {
+        return json({ ok: false, reason: 'invalid_score' }, 400)
+      }
+      scoreVal = parseFloat(n.toFixed(2))
+    }
+
+    const { error: upErr } = await supa
+      .from('video_evaluations')
+      .upsert([{
+        registration_id,
+        judge_id,
+        decision,
+        feedback: feedback ? String(feedback) : null,
+        score:    scoreVal,
+      }], { onConflict: 'registration_id,judge_id' })
+    if (upErr) return json({ error: 'db_error', detail: upErr.message }, 500)
+
+    return json({ ok: true })
   }
 
   return json({ error: 'unknown_action' }, 400)

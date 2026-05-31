@@ -262,3 +262,65 @@ export const fetchConferencia = async (): Promise<ConferenciaData> => {
   }
   return data as ConferenciaData;
 };
+
+/* ─── Multi-jurado seletiva de vídeo v1.1 (modo blind) ──────────────────────── */
+
+export type VideoDecision = 'approve' | 'reject' | 'conditional';
+
+export interface VideoQueueItem {
+  id: string;
+  numero: number;
+  video_url: string;
+  estilo: string | null;
+  categoria: string | null;
+  formacao: string | null;
+  tipo: string | null;
+}
+
+export interface VideoMyVote {
+  registration_id: string;
+  decision: VideoDecision;
+  feedback: string | null;
+  score: number | null;
+}
+
+export interface VideoQueueData {
+  event: { id: string; name: string; slug: string | null } | null;
+  evaluators_count: number;
+  rule: 'majority' | 'unanimous';
+  queue: VideoQueueItem[];
+  my_votes: VideoMyVote[];
+  remaining: number;
+  total_voted: number;
+}
+
+/** Fila de seletiva de vídeo do jurado (modo blind, só vídeos não votados). */
+export const fetchVideoQueue = async (): Promise<VideoQueueData> => {
+  const { token, judge_id } = requireJudgeSession();
+  const { data, status } = await callJudgeFn({ action: 'get-video-queue', token, judge_id });
+  if (status !== 200 || !data?.ok) {
+    throw new Error(data?.detail ?? data?.reason ?? 'failed_to_load');
+  }
+  return data as VideoQueueData;
+};
+
+/** Vota num vídeo da seletiva. score opcional (0-10). Trigger SQL agrega. */
+export const submitVideoEvaluation = async (
+  registration_id: string,
+  decision: VideoDecision,
+  opts?: { feedback?: string; score?: number | null },
+): Promise<void> => {
+  const { token, judge_id } = requireJudgeSession();
+  const { data, status } = await callJudgeFn({
+    action: 'submit-video-evaluation',
+    token,
+    judge_id,
+    registration_id,
+    decision,
+    feedback: opts?.feedback,
+    score: opts?.score,
+  });
+  if (status !== 200 || !data?.ok) {
+    throw new Error(data?.detail ?? data?.reason ?? 'failed_to_submit_video_evaluation');
+  }
+};

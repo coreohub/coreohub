@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Award, Loader2, Lock, ArrowLeft, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Award, Loader2, Lock, ArrowLeft, ShieldCheck, AlertCircle, Video, Gavel } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../services/supabase';
 import InstallPWAButton from '../components/InstallPWAButton';
@@ -104,6 +104,8 @@ const JudgeLogin: React.FC = () => {
   const [kioskMode, setKioskMode] = useState<boolean>(false);
   const [showSwitchPrompt, setShowSwitchPrompt] = useState(false);
   const [switchInput, setSwitchInput] = useState('');
+  // Multi-jurado v1.1: pós-PIN, se há seletiva de vídeo com banca, oferece escolha.
+  const [destChoice, setDestChoice] = useState<{ judgeName: string } | null>(null);
 
   const avatarSrc = (j: Judge) =>
     j.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(j.name)}`;
@@ -251,6 +253,15 @@ const JudgeLogin: React.FC = () => {
           }
         } catch { /* noop */ }
 
+        // Multi-jurado v1.1: se há seletiva de vídeo com banca ativa, oferece
+        // escolha entre Terminal de Palco e Seletiva de Vídeo. Senão, vai direto.
+        if (data.video_selection_available) {
+          setValidating(false);
+          setSelectedJudge(null);
+          setDestChoice({ judgeName: data.judge.name });
+          return;
+        }
+
         navigate('/judge-terminal', { replace: true });
         return;
       }
@@ -294,6 +305,49 @@ const JudgeLogin: React.FC = () => {
             Esse link de acesso não existe mais ou foi revogado pelo produtor.
             Peça um link novo na produção.
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Multi-jurado v1.1: escolha pós-PIN entre Terminal de Palco e Seletiva de Vídeo.
+  if (destChoice) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 flex flex-col items-center justify-center">
+        <div className="w-full max-w-md space-y-6 text-center">
+          <div className="space-y-2">
+            <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068]">Olá, {destChoice.judgeName}</p>
+            <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter italic text-slate-900 dark:text-white">
+              O que você vai <span className="text-[#ff0068]">fazer?</span>
+            </h1>
+            <p className="text-xs text-slate-500 font-bold">Escolha por onde começar. Você pode trocar depois.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-3">
+            <button
+              onClick={() => navigate('/jurado-seletiva', { replace: true })}
+              className="group flex items-center gap-4 p-5 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/10 rounded-3xl hover:border-[#ff0068]/40 hover:shadow-lg hover:shadow-[#ff0068]/10 active:scale-[0.98] transition-all text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068]"
+            >
+              <div className="inline-flex p-3 rounded-2xl bg-[#ff0068]/10 text-[#ff0068] shrink-0">
+                <Video size={22} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white">Seletiva de Vídeo</p>
+                <p className="text-[11px] text-slate-500 font-bold leading-snug">Avalie os vídeos enviados às cegas.</p>
+              </div>
+            </button>
+            <button
+              onClick={() => navigate('/judge-terminal', { replace: true })}
+              className="group flex items-center gap-4 p-5 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/10 rounded-3xl hover:border-[#ff0068]/40 hover:shadow-lg hover:shadow-[#ff0068]/10 active:scale-[0.98] transition-all text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068]"
+            >
+              <div className="inline-flex p-3 rounded-2xl bg-slate-500/10 text-slate-500 shrink-0">
+                <Gavel size={22} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white">Terminal de Palco</p>
+                <p className="text-[11px] text-slate-500 font-bold leading-snug">Avalie as apresentações ao vivo.</p>
+              </div>
+            </button>
+          </div>
         </div>
       </div>
     );
