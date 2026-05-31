@@ -24,6 +24,9 @@ import {
 import AsaasBadge from '../components/AsaasBadge';
 import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
 import { resolveLote, todayISO, type Lote } from '../utils/lotes';
+// Fonte única da matemática de comissão/split (compartilhada com a edge
+// create-audience-ticket). Garante que o total exibido bate com a cobrança.
+import { computeAudienceCart } from '../supabase/functions/_shared/audience-pricing';
 
 const formatBRL = (n: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n ?? 0);
@@ -286,31 +289,34 @@ export default function CheckoutIngresso() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalBase, appliedCouponCode]);
 
-  // ─── Breakdown (replica a distribuição do edge p/ bater com a cobrança) ───
+  // ─── Breakdown — usa a MESMA fonte que a edge (computeAudienceCart) pra
+  // bater centavo-a-centavo com a cobrança gerada. Fonte única em _shared. ───
   const breakdown = useMemo(() => {
     if (!event || lines.length === 0) return null;
-    const commPct = Number(event.audience_commission_percent ?? 10);
     const feeMode = event.audience_fee_mode ?? 'repassar';
-    const discountTotal = Math.min(couponDiscount, totalBase);
-    let chargedTotal = 0, commTotal = 0, discountApplied = 0;
-    for (const l of lines) {
-      const typeBase = l.precoUnit * l.qty;
-      const typeDiscount = totalBase > 0 ? round2(discountTotal * (typeBase / totalBase)) : 0;
-      const discountPerTicket = round2(typeDiscount / l.qty);
-      const baseFeeUnit = round2(l.precoUnit - discountPerTicket);
-      const commUnit = round2(baseFeeUnit * (commPct / 100));
-      const chargedUnit = feeMode === 'repassar' ? round2(baseFeeUnit + commUnit) : baseFeeUnit;
-      chargedTotal += round2(chargedUnit * l.qty);
-      commTotal += round2(commUnit * l.qty);
-      discountApplied += round2(discountPerTicket * l.qty);
+    try {
+      const r = computeAudienceCart({
+        resolved: lines.map(l => ({
+          idx: l.idx, nome: l.nome, kind: l.kind,
+          quantity: l.qty, precoUnit: l.precoUnit, quantidadeTotal: l.quantidadeTotal,
+        })),
+        totalBase,
+        discountTotal: Math.min(couponDiscount, totalBase),
+        commissionPercent: Number(event.audience_commission_percent ?? 10),
+        feeMode,
+      });
+      return {
+        feeMode,
+        totalBase,
+        totalDiscount: r.discountApplied,
+        totalFee: r.commissionTotal,
+        totalCharged: r.chargedTotal,
+      };
+    } catch {
+      // Desconto > base (cupom inválido pro carrinho) — não quebra o render.
+      // A validação de cupom já previne; aqui é só defesa em profundidade.
+      return null;
     }
-    return {
-      feeMode,
-      totalBase,
-      totalDiscount: round2(discountApplied),
-      totalFee: round2(commTotal),
-      totalCharged: round2(chargedTotal),
-    };
   }, [event, lines, totalBase, couponDiscount]);
 
   // ─── Submit ────────────────────────────────────────────────────────────────
