@@ -239,6 +239,13 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-06-07 — Login OTP no webview do Instagram + CPF do pagador no Solo ✅ SHIPADO
+2 commits (`cab069d` + `7117d27`) pushados pra main. Só frontend — nenhuma edge function/migration.
+
+- **Login por e-mail (OTP) dentro de in-app browser** (`7117d27`): o OAuth do Google quebra no webview do Instagram/Facebook/TikTok (Google bloqueia WebView, erro 403 `disallowed_useragent`). Solução opção 1 (só no webview): `utils/inAppBrowser.ts` (detector puro por user-agent + 7 testes) detecta o webview e `Auth.tsx` esconde o Google + mostra fluxo OTP (email → `signInWithOtp` com `shouldCreateUser` → código 6 dígitos → `verifyOtp({type:'email'})`). Fora do webview NADA muda. Descobertas-chave: cliente em **flow implícito** → link mágico funciona cross-browser; `auth-email-hook` JÁ manda link+código no mesmo e-mail (não tocou no e-mail). **Pré-req:** "Email OTP" habilitado no Supabase Auth. Opção 2 (passwordless pra todos) = futuro. Detalhes em [[otp-login-webview-instagram-shipado]].
+- **CPF do pagador capturado no Solo** (`cab069d`): são 2 CPFs diferentes — bailarino (certificado, `elenco`) vs pagador (`profiles.cpf_cnpj`, fatura Asaas). Pagador é quase sempre o coreógrafo → auto-captura SÓ em Solo (1 bailarino); duo/trio/grupo coleta no pagamento. Modal de pagamento vira pré-preenchido + editável pra confirmar na 1ª cobrança (flag local `coreohub_cpf_confirmado_<id>`). Nunca cobra com CPF errado silenciosamente. Detalhes em [[cpf-captura-pagador-solo-shipado]].
+- **Memória nova:** [[terminal-juri-offline-vs-navegador]] — pauta aberta (não implementar): terminal de júri nativo offline vs navegador/PWA.
+
 ### 2026-05-30 — A19 Parte A: testes automatizados ✅ SHIPADO
 1 commit (`2f5181a`) + edge `create-audience-ticket` redeployada. Primeira rede de segurança automatizada do projeto. Detalhes em [[backlog-testes-automatizados-a19]].
 
