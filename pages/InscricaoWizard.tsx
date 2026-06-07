@@ -859,8 +859,28 @@ const InscricaoWizard: React.FC = () => {
       // conta um dia (LGPD). Padrão de fatura/recibo de e-commerce.
       const [{ data: { user: authUser } }, { data: profileSnap }] = await Promise.all([
         supabase.auth.getUser(),
-        supabase.from('profiles').select('full_name, whatsapp').eq('id', userId!).maybeSingle(),
+        supabase.from('profiles').select('full_name, whatsapp, cpf_cnpj').eq('id', userId!).maybeSingle(),
       ]);
+
+      // CPF do pagador — auto-captura SÓ em Solo. Num solo, o bailarino é, na
+      // prática, o próprio pagador, então adota o CPF dele no perfil pra a tela
+      // de pagamento já vir pré-preenchida (editável pra confirmar). Em duo/
+      // trio/grupo o pagador é o coreógrafo — que NÃO é necessariamente o 1º
+      // bailarino —, então não chuta: o pagamento coleta o CPF do responsável
+      // uma vez. Best-effort: não bloqueia a inscrição se falhar, e nunca
+      // sobrescreve um CPF de pagamento já salvo no perfil.
+      const isSoloInscricao = data.bailarinos.length === 1;
+      if (isSoloInscricao && !profileSnap?.cpf_cnpj) {
+        const soloCpf = onlyDigits(data.bailarinos[0]?.cpf ?? '');
+        if (soloCpf.length === 11) {
+          try {
+            await supabase
+              .from('profiles')
+              .update({ cpf_cnpj: soloCpf, document: soloCpf })
+              .eq('id', userId!);
+          } catch { /* best-effort — pagamento ainda coleta CPF se isto falhar */ }
+        }
+      }
 
       // 2) Cria registration. Status AGUARDANDO_PAGAMENTO — Checkout completa.
       const { data: reg, error: regErr } = await supabase

@@ -566,10 +566,20 @@ const MinhasCoreografias = () => {
       .maybeSingle();
     const cpf = prof?.cpf_cnpj?.replace(/\D/g, '') ?? '';
     setProfileCpf(prof?.cpf_cnpj ?? null);
-    if (!cpf) {
-      // Antes navegava pra /profile (tela com 8 campos) — atrito alto.
-      // Agora abre modal contextual com 1 campo. Refator 2026-05-25.
-      setCpfDraft('');
+
+    // O CPF pode ter sido auto-capturado do wizard (1º bailarino) — nesse caso
+    // o pagador precisa confirmar/editar antes da 1ª cobrança, porque quem paga
+    // (coreógrafo) nem sempre é o bailarino. Depois de confirmado uma vez, não
+    // pedimos de novo (flag local por usuário).
+    const confirmKey = `coreohub_cpf_confirmado_${user.id}`;
+    const jaConfirmado = (() => {
+      try { return localStorage.getItem(confirmKey) === '1'; } catch { return false; }
+    })();
+
+    if (!cpf || !jaConfirmado) {
+      // Vazio → digita do zero. Pré-capturado → vem preenchido pra confirmar.
+      // (Modal contextual de 1 campo, padrão Stripe/Sympla — refator 2026-05-25.)
+      setCpfDraft(cpf ? maskCpfCnpj(cpf) : '');
       setCpfError(null);
       setCpfModalOpen(true);
       return false;
@@ -602,6 +612,9 @@ const MinhasCoreografias = () => {
       if (upErr) throw upErr;
       // Atualiza state local pra banner sumir imediatamente sem refetch.
       setProfileCpf(digits);
+      // Marca como confirmado pelo pagador — não reabre o modal nas próximas
+      // compras (a captura automática do wizard já foi revisada por um humano).
+      try { localStorage.setItem(`coreohub_cpf_confirmado_${user.id}`, '1'); } catch { /* noop */ }
       setCpfModalOpen(false);
     } catch (e: any) {
       setCpfError(e.message ?? 'Erro ao salvar CPF.');
@@ -1764,10 +1777,12 @@ const MinhasCoreografias = () => {
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-[#ff0068]">Passo final</p>
                   <h3 id="cpf-modal-title" className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white mt-1 italic">
-                    Adicionar CPF
+                    {cpfDraft ? 'Confirme o CPF do pagador' : 'Adicionar CPF'}
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed normal-case">
-                    Necessário pra gerar a fatura Asaas. Salvamos no seu perfil — não pedimos de novo na próxima compra.
+                    {cpfDraft
+                      ? 'Esse CPF vai na fatura como pagador. Confirme, ou ajuste se quem paga for outra pessoa.'
+                      : 'Necessário pra gerar a fatura Asaas. Salvamos no seu perfil — não pedimos de novo na próxima compra.'}
                   </p>
                 </div>
                 {!cpfSaving && (
