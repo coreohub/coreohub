@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
 import AsaasBadge from '../components/AsaasBadge';
 import { suggestEmail } from '../utils/mailcheck';
+import { isInAppBrowser } from '../utils/inAppBrowser';
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -94,6 +95,19 @@ const Auth = () => {
   const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
   const [recoveryLoading, setRecoveryLoading] = useState(false);
   const passwordRef = useRef<HTMLInputElement>(null);
+
+  // Detecção de in-app browser (Instagram/Facebook/TikTok): o OAuth do Google
+  // é bloqueado nesses WebViews (erro 403 disallowed_useragent). Dentro deles
+  // escondemos o Google e oferecemos login por e-mail (OTP + link mágico), que
+  // funciona em qualquer navegador. Fora do webview nada muda.
+  const isInApp = isInAppBrowser();
+  const [useOtp, setUseOtp] = useState(isInApp);
+  const [otpStep, setOtpStep] = useState<'idle' | 'sent'>('idle');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpEmail, setOtpEmail] = useState('');
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [otpResendIn, setOtpResendIn] = useState(0);
 
   // Quando o login vem de um deep link de festival, mostra contexto do evento
   // pra reduzir confusão ("estou me inscrevendo em qual mostra?")
@@ -358,6 +372,69 @@ const Auth = () => {
     }
   };
 
+  // Cooldown do botão de reenvio de código.
+  useEffect(() => {
+    if (otpResendIn <= 0) return;
+    const t = setTimeout(() => setOtpResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [otpResendIn]);
+
+  /**
+   * Envia o e-mail de acesso (OTP). O auth-email-hook já manda link mágico +
+   * código de 6 dígitos no MESMO e-mail. shouldCreateUser:true → serve login
+   * E cadastro (bailarino novo vindo do Instagram não precisa criar senha).
+   * emailRedirectTo preserva o festival de destino quando o link é aberto no
+   * navegador padrão do celular (escapando da webview do Instagram).
+   */
+  const handleSendOtp = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    setOtpError(null);
+    const mail = email.trim();
+    if (!mail) { setOtpError('Digite seu e-mail.'); return; }
+    setOtpLoading(true);
+    try {
+      const redirectUrl = `${window.location.origin}/login${redirectTo ? `?redirectTo=${encodeURIComponent(redirectTo)}` : ''}`;
+      const { error } = await supabase.auth.signInWithOtp({
+        email: mail,
+        options: { emailRedirectTo: redirectUrl, shouldCreateUser: true },
+      });
+      if (error) throw error;
+      setOtpEmail(mail);
+      setOtpStep('sent');
+      setOtpResendIn(45);
+    } catch (err: any) {
+      setOtpError(err.message ?? 'Não foi possível enviar o e-mail. Tente de novo.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  /** Verifica o código de 6 dígitos. Sucesso → SIGNED_IN listener navega. */
+  const handleVerifyOtp = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    setOtpError(null);
+    const token = otpCode.replace(/\D/g, '');
+    if (token.length !== 6) { setOtpError('O código tem 6 dígitos.'); return; }
+    setOtpLoading(true);
+    try {
+      const { error } = await supabase.auth.verifyOtp({ email: otpEmail, token, type: 'email' });
+      if (error) throw error;
+      setIsAuthenticating(true);
+      // onAuthStateChange (SIGNED_IN) cuida do redirect — mantém o spinner.
+      // Safety (mesmo padrão do handleAuth): se o navigate não disparar
+      // (RLS/redirect loop), libera o spinner em 5s pra não travar o usuário.
+      setTimeout(() => { setOtpLoading(false); setIsAuthenticating(false); }, 5000);
+    } catch (err: any) {
+      const raw = err.message ?? '';
+      setOtpError(
+        /expire|invalid|token/i.test(raw)
+          ? 'Código inválido ou expirado. Peça um novo.'
+          : (raw || 'Não foi possível validar o código.'),
+      );
+      setOtpLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-6 relative overflow-hidden font-sans transition-colors">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,0,104,0.1),transparent_70%)]" />
@@ -423,10 +500,10 @@ const Auth = () => {
           <div className="space-y-8">
             <div className="text-center space-y-2">
               <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                {authMode === 'login' ? 'Acesse sua conta' : 'Comece sua Jornada'}
+                {useOtp ? 'Entrar com e-mail' : authMode === 'login' ? 'Acesse sua conta' : 'Comece sua Jornada'}
               </h2>
               <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest">
-                {authMode === 'login' ? 'Entre com seu e-mail e senha' : 'Crie seu perfil de acesso'}
+                {useOtp ? 'Sem senha — enviamos um link e um código' : authMode === 'login' ? 'Entre com seu e-mail e senha' : 'Crie seu perfil de acesso'}
               </p>
             </div>
 
@@ -454,6 +531,129 @@ const Auth = () => {
               )}
             </AnimatePresence>
 
+            {/* ── Login por e-mail (OTP) — caminho dentro de webview ── */}
+            {useOtp && (
+              <div className="space-y-5">
+                {otpStep === 'idle' ? (
+                  <form onSubmit={handleSendOtp} className="space-y-5">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-4">E-mail</label>
+                      <div className="relative group">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-[#ff0068] transition-colors">
+                          <Mail size={16} />
+                        </div>
+                        <input
+                          type="email"
+                          required
+                          value={email}
+                          onChange={(e) => handleEmailChange(e.target.value)}
+                          placeholder="seu@email.com"
+                          className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl py-3 pl-12 pr-6 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-[#ff0068]/50 focus:bg-white dark:focus:bg-white/10 transition-all font-bold shadow-sm"
+                        />
+                      </div>
+                      {emailSuggestion && (
+                        <button
+                          type="button"
+                          onClick={() => { setEmail(emailSuggestion); setEmailSuggestion(null); }}
+                          className="ml-4 text-[10px] text-amber-600 dark:text-amber-400 font-bold hover:underline text-left"
+                        >
+                          Você quis dizer <span className="text-[#ff0068] font-black">{emailSuggestion}</span>?
+                        </button>
+                      )}
+                    </div>
+
+                    {otpError && (
+                      <div className="bg-rose-500/10 border border-rose-500/20 p-3 rounded-2xl text-rose-500 text-[10px] font-black uppercase tracking-widest text-center">
+                        {otpError}
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={otpLoading || isAuthenticating}
+                      className="w-full group relative flex items-center justify-center gap-3 bg-[#ff0068] text-white font-black uppercase tracking-widest text-[10px] py-3.5 rounded-2xl transition-all hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(255,0,104,0.4)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {otpLoading ? (
+                        <><Loader2 className="animate-spin" size={18} /><span>Enviando...</span></>
+                      ) : (
+                        <><span>Receber acesso por e-mail</span><ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" /></>
+                      )}
+                    </button>
+
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center font-bold normal-case leading-relaxed px-2">
+                      Enviamos um link de acesso e um código. Sem senha pra criar ou lembrar.
+                    </p>
+                  </form>
+                ) : (
+                  <form onSubmit={handleVerifyOtp} className="space-y-5">
+                    <div className="text-center space-y-2">
+                      <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 mb-1">
+                        <Mail size={20} />
+                      </div>
+                      <p className="text-sm font-black text-slate-900 dark:text-white normal-case">
+                        Enviamos um e-mail pra<br /><span className="text-[#ff0068]">{otpEmail}</span>
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold normal-case leading-relaxed px-2">
+                        Toque em <strong>Entrar agora</strong> no e-mail pra logar direto, ou digite o código de 6 dígitos abaixo.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-center block">Código</label>
+                      <input
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        pattern="[0-9]*"
+                        maxLength={6}
+                        value={otpCode}
+                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="••••••"
+                        autoFocus
+                        className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl py-3.5 px-6 text-center text-2xl font-black tracking-[0.5em] text-slate-900 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-700 focus:outline-none focus:border-[#ff0068]/50 focus:bg-white dark:focus:bg-white/10 transition-all shadow-sm"
+                      />
+                    </div>
+
+                    {otpError && (
+                      <div className="bg-rose-500/10 border border-rose-500/20 p-3 rounded-2xl text-rose-500 text-[10px] font-black uppercase tracking-widest text-center">
+                        {otpError}
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={otpLoading || isAuthenticating || otpCode.length < 6}
+                      className="w-full group relative flex items-center justify-center gap-3 bg-[#ff0068] text-white font-black uppercase tracking-widest text-[10px] py-3.5 rounded-2xl transition-all hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(255,0,104,0.4)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {otpLoading || isAuthenticating ? (
+                        <><Loader2 className="animate-spin" size={18} /><span>{isAuthenticating ? 'Entrando...' : 'Validando...'}</span></>
+                      ) : (
+                        <><span>Entrar</span><ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" /></>
+                      )}
+                    </button>
+
+                    <div className="flex items-center justify-between px-1">
+                      <button
+                        type="button"
+                        onClick={() => { setOtpStep('idle'); setOtpCode(''); setOtpError(null); }}
+                        className="text-[10px] font-bold text-slate-400 hover:text-[#ff0068] transition-colors"
+                      >
+                        Trocar e-mail
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSendOtp}
+                        disabled={otpResendIn > 0 || otpLoading}
+                        className="text-[10px] font-bold text-slate-400 hover:text-[#ff0068] transition-colors disabled:opacity-50"
+                      >
+                        {otpResendIn > 0 ? `Reenviar em ${otpResendIn}s` : 'Reenviar código'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
+
+            {!useOtp && (
             <form onSubmit={handleAuth} className="space-y-5">
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-4">E-mail</label>
@@ -520,8 +720,12 @@ const Auth = () => {
                 </button>
               </div>
             </form>
+            )}
 
-            {/* Divisor + Login social */}
+            {/* Divisor + Login social — escondido dentro de webview (Instagram/
+                Facebook/TikTok) porque o OAuth do Google quebra em in-app
+                browser (403 disallowed_useragent). Lá usamos OTP por e-mail. */}
+            {!isInApp && !useOtp && (
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
@@ -543,18 +747,33 @@ const Auth = () => {
                 Continuar com Google
               </button>
             </div>
+            )}
 
             <div className="pt-4 flex flex-col items-center gap-3">
-              <button
-                onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
-                className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-[#ff0068] transition-colors"
-              >
-                {authMode === 'login' ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Entrar'}
-              </button>
+              {/* Dentro de webview (Instagram/Facebook/TikTok) o Google quebra,
+                  então alternamos entre OTP por e-mail e e-mail+senha. */}
+              {isInApp && (
+                <button
+                  type="button"
+                  onClick={() => { setUseOtp((v) => !v); setOtpStep('idle'); setOtpCode(''); setOtpError(null); }}
+                  className="text-[10px] font-black uppercase tracking-widest text-[#ff0068] hover:underline transition-colors"
+                >
+                  {useOtp ? 'Prefiro entrar com e-mail e senha' : 'Entrar sem senha (código por e-mail)'}
+                </button>
+              )}
+
+              {!useOtp && (
+                <button
+                  onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
+                  className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-[#ff0068] transition-colors"
+                >
+                  {authMode === 'login' ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Entrar'}
+                </button>
+              )}
 
               {/* Esqueci a senha — magic link como recovery (não signup).
                   Padrão Stripe Q2.6 da pesquisa de mercado. */}
-              {authMode === 'login' && (
+              {!useOtp && authMode === 'login' && (
                 <button
                   type="button"
                   onClick={handlePasswordRecovery}
