@@ -563,7 +563,7 @@ const Auth = () => {
                     </div>
 
                     {otpError && (
-                      <div className="bg-rose-500/10 border border-rose-500/20 p-3 rounded-2xl text-rose-500 text-[10px] font-black uppercase tracking-widest text-center">
+                      <div role="alert" className="bg-rose-500/10 border border-rose-500/20 p-3 rounded-2xl text-rose-500 text-[10px] font-black uppercase tracking-widest text-center">
                         {otpError}
                       </div>
                     )}
@@ -599,8 +599,9 @@ const Auth = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-center block">Código</label>
+                      <label htmlFor="otp-code" className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-center block">Código</label>
                       <input
+                        id="otp-code"
                         inputMode="numeric"
                         autoComplete="one-time-code"
                         pattern="[0-9]*"
@@ -614,7 +615,7 @@ const Auth = () => {
                     </div>
 
                     {otpError && (
-                      <div className="bg-rose-500/10 border border-rose-500/20 p-3 rounded-2xl text-rose-500 text-[10px] font-black uppercase tracking-widest text-center">
+                      <div role="alert" className="bg-rose-500/10 border border-rose-500/20 p-3 rounded-2xl text-rose-500 text-[10px] font-black uppercase tracking-widest text-center">
                         {otpError}
                       </div>
                     )}
