@@ -455,19 +455,19 @@ const Auth = () => {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md z-10"
       >
-        <div className="text-center mb-10">
+        <div className="text-center mb-8">
           <motion.div
             initial={{ scale: 0.8, rotate: -10 }}
             animate={{ scale: 1, rotate: 0 }}
-            className="inline-flex items-center justify-center mb-4"
+            className="inline-flex items-center justify-center mb-3"
           >
-            <img src="/coreohub-avatar.png" alt="CoreoHub" className="w-20 h-20 drop-shadow-[0_0_20px_rgba(255,0,104,0.5)]" />
+            <img src="/coreohub-avatar.png" alt="CoreoHub" className="w-16 h-16 drop-shadow-[0_0_20px_rgba(255,0,104,0.5)]" />
           </motion.div>
 
-          <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter uppercase italic leading-none">
+          <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase italic leading-none">
             Coreo<span className="text-[#ff0068]">Hub</span>
           </h1>
-          <p className="text-slate-400 dark:text-slate-500 font-black text-[10px] uppercase tracking-[0.4em] mt-4">
+          <p className="text-slate-400 dark:text-slate-500 font-black text-[10px] uppercase tracking-[0.4em] mt-3">
             Gestão Inteligente para Festivais de Dança
           </p>
         </div>
