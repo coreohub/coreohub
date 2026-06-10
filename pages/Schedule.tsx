@@ -35,6 +35,7 @@ interface Registration {
   nome_coreografia: string;
   estudio: string;
   status: string;
+  status_pagamento?: string;
   status_trilha?: string;
   trilha_url?: string;
   ordem_apresentacao?: number;
@@ -44,6 +45,7 @@ interface Registration {
   categoria?: string;
   classificacao_final?: string;
   bloco_id?: string | null;
+  excluded_from_schedule?: boolean;
 }
 
 interface Bloco {
@@ -173,13 +175,14 @@ interface SortableRowProps {
   onGenerateOne: (reg: Registration) => void;
   onAnnounce: (reg: Registration) => void;
   onPrepare: (reg: Registration) => void;
+  onExclude: (regId: string) => void;
 }
 
 const SortableRow: React.FC<SortableRowProps> = ({
   reg, index, conflicts,
   audioSet, saidaAtiva, isLive, isGenerating, batchInProgress, updatingLive, currentVoice,
   blocos, matchesSearch, recentlyMoved, onOpenBlocoPicker,
-  onGenerateOne, onAnnounce, onPrepare,
+  onGenerateOne, onAnnounce, onPrepare, onExclude,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: reg.id });
@@ -398,6 +401,20 @@ const SortableRow: React.FC<SortableRowProps> = ({
           {isLive ? <Radio size={11} /> : null}
           {isLive ? 'Ao Vivo' : 'Iniciar'}
         </button>
+        {/* Remover do cronograma — não reprova nem estorna, só tira da grade.
+            Reincluível na seção "Removidas". */}
+        <button
+          onClick={() => {
+            if (confirm(`Remover "${reg.nome_coreografia}" do cronograma?\n\nA inscrição e o pagamento continuam válidos — você pode reincluir depois na seção "Removidas".`)) {
+              onExclude(reg.id);
+            }
+          }}
+          onPointerDown={e => e.stopPropagation()}
+          className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all"
+          title="Remover do cronograma (mantém inscrição e pagamento)"
+        >
+          <X size={14} />
+        </button>
       </div>
     </div>
   );
@@ -406,6 +423,10 @@ const SortableRow: React.FC<SortableRowProps> = ({
 // ---------- main component ----------
 const Schedule = () => {
   const [registrations, setRegistrations] = useState<Registration[]>([]);
+  // Coreografias removidas do cronograma pelo produtor (inscrição/pagamento
+  // seguem válidos). Restauráveis via seção "Removidas".
+  const [excludedRegs, setExcludedRegs] = useState<Registration[]>([]);
+  const [showExcluded, setShowExcluded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -504,15 +525,23 @@ const Schedule = () => {
   const fetchData = async (eventId: string | null) => {
     setIsLoading(true);
     try {
+      // Cronograma mostra automaticamente toda inscrição PAGA (status_pagamento
+      // APROVADO/CONFIRMADO — cobre eventos gratuitos, que recebem APROVADO sem
+      // Asaas) OU já aprovada manualmente (status='APROVADA', não perde dado
+      // histórico). O webhook seta status_pagamento via service_role, então
+      // aparece sozinha sem o produtor aprovar uma a uma. Excluídas são
+      // separadas em memória pra alimentar a seção "Removidas" (restaurável).
       let regsQuery = supabase
         .from('registrations')
         .select('*')
-        .eq('status', 'APROVADA')
+        .or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO')
         .order('ordem_apresentacao', { ascending: true });
 
       if (eventId) regsQuery = regsQuery.eq('event_id', eventId);
 
-      const { data: regs } = await regsQuery;
+      const { data: allQualifying } = await regsQuery;
+      const regs = (allQualifying || []).filter((r: Registration) => !r.excluded_from_schedule);
+      setExcludedRegs((allQualifying || []).filter((r: Registration) => r.excluded_from_schedule));
 
       const { data: cfg } = await supabase
         .from('configuracoes')
@@ -1044,6 +1073,56 @@ const Schedule = () => {
     const blocoNome = blocoId ? (blocos.find(b => b.id === blocoId)?.name ?? 'bloco') : 'Sem bloco';
     setSavedMsg(`Movida pra ${blocoNome}`);
     setTimeout(() => setSavedMsg(''), 2200);
+  };
+
+  /** Remove a coreografia do cronograma (não reprova nem estorna). Move pra
+      seção "Removidas", de onde pode ser reincluída. `.select('id')` detecta
+      bloqueio de RLS (padrão do projeto — UPDATE silencioso retorna 0 rows). */
+  const handleExcludeFromSchedule = async (regId: string) => {
+    const reg = registrations.find(r => r.id === regId);
+    if (!reg) return;
+    // Optimistic
+    setRegistrations(prev => prev.filter(r => r.id !== regId));
+    setExcludedRegs(prev => [...prev, { ...reg, excluded_from_schedule: true }]);
+    const { data, error } = await supabase
+      .from('registrations')
+      .update({ excluded_from_schedule: true })
+      .eq('id', regId)
+      .select('id');
+    if (error || !data?.length) {
+      console.error('[Schedule] falha ao remover do cronograma', error);
+      setExcludedRegs(prev => prev.filter(r => r.id !== regId));
+      setRegistrations(prev => [...prev, reg]);
+      setSavedMsg('Falha ao remover. Tente de novo.');
+      setTimeout(() => setSavedMsg(''), 3000);
+      return;
+    }
+    setSavedMsg(`"${reg.nome_coreografia}" removida do cronograma`);
+    setTimeout(() => setSavedMsg(''), 2600);
+  };
+
+  /** Reinclui no cronograma uma coreografia que tinha sido removida. */
+  const handleRestoreToSchedule = async (regId: string) => {
+    const reg = excludedRegs.find(r => r.id === regId);
+    if (!reg) return;
+    // Optimistic
+    setExcludedRegs(prev => prev.filter(r => r.id !== regId));
+    setRegistrations(prev => [...prev, { ...reg, excluded_from_schedule: false }]);
+    const { data, error } = await supabase
+      .from('registrations')
+      .update({ excluded_from_schedule: false })
+      .eq('id', regId)
+      .select('id');
+    if (error || !data?.length) {
+      console.error('[Schedule] falha ao reincluir no cronograma', error);
+      setRegistrations(prev => prev.filter(r => r.id !== regId));
+      setExcludedRegs(prev => [...prev, reg]);
+      setSavedMsg('Falha ao reincluir. Tente de novo.');
+      setTimeout(() => setSavedMsg(''), 3000);
+      return;
+    }
+    setSavedMsg(`"${reg.nome_coreografia}" voltou pro cronograma`);
+    setTimeout(() => setSavedMsg(''), 2600);
   };
 
   const handleDragEnd = async (event: any) => {
@@ -1615,10 +1694,12 @@ const Schedule = () => {
           </div>
           <div className="text-center">
             <p className="text-sm font-black uppercase tracking-tight text-slate-400 dark:text-white/40">
-              Nenhuma coreografia aprovada
+              {excludedRegs.length > 0 ? 'Todas removidas do cronograma' : 'Nenhuma coreografia ainda'}
             </p>
             <p className="text-[9px] font-bold text-slate-300 dark:text-white/20 mt-1">
-              Aprove inscrições em "Inscrições" para que apareçam aqui
+              {excludedRegs.length > 0
+                ? 'Reinclua alguma na seção "Removidas" abaixo'
+                : 'Assim que uma inscrição for paga, ela aparece aqui automaticamente'}
             </p>
           </div>
         </div>
@@ -1666,6 +1747,7 @@ const Schedule = () => {
                   onGenerateOne={handleGenerateOne}
                   onAnnounce={handleAnnounce}
                   onPrepare={handlePrepare}
+                  onExclude={handleExcludeFromSchedule}
                 />
               ));
 
@@ -1720,6 +1802,45 @@ const Schedule = () => {
             return <div className="space-y-2">{sections}</div>;
           })()}
         </DndContext>
+      )}
+
+      {/* ── Removidas do cronograma (restauráveis) ── */}
+      {excludedRegs.length > 0 && !isLoading && (
+        <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] overflow-hidden">
+          <button
+            onClick={() => setShowExcluded(s => !s)}
+            className="w-full flex items-center justify-between gap-2 px-4 py-3 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+          >
+            <span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+              <X size={12} />
+              {excludedRegs.length} removida{excludedRegs.length !== 1 ? 's' : ''} do cronograma
+            </span>
+            {showExcluded ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
+          </button>
+          {showExcluded && (
+            <div className="px-3 pb-3 space-y-2">
+              {excludedRegs.map(reg => (
+                <div key={reg.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-white/8 bg-white dark:bg-white/5">
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-[11px] font-black uppercase tracking-tight truncate text-slate-700 dark:text-slate-200">
+                      {reg.nome_coreografia}
+                    </h4>
+                    <span className="text-[9px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest truncate">
+                      {reg.estudio}{reg.categoria ? ` · ${reg.categoria}` : ''}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleRestoreToSchedule(reg.id)}
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest bg-[#ff0068]/10 text-[#ff0068] hover:bg-[#ff0068]/20 active:scale-95 transition-all"
+                    title="Reincluir no cronograma"
+                  >
+                    <Plus size={11} /> Reincluir
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* ── ZIP info footer ── */}
