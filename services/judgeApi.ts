@@ -109,6 +109,8 @@ export interface SubmitEvaluationPayload {
   created_at: string;
   audit_log: any;
   highlights?: JudgeHighlight[];
+  /** Comentário escrito opcional do jurado (complementa o áudio). */
+  feedback_text?: string | null;
   /** Phase 5: idempotência. Outbox mantém o mesmo UUID v4 em todos os retries. */
   client_uuid?: string;
 }

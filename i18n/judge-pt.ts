@@ -106,6 +106,12 @@ const judgePt = {
   'criteria.average': 'média',
   'criteria.nominationsLabel': 'Indicações',
 
+  // Comentário escrito (modo competitivo — opcional, complementa o áudio)
+  'comment.toggle': 'Comentário escrito (opcional)',
+  'comment.hide': 'Ocultar comentário',
+  'comment.placeholder': 'Escreva um comentário para o inscrito (opcional)...',
+  'comment.filled': 'Comentário escrito',
+
   // Submitted state
   'submitted.title': 'Nota Enviada',
   'submitted.subtitle': 'Campos bloqueados para edição',

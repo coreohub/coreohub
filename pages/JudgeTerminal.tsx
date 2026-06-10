@@ -7,7 +7,7 @@ import {
   Shield, AlertTriangle, ClipboardCheck,
   Zap, Crown, Users, Award, Shirt,
   Monitor, Tablet, Smartphone, LogOut,
-  MoreVertical, FastForward,
+  MoreVertical, FastForward, MessageSquare,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useT, useLocale, setLocale } from '../hooks/useT';
@@ -330,8 +330,10 @@ const JudgeTerminal = () => {
   /* ── Tie detection ── */
   const [tieWarning,       setTieWarning]       = useState<string | null>(null);
 
-  /* ── Avaliada (non-competitive) feedback text ── */
+  /* ── Feedback text — Avaliada usa como canal principal; modo competitivo
+        usa como comentário escrito opcional (complementa o áudio). ── */
   const [feedbackText, setFeedbackText] = useState('');
+  const [showComment, setShowComment] = useState(false);
   const [prevGenreScores,  setPrevGenreScores]   = useState<number[]>([]);
 
   /* ── helpers ── */
@@ -358,6 +360,15 @@ const JudgeTerminal = () => {
     ? (feedbackText.trim().length > 0 || isRecording || rollingChunksRef.current.length > 0)
     : activeCriteria.length > 0 && activeCriteria.every(c => scores[c.name] && scores[c.name] !== '');
   const isLastField  = activeCriteria.findIndex(c => c.name === activeField) === activeCriteria.length - 1;
+  // Campo só está "pronto pra avançar" quando tem nota completa.
+  // BASE_10: exige 2+ chars (ex: '5.5', '10', '5.') — impede avanço com '5' solto,
+  //   já que o auto-decimal só dispara no 2º dígito (digitar só '5' deixa o campo cru).
+  // BASE_100: qualquer 1+ dígito basta (inteiros).
+  const isCurrentFieldReady = (() => {
+    const cur = scores[activeField] || '';
+    if (scoreScale === 'BASE_100') return cur.length >= 1;
+    return cur.length >= 2 && cur !== '' && !cur.endsWith('.');
+  })();
 
   const initScores = (cs: CriterionWithWeight[]) => {
     const s: Record<string, string> = {};
@@ -658,6 +669,7 @@ const JudgeTerminal = () => {
     setMicAttempted(false);
     setTieWarning(null);
     setFeedbackText('');
+    setShowComment(false);
     setCurrentIndex(liveIdx);
   }, [liveRegistrationId, isSubmitted, filteredSchedule, currentPerformance?.id, currentIndex]);
 
@@ -887,8 +899,11 @@ const JudgeTerminal = () => {
           candidate = key;
         } else if (cur === '1' && key === '0') {
           candidate = '10';
-        } else if (cur.length === 1 && cur !== '1') {
-          candidate = cur + '.' + key;   // auto-insert decimal after first digit ≠ 1
+        } else if (cur.length === 1) {
+          // Auto-insere decimal após o 1º dígito. Pra '1', qualquer dígito 1-9
+          // forma '1.X' (já que '1X' > 10 seria inválido); só '1'+'0' vira '10'
+          // (tratado acima). Antes o '1' ficava preso esperando 2º dígito.
+          candidate = cur + '.' + key;
         } else {
           candidate = cur + key;
         }
@@ -904,6 +919,9 @@ const JudgeTerminal = () => {
   const handleNext = () => {
     if (isSubmitted) return;
     handleActivity();
+    // Não avança sem nota completa no campo atual (impede Enter/clique acidental
+    // pular um quesito com dígito solto). Pisca o display pra sinalizar.
+    if (!isCurrentFieldReady) { triggerFlash(); return; }
     const idx = activeCriteria.findIndex(c => c.name === activeField);
     if (idx < activeCriteria.length - 1) setActiveField(activeCriteria[idx + 1].name);
   };
@@ -994,6 +1012,7 @@ const JudgeTerminal = () => {
         scores:          numScores,
         weighted_avg:    weightedAvg,
         criteria_used:   activeCriteria,
+        feedback_text:   feedbackText.trim() || null,
       };
 
       const evalRow = {
@@ -1005,6 +1024,7 @@ const JudgeTerminal = () => {
         submitted_at:           now,
         created_at:             now,
         audit_log:              auditEntry,
+        feedback_text:          feedbackText.trim() || null,
       };
       if (judgeSession) {
         await enqueueEvaluation({ evalPayload: evalRow, audioBlob });
@@ -1125,6 +1145,7 @@ const JudgeTerminal = () => {
     setMicAttempted(false);
     setTieWarning(null);
     setFeedbackText('');
+    setShowComment(false);
     setCurrentIndex(prev => prev + 1);
   };
 
@@ -1147,6 +1168,7 @@ const JudgeTerminal = () => {
     setMicAttempted(false);
     setTieWarning(null);
     setFeedbackText('');
+    setShowComment(false);
     setCurrentIndex(idx);
     setJumpToInput('');
     setJumpToError(null);
@@ -1923,6 +1945,56 @@ const JudgeTerminal = () => {
                   </div>
                 );
               })()}
+
+              {/* Comentário escrito (opcional) — colapsado por padrão pra não
+                  ocupar altura no layout compacto. Complementa o áudio, não o
+                  substitui. Expande inline; a section é overflow-y-auto. */}
+              {!isAvaliada && (
+                <div className="px-2 pb-2 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950">
+                  {!showComment ? (
+                    <button
+                      onClick={() => { if (!isSubmitted) { setShowComment(true); handleActivity(); } }}
+                      disabled={isSubmitted}
+                      className={`w-full flex items-center justify-center gap-2 py-2 mt-2 rounded-xl border border-dashed font-black uppercase tracking-widest text-[9px] transition-all
+                        ${isSubmitted
+                          ? 'border-slate-200 dark:border-slate-700 text-slate-400 opacity-60 cursor-not-allowed'
+                          : feedbackText.trim()
+                            ? 'border-emerald-300 dark:border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-500/5'
+                            : 'border-slate-300 dark:border-white/20 text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-white/40 active:scale-[0.98]'
+                        }`}
+                    >
+                      {feedbackText.trim()
+                        ? <><Check size={12} /> {t('comment.filled')}</>
+                        : <><MessageSquare size={12} /> {t('comment.toggle')}</>
+                      }
+                    </button>
+                  ) : (
+                    <div className="mt-2 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                          <MessageSquare size={11} /> {t('comment.toggle')}
+                        </span>
+                        <button
+                          onClick={() => setShowComment(false)}
+                          className="text-[8px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                        >
+                          {t('comment.hide')}
+                        </button>
+                      </div>
+                      <textarea
+                        value={feedbackText}
+                        onChange={e => { setFeedbackText(e.target.value); handleActivity(); }}
+                        disabled={isSubmitted}
+                        placeholder={t('comment.placeholder')}
+                        rows={3}
+                        className={`w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-[#ff0068]/20 resize-none transition-all ${
+                          isSubmitted ? 'opacity-60 cursor-not-allowed' : ''
+                        }`}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </section>
 
             {/* ══ NUMPAD PANEL — compact, right on tablet ══ */}
@@ -2024,9 +2096,9 @@ const JudgeTerminal = () => {
                     ) : (
                       <button
                         onClick={handleNext}
-                        disabled={isLastField}
+                        disabled={isLastField || !isCurrentFieldReady}
                         className={`rounded-lg md:rounded-xl flex items-center justify-center transition-all touch-manipulation
-                          ${isLastField
+                          ${isLastField || !isCurrentFieldReady
                             ? 'bg-slate-100 dark:bg-slate-800 text-slate-300 dark:text-slate-600 border border-slate-200 dark:border-slate-700'
                             : 'bg-[#ff0068] hover:bg-[#d4005a] text-white shadow-lg shadow-[#ff0068]/20 active:scale-95'
                           }`}
@@ -2090,9 +2162,9 @@ const JudgeTerminal = () => {
                     return (
                       <button
                         onClick={handleNext}
-                        disabled={isLastField}
+                        disabled={isLastField || !isCurrentFieldReady}
                         className={`shrink-0 w-full flex items-center justify-center gap-2 py-2 md:py-3 rounded-lg md:rounded-xl font-black text-xs uppercase tracking-widest transition-all touch-manipulation
-                          ${isLastField
+                          ${isLastField || !isCurrentFieldReady
                             ? 'bg-slate-100 dark:bg-slate-800 text-slate-300 dark:text-slate-600 border border-slate-200 dark:border-slate-700 cursor-not-allowed'
                             : 'bg-[#ff0068] hover:bg-[#d4005a] text-white shadow-lg shadow-[#ff0068]/20 active:scale-95'
                           }`}

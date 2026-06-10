@@ -104,6 +104,12 @@ const judgeEs: Record<JudgeDictKey, string> = {
   'criteria.average': 'promedio',
   'criteria.nominationsLabel': 'Nominaciones',
 
+  // Comentario escrito (modo competitivo — opcional, complementa el audio)
+  'comment.toggle': 'Comentario escrito (opcional)',
+  'comment.hide': 'Ocultar comentario',
+  'comment.placeholder': 'Escribe un comentario para el inscrito (opcional)...',
+  'comment.filled': 'Comentario escrito',
+
   // Submitted state
   'submitted.title': 'Nota Enviada',
   'submitted.subtitle': 'Campos bloqueados para edición',

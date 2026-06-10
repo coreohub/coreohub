@@ -341,6 +341,9 @@ Deno.serve(async (req) => {
       submitted_at:           payload.submitted_at ?? new Date().toISOString(),
       created_at:             payload.created_at ?? new Date().toISOString(),
       audit_log:              payload.audit_log ?? null,
+      // Comentário escrito opcional do jurado (complementa o áudio). Inscrito
+      // lê em /meus-resultados; produtor vê via audit_log.feedback_text.
+      feedback_text:          payload.feedback_text ?? null,
       // Phase 5: idempotência. Outbox do jurado mantém o mesmo UUID em todos
       // os retries; UNIQUE INDEX no banco garante dedupe.
       client_uuid:            payload.client_uuid ?? null,

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { UserRole } from '../types';
-import { Trophy, Star, Music, Loader2, Volume2, Award, ChevronDown, ChevronUp, Search } from 'lucide-react';
+import { Trophy, Star, Music, Loader2, Volume2, Award, ChevronDown, ChevronUp, Search, Download, FileText, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface MyResultsProps {
@@ -24,8 +24,14 @@ interface MyRegistration {
     scores: Record<string, number>;
     final: number;
     audio_url?: string;
+    feedback_text?: string | null;
   }[];
 }
+
+const slugify = (s: string) =>
+  (s || 'arquivo')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'arquivo';
 
 const ScoreBadge = ({ score }: { score: number }) => {
   const color = score >= 9
@@ -50,6 +56,8 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
   const [error, setError] = useState<string | null>(null);
   // UX#12: ref único pro Audio pra cleanup correto (antes vazava ao trocar de áudio rapidamente).
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [downloadingAudio, setDownloadingAudio] = useState<string | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchMyResults = async () => {
@@ -86,6 +94,7 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
               scores: e.scores || {},
               final: Number(e.final_weighted_average) || 0,
               audio_url: e.audio_url,
+              feedback_text: e.feedback_text ?? null,
             }));
 
             return {
@@ -140,6 +149,149 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
     audioRef.current = audio;
     audio.play().catch(() => setPlayingAudio(null));
     audio.onended = () => setPlayingAudio(null);
+  };
+
+  /* Download do áudio do jurado. O atributo `download` é ignorado em URLs
+     cross-origin (Supabase Storage), então buscamos o blob e geramos object URL. */
+  const downloadAudio = async (url: string, regName: string, judgeName: string) => {
+    setDownloadingAudio(url);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('fetch falhou');
+      const blob = await res.blob();
+      const ext = (url.split('.').pop() || 'webm').split('?')[0];
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = `feedback-${slugify(regName)}-${slugify(judgeName)}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+    } catch (err) {
+      console.error('Erro ao baixar áudio:', err);
+      setError('Falha ao baixar o áudio. Tente novamente.');
+    } finally {
+      setDownloadingAudio(null);
+    }
+  };
+
+  /* Gera PDF do scoresheet (notas por quesito + comentário escrito) de uma
+     inscrição. Inclui todos os jurados. Disponível quando o resultado já foi
+     publicado (contém notas). Padrão CompetitionSuite/DanceBug. */
+  const downloadPdf = async (reg: MyRegistration) => {
+    setGeneratingPdf(reg.id);
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      const autoTable = (await import('jspdf-autotable')).default;
+
+      const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+
+      // Cabeçalho
+      doc.setFillColor(255, 0, 104);
+      doc.rect(0, 0, pageWidth, 42, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(22);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Folha de Avaliação', pageWidth / 2, 20, { align: 'center' });
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      doc.text(reg.nome_coreografia.toUpperCase(), pageWidth / 2, 30, { align: 'center' });
+      doc.setFontSize(9);
+      doc.text(`${reg.estudio} • ${reg.categoria} • ${reg.estilo_danca}`, pageWidth / 2, 37, { align: 'center' });
+
+      doc.setTextColor(40, 40, 40);
+      let cursorY = 54;
+
+      const overallAvg = reg.evaluations.length > 0
+        ? reg.evaluations.reduce((a, b) => a + b.final, 0) / reg.evaluations.length
+        : 0;
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Média geral: ${overallAvg.toFixed(2)}`, 20, cursorY);
+      if (reg.classificacao_final) {
+        doc.text(`Classificação: ${reg.classificacao_final}° lugar`, pageWidth - 20, cursorY, { align: 'right' });
+      }
+      cursorY += 8;
+
+      reg.evaluations.forEach((ev) => {
+        if (cursorY > pageHeight - 50) { doc.addPage(); cursorY = 20; }
+
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 0, 104);
+        doc.text(`${ev.judge_name}`, 20, cursorY);
+        doc.setTextColor(40, 40, 40);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text(`Média: ${ev.final.toFixed(2)}`, pageWidth - 20, cursorY, { align: 'right' });
+        cursorY += 3;
+
+        const scoreRows = Object.entries(ev.scores).map(([crit, val]) => [crit, Number(val).toFixed(1)]);
+        if (scoreRows.length > 0) {
+          autoTable(doc, {
+            head: [['Quesito', 'Nota']],
+            body: scoreRows,
+            startY: cursorY,
+            theme: 'striped',
+            headStyles: { fillColor: [40, 40, 40], textColor: 255, fontSize: 9, fontStyle: 'bold' },
+            bodyStyles: { fontSize: 9, textColor: 40 },
+            alternateRowStyles: { fillColor: [248, 248, 250] },
+            columnStyles: { 1: { cellWidth: 24, halign: 'center', fontStyle: 'bold' } },
+            margin: { left: 20, right: 20 },
+          });
+          cursorY = (doc as any).lastAutoTable.finalY + 5;
+        }
+
+        if (ev.feedback_text && ev.feedback_text.trim()) {
+          if (cursorY > pageHeight - 40) { doc.addPage(); cursorY = 20; }
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(120, 120, 120);
+          doc.text('COMENTÁRIO DO JURADO', 20, cursorY);
+          cursorY += 4;
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9);
+          doc.setTextColor(40, 40, 40);
+          const lines = doc.splitTextToSize(ev.feedback_text.trim(), pageWidth - 40);
+          doc.text(lines, 20, cursorY);
+          cursorY += lines.length * 4.5 + 4;
+        }
+
+        if (ev.audio_url) {
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'italic');
+          doc.setTextColor(120, 120, 120);
+          doc.text('Há comentário em áudio disponível no app (botão "Baixar áudio").', 20, cursorY);
+          doc.setTextColor(40, 40, 40);
+          cursorY += 6;
+        }
+
+        cursorY += 4;
+      });
+
+      // Rodapé
+      const totalPages = doc.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(140, 140, 140);
+        const dateStr = `${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR').slice(0, 5)}`;
+        doc.text(`Gerado em ${dateStr} • CoreoHub`, 20, pageHeight - 8);
+        doc.text(`Página ${i} de ${totalPages}`, pageWidth - 20, pageHeight - 8, { align: 'right' });
+      }
+
+      doc.save(`avaliacao-${slugify(reg.nome_coreografia)}.pdf`);
+    } catch (err) {
+      console.error('Erro ao gerar PDF:', err);
+      setError('Falha ao gerar o PDF. Tente novamente.');
+    } finally {
+      setGeneratingPdf(null);
+    }
   };
 
   if (loading) {
@@ -260,15 +412,29 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
                                   <Award size={14} className="text-[#ff0068]" />
                                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">{ev.judge_name}</span>
                                 </div>
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
                                   {ev.audio_url && (
-                                    <button
-                                      onClick={() => playAudio(ev.audio_url!)}
-                                      aria-label={playingAudio === ev.audio_url ? 'Pausar comentário em áudio' : 'Reproduzir comentário em áudio do jurado'}
-                                      className={`p-2.5 rounded-xl transition-all ${playingAudio === ev.audio_url ? 'bg-[#ff0068] text-white' : 'bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-[#ff0068]'}`}
-                                    >
-                                      <Volume2 size={14} />
-                                    </button>
+                                    <>
+                                      <button
+                                        onClick={() => playAudio(ev.audio_url!)}
+                                        aria-label={playingAudio === ev.audio_url ? 'Pausar comentário em áudio' : 'Reproduzir comentário em áudio do jurado'}
+                                        className={`p-2.5 rounded-xl transition-all ${playingAudio === ev.audio_url ? 'bg-[#ff0068] text-white' : 'bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-[#ff0068]'}`}
+                                      >
+                                        <Volume2 size={14} />
+                                      </button>
+                                      <button
+                                        onClick={() => downloadAudio(ev.audio_url!, reg.nome_coreografia, ev.judge_name)}
+                                        disabled={downloadingAudio === ev.audio_url}
+                                        aria-label="Baixar comentário em áudio do jurado"
+                                        title="Baixar áudio"
+                                        className="p-2.5 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-[#ff0068] transition-all disabled:opacity-50"
+                                      >
+                                        {downloadingAudio === ev.audio_url
+                                          ? <Loader2 size={14} className="animate-spin" />
+                                          : <Download size={14} />
+                                        }
+                                      </button>
+                                    </>
                                   )}
                                   {isPublished && <ScoreBadge score={ev.final} />}
                                 </div>
@@ -284,8 +450,30 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
                                   ))}
                                 </div>
                               )}
+
+                              {ev.feedback_text && ev.feedback_text.trim() && (
+                                <div className="flex gap-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-xl px-3 py-2.5">
+                                  <MessageSquare size={13} className="text-[#ff0068] shrink-0 mt-0.5" />
+                                  <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{ev.feedback_text.trim()}</p>
+                                </div>
+                              )}
                             </div>
                           ))
+                        )}
+
+                        {/* Baixar folha de avaliação (PDF) — só com resultado publicado,
+                            já que o PDF contém as notas por quesito. */}
+                        {isPublished && reg.evaluations.length > 0 && (
+                          <button
+                            onClick={() => downloadPdf(reg)}
+                            disabled={generatingPdf === reg.id}
+                            className="w-full flex items-center justify-center gap-2 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50"
+                          >
+                            {generatingPdf === reg.id
+                              ? <><Loader2 size={14} className="animate-spin" /> Gerando PDF...</>
+                              : <><FileText size={14} /> Baixar folha de avaliação (PDF)</>
+                            }
+                          </button>
                         )}
                       </div>
                     </motion.div>
