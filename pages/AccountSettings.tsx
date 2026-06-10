@@ -4187,13 +4187,20 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       >
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); toggleVoiceSample(v.name); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Auditar = escolher: ouvir o sample também seleciona a voz
+                            // (padrão ElevenLabs/Google TTS). Evita a armadilha de ouvir
+                            // uma voz e salvar outra.
+                            setFlowConfig(f => ({ ...f, voice_id: v.id || null }));
+                            toggleVoiceSample(v.name);
+                          }}
                           className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
                             isPlaying
                               ? 'bg-[#ff0068] text-white animate-pulse'
                               : 'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 hover:bg-[#ff0068]/10 hover:text-[#ff0068]'
                           }`}
-                          title={isPlaying ? 'Pausar' : 'Ouvir sample'}
+                          title={isPlaying ? 'Pausar' : 'Ouvir e selecionar esta voz'}
                         >
                           {isPlaying ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" className="ml-0.5" />}
                         </button>
@@ -4222,7 +4229,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   >
                     {previewing
                       ? <><Loader2 size={12} className="animate-spin" /> Gerando {previewing}...</>
-                      : <><Play size={12} fill="currentColor" /> Testar narração completa</>}
+                      : <><Play size={12} fill="currentColor" /> Testar com {flowConfig.voice_id || 'Charon'}</>}
                   </button>
                   <span className="text-[10px] text-slate-400">
                     Coreografia <span className="text-[#ff0068]">Eclipse</span> · Estúdio <span className="text-[#ff0068]">Studio Demo</span>
