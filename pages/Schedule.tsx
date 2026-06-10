@@ -476,20 +476,25 @@ const Schedule = () => {
   );
 
   useEffect(() => {
-    supabase
-      .from('events')
-      .select('id,name,edition_year,start_date,created_at,is_demo')
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (data && data.length > 0) {
-          setAllEvents(data);
-          // Default = mais recente criado (consistente com MesaDeSom).
-          // Evita pegar evento futuro vazio em vez do demo recem-criado
-          setSelectedEventId(prev => prev ?? data[0].id);
-        } else {
-          fetchData(null);
-        }
-      });
+    // Filtra por created_by — events é público (vitrine), então sem o filtro
+    // o picker mostraria eventos de OUTROS produtores. Espelha Registrations.tsx.
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { fetchData(null); return; }
+      const { data } = await supabase
+        .from('events')
+        .select('id,name,edition_year,start_date,created_at,is_demo')
+        .eq('created_by', user.id)
+        .order('created_at', { ascending: false });
+      if (data && data.length > 0) {
+        setAllEvents(data);
+        // Default = mais recente criado (consistente com MesaDeSom).
+        // Evita pegar evento futuro vazio em vez do demo recem-criado
+        setSelectedEventId(prev => prev ?? data[0].id);
+      } else {
+        fetchData(null);
+      }
+    })();
   }, []); // eslint-disable-line
 
   useEffect(() => {
