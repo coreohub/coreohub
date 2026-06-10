@@ -303,6 +303,10 @@ const JuradoSeletiva: React.FC = () => {
                     value={feedback}
                     onChange={e => setFeedback(e.target.value)}
                     rows={2}
+                    spellCheck
+                    lang="pt-BR"
+                    autoCapitalize="sentences"
+                    autoCorrect="on"
                     placeholder="Observações pro inscrito (opcional)…"
                     className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50 resize-none"
                   />

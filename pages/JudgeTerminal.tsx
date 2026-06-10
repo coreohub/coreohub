@@ -1819,6 +1819,10 @@ const JudgeTerminal = () => {
                 disabled={isSubmitted}
                 placeholder={t('avaliada.feedbackPlaceholder')}
                 rows={5}
+                spellCheck
+                lang="pt-BR"
+                autoCapitalize="sentences"
+                autoCorrect="on"
                 className={`w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-violet-400/30 resize-none transition-all ${
                   isSubmitted ? 'opacity-60 cursor-not-allowed' : ''
                 }`}
@@ -1987,6 +1991,10 @@ const JudgeTerminal = () => {
                         disabled={isSubmitted}
                         placeholder={t('comment.placeholder')}
                         rows={3}
+                        spellCheck
+                        lang="pt-BR"
+                        autoCapitalize="sentences"
+                        autoCorrect="on"
                         className={`w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-[#ff0068]/20 resize-none transition-all ${
                           isSubmitted ? 'opacity-60 cursor-not-allowed' : ''
                         }`}
