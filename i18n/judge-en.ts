@@ -55,6 +55,7 @@ const judgeEn: Record<JudgeDictKey, string> = {
   // Manual navigation (performance list + previous)
   'nav.title': 'Go to performance',
   'nav.previous': 'Previous',
+  'nav.next': 'Next',
   'nav.empty': 'No performances in your queue.',
   'nav.status.evaluated': 'Evaluated',
   'nav.status.current': 'Current',

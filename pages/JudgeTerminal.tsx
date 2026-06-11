@@ -238,6 +238,7 @@ const JudgeTerminal = () => {
   const [jumpToError, setJumpToError]           = useState<string | null>(null);
   // Guard de navegação: índice-alvo aguardando confirmação de descarte.
   const [pendingNavIdx, setPendingNavIdx]       = useState<number | null>(null);
+  const overflowMenuRef = useRef<HTMLDivElement | null>(null);
 
   /* ── Schedule ── */
   const [schedule, setSchedule]             = useState<any[]>([]);
@@ -664,6 +665,18 @@ const JudgeTerminal = () => {
     })();
     return () => { cancelled = true; };
   }, [schedule, selectedJudge, judgeSession, isDemoMode]);
+
+  /* ── Fecha o menu de navegação ao clicar fora do popover ── */
+  useEffect(() => {
+    if (!showOverflowMenu) return;
+    const onDown = (e: MouseEvent) => {
+      if (overflowMenuRef.current && !overflowMenuRef.current.contains(e.target as Node)) {
+        setShowOverflowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [showOverflowMenu]);
 
   /* ── Visible awards for the current performance (filtered by formation + genre) ── */
   const visibleAwards = useMemo(() => {
@@ -1643,8 +1656,8 @@ const JudgeTerminal = () => {
             <Lock size={12} />
           </button>
 
-          {/* Overflow menu — navegação manual (lista + anterior + pular pra #N) */}
-          <div className="relative">
+          {/* Overflow menu — navegação manual (lista + anterior/próximo + #N) */}
+          <div className="relative" ref={overflowMenuRef}>
             <button
               onClick={() => { setShowOverflowMenu(p => !p); setJumpToError(null); }}
               className="p-1.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 transition-all"
@@ -1662,15 +1675,26 @@ const JudgeTerminal = () => {
                   </p>
                 </div>
 
-                {/* Linha de ações: Anterior + atalho "pular pra #N" */}
+                {/* Linha 1: Anterior + Próximo */}
                 <div className="flex items-center gap-2 mb-2">
                   <button
                     onClick={() => requestGoToIndex(currentIndex - 1)}
                     disabled={currentIndex <= 0}
-                    className="flex items-center gap-1 px-3 py-2 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 transition-all"
+                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 transition-all"
                   >
                     <ChevronLeft size={12} /> {t('nav.previous')}
                   </button>
+                  <button
+                    onClick={() => requestGoToIndex(currentIndex + 1)}
+                    disabled={currentIndex >= filteredSchedule.length - 1}
+                    className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 transition-all"
+                  >
+                    {t('nav.next')} <ChevronRight size={12} />
+                  </button>
+                </div>
+
+                {/* Linha 2: atalho "pular pra #N" (Wi-Fi caído) */}
+                <div className="flex items-center gap-2 mb-2">
                   <input
                     type="number"
                     inputMode="numeric"

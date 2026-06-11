@@ -57,6 +57,7 @@ const judgePt = {
   // Navegação manual (lista de apresentações + anterior)
   'nav.title': 'Ir para apresentação',
   'nav.previous': 'Anterior',
+  'nav.next': 'Próximo',
   'nav.empty': 'Nenhuma apresentação na sua fila.',
   'nav.status.evaluated': 'Avaliada',
   'nav.status.current': 'Atual',

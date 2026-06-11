@@ -55,6 +55,7 @@ const judgeEs: Record<JudgeDictKey, string> = {
   // Navegación manual (lista de presentaciones + anterior)
   'nav.title': 'Ir a la presentación',
   'nav.previous': 'Anterior',
+  'nav.next': 'Siguiente',
   'nav.empty': 'No hay presentaciones en tu cola.',
   'nav.status.evaluated': 'Evaluada',
   'nav.status.current': 'Actual',
