@@ -240,13 +240,14 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 Cronológico inverso. Detalhes individuais em `memory/`.
 
 ### 2026-06-11 — Terminal júri navegação manual + voz narração + teclado PIN + frase LGPD ✅ SHIPADO
-6 commits (`04c91a1` → `e211d9b`). Só frontend — nenhuma migration/edge function. Tudo em prod (Vercel).
+7 commits (`04c91a1` → `1c88753`). Só frontend — nenhuma migration/edge function. Tudo em prod (Vercel).
 
 - **Teclado do PIN do login** (`04c91a1`): `JudgeLogin.tsx` só tinha numpad on-screen (onClick); faltava listener de keydown. No desktop digitar não fazia nada. Agora aceita 0-9/Backspace/Esc (guard de 4 dígitos dentro do updater pra robustez contra closure velha).
 - **Voz da narração no cronograma** (`6b1fc39`): bug multi-tenant. `/narracao-ia` salva `voice_id` na row do evento (só grava legacy `id='1'` se super admin); `Schedule.tsx` lia de `id='1'` → narração com voz velha/default ("aleatória"). Fix: lê/grava config por `event_id` (fallback legacy). `handleSaveSettings` (tempo_entrada/intervalo) idem (era `id='1'` compartilhada = vazamento). Lição: `.eq('id',1)` direto em `configuracoes` = bug latente multi-tenant. Detalhes em [[cronograma-voz-narracao-event-row-fix]].
 - **Navegação manual no terminal** (`0a50ee7` + `967b44f` + `6aed319` + `e211d9b`): jurado não decora número. Menu `⋮` vira painel com fila inteira rolável (toque pra ir) + "Anterior"/"Próximo" + atalho #N. `evaluatedSet` offline-aware alimenta ✓avaliada. `goToIndex` centraliza reset. Guard de unsaved (modal `role=dialog`). Click-outside via `pointerdown` (touch tablet) + Esc. Rolagem com momentum (`-webkit-overflow-scrolling` + `touch-action: pan-y` + `overscroll-contain`). i18n PT/EN/ES. Detalhes em [[terminal-juri-navegacao-manual-shipado]].
 - **Frase de áudio/LGPD** (`89dab5d`): bloco "Condições de participação" no Resumo do `InscricaoWizard` (step 3, cobre inscrição + seletiva). Transparência (não consentimento) — bailarino é terceiro, inscrito aceita ao confirmar. Frase única pra todos os eventos. Jurado é coberto por contrato (sem popup). Antes NÃO existia no código (TermoProdutor não tinha, não há regulamento-base).
-- **Pendência de teste (user):** validar terminal em prod (lista/Anterior/Próximo/scroll no tablet) limpando o Service Worker antes. Backlog [[backlog-politica-audio-juri]] (config de política de áudio) segue aberto.
+- **Demo do terminal 3 → 10 apresentações** (`1c88753`): com 3 itens a lista não overflowa e não dava pra testar rolagem. 10 apresentações variadas (estilos/estúdios/formações). Demo bypassa filtro de gênero de propósito (mostra todas, mesmo fora das competências do jurado) — em evento real a lista filtra pelos gêneros do jurado.
+- **Navegação manual VALIDADA em demo pelo user** (2026-06-11): rolagem (mouse/dedo), Anterior/Próximo, lista com status, fechar ao clicar fora — todos OK no screenshot do user. **Resta:** validar terminal em **evento real** (#4 — coreografias do cronograma chegando no terminal no dia, depende de evento ao vivo). Backlog [[backlog-politica-audio-juri]] (config de política de áudio) segue aberto.
 
 ### 2026-06-10/11 — Terminal júri + Cronograma + Narração IA + Integrações de Marketing ✅ SHIPADO
 Sessão grande (~6 commits). Tudo em prod, migrations `20260620`/`20260621` aplicadas, edge `judge-login` redeployada.
