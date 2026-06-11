@@ -1723,7 +1723,10 @@ const JudgeTerminal = () => {
                     {t('nav.empty')}
                   </p>
                 ) : (
-                  <div className="max-h-72 overflow-y-auto -mx-1 px-1 space-y-1">
+                  <div
+                    className="max-h-72 overflow-y-auto overscroll-contain -mx-1 px-1 space-y-1"
+                    style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
+                  >
                     {filteredSchedule.map((p: any, i: number) => {
                       const isCurrent = i === currentIndex;
                       const isEvaluated = evaluatedSet.has(p.id);
