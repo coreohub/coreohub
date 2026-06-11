@@ -666,16 +666,22 @@ const JudgeTerminal = () => {
     return () => { cancelled = true; };
   }, [schedule, selectedJudge, judgeSession, isDemoMode]);
 
-  /* ── Fecha o menu de navegação ao clicar fora do popover ── */
+  /* ── Fecha o menu de navegação ao clicar/tocar fora ou Esc ──
+     pointerdown cobre mouse + touch + caneta (tablet do júri). */
   useEffect(() => {
     if (!showOverflowMenu) return;
-    const onDown = (e: MouseEvent) => {
+    const onDown = (e: PointerEvent) => {
       if (overflowMenuRef.current && !overflowMenuRef.current.contains(e.target as Node)) {
         setShowOverflowMenu(false);
       }
     };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
+    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowOverflowMenu(false); };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onEsc);
+    };
   }, [showOverflowMenu]);
 
   /* ── Visible awards for the current performance (filtered by formation + genre) ── */
@@ -1443,12 +1449,17 @@ const JudgeTerminal = () => {
       {/* ── Guard de navegação: avaliação em andamento não submetida ── */}
       {pendingNavIdx !== null && (
         <div className="absolute inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-5">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-sm border border-slate-200 dark:border-slate-700 shadow-2xl p-6 space-y-5">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="nav-guard-msg"
+            className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-sm border border-slate-200 dark:border-slate-700 shadow-2xl p-6 space-y-5"
+          >
             <div className="flex items-center gap-3">
               <div className="inline-flex p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 shrink-0">
                 <AlertTriangle size={18} className="text-amber-500" />
               </div>
-              <p className="text-sm font-bold text-slate-700 dark:text-slate-200 leading-snug">
+              <p id="nav-guard-msg" className="text-sm font-bold text-slate-700 dark:text-slate-200 leading-snug">
                 {t('nav.unsavedConfirm')}
               </p>
             </div>
@@ -1699,6 +1710,7 @@ const JudgeTerminal = () => {
                     type="number"
                     inputMode="numeric"
                     min={1}
+                    aria-label={t('jumpTo.label')}
                     placeholder={t('jumpTo.placeholder')}
                     value={jumpToInput}
                     onChange={e => { setJumpToInput(e.target.value); setJumpToError(null); }}
