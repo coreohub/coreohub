@@ -205,8 +205,9 @@ const JudgeLogin: React.FC = () => {
   };
 
   const handleDigit = (d: string) => {
-    if (pinInput.length >= 4 || validating) return;
-    setPinInput(p => p + d);
+    if (validating) return;
+    // Guard dentro do updater pra ser robusto a closure velha do listener de teclado.
+    setPinInput(p => (p.length >= 4 ? p : p + d));
     setError(null);
   };
 
@@ -214,6 +215,27 @@ const JudgeLogin: React.FC = () => {
     setPinInput(p => p.slice(0, -1));
     setError(null);
   };
+
+  // Suporte a teclado físico (desktop / tablet com teclado acoplado): digita o PIN
+  // sem precisar clicar no numpad na tela. Só ativo enquanto o modal de PIN está aberto.
+  useEffect(() => {
+    if (!selectedJudge) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (validating) return;
+      if (e.key >= '0' && e.key <= '9') {
+        e.preventDefault();
+        handleDigit(e.key);
+      } else if (e.key === 'Backspace') {
+        e.preventDefault();
+        handleBackspace();
+      } else if (e.key === 'Escape') {
+        closePinModal();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedJudge, validating]);
 
   useEffect(() => {
     if (pinInput.length !== 4 || !selectedJudge || validating || !paramToken) return;
