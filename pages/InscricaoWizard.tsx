@@ -1889,6 +1889,21 @@ const InscricaoWizard: React.FC = () => {
                 adicionar mais inscrições antes. O valor depende do lote vigente (Pix, cartão ou boleto via Asaas).
               </p>
             </div>
+
+            {/* Condições de participação — cobre transparência LGPD sobre o
+                feedback dos jurados (áudio/texto). O bailarino é terceiro: o
+                inscrito aceita ao confirmar. Frase única pra todos os eventos. */}
+            <div className="border-t border-slate-200 dark:border-white/10 pt-4 mt-4">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
+                Condições de participação
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                Ao se inscrever, você concorda que as apresentações poderão ser avaliadas por jurados e que
+                essas avaliações podem incluir <strong>comentários em áudio e/ou texto</strong>, gravados
+                durante o evento e disponibilizados de forma <strong>privada a você</strong> na plataforma,
+                com finalidade exclusivamente técnica e pedagógica.
+              </p>
+            </div>
           </div>
         )}
       </div>
