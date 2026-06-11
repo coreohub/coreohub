@@ -54,6 +54,16 @@ const judgePt = {
   'jumpTo.notFound': 'Apresentação #{n} não encontrada',
   'jumpTo.hint': '{count} apresentações disponíveis',
 
+  // Navegação manual (lista de apresentações + anterior)
+  'nav.title': 'Ir para apresentação',
+  'nav.previous': 'Anterior',
+  'nav.empty': 'Nenhuma apresentação na sua fila.',
+  'nav.status.evaluated': 'Avaliada',
+  'nav.status.current': 'Atual',
+  'nav.status.pending': 'Pendente',
+  'nav.unsavedConfirm': 'Você tem uma avaliação em andamento que ainda não foi enviada. Trocar de apresentação vai descartá-la. Continuar?',
+  'nav.discardContinue': 'Descartar e continuar',
+
   // Live banner (Phase 4 — Mesa de Som ao vivo)
   'live.label': 'AO VIVO:',
 

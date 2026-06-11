@@ -8,6 +8,7 @@ import {
   Zap, Crown, Users, Award, Shirt,
   Monitor, Tablet, Smartphone, LogOut,
   MoreVertical, FastForward, MessageSquare,
+  ChevronLeft, List,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useT, useLocale, setLocale } from '../hooks/useT';
@@ -235,6 +236,8 @@ const JudgeTerminal = () => {
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const [jumpToInput, setJumpToInput]           = useState('');
   const [jumpToError, setJumpToError]           = useState<string | null>(null);
+  // Guard de navegação: índice-alvo aguardando confirmação de descarte.
+  const [pendingNavIdx, setPendingNavIdx]       = useState<number | null>(null);
 
   /* ── Schedule ── */
   const [schedule, setSchedule]             = useState<any[]>([]);
@@ -258,6 +261,10 @@ const JudgeTerminal = () => {
   // a atribuição de prêmio acontece pós-bloco em /deliberacao.
   const [starredSet, setStarredSet] = useState<Set<string>>(new Set());
   const [starringInFlight, setStarringInFlight] = useState(false);
+
+  // Navegação manual: registration_ids que este jurado já avaliou (offline-aware).
+  // Popula no load via fetchPreviousEvaluationsSWR + adição otimista no submit.
+  const [evaluatedSet, setEvaluatedSet] = useState<Set<string>>(new Set());
 
   // Phase 4: âncora central — qual apresentação está em palco AGORA segundo
   // a Mesa de Som. Quando muda, terminal mostra banner "AO VIVO" e auto-advance
@@ -629,6 +636,34 @@ const JudgeTerminal = () => {
       }
     })();
   }, [resolveGenreCriteria, judgeSession]);
+
+  /* ── Navegação manual: hidrata o set de "já avaliadas" deste jurado ──
+     Offline-aware: SWR/IndexedDB no fluxo de jurado, query direta no legado.
+     Falha em silêncio — nunca bloqueia a avaliação. */
+  useEffect(() => {
+    if (isDemoMode) { setEvaluatedSet(new Set()); return; }
+    const ids = schedule.map((s: any) => s.id).filter(Boolean);
+    if (ids.length === 0 || !selectedJudge) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        let rows: Array<{ registration_id: string }> = [];
+        if (judgeSession) {
+          rows = await fetchPreviousEvaluationsSWR(ids);
+        } else {
+          const { data } = await supabase
+            .from('evaluations')
+            .select('registration_id')
+            .eq('judge_id', selectedJudge.id)
+            .in('registration_id', ids);
+          rows = data ?? [];
+        }
+        if (cancelled) return;
+        setEvaluatedSet(new Set(rows.map(r => r.registration_id)));
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [schedule, selectedJudge, judgeSession, isDemoMode]);
 
   /* ── Visible awards for the current performance (filtered by formation + genre) ── */
   const visibleAwards = useMemo(() => {
@@ -1042,6 +1077,8 @@ const JudgeTerminal = () => {
       // Lock the fields — don't advance yet so the judge can review
       setIsSubmitted(true);
       setSubmittedAt(now);
+      // Navegação manual: marca como avaliada otimisticamente (✓ na lista).
+      setEvaluatedSet(prev => new Set(prev).add(currentPerformance.id));
 
     } catch (e: any) {
       setSubmitError(e?.message || t('errors.saveFailed'));
@@ -1135,8 +1172,18 @@ const JudgeTerminal = () => {
     setIsSubmitted(false);
   };
 
-  /* ── Advance to next performance (after reviewing submitted state) ── */
-  const handleAdvance = () => {
+  /* ── Há avaliação em andamento NÃO submetida? (guard de navegação) ── */
+  const hasUnsavedProgress = (): boolean => {
+    if (isSubmitted) return false;
+    if (isRecording || rollingChunksRef.current.length > 0) return true;
+    if (feedbackText.trim().length > 0) return true;
+    return activeCriteria.some(c => (scores[c.name] ?? '') !== '');
+  };
+
+  /* ── Aplica a troca de apresentação (reset manual; o effect de currentIndex
+     cuida de scores/critérios/isSubmitted). Centraliza o que handleAdvance e
+     handleJumpTo duplicavam — fonte única do reset. ── */
+  const commitGoToIndex = (idx: number) => {
     handleActivity();
     setIsSubmitted(false);
     setSubmittedAt(null);
@@ -1146,12 +1193,25 @@ const JudgeTerminal = () => {
     setTieWarning(null);
     setFeedbackText('');
     setShowComment(false);
-    setCurrentIndex(prev => prev + 1);
+    setCurrentIndex(idx);
+    setShowOverflowMenu(false);
+    setPendingNavIdx(null);
   };
+
+  /* ── Pedido de navegação: valida bounds e dispara o guard de unsaved.
+     Tudo 100% offline (só state local). ── */
+  const requestGoToIndex = (idx: number) => {
+    if (idx < 0 || idx >= filteredSchedule.length || idx === currentIndex) return;
+    if (hasUnsavedProgress()) { setPendingNavIdx(idx); return; }
+    commitGoToIndex(idx);
+  };
+
+  /* ── Advance to next performance (after reviewing submitted state) ── */
+  const handleAdvance = () => { requestGoToIndex(currentIndex + 1); };
 
   /* ── Jump to performance by ordem_apresentacao (item 38 — push offline)
      Coordenador anuncia "apresentação #N" em voz alta quando Wi-Fi cai;
-     jurado digita aqui e pula direto. Funciona 100% offline (só state local). */
+     jurado digita aqui e pula direto. ── */
   const handleJumpTo = () => {
     const raw = jumpToInput.trim();
     const n = parseInt(raw, 10);
@@ -1161,18 +1221,9 @@ const JudgeTerminal = () => {
       setJumpToError(t('jumpTo.notFound', { n: String(n) }));
       return;
     }
-    handleActivity();
-    setIsSubmitted(false);
-    setSubmittedAt(null);
-    rollingChunksRef.current = [];
-    setMicAttempted(false);
-    setTieWarning(null);
-    setFeedbackText('');
-    setShowComment(false);
-    setCurrentIndex(idx);
     setJumpToInput('');
     setJumpToError(null);
-    setShowOverflowMenu(false);
+    requestGoToIndex(idx);
   };
 
   /* ── PIN handlers ── */
@@ -1376,6 +1427,36 @@ const JudgeTerminal = () => {
       onClick={handleActivity}
     >
 
+      {/* ── Guard de navegação: avaliação em andamento não submetida ── */}
+      {pendingNavIdx !== null && (
+        <div className="absolute inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-5">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-sm border border-slate-200 dark:border-slate-700 shadow-2xl p-6 space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="inline-flex p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 shrink-0">
+                <AlertTriangle size={18} className="text-amber-500" />
+              </div>
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-200 leading-snug">
+                {t('nav.unsavedConfirm')}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPendingNavIdx(null)}
+                className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-slate-500 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={() => commitGoToIndex(pendingNavIdx)}
+                className="flex-1 py-3 rounded-2xl bg-[#ff0068] hover:bg-[#ff0068]/90 text-white text-[10px] font-black uppercase tracking-widest transition-all"
+              >
+                {t('nav.discardContinue')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Option A: Demo tutorial modal overlay ── */}
       {showDemoTutorial && (
         <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-5">
@@ -1562,7 +1643,7 @@ const JudgeTerminal = () => {
             <Lock size={12} />
           </button>
 
-          {/* Overflow menu (item 38 — pular pra #N quando Wi-Fi cai) */}
+          {/* Overflow menu — navegação manual (lista + anterior + pular pra #N) */}
           <div className="relative">
             <button
               onClick={() => { setShowOverflowMenu(p => !p); setJumpToError(null); }}
@@ -1573,42 +1654,94 @@ const JudgeTerminal = () => {
             </button>
 
             {showOverflowMenu && (
-              <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl z-50 p-4">
+              <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl z-50 p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <FastForward size={14} className="text-[#ff0068]" />
+                  <List size={14} className="text-[#ff0068]" />
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-white">
-                    {t('jumpTo.title')}
+                    {t('nav.title')}
                   </p>
                 </div>
-                <p className="text-[8px] font-bold uppercase tracking-widest text-slate-400 mb-2">
-                  {t('jumpTo.label')}
-                </p>
-                <div className="flex items-center gap-2">
+
+                {/* Linha de ações: Anterior + atalho "pular pra #N" */}
+                <div className="flex items-center gap-2 mb-2">
+                  <button
+                    onClick={() => requestGoToIndex(currentIndex - 1)}
+                    disabled={currentIndex <= 0}
+                    className="flex items-center gap-1 px-3 py-2 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 transition-all"
+                  >
+                    <ChevronLeft size={12} /> {t('nav.previous')}
+                  </button>
                   <input
                     type="number"
                     inputMode="numeric"
                     min={1}
-                    autoFocus
                     placeholder={t('jumpTo.placeholder')}
                     value={jumpToInput}
                     onChange={e => { setJumpToInput(e.target.value); setJumpToError(null); }}
                     onKeyDown={e => { if (e.key === 'Enter') handleJumpTo(); }}
-                    className="flex-1 px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm font-black text-slate-900 dark:text-white tabular-nums focus:outline-none focus:border-[#ff0068] transition-all"
+                    className="flex-1 w-0 px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm font-black text-slate-900 dark:text-white tabular-nums focus:outline-none focus:border-[#ff0068] transition-all"
                   />
                   <button
                     onClick={handleJumpTo}
                     disabled={!jumpToInput.trim()}
-                    className="px-3 py-2 bg-[#ff0068] hover:bg-[#ff0068]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                    className="px-3 py-2 bg-[#ff0068] hover:bg-[#ff0068]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0"
                   >
                     {t('jumpTo.cta')}
                   </button>
                 </div>
-                {jumpToError ? (
-                  <p className="mt-2 text-[9px] font-bold text-rose-500 uppercase tracking-widest">{jumpToError}</p>
-                ) : (
-                  <p className="mt-2 text-[8px] font-bold text-slate-400 uppercase tracking-widest">
-                    {t('jumpTo.hint', { count: String(filteredSchedule.length) })}
+                {jumpToError && (
+                  <p className="mb-2 text-[9px] font-bold text-rose-500 uppercase tracking-widest">{jumpToError}</p>
+                )}
+
+                {/* Lista rolável da fila inteira do jurado */}
+                {filteredSchedule.length === 0 ? (
+                  <p className="py-6 text-center text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                    {t('nav.empty')}
                   </p>
+                ) : (
+                  <div className="max-h-72 overflow-y-auto -mx-1 px-1 space-y-1">
+                    {filteredSchedule.map((p: any, i: number) => {
+                      const isCurrent = i === currentIndex;
+                      const isEvaluated = evaluatedSet.has(p.id);
+                      const statusLabel = isCurrent
+                        ? t('nav.status.current')
+                        : isEvaluated ? t('nav.status.evaluated') : t('nav.status.pending');
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => requestGoToIndex(i)}
+                          aria-current={isCurrent ? 'true' : undefined}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all
+                            ${isCurrent
+                              ? 'bg-[#ff0068]/10 border-[#ff0068]/40'
+                              : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 hover:border-[#ff0068]/30 hover:bg-[#ff0068]/5'}`}
+                        >
+                          <span className={`shrink-0 w-7 text-center text-xs font-black tabular-nums ${isCurrent ? 'text-[#ff0068]' : 'text-slate-400'}`}>
+                            {p.ordem_apresentacao ?? i + 1}
+                          </span>
+                          <span className="shrink-0">
+                            {isCurrent
+                              ? <span className="block w-2 h-2 rounded-full bg-[#ff0068] animate-pulse" />
+                              : isEvaluated
+                                ? <Check size={14} className="text-emerald-500" />
+                                : <span className="block w-2 h-2 rounded-full border border-slate-300 dark:border-slate-600" />}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[11px] font-black uppercase tracking-tight text-slate-900 dark:text-white truncate">
+                              {p.nome_coreografia || '—'}
+                            </span>
+                            <span className="block text-[9px] font-bold text-slate-400 truncate">
+                              {p.estudio} · {p.estilo_danca}
+                            </span>
+                          </span>
+                          <span className={`shrink-0 text-[8px] font-black uppercase tracking-widest
+                            ${isCurrent ? 'text-[#ff0068]' : isEvaluated ? 'text-emerald-500' : 'text-slate-400'}`}>
+                            {statusLabel}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             )}

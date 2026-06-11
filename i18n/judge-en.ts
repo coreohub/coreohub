@@ -52,6 +52,16 @@ const judgeEn: Record<JudgeDictKey, string> = {
   'jumpTo.notFound': 'Performance #{n} not found',
   'jumpTo.hint': '{count} performances available',
 
+  // Manual navigation (performance list + previous)
+  'nav.title': 'Go to performance',
+  'nav.previous': 'Previous',
+  'nav.empty': 'No performances in your queue.',
+  'nav.status.evaluated': 'Evaluated',
+  'nav.status.current': 'Current',
+  'nav.status.pending': 'Pending',
+  'nav.unsavedConfirm': 'You have an evaluation in progress that hasn\'t been submitted. Switching performance will discard it. Continue?',
+  'nav.discardContinue': 'Discard & continue',
+
   // Live banner (Phase 4)
   'live.label': 'LIVE:',
 

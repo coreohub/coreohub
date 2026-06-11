@@ -52,6 +52,16 @@ const judgeEs: Record<JudgeDictKey, string> = {
   'jumpTo.notFound': 'Presentación #{n} no encontrada',
   'jumpTo.hint': '{count} presentaciones disponibles',
 
+  // Navegación manual (lista de presentaciones + anterior)
+  'nav.title': 'Ir a la presentación',
+  'nav.previous': 'Anterior',
+  'nav.empty': 'No hay presentaciones en tu cola.',
+  'nav.status.evaluated': 'Evaluada',
+  'nav.status.current': 'Actual',
+  'nav.status.pending': 'Pendiente',
+  'nav.unsavedConfirm': 'Tienes una evaluación en curso que aún no se ha enviado. Cambiar de presentación la descartará. ¿Continuar?',
+  'nav.discardContinue': 'Descartar y continuar',
+
   // Live banner (Phase 4)
   'live.label': 'EN VIVO:',
 
