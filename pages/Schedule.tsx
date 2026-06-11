@@ -543,11 +543,27 @@ const Schedule = () => {
       const regs = (allQualifying || []).filter((r: Registration) => !r.excluded_from_schedule);
       setExcludedRegs((allQualifying || []).filter((r: Registration) => r.excluded_from_schedule));
 
-      const { data: cfg } = await supabase
-        .from('configuracoes')
-        .select('*')
-        .eq('id', 1)
-        .single();
+      // Lê o config da ROW DO EVENTO (multi-tenant), não da legacy id='1'.
+      // Bug 2026-06-11: produtor (não-super-admin) salva voice_id só na row do
+      // evento via /narracao-ia; lendo id='1' aqui o cronograma gerava narração
+      // com voz velha/default. Fallback pra legacy cobre eventos sem row própria.
+      let cfg: any = null;
+      if (eventId) {
+        const { data } = await supabase
+          .from('configuracoes')
+          .select('*')
+          .eq('id', eventId)
+          .maybeSingle();
+        cfg = data;
+      }
+      if (!cfg) {
+        const { data } = await supabase
+          .from('configuracoes')
+          .select('*')
+          .eq('id', '1')
+          .maybeSingle();
+        cfg = data;
+      }
 
       if (cfg?.intervalo_seguranca) { setMinInterval(cfg.intervalo_seguranca); setIntervaloSeguranca(cfg.intervalo_seguranca); }
       if (cfg?.tempo_entrada) setTempoEntrada(cfg.tempo_entrada);
@@ -1273,12 +1289,15 @@ const Schedule = () => {
   };
 
   const handleSaveSettings = async () => {
+    if (!selectedEventId) { setShowSettings(false); return; }
     setIsSavingSettings(true);
     try {
+      // Grava na row do evento (multi-tenant), não na legacy id='1' compartilhada.
+      // Espelha a leitura por event_id e o padrão do /narracao-ia.
       await supabase.from('configuracoes').update({
         tempo_entrada:       tempoEntrada,
         intervalo_seguranca: intervaloSeguranca,
-      }).eq('id', 1);
+      }).eq('id', selectedEventId);
       setMinInterval(intervaloSeguranca);
       setShowSettings(false);
     } catch (err) {
