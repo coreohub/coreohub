@@ -1106,6 +1106,13 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     producer_ga4_id:        '',
     producer_meta_pixel_id: '',
   });
+  // Snapshot do que está SALVO no banco (capturado no load + após cada save).
+  // Usado pra distinguir "salvo" de "digitado mas não salvo" no selo de status
+  // — o verde só aparece quando bate com o banco, não ao digitar.
+  const [savedMarketing, setSavedMarketing] = useState({
+    producer_ga4_id:        '',
+    producer_meta_pixel_id: '',
+  });
   // Tokens server-side (CAPI Meta + Measurement Protocol GA4). SENSÍVEIS
   // — vivem em tabela separada (event_marketing_secrets) com RLS owner-only.
   // Usados pelo webhook Asaas pra disparar Purchase server-side e recuperar
@@ -1666,10 +1673,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               email_event:        myEvent.email_event ?? '',
               regulation_pdf_url: myEvent.regulation_pdf_url ?? '',
             });
-            setMarketing({
+            const loadedMarketing = {
               producer_ga4_id:        (myEvent as any).producer_ga4_id ?? '',
               producer_meta_pixel_id: (myEvent as any).producer_meta_pixel_id ?? '',
-            });
+            };
+            setMarketing(loadedMarketing);
+            setSavedMarketing(loadedMarketing);
             // Carrega secrets sensíveis (CAPI tokens) do event_marketing_secrets.
             // RLS owner-only protege — só carrega se for dono. UI mostra
             // "configurado" via flag, nunca expõe o token salvo. Status
@@ -2102,6 +2111,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       }
 
       if (onSaveSuccess) onSaveSuccess();
+      // Snapshot do estado salvo → o selo de status passa de "Não salvo" pra
+      // "Salvo" só agora (não ao digitar).
+      setSavedMarketing({
+        producer_ga4_id:        marketing.producer_ga4_id,
+        producer_meta_pixel_id: marketing.producer_meta_pixel_id,
+      });
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
@@ -2593,19 +2608,31 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 const ga4Valid   = ga4Raw === '' || /^G-[A-Z0-9]{6,15}$/i.test(ga4Raw);
                 const pixelValid = pixelRaw === '' || /^\d{13,16}$/.test(pixelRaw);
 
+                // Status HONESTO — não afirma "Conectado" (não verificamos a
+                // conexão real; pra pixel client-side não há ping simples). O
+                // verde "Salvo" só aparece quando o campo bate com o snapshot do
+                // banco (savedMarketing) — não ao digitar. metaHasId é só pra o
+                // gate do token (precisa de um ID válido no campo).
                 const metaHasId    = pixelRaw !== '' && pixelValid;
                 const metaHasToken = secretsConfigured.meta_capi_token || marketingSecrets.meta_capi_token.trim() !== '';
-                const metaStatus   = metaHasId ? 'connected' : (metaHasToken ? 'incomplete' : 'none');
+                const metaIdDirty  = pixelRaw !== savedMarketing.producer_meta_pixel_id.trim();
+                const metaStatus   = metaHasId
+                  ? (metaIdDirty ? 'unsaved' : 'saved')
+                  : (pixelRaw !== '' ? 'unsaved' : (metaHasToken ? 'incomplete' : 'none'));
 
                 const gaHasId    = ga4Raw !== '' && ga4Valid;
                 const gaHasToken = secretsConfigured.ga4_api_secret || marketingSecrets.ga4_api_secret.trim() !== '';
-                const gaStatus   = gaHasId ? 'connected' : (gaHasToken ? 'incomplete' : 'none');
+                const gaIdDirty  = ga4Raw !== savedMarketing.producer_ga4_id.trim();
+                const gaStatus   = gaHasId
+                  ? (gaIdDirty ? 'unsaved' : 'saved')
+                  : (ga4Raw !== '' ? 'unsaved' : (gaHasToken ? 'incomplete' : 'none'));
 
                 const renderBadge = (status: string) => {
                   const map: Record<string, { cls: string; label: string }> = {
-                    connected:  { cls: 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30', label: '● Conectado' },
-                    incomplete: { cls: 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30', label: '⚠ Incompleto' },
-                    none:       { cls: 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-white/5 dark:text-slate-400 dark:border-white/10', label: '○ Não conectado' },
+                    saved:      { cls: 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30', label: '● Salvo' },
+                    unsaved:    { cls: 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30', label: '○ Não salvo' },
+                    incomplete: { cls: 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30', label: '⚠ Falta o ID' },
+                    none:       { cls: 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-white/5 dark:text-slate-400 dark:border-white/10', label: '○ Não configurado' },
                   };
                   const m = map[status];
                   return <span className={`shrink-0 px-2.5 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest ${m.cls}`}>{m.label}</span>;
