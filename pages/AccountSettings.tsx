@@ -1123,6 +1123,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     meta_capi_token: false,
     ga4_api_secret:  false,
   });
+  // Progressive disclosure: o server-side (CAPI/Measurement Protocol) é avançado
+  // e fica colapsado por padrão. Auto-expande quando já há token configurado
+  // (pra produtor ver/trocar o que já salvou) — ver effect logo abaixo do fetch.
+  const [showAdvancedMeta,   setShowAdvancedMeta]   = useState(false);
+  const [showAdvancedGoogle, setShowAdvancedGoogle] = useState(false);
   // Status dos tokens lido do webhook (atualiza a cada Purchase server-side).
   // Mostra banner "✓ Última conversão chegou" ou "✗ Token inválido — regerar".
   const [secretsStatus, setSecretsStatus] = useState<{
@@ -1827,6 +1832,13 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     };
     fetchConfig();
   }, []);
+
+  // Auto-expande o "Avançado" de cada plataforma quando já existe token salvo,
+  // pra o produtor enxergar/trocar o que configurou sem precisar caçar o toggle.
+  useEffect(() => {
+    if (secretsConfigured.meta_capi_token) setShowAdvancedMeta(true);
+    if (secretsConfigured.ga4_api_secret)  setShowAdvancedGoogle(true);
+  }, [secretsConfigured.meta_capi_token, secretsConfigured.ga4_api_secret]);
 
   /* ── save ── */
   const handleSave = async () => {
@@ -2570,39 +2582,47 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   <p className="text-xs text-slate-500 mt-0.5">Plugue seus pixels pra rastrear visitantes e conversões nas suas próprias contas. Opcional — funciona em paralelo com o tracking interno do CoreoHub.</p>
                 </div>
               </div>
-              {/* Validação inline — campos vazios não mostram nada; preenchidos
-                  mostram ✓ ou ✗ pra o produtor saber que o ID será aceito antes
-                  de salvar. Espelha os regex de components/ProducerPixels.tsx. */}
+              {/* Reorganizado por PLATAFORMA (padrão Segment/Shopify/Stripe):
+                  cada integração num card com o ID essencial à mostra + o
+                  server-side (CAPI/Measurement Protocol) num "Avançado"
+                  colapsável + selo de status. O token fica travado até o ID
+                  existir (token não vive sem o pixel/stream dele). */}
               {(() => {
                 const ga4Raw   = marketing.producer_ga4_id.trim();
                 const pixelRaw = marketing.producer_meta_pixel_id.trim();
                 const ga4Valid   = ga4Raw === '' || /^G-[A-Z0-9]{6,15}$/i.test(ga4Raw);
                 const pixelValid = pixelRaw === '' || /^\d{13,16}$/.test(pixelRaw);
+
+                const metaHasId    = pixelRaw !== '' && pixelValid;
+                const metaHasToken = secretsConfigured.meta_capi_token || marketingSecrets.meta_capi_token.trim() !== '';
+                const metaStatus   = metaHasId ? 'connected' : (metaHasToken ? 'incomplete' : 'none');
+
+                const gaHasId    = ga4Raw !== '' && ga4Valid;
+                const gaHasToken = secretsConfigured.ga4_api_secret || marketingSecrets.ga4_api_secret.trim() !== '';
+                const gaStatus   = gaHasId ? 'connected' : (gaHasToken ? 'incomplete' : 'none');
+
+                const renderBadge = (status: string) => {
+                  const map: Record<string, { cls: string; label: string }> = {
+                    connected:  { cls: 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30', label: '● Conectado' },
+                    incomplete: { cls: 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30', label: '⚠ Incompleto' },
+                    none:       { cls: 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-white/5 dark:text-slate-400 dark:border-white/10', label: '○ Não conectado' },
+                  };
+                  const m = map[status];
+                  return <span className={`shrink-0 px-2.5 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest ${m.cls}`}>{m.label}</span>;
+                };
+
                 return (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className={label}>Google Analytics 4 — Measurement ID</label>
-                      <input
-                        type="text"
-                        value={marketing.producer_ga4_id}
-                        onChange={e => setMarketing({ ...marketing, producer_ga4_id: e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '') })}
-                        placeholder="G-XXXXXXXXXX"
-                        maxLength={15}
-                        className={input}
-                      />
-                      {ga4Raw && (
-                        <p className={`text-[10px] mt-1 ${ga4Valid ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                          {ga4Valid
-                            ? '✓ Formato válido — pronto pra salvar.'
-                            : '✗ Formato inválido. Deve começar com G- seguido de letras/números (ex: G-Y7N93KHNP8).'}
-                        </p>
-                      )}
-                      <p className="text-[9px] text-slate-400 mt-1">
-                        Crie em <span className="underline">analytics.google.com</span> → Propriedade → Stream Web. Cole o ID que começa com <code className="px-1 bg-slate-200 dark:bg-white/10 rounded">G-</code>.
-                      </p>
-                    </div>
-                    <div>
-                      <label className={label}>Meta Pixel ID (Facebook + Instagram)</label>
+                  <div className="space-y-4">
+                    {/* ── META ── */}
+                    <div className="border border-slate-200 dark:border-white/10 rounded-2xl p-5 bg-slate-50/50 dark:bg-white/[0.02]">
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <div className="flex items-baseline gap-2 min-w-0">
+                          <span className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white">Meta</span>
+                          <span className="text-[10px] text-slate-400 truncate">Facebook + Instagram</span>
+                        </div>
+                        {renderBadge(metaStatus)}
+                      </div>
+                      <label className={label}>Pixel ID</label>
                       <input
                         type="text"
                         value={marketing.producer_meta_pixel_id}
@@ -2622,100 +2642,154 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       <p className="text-[9px] text-slate-400 mt-1">
                         Crie em <span className="underline">business.facebook.com</span> → Gerenciador de Eventos → Pixel da Meta. Cole o ID numérico (15-16 dígitos).
                       </p>
+                      {metaStatus === 'incomplete' && (
+                        <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-2 font-bold">⚠ Você já tem o token do CAPI, mas falta o Pixel ID — sem ele o rastreamento não dispara.</p>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => setShowAdvancedMeta(o => !o)}
+                        className="mt-3 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#ff0068] transition-colors"
+                      >
+                        {showAdvancedMeta ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                        Avançado · Conversions API (server-side)
+                      </button>
+                      {showAdvancedMeta && (
+                        <div className="mt-3 pl-3 border-l-2 border-slate-200 dark:border-white/10">
+                          <p className="text-[10px] text-slate-500 leading-relaxed mb-2">
+                            Recupera ~30% das conversões que o client-side perde (iOS 14+, adblock). <strong>Sensível</strong> — guardado criptografado, visível só pra você.
+                          </p>
+                          <div className="relative">
+                            <input
+                              type={showSecrets.meta_capi_token ? 'text' : 'password'}
+                              value={marketingSecrets.meta_capi_token}
+                              onChange={e => setMarketingSecrets({ ...marketingSecrets, meta_capi_token: e.target.value })}
+                              disabled={!metaHasId}
+                              placeholder={!metaHasId ? 'Preencha o Pixel ID acima primeiro' : (secretsConfigured.meta_capi_token ? '••••••• (já configurado — cole pra trocar)' : 'EAAxxxxxxxxxxxxxxxxxxxx...')}
+                              className={`${input} ${!metaHasId ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              autoComplete="off"
+                            />
+                            {metaHasId && (
+                              <button
+                                type="button"
+                                onClick={() => setShowSecrets(s => ({ ...s, meta_capi_token: !s.meta_capi_token }))}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 dark:hover:text-white"
+                              >
+                                {showSecrets.meta_capi_token ? 'ocultar' : 'mostrar'}
+                              </button>
+                            )}
+                          </div>
+                          {secretsConfigured.meta_capi_token && !marketingSecrets.meta_capi_token && (
+                            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1">✓ Configurado. Deixe vazio pra manter o atual.</p>
+                          )}
+                          {secretsStatus.meta_capi_status === 'INVALID_TOKEN' && (
+                            <div className="mt-2 p-2 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 rounded-lg">
+                              <p className="text-[10px] font-black text-rose-700 dark:text-rose-300">✗ Token inválido ou expirado</p>
+                              <p className="text-[9px] text-rose-600 dark:text-rose-400 mt-0.5">Regere no Gerenciador de Eventos e cole aqui. Conversões server-side estão paradas.</p>
+                            </div>
+                          )}
+                          {secretsStatus.meta_capi_status === 'OK' && secretsStatus.meta_capi_last_at && (
+                            <p className="text-[9px] text-emerald-600 dark:text-emerald-400 mt-1">✓ Última conversão chegou: {new Date(secretsStatus.meta_capi_last_at).toLocaleString('pt-BR')}</p>
+                          )}
+                          <p className="text-[9px] text-slate-400 mt-1">
+                            Em <span className="underline">business.facebook.com</span> → Gerenciador de Eventos → seu Pixel → Configurações → Conversions API → "Gerar token de acesso".
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ── GOOGLE ── */}
+                    <div className="border border-slate-200 dark:border-white/10 rounded-2xl p-5 bg-slate-50/50 dark:bg-white/[0.02]">
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <div className="flex items-baseline gap-2 min-w-0">
+                          <span className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white">Google Analytics 4</span>
+                        </div>
+                        {renderBadge(gaStatus)}
+                      </div>
+                      <label className={label}>Measurement ID</label>
+                      <input
+                        type="text"
+                        value={marketing.producer_ga4_id}
+                        onChange={e => setMarketing({ ...marketing, producer_ga4_id: e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '') })}
+                        placeholder="G-XXXXXXXXXX"
+                        maxLength={15}
+                        className={input}
+                      />
+                      {ga4Raw && (
+                        <p className={`text-[10px] mt-1 ${ga4Valid ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                          {ga4Valid
+                            ? '✓ Formato válido — pronto pra salvar.'
+                            : '✗ Formato inválido. Deve começar com G- seguido de letras/números (ex: G-Y7N93KHNP8).'}
+                        </p>
+                      )}
+                      <p className="text-[9px] text-slate-400 mt-1">
+                        Crie em <span className="underline">analytics.google.com</span> → Propriedade → Stream Web. Cole o ID que começa com <code className="px-1 bg-slate-200 dark:bg-white/10 rounded">G-</code>.
+                      </p>
+                      {gaStatus === 'incomplete' && (
+                        <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-2 font-bold">⚠ Você já tem o API Secret, mas falta o Measurement ID — sem ele o rastreamento não dispara.</p>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => setShowAdvancedGoogle(o => !o)}
+                        className="mt-3 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#ff0068] transition-colors"
+                      >
+                        {showAdvancedGoogle ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                        Avançado · Measurement Protocol (server-side)
+                      </button>
+                      {showAdvancedGoogle && (
+                        <div className="mt-3 pl-3 border-l-2 border-slate-200 dark:border-white/10">
+                          <p className="text-[10px] text-slate-500 leading-relaxed mb-2">
+                            Recupera ~30% das conversões que o client-side perde (iOS 14+, adblock). <strong>Sensível</strong> — guardado criptografado, visível só pra você.
+                          </p>
+                          <div className="relative">
+                            <input
+                              type={showSecrets.ga4_api_secret ? 'text' : 'password'}
+                              value={marketingSecrets.ga4_api_secret}
+                              onChange={e => setMarketingSecrets({ ...marketingSecrets, ga4_api_secret: e.target.value })}
+                              disabled={!gaHasId}
+                              placeholder={!gaHasId ? 'Preencha o Measurement ID acima primeiro' : (secretsConfigured.ga4_api_secret ? '••••••• (já configurado — cole pra trocar)' : 'aB3-xY9_zQ7kFv2...')}
+                              className={`${input} ${!gaHasId ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              autoComplete="off"
+                            />
+                            {gaHasId && (
+                              <button
+                                type="button"
+                                onClick={() => setShowSecrets(s => ({ ...s, ga4_api_secret: !s.ga4_api_secret }))}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 dark:hover:text-white"
+                              >
+                                {showSecrets.ga4_api_secret ? 'ocultar' : 'mostrar'}
+                              </button>
+                            )}
+                          </div>
+                          {secretsConfigured.ga4_api_secret && !marketingSecrets.ga4_api_secret && (
+                            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1">✓ Configurado. Deixe vazio pra manter o atual.</p>
+                          )}
+                          {secretsStatus.ga4_mp_status === 'INVALID_SECRET' && (
+                            <div className="mt-2 p-2 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 rounded-lg">
+                              <p className="text-[10px] font-black text-rose-700 dark:text-rose-300">✗ API Secret inválido</p>
+                              <p className="text-[9px] text-rose-600 dark:text-rose-400 mt-0.5">Crie um novo no GA4 Admin e cole aqui. Conversões server-side estão paradas.</p>
+                            </div>
+                          )}
+                          {secretsStatus.ga4_mp_status === 'OK' && secretsStatus.ga4_mp_last_at && (
+                            <p className="text-[9px] text-emerald-600 dark:text-emerald-400 mt-1">✓ Última conversão chegou: {new Date(secretsStatus.ga4_mp_last_at).toLocaleString('pt-BR')}</p>
+                          )}
+                          <p className="text-[9px] text-slate-400 mt-1">
+                            Em <span className="underline">analytics.google.com</span> → Admin → Streams de Dados → seu Stream → API Secrets do Measurement Protocol → Criar.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Como funciona */}
+                    <div className="p-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-xl">
+                      <p className="text-[10px] text-blue-700 dark:text-blue-300 leading-relaxed">
+                        💡 <strong>Como funciona:</strong> com o ID preenchido, cada plataforma rastreia automaticamente visitas à vitrine, cliques em "Inscreva-se" e conversões de pagamento — em paralelo com o tracking interno do CoreoHub. Os dados aparecem na SUA conta do Google/Meta pra otimizar campanhas. O server-side (Avançado) é opcional e recupera o que o navegador bloqueia.
+                      </p>
                     </div>
                   </div>
                 );
               })()}
-              <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-xl">
-                <p className="text-[10px] text-blue-700 dark:text-blue-300 leading-relaxed">
-                  💡 <strong>Como funciona:</strong> Quando configurados, ambos rastreiam automaticamente visitas à vitrine do seu festival, cliques em "Inscreva-se" e conversões de pagamento. Eventos disparam nas suas contas em paralelo com as do CoreoHub. Você usa os dados pra otimizar suas campanhas no Google/Instagram Ads.
-                </p>
-              </div>
-
-              {/* CAPI server-side (opcional) — tokens SENSÍVEIS que vivem em
-                  event_marketing_secrets com RLS owner-only. Recupera ~30%
-                  perdido client-side (iOS ITP, adblockers) disparando
-                  Purchase via servidor quando webhook Asaas confirma. */}
-              <div className="mt-5 pt-5 border-t border-slate-200 dark:border-white/10">
-                <p className="text-[11px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 mb-1">
-                  Conversions API <span className="text-slate-400">(server-side, opcional)</span>
-                </p>
-                <p className="text-[10px] text-slate-500 leading-relaxed mb-4">
-                  Tokens server-side recuperam ~30% das conversões que o tracking client-side perde (iOS 14+, adblockers, modo privado). <strong>Sensíveis</strong> — só salve aqui, são armazenados criptografados e visíveis só pra você.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className={label}>Meta Conversions API — Access Token</label>
-                    <div className="relative">
-                      <input
-                        type={showSecrets.meta_capi_token ? 'text' : 'password'}
-                        value={marketingSecrets.meta_capi_token}
-                        onChange={e => setMarketingSecrets({ ...marketingSecrets, meta_capi_token: e.target.value })}
-                        placeholder={secretsConfigured.meta_capi_token ? '••••••• (já configurado — cole pra trocar)' : 'EAAxxxxxxxxxxxxxxxxxxxx...'}
-                        className={input}
-                        autoComplete="off"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowSecrets(s => ({ ...s, meta_capi_token: !s.meta_capi_token }))}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 dark:hover:text-white"
-                      >
-                        {showSecrets.meta_capi_token ? 'ocultar' : 'mostrar'}
-                      </button>
-                    </div>
-                    {secretsConfigured.meta_capi_token && !marketingSecrets.meta_capi_token && (
-                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1">✓ Configurado. Deixe vazio pra manter o atual.</p>
-                    )}
-                    {secretsStatus.meta_capi_status === 'INVALID_TOKEN' && (
-                      <div className="mt-2 p-2 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 rounded-lg">
-                        <p className="text-[10px] font-black text-rose-700 dark:text-rose-300">✗ Token inválido ou expirado</p>
-                        <p className="text-[9px] text-rose-600 dark:text-rose-400 mt-0.5">Regere no Gerenciador de Eventos e cole aqui. Conversões server-side estão paradas.</p>
-                      </div>
-                    )}
-                    {secretsStatus.meta_capi_status === 'OK' && secretsStatus.meta_capi_last_at && (
-                      <p className="text-[9px] text-emerald-600 dark:text-emerald-400 mt-1">✓ Última conversão chegou: {new Date(secretsStatus.meta_capi_last_at).toLocaleString('pt-BR')}</p>
-                    )}
-                    <p className="text-[9px] text-slate-400 mt-1">
-                      Em <span className="underline">business.facebook.com</span> → Gerenciador de Eventos → seu Pixel → Configurações → Conversions API → "Gerar token de acesso".
-                    </p>
-                  </div>
-                  <div>
-                    <label className={label}>GA4 Measurement Protocol — API Secret</label>
-                    <div className="relative">
-                      <input
-                        type={showSecrets.ga4_api_secret ? 'text' : 'password'}
-                        value={marketingSecrets.ga4_api_secret}
-                        onChange={e => setMarketingSecrets({ ...marketingSecrets, ga4_api_secret: e.target.value })}
-                        placeholder={secretsConfigured.ga4_api_secret ? '••••••• (já configurado — cole pra trocar)' : 'aB3-xY9_zQ7kFv2...'}
-                        className={input}
-                        autoComplete="off"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowSecrets(s => ({ ...s, ga4_api_secret: !s.ga4_api_secret }))}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 dark:hover:text-white"
-                      >
-                        {showSecrets.ga4_api_secret ? 'ocultar' : 'mostrar'}
-                      </button>
-                    </div>
-                    {secretsConfigured.ga4_api_secret && !marketingSecrets.ga4_api_secret && (
-                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1">✓ Configurado. Deixe vazio pra manter o atual.</p>
-                    )}
-                    {secretsStatus.ga4_mp_status === 'INVALID_SECRET' && (
-                      <div className="mt-2 p-2 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 rounded-lg">
-                        <p className="text-[10px] font-black text-rose-700 dark:text-rose-300">✗ API Secret inválido</p>
-                        <p className="text-[9px] text-rose-600 dark:text-rose-400 mt-0.5">Crie um novo no GA4 Admin e cole aqui. Conversões server-side estão paradas.</p>
-                      </div>
-                    )}
-                    {secretsStatus.ga4_mp_status === 'OK' && secretsStatus.ga4_mp_last_at && (
-                      <p className="text-[9px] text-emerald-600 dark:text-emerald-400 mt-1">✓ Última conversão chegou: {new Date(secretsStatus.ga4_mp_last_at).toLocaleString('pt-BR')}</p>
-                    )}
-                    <p className="text-[9px] text-slate-400 mt-1">
-                      Em <span className="underline">analytics.google.com</span> → Admin → Streams de Dados → seu Stream → API Secrets do Measurement Protocol → Criar.
-                    </p>
-                  </div>
-                </div>
-              </div>
             </div>
 
             {/* Programação Detalhada */}
