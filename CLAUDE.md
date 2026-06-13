@@ -239,6 +239,14 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-06-13 — Fluxo de criar 2º evento (ponto de entrada quebrado) ✅ SHIPADO
+2 commits (`13d140e` + `4eed0b0`). Só frontend. Diagnóstico veio de pergunta do user ("existe fluxo pra produtor criar novo evento? não lembro").
+
+- **Diagnóstico:** o suporte a múltiplos eventos por produtor SEMPRE existiu nos dados (`events` por `created_by`, `EventPickerSheet` troca, app multi-tenant por `event_id`) e o fluxo real de criação é o `OnboardingWizard` em **`/criar-evento`** (`CriarEventoGate` → se logado renderiza o wizard → `createEvent`). MAS nenhum botão in-app apontava certo: o botão **"Novo Evento"** do `ProducerDashboard` ia pra `/account-settings`, que **edita o evento mais recente** (`order created_at desc limit 1`), não cria. Por isso o produtor que voltava nunca achava o "criar novo".
+- **Fix (`13d140e`):** botão "Novo Evento" → `navigate('/criar-evento')`.
+- **Feature (`4eed0b0`):** atalho "+ Criar evento" no rodapé do `EventPickerSheet` (onde o produtor troca de evento) — opt-in via prop `onCreateNew?: () => void` (componente fica desacoplado de rota; usado em 5 telas, só o Dashboard passa a prop). Rodapé fixo nos 2 layouts (sheet mobile + dropdown desktop). Os dois pontos de entrada coexistem (botão do header + atalho no picker, padrão Sympla/Notion).
+- **Guard anti-duplicata:** OnboardingWizard só redireciona pra evento existente quando nome+ano batem (case-insensitive) — criar com nome/ano diferente funciona normal. Detalhes em [[criar-segundo-evento-entrypoint-fix]].
+
 ### 2026-06-11 — Terminal júri navegação manual + voz narração + teclado PIN + frase LGPD ✅ SHIPADO
 7 commits (`04c91a1` → `1c88753`). Só frontend — nenhuma migration/edge function. Tudo em prod (Vercel).
 
