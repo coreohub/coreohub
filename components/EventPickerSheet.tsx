@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, Check, ChevronDown, Search } from 'lucide-react';
+import { Calendar, Check, ChevronDown, Search, Plus } from 'lucide-react';
 
 /**
  * Substitui o `<select>` nativo do Android (que vira bottom sheet feio sem
@@ -29,6 +29,9 @@ interface Props {
   className?: string;
   /** Texto do trigger quando nenhum evento está selecionado. */
   emptyLabel?: string;
+  /** Quando passado, mostra um rodapé "+ Criar evento" no fim do picker.
+   *  Opt-in: telas que não devem oferecer criação simplesmente não passam. */
+  onCreateNew?: () => void;
 }
 
 const formatLabel = (ev: EventPickerOption) =>
@@ -40,6 +43,7 @@ const EventPickerSheet: React.FC<Props> = ({
   onSelect,
   className = '',
   emptyLabel = 'Selecionar evento',
+  onCreateNew,
 }) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -70,6 +74,11 @@ const EventPickerSheet: React.FC<Props> = ({
   const handlePick = (id: string) => {
     onSelect(id);
     setOpen(false);
+  };
+
+  const handleCreateNew = () => {
+    setOpen(false);
+    onCreateNew?.();
   };
 
   return (
@@ -181,6 +190,17 @@ const EventPickerSheet: React.FC<Props> = ({
                   })
                 )}
               </ul>
+              {onCreateNew && (
+                <div className="shrink-0 border-t border-slate-100 dark:border-white/5 p-3">
+                  <button
+                    type="button"
+                    onClick={handleCreateNew}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#ff0068]/10 text-[#ff0068] text-[11px] font-black uppercase tracking-widest hover:bg-[#ff0068]/15 transition-colors"
+                  >
+                    <Plus size={14} /> Criar evento
+                  </button>
+                </div>
+              )}
             </motion.div>
 
             {/* Dropdown desktop (md+) — ancorado abaixo do trigger */}
@@ -240,6 +260,17 @@ const EventPickerSheet: React.FC<Props> = ({
                   })
                 )}
               </ul>
+              {onCreateNew && (
+                <div className="shrink-0 border-t border-slate-100 dark:border-white/5 p-2">
+                  <button
+                    type="button"
+                    onClick={handleCreateNew}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[#ff0068]/10 text-[#ff0068] text-[10px] font-black uppercase tracking-widest hover:bg-[#ff0068]/15 transition-colors"
+                  >
+                    <Plus size={12} /> Criar evento
+                  </button>
+                </div>
+              )}
             </motion.div>
 
             {/* Overlay invisível pra click-outside no desktop */}

@@ -430,6 +430,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
               events={allEvents}
               selectedEventId={selectedEventId}
               onSelect={setSelectedEventId}
+              onCreateNew={() => navigate('/criar-evento')}
               className="flex-1 md:flex-none"
             />
           )}
