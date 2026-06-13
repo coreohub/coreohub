@@ -435,7 +435,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
           )}
 
           <button
-            onClick={() => navigate('/account-settings')}
+            onClick={() => navigate('/criar-evento')}
             className="flex items-center gap-2 bg-[#ff0068] text-white px-4 sm:px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-[#ff0068]/20 group whitespace-nowrap"
           >
             <Plus size={16} className="group-hover:rotate-90 transition-transform" />
