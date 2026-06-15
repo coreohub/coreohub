@@ -72,8 +72,8 @@ Deno.serve(async (req) => {
 
     const groups = filtered.map((r: any) => ({
       coreohub_registration_id: r.id,
-      coreografia: r.nome_coreografia,
-      nome: r.estudio,
+      coreografia: r.nome_coreografia ?? '',
+      nome: r.estudio ?? '', // groups.nome é NOT NULL; solo sem estúdio vira ''
       modalidade: r.estilo_danca ?? null,
       bloco: r.bloco_id ? (blocoName.get(r.bloco_id) ?? null) : null,
       ordem: r.ordem_apresentacao ?? null,
