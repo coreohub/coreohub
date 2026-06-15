@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     // Inscrições do cronograma (mesmo filtro do Schedule.tsx)
     const { data: regs } = await admin
       .from('registrations')
-      .select('id, nome_coreografia, estudio, estilo_danca, ordem_apresentacao, bloco_id, excluded_from_schedule')
+      .select('id, nome_coreografia, estilo_danca, ordem_apresentacao, bloco_id, excluded_from_schedule, inscrito_nome, formato_participacao, bailarinos_detalhes, event_data')
       .eq('event_id', event_id)
       .or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO');
     const filtered = (regs ?? []).filter((r: { excluded_from_schedule?: boolean }) => !r.excluded_from_schedule);
@@ -70,14 +70,30 @@ Deno.serve(async (req) => {
       .eq('event_id', event_id);
     const blocoName = new Map((blocos ?? []).map((b: { id: string; name: string }) => [b.id, b.name]));
 
-    const groups = filtered.map((r: any) => ({
-      coreohub_registration_id: r.id,
-      coreografia: r.nome_coreografia ?? '',
-      nome: r.estudio ?? '', // groups.nome é NOT NULL; solo sem estúdio vira ''
-      modalidade: r.estilo_danca ?? null,
-      bloco: r.bloco_id ? (blocoName.get(r.bloco_id) ?? null) : null,
-      ordem: r.ordem_apresentacao ?? null,
-    }));
+    const groups = filtered.map((r: any) => {
+      const ed = r.event_data ?? {};
+      // Âncora "quem dança" (cascata): estúdio → coreógrafo → inscrito. Nunca vazio.
+      const anchor = (ed.estudio_nome || ed.coreografo_nome || r.inscrito_nome || '')
+        .toString()
+        .trim();
+      // Nomes dos bailarinos (só nome, sem CPF/nasc) pra busca + exibição.
+      const bailarinos = Array.isArray(r.bailarinos_detalhes)
+        ? r.bailarinos_detalhes
+            .map((b: any) => (b?.nome ?? '').toString().trim())
+            .filter(Boolean)
+            .join(', ')
+        : '';
+      return {
+        coreohub_registration_id: r.id,
+        coreografia: r.nome_coreografia ?? '',
+        nome: anchor, // groups.nome é NOT NULL — cascata garante preenchido
+        modalidade: r.estilo_danca ?? null,
+        bloco: r.bloco_id ? (blocoName.get(r.bloco_id) ?? null) : null,
+        ordem: r.ordem_apresentacao ?? null,
+        bailarinos: bailarinos || null,
+        formacao: r.formato_participacao ?? null,
+      };
+    });
 
     // Push pro Voto (festival_slug auto-vincula no 1º envio)
     const resp = await fetch(voteUrl, {
