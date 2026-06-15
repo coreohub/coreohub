@@ -429,6 +429,7 @@ const Schedule = () => {
   const [showExcluded, setShowExcluded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
@@ -1203,6 +1204,23 @@ const Schedule = () => {
     setIsGenerating(false);
   };
 
+  // Publica as coreografias do cronograma no Voto Popular (push pro projeto isolado).
+  const handlePublishToVote = async () => {
+    if (!selectedEventId) { alert('Selecione um evento primeiro.'); return; }
+    setIsPublishing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('publish-vote-groups', {
+        body: { event_id: selectedEventId },
+      });
+      if (error) throw error;
+      alert(`Publicado no Voto Popular: ${(data as any)?.published ?? 0} coreografias.`);
+    } catch (e: any) {
+      alert('Erro ao publicar no Voto: ' + (e?.message ?? String(e)));
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
   const handleSaveOrder = async () => {
     setIsSaving(true);
     try {
@@ -1440,6 +1458,16 @@ const Schedule = () => {
               ? <><Loader2 size={12} className="animate-spin" /> Gerando {batchProgress.done}/{batchProgress.total}...</>
               : 'Gerar narrações IA'
             }
+          </button>
+
+          <button
+            onClick={handlePublishToVote}
+            disabled={isPublishing || registrations.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:border-[#ff0068]/50 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
+            title="Enviar as coreografias do cronograma pro Voto Popular (vote.usualdance.com)"
+          >
+            {isPublishing ? <Loader2 size={12} className="animate-spin" /> : <Radio size={12} />}
+            {isPublishing ? 'Publicando...' : 'Publicar no Voto'}
           </button>
 
           {orderChanged && (
