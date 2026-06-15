@@ -100,6 +100,11 @@ const Registrations = () => {
       categoria:            reg.categoria ?? '',
       estilo_danca:         reg.estilo_danca ?? '',
       tipo_apresentacao:    reg.tipo_apresentacao ?? '',
+      nome_coreografia:     reg.nome_coreografia ?? '',
+      // estúdio/coreógrafo moram no event_data JSONB (não são colunas diretas)
+      estudio_nome:         reg.event_data?.estudio_nome ?? '',
+      coreografo_nome:      reg.event_data?.coreografo_nome ?? '',
+      _event_data:          reg.event_data ?? {},
       // Refator 2026-06-01: CPF/data/nome reais vêm da `elenco` (JSONB
       // bailarinos_detalhes só tem id+nome+@). elencoId carrega o id da row
       // pra save fazer UPDATE em vez de INSERT. Produtor não cria bailarino
@@ -142,10 +147,17 @@ const Registrations = () => {
     try {
       const patch: Record<string, any> = {};
       // Só envia campos que mudaram pra não resetar coluna por engano.
-      for (const k of ['formato_participacao', 'categoria', 'estilo_danca', 'tipo_apresentacao']) {
+      for (const k of ['formato_participacao', 'categoria', 'estilo_danca', 'tipo_apresentacao', 'nome_coreografia']) {
         const v = editValues[k]?.trim?.() ?? editValues[k];
         if (v !== undefined && v !== '') patch[k] = v;
       }
+      // Estúdio/coreógrafo moram no event_data JSONB — merge preservando o resto
+      // (mod_fee, duração, etc.). _event_data carrega o original capturado no startEditing.
+      patch.event_data = {
+        ...(editValues._event_data ?? {}),
+        estudio_nome:    String(editValues.estudio_nome ?? '').trim() || null,
+        coreografo_nome: String(editValues.coreografo_nome ?? '').trim() || null,
+      };
       // Sessão 4.2 item 2: bailarinos editáveis. Normaliza CPF (só dígitos),
       // valida quando preenchido, força lowercase no instagram (lição 2026-05-19),
       // converte data BR→ISO. Solo/Duo/Trio → @ por bailarino; Grupo/Conjunto →
@@ -2185,6 +2197,15 @@ const Registrations = () => {
                         <EditField label="Tipo de Mostra" value={editValues.tipo_apresentacao}
                           onChange={v => setEditValues(p => ({ ...p, tipo_apresentacao: v }))}
                           options={['Competitiva', 'Avaliada']} />
+                        <EditField label="Nome da Coreografia" value={editValues.nome_coreografia ?? ''}
+                          onChange={v => setEditValues(p => ({ ...p, nome_coreografia: v }))}
+                          options={[]} />
+                        <EditField label="Estúdio / Escola" value={editValues.estudio_nome ?? ''}
+                          onChange={v => setEditValues(p => ({ ...p, estudio_nome: v }))}
+                          options={[]} />
+                        <EditField label="Coreógrafo(a)" value={editValues.coreografo_nome ?? ''}
+                          onChange={v => setEditValues(p => ({ ...p, coreografo_nome: v }))}
+                          options={[]} />
                       </div>
                     </>
                   ) : (

@@ -265,6 +265,21 @@ const resolveRefDate = (
   return eventDate || new Date().toISOString().slice(0, 10);
 };
 
+// Normaliza CAIXA ALTA pra Title Case (mantém "de/da" minúsculo). Evita que o
+// inscrito grave nome de coreografia/estúdio/coreógrafo todo em maiúsculo.
+const PARTICULAS_NOME = new Set(['de', 'da', 'do', 'dos', 'das', 'e', 'di', 'du', 'na', 'no']);
+function normalizeNomeProprio(s: string): string {
+  const t = (s ?? '').trim();
+  if (!t) return t;
+  const isAllCaps = t === t.toUpperCase() && /[A-ZÀ-Ý]/.test(t);
+  if (!isAllCaps) return t;
+  return t
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w, i) => (i > 0 && PARTICULAS_NOME.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(' ');
+}
+
 const InscricaoWizard: React.FC = () => {
   const { idOrSlug, modalidade: urlModalidade } = useParams<{ idOrSlug: string; modalidade?: string }>();
   // Permite trocar modalidade pelo select do Passo 1 SEM perder state preenchido.
@@ -892,7 +907,7 @@ const InscricaoWizard: React.FC = () => {
           inscrito_email:       authUser?.email ?? null,
           inscrito_whatsapp:    profileSnap?.whatsapp ?? null,
           ...(utms ?? {}),
-          nome_coreografia:     data.nome_coreografia.trim(),
+          nome_coreografia:     normalizeNomeProprio(data.nome_coreografia),
           estilo_danca:         data.estilo_danca || null,
           subgenero:            data.subgenero || null,
           // Modalidade marcada como Livre pelo produtor não exige categoria etária.
@@ -929,8 +944,8 @@ const InscricaoWizard: React.FC = () => {
               // MinhasCoreografias.tsx que lê esse campo. Pode ser removido
               // quando todas as views forem migradas pra duracao_segundos.
               duracao_minutos:  duracaoSec ? Math.round((duracaoSec / 60) * 100) / 100 : null,
-              coreografo_nome:  data.coreografo_nome.trim(),
-              estudio_nome:     data.estudio_nome.trim() || null,
+              coreografo_nome:  normalizeNomeProprio(data.coreografo_nome),
+              estudio_nome:     normalizeNomeProprio(data.estudio_nome) || null,
               wizard_version:   'PR-B-2026-05-08',
               // Flag pra produtor ver no painel (legacy MinhasCoreografias).
               // Só salva quando há violação real — caso contrário, null.
