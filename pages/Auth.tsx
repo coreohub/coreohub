@@ -414,7 +414,7 @@ const Auth = () => {
     e?.preventDefault();
     setOtpError(null);
     const token = otpCode.replace(/\D/g, '');
-    if (token.length !== 6) { setOtpError('O código tem 6 dígitos.'); return; }
+    if (token.length < 6) { setOtpError('Digite o código que chegou no e-mail.'); return; }
     setOtpLoading(true);
     try {
       const { error } = await supabase.auth.verifyOtp({ email: otpEmail, token, type: 'email' });
@@ -594,7 +594,7 @@ const Auth = () => {
                         Enviamos um e-mail pra<br /><span className="text-[#ff0068]">{otpEmail}</span>
                       </p>
                       <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold normal-case leading-relaxed px-2">
-                        Toque em <strong>Entrar agora</strong> no e-mail pra logar direto, ou digite o código de 6 dígitos abaixo.
+                        Toque em <strong>Entrar agora</strong> no e-mail pra logar direto, ou digite o código do e-mail abaixo.
                       </p>
                     </div>
 
@@ -605,12 +605,12 @@ const Auth = () => {
                         inputMode="numeric"
                         autoComplete="one-time-code"
                         pattern="[0-9]*"
-                        maxLength={6}
+                        maxLength={8}
                         value={otpCode}
-                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                        placeholder="••••••"
+                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                        placeholder="••••••••"
                         autoFocus
-                        className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl py-3.5 px-6 text-center text-2xl font-black tracking-[0.5em] text-slate-900 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-700 focus:outline-none focus:border-[#ff0068]/50 focus:bg-white dark:focus:bg-white/10 transition-all shadow-sm"
+                        className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl py-3.5 px-6 text-center text-2xl font-black tracking-[0.35em] text-slate-900 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-700 focus:outline-none focus:border-[#ff0068]/50 focus:bg-white dark:focus:bg-white/10 transition-all shadow-sm"
                       />
                     </div>
 
