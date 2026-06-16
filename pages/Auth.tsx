@@ -605,12 +605,12 @@ const Auth = () => {
                         inputMode="numeric"
                         autoComplete="one-time-code"
                         pattern="[0-9]*"
-                        maxLength={8}
+                        maxLength={10}
                         value={otpCode}
-                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
-                        placeholder="••••••••"
+                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        placeholder="Código do e-mail"
                         autoFocus
-                        className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl py-3.5 px-6 text-center text-2xl font-black tracking-[0.35em] text-slate-900 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-700 focus:outline-none focus:border-[#ff0068]/50 focus:bg-white dark:focus:bg-white/10 transition-all shadow-sm"
+                        className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl py-3.5 px-6 text-center text-xl font-black tracking-[0.2em] text-slate-900 dark:text-white placeholder:text-sm placeholder:tracking-normal placeholder:font-bold placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-[#ff0068]/50 focus:bg-white dark:focus:bg-white/10 transition-all shadow-sm"
                       />
                     </div>
 
