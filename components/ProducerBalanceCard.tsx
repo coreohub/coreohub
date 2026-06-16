@@ -256,13 +256,13 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
             <span className="inline-flex items-center gap-1.5">
               <CheckCircle2 size={11} className="text-emerald-500" />
               <strong className="font-black text-slate-700 dark:text-slate-300">{fmtBRL(disponivel)}</strong>
-              disponível agora
+              já liberado
             </span>
             <span className="text-slate-300 dark:text-slate-600">•</span>
             <span className="inline-flex items-center gap-1.5">
               <Clock size={11} className="text-amber-500" />
               <strong className="font-black text-slate-700 dark:text-slate-300">{fmtBRL(retido)}</strong>
-              a liberar {nextReleaseAt ? fmtNextRelease() : ''}
+              retido {nextReleaseAt ? '· libera ' + fmtNextRelease() : ''}
             </span>
           </div>
         </div>
