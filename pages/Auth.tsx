@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Sparkles, Loader2, Mail, Lock, ArrowRight, ShieldCheck, Zap, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
+import { OtpBoxes } from '../components/OtpBoxes';
 import AsaasBadge from '../components/AsaasBadge';
 import { suggestEmail } from '../utils/mailcheck';
 import { isInAppBrowser } from '../utils/inAppBrowser';
@@ -410,10 +411,10 @@ const Auth = () => {
   };
 
   /** Verifica o código de 6 dígitos. Sucesso → SIGNED_IN listener navega. */
-  const handleVerifyOtp = async (e?: React.FormEvent) => {
-    e?.preventDefault();
+  const handleVerifyOtp = async (arg?: React.FormEvent | string) => {
+    if (arg && typeof arg !== 'string') arg.preventDefault();
     setOtpError(null);
-    const token = otpCode.replace(/\D/g, '');
+    const token = (typeof arg === 'string' ? arg : otpCode).replace(/\D/g, '');
     if (token.length < 6) { setOtpError('Digite o código que chegou no e-mail.'); return; }
     setOtpLoading(true);
     try {
@@ -600,17 +601,12 @@ const Auth = () => {
 
                     <div className="space-y-2">
                       <label htmlFor="otp-code" className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-center block">Código</label>
-                      <input
-                        id="otp-code"
-                        inputMode="numeric"
-                        autoComplete="one-time-code"
-                        pattern="[0-9]*"
-                        maxLength={10}
+                      <OtpBoxes
                         value={otpCode}
-                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                        placeholder="Código do e-mail"
+                        onChange={setOtpCode}
+                        onComplete={(v) => handleVerifyOtp(v)}
                         autoFocus
-                        className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl py-3.5 px-6 text-center text-xl font-black tracking-[0.2em] text-slate-900 dark:text-white placeholder:text-sm placeholder:tracking-normal placeholder:font-bold placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-[#ff0068]/50 focus:bg-white dark:focus:bg-white/10 transition-all shadow-sm"
+                        disabled={otpLoading || isAuthenticating}
                       />
                     </div>
 
