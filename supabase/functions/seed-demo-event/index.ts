@@ -519,7 +519,11 @@ Deno.serve(async (req) => {
       // Mesmo sem evento, pode haver workshop standalone + templates do produtor.
       // Deleta órfãos pra regerar limpo.
       await supa.from('certificate_templates').delete().eq('producer_id', userId)
-      await supa.from('workshops').delete().eq('created_by', userId)  // pega standalone (event_id=null)
+      // BUG CRÍTICO 2026-06-17: faltava o filtro .is('event_id', null) — sem
+      // ele, isso deletava TODOS os workshops do produtor, incluindo os de
+      // eventos REAIS (não só os standalone órfãos do demo). Causou perda de
+      // dados em prod (workshops do Usualdance Festival apagados).
+      await supa.from('workshops').delete().eq('created_by', userId).is('event_id', null)
       return
     }
     // platform_commissions: deleta linhas que apontam pros eventos demo
@@ -548,10 +552,13 @@ Deno.serve(async (req) => {
     } catch (e) {
       console.warn('Falha ao deletar elenco demo:', e)
     }
-    // ── Workshops Etapa 1: workshops têm event_id CASCADE, mas standalone (NULL)
-    //    são scopados por created_by. workshop_lots e workshop_registrations têm
-    //    CASCADE em workshops.id, então só precisamos deletar workshops.
-    await supa.from('workshops').delete().eq('created_by', userId)
+    // ── Workshops Etapa 1: workshops vinculados ao evento demo (event_id IN ids)
+    //    já são apagados via CASCADE quando o evento demo é deletado abaixo.
+    //    Só precisamos limpar os standalone (event_id=null) do produtor aqui.
+    //    BUG CRÍTICO 2026-06-17: faltava .is('event_id', null) — sem ele isso
+    //    deletava TAMBÉM os workshops de eventos REAIS do mesmo produtor.
+    //    workshop_lots e workshop_registrations têm CASCADE em workshops.id.
+    await supa.from('workshops').delete().eq('created_by', userId).is('event_id', null)
     // ── Certificados Etapa 2: certificate_templates é por producer_id (1 por type),
     //    certificates_issued tem CASCADE em registrations / workshop_registrations.
     //    Deletar templates e certificates_issued explicitamente garante limpeza.
