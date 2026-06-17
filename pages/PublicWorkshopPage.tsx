@@ -177,12 +177,12 @@ const PublicWorkshopPage: React.FC = () => {
     <div className="min-h-screen bg-[#0b0b0f] text-white pb-24 sm:pb-12">
       {/* Cover */}
       <div className="relative h-56 md:h-80 overflow-hidden">
-        {workshop.cover_url ? (
-          <img src={workshop.cover_url} alt="" className="w-full h-full object-cover" />
+        {(workshop.cover_url || workshop.professor_photo_url) ? (
+          <img src={workshop.cover_url || workshop.professor_photo_url || ''} alt="" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-[#ff0068] via-purple-700 to-[#0b0b0f]" />
         )}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#0b0b0f]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/10 to-[#0b0b0f]" />
       </div>
 
       <div className="max-w-3xl mx-auto px-4 -mt-20 relative">

@@ -4,7 +4,7 @@ import imageCompression from 'browser-image-compression';
 import {
   Plus, Trash2, Pencil, Calendar, Clock, MapPin, Loader2, X, AlertCircle, CheckCircle,
   GraduationCap, User, Tag, Layers, DollarSign, Users, Globe, EyeOff, Camera,
-  ShoppingCart, Mail, RefreshCw, UserCheck, Search,
+  ShoppingCart, Mail, RefreshCw, UserCheck, Search, Image as ImageIcon,
 } from 'lucide-react';
 
 type Nivel = 'iniciante' | 'intermediario' | 'avancado' | 'todos';
@@ -927,6 +927,34 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
     }
   };
 
+  // Upload de capa do workshop (estilo Sympla — 16:9 1200×675).
+  // Mesmo padrão: comprime e salva base64 inline, sem depender de bucket.
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const handleCoverUpload = async (file: File) => {
+    if (!file) return;
+    setCoverUploading(true);
+    try {
+      const compressed = await imageCompression(file, {
+        maxSizeMB: 0.3,
+        maxWidthOrHeight: 1200,
+        useWebWorker: true,
+        fileType: 'image/webp',
+      });
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(compressed);
+      });
+      upd('cover_url', base64);
+    } catch (e) {
+      console.warn('Falha ao processar capa do workshop:', e);
+    } finally {
+      setCoverUploading(false);
+    }
+  };
+
   return (
     <div
       role="dialog"
@@ -968,6 +996,42 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
             </Field>
             <Field label="Descrição">
               <textarea value={form.description} onChange={e => upd('description', e.target.value)} rows={3} className={inputCls} placeholder="O que o aluno vai aprender, pré-requisitos, materiais..." />
+            </Field>
+            <Field label="Capa do workshop (recomendado 1200×675px, proporção 16:9)">
+              <div className="flex items-start gap-4">
+                <div className="relative shrink-0 w-32 aspect-video rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-white/10">
+                  {form.cover_url ? (
+                    <img src={form.cover_url} alt="capa do workshop" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-slate-400 dark:text-slate-600">
+                      <ImageIcon size={20} />
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => coverInputRef.current?.click()}
+                    disabled={coverUploading}
+                    className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#ff0068] text-white flex items-center justify-center shadow-lg ring-2 ring-white dark:ring-slate-900 hover:scale-110 transition-transform"
+                    title={form.cover_url ? 'Trocar capa' : 'Adicionar capa'}
+                    aria-label={form.cover_url ? 'Trocar capa' : 'Adicionar capa'}
+                  >
+                    {coverUploading
+                      ? <Loader2 size={12} className="animate-spin" />
+                      : <Camera size={12} />
+                    }
+                  </button>
+                  <input
+                    ref={coverInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => { if (e.target.files?.[0]) handleCoverUpload(e.target.files[0]); }}
+                  />
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 flex-1">
+                  Aparece no card da vitrine e no topo da página pública do workshop. Sem capa, usamos a foto do professor.
+                </p>
+              </div>
             </Field>
           </Section>
 

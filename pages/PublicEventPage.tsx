@@ -1117,6 +1117,7 @@ const PublicEventPage = () => {
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
               <BrandIcon size={24} /> Workshops
             </h2>
+            <p className="text-xs text-slate-400">Aprimore sua técnica com quem é referência. Inscritos da mostra têm preço especial.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {publicWorkshops.map(ws => {
                 const dataFmt = new Date(ws.data_inicio).toLocaleString('pt-BR', {
