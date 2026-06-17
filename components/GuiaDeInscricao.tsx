@@ -231,7 +231,7 @@ const GuiaDeInscricao: React.FC<Props> = ({ profile, config }) => {
       id: 3,
       Icon: Upload,
       title: 'Envie as trilhas sonoras',
-      subtitle: 'Arquivos de áudio para o evento',
+      subtitle: 'Arquivos de música para o evento',
       description: (() => {
         const formats = config?.formato_trilha || 'MP3, WAV ou M4A (máximo 100MB por arquivo)';
         const prazoFormatado = config?.prazo_upload_trilha

@@ -331,7 +331,7 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
               }`
             }>
               <span className={`w-1.5 h-1.5 rounded-full ${hasAudio ? 'bg-emerald-500' : 'bg-rose-500 animate-pulse'}`} />
-              {hasAudio ? 'Áudio Enviado' : 'Áudio Pendente'}
+              {hasAudio ? 'Música Enviada' : 'Música Pendente'}
             </div>
 
             {/* Player */}
@@ -376,7 +376,7 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
                       ? <Loader2 size={11} className="animate-spin" />
                       : <Upload size={11} />
                     }
-                    {uploading ? `Enviando… ${progress}%` : hasAudio ? 'Substituir Áudio' : 'Enviar Áudio'}
+                    {uploading ? `Enviando… ${progress}%` : hasAudio ? 'Substituir Música' : 'Enviar Música'}
                   </button>
 
                   {hasAudio && (
