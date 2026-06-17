@@ -6,7 +6,7 @@ import {
   Music2, Plus, Trash2, AlertCircle, Loader2, CheckCircle,
   Clapperboard, Calendar, MapPin, Clock, CreditCard, QrCode,
   ChevronRight, AlertTriangle, ShoppingCart, X, Video,
-  Users, Pencil, Save, RefreshCw, Lock as LockIcon, Tag,
+  Users, Pencil, Save, RefreshCw, Lock as LockIcon, Tag, Sparkles,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import BailarinosEditor, { type BailarinoFormValue } from '../components/BailarinosEditor';
@@ -17,6 +17,7 @@ import {
   type ElencoRow,
 } from '../utils/bailarinos';
 import { validateCoupon } from '../services/couponService';
+import { isRegistrationPaid } from '../utils/registrationStatus';
 
 /* ══════════════════════════════════════════════════════════════
    TYPES
@@ -134,6 +135,9 @@ const MinhasCoreografias = () => {
   const [registrations, setRegistrations]    = useState<Registration[]>([]);
   const [workshops,     setWorkshops]        = useState<any[]>([]);
   const [activePayments, setActivePayments]  = useState<Record<string, AggregatePayment>>({});
+  // event_id -> tem workshop publicado pra vender. Alimenta o card de upsell
+  // "Garanta seu workshop com preço de inscrito" por evento.
+  const [eventsWithWorkshops, setEventsWithWorkshops] = useState<Record<string, boolean>>({});
   const [profileCpf, setProfileCpf]          = useState<string | null>(null);
   const [loading,  setLoading]               = useState(true);
   const [error,    setError]                 = useState<string | null>(null);
@@ -278,6 +282,17 @@ const MinhasCoreografias = () => {
         for (const ev of (eventsData ?? [])) formacoes[ev.id] = ev.formacoes_config ?? [];
         setPrazosPorEvento(prazos);
         setFormacoesPorEvento(formacoes);
+
+        // Upsell de workshop: só mostra o card se o evento tem workshop
+        // publicado pra vender (evita CTA pra página sem nada).
+        const { data: wsAvailable } = await supabase
+          .from('workshops')
+          .select('event_id')
+          .in('event_id', eventIds)
+          .eq('is_published', true);
+        const wsMap: Record<string, boolean> = {};
+        for (const w of (wsAvailable ?? [])) wsMap[w.event_id] = true;
+        setEventsWithWorkshops(wsMap);
       }
 
       // Helper: calcula o preço a mostrar pra uma inscrição. Espelha a lógica
@@ -1726,6 +1741,34 @@ const MinhasCoreografias = () => {
               </div>
             </div>
           )}
+
+          {/* ── CTA upsell de workshop (Bloco 5) ── */}
+          {grupo.eventSlug && eventsWithWorkshops[grupo.eventId] && (() => {
+            const temInscricaoPaga = grupo.outras.some(r => isRegistrationPaid(r.status_pagamento));
+            return (
+              <div className="border-t border-slate-200 dark:border-white/10 p-5">
+                <button
+                  onClick={() => navigate(`/evento/${grupo.eventSlug}#workshops`)}
+                  className="w-full flex items-center justify-between gap-3 bg-gradient-to-r from-[#ff0068]/10 to-violet-500/10 border border-[#ff0068]/30 hover:border-[#ff0068] rounded-2xl p-4 text-left transition-colors group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Sparkles size={18} className="text-[#ff0068] shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-black text-slate-900 dark:text-white">
+                        {temInscricaoPaga
+                          ? 'Garanta seu workshop com preço de inscrito'
+                          : 'Finalize sua inscrição para garantir o preço de inscrito nos workshops'}
+                      </p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        Aprimore sua técnica com quem é referência neste festival.
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight size={16} className="text-[#ff0068] shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                </button>
+              </div>
+            );
+          })()}
 
         </div>
       ))}
