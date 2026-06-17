@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import SystemErrorBanner from '../components/SystemErrorBanner';
 import { getAllGenres } from '../services/genreService';
+import { parseTempoSegundos } from '../utils/masks';
 import { EventStyle } from '../types';
 import {
-  Music2, Upload, Play, Pause, CheckCircle2,
+  Music2, Upload, Play, Pause, CheckCircle2, Check,
   Loader2, Lock, Calendar, Clapperboard,
   AlertTriangle, RefreshCw, Headphones, Trash2,
   ShieldAlert, CreditCard, ArrowRight, Disc,
@@ -34,6 +35,12 @@ interface Coreografia {
   prazo_trilhas?: string | null;
   /** Fallback de prazo = data do evento (configuracoes.data_evento) */
   event_date_fallback?: string | null;
+  /** Duração da trilha enviada em segundos (registrations.duracao_trilha_segundos) */
+  duracao_trilha_segundos?: number | null;
+  /** Nome original do arquivo enviado (registrations.trilha_filename) */
+  trilha_filename?: string | null;
+  /** Limite de duração da modalidade em segundos (formacoes_config[].max_time) */
+  max_time_seconds?: number;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -76,37 +83,50 @@ const fmtDate = (d?: string) => {
 };
 
 /* ══════════════════════════════════════════════════════════════
-   MINI PLAYER
+   PRÉVIA DA MÚSICA (neutra e minimalista)
+   Botão play/pause apagado (não verde) + nome do arquivo + duração,
+   com selo de limite da modalidade: ✓ dentro / ⚠ acima do máximo.
 ══════════════════════════════════════════════════════════════ */
-const AudioPlayer: React.FC<{ url: string }> = ({ url }) => {
+const fmtDur = (s: number) => {
+  if (!s || !isFinite(s)) return '';
+  const m = Math.floor(s / 60);
+  const sec = Math.round(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+};
+
+const TrackPreview: React.FC<{
+  url: string;
+  filename?: string | null;
+  durationSeconds?: number | null;
+  maxSeconds?: number;
+}> = ({ url, filename, durationSeconds, maxSeconds }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [liveDur, setLiveDur] = useState(0);
 
   const toggle = () => {
     if (!audioRef.current) return;
     if (playing) {
       audioRef.current.pause();
     } else {
-      // Pause all other audio elements on page
+      // Pausa qualquer outro áudio tocando na página
       document.querySelectorAll('audio').forEach(a => { if (a !== audioRef.current) a.pause(); });
       audioRef.current.play();
     }
     setPlaying(!playing);
   };
 
-  const fmtTime = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return `${m}:${sec.toString().padStart(2, '0')}`;
-  };
+  const dur    = durationSeconds && durationSeconds > 0 ? durationSeconds : liveDur;
+  const hasMax = !!maxSeconds && maxSeconds > 0 && dur > 0;
+  const over   = hasMax && dur > (maxSeconds as number);
+  const within = hasMax && !over;
 
   return (
-    <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl">
+    <div className="flex items-center gap-3 p-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/8 rounded-xl">
       <button
         onClick={toggle}
-        className="w-8 h-8 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center shrink-0 transition-all active:scale-95"
+        aria-label={playing ? 'Pausar prévia' : 'Tocar prévia'}
+        className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-white/10 text-slate-500 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-white/15 flex items-center justify-center shrink-0 transition-all active:scale-95"
       >
         {playing
           ? <Pause size={13} fill="currentColor" />
@@ -115,31 +135,26 @@ const AudioPlayer: React.FC<{ url: string }> = ({ url }) => {
       </button>
 
       <div className="flex-1 min-w-0">
-        <div
-          className="w-full h-1.5 bg-emerald-200 dark:bg-emerald-500/30 rounded-full cursor-pointer"
-          onClick={e => {
-            if (!audioRef.current || !duration) return;
-            const rect = (e.target as HTMLElement).getBoundingClientRect();
-            const ratio = (e.clientX - rect.left) / rect.width;
-            audioRef.current.currentTime = ratio * duration;
-          }}
-        >
-          <div
-            className="h-full bg-emerald-500 rounded-full transition-all"
-            style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }}
-          />
+        <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 truncate">
+          {filename || 'Música enviada'}
+        </p>
+        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+          {dur > 0 && (
+            <span className="text-[10px] font-bold text-slate-400 tabular-nums">{fmtDur(dur)}</span>
+          )}
+          {within && <Check size={11} className="text-emerald-500 shrink-0" />}
+          {over && (
+            <span className="inline-flex items-center gap-0.5 text-[9px] font-black uppercase tracking-wide text-amber-600 dark:text-amber-400">
+              <AlertTriangle size={10} /> acima do limite (máx {fmtDur(maxSeconds as number)})
+            </span>
+          )}
         </div>
       </div>
-
-      <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 tabular-nums shrink-0">
-        {fmtTime(progress)}{duration ? ` / ${fmtTime(duration)}` : ''}
-      </span>
 
       <audio
         ref={audioRef}
         src={url}
-        onTimeUpdate={() => setProgress(audioRef.current?.currentTime || 0)}
-        onDurationChange={() => setDuration(audioRef.current?.duration || 0)}
+        onDurationChange={() => setLiveDur(audioRef.current?.duration || 0)}
         onEnded={() => setPlaying(false)}
         onPause={() => setPlaying(false)}
         className="hidden"
@@ -154,13 +169,25 @@ const AudioPlayer: React.FC<{ url: string }> = ({ url }) => {
 interface CardProps {
   coreo: Coreografia;
   userName: string;
-  onUploaded: (id: string, url: string, durationSeconds: number) => void;
+  onUploaded: (id: string, url: string, durationSeconds: number, filename: string) => void;
   onRemoved: (id: string) => void;
 }
+
+/** Extrai o path do objeto no bucket a partir da public URL (pra remover). */
+const extractTrilhaPath = (url?: string | null): string => {
+  if (!url) return '';
+  try {
+    const parts = new URL(url).pathname.split('/object/public/trilhas/');
+    return parts[1] ? decodeURIComponent(parts[1]) : '';
+  } catch {
+    return '';
+  }
+};
 
 const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemoved }) => {
   const [uploading, setUploading]     = useState(false);
   const [removing,  setRemoving]      = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [uploadErr, setUploadErr]     = useState<string | null>(null);
   const [progress,  setProgress]      = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -215,17 +242,19 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
     // Read audio duration
     const durationSeconds = await readAudioDuration(file);
 
-    // Build standardised filename: ID-NomeCoreografia-Escola.ext
+    // Nome ÚNICO por envio (timestamp) — cada substituição gera URL nova.
+    // Sem isso, o upsert sobrescrevia o mesmo path = mesma URL, e o navegador/
+    // CDN serviam o áudio ANTIGO do cache (bug "Substituir tocava a 1ª música").
     const safeNome  = slugify(coreo.nome);
     const safeEsco  = slugify(userName);
-    const filename  = `${coreo.id}-${safeNome}-${safeEsco}.${ext}`;
+    const oldPath   = extractTrilhaPath(coreo.trilha_url); // pra apagar depois
+    const filename  = `${coreo.id}-${safeNome}-${safeEsco}-${Date.now()}.${ext}`;
     const path      = `audios/${filename}`;
 
     setUploading(true);
     setProgress(10);
 
     try {
-      // Remove previous file if exists (upsert = overwrite)
       const { error: upErr } = await supabase.storage
         .from('trilhas')
         .upload(path, file, { upsert: true, contentType: file.type });
@@ -244,8 +273,19 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
         .eq('id', coreo.id);
 
       if (dbErr) throw dbErr;
+
+      // Best-effort: nome original do arquivo. Coluna pode não existir ainda
+      // (deploy antes da migration) — erro aqui NÃO quebra o upload.
+      await supabase.from('registrations').update({ trilha_filename: file.name }).eq('id', coreo.id);
+
+      // Best-effort: apaga o arquivo anterior (evita lixo no storage). Nunca
+      // bloqueia o sucesso do envio.
+      if (oldPath && oldPath !== path) {
+        await supabase.storage.from('trilhas').remove([oldPath]);
+      }
+
       setProgress(100);
-      onUploaded(coreo.id, publicUrl, durationSeconds);
+      onUploaded(coreo.id, publicUrl, durationSeconds, file.name);
     } catch (err: any) {
       setUploadErr(err.message || 'Erro ao enviar o arquivo.');
     } finally {
@@ -258,11 +298,9 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
   const handleRemove = async () => {
     if (!coreo.trilha_url) return;
     setRemoving(true);
+    setConfirmRemove(false);
     try {
-      // Extract path from URL
-      const urlObj  = new URL(coreo.trilha_url);
-      const parts   = urlObj.pathname.split('/object/public/trilhas/');
-      const filePath = parts[1] ? decodeURIComponent(parts[1]) : '';
+      const filePath = extractTrilhaPath(coreo.trilha_url);
       if (filePath) {
         await supabase.storage.from('trilhas').remove([filePath]);
       }
@@ -352,9 +390,14 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
               {hasAudio ? 'Música Enviada' : 'Música Pendente'}
             </div>
 
-            {/* Player */}
+            {/* Prévia (player neutro + selo de limite de duração) */}
             {hasAudio && coreo.trilha_url && (
-              <AudioPlayer url={coreo.trilha_url} />
+              <TrackPreview
+                url={coreo.trilha_url}
+                filename={coreo.trilha_filename}
+                durationSeconds={coreo.duracao_trilha_segundos}
+                maxSeconds={coreo.max_time_seconds}
+              />
             )}
 
             {/* Upload progress bar */}
@@ -410,15 +453,38 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
                     {uploading ? `Enviando… ${progress}%` : hasAudio ? 'Substituir' : 'Enviar Música'}
                   </button>
 
-                  {hasAudio && (
+                  {hasAudio && !confirmRemove && (
                     <button
-                      onClick={handleRemove}
+                      onClick={() => setConfirmRemove(true)}
                       disabled={removing}
                       className="flex items-center gap-1.5 px-3 py-2 border border-rose-200 dark:border-rose-500/30 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg font-black text-[9px] uppercase tracking-widest active:scale-95 transition-all"
                     >
                       {removing ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
                       Remover
                     </button>
+                  )}
+
+                  {/* Confirmação inline (evita apagar sem querer — com a trava por
+                      prazo, pode não dar pra reenviar). */}
+                  {hasAudio && confirmRemove && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[9px] font-bold text-rose-500">Remover esta música?</span>
+                      <button
+                        onClick={handleRemove}
+                        disabled={removing}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-rose-500 hover:bg-rose-600 disabled:opacity-60 text-white rounded-lg font-black text-[9px] uppercase tracking-widest active:scale-95 transition-all"
+                      >
+                        {removing ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                        Sim, remover
+                      </button>
+                      <button
+                        onClick={() => setConfirmRemove(false)}
+                        disabled={removing}
+                        className="px-3 py-2 border border-slate-200 dark:border-white/15 text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-lg font-black text-[9px] uppercase tracking-widest active:scale-95 transition-all"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
                   )}
                 </>
               ) : (
@@ -503,16 +569,18 @@ const CentralDeMidia = () => {
 
       setAllGenres(genres);
 
-      // Prazo de envio (prazo_trilhas) + fallback data do evento, por evento.
+      // Prazo de envio (prazo_trilhas) + fallback data do evento + limite de
+      // duração por modalidade (formacoes_config[].max_time), por evento.
       // Falha-aberto: se a leitura falhar, ninguém é travado.
       const eventIds = [...new Set((coreoRes.data || []).map((c: any) => c.event_id).filter(Boolean))];
       const cfgByEvent: Record<string, { prazo_trilhas: string | null; data_evento: string | null }> = {};
+      const formacoesByEvent: Record<string, any[]> = {};
       if (eventIds.length) {
-        const { data: cfgRows } = await supabase
-          .from('configuracoes')
-          .select('event_id, prazo_trilhas, data_evento')
-          .in('event_id', eventIds);
-        for (const row of cfgRows || []) {
+        const [cfgRes, evRes] = await Promise.all([
+          supabase.from('configuracoes').select('event_id, prazo_trilhas, data_evento').in('event_id', eventIds),
+          supabase.from('events').select('id, formacoes_config').in('id', eventIds),
+        ]);
+        for (const row of cfgRes.data || []) {
           if (row.event_id) {
             cfgByEvent[String(row.event_id)] = {
               prazo_trilhas: row.prazo_trilhas ?? null,
@@ -520,15 +588,25 @@ const CentralDeMidia = () => {
             };
           }
         }
+        for (const ev of evRes.data || []) {
+          if (ev.id) formacoesByEvent[String(ev.id)] = Array.isArray(ev.formacoes_config) ? ev.formacoes_config : [];
+        }
       }
 
       const enriched = (coreoRes.data || []).map((c: any) => {
         const cfg = cfgByEvent[String(c.event_id)] || { prazo_trilhas: null, data_evento: null };
+        // Limite de duração da modalidade — MESMA fonte do Wizard:
+        // formacoes_config[].max_time casado por name = formato_participacao.
+        const formacoes = formacoesByEvent[String(c.event_id)] || [];
+        const formato   = String(c.formato_participacao ?? '').trim().toLowerCase();
+        const fmt       = formato ? formacoes.find((m: any) => String(m?.name ?? '').trim().toLowerCase() === formato) : null;
+        const maxSec    = fmt?.max_time ? parseTempoSegundos(fmt.max_time) : 0;
         return {
           ...c,
           allow_shorter_track: resolveAllowShorterTrack(c, genres),
           prazo_trilhas:       cfg.prazo_trilhas,
           event_date_fallback: cfg.data_evento,
+          max_time_seconds:    maxSec > 0 ? maxSec : undefined,
         };
       });
       setCoreografias(enriched);
@@ -542,15 +620,19 @@ const CentralDeMidia = () => {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const handleUploaded = (id: string, url: string, _durationSeconds: number) => {
+  const handleUploaded = (id: string, url: string, durationSeconds: number, filename: string) => {
     setCoreografias(prev =>
-      prev.map(c => c.id === id ? { ...c, trilha_url: url, status_trilha: 'ENVIADA' } : c)
+      prev.map(c => c.id === id
+        ? { ...c, trilha_url: url, status_trilha: 'ENVIADA', duracao_trilha_segundos: durationSeconds, trilha_filename: filename }
+        : c)
     );
   };
 
   const handleRemoved = (id: string) => {
     setCoreografias(prev =>
-      prev.map(c => c.id === id ? { ...c, trilha_url: undefined, status_trilha: 'PENDENTE' } : c)
+      prev.map(c => c.id === id
+        ? { ...c, trilha_url: undefined, status_trilha: 'PENDENTE', trilha_filename: null, duracao_trilha_segundos: null }
+        : c)
     );
   };
 
