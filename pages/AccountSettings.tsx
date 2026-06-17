@@ -10,7 +10,7 @@ import {
   addSubgenre, editSubgenre, removeSubgenre,
 } from '../services/genreService';
 import { EventStyle, Subgenre } from '../types';
-import { maskCpfCnpj, unmaskCpfCnpj, maskMoeda, parseMoeda, maskData, parseDataISO, calcIdade, validateCpf, validateCnpj, maskedChange, formatPrecoBR, parsePrecoBR } from '../utils/masks';
+import { maskCpfCnpj, unmaskCpfCnpj, maskMoeda, parseMoeda, maskData, parseDataISO, calcIdade, validateCpf, validateCnpj, maskedChange, formatPrecoBR, parsePrecoBR, maskTempo } from '../utils/masks';
 import { humanizeSupabaseError } from '../utils/supabaseErrors';
 import AsaasBadge from '../components/AsaasBadge';
 import DemoSettingsTab from '../components/DemoSettingsTab';
@@ -387,6 +387,8 @@ interface FormatItem {
   lotes: FormatLote[];
   pricingType: 'FIXED' | 'PER_MEMBER';
   minMembers: number;
+  /** Tempo máximo da modalidade (MM:SS). '' = sem limite. */
+  max_time?: string;
 }
 
 const DEFAULT_FORMATS: FormatItem[] = [
@@ -411,6 +413,9 @@ const migrateFormat = (f: any): FormatItem => {
     lotes,
     pricingType: f.pricingType ?? 'FIXED',
     minMembers: f.minMembers ?? 1,
+    // Tempo máximo da modalidade (MM:SS). Lido pelo Wizard (valida duração) e
+    // pela Central de Mídia (selo ✓/⚠ na trilha). '' = sem limite.
+    max_time: f.max_time ?? '',
   };
 };
 
@@ -2028,6 +2033,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             base_fee:     firstLote?.preco ?? 0,
             pricing_type: f.pricingType ?? 'FIXED',
             lotes:        f.lotes ?? [],
+            // Tempo máximo da modalidade (MM:SS) — antes era descartado aqui, o
+            // que zerava a validação de duração do Wizard e o selo da trilha.
+            max_time:     (f.max_time && String(f.max_time).trim()) || null,
             is_active:    true,
           };
         });
@@ -6031,6 +6039,22 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   </p>
                 )}
               </div>
+            </div>
+
+            <div>
+              <label className={label}>Tempo máximo da música (MM:SS) — opcional</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={5}
+                placeholder="Ex: 03:00 (vazio = sem limite)"
+                value={tempValue.max_time || ''}
+                onChange={e => setTempValue((v: any) => ({ ...v, max_time: maskTempo(e.target.value) }))}
+                className={input}
+              />
+              <p className="text-[9px] text-slate-400 mt-1">
+                Valida a duração no envio da trilha (selo ✓/⚠) e no Wizard de inscrição.
+              </p>
             </div>
           </div>
         );
