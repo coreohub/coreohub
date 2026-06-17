@@ -74,6 +74,13 @@ const CheckoutWorkshop: React.FC = () => {
   // Combo (auto-detect quando CPF válido + workshop tem event_id + auto_detect_combo)
   const [combo, setCombo] = useState<{ found: boolean; registration_id?: string; coreografia?: string; formato?: string; estudio?: string } | null>(null);
   const [comboLoading, setComboLoading] = useState(false);
+  // Anti-fraude: combo só é detectado pra comprador logado (a edge function/RPC
+  // exige user_id pra validar dono do CPF). userId === undefined = ainda checando.
+  const [userId, setUserId] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+  }, []);
 
   // Hidrata workshop + stock
   useEffect(() => {
@@ -119,6 +126,14 @@ const CheckoutWorkshop: React.FC = () => {
       setCombo(null);
       return;
     }
+    // Sem login não vale nem chamar a edge function — anti-fraude exige
+    // comprador logado pra validar dono do CPF. userId === undefined ainda
+    // está checando a sessão, espera resolver antes de decidir.
+    if (userId === undefined) return;
+    if (userId === null) {
+      setCombo(null);
+      return;
+    }
     const clean = cpf.replace(/\D/g, '');
     if (!isValidCpf(clean)) {
       setCombo(null);
@@ -151,7 +166,7 @@ const CheckoutWorkshop: React.FC = () => {
       }
     }, 400);
     return () => { active = false; clearTimeout(debounce); };
-  }, [cpf, workshop?.id, workshop?.event_id, workshop?.auto_detect_combo]);
+  }, [cpf, workshop?.id, workshop?.event_id, workshop?.auto_detect_combo, userId]);
 
   // Calcula preço
   const breakdown = useMemo(() => {
@@ -222,7 +237,7 @@ const CheckoutWorkshop: React.FC = () => {
   const canSubmit = !!name.trim()
     && !!email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
     && isValidCpf(cpf)
-    && !paying && !error;
+    && !paying && !error && !comboLoading;
 
   const handlePay = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -338,6 +353,19 @@ const CheckoutWorkshop: React.FC = () => {
           {/* Combo detection feedback */}
           {workshop.event_id && workshop.auto_detect_combo && (
             <>
+              {userId === null && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-slate-300 flex items-start gap-2">
+                  <Sparkles size={16} className="text-[#ff0068] mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-bold">Tem preço de inscrito?</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      <button type="button" onClick={() => navigate(`/login?redirectTo=${encodeURIComponent(`/checkout-workshop/${workshop.id}`)}`)} className="text-[#ff0068] font-bold underline">
+                        Entre na sua conta
+                      </button> para verificar se você tem o preço especial de inscrito da mostra.
+                    </p>
+                  </div>
+                </div>
+              )}
               {comboLoading && (
                 <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-slate-400 flex items-center gap-2">
                   <Loader2 size={12} className="animate-spin" /> Verificando inscrição na mostra...
@@ -431,11 +459,19 @@ const CheckoutWorkshop: React.FC = () => {
           <button
             type="submit"
             disabled={!canSubmit || (breakdown?.charged !== 0 && !refundAccepted)}
-            title={breakdown?.charged !== 0 && !refundAccepted ? 'Aceite a política de reembolso para prosseguir' : undefined}
+            title={
+              comboLoading ? 'Verificando inscrição na mostra...'
+                : breakdown?.charged !== 0 && !refundAccepted ? 'Aceite a política de reembolso para prosseguir'
+                : undefined
+            }
             className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#ff0068] px-4 py-3.5 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] disabled:opacity-40 disabled:cursor-not-allowed transition"
           >
-            {paying && <Loader2 size={16} className="animate-spin" />}
-            {breakdown?.charged === 0 ? 'Confirmar inscrição grátis' : 'Continuar pro pagamento'}
+            {(paying || comboLoading) && <Loader2 size={16} className="animate-spin" />}
+            {comboLoading
+              ? 'Verificando...'
+              : breakdown?.charged === 0
+                ? 'Confirmar inscrição grátis'
+                : `Inscrever-se · ${formatBRL(breakdown?.charged ?? 0)}`}
           </button>
 
           <div className="flex items-center justify-center gap-2 text-[10px] text-slate-500 uppercase tracking-widest">
