@@ -1117,9 +1117,6 @@ const PublicEventPage = () => {
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
               <BrandIcon size={24} /> Workshops
             </h2>
-            <p className="text-xs text-slate-400">
-              Aulas com professores convidados. Inscritos da mostra podem ter desconto ou cortesia.
-            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {publicWorkshops.map(ws => {
                 const dataFmt = new Date(ws.data_inicio).toLocaleString('pt-BR', {
@@ -1137,8 +1134,8 @@ const PublicEventPage = () => {
                     className="text-left bg-white/5 border border-white/10 hover:border-[#ff0068]/40 rounded-2xl overflow-hidden transition-colors group"
                   >
                     <div className="aspect-[16/9] bg-gradient-to-br from-[#ff0068]/20 to-purple-500/20 relative overflow-hidden">
-                      {ws.cover_url && (
-                        <img src={ws.cover_url} alt={ws.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                      {(ws.cover_url || ws.professor_photo_url) && (
+                        <img src={ws.cover_url || ws.professor_photo_url || ''} alt={ws.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
                       )}
                       {ws.gratis_para_inscritos && (
                         <span className="absolute top-2 right-2 inline-flex items-center text-[9px] font-black uppercase tracking-widest bg-violet-500/90 text-white px-2 py-0.5 rounded-full">

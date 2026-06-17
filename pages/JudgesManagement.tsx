@@ -56,7 +56,9 @@ const EMPTY_JUDGE: Omit<Judge, 'id'> = {
   pin: '',
   language: 'pt-BR',
   is_active: true,
-  is_public: false,
+  // Jurado nasce VISÍVEL na vitrine (é vitrine de venda do festival, igual ao
+  // professor de workshop que já é público por default). Produtor oculta no toggle.
+  is_public: true,
   gender: null,
   can_evaluate_video: true,
 };
@@ -108,6 +110,7 @@ const JudgesManagement = () => {
   const [showPin, setShowPin] = useState(false);
   const [copiedField, setCopiedField] = useState<'pin' | 'link' | null>(null);
   const [revealedPinId, setRevealedPinId] = useState<string | null>(null);
+  const [publishingAll, setPublishingAll] = useState(false);
 
   const copyToClipboard = async (text: string, field: 'pin' | 'link') => {
     try {
@@ -317,6 +320,28 @@ const JudgesManagement = () => {
   const avatarSrc = (j: Judge) =>
     j.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(j.name)}`;
 
+  // Jurados ocultos da vitrine (is_public=false). Banner + ação "publicar todos"
+  // resolve o caso comum: produtor cadastrou a banca mas ninguém aparece na vitrine.
+  const hiddenJudges = judges.filter(j => !j.is_public);
+  const publishAllJudges = async () => {
+    if (hiddenJudges.length === 0) return;
+    setPublishingAll(true);
+    try {
+      const { data, error } = await supabase
+        .from('judges')
+        .update({ is_public: true })
+        .in('id', hiddenJudges.map(j => j.id))
+        .select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error('Não foi possível publicar — sem permissão.');
+      setJudges(js => js.map(j => ({ ...j, is_public: true })));
+    } catch (e: any) {
+      alert(e.message || 'Erro ao publicar jurados na vitrine.');
+    } finally {
+      setPublishingAll(false);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-700">
       {/* Header */}
@@ -352,6 +377,27 @@ const JudgesManagement = () => {
           </button>
         </div>
       </div>
+
+      {/* Jurados ocultos da vitrine — ação rápida pra publicar todos */}
+      {!loading && hiddenJudges.length > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-2xl">
+          <div className="flex items-start gap-2.5">
+            <EyeOff size={16} className="text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-[11px] font-bold text-amber-700 dark:text-amber-300 leading-snug">
+              {hiddenJudges.length} jurado{hiddenJudges.length > 1 ? 's' : ''} {hiddenJudges.length > 1 ? 'ocultos' : 'oculto'} da vitrine do evento.
+              <span className="block text-amber-600/80 dark:text-amber-400/70 font-medium">Jurados só aparecem pro público quando marcados como visíveis.</span>
+            </p>
+          </div>
+          <button
+            onClick={publishAllJudges}
+            disabled={publishingAll}
+            className="shrink-0 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-60 flex items-center gap-2 transition-all"
+          >
+            {publishingAll ? <Loader2 size={13} className="animate-spin" /> : <Eye size={13} />}
+            Publicar todos na vitrine
+          </button>
+        </div>
+      )}
 
       {/* Loading */}
       {loading && (
