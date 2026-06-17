@@ -91,6 +91,7 @@ const Registrations = () => {
   const [editValues, setEditValues] = useState<Record<string, any>>({});
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [togglingTrilha, setTogglingTrilha] = useState(false);
 
   const startEditing = (reg: any) => {
     setEditing(true);
@@ -1015,6 +1016,31 @@ const Registrations = () => {
     await supabase.from('registrations').update(update).eq('id', regId);
     setRegistrations(prev => prev.map(r => r.id === regId ? { ...r, ...update } : r));
     setTriageAction(null);
+  };
+
+  // Override: libera o inscrito a enviar/trocar a trilha mesmo após o prazo
+  // (configuracoes.prazo_trilhas). Coluna trilha_liberada_pos_prazo fora do
+  // trigger de proteção; RLS producer_updates_registrations cobre. .select('id')
+  // detecta bloqueio silencioso de RLS (mesmo hardening do handleSaveEdit).
+  const handleToggleTrilhaLiberada = async (regId: string, next: boolean) => {
+    setTogglingTrilha(true);
+    try {
+      const { data, error } = await supabase
+        .from('registrations')
+        .update({ trilha_liberada_pos_prazo: next })
+        .eq('id', regId)
+        .select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('Não foi possível atualizar — sem permissão ou inscrição não encontrada.');
+      }
+      setRegistrations(prev => prev.map(r => r.id === regId ? { ...r, trilha_liberada_pos_prazo: next } : r));
+      setViewingReg((prev: any) => prev && prev.id === regId ? { ...prev, trilha_liberada_pos_prazo: next } : prev);
+    } catch (e: any) {
+      alert(e.message || 'Erro ao liberar envio de trilha.');
+    } finally {
+      setTogglingTrilha(false);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -2333,6 +2359,26 @@ const Registrations = () => {
                         </span>
                       )}
                     </div>
+
+                    {/* Override do produtor: libera envio/troca de trilha após o prazo
+                        (decisão 2026-06-17). Coluna trilha_liberada_pos_prazo. */}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleTrilhaLiberada(viewingReg.id, !viewingReg.trilha_liberada_pos_prazo)}
+                      disabled={togglingTrilha}
+                      className="w-full flex items-center justify-between gap-3 p-3 bg-slate-50 dark:bg-white/5 rounded-xl text-left disabled:opacity-60 transition-all"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200">Liberar envio após o prazo</p>
+                        <p className="text-[10px] text-slate-400 leading-tight mt-0.5">
+                          Permite este inscrito enviar ou trocar a música mesmo depois da data limite.
+                        </p>
+                      </div>
+                      <span className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${viewingReg.trilha_liberada_pos_prazo ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-white/15'}`}>
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${viewingReg.trilha_liberada_pos_prazo ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                      </span>
+                    </button>
+
                     {/* Vídeo seletiva: condicional pelo flag do evento */}
                     {viewingReg.events?.video_selection_enabled && (
                       <>

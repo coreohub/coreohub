@@ -28,12 +28,21 @@ interface Coreografia {
   trilha_url?: string;
   status_trilha?: string;
   allow_shorter_track?: boolean;
+  /** Override do produtor: libera envio mesmo após o prazo */
+  trilha_liberada_pos_prazo?: boolean;
+  /** Prazo de envio de trilha do evento (configuracoes.prazo_trilhas) */
+  prazo_trilhas?: string | null;
+  /** Fallback de prazo = data do evento (configuracoes.data_evento) */
+  event_date_fallback?: string | null;
 }
 
 /* ══════════════════════════════════════════════════════════════
    CONSTANTS
 ══════════════════════════════════════════════════════════════ */
-const UPLOAD_ALLOWED_STATUSES = ['RASCUNHO', 'AGUARDANDO_PAGAMENTO', 'PRONTA', 'PRONTO'];
+// Trava por PRAZO substitui a trava por pagamento (decisão 2026-06-17):
+// inscrito edita/substitui a trilha até o prazo do produtor. Só status mortos
+// bloqueiam de vez (inscrição cancelada/estornada/reprovada).
+const DEAD_STATUSES = ['CANCELADA', 'CANCELADO', 'ESTORNADA', 'ESTORNADO', 'REPROVADA', 'REPROVADO', 'REJEITADA'];
 
 const STATUS_CFG: Record<string, { bg: string; text: string; label: string }> = {
   RASCUNHO:             { bg: 'bg-slate-100 dark:bg-white/8',           text: 'text-slate-500',                        label: 'Rascunho'             },
@@ -156,9 +165,18 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
   const [progress,  setProgress]      = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const canUpload = UPLOAD_ALLOWED_STATUSES.includes(coreo.status);
   const hasAudio  = !!coreo.trilha_url;
   const st        = STATUS_CFG[coreo.status] || STATUS_CFG.RASCUNHO;
+
+  // ── Trava por prazo ──
+  // Hoje em America/Sao_Paulo no formato YYYY-MM-DD ('en-CA' = ISO date).
+  const todayISO   = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  const deadline   = coreo.prazo_trilhas || coreo.event_date_fallback || null;
+  const deadlinePassed = !!deadline && todayISO > deadline; // dia do prazo ainda conta (envios "até")
+  const overrideOn = !!coreo.trilha_liberada_pos_prazo;
+  const isDead     = DEAD_STATUSES.includes((coreo.status || '').toUpperCase());
+  const locked     = isDead || (deadlinePassed && !overrideOn);
+  const editable   = !locked;
 
   /** Reads the audio file duration in seconds using HTML5 Audio API */
   const readAudioDuration = (file: File): Promise<number> =>
@@ -356,9 +374,19 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
               </p>
             )}
 
+            {/* Prazo de envio (quando aberto) */}
+            {editable && deadline && (
+              <p className="text-[9px] font-bold text-slate-400 flex items-center gap-1">
+                <Calendar size={9} className="shrink-0" />
+                {deadlinePassed && overrideOn
+                  ? <span>Envio <span className="text-emerald-600 dark:text-emerald-400">liberado pela organização</span> · prazo era {fmtDate(deadline)}</span>
+                  : <span>{hasAudio ? 'Trocar' : 'Enviar'} até <strong className="text-slate-500 dark:text-slate-300">{fmtDate(deadline)}</strong></span>}
+              </p>
+            )}
+
             {/* Action buttons */}
             <div className="flex items-center gap-2 flex-wrap">
-              {canUpload ? (
+              {editable ? (
                 <>
                   <input
                     ref={fileInputRef}
@@ -370,13 +398,16 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploading}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-[#ff0068] hover:bg-[#d4005a] disabled:opacity-60 text-white rounded-lg font-black text-[9px] uppercase tracking-widest shadow-md shadow-[#ff0068]/20 active:scale-95 transition-all"
+                    className={hasAudio
+                      ? 'flex items-center gap-1.5 px-3 py-2 border border-slate-200 dark:border-white/15 text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 disabled:opacity-60 rounded-lg font-black text-[9px] uppercase tracking-widest active:scale-95 transition-all'
+                      : 'flex items-center gap-1.5 px-3 py-2 bg-[#ff0068] hover:bg-[#d4005a] disabled:opacity-60 text-white rounded-lg font-black text-[9px] uppercase tracking-widest shadow-md shadow-[#ff0068]/20 active:scale-95 transition-all'
+                    }
                   >
                     {uploading
                       ? <Loader2 size={11} className="animate-spin" />
-                      : <Upload size={11} />
+                      : hasAudio ? <RefreshCw size={11} /> : <Upload size={11} />
                     }
-                    {uploading ? `Enviando… ${progress}%` : hasAudio ? 'Substituir Música' : 'Enviar Música'}
+                    {uploading ? `Enviando… ${progress}%` : hasAudio ? 'Substituir' : 'Enviar Música'}
                   </button>
 
                   {hasAudio && (
@@ -394,8 +425,10 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
                 <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg">
                   <Lock size={11} className="text-slate-400 shrink-0" />
                   <p className="text-[8px] font-bold text-slate-500 leading-tight">
-                    Arquivo bloqueado após confirmação do pagamento.{' '}
-                    <span className="text-slate-400">Entre em contato com a organização para alterações.</span>
+                    {isDead
+                      ? <>Inscrição {st.label.toLowerCase()} — envio indisponível.</>
+                      : <>Prazo de envio encerrado em {fmtDate(deadline)}.{' '}
+                          <span className="text-slate-400">Fale com a organização para liberar uma alteração.</span></>}
                   </p>
                 </div>
               )}
@@ -469,10 +502,35 @@ const CentralDeMidia = () => {
       if (coreoRes.error) throw coreoRes.error;
 
       setAllGenres(genres);
-      const enriched = (coreoRes.data || []).map((c: any) => ({
-        ...c,
-        allow_shorter_track: resolveAllowShorterTrack(c, genres),
-      }));
+
+      // Prazo de envio (prazo_trilhas) + fallback data do evento, por evento.
+      // Falha-aberto: se a leitura falhar, ninguém é travado.
+      const eventIds = [...new Set((coreoRes.data || []).map((c: any) => c.event_id).filter(Boolean))];
+      const cfgByEvent: Record<string, { prazo_trilhas: string | null; data_evento: string | null }> = {};
+      if (eventIds.length) {
+        const { data: cfgRows } = await supabase
+          .from('configuracoes')
+          .select('event_id, prazo_trilhas, data_evento')
+          .in('event_id', eventIds);
+        for (const row of cfgRows || []) {
+          if (row.event_id) {
+            cfgByEvent[String(row.event_id)] = {
+              prazo_trilhas: row.prazo_trilhas ?? null,
+              data_evento:   row.data_evento ?? null,
+            };
+          }
+        }
+      }
+
+      const enriched = (coreoRes.data || []).map((c: any) => {
+        const cfg = cfgByEvent[String(c.event_id)] || { prazo_trilhas: null, data_evento: null };
+        return {
+          ...c,
+          allow_shorter_track: resolveAllowShorterTrack(c, genres),
+          prazo_trilhas:       cfg.prazo_trilhas,
+          event_date_fallback: cfg.data_evento,
+        };
+      });
       setCoreografias(enriched);
       setUserName(profileRes.data?.full_name || user.email || 'Usuario');
     } catch (e: any) {
@@ -644,7 +702,7 @@ const CentralDeMidia = () => {
           <ShieldAlert size={13} className="text-slate-400 shrink-0 mt-0.5" />
           <p className="text-[9px] font-bold text-slate-400 leading-relaxed">
             Formatos aceitos: <strong className="text-slate-500">MP3, WAV e M4A</strong> (Máx. 100MB).{' '}
-            Após a confirmação do pagamento o arquivo fica bloqueado — entre em contato com a organização para alterações.
+            Você pode enviar e substituir suas músicas até a data limite definida pela organização de cada evento.
           </p>
         </div>
       )}

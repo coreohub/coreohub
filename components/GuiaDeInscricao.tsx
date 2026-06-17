@@ -234,8 +234,8 @@ const GuiaDeInscricao: React.FC<Props> = ({ profile, config }) => {
       subtitle: 'Arquivos de música para o evento',
       description: (() => {
         const formats = config?.formato_trilha || 'MP3, WAV ou M4A (máximo 100MB por arquivo)';
-        const prazoFormatado = config?.prazo_upload_trilha
-          ? new Date(config.prazo_upload_trilha).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+        const prazoFormatado = config?.prazo_trilhas
+          ? new Date(config.prazo_trilhas + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
           : null;
         const prazoTexto = prazoFormatado
           ? `Envie a trilha sonora de cada coreografia inscrita até ${prazoFormatado}. Organize seus arquivos com antecedência.`
@@ -254,8 +254,8 @@ const GuiaDeInscricao: React.FC<Props> = ({ profile, config }) => {
           {comTrilha === total && total > 0 && (
             <span className="text-[10px] font-bold text-emerald-500 uppercase">Todas as trilhas enviadas</span>
           )}
-          {config?.prazo_upload_trilha && (
-            <DeadlineBadge label="Enviar até" date={config.prazo_upload_trilha} />
+          {config?.prazo_trilhas && (
+            <DeadlineBadge label="Enviar até" date={config.prazo_trilhas} />
           )}
         </div>
       ),
