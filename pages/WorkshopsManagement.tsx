@@ -43,6 +43,14 @@ interface WorkshopRow {
   is_published: boolean;
 }
 
+interface JudgeOption {
+  id: string;
+  name: string;
+  avatar_url: string | null;
+  mini_bio: string | null;
+  instagram: string | null;
+}
+
 interface LotRow {
   id: string;
   workshop_id: string;
@@ -106,6 +114,8 @@ const WorkshopsManagement: React.FC = () => {
   const [editingId, setEditingId]           = useState<string | null>(null);
   const [showLotsModal, setShowLotsModal]   = useState<WorkshopRow | null>(null);
   const [showBuyersModal, setShowBuyersModal] = useState<WorkshopRow | null>(null);
+  // Jurados do produtor — pra reaproveitar como professor (nome/foto/bio/@).
+  const [judges, setJudges] = useState<JudgeOption[]>([]);
 
   // ── Form de workshop ────────────────────────────────────────────────────
   const emptyForm = {
@@ -145,12 +155,20 @@ const WorkshopsManagement: React.FC = () => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
-      const { data } = await supabase
-        .from('events')
-        .select('id, name')
-        .eq('created_by', user.id)
-        .order('created_at', { ascending: false });
-      if (data) setEvents(data);
+      const [evRes, judgesRes] = await Promise.all([
+        supabase
+          .from('events')
+          .select('id, name')
+          .eq('created_by', user.id)
+          .order('created_at', { ascending: false }),
+        // Jurados do produtor (RLS já escopa) — pra reaproveitar como professor.
+        supabase
+          .from('judges')
+          .select('id, name, avatar_url, mini_bio, instagram')
+          .order('name'),
+      ]);
+      if (evRes.data) setEvents(evRes.data);
+      if (judgesRes.data) setJudges(judgesRes.data as JudgeOption[]);
     })();
   }, []);
 
@@ -518,6 +536,7 @@ const WorkshopsManagement: React.FC = () => {
           saving={saving}
           isEdit={!!editingId}
           events={events}
+          judges={judges}
           onClose={() => setShowModal(false)}
           onSave={saveWorkshop}
         />
@@ -846,12 +865,27 @@ const BuyersModal: React.FC<{ workshop: WorkshopRow; onClose: () => void }> = ({
 // ════════════════════════════════════════════════════════════════════════════
 interface WorkshopFormModalProps {
   form: any; setForm: any; formError: string | null; saving: boolean;
-  isEdit: boolean; events: EventOption[];
+  isEdit: boolean; events: EventOption[]; judges: JudgeOption[];
   onClose: () => void; onSave: () => void;
 }
 
-const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, formError, saving, isEdit, events, onClose, onSave }) => {
+const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, formError, saving, isEdit, events, judges, onClose, onSave }) => {
   const upd = (k: string, v: any) => setForm((p: any) => ({ ...p, [k]: v }));
+
+  // Reaproveitar jurado já cadastrado como professor (snapshot/cópia — não
+  // vincula). Pré-preenche nome/foto/bio/@; campos seguem editáveis depois.
+  const applyJudge = (judgeId: string) => {
+    const j = judges.find(x => x.id === judgeId);
+    if (!j) return;
+    setForm((p: any) => ({
+      ...p,
+      professor_name:        j.name ?? p.professor_name,
+      professor_photo_url:   j.avatar_url ?? p.professor_photo_url,
+      professor_bio:         j.mini_bio ?? p.professor_bio,
+      professor_bio_short:   (j.mini_bio ?? '').slice(0, 140) || p.professor_bio_short,
+      professor_instagram:   j.instagram ?? p.professor_instagram,
+    }));
+  };
 
   // Audit T3: ESC fecha + lock body scroll
   useEffect(() => {
@@ -939,9 +973,22 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
 
           {/* Professor */}
           <Section title="Professor">
+            {/* Reaproveitar jurado já cadastrado — pré-preenche os campos abaixo
+                (cópia, não vínculo). Evita recadastrar quem já é jurado do festival. */}
+            {judges.length > 0 && (
+              <Field label="Reaproveitar jurado cadastrado (opcional)">
+                <select
+                  defaultValue=""
+                  onChange={e => { if (e.target.value) applyJudge(e.target.value); e.target.value = ''; }}
+                  className={inputCls}
+                >
+                  <option value="">— Digitar manualmente —</option>
+                  {judges.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
+                </select>
+              </Field>
+            )}
             {/* Foto + nome lado a lado em desktop, empilhado em mobile.
-                Padrão JudgesManagement: avatar quadrado com Camera overlay no canto.
-                Útil quando o professor NÃO é jurado já cadastrado (não tem foto vinda dali). */}
+                Padrão JudgesManagement: avatar quadrado com Camera overlay no canto. */}
             <div className="flex items-start gap-4">
               <div className="relative shrink-0">
                 <img
