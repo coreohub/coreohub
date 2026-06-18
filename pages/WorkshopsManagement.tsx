@@ -547,6 +547,7 @@ const WorkshopsManagement: React.FC = () => {
       {showLotsModal && (
         <LotsModal
           workshop={showLotsModal}
+          otherWorkshops={workshops.filter(w => w.id !== showLotsModal.id)}
           onClose={() => { setShowLotsModal(null); refresh(); }}
         />
       )}
@@ -1191,12 +1192,15 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
 // ════════════════════════════════════════════════════════════════════════════
 // Modal: gerenciar lotes do workshop
 // ════════════════════════════════════════════════════════════════════════════
-interface LotsModalProps { workshop: WorkshopRow; onClose: () => void }
+interface LotsModalProps { workshop: WorkshopRow; otherWorkshops: WorkshopRow[]; onClose: () => void }
 
-const LotsModal: React.FC<LotsModalProps> = ({ workshop, onClose }) => {
+const LotsModal: React.FC<LotsModalProps> = ({ workshop, otherWorkshops, onClose }) => {
   const [lots, setLotsLocal] = useState<LotRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
+  const [applyingId, setApplyingId] = useState<string | null>(null);
+  const [selectedTargets, setSelectedTargets] = useState<Set<string>>(new Set(otherWorkshops.map(w => w.id)));
+  const [applyFeedback, setApplyFeedback] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -1233,6 +1237,46 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, onClose }) => {
     if (!confirm('Remover este lote?')) return;
     await supabase.from('workshop_lots').delete().eq('id', id);
     refresh();
+  };
+
+  const toggleTarget = (id: string) => {
+    setSelectedTargets(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const applyLotToOthers = async (lot: LotRow) => {
+    const targets = otherWorkshops.filter(w => selectedTargets.has(w.id));
+    if (targets.length === 0) return;
+    setApplyingId(lot.id);
+    setApplyFeedback(null);
+    const payload = {
+      ordem: lot.ordem,
+      nome: lot.nome,
+      preco: lot.preco,
+      preco_inscritos_mostra: lot.preco_inscritos_mostra,
+      data_inicio: lot.data_inicio,
+      data_fim: lot.data_fim,
+      quantidade_maxima: lot.quantidade_maxima,
+      is_active: lot.is_active,
+    };
+    let ok = 0;
+    for (const target of targets) {
+      const { data: existing } = await supabase
+        .from('workshop_lots')
+        .select('id')
+        .eq('workshop_id', target.id)
+        .eq('ordem', lot.ordem)
+        .maybeSingle();
+      const { error } = existing
+        ? await supabase.from('workshop_lots').update(payload).eq('id', existing.id)
+        : await supabase.from('workshop_lots').insert({ ...payload, workshop_id: target.id });
+      if (!error) ok++;
+    }
+    setApplyingId(null);
+    setApplyFeedback(`Lote "${lot.nome}" aplicado em ${ok} de ${targets.length} workshop(s).`);
   };
 
   // Audit T3: ESC fecha + lock body scroll
@@ -1272,15 +1316,41 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, onClose }) => {
                 Sem lotes. Sem lote ativo, o sistema usa o preço padrão do workshop ({fmtCurrency(workshop.preco_padrao)}).
               </p>
             )}
+
+            {otherWorkshops.length > 0 && (
+              <div className="rounded-xl border border-dashed border-slate-300 dark:border-white/15 p-3">
+                <p className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Aplicar lote em outros workshops</p>
+                <div className="flex flex-wrap gap-2">
+                  {otherWorkshops.map(w => (
+                    <label key={w.id} className="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-lg px-2 py-1">
+                      <input type="checkbox" checked={selectedTargets.has(w.id)} onChange={() => toggleTarget(w.id)} />
+                      {w.name}
+                    </label>
+                  ))}
+                </div>
+                {applyFeedback && <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2">{applyFeedback}</p>}
+              </div>
+            )}
+
             {lots.map(lot => (
               <div key={lot.id} className="rounded-xl border border-slate-200 dark:border-white/10 p-4 bg-slate-50 dark:bg-white/5">
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                   <span className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Lote {lot.ordem}</span>
                   <div className="flex items-center gap-2">
                     <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">
                       <input type="checkbox" checked={lot.is_active} onChange={e => updateLot(lot.id, { is_active: e.target.checked })} />
                       Ativo
                     </label>
+                    {otherWorkshops.length > 0 && (
+                      <button
+                        onClick={() => applyLotToOthers(lot)}
+                        disabled={applyingId === lot.id || selectedTargets.size === 0}
+                        className="inline-flex items-center gap-1 text-xs font-bold text-[#ff0068] hover:bg-[#ff0068]/10 px-2 py-1 rounded-lg disabled:opacity-40"
+                      >
+                        {applyingId === lot.id ? <Loader2 size={12} className="animate-spin" /> : <Layers size={12} />}
+                        Aplicar nos outros
+                      </button>
+                    )}
                     <button onClick={() => removeLot(lot.id)} className="text-rose-500 hover:bg-rose-500/10 p-1 rounded">
                       <Trash2 size={14} />
                     </button>
