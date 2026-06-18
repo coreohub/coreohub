@@ -239,6 +239,18 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-06-18/19 — Lotes de workshop nunca funcionaram de fato + combo de desconto travado + UX de Lotes ✅ SHIPADO
+4 commits (`a830b47`, `cd2981b`, `d55b346`, `3d96242`). Disparado por relato do user: "lotes publicados não estão aparecendo na vitrine" + depois "comprei testando desconto de inscrito e não mudou o preço". Detalhes em [[workshop-lotes-rpc-e-combo-shipado]].
+
+- **Bug 1 — ordenação errada (`a830b47`)**: `get_workshop_stock` fazia `ORDER BY ordem ASC` (lote de ordem mais baixa) quando o comentário no próprio SQL dizia "ordem mais alta". Corrigido pra `DESC`.
+- **Bug 2 — função sempre falhava silenciosamente (`cd2981b`, migration `20260624`)**: `get_workshop_stock` tinha `column reference "capacidade_max" is ambiguous` (a coluna de saída da `RETURNS TABLE` tem o mesmo nome de `workshops.capacidade_max`) — bug existente desde a criação original (`20260519_workshops.sql`), nunca pego porque o frontend só loga `console.warn` e cai no fallback `preco_padrao`. Resultado: a vitrine **nunca** mostrou preço de lote, sempre o preço padrão do workshop, independente de qualquer config de data/lote. Fix: qualificar a coluna com alias (`w.capacidade_max`).
+- **Bug 3 — desconto de inscrito da mostra nunca aplicava (`d55b346`, migration `20260625`)**: `detect_workshop_combo` exigia `r.status = 'APROVADA'` (curadoria manual no painel, botão "Aprovar" em `Registrations.tsx`) ALÉM do pagamento aprovado. O Hemer nunca usa essa aprovação manual separada — pra ele, pagamento aprovado já é a inscrição válida. Resultado: **nenhuma** das inscrições pagas do Usualdance Festival se qualificava pro desconto. Fix: exige só `status_pagamento IN ('APROVADO','CONFIRMADO')`, mesmo critério de `emit-certificates-batch`/`isRegistrationPaid()`. Validado com inscrição real via `supabase db query --linked` antes de aplicar (`found: true`).
+- **Feature — "Aplicar nos outros workshops" (`cd2981b`)**: modal de Lotes ganhou checkboxes de workshops-alvo + botão por lote que copia (ou faz upsert por `ordem`) preço/datas/estoque pra outros workshops do mesmo evento — evita reconfigurar lote por lote manualmente.
+- **UX — botão Salvar explícito (`cd2981b`)**: modal de Lotes trocou autosave por campo (`onBlur`) por edição local + botão "Salvar" único (toggle Ativo/Remover continuam imediatos). Indicador visual "· não salvo" + guard de confirmação ao fechar com edição pendente.
+- **Copy — "Inscrever-se" → "Comprar" (`cd2981b`)**: CTA de workshop pago alinhado ao padrão já usado em ingressos (mercado BR: "Comprar" = transação direta, "Inscrever-se" reservado pra competição/lista). Mantém "Confirmar inscrição grátis" no caso sem cobrança.
+- **`/revisar` (`3d96242`)**: 3 achados corrigidos na hora — inputs de Preço/Estoque com `value` controlado + `Number(...)` no `onChange` comiam o ponto decimal a cada tecla (impossível digitar centavos fluentemente); mensagens de feedback sem `aria-live`; contraste de "· não salvo" (`amber-500` em fundo branco, ~2.4:1) abaixo do mínimo AA.
+- **Operacional**: migrations `20260623`/`20260624`/`20260625` aplicadas direto em produção via `supabase db query --linked --file ...` (não pelo SQL Editor do Dashboard — primeira vez usando esse caminho na sessão, mais rápido pra correções urgentes; segue válido colar no Dashboard quando preferir o fluxo manual).
+
 ### 2026-06-18 (noite) — Vitrine de workshop: preço do lote vigente + aviso de virada ✅ SHIPADO
 3 commits (`16248c3` → `dc74b70`). Disparado por pergunta do user: "deveria mostrar que é lote 1?". Detalhes em [[workshop-lote-vigente-vitrine-shipado]].
 
