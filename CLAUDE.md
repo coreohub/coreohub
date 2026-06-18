@@ -239,6 +239,30 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-06-18 — Bundle melhorias Workshops (5 blocos) + bug crítico seed-demo ✅ SHIPADO
+4 commits (`b6423d4` → `cd759cd`). Plano de 5 blocos aprovado + 1 fix crítico descoberto no meio da sessão. Detalhes em [[bundle-workshops-melhorias-2026-06-18]].
+
+- **Bloco 1 — Frase na vitrine** (`b6423d4`): `<p>` com "Aprimore sua técnica com quem é referência. Inscritos da mostra têm preço especial." abaixo do `<h2>Workshops</h2>` em `PublicEventPage.tsx` (tinha sido removida no `0b3e69b`).
+- **Bloco 2 — Capa do workshop** (`b6423d4`): upload no `WorkshopFormModal` (mesmo padrão de compressão webp da foto do professor, mas 1200×675 / 0.3MB). Hero do `PublicWorkshopPage.tsx` cai pra `professor_photo_url` quando não há capa.
+- **Bloco 3 — Desconto visível no checkout** (`c0c5920`): botão mostra preço final (`Inscrever-se · R$ X`) + trava submit enquanto `comboLoading`.
+- **Bloco 4 — Anti-fraude do combo (Opção 2)** (`c0c5920`, migration `20260622` **aplicada em prod**): `detect_workshop_combo` agora exige `p_user_id` e só aplica desconto se a inscrição achada pertence ao comprador logado OU o CPF buscado é o próprio CPF de perfil dele. Antes, qualquer CPF de inscrição aprovada dava desconto pra qualquer comprador (sem checar dono). Edge function decodifica o JWT pra extrair `user_id`; sem login, nem chama a RPC — frontend mostra CTA "Entre na sua conta".
+- **Bloco 5 — CTA upsell em Minhas Inscrições** (`4dd4cd4`): card "Garanta seu workshop com preço de inscrito" por evento (só se o evento tem workshop publicado). Desconto só pra inscrição PAGA; pendente vira nudge "Finalize sua inscrição...".
+- **🚨 Bug crítico descoberto e corrigido (`cd759cd`)**: user reportou que os workshops reais do Hemer (Usualdance Festival) desapareceram da vitrine e do painel depois que ele criou um evento DEMO pra teste. SQL confirmou tabela `workshops` com 0 rows em prod. Causa: `seed-demo-event` (`cleanupBeforeEventDelete`) tinha 2 `DELETE FROM workshops WHERE created_by = userId` **sem filtro `.is('event_id', null)`** — deveria limpar só workshops standalone órfãos do demo, mas sem o filtro apagava TODOS os workshops do produtor, inclusive os de eventos reais. Fix + redeploy via CLI. **Sem backup disponível (plano FREE do Supabase) — Hemer precisou recriar os workshops manualmente.**
+- **Achados de revisão (`/revisar`, não corrigidos ainda)**: upload de capa ficou dentro de `<Field>` (que renderiza `<label>` envolvendo o input file + botão) — pode abrir o seletor de arquivo 2x ao clicar no botão Camera (🔴 bug funcional); capa comprimida a 0.3MB inline (2x a foto do professor) infla o payload de `select('*')` na listagem (🟡 perf); `rounded-xl` no preview da capa vs `rounded-2xl` no avatar do professor (🟢 cosmético). Ver pendência em "O que falta fazer".
+
+### 2026-06-14 — Card de saldo do produtor: copy claro (não era bug) ✅ SHIPADO
+Commit `2b5a7d5`. Só `ProducerBalanceCard.tsx`. User achou contraditório "R$ 0,00 disponível agora" ao lado do botão "Transferir agora — R$ 1.806,30". **Não era bug de cálculo** — D+7 correto (0 passou do hold, retido liberando em 17h; saldo real Asaas batendo). Só copy: "disponível agora" → **"já liberado"**, "a liberar {time}" → **"retido · libera {time}"**. A palavra "disponível" confundia porque o retido TAMBÉM é sacável agora (antecipação). Detalhes em [[settlement-d7-shipado]].
+
+### 2026-06-14 — Voto Popular: MVP construído + plano de integração CoreoHub 🚧 EM ANDAMENTO
+
+Produto **NOVO** da CoreoHub (voto popular ao vivo durante a live do YouTube), em **infra ISOLADA** (Supabase/repo/Vercel próprios — não mistura com a CoreoHub: protege a CoreoHub do pico de carga da live + zero PII cruzada). Piloto Usualdance 2026 (11/07). Pasta local `D:\Documentos\Voto Popular`, repo `coreohub/voto-popular`, domínio `vote.usualdance.com`, Supabase ref `aghmjmqrkwuxmrctslkf` (São Paulo). Decisão: produto CoreoHub, Usualdance = tenant 1 (não dono). Detalhes em [[voto-popular-mvp]].
+
+- **MVP funcionando E2E em prod (1 dia):** login OTP-first (Supabase manda 8 dígitos, não 6) + Google (marca "Usualdance" verificada no GSC), schema multi-tenant + RLS, fluxo de voto (favorito→espera→voto→confirmação) em realtime, edge `cast-vote` (valida janela no backend + 1 voto/grupo via índice único), console `/operador` (allowlist de e-mail), resultado secreto por design.
+- **✅ Integração Fluxo A (grupos do cronograma) SHIPADO 2026-06-14:** botão "Publicar no Voto" no `Schedule.tsx` → edge fn `publish-vote-groups` (CoreoHub) → `import-groups` (Voto). Push assinado por token, sem credencial cruzada. Unidade votável = coreografia; âncora em cascata `event_data.estudio_nome → coreografo_nome → inscrito_nome` (nunca vazia); bailarinos (nomes, sem CPF) só na busca + tela de voto; card com title-case; **fluxo de voto sequencial** (após votar → "aguarde o próximo" → pula sozinho quando abre a próxima janela). Bônus: painel de edição de inscrição (`Registrations.tsx`) ganhou 3 campos (nome coreografia/estúdio/coreógrafo, estúdio+coreógrafo merge no `event_data`) + Wizard normaliza CAIXA ALTA no save. Detalhes em [[voto-integracao-coreohub-plano]].
+- **✅ Integração Fluxo B (voto abre sozinho) SHIPADO 2026-06-14 (testado):** trigger `trg_notify_vote_stage` AFTER UPDATE OF `events.live_registration_id` → edge fn `notify-vote-stage` (CoreoHub, segura o token) → `stage-webhook` (Voto) abre/fecha janela. Push assíncrono (pg_net), não trava a Mesa de Som. Clicar "Iniciar" no Cronograma já abre o voto sozinho. `/operador` vira fallback manual.
+- **✅ OTP 6 caixinhas SHIPADO 2026-06-14:** lição — Supabase manda OTP de **8 dígitos por padrão** (Auth → Sign In/Providers → Email → "Email OTP length"); o login OTP da CoreoHub (`Auth.tsx`, webview Instagram) assumia 6 hardcoded e nunca foi testado com código real → **cliente bloqueado na inscrição** (receita parada). Fix: OTP length=6 no Supabase + componente `OtpBoxes` (6 caixas auto-avança, colar preenche todas, não hardcoda tamanho). Mesmo no Voto.
+- **Falta no Voto:** dashboard de métricas (case de venda), patrocinador (telas 1/6), antifraude (Turnstile + rate-limit IP), polimentos pro dia (limite de e-mail, Broadcast pra escala, sender @usualdance.com), **ideia: mostrar grupos já apresentados + os que vêm (sem revelar votos)**. Gap CoreoHub: coluna ESTÚDIO em `Registrations.tsx` lê `reg.estudio` (vazio) em vez de `event_data.estudio_nome` — adiado.
+
 ### 2026-06-13 — Fluxo de criar 2º evento (ponto de entrada quebrado) ✅ SHIPADO
 2 commits (`13d140e` + `4eed0b0`). Só frontend. Diagnóstico veio de pergunta do user ("existe fluxo pra produtor criar novo evento? não lembro").
 
@@ -615,6 +639,11 @@ BaaS aprovado, secrets prod configurados, webhook ativo, primeira subconta criad
 Priorização cronológica detalhada em `memory/MEMORY.md` + cada item tem sua memória dedicada.
 
 ### 🟧 P1 — Alta prioridade, baixo esforço, destravado
+
+**🔧 Pendência de polimento — Bundle Workshops 2026-06-18** (achados do `/revisar`, não corrigidos):
+1. 🔴 `WorkshopFormModal` (WorkshopsManagement.tsx): upload de capa ficou dentro de `<Field>` (renderiza `<label>` envolvendo o `<input type="file">` + botão Camera) — clicar no botão pode abrir o seletor de arquivo 2x (onClick do botão + comportamento nativo do label encaminhando pro input contido). Tirar o bloco de dentro do `<Field>`, igual ao upload da foto do professor (que já está fora).
+2. 🟡 Capa comprimida a 0.3MB inline (2x a foto do professor, 0.15MB) — infla o payload de `select('*')` em `refresh()` da listagem de workshops. Considerar reduzir `maxSizeMB` ou migrar pra Storage bucket.
+3. 🟢 Preview da capa usa `rounded-xl`; avatar do professor (mesmo modal) usa `rounded-2xl`. Padronizar pra `rounded-2xl`.
 
 **✅ Bundle P1-4 SHIPADO em 2026-05-21 (tarde)** (commit `9463e66`) — 4 residuais destravados: Checkout `APROVADO` direto, Schedule drag fade (`dropIn` keyframe), Wizard rascunho localStorage TTL 24h, Email `payout_released` no cron `daily-release-funds`.
 
