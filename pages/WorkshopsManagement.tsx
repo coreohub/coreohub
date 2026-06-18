@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../services/supabase';
 import imageCompression from 'browser-image-compression';
 import {
@@ -682,9 +683,9 @@ const BuyersModal: React.FC<{ workshop: WorkshopRow; onClose: () => void }> = ({
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-4xl max-h-[92vh] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-4xl max-h-[92dvh] sm:max-h-[92vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-white/10">
           <div className="min-w-0">
@@ -856,7 +857,8 @@ const BuyersModal: React.FC<{ workshop: WorkshopRow; onClose: () => void }> = ({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 
@@ -955,7 +957,7 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
     }
   };
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -1181,7 +1183,8 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 
@@ -1243,7 +1246,7 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, onClose }) => {
     };
   }, [onClose]);
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -1316,7 +1319,8 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, onClose }) => {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 
