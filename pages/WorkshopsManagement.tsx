@@ -1197,6 +1197,12 @@ interface LotsModalProps { workshop: WorkshopRow; otherWorkshops: WorkshopRow[];
 const LotsModal: React.FC<LotsModalProps> = ({ workshop, otherWorkshops, onClose }) => {
   const [lots, setLotsLocal] = useState<LotRow[]>([]);
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
+  // Texto bruto dos campos numéricos enquanto o usuário digita — value
+  // controlado vindo direto de Number(...) "comia" o ponto decimal a cada
+  // tecla (ex: digitar "40." virava "40" antes do usuário terminar de
+  // digitar os centavos). Guarda o texto literal aqui, só converte pra
+  // Number quando salva.
+  const [rawNumInputs, setRawNumInputs] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
@@ -1213,6 +1219,7 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, otherWorkshops, onClose
       .order('ordem', { ascending: true });
     setLotsLocal(data ?? []);
     setDirtyIds(new Set());
+    setRawNumInputs({});
     setLoading(false);
   }, [workshop.id]);
   useEffect(() => { refresh(); }, [refresh]);
@@ -1236,6 +1243,26 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, otherWorkshops, onClose
     setLotsLocal(prev => prev.map(l => (l.id === id ? { ...l, ...patch } : l)));
     setDirtyIds(prev => new Set(prev).add(id));
     setSaveFeedback(null);
+  };
+
+  // Campos numéricos: mantém o texto literal digitado (rawNumInputs) pra não
+  // perder o "." enquanto o usuário ainda está digitando os centavos, e só
+  // grava o Number parseado em editLot quando o texto é um número válido.
+  const editNumField = (lotId: string, field: 'preco' | 'preco_inscritos_mostra' | 'quantidade_maxima', raw: string) => {
+    setRawNumInputs(prev => ({ ...prev, [`${lotId}__${field}`]: raw }));
+    if (raw === '') {
+      editLot(lotId, { [field]: field === 'preco' ? 0 : null } as Partial<LotRow>);
+      return;
+    }
+    const parsed = Number(raw);
+    if (!Number.isNaN(parsed)) editLot(lotId, { [field]: parsed } as Partial<LotRow>);
+  };
+
+  const getNumFieldValue = (lot: LotRow, field: 'preco' | 'preco_inscritos_mostra' | 'quantidade_maxima'): string => {
+    const key = `${lot.id}__${field}`;
+    if (key in rawNumInputs) return rawNumInputs[key];
+    const value = lot[field];
+    return value == null ? '' : String(value);
   };
 
   // Ativo/Remover seguem imediatos (ação de 1 clique, não texto digitado).
@@ -1366,7 +1393,7 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, otherWorkshops, onClose
                     </label>
                   ))}
                 </div>
-                {applyFeedback && <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2">{applyFeedback}</p>}
+                {applyFeedback && <p role="status" aria-live="polite" className="text-xs text-emerald-600 dark:text-emerald-400 mt-2">{applyFeedback}</p>}
               </div>
             )}
 
@@ -1375,7 +1402,7 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, otherWorkshops, onClose
                 <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                   <span className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                     Lote {lot.ordem}
-                    {dirtyIds.has(lot.id) && <span className="text-amber-500 dark:text-amber-400 font-bold">· não salvo</span>}
+                    {dirtyIds.has(lot.id) && <span className="text-amber-700 dark:text-amber-400 font-bold">· não salvo</span>}
                   </span>
                   <div className="flex items-center gap-2">
                     <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">
@@ -1402,13 +1429,13 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, otherWorkshops, onClose
                     <input value={lot.nome} onChange={e => editLot(lot.id, { nome: e.target.value })} className={inputCls} />
                   </Field>
                   <Field label="Preço (R$)">
-                    <input type="number" step="0.01" value={lot.preco} onChange={e => editLot(lot.id, { preco: Number(e.target.value) })} className={inputCls} />
+                    <input type="number" step="0.01" value={getNumFieldValue(lot, 'preco')} onChange={e => editNumField(lot.id, 'preco', e.target.value)} className={inputCls} />
                   </Field>
                   <Field label="Preço inscritos (R$)">
-                    <input type="number" step="0.01" value={lot.preco_inscritos_mostra ?? ''} onChange={e => editLot(lot.id, { preco_inscritos_mostra: e.target.value === '' ? null : Number(e.target.value) })} className={inputCls} placeholder="vazio = sem desconto" />
+                    <input type="number" step="0.01" value={getNumFieldValue(lot, 'preco_inscritos_mostra')} onChange={e => editNumField(lot.id, 'preco_inscritos_mostra', e.target.value)} className={inputCls} placeholder="vazio = sem desconto" />
                   </Field>
                   <Field label="Estoque (quantidade máx)">
-                    <input type="number" value={lot.quantidade_maxima ?? ''} onChange={e => editLot(lot.id, { quantidade_maxima: e.target.value === '' ? null : Number(e.target.value) })} className={inputCls} placeholder="vazio = sem limite" />
+                    <input type="number" value={getNumFieldValue(lot, 'quantidade_maxima')} onChange={e => editNumField(lot.id, 'quantidade_maxima', e.target.value)} className={inputCls} placeholder="vazio = sem limite" />
                   </Field>
                   <Field label="Início (vendas)">
                     <input type="datetime-local" value={toInputDateTime(lot.data_inicio)} onChange={e => editLot(lot.id, { data_inicio: e.target.value ? new Date(e.target.value).toISOString() : null })} className={inputCls} />
@@ -1432,7 +1459,7 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, otherWorkshops, onClose
 
         {!loading && (
           <div className="flex items-center justify-between gap-3 px-5 sm:px-6 py-4 border-t border-slate-200 dark:border-white/10 shrink-0">
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p role="status" aria-live="polite" className="text-xs text-slate-500 dark:text-slate-400">
               {saveFeedback ?? (dirtyIds.size > 0 ? `${dirtyIds.size} lote(s) com alterações não salvas.` : '')}
             </p>
             <button
