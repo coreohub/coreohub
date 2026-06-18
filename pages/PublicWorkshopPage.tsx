@@ -175,14 +175,17 @@ const PublicWorkshopPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#0b0b0f] text-white pb-24 sm:pb-12">
-      {/* Cover */}
-      <div className="relative h-56 md:h-80 overflow-hidden">
-        {(workshop.cover_url || workshop.professor_photo_url) ? (
-          <img src={workshop.cover_url || workshop.professor_photo_url || ''} alt="" className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-[#ff0068] via-purple-700 to-[#0b0b0f]" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/10 to-[#0b0b0f]" />
+      {/* Cover — largura limitada (não full-bleed) pra não distorcer a proporção
+          16:9 em telas largas; full-bleed + altura fixa cropava igual zoom. */}
+      <div className="max-w-5xl mx-auto">
+        <div className="relative aspect-[16/9] sm:rounded-b-3xl overflow-hidden">
+          {(workshop.cover_url || workshop.professor_photo_url) ? (
+            <img src={workshop.cover_url || workshop.professor_photo_url || ''} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-[#ff0068] via-purple-700 to-[#0b0b0f]" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/10 to-[#0b0b0f]" />
+        </div>
       </div>
 
       <div className="max-w-3xl mx-auto px-4 -mt-20 relative">
@@ -240,10 +243,12 @@ const PublicWorkshopPage: React.FC = () => {
             </div>
           )}
 
+          {/* No mobile, quando podeComprar, a barra fixa do rodapé já cobre o CTA —
+              esconder aqui evita o botão duplicado (mesma ação 2x na tela). */}
           <button
             disabled={!podeComprar}
             onClick={() => navigate(`/checkout-workshop/${workshop.id}`)}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#ff0068] px-4 py-3 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] disabled:opacity-40 disabled:cursor-not-allowed transition"
+            className={`w-full items-center justify-center gap-2 rounded-xl bg-[#ff0068] px-4 py-3 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] disabled:opacity-40 disabled:cursor-not-allowed transition ${podeComprar ? 'hidden sm:flex' : 'flex'}`}
           >
             {podeComprar ? 'Inscrever-se agora' : lotEsgotado ? 'Esgotado' : 'Indisponível'}
           </button>

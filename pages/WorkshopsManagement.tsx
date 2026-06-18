@@ -963,7 +963,7 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
       className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4"
       onClick={onClose}
     >
-      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl max-w-3xl w-full shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[90vh]" onClick={e => e.stopPropagation()}>
+      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl max-w-3xl w-full shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[90vh]" onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-5 pb-4 border-b border-slate-200 dark:border-white/10 shrink-0">
           <h2 id="workshop-form-title" className="text-lg sm:text-xl font-black text-slate-900 dark:text-white truncate">{isEdit ? 'Editar workshop' : 'Novo workshop'}</h2>
           <button onClick={onClose} aria-label="Fechar" className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg shrink-0"><X size={18} /></button>
@@ -1251,7 +1251,7 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, onClose }) => {
       className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4"
       onClick={onClose}
     >
-      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl max-w-3xl w-full shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[90vh]" onClick={e => e.stopPropagation()}>
+      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl max-w-3xl w-full shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[90vh]" onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-5 pb-4 border-b border-slate-200 dark:border-white/10 shrink-0">
           <div className="min-w-0">
             <h2 id="workshop-lots-title" className="text-lg sm:text-xl font-black text-slate-900 dark:text-white flex items-center gap-2"><Layers size={18} className="text-[#ff0068] shrink-0" />Lotes</h2>
