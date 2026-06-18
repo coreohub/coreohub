@@ -84,6 +84,30 @@ const PublicWorkshopPage: React.FC = () => {
   const [error, setError]       = useState<string | null>(null);
   const [toast, setToast]       = useState<string | null>(null);
 
+  // Próximo lote — pra avisar "sobe pra R$X em [data]" (mesmo padrão de
+  // Ingressos/Inscrições). RPC get_workshop_stock só devolve o lote vigente,
+  // então busca separada em workshop_lots. Chamada tanto no load inicial
+  // quanto no polling, senão o aviso fica desatualizado se a virada
+  // acontecer com a aba aberta (preço atualiza, aviso não).
+  const fetchProximoLote = async (workshopId: string, stRow: Stock | null) => {
+    if (!stRow?.active_lot_id) { setProximoLote(null); return; }
+    const { data: lotsData } = await supabase
+      .from('workshop_lots')
+      .select('id, ordem, preco, data_inicio')
+      .eq('workshop_id', workshopId)
+      .eq('is_active', true)
+      .order('ordem', { ascending: true });
+    if (!Array.isArray(lotsData)) return;
+    const ativoOrdem = lotsData.find((l: any) => l.id === stRow.active_lot_id);
+    const proximo = lotsData.find((l: any) => ativoOrdem && l.ordem > ativoOrdem.ordem && l.data_inicio);
+    if (proximo && Number(proximo.preco) > Number(stRow.active_lot_preco)) {
+      const dataVirada = String(proximo.data_inicio).slice(0, 10);
+      setProximoLote({ preco: Number(proximo.preco), dataVirada, dias: diffDias(todayISO(), dataVirada) });
+    } else {
+      setProximoLote(null);
+    }
+  };
+
   useEffect(() => {
     if (!idOrSlug) return;
     (async () => {
@@ -108,25 +132,7 @@ const PublicWorkshopPage: React.FC = () => {
         const { data: st } = await supabase.rpc('get_workshop_stock', { p_workshop_id: ws.id });
         const stRow = Array.isArray(st) ? st[0] : st;
         if (stRow) setStock(stRow);
-
-        // Próximo lote — pra avisar "sobe pra R$X em [data]" (mesmo padrão
-        // de Ingressos/Inscrições). RPC só devolve o lote vigente.
-        if (stRow?.active_lot_id) {
-          const { data: lotsData } = await supabase
-            .from('workshop_lots')
-            .select('id, ordem, preco, data_inicio')
-            .eq('workshop_id', ws.id)
-            .eq('is_active', true)
-            .order('ordem', { ascending: true });
-          if (Array.isArray(lotsData)) {
-            const ativoOrdem = lotsData.find((l: any) => l.id === stRow.active_lot_id);
-            const proximo = lotsData.find((l: any) => ativoOrdem && l.ordem > ativoOrdem.ordem && l.data_inicio);
-            if (proximo && Number(proximo.preco) > Number(stRow.active_lot_preco)) {
-              const dataVirada = String(proximo.data_inicio).slice(0, 10);
-              setProximoLote({ preco: Number(proximo.preco), dataVirada, dias: diffDias(todayISO(), dataVirada) });
-            }
-          }
-        }
+        await fetchProximoLote(ws.id, stRow ?? null);
       } finally {
         setLoading(false);
       }
@@ -140,6 +146,7 @@ const PublicWorkshopPage: React.FC = () => {
       const { data } = await supabase.rpc('get_workshop_stock', { p_workshop_id: workshop.id });
       const row = Array.isArray(data) ? data[0] : data;
       if (row) setStock(row);
+      await fetchProximoLote(workshop.id, row ?? null);
     };
     const t = setInterval(tick, 30_000);
     return () => clearInterval(t);
@@ -242,7 +249,7 @@ const PublicWorkshopPage: React.FC = () => {
                 <p className="text-xs text-emerald-300 mt-1 font-bold">🎉 Grátis para inscritos da mostra</p>
               )}
               {proximoLote && (
-                <p className="text-[11px] font-bold text-[#ff0068] mt-1">
+                <p className="text-[10px] font-bold text-[#ff0068] mt-1">
                   {proximoLote.dias < 1
                     ? <>Sobe pra {fmtCurrency(proximoLote.preco)} amanhã</>
                     : <>Sobe pra {fmtCurrency(proximoLote.preco)} em {formatDataBRComDia(proximoLote.dataVirada)}</>}
