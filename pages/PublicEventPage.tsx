@@ -55,7 +55,10 @@ const PublicEventPage = () => {
   }>>([]);
   // Lote vigente por workshop (id → {nome, preco}), pra exibir badge "1º lote"
   // + preço correto já na listagem (antes só a página de detalhe resolvia).
-  const [workshopActiveLot, setWorkshopActiveLot] = useState<Record<string, { nome: string; preco: number }>>({});
+  const [workshopActiveLot, setWorkshopActiveLot] = useState<Record<string, {
+    nome: string; preco: number;
+    proximo: { preco: number; dataVirada: string; dias: number } | null;
+  }>>({});
   // Tier 2: estoque por tipo de ingresso (mapa idx → { sold, remaining, sold_out })
   const [stockByType, setStockByType] = useState<Record<string, { sold: number; remaining: number | null; sold_out: boolean }>>({});
   // Gêneros + modalidades estruturados (event_styles). Renderizado em seção
@@ -191,16 +194,31 @@ const PublicEventPage = () => {
               .eq('is_active', true);
             if (Array.isArray(lotsData)) {
               const now = Date.now();
-              const byWorkshop: Record<string, { nome: string; preco: number }> = {};
+              const today = todayISO();
+              const byWorkshop: Record<string, {
+                nome: string; preco: number;
+                proximo: { preco: number; dataVirada: string; dias: number } | null;
+              }> = {};
               for (const ws of wsData as any[]) {
-                const candidatos = lotsData
+                const todosOsLotes = lotsData
                   .filter((l: any) => l.workshop_id === ws.id)
+                  .sort((a: any, b: any) => a.ordem - b.ordem);
+                const candidatos = todosOsLotes
                   .filter((l: any) => (!l.data_inicio || new Date(l.data_inicio).getTime() <= now)
                     && (!l.data_fim || new Date(l.data_fim).getTime() >= now))
                   .sort((a: any, b: any) => b.ordem - a.ordem);
-                if (candidatos[0]) {
-                  byWorkshop[ws.id] = { nome: candidatos[0].nome, preco: Number(candidatos[0].preco) };
-                }
+                const ativo = candidatos[0];
+                if (!ativo) continue;
+                // Próximo lote = primeira ordem maior que a do ativo, com início futuro conhecido.
+                const proximoLote = todosOsLotes.find((l: any) => l.ordem > ativo.ordem && l.data_inicio);
+                const proximo = proximoLote && Number(proximoLote.preco) > Number(ativo.preco)
+                  ? {
+                      preco: Number(proximoLote.preco),
+                      dataVirada: String(proximoLote.data_inicio).slice(0, 10),
+                      dias: diffDias(today, String(proximoLote.data_inicio).slice(0, 10)),
+                    }
+                  : null;
+                byWorkshop[ws.id] = { nome: ativo.nome, preco: Number(ativo.preco), proximo };
               }
               setWorkshopActiveLot(byWorkshop);
             }
@@ -1188,6 +1206,13 @@ const PublicEventPage = () => {
                           ? 'Grátis'
                           : Number(preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </p>
+                      {loteAtivo?.proximo && (
+                        <p className="text-[10px] font-bold text-[#ff0068]">
+                          {loteAtivo.proximo.dias < 1
+                            ? <>Sobe pra R$ {formatPrecoBR(loteAtivo.proximo.preco)} amanhã</>
+                            : <>Sobe pra R$ {formatPrecoBR(loteAtivo.proximo.preco)} em {formatDataBRComDia(loteAtivo.proximo.dataVirada)}</>}
+                        </p>
+                      )}
                     </div>
                   </button>
                 );

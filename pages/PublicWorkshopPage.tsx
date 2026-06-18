@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import { diffDias, formatDataBRComDia, todayISO } from '../utils/lotes';
 import {
   Loader2, AlertCircle, ArrowLeft, Calendar, Clock, MapPin, User as UserIcon,
   GraduationCap, Tag, Users, Globe, Instagram, Award, Share2,
@@ -78,6 +79,7 @@ const PublicWorkshopPage: React.FC = () => {
 
   const [workshop, setWorkshop] = useState<Workshop | null>(null);
   const [stock, setStock]       = useState<Stock | null>(null);
+  const [proximoLote, setProximoLote] = useState<{ preco: number; dataVirada: string; dias: number } | null>(null);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
   const [toast, setToast]       = useState<string | null>(null);
@@ -106,6 +108,25 @@ const PublicWorkshopPage: React.FC = () => {
         const { data: st } = await supabase.rpc('get_workshop_stock', { p_workshop_id: ws.id });
         const stRow = Array.isArray(st) ? st[0] : st;
         if (stRow) setStock(stRow);
+
+        // Próximo lote — pra avisar "sobe pra R$X em [data]" (mesmo padrão
+        // de Ingressos/Inscrições). RPC só devolve o lote vigente.
+        if (stRow?.active_lot_id) {
+          const { data: lotsData } = await supabase
+            .from('workshop_lots')
+            .select('id, ordem, preco, data_inicio')
+            .eq('workshop_id', ws.id)
+            .eq('is_active', true)
+            .order('ordem', { ascending: true });
+          if (Array.isArray(lotsData)) {
+            const ativoOrdem = lotsData.find((l: any) => l.id === stRow.active_lot_id);
+            const proximo = lotsData.find((l: any) => ativoOrdem && l.ordem > ativoOrdem.ordem && l.data_inicio);
+            if (proximo && Number(proximo.preco) > Number(stRow.active_lot_preco)) {
+              const dataVirada = String(proximo.data_inicio).slice(0, 10);
+              setProximoLote({ preco: Number(proximo.preco), dataVirada, dias: diffDias(todayISO(), dataVirada) });
+            }
+          }
+        }
       } finally {
         setLoading(false);
       }
@@ -219,6 +240,13 @@ const PublicWorkshopPage: React.FC = () => {
               )}
               {workshop.gratis_para_inscritos && (
                 <p className="text-xs text-emerald-300 mt-1 font-bold">🎉 Grátis para inscritos da mostra</p>
+              )}
+              {proximoLote && (
+                <p className="text-[11px] font-bold text-[#ff0068] mt-1">
+                  {proximoLote.dias < 1
+                    ? <>Sobe pra {fmtCurrency(proximoLote.preco)} amanhã</>
+                    : <>Sobe pra {fmtCurrency(proximoLote.preco)} em {formatDataBRComDia(proximoLote.dataVirada)}</>}
+                </p>
               )}
             </div>
             <button onClick={handleShare} className="p-2 rounded-lg hover:bg-white/10 text-slate-400" title="Compartilhar">
