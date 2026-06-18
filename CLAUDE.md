@@ -239,6 +239,15 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-06-18 (noite) — Vitrine de workshop: preço do lote vigente + aviso de virada ✅ SHIPADO
+3 commits (`16248c3` → `dc74b70`). Disparado por pergunta do user: "deveria mostrar que é lote 1?". Detalhes em [[workshop-lote-vigente-vitrine-shipado]].
+
+- **Bug encontrado**: o card de Workshop na listagem (`PublicEventPage.tsx`) sempre mostrava `ws.preco_padrao`, nunca consultava `workshop_lots` — preço cheio na vitrine mesmo com lote promocional ativo. A página de detalhe (`PublicWorkshopPage.tsx`) já resolvia certo via RPC `get_workshop_stock`, mas essa RPC só funcionou de fato depois do fix de coluna ambígua (`cd2981b`, mais cedo na mesma sessão) — antes caía silenciosamente no fallback.
+- **Fix**: card busca o lote ativo de todos os workshops em 1 query batched (`workshop_lots .in(workshop_id)`), evitando N round-trips. Replica a mesma regra do RPC (maior `ordem`, `is_active`, dentro da janela `data_inicio`/`data_fim`).
+- **Aviso "Sobe pra R$X em [data]"**: replicado no card e no detalhe, mesmo padrão de urgência já usado em Ingressos/Inscrições.
+- **Achado do `/revisar` corrigido na hora**: polling de 30s do detalhe só recalculava o preço, não o aviso de virada — se a virada acontecesse com a aba aberta, o aviso ficava com data já passada. Extraído `fetchProximoLote()` chamado no mount e no tick.
+- **Pendência cosmética não bloqueante**: lógica de "achar próximo lote" + JSX do aviso duplicada agora em 4 lugares (ingressos/inscrições/card workshop/detalhe workshop). Vale extrair helper compartilhado se aparecer um 5º caso.
+
 ### 2026-06-18 — Bundle melhorias Workshops (5 blocos) + bug crítico seed-demo ✅ SHIPADO
 4 commits (`b6423d4` → `cd759cd`). Plano de 5 blocos aprovado + 1 fix crítico descoberto no meio da sessão. Detalhes em [[bundle-workshops-melhorias-2026-06-18]].
 
@@ -644,6 +653,8 @@ Priorização cronológica detalhada em `memory/MEMORY.md` + cada item tem sua m
 1. 🔴 `WorkshopFormModal` (WorkshopsManagement.tsx): upload de capa ficou dentro de `<Field>` (renderiza `<label>` envolvendo o `<input type="file">` + botão Camera) — clicar no botão pode abrir o seletor de arquivo 2x (onClick do botão + comportamento nativo do label encaminhando pro input contido). Tirar o bloco de dentro do `<Field>`, igual ao upload da foto do professor (que já está fora).
 2. 🟡 Capa comprimida a 0.3MB inline (2x a foto do professor, 0.15MB) — infla o payload de `select('*')` em `refresh()` da listagem de workshops. Considerar reduzir `maxSizeMB` ou migrar pra Storage bucket.
 3. 🟢 Preview da capa usa `rounded-xl`; avatar do professor (mesmo modal) usa `rounded-2xl`. Padronizar pra `rounded-2xl`.
+
+**🟢 Pendência cosmética — Vitrine lote de workshop (2026-06-18 noite)**: lógica de "achar próximo lote com preço maior" + JSX do aviso "Sobe pra R$X em [data]" duplicada em 4 lugares (ingressos/inscrições em `PublicEventPage.tsx`, card de workshop, detalhe `PublicWorkshopPage.tsx`) — cada um com uma variação de busca. Extrair helper `resolveProximoLote()` + componente `<AvisoViradaLote>` compartilhado se aparecer um 5º caso. Detalhes em [[workshop-lote-vigente-vitrine-shipado]].
 
 **✅ Bundle P1-4 SHIPADO em 2026-05-21 (tarde)** (commit `9463e66`) — 4 residuais destravados: Checkout `APROVADO` direto, Schedule drag fade (`dropIn` keyframe), Wizard rascunho localStorage TTL 24h, Email `payout_released` no cron `daily-release-funds`.
 
