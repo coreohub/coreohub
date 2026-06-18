@@ -471,7 +471,7 @@ const CheckoutWorkshop: React.FC = () => {
               ? 'Verificando...'
               : breakdown?.charged === 0
                 ? 'Confirmar inscrição grátis'
-                : `Inscrever-se · ${formatBRL(breakdown?.charged ?? 0)}`}
+                : `Comprar · ${formatBRL(breakdown?.charged ?? 0)}`}
           </button>
 
           <div className="flex items-center justify-center gap-2 text-[10px] text-slate-500 uppercase tracking-widest">

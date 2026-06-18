@@ -1196,8 +1196,10 @@ interface LotsModalProps { workshop: WorkshopRow; otherWorkshops: WorkshopRow[];
 
 const LotsModal: React.FC<LotsModalProps> = ({ workshop, otherWorkshops, onClose }) => {
   const [lots, setLotsLocal] = useState<LotRow[]>([]);
+  const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
+  const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [selectedTargets, setSelectedTargets] = useState<Set<string>>(new Set(otherWorkshops.map(w => w.id)));
   const [applyFeedback, setApplyFeedback] = useState<string | null>(null);
@@ -1210,6 +1212,7 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, otherWorkshops, onClose
       .eq('workshop_id', workshop.id)
       .order('ordem', { ascending: true });
     setLotsLocal(data ?? []);
+    setDirtyIds(new Set());
     setLoading(false);
   }, [workshop.id]);
   useEffect(() => { refresh(); }, [refresh]);
@@ -1228,14 +1231,48 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, otherWorkshops, onClose
     if (!error) refresh();
   };
 
-  const updateLot = async (id: string, patch: Partial<LotRow>) => {
-    const { error } = await supabase.from('workshop_lots').update(patch).eq('id', id);
+  // Edição local — só vai pro banco quando "Salvar" é clicado.
+  const editLot = (id: string, patch: Partial<LotRow>) => {
+    setLotsLocal(prev => prev.map(l => (l.id === id ? { ...l, ...patch } : l)));
+    setDirtyIds(prev => new Set(prev).add(id));
+    setSaveFeedback(null);
+  };
+
+  // Ativo/Remover seguem imediatos (ação de 1 clique, não texto digitado).
+  const toggleActive = async (id: string, is_active: boolean) => {
+    const { error } = await supabase.from('workshop_lots').update({ is_active }).eq('id', id);
     if (!error) refresh();
   };
 
   const removeLot = async (id: string) => {
     if (!confirm('Remover este lote?')) return;
     await supabase.from('workshop_lots').delete().eq('id', id);
+    refresh();
+  };
+
+  const lotEditablePayload = (lot: LotRow) => ({
+    nome: lot.nome,
+    preco: lot.preco,
+    preco_inscritos_mostra: lot.preco_inscritos_mostra,
+    quantidade_maxima: lot.quantidade_maxima,
+    data_inicio: lot.data_inicio,
+    data_fim: lot.data_fim,
+  });
+
+  const saveAll = async () => {
+    if (dirtyIds.size === 0) return;
+    setSaving(true);
+    setSaveFeedback(null);
+    let ok = 0;
+    const ids = Array.from(dirtyIds);
+    for (const id of ids) {
+      const lot = lots.find(l => l.id === id);
+      if (!lot) continue;
+      const { error } = await supabase.from('workshop_lots').update(lotEditablePayload(lot)).eq('id', id);
+      if (!error) ok++;
+    }
+    setSaving(false);
+    setSaveFeedback(ok === ids.length ? 'Alterações salvas.' : `Salvo ${ok} de ${ids.length} lote(s) — verifique erros.`);
     refresh();
   };
 
@@ -1252,16 +1289,12 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, otherWorkshops, onClose
     if (targets.length === 0) return;
     setApplyingId(lot.id);
     setApplyFeedback(null);
-    const payload = {
-      ordem: lot.ordem,
-      nome: lot.nome,
-      preco: lot.preco,
-      preco_inscritos_mostra: lot.preco_inscritos_mostra,
-      data_inicio: lot.data_inicio,
-      data_fim: lot.data_fim,
-      quantidade_maxima: lot.quantidade_maxima,
-      is_active: lot.is_active,
-    };
+    // Garante que o lote de origem está salvo antes de propagar (evita copiar edição não persistida).
+    if (dirtyIds.has(lot.id)) {
+      await supabase.from('workshop_lots').update(lotEditablePayload(lot)).eq('id', lot.id);
+      setDirtyIds(prev => { const next = new Set(prev); next.delete(lot.id); return next; });
+    }
+    const payload = { ...lotEditablePayload(lot), ordem: lot.ordem, is_active: lot.is_active };
     let ok = 0;
     for (const target of targets) {
       const { data: existing } = await supabase
@@ -1280,15 +1313,20 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, otherWorkshops, onClose
   };
 
   // Audit T3: ESC fecha + lock body scroll
+  const guardedClose = useCallback(() => {
+    if (dirtyIds.size > 0 && !confirm('Você tem alterações não salvas nos lotes. Fechar sem salvar?')) return;
+    onClose();
+  }, [dirtyIds, onClose]);
+
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') guardedClose(); };
     document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = '';
     };
-  }, [onClose]);
+  }, [guardedClose]);
 
   return createPortal(
     <div
@@ -1296,7 +1334,7 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, otherWorkshops, onClose
       aria-modal="true"
       aria-labelledby="workshop-lots-title"
       className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4"
-      onClick={onClose}
+      onClick={guardedClose}
     >
       <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl max-w-3xl w-full shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[90vh]" onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-5 pb-4 border-b border-slate-200 dark:border-white/10 shrink-0">
@@ -1304,7 +1342,7 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, otherWorkshops, onClose
             <h2 id="workshop-lots-title" className="text-lg sm:text-xl font-black text-slate-900 dark:text-white flex items-center gap-2"><Layers size={18} className="text-[#ff0068] shrink-0" />Lotes</h2>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 truncate">{workshop.name}</p>
           </div>
-          <button onClick={onClose} aria-label="Fechar" className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg shrink-0"><X size={18} /></button>
+          <button onClick={guardedClose} aria-label="Fechar" className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg shrink-0"><X size={18} /></button>
         </div>
 
         {loading ? (
@@ -1333,12 +1371,15 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, otherWorkshops, onClose
             )}
 
             {lots.map(lot => (
-              <div key={lot.id} className="rounded-xl border border-slate-200 dark:border-white/10 p-4 bg-slate-50 dark:bg-white/5">
+              <div key={lot.id} className={`rounded-xl border p-4 bg-slate-50 dark:bg-white/5 ${dirtyIds.has(lot.id) ? 'border-amber-400 dark:border-amber-500/60' : 'border-slate-200 dark:border-white/10'}`}>
                 <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                  <span className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Lote {lot.ordem}</span>
+                  <span className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                    Lote {lot.ordem}
+                    {dirtyIds.has(lot.id) && <span className="text-amber-500 dark:text-amber-400 font-bold">· não salvo</span>}
+                  </span>
                   <div className="flex items-center gap-2">
                     <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">
-                      <input type="checkbox" checked={lot.is_active} onChange={e => updateLot(lot.id, { is_active: e.target.checked })} />
+                      <input type="checkbox" checked={lot.is_active} onChange={e => toggleActive(lot.id, e.target.checked)} />
                       Ativo
                     </label>
                     {otherWorkshops.length > 0 && (
@@ -1358,22 +1399,22 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, otherWorkshops, onClose
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <Field label="Nome">
-                    <input defaultValue={lot.nome} onBlur={e => updateLot(lot.id, { nome: e.target.value })} className={inputCls} />
+                    <input value={lot.nome} onChange={e => editLot(lot.id, { nome: e.target.value })} className={inputCls} />
                   </Field>
                   <Field label="Preço (R$)">
-                    <input type="number" step="0.01" defaultValue={lot.preco} onBlur={e => updateLot(lot.id, { preco: Number(e.target.value) })} className={inputCls} />
+                    <input type="number" step="0.01" value={lot.preco} onChange={e => editLot(lot.id, { preco: Number(e.target.value) })} className={inputCls} />
                   </Field>
                   <Field label="Preço inscritos (R$)">
-                    <input type="number" step="0.01" defaultValue={lot.preco_inscritos_mostra ?? ''} onBlur={e => updateLot(lot.id, { preco_inscritos_mostra: e.target.value === '' ? null : Number(e.target.value) })} className={inputCls} placeholder="vazio = sem desconto" />
+                    <input type="number" step="0.01" value={lot.preco_inscritos_mostra ?? ''} onChange={e => editLot(lot.id, { preco_inscritos_mostra: e.target.value === '' ? null : Number(e.target.value) })} className={inputCls} placeholder="vazio = sem desconto" />
                   </Field>
                   <Field label="Estoque (quantidade máx)">
-                    <input type="number" defaultValue={lot.quantidade_maxima ?? ''} onBlur={e => updateLot(lot.id, { quantidade_maxima: e.target.value === '' ? null : Number(e.target.value) })} className={inputCls} placeholder="vazio = sem limite" />
+                    <input type="number" value={lot.quantidade_maxima ?? ''} onChange={e => editLot(lot.id, { quantidade_maxima: e.target.value === '' ? null : Number(e.target.value) })} className={inputCls} placeholder="vazio = sem limite" />
                   </Field>
                   <Field label="Início (vendas)">
-                    <input type="datetime-local" defaultValue={toInputDateTime(lot.data_inicio)} onBlur={e => updateLot(lot.id, { data_inicio: e.target.value ? new Date(e.target.value).toISOString() : null })} className={inputCls} />
+                    <input type="datetime-local" value={toInputDateTime(lot.data_inicio)} onChange={e => editLot(lot.id, { data_inicio: e.target.value ? new Date(e.target.value).toISOString() : null })} className={inputCls} />
                   </Field>
                   <Field label="Fim (vendas)">
-                    <input type="datetime-local" defaultValue={toInputDateTime(lot.data_fim)} onBlur={e => updateLot(lot.id, { data_fim: e.target.value ? new Date(e.target.value).toISOString() : null })} className={inputCls} />
+                    <input type="datetime-local" value={toInputDateTime(lot.data_fim)} onChange={e => editLot(lot.id, { data_fim: e.target.value ? new Date(e.target.value).toISOString() : null })} className={inputCls} />
                   </Field>
                 </div>
               </div>
@@ -1385,6 +1426,22 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, otherWorkshops, onClose
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
               Adicionar lote
+            </button>
+          </div>
+        )}
+
+        {!loading && (
+          <div className="flex items-center justify-between gap-3 px-5 sm:px-6 py-4 border-t border-slate-200 dark:border-white/10 shrink-0">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {saveFeedback ?? (dirtyIds.size > 0 ? `${dirtyIds.size} lote(s) com alterações não salvas.` : '')}
+            </p>
+            <button
+              onClick={saveAll}
+              disabled={saving || dirtyIds.size === 0}
+              className="inline-flex items-center gap-2 rounded-xl bg-[#ff0068] px-4 py-2.5 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] disabled:opacity-40 disabled:cursor-not-allowed transition shrink-0"
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : null}
+              Salvar
             </button>
           </div>
         )}

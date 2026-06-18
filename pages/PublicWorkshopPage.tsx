@@ -250,7 +250,7 @@ const PublicWorkshopPage: React.FC = () => {
             onClick={() => navigate(`/checkout-workshop/${workshop.id}`)}
             className={`w-full items-center justify-center gap-2 rounded-xl bg-[#ff0068] px-4 py-3 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] disabled:opacity-40 disabled:cursor-not-allowed transition ${podeComprar ? 'hidden sm:flex' : 'flex'}`}
           >
-            {podeComprar ? 'Inscrever-se agora' : lotEsgotado ? 'Esgotado' : 'Indisponível'}
+            {podeComprar ? 'Comprar agora' : lotEsgotado ? 'Esgotado' : 'Indisponível'}
           </button>
         </div>
 
@@ -325,7 +325,7 @@ const PublicWorkshopPage: React.FC = () => {
             onClick={() => navigate(`/checkout-workshop/${workshop.id}`)}
             className="w-full rounded-xl bg-[#ff0068] px-4 py-3 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30"
           >
-            Inscrever-se · {fmtCurrency(precoAtivo)}
+            Comprar · {fmtCurrency(precoAtivo)}
           </button>
         </div>
       )}
