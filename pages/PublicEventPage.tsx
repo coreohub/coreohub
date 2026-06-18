@@ -53,6 +53,9 @@ const PublicEventPage = () => {
     modalidade: string | null; nivel: string; data_inicio: string;
     duracao_minutos: number | null; preco_padrao: number; gratis_para_inscritos: boolean;
   }>>([]);
+  // Lote vigente por workshop (id → {nome, preco}), pra exibir badge "1º lote"
+  // + preço correto já na listagem (antes só a página de detalhe resolvia).
+  const [workshopActiveLot, setWorkshopActiveLot] = useState<Record<string, { nome: string; preco: number }>>({});
   // Tier 2: estoque por tipo de ingresso (mapa idx → { sold, remaining, sold_out })
   const [stockByType, setStockByType] = useState<Record<string, { sold: number; remaining: number | null; sold_out: boolean }>>({});
   // Gêneros + modalidades estruturados (event_styles). Renderizado em seção
@@ -176,6 +179,32 @@ const PublicEventPage = () => {
           .order('data_inicio', { ascending: true });
         if (Array.isArray(wsData)) {
           setPublicWorkshops(wsData as any);
+
+          // Lote vigente por workshop — mesma regra do RPC get_workshop_stock
+          // (maior ordem, is_active, dentro da janela data_inicio/data_fim).
+          // Query única em vez de 1 RPC por card (evita N round-trips).
+          if (wsData.length > 0) {
+            const { data: lotsData } = await supabase
+              .from('workshop_lots')
+              .select('workshop_id, ordem, nome, preco, data_inicio, data_fim, is_active')
+              .in('workshop_id', wsData.map((w: any) => w.id))
+              .eq('is_active', true);
+            if (Array.isArray(lotsData)) {
+              const now = Date.now();
+              const byWorkshop: Record<string, { nome: string; preco: number }> = {};
+              for (const ws of wsData as any[]) {
+                const candidatos = lotsData
+                  .filter((l: any) => l.workshop_id === ws.id)
+                  .filter((l: any) => (!l.data_inicio || new Date(l.data_inicio).getTime() <= now)
+                    && (!l.data_fim || new Date(l.data_fim).getTime() >= now))
+                  .sort((a: any, b: any) => b.ordem - a.ordem);
+                if (candidatos[0]) {
+                  byWorkshop[ws.id] = { nome: candidatos[0].nome, preco: Number(candidatos[0].preco) };
+                }
+              }
+              setWorkshopActiveLot(byWorkshop);
+            }
+          }
         }
 
         // Tier 2: estoque por tipo (só faz sentido pro fluxo INTERNO com sales)
@@ -1128,6 +1157,8 @@ const PublicEventPage = () => {
                   : ws.nivel === 'intermediario' ? 'Intermediário'
                   : ws.nivel === 'avancado' ? 'Avançado'
                   : ws.nivel;
+                const loteAtivo = workshopActiveLot[ws.id];
+                const preco = loteAtivo ? loteAtivo.preco : ws.preco_padrao;
                 return (
                   <button
                     key={ws.id}
@@ -1149,10 +1180,13 @@ const PublicEventPage = () => {
                       <h3 className="font-black uppercase tracking-tight text-white text-sm leading-tight line-clamp-2">{ws.name}</h3>
                       <p className="text-xs text-slate-400">com {ws.professor_name}</p>
                       <p className="text-[11px] text-slate-500">{dataFmt}{ws.duracao_minutos ? ` · ${ws.duracao_minutos}min` : ''}</p>
+                      {loteAtivo && (
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">{loteAtivo.nome}</p>
+                      )}
                       <p className="text-sm font-black text-white pt-1">
-                        {ws.preco_padrao === 0
+                        {preco === 0
                           ? 'Grátis'
-                          : Number(ws.preco_padrao).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          : Number(preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </p>
                     </div>
                   </button>
