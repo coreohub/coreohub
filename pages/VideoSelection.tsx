@@ -744,7 +744,7 @@ const VideoSelection: React.FC = () => {
                         <button
                           onClick={() => handleWaiveFee(reg)}
                           disabled={waivingFeeId === reg.id}
-                          className="px-3 py-2 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all disabled:opacity-50"
+                          className="px-3 py-2 bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-violet-500 hover:text-white transition-all disabled:opacity-50"
                           title="Isentar taxa de seletiva (cortesia, sem cobrança)"
                         >
                           Isentar taxa

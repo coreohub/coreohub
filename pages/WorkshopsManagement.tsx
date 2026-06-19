@@ -801,42 +801,51 @@ const BuyersModal: React.FC<{ workshop: WorkshopRow; onClose: () => void }> = ({
           </button>
           <button
             onClick={() => setCourtesyOpen(o => !o)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap hover:bg-blue-500/20"
+            aria-expanded={courtesyOpen}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-violet-500/10 border border-violet-500/30 text-violet-600 dark:text-violet-400 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap hover:bg-violet-500/20"
           >
             <Users size={13} /> Adicionar cortesia
           </button>
         </div>
 
         {courtesyOpen && (
-          <div className="px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-white/10 bg-blue-500/5 space-y-3">
-            <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">
+          <div className="px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-white/10 bg-violet-500/5 space-y-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-400">
               Convite gratuito direto — sem cupom, sem cobrança Asaas
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label className="sr-only" htmlFor="ws-courtesy-name">Nome</label>
               <input
+                id="ws-courtesy-name"
                 value={courtesyForm.name}
                 onChange={e => setCourtesyForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="Nome"
-                className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500/50"
+                className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500/50"
               />
+              <label className="sr-only" htmlFor="ws-courtesy-email">E-mail</label>
               <input
+                id="ws-courtesy-email"
                 type="email"
                 value={courtesyForm.email}
                 onChange={e => setCourtesyForm(f => ({ ...f, email: e.target.value }))}
                 placeholder="E-mail"
-                className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500/50"
+                className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500/50"
               />
+              <label className="sr-only" htmlFor="ws-courtesy-cpf">CPF</label>
               <input
+                id="ws-courtesy-cpf"
                 value={courtesyForm.cpf}
                 onChange={e => setCourtesyForm(f => ({ ...f, cpf: maskCPF(e.target.value) }))}
                 placeholder="CPF"
-                className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500/50"
+                className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500/50"
               />
+              <label className="sr-only" htmlFor="ws-courtesy-phone">Telefone</label>
               <input
+                id="ws-courtesy-phone"
                 value={courtesyForm.phone}
                 onChange={e => setCourtesyForm(f => ({ ...f, phone: e.target.value }))}
                 placeholder="Telefone (opcional)"
-                className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500/50"
+                className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500/50"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -850,7 +859,7 @@ const BuyersModal: React.FC<{ workshop: WorkshopRow; onClose: () => void }> = ({
               <button
                 onClick={handleAddCourtesy}
                 disabled={courtesySaving}
-                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1.5"
+                className="px-4 py-2 bg-violet-500 hover:bg-violet-600 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1.5"
               >
                 {courtesySaving ? <Loader2 size={13} className="animate-spin" /> : <Users size={13} />}
                 {courtesySaving ? 'Salvando...' : 'Confirmar cortesia'}

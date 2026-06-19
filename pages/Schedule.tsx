@@ -384,6 +384,7 @@ const SortableRow: React.FC<SortableRowProps> = ({
         </button>
         <button
           onClick={() => onAnnounce(reg)}
+          aria-label="Anunciar com narração IA"
           className="p-2 text-slate-400 hover:text-[#ff0068] hover:bg-[#ff0068]/10 rounded-xl transition-all"
           title="Anunciar com Narração IA (só toca o áudio, não sincroniza o Voto)"
         >
@@ -393,6 +394,7 @@ const SortableRow: React.FC<SortableRowProps> = ({
           <button
             onClick={() => onMarkLiveOnly(reg)}
             disabled={updatingLive}
+            aria-label="Marcar ao vivo sem narração"
             className="p-2 text-slate-400 hover:text-[#ff0068] hover:bg-[#ff0068]/10 rounded-xl transition-all disabled:opacity-50"
             title="Marcar AO VIVO sem narração (sincroniza o Voto Popular; use quando o anúncio é feito manualmente no microfone)"
           >

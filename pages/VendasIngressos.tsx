@@ -8,6 +8,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase, resolveActiveEventId } from '../services/supabase';
 import {
   Ticket, Loader2, Search, Download, ExternalLink, CheckCircle2, Clock, XCircle, RotateCcw,
@@ -311,7 +312,7 @@ const VendasIngressos: React.FC = () => {
           </button>
           <button
             onClick={() => { setCourtesyError(null); setCourtesyOpen(true); }}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-500/20"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-violet-500/10 border border-violet-500/30 text-violet-600 dark:text-violet-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-500/20"
           >
             <Users size={12} /> Adicionar cortesia
           </button>
@@ -482,12 +483,12 @@ const VendasIngressos: React.FC = () => {
       )}
 
       {/* Modal de reembolso (Tier 2) */}
-      {courtesyOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" role="dialog" aria-modal="true">
+      {courtesyOpen && createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" role="dialog" aria-modal="true" aria-labelledby="courtesy-modal-title">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5">
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white italic">
+                <h3 id="courtesy-modal-title" className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white italic">
                   Adicionar cortesia
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
@@ -499,6 +500,7 @@ const VendasIngressos: React.FC = () => {
                 onClick={() => setCourtesyOpen(false)}
                 className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5"
                 disabled={courtesySaving}
+                aria-label="Fechar"
               >
                 <X size={18} />
               </button>
@@ -506,8 +508,9 @@ const VendasIngressos: React.FC = () => {
 
             <div className="space-y-3">
               <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Nome</label>
+                <label htmlFor="courtesy-name" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Nome</label>
                 <input
+                  id="courtesy-name"
                   value={courtesyForm.name}
                   onChange={e => setCourtesyForm(f => ({ ...f, name: e.target.value }))}
                   className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
@@ -515,8 +518,9 @@ const VendasIngressos: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">E-mail</label>
+                <label htmlFor="courtesy-email" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">E-mail</label>
                 <input
+                  id="courtesy-email"
                   type="email"
                   value={courtesyForm.email}
                   onChange={e => setCourtesyForm(f => ({ ...f, email: e.target.value }))}
@@ -524,8 +528,9 @@ const VendasIngressos: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">CPF</label>
+                <label htmlFor="courtesy-cpf" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">CPF</label>
                 <input
+                  id="courtesy-cpf"
                   value={courtesyForm.cpf}
                   onChange={e => setCourtesyForm(f => ({ ...f, cpf: maskCpfCnpj(e.target.value) }))}
                   placeholder="000.000.000-00"
@@ -533,8 +538,9 @@ const VendasIngressos: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Telefone (opcional)</label>
+                <label htmlFor="courtesy-phone" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Telefone (opcional)</label>
                 <input
+                  id="courtesy-phone"
                   value={courtesyForm.phone}
                   onChange={e => setCourtesyForm(f => ({ ...f, phone: e.target.value }))}
                   className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
@@ -562,14 +568,15 @@ const VendasIngressos: React.FC = () => {
                 type="button"
                 onClick={handleAddCourtesy}
                 disabled={courtesySaving}
-                className="flex-1 py-3 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-xl text-[11px] font-black uppercase tracking-widest inline-flex items-center justify-center gap-2"
+                className="flex-1 py-3 bg-violet-500 hover:bg-violet-600 disabled:opacity-50 text-white rounded-xl text-[11px] font-black uppercase tracking-widest inline-flex items-center justify-center gap-2"
               >
                 {courtesySaving ? <Loader2 size={14} className="animate-spin" /> : <Users size={14} />}
                 {courtesySaving ? 'Salvando...' : 'Adicionar cortesia'}
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {refundTarget && (
@@ -819,7 +826,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     CANCELADO: { label: 'Cancelado',  cls: 'bg-slate-500/10 text-slate-500',                          icon: XCircle },
     ESTORNADO: { label: 'Estornado',  cls: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',         icon: XCircle },
     VENCIDO:   { label: 'Vencido',    cls: 'bg-slate-500/10 text-slate-500',                          icon: XCircle },
-    CORTESIA:  { label: 'Cortesia',   cls: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',         icon: CheckCircle2 },
+    CORTESIA:  { label: 'Cortesia',   cls: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',   icon: CheckCircle2 },
   };
   const cfg = map[status] ?? { label: status, cls: 'bg-slate-500/10 text-slate-500', icon: AlertCircle };
   const Icon = cfg.icon;
