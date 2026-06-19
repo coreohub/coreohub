@@ -1,14 +1,17 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Ticket, GraduationCap, Tag } from 'lucide-react';
+import { ClipboardList, Ticket, GraduationCap, Video, Tag } from 'lucide-react';
 
-// Tabs de navegação compartilhadas entre as 3 telas do hub "Vendas"
-// (Ingressos/Workshops/Cupons). Padrão Stripe Dashboard / Sympla Painel de
-// Vendas: continuam sendo rotas separadas (cada uma mantém seu próprio state
-// pesado e fetch), mas a navegação entre elas parece 1 hub único.
+// Tabs de navegação compartilhadas entre as telas do hub "Vendas" — tudo que
+// gera receita/comissão (Inscrições/Ingressos/Workshops/Seletiva/Cupons).
+// Padrão Stripe Dashboard / Sympla Painel de Vendas: continuam sendo rotas
+// separadas (cada uma mantém seu próprio state pesado e fetch), mas a navegação
+// entre elas parece 1 hub único. Ordem = funil (entrada → add-ons → cupom).
 const TABS = [
-  { path: '/vendas-ingressos',    label: 'Ingressos', icon: Ticket        },
+  { path: '/registrations',       label: 'Inscrições', icon: ClipboardList },
+  { path: '/vendas-ingressos',    label: 'Ingressos',  icon: Ticket        },
   { path: '/workshops-do-evento', label: 'Workshops',  icon: GraduationCap },
+  { path: '/seletiva-video',      label: 'Seletiva',   icon: Video         },
   { path: '/cupons',              label: 'Cupons',     icon: Tag           },
 ] as const;
 

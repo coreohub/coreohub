@@ -15,6 +15,7 @@ import { refundRegistration } from '../services/refundService';
 import EventPickerSheet from '../components/EventPickerSheet';
 import { maskCpfCnpj, unmaskCpfCnpj, validateCpf, maskData, parseDataISO, maskMoeda, parseMoeda } from '../utils/masks';
 import BailarinosEditor from '../components/BailarinosEditor';
+import VendasTabs from '../components/VendasTabs';
 import {
   hasIncompleteBailarinos as hasIncompleteBailarinosUtil,
   isElencoIncompleto,
@@ -1058,6 +1059,7 @@ const Registrations = () => {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-20">
+      <VendasTabs />
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Inscrições</h1>

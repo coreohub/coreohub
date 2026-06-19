@@ -113,14 +113,18 @@ const menuSections: MenuSection[] = [
       { path: '/credenciais',     label: 'Credenciais',       icon: QrCode        },
     ],
   },
-  // ─── VENDAS ── ingressos, workshops e cupons (hub único, ver VendasTabs) ──
+  // ─── VENDAS ── tudo que gera receita/comissão (hub único, ver VendasTabs).
+  // Inscrições e Seletiva também aparecem em "Operação" (curadoria) — dual-list
+  // de propósito, igual Cronograma; mesma rota, contextos diferentes. ──
   {
     section: 'Vendas',
     roles: ALL_ORGANIZER,
     tone: 'orange',
     items: [
-      { path: '/vendas-ingressos',    label: 'Ingressos', icon: Ticket        },
+      { path: '/registrations',       label: 'Inscrições', icon: ClipboardList },
+      { path: '/vendas-ingressos',    label: 'Ingressos',  icon: Ticket        },
       { path: '/workshops-do-evento', label: 'Workshops',  icon: GraduationCap },
+      { path: '/seletiva-video',      label: 'Seletiva',   icon: Video         },
       { path: '/cupons',              label: 'Cupons',     icon: Tag           },
     ],
   },

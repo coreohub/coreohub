@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase, updateVideoFeeStatus } from '../services/supabase';
 import { maskMoeda, parseMoeda } from '../utils/masks';
 import EventPickerSheet from '../components/EventPickerSheet';
+import VendasTabs from '../components/VendasTabs';
 
 type VideoStatus = 'pending' | 'submitted' | 'approved' | 'rejected' | 'conditional' | 'review_later';
 
@@ -332,6 +333,7 @@ const VideoSelection: React.FC = () => {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-20">
+      <VendasTabs />
       {/* Header */}
       <div className="flex justify-between items-start flex-wrap gap-4">
         <div>
