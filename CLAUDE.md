@@ -239,6 +239,16 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-06-19 — Hub de Vendas + Cortesia direta + Voto desacoplado da narração + fix mobile Credenciamento ✅ SHIPADO
+2 commits (`ad54f38` feature + `01f3fc8` fix `/revisar`) + 1 edge function nova deployada (`create-courtesy-entry`). Disparado por pedido do user de revisar 4 frentes com boas práticas de mercado (UX/UI). Detalhes em [[hub-vendas-cortesia-voto-mobile-shipado]].
+
+- **Voto Popular ↔ Cronograma**: novo botão "Marcar AO VIVO" (ícone `Radio`) em `Schedule.tsx` grava `events.live_registration_id` (sincroniza o Voto via trigger `trg_notify_vote_stage`) **sem** disparar a narração IA — pro caso do anúncio ser feito manualmente no microfone do som. O botão "Iniciar" continua fazendo as duas coisas juntas como atalho padrão (comportamento anterior preservado).
+- **Hub "Vendas"**: seção do menu "Bilheteria" renomeada pra "Vendas" (`Sidebar.tsx`). Novo componente `components/VendasTabs.tsx` compartilhado entre `/vendas-ingressos`, `/workshops-do-evento` e `/cupons` — continuam sendo 3 rotas separadas (cada uma mantém seu state/fetch pesado), mas a navegação entre elas agora parece 1 hub único (padrão Stripe Dashboard / Sympla Painel de Vendas). **Pendente**: tab "Visão Geral" consolidada (receita agregada das 3 fontes) foi recomendada no plano mas não implementada — ver pendência abaixo.
+- **Cortesia (convite gratuito direto, sem cupom)**: schema já suportava (`status_pagamento='CORTESIA'` em `audience_tickets`/`workshop_registrations`, `video_fee_status='waived'` na seletiva) mas faltava a ação no painel. Nova edge function `create-courtesy-entry` (valida dono do evento/workshop via JWT, insere com `preco=0` sem passar pelo Asaas) + botão "Adicionar cortesia" em `VendasIngressos.tsx` (modal) e `WorkshopsManagement.tsx` (form inline no `BuyersModal`). Na Seletiva, botão "Isentar taxa" seta `video_fee_status='waived'` direto via `updateVideoFeeStatus` (RLS já permitia, só faltava UI). Inscrição continua usando cupom 100% (único caminho onde Asaas aceita cobrança R$0).
+- **Credenciamento mobile** (`CheckIn.tsx`): botão "Check" `w-16→w-20` + `min-h-11` (alvo de toque), abas de filtro com `tracking-tight sm:tracking-widest` (texto não trunca mais em 375px), frame do scanner QR `w-64` fixo → `w-[min(70vw,256px)]` responsivo.
+- **`/revisar` (`01f3fc8`)**: 4 achados corrigidos na hora — cor de cortesia inconsistente (`blue` só na VendasIngressos vs `violet` já usado em Workshops/MeuWorkshop, padronizado em `violet` nos 3 lugares novos + badge existente); modal de cortesia novo sem `createPortal` (violava a lição [[licao-createPortal-stacking-context]] já documentada); inputs do form inline de Workshops só com `placeholder` (sem `<label>` associado); botões de ícone (Anunciar, Marcar AO VIVO) sem `aria-label`.
+- **Deploy**: `supabase functions deploy create-courtesy-entry` via CLI + push pra `main` (Vercel auto-deploy).
+
 ### 2026-06-18/19 — Lotes de workshop nunca funcionaram de fato + combo de desconto travado + UX de Lotes ✅ SHIPADO
 4 commits (`a830b47`, `cd2981b`, `d55b346`, `3d96242`). Disparado por relato do user: "lotes publicados não estão aparecendo na vitrine" + depois "comprei testando desconto de inscrito e não mudou o preço". Detalhes em [[workshop-lotes-rpc-e-combo-shipado]].
 
@@ -660,6 +670,10 @@ BaaS aprovado, secrets prod configurados, webhook ativo, primeira subconta criad
 Priorização cronológica detalhada em `memory/MEMORY.md` + cada item tem sua memória dedicada.
 
 ### 🟧 P1 — Alta prioridade, baixo esforço, destravado
+
+**🟡 Pendência — Hub de Vendas: tab "Visão Geral" consolidada (2026-06-19)**: o plano recomendava uma tab de resumo com receita agregada de Ingressos+Workshops+Cupons no topo do hub `/vendas` (padrão Stripe Dashboard/Sympla). Foi implementada só a navegação entre as 3 rotas (`VendasTabs.tsx`) — a tab "Visão Geral" com os cards de receita consolidada não chegou a ser construída. Reaproveitar a lógica de "Análise Financeira" já existente em `Registrations.tsx` como base. ~2h.
+
+**🟢 Pendência — Cortesia (2026-06-19)**: `create-courtesy-entry` não decrementa estoque/capacidade do tipo de ingresso ou workshop (decisão v1: cortesia fica fora da contagem de vendas pagas, "convite da casa"). Se o produtor quiser que cortesias contem contra o limite de vagas, precisa de ajuste futuro. Também sem smoke E2E real em evento ao vivo ainda (testar "Marcar AO VIVO" + cortesia em produção real). Detalhes em [[hub-vendas-cortesia-voto-mobile-shipado]].
 
 **🔧 Pendência de polimento — Bundle Workshops 2026-06-18** (achados do `/revisar`, não corrigidos):
 1. 🔴 `WorkshopFormModal` (WorkshopsManagement.tsx): upload de capa ficou dentro de `<Field>` (renderiza `<label>` envolvendo o `<input type="file">` + botão Camera) — clicar no botão pode abrir o seletor de arquivo 2x (onClick do botão + comportamento nativo do label encaminhando pro input contido). Tirar o bloco de dentro do `<Field>`, igual ao upload da foto do professor (que já está fora).
