@@ -10,6 +10,7 @@ import {
   Loader2, X, AlertCircle, CheckCircle, Power, DollarSign, Pencil,
 } from 'lucide-react';
 import EventPickerSheet from '../components/EventPickerSheet';
+import VendasTabs from '../components/VendasTabs';
 
 type DiscountType = 'percent' | 'fixed';
 
@@ -393,6 +394,7 @@ const Coupons: React.FC = () => {
 
   return (
     <div className="space-y-8 pb-20">
+      <VendasTabs />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
         <div className="min-w-0">

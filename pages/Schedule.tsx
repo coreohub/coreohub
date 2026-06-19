@@ -175,6 +175,7 @@ interface SortableRowProps {
   onGenerateOne: (reg: Registration) => void;
   onAnnounce: (reg: Registration) => void;
   onPrepare: (reg: Registration) => void;
+  onMarkLiveOnly: (reg: Registration) => void;
   onExclude: (regId: string) => void;
 }
 
@@ -182,7 +183,7 @@ const SortableRow: React.FC<SortableRowProps> = ({
   reg, index, conflicts,
   audioSet, saidaAtiva, isLive, isGenerating, batchInProgress, updatingLive, currentVoice,
   blocos, matchesSearch, recentlyMoved, onOpenBlocoPicker,
-  onGenerateOne, onAnnounce, onPrepare, onExclude,
+  onGenerateOne, onAnnounce, onPrepare, onMarkLiveOnly, onExclude,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: reg.id });
@@ -384,10 +385,20 @@ const SortableRow: React.FC<SortableRowProps> = ({
         <button
           onClick={() => onAnnounce(reg)}
           className="p-2 text-slate-400 hover:text-[#ff0068] hover:bg-[#ff0068]/10 rounded-xl transition-all"
-          title="Anunciar com Narração IA"
+          title="Anunciar com Narração IA (só toca o áudio, não sincroniza o Voto)"
         >
           <Volume2 size={14} />
         </button>
+        {!isLive && (
+          <button
+            onClick={() => onMarkLiveOnly(reg)}
+            disabled={updatingLive}
+            className="p-2 text-slate-400 hover:text-[#ff0068] hover:bg-[#ff0068]/10 rounded-xl transition-all disabled:opacity-50"
+            title="Marcar AO VIVO sem narração (sincroniza o Voto Popular; use quando o anúncio é feito manualmente no microfone)"
+          >
+            <Radio size={14} />
+          </button>
+        )}
         <button
           onClick={() => onPrepare(reg)}
           disabled={updatingLive}
@@ -396,7 +407,7 @@ const SortableRow: React.FC<SortableRowProps> = ({
               ? 'bg-[#ff0068] text-white shadow-lg shadow-[#ff0068]/20'
               : 'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-400 hover:bg-[#ff0068]/10 hover:text-[#ff0068]'
           }`}
-          title={isLive ? 'Apresentação ao vivo pra jurados' : 'Marcar como ao vivo (jurados verão essa apresentação como ativa)'}
+          title={isLive ? 'Apresentação ao vivo pra jurados' : 'Anunciar com narração IA + marcar como ao vivo (sincroniza o Voto Popular)'}
         >
           {isLive ? <Radio size={11} /> : null}
           {isLive ? 'Ao Vivo' : 'Iniciar'}
@@ -853,17 +864,7 @@ const Schedule = () => {
     if (currentTrack) handleAnnounce(currentTrack);
   };
 
-  const handlePrepare = async (reg: Registration) => {
-    setCurrentTrack(reg);
-    setIsPlaying(false);
-    if (modoSistema) {
-      // Modo SISTEMA: dispara sequencia automatica entrada->wait->trilha->saida
-      startSequenceMode(reg);
-    } else {
-      // Modo MANUAL (default): so toca a narracao de entrada; sonoplasta
-      // controla a trilha em equipamento externo.
-      handleAnnounce(reg);
-    }
+  const setLiveRegistration = async (reg: Registration) => {
     if (!selectedEventId) return;
     setUpdatingLive(true);
     try {
@@ -878,6 +879,28 @@ const Schedule = () => {
     } finally {
       setUpdatingLive(false);
     }
+  };
+
+  const handlePrepare = async (reg: Registration) => {
+    setCurrentTrack(reg);
+    setIsPlaying(false);
+    if (modoSistema) {
+      // Modo SISTEMA: dispara sequencia automatica entrada->wait->trilha->saida
+      startSequenceMode(reg);
+    } else {
+      // Modo MANUAL (default): so toca a narracao de entrada; sonoplasta
+      // controla a trilha em equipamento externo.
+      handleAnnounce(reg);
+    }
+    await setLiveRegistration(reg);
+  };
+
+  // Sincroniza só o status "ao vivo" (e o Voto Popular via trigger), sem
+  // narração — pra quando o anúncio é feito manualmente no microfone.
+  const handleMarkLiveOnly = async (reg: Registration) => {
+    setCurrentTrack(reg);
+    setIsPlaying(false);
+    await setLiveRegistration(reg);
   };
 
   const handleEndLive = async () => {
@@ -1794,6 +1817,7 @@ const Schedule = () => {
                   onGenerateOne={handleGenerateOne}
                   onAnnounce={handleAnnounce}
                   onPrepare={handlePrepare}
+                  onMarkLiveOnly={handleMarkLiveOnly}
                   onExclude={handleExcludeFromSchedule}
                 />
               ));

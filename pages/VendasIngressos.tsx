@@ -14,6 +14,8 @@ import {
   Users, DollarSign, AlertCircle, Undo2, X,
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
+import VendasTabs from '../components/VendasTabs';
+import { maskCpfCnpj, unmaskCpfCnpj } from '../utils/masks';
 
 interface Row {
   id: string;
@@ -55,6 +57,7 @@ const STATUS_FILTERS: Array<{ id: string; label: string }> = [
 const VendasIngressos: React.FC = () => {
   const [rows, setRows] = useState<Row[]>([]);
   const [eventName, setEventName] = useState<string>('');
+  const [eventId, setEventId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -66,6 +69,11 @@ const VendasIngressos: React.FC = () => {
   const [refundError, setRefundError] = useState<string | null>(null);
   // Detail drawer (Stripe Dashboard pattern: row click → side sheet com detalhes)
   const [detailRow, setDetailRow] = useState<Row | null>(null);
+  // Cortesia (convite gratuito direto, sem cupom — padrão Sympla/Eventbrite)
+  const [courtesyOpen, setCourtesyOpen] = useState(false);
+  const [courtesyForm, setCourtesyForm] = useState({ name: '', email: '', cpf: '', phone: '' });
+  const [courtesySaving, setCourtesySaving] = useState(false);
+  const [courtesyError, setCourtesyError] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -73,6 +81,7 @@ const VendasIngressos: React.FC = () => {
     try {
       const eventId = await resolveActiveEventId();
       if (!eventId) { setErr('Nenhum evento ativo encontrado.'); setLoading(false); return; }
+      setEventId(eventId);
       const { data: ev } = await supabase.from('events').select('name').eq('id', eventId).maybeSingle();
       setEventName(ev?.name ?? '');
       const { data, error } = await supabase
@@ -201,6 +210,46 @@ const VendasIngressos: React.FC = () => {
     }
   };
 
+  // ─── Cortesia (convite gratuito direto) ──────────────────────────────────
+  const handleAddCourtesy = async () => {
+    if (!eventId || courtesySaving) return;
+    setCourtesyError(null);
+    const cpf = unmaskCpfCnpj(courtesyForm.cpf);
+    if (!courtesyForm.name.trim() || !courtesyForm.email.trim() || cpf.length !== 11) {
+      setCourtesyError('Preencha nome, e-mail e CPF válido.');
+      return;
+    }
+    setCourtesySaving(true);
+    try {
+      const { data, error: invokeErr } = await supabase.functions.invoke('create-courtesy-entry', {
+        body: {
+          kind: 'audience',
+          event_id: eventId,
+          buyer_name: courtesyForm.name.trim(),
+          buyer_email: courtesyForm.email.trim(),
+          buyer_cpf: cpf,
+          buyer_phone: courtesyForm.phone.trim() || undefined,
+        },
+      });
+      if (invokeErr) {
+        let serverMsg: string | null = null;
+        try {
+          const resp = (invokeErr as any).context?.response;
+          if (resp && typeof resp.json === 'function') serverMsg = (await resp.json())?.error ?? null;
+        } catch { /* ignore */ }
+        throw new Error(serverMsg ?? invokeErr.message ?? 'Falha ao criar cortesia');
+      }
+      if (data?.error) throw new Error(data.error);
+      setCourtesyOpen(false);
+      setCourtesyForm({ name: '', email: '', cpf: '', phone: '' });
+      await load();
+    } catch (e: any) {
+      setCourtesyError(e.message ?? String(e));
+    } finally {
+      setCourtesySaving(false);
+    }
+  };
+
   // ─── Export CSV ───────────────────────────────────────────────────────────
   const exportCsv = () => {
     const header = [
@@ -245,6 +294,7 @@ const VendasIngressos: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <VendasTabs />
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
@@ -258,6 +308,12 @@ const VendasIngressos: React.FC = () => {
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10"
           >
             <RotateCcw size={12} /> Atualizar
+          </button>
+          <button
+            onClick={() => { setCourtesyError(null); setCourtesyOpen(true); }}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-500/20"
+          >
+            <Users size={12} /> Adicionar cortesia
           </button>
           <button
             onClick={exportCsv}
@@ -426,6 +482,96 @@ const VendasIngressos: React.FC = () => {
       )}
 
       {/* Modal de reembolso (Tier 2) */}
+      {courtesyOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" role="dialog" aria-modal="true">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white italic">
+                  Adicionar cortesia
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Convite gratuito direto — sem cupom, sem cobrança Asaas.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCourtesyOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5"
+                disabled={courtesySaving}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Nome</label>
+                <input
+                  value={courtesyForm.name}
+                  onChange={e => setCourtesyForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">E-mail</label>
+                <input
+                  type="email"
+                  value={courtesyForm.email}
+                  onChange={e => setCourtesyForm(f => ({ ...f, email: e.target.value }))}
+                  className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">CPF</label>
+                <input
+                  value={courtesyForm.cpf}
+                  onChange={e => setCourtesyForm(f => ({ ...f, cpf: maskCpfCnpj(e.target.value) }))}
+                  placeholder="000.000.000-00"
+                  className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Telefone (opcional)</label>
+                <input
+                  value={courtesyForm.phone}
+                  onChange={e => setCourtesyForm(f => ({ ...f, phone: e.target.value }))}
+                  className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+                />
+              </div>
+            </div>
+
+            {courtesyError && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm text-red-600 dark:text-red-300 flex items-start gap-2" aria-live="polite">
+                <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                <span>{courtesyError}</span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCourtesyOpen(false)}
+                disabled={courtesySaving}
+                className="flex-1 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 rounded-xl text-[11px] font-black uppercase tracking-widest"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleAddCourtesy}
+                disabled={courtesySaving}
+                className="flex-1 py-3 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-xl text-[11px] font-black uppercase tracking-widest inline-flex items-center justify-center gap-2"
+              >
+                {courtesySaving ? <Loader2 size={14} className="animate-spin" /> : <Users size={14} />}
+                {courtesySaving ? 'Salvando...' : 'Adicionar cortesia'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {refundTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5">

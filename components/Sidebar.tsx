@@ -113,15 +113,15 @@ const menuSections: MenuSection[] = [
       { path: '/credenciais',     label: 'Credenciais',       icon: QrCode        },
     ],
   },
-  // ─── BILHETERIA ── vendas e cupons ──
+  // ─── VENDAS ── ingressos, workshops e cupons (hub único, ver VendasTabs) ──
   {
-    section: 'Bilheteria',
+    section: 'Vendas',
     roles: ALL_ORGANIZER,
     tone: 'orange',
     items: [
-      { path: '/vendas-ingressos',    label: 'Vendas de Ingressos', icon: Ticket        },
-      { path: '/workshops-do-evento', label: 'Workshops',           icon: GraduationCap },
-      { path: '/cupons',              label: 'Cupons',              icon: Tag           },
+      { path: '/vendas-ingressos',    label: 'Ingressos', icon: Ticket        },
+      { path: '/workshops-do-evento', label: 'Workshops',  icon: GraduationCap },
+      { path: '/cupons',              label: 'Cupons',     icon: Tag           },
     ],
   },
   // ─── RESULTADOS ── pós-apresentação ──

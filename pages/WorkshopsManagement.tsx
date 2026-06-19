@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../services/supabase';
+import VendasTabs from '../components/VendasTabs';
 import imageCompression from 'browser-image-compression';
 import {
   Plus, Trash2, Pencil, Calendar, Clock, MapPin, Loader2, X, AlertCircle, CheckCircle,
@@ -369,6 +370,8 @@ const WorkshopsManagement: React.FC = () => {
     <div className="min-h-screen bg-slate-50 dark:bg-[#0b0b0f] py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
 
+        <VendasTabs />
+
         {/* Header */}
         <div className="mb-6 flex items-start justify-between flex-wrap gap-4">
           <div>
@@ -608,6 +611,10 @@ const BuyersModal: React.FC<{ workshop: WorkshopRow; onClose: () => void }> = ({
   const [statusFilter, setStatusFilter] = useState<'ALL' | BuyerRow['status_pagamento']>('ALL');
   const [marking, setMarking] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
+  // Cortesia (convite gratuito direto, sem cupom — padrão Sympla/Eventbrite)
+  const [courtesyOpen, setCourtesyOpen] = useState(false);
+  const [courtesyForm, setCourtesyForm] = useState({ name: '', email: '', cpf: '', phone: '' });
+  const [courtesySaving, setCourtesySaving] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -684,6 +691,45 @@ const BuyersModal: React.FC<{ workshop: WorkshopRow; onClose: () => void }> = ({
     }
   };
 
+  const handleAddCourtesy = async () => {
+    if (courtesySaving) return;
+    const cpf = onlyDigits(courtesyForm.cpf);
+    if (!courtesyForm.name.trim() || !courtesyForm.email.trim() || cpf.length !== 11) {
+      setFeedback({ kind: 'err', msg: 'Preencha nome, e-mail e CPF válido.' });
+      return;
+    }
+    setCourtesySaving(true);
+    try {
+      const { data, error: invokeErr } = await supabase.functions.invoke('create-courtesy-entry', {
+        body: {
+          kind: 'workshop',
+          workshop_id: workshop.id,
+          buyer_name: courtesyForm.name.trim(),
+          buyer_email: courtesyForm.email.trim(),
+          buyer_cpf: cpf,
+          buyer_phone: courtesyForm.phone.trim() || undefined,
+        },
+      });
+      if (invokeErr) {
+        let serverMsg: string | null = null;
+        try {
+          const resp = (invokeErr as any).context?.response;
+          if (resp && typeof resp.json === 'function') serverMsg = (await resp.json())?.error ?? null;
+        } catch { /* ignore */ }
+        throw new Error(serverMsg ?? invokeErr.message ?? 'Falha ao criar cortesia');
+      }
+      if (data?.error) throw new Error(data.error);
+      setCourtesyOpen(false);
+      setCourtesyForm({ name: '', email: '', cpf: '', phone: '' });
+      setFeedback({ kind: 'ok', msg: 'Cortesia adicionada' });
+      await refresh();
+    } catch (e: any) {
+      setFeedback({ kind: 'err', msg: e.message ?? 'Erro ao criar cortesia' });
+    } finally {
+      setCourtesySaving(false);
+    }
+  };
+
   return createPortal(
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4">
       <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-4xl max-h-[92dvh] sm:max-h-[92vh] overflow-hidden flex flex-col">
@@ -753,7 +799,65 @@ const BuyersModal: React.FC<{ workshop: WorkshopRow; onClose: () => void }> = ({
           >
             <RefreshCw size={14} />
           </button>
+          <button
+            onClick={() => setCourtesyOpen(o => !o)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap hover:bg-blue-500/20"
+          >
+            <Users size={13} /> Adicionar cortesia
+          </button>
         </div>
+
+        {courtesyOpen && (
+          <div className="px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-white/10 bg-blue-500/5 space-y-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">
+              Convite gratuito direto — sem cupom, sem cobrança Asaas
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input
+                value={courtesyForm.name}
+                onChange={e => setCourtesyForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="Nome"
+                className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500/50"
+              />
+              <input
+                type="email"
+                value={courtesyForm.email}
+                onChange={e => setCourtesyForm(f => ({ ...f, email: e.target.value }))}
+                placeholder="E-mail"
+                className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500/50"
+              />
+              <input
+                value={courtesyForm.cpf}
+                onChange={e => setCourtesyForm(f => ({ ...f, cpf: maskCPF(e.target.value) }))}
+                placeholder="CPF"
+                className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500/50"
+              />
+              <input
+                value={courtesyForm.phone}
+                onChange={e => setCourtesyForm(f => ({ ...f, phone: e.target.value }))}
+                placeholder="Telefone (opcional)"
+                className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500/50"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCourtesyOpen(false)}
+                disabled={courtesySaving}
+                className="px-4 py-2 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAddCourtesy}
+                disabled={courtesySaving}
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1.5"
+              >
+                {courtesySaving ? <Loader2 size={13} className="animate-spin" /> : <Users size={13} />}
+                {courtesySaving ? 'Salvando...' : 'Confirmar cortesia'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {feedback && (
           <div className={`mx-5 sm:mx-6 mt-3 p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${

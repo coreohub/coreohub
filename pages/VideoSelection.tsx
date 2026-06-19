@@ -6,7 +6,7 @@ import {
   Save, Info, Filter, Users, Star,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { supabase } from '../services/supabase';
+import { supabase, updateVideoFeeStatus } from '../services/supabase';
 import { maskMoeda, parseMoeda } from '../utils/masks';
 import EventPickerSheet from '../components/EventPickerSheet';
 
@@ -80,6 +80,7 @@ const VideoSelection: React.FC = () => {
   const [feedback, setFeedback] = useState('');
   const [savingReview, setSavingReview] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
+  const [waivingFeeId, setWaivingFeeId] = useState<string | null>(null);
 
   // Config state
   const [config, setConfig] = useState<EventVideoConfig>({
@@ -203,6 +204,22 @@ const VideoSelection: React.FC = () => {
     rejected:    registrations.filter(r => r.video_status === 'rejected').length,
     conditional: registrations.filter(r => r.video_status === 'conditional').length,
   }), [registrations]);
+
+  // Isenta a taxa de seletiva (cortesia) — sem cupom, sem Asaas. Padrão
+  // Sympla/Eventbrite "convite gratuito direto".
+  const handleWaiveFee = async (reg: RegWithVideo) => {
+    if (waivingFeeId) return;
+    if (!confirm(`Isentar a taxa de seletiva de "${reg.nome_coreografia}"?`)) return;
+    setWaivingFeeId(reg.id);
+    try {
+      await updateVideoFeeStatus(reg.id, 'waived');
+      setRegistrations(prev => prev.map(r => r.id === reg.id ? { ...r, video_fee_status: 'waived' } : r));
+    } catch (e: any) {
+      alert(e.message ?? 'Erro ao isentar taxa');
+    } finally {
+      setWaivingFeeId(null);
+    }
+  };
 
   const handleReview = async (decision: Extract<VideoStatus, 'approved' | 'rejected' | 'conditional' | 'review_later'>) => {
     if (!reviewing) return;
@@ -721,6 +738,16 @@ const VideoSelection: React.FC = () => {
                           title="Rever decisão"
                         >
                           <MessageSquare size={15} />
+                        </button>
+                      )}
+                      {config.video_selection_fee_required && reg.video_fee_status === 'pending' && (
+                        <button
+                          onClick={() => handleWaiveFee(reg)}
+                          disabled={waivingFeeId === reg.id}
+                          className="px-3 py-2 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all disabled:opacity-50"
+                          title="Isentar taxa de seletiva (cortesia, sem cobrança)"
+                        >
+                          Isentar taxa
                         </button>
                       )}
                     </div>

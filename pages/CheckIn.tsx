@@ -382,7 +382,7 @@ const CheckIn = () => {
             <button
               key={t}
               onClick={() => setFilterTab(t)}
-              className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+              className={`flex-1 min-h-11 py-2.5 px-1 rounded-xl text-[10px] font-black uppercase tracking-tight sm:tracking-widest transition-all ${
                 filterTab === t
                   ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
                   : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
@@ -450,7 +450,7 @@ const CheckIn = () => {
               <button
                 onClick={() => handleToggle(item)}
                 disabled={!canCheckIn}
-                className={`shrink-0 w-16 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
+                className={`shrink-0 w-20 min-h-11 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
                   checkedIn
                     ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
                     : 'bg-[#ff0068]/10 text-[#ff0068] border border-[#ff0068]/20 hover:bg-[#ff0068] hover:text-white hover:border-transparent'
@@ -482,7 +482,7 @@ const CheckIn = () => {
               <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" playsInline muted />
               {/* Scan frame overlay */}
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-64 h-64 relative">
+                <div className="w-[min(70vw,256px)] h-[min(70vw,256px)] relative">
                   <div className="absolute inset-0 border-2 border-white/20 rounded-3xl" />
                   <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-[#ff0068] rounded-tl-2xl" />
                   <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-[#ff0068] rounded-tr-2xl" />
