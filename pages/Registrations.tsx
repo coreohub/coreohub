@@ -1058,11 +1058,11 @@ const Registrations = () => {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700 pb-20">
+    <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-700 pb-20">
       <VendasTabs />
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Inscrições</h1>
+          <h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Inscrições</h1>
           <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Controle mestre do festival</p>
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:shrink-0">

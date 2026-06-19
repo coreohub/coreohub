@@ -332,7 +332,7 @@ const VideoSelection: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700 pb-20">
+    <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-700 pb-20">
       <VendasTabs />
       {/* Header */}
       <div className="flex justify-between items-start flex-wrap gap-4">

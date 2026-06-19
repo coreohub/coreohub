@@ -393,7 +393,7 @@ const Coupons: React.FC = () => {
   const totalUses   = coupons.reduce((s, c) => s + c.used_count, 0);
 
   return (
-    <div className="space-y-8 pb-20">
+    <div className="max-w-7xl mx-auto space-y-6 pb-20">
       <VendasTabs />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
@@ -402,7 +402,7 @@ const Coupons: React.FC = () => {
             <div className="w-1.5 h-1.5 bg-[#ff0068] rounded-full animate-pulse shadow-[0_0_8px_#ff0068]" />
             <span className="text-[9px] font-black text-[#ff0068] uppercase tracking-[0.3em]">Promoções</span>
           </div>
-          <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase text-slate-900 dark:text-white">
+          <h1 className="text-3xl font-black tracking-tighter uppercase text-slate-900 dark:text-white">
             Cupons de <span className="text-[#ff0068]">Desconto</span>
           </h1>
           <p className="text-xs text-slate-500 font-bold mt-1">

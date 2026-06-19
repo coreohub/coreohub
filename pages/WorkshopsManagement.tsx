@@ -374,7 +374,7 @@ const WorkshopsManagement: React.FC = () => {
         {/* Header */}
         <div className="mb-6 flex items-start justify-between flex-wrap gap-4">
           <div>
-            <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-3">
+            <h1 className="text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white flex items-center gap-3">
               <GraduationCap className="text-[#ff0068]" size={28} />
               Workshops
             </h1>

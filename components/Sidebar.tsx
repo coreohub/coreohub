@@ -121,6 +121,7 @@ const menuSections: MenuSection[] = [
     roles: ALL_ORGANIZER,
     tone: 'orange',
     items: [
+      { path: '/vendas',              label: 'Visão Geral', icon: LayoutDashboard },
       { path: '/registrations',       label: 'Inscrições', icon: ClipboardList },
       { path: '/vendas-ingressos',    label: 'Ingressos',  icon: Ticket        },
       { path: '/workshops-do-evento', label: 'Workshops',  icon: GraduationCap },

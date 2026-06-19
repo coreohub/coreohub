@@ -52,6 +52,7 @@ const Checkout                 = lazy(() => import('./pages/Checkout'));
 const CheckoutIngresso         = lazy(() => import('./pages/CheckoutIngresso'));
 const MeuIngresso              = lazy(() => import('./pages/MeuIngresso'));
 const VendasIngressos          = lazy(() => import('./pages/VendasIngressos'));
+const VendasOverview           = lazy(() => import('./pages/VendasOverview'));
 const Coupons                  = lazy(() => import('./pages/Coupons'));
 const WorkshopsManagement      = lazy(() => import('./pages/WorkshopsManagement'));
 const PublicWorkshopPage       = lazy(() => import('./pages/PublicWorkshopPage'));
@@ -527,6 +528,7 @@ const App: React.FC = () => {
         {/* Etapa 2 Certificados — pública (validação por hash) e privada (lista do inscrito) */}
         <Route path="/validar-certificado/:hash" element={<Suspense fallback={<PageLoader />}><ValidarCertificado /></Suspense>} />
         <Route path="/meus-certificados" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><MeusCertificados /></Suspense></PrivateRoute>} />
+        <Route path="/vendas"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><VendasOverview /></Suspense></PrivateRoute>} />
         <Route path="/vendas-ingressos" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><VendasIngressos /></Suspense></PrivateRoute>} />
         <Route path="/workshops-do-evento" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><WorkshopsManagement /></Suspense></PrivateRoute>} />
         <Route path="/cupons"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><Coupons /></Suspense></PrivateRoute>} />
