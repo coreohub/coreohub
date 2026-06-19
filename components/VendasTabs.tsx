@@ -20,7 +20,7 @@ const VendasTabs: React.FC = () => {
   const location = useLocation();
 
   return (
-    <div className="flex items-center gap-1 bg-slate-100 dark:bg-white/5 p-1 rounded-2xl mb-6 w-fit overflow-x-auto max-w-full">
+    <nav aria-label="Vendas" className="flex items-center gap-1 bg-slate-100 dark:bg-white/5 p-1 rounded-2xl mb-6 w-fit overflow-x-auto max-w-full">
       {TABS.map(tab => {
         const active = location.pathname === tab.path;
         const Icon = tab.icon;
@@ -28,6 +28,7 @@ const VendasTabs: React.FC = () => {
           <button
             key={tab.path}
             onClick={() => navigate(tab.path)}
+            aria-current={active ? 'page' : undefined}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${
               active
                 ? 'bg-white dark:bg-white/10 text-[#ff0068] shadow-sm'
@@ -39,7 +40,7 @@ const VendasTabs: React.FC = () => {
           </button>
         );
       })}
-    </div>
+    </nav>
   );
 };
 
