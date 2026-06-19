@@ -54,7 +54,7 @@ const VendasOverview: React.FC = () => {
         ] = await Promise.all([
           supabase.from('events').select('name, video_selection_fee').eq('id', eventId).maybeSingle(),
           supabase.from('registrations')
-            .select('valor_pago, valor_total, charged_amount, mod_fee, status_pagamento, video_fee_status')
+            .select('valor_pago, charged_amount, mod_fee, status_pagamento, video_fee_status')
             .eq('event_id', eventId),
           supabase.from('audience_tickets').select('preco, status_pagamento').eq('event_id', eventId),
           supabase.from('workshops').select('id').eq('event_id', eventId),
@@ -67,7 +67,7 @@ const VendasOverview: React.FC = () => {
               .in('workshop_id', workshopIds)
           : { data: [] as any[] };
 
-        const valorDe = (r: any) => Number(r.valor_pago ?? r.valor_total ?? r.charged_amount ?? r.mod_fee ?? 0) || 0;
+        const valorDe = (r: any) => Number(r.valor_pago ?? r.charged_amount ?? r.mod_fee ?? 0) || 0;
 
         const regsPagas = (regs ?? []).filter(r => isRegistrationPaid(r.status_pagamento));
         const inscricoesReceita = regsPagas.reduce((s, r) => s + valorDe(r), 0);
