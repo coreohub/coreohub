@@ -1116,7 +1116,7 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
     setCoverUploading(true);
     try {
       const compressed = await imageCompression(file, {
-        maxSizeMB: 0.3,
+        maxSizeMB: 0.15,
         maxWidthOrHeight: 1200,
         useWebWorker: true,
         fileType: 'image/webp',
@@ -1177,9 +1177,12 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
             <Field label="Descrição">
               <textarea value={form.description} onChange={e => upd('description', e.target.value)} rows={3} className={inputCls} placeholder="O que o aluno vai aprender, pré-requisitos, materiais..." />
             </Field>
-            <Field label="Capa do workshop (recomendado 1200×675px, proporção 16:9)">
+            <div>
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                Capa do workshop (recomendado 1200×675px, proporção 16:9)
+              </span>
               <div className="flex items-start gap-4">
-                <div className="relative shrink-0 w-32 aspect-video rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-white/10">
+                <div className="relative shrink-0 w-32 aspect-video rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-white/10">
                   {form.cover_url ? (
                     <img src={form.cover_url} alt="capa do workshop" className="w-full h-full object-cover" />
                   ) : (
@@ -1212,7 +1215,7 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
                   Aparece no card da vitrine e no topo da página pública do workshop. Sem capa, usamos a foto do professor.
                 </p>
               </div>
-            </Field>
+            </div>
           </Section>
 
           {/* Professor */}
