@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import { supabase } from '../services/supabase';
 import VendasTabs from '../components/VendasTabs';
+import { resolveActiveWorkshopLot } from '../utils/lotes';
 import imageCompression from 'browser-image-compression';
 import {
   Plus, Trash2, Pencil, Calendar, Clock, MapPin, Loader2, X, AlertCircle, CheckCircle,
@@ -497,9 +498,7 @@ const WorkshopsManagement: React.FC = () => {
           <div className="grid gap-4">
             {workshops.map(w => {
               const wsLots = lots[w.id] ?? [];
-              const activeLot = wsLots.find(l => l.is_active &&
-                (!l.data_inicio || new Date(l.data_inicio) <= new Date()) &&
-                (!l.data_fim     || new Date(l.data_fim)     >= new Date()));
+              const activeLot = resolveActiveWorkshopLot(wsLots);
               const eventName = events.find(e => e.id === w.event_id)?.name;
               return (
                 <div key={w.id} className="rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 p-5 shadow-sm">

@@ -9,7 +9,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
-import { diffDias, formatDataBRComDia, todayISO } from '../utils/lotes';
+import { diffDias, todayISO, findNextWorkshopLot } from '../utils/lotes';
+import AvisoViradaLote from '../components/AvisoViradaLote';
 import {
   Loader2, AlertCircle, ArrowLeft, Calendar, Clock, MapPin, User as UserIcon,
   GraduationCap, Tag, Users, Globe, Instagram, Award, Share2,
@@ -95,12 +96,11 @@ const PublicWorkshopPage: React.FC = () => {
       .from('workshop_lots')
       .select('id, ordem, preco, data_inicio')
       .eq('workshop_id', workshopId)
-      .eq('is_active', true)
-      .order('ordem', { ascending: true });
+      .eq('is_active', true);
     if (!Array.isArray(lotsData)) return;
-    const ativoOrdem = lotsData.find((l: any) => l.id === stRow.active_lot_id);
-    const proximo = lotsData.find((l: any) => ativoOrdem && l.ordem > ativoOrdem.ordem && l.data_inicio);
-    if (proximo && Number(proximo.preco) > Number(stRow.active_lot_preco)) {
+    const ativo = lotsData.find((l: any) => l.id === stRow.active_lot_id);
+    const proximo = ativo ? findNextWorkshopLot(lotsData as any[], { ...ativo, preco: stRow.active_lot_preco } as any) : null;
+    if (proximo) {
       const dataVirada = String(proximo.data_inicio).slice(0, 10);
       setProximoLote({ preco: Number(proximo.preco), dataVirada, dias: diffDias(todayISO(), dataVirada) });
     } else {
@@ -250,9 +250,7 @@ const PublicWorkshopPage: React.FC = () => {
               )}
               {proximoLote && (
                 <p className="text-[10px] font-bold text-[#ff0068] mt-1">
-                  {proximoLote.dias < 1
-                    ? <>Sobe pra {fmtCurrency(proximoLote.preco)} amanhã</>
-                    : <>Sobe pra {fmtCurrency(proximoLote.preco)} em {formatDataBRComDia(proximoLote.dataVirada)}</>}
+                  <AvisoViradaLote preco={proximoLote.preco} dataVirada={proximoLote.dataVirada} dias={proximoLote.dias} formatPreco={fmtCurrency} />
                 </p>
               )}
             </div>

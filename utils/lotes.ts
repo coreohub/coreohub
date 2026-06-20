@@ -74,3 +74,43 @@ export function formatDataBRComDia(iso: string): string {
   const monthMap   = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   return `${weekdayMap[date.getDay()]}, ${String(d).padStart(2, '0')}/${monthMap[m - 1]}`;
 }
+
+/**
+ * Lote de workshop (tabela `workshop_lots` — schema diferente do `Lote`
+ * embutido de inscrições/ingressos: usa `ordem`+`is_active`+janela
+ * `data_inicio`/`data_fim` em vez de `data_virada` único).
+ */
+export type WorkshopLot = {
+  ordem: number;
+  preco: number;
+  data_inicio?: string | null;
+  data_fim?: string | null;
+  is_active?: boolean;
+};
+
+/** Lote vigente de um workshop = maior `ordem` entre os `is_active` dentro
+ *  da janela `data_inicio`/`data_fim`. Mesma regra do RPC `get_workshop_stock`. */
+export function resolveActiveWorkshopLot<T extends WorkshopLot>(
+  lots: T[],
+  now: Date = new Date(),
+): T | null {
+  const candidatos = lots
+    .filter(l => l.is_active !== false
+      && (!l.data_inicio || new Date(l.data_inicio) <= now)
+      && (!l.data_fim || new Date(l.data_fim) >= now))
+    .sort((a, b) => b.ordem - a.ordem);
+  return candidatos[0] ?? null;
+}
+
+/** Próximo lote de workshop após o vigente (ordem maior, com `data_inicio`
+ *  conhecida, preço maior) — pra aviso "Sobe pra R$X em [data]". */
+export function findNextWorkshopLot<T extends WorkshopLot>(
+  lots: T[],
+  active: T | null,
+): T | null {
+  if (!active) return null;
+  const proximo = lots
+    .filter(l => l.ordem > active.ordem && l.data_inicio)
+    .sort((a, b) => a.ordem - b.ordem)[0];
+  return proximo && Number(proximo.preco) > Number(active.preco) ? proximo : null;
+}

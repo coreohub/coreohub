@@ -13,8 +13,9 @@ import { motion } from 'motion/react';
 import BrandIcon from '../components/BrandIcon';
 import { EventAnchorNav, type AnchorSection } from '../components/EventAnchorNav';
 import { PessoasSection, type JudgePublic, type WorkshopTeacherPublic } from '../components/PessoasSection';
-import { resolveLote, diffDias, formatDataBRComDia, todayISO, type Lote } from '../utils/lotes';
+import { resolveLote, diffDias, formatDataBRComDia, todayISO, resolveActiveWorkshopLot, findNextWorkshopLot, type Lote } from '../utils/lotes';
 import { formatPrecoBR } from '../utils/masks';
+import AvisoViradaLote from '../components/AvisoViradaLote';
 
 /** Deriva nome do lote pelo índice/posição. Lote único → null (não mostra label).
  *  Múltiplos lotes → "Lote N" para intermediários, "Último Lote" pro final. */
@@ -193,25 +194,17 @@ const PublicEventPage = () => {
               .in('workshop_id', wsData.map((w: any) => w.id))
               .eq('is_active', true);
             if (Array.isArray(lotsData)) {
-              const now = Date.now();
               const today = todayISO();
               const byWorkshop: Record<string, {
                 nome: string; preco: number;
                 proximo: { preco: number; dataVirada: string; dias: number } | null;
               }> = {};
               for (const ws of wsData as any[]) {
-                const todosOsLotes = lotsData
-                  .filter((l: any) => l.workshop_id === ws.id)
-                  .sort((a: any, b: any) => a.ordem - b.ordem);
-                const candidatos = todosOsLotes
-                  .filter((l: any) => (!l.data_inicio || new Date(l.data_inicio).getTime() <= now)
-                    && (!l.data_fim || new Date(l.data_fim).getTime() >= now))
-                  .sort((a: any, b: any) => b.ordem - a.ordem);
-                const ativo = candidatos[0];
+                const todosOsLotes = lotsData.filter((l: any) => l.workshop_id === ws.id);
+                const ativo = resolveActiveWorkshopLot(todosOsLotes as any[]);
                 if (!ativo) continue;
-                // Próximo lote = primeira ordem maior que a do ativo, com início futuro conhecido.
-                const proximoLote = todosOsLotes.find((l: any) => l.ordem > ativo.ordem && l.data_inicio);
-                const proximo = proximoLote && Number(proximoLote.preco) > Number(ativo.preco)
+                const proximoLote = findNextWorkshopLot(todosOsLotes as any[], ativo);
+                const proximo = proximoLote
                   ? {
                       preco: Number(proximoLote.preco),
                       dataVirada: String(proximoLote.data_inicio).slice(0, 10),
@@ -956,9 +949,7 @@ const PublicEventPage = () => {
 
                           {hint && !soldOut && (
                             <p className="text-[10px] font-bold text-[#ff0068]">
-                              {hint.dias < 1
-                                ? <>Sobe pra R$ {formatPrecoBR(hint.proximoPreco)} amanhã</>
-                                : <>Sobe pra R$ {formatPrecoBR(hint.proximoPreco)} em {formatDataBRComDia(hint.dataVirada)}</>}
+                              <AvisoViradaLote preco={hint.proximoPreco} dataVirada={hint.dataVirada} dias={hint.dias} formatPreco={n => `R$ ${formatPrecoBR(n)}`} />
                             </p>
                           )}
 
@@ -1131,9 +1122,7 @@ const PublicEventPage = () => {
                     )}
                     {hint && isRegistrationOpen && (
                       <p className="text-[10px] font-bold mt-3 pt-3 border-t border-white/5 text-[#ff0068]">
-                        {hint.dias < 1
-                          ? <>Sobe pra R$ {formatPrecoBR(hint.proximoPreco)} amanhã</>
-                          : <>Sobe pra R$ {formatPrecoBR(hint.proximoPreco)} em {formatDataBRComDia(hint.dataVirada)}</>}
+                        <AvisoViradaLote preco={hint.proximoPreco} dataVirada={hint.dataVirada} dias={hint.dias} formatPreco={n => `R$ ${formatPrecoBR(n)}`} />
                       </p>
                     )}
                     {isRegistrationOpen && (
@@ -1208,9 +1197,7 @@ const PublicEventPage = () => {
                       </p>
                       {loteAtivo?.proximo && (
                         <p className="text-[10px] font-bold text-[#ff0068]">
-                          {loteAtivo.proximo.dias < 1
-                            ? <>Sobe pra R$ {formatPrecoBR(loteAtivo.proximo.preco)} amanhã</>
-                            : <>Sobe pra R$ {formatPrecoBR(loteAtivo.proximo.preco)} em {formatDataBRComDia(loteAtivo.proximo.dataVirada)}</>}
+                          <AvisoViradaLote preco={loteAtivo.proximo.preco} dataVirada={loteAtivo.proximo.dataVirada} dias={loteAtivo.proximo.dias} formatPreco={n => `R$ ${formatPrecoBR(n)}`} />
                         </p>
                       )}
                     </div>
