@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../services/supabase';
 import SystemErrorBanner from '../components/SystemErrorBanner';
+import PageHeader from '../components/PageHeader';
 import {
   Users, Plus, Search, Pencil, Trash2, X,
   CheckCircle, AlertCircle, Loader2, ShieldCheck,
@@ -209,23 +210,18 @@ const MeuElenco = () => {
   return (
     <div className="max-w-3xl mx-auto space-y-4">
 
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
-            Meu <span className="text-[#ff0068]">Elenco</span>
-          </h1>
-          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">
-            Banco de talentos · {elenco.length} bailarino{elenco.length !== 1 ? 's' : ''} cadastrado{elenco.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#ff0068] hover:bg-[#d4005a] text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 active:scale-95 transition-all"
-        >
-          <UserPlus size={14} /> Adicionar
-        </button>
-      </div>
+      <PageHeader
+        title={<>Meu <span className="text-[#ff0068]">Elenco</span></>}
+        subtitle={`Banco de talentos · ${elenco.length} bailarino${elenco.length !== 1 ? 's' : ''} cadastrado${elenco.length !== 1 ? 's' : ''}`}
+        actions={
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#ff0068] hover:bg-[#d4005a] text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 active:scale-95 transition-all"
+          >
+            <UserPlus size={14} /> Adicionar
+          </button>
+        }
+      />
 
       {/* Search */}
       {elenco.length > 0 && (

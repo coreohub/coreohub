@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import SystemErrorBanner from '../components/SystemErrorBanner';
+import PageHeader from '../components/PageHeader';
 import { getAllGenres } from '../services/genreService';
 import { parseTempoSegundos } from '../utils/masks';
 import { EventStyle } from '../types';
@@ -654,25 +655,21 @@ const CentralDeMidia = () => {
   return (
     <div className="max-w-3xl mx-auto space-y-4">
 
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
-            Central de <span className="text-[#ff0068]">Mídia</span>
-          </h1>
-          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">
-            Gerencie as trilhas sonoras das suas coreografias
-          </p>
-        </div>
-        <button
-          onClick={fetchAll}
-          disabled={loading}
-          className="p-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-400 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all disabled:opacity-50"
-          title="Recarregar"
-        >
-          <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-        </button>
-      </div>
+      <PageHeader
+        title={<>Central de <span className="text-[#ff0068]">Mídia</span></>}
+        subtitle="Gerencie as trilhas sonoras das suas coreografias"
+        actions={
+          <button
+            onClick={fetchAll}
+            disabled={loading}
+            aria-label="Recarregar"
+            className="p-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-400 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all disabled:opacity-50"
+            title="Recarregar"
+          >
+            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+          </button>
+        }
+      />
 
       {/* ── Summary cards ── */}
       {!loading && total > 0 && (

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import imageCompression from 'browser-image-compression';
 import { supabase } from '../services/supabase';
+import PageHeader from '../components/PageHeader';
 import {
   User, Phone, MapPin, Save, Loader2,
   CheckCircle, AlertCircle, CreditCard, Music2,
@@ -303,15 +304,10 @@ const MeuPerfil = () => {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
 
-      {/* Page title */}
-      <div>
-        <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
-          Meu <span className="text-[#ff0068]">Perfil</span>
-        </h1>
-        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">
-          Dados profissionais e de contato
-        </p>
-      </div>
+      <PageHeader
+        title={<>Meu <span className="text-[#ff0068]">Perfil</span></>}
+        subtitle="Dados profissionais e de contato"
+      />
 
       {/* Avatar card */}
       <div className="flex items-center gap-4 p-5 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/8 rounded-2xl">

@@ -235,7 +235,7 @@ const Certificates: React.FC = () => {
 
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white flex items-center gap-3">
-            <Award className="text-[#ff0068]" size={28} />
+            <Award className="text-[#ff0068]" size={28} aria-hidden="true" />
             Certificados
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
