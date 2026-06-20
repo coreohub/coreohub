@@ -239,6 +239,14 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-06-20 — Régua de KPIs no hub de Workshops + padronização de container ✅ SHIPADO
+3 commits (`df3f0a5` + `d420e9e` + `933ccdb`). Só frontend, zero migration/edge. Resolve os 2 itens pendentes deixados pela sessão de 2026-06-19 (noite). Detalhes em [[workshops-kpis-e-padronizacao-container-shipado]].
+
+- **Item A — Resumo de vendas em `/workshops-do-evento` (`df3f0a5`)**: a tela só mostrava receita escondida no modal "Compradores" de cada aula. Régua de 4 cards no topo (componente `WsMetric`, espelha o `Metric` do `VendasIngressos.tsx`): Receita (só `APROVADO`), Vagas vendidas (`X / Y · Z% lotado`, inclui cortesia/combo grátis que ocupam vaga), Pendentes, Presenças. Dados via 1 query batched `workshop_registrations.in('workshop_id', ids)` no `refresh()` (paralelizada com lots via `Promise.all`) — respeita o filtro de escopo. Pesquisa de mercado: Eventbrite/Sympla/Cvent combinam gestão + vendas na mesma tela. Cortesia/grátis conta em vagas mas R$ 0 na receita.
+- **Item B — Padronização de container (`d420e9e`)**: aplicado `max-w-7xl mx-auto` no root de 6 telas full-bleed que são dashboards/listas (ProducerDashboard, JudgesManagement, EquipeProdutor, ResultsPanel, Deliberacoes, SuporteJuri). Exceções full-bleed mantidas de propósito: Schedule (kanban), StageMarker (grid de palco), CheckIn (scanner QR). Não tocados (formulários centrados leem melhor estreitos): Schedule `4xl`, RegulationAIParser `4xl`, Certificates `6xl`, AccountSettings. Container canônico: `max-w-7xl mx-auto space-y-6` (+ `pb-20` quando aparece no BottomNav mobile).
+- **Achados do `/revisar` (`933ccdb`)**: 2 🟢 aplicados em `WsMetric` + `Metric` (VendasIngressos, pra paridade) — `aria-hidden` no ícone decorativo + label `text-[9px]` → `text-[10px]` (DESIGN_SYSTEM). 🟢 restante (card "Presenças" mostra `0 / 0` em escopo sem inscrição) deixado: é informativo e some com a 1ª inscrição.
+- **Pendência**: validação visual Playwright não rodada (depende de auth de prod) — vale smoke do `% lotado` na régua e do respiro lateral das 6 telas em mobile 375px.
+
 ### 2026-06-19 (noite) — Padronização do topo do hub de Vendas + tab "Visão Geral" ✅ SHIPADO
 Disparado pelo user notando que o topo (régua de abas + título) ficava em alturas/larguras diferentes ao trocar entre Inscrições/Ingressos/Workshops/Seletiva/Cupons. Causa: cada tela definia seu próprio container (`max-w-7xl` em 2 delas, full-width nas outras 3) e `space-y-8` vs `space-y-6` colidindo com o `mb-6` do `VendasTabs`, gerando gap de 24px numas e 32px noutras.
 
