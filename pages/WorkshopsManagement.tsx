@@ -1177,7 +1177,7 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
               <textarea value={form.description} onChange={e => upd('description', e.target.value)} rows={3} className={inputCls} placeholder="O que o aluno vai aprender, pré-requisitos, materiais..." />
             </Field>
             <div>
-              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+              <span id="workshop-cover-label" className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
                 Capa do workshop (recomendado 1200×675px, proporção 16:9)
               </span>
               <div className="flex items-start gap-4">
@@ -1196,6 +1196,7 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
                     className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#ff0068] text-white flex items-center justify-center shadow-lg ring-2 ring-white dark:ring-slate-900 hover:scale-110 transition-transform"
                     title={form.cover_url ? 'Trocar capa' : 'Adicionar capa'}
                     aria-label={form.cover_url ? 'Trocar capa' : 'Adicionar capa'}
+                    aria-describedby="workshop-cover-label"
                   >
                     {coverUploading
                       ? <Loader2 size={12} className="animate-spin" />

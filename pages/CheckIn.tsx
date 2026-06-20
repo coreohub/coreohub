@@ -337,6 +337,8 @@ const CheckIn = () => {
             <>
               <button
                 onClick={fetchData}
+                aria-label="Atualizar"
+                title="Atualizar"
                 className="p-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-400 hover:text-[#ff0068] transition-all"
               >
                 <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />

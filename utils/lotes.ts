@@ -95,7 +95,7 @@ export function resolveActiveWorkshopLot<T extends WorkshopLot>(
   now: Date = new Date(),
 ): T | null {
   const candidatos = lots
-    .filter(l => l.is_active !== false
+    .filter(l => l.is_active === true
       && (!l.data_inicio || new Date(l.data_inicio) <= now)
       && (!l.data_fim || new Date(l.data_fim) >= now))
     .sort((a, b) => b.ordem - a.ordem);

@@ -110,7 +110,7 @@ const TermoProdutor: React.FC = () => {
         <PageHeader
           icon={
             <div className="w-12 h-12 rounded-2xl bg-[#ff0068]/10 flex items-center justify-center">
-              <FileText size={20} className="text-[#ff0068]" />
+              <FileText size={20} className="text-[#ff0068]" aria-hidden="true" />
             </div>
           }
           title={<>Termo de Adesão <span className="text-[#ff0068]">— Produtor</span></>}
