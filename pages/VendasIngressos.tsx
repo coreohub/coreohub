@@ -811,9 +811,9 @@ const Td: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 const Metric: React.FC<{ icon: any; label: string; value: string; sub?: string }> = ({ icon: Icon, label, value, sub }) => (
   <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4">
     <div className="p-2 rounded-xl bg-[#ff0068]/10 text-[#ff0068] inline-flex mb-2">
-      <Icon size={16} />
+      <Icon size={16} aria-hidden />
     </div>
-    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">{label}</p>
+    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</p>
     <p className="text-2xl font-black tracking-tighter text-slate-900 dark:text-white">{value}</p>
     {sub && <p className="text-[10px] text-slate-500 mt-0.5">{sub}</p>}
   </div>
