@@ -59,11 +59,17 @@ interface Props {
   userId: string;
 }
 
+const PAGE_SIZE = 50;
+
 const NotificationBell: React.FC<Props> = ({ userId }) => {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  // Heurística sem count query: se a última página voltou cheia (PAGE_SIZE),
+  // assume que pode ter mais. Confirma/corrige no fetch seguinte.
+  const [hasMore, setHasMore] = useState(false);
   // Tick a cada 60s pra forçar re-render do formatRelative (notif fica "agora"
   // indefinidamente se o componente não re-renderizar). Cheap — só dispara
   // re-cálculo de strings, não refetch.
@@ -89,10 +95,13 @@ const NotificationBell: React.FC<Props> = ({ userId }) => {
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
-      .limit(50)
+      .range(0, PAGE_SIZE - 1)
       .then(({ data, error }) => {
         if (!active) return;
-        if (!error) setItems((data ?? []) as NotificationRow[]);
+        if (!error) {
+          setItems((data ?? []) as NotificationRow[]);
+          setHasMore((data ?? []).length === PAGE_SIZE);
+        }
         setLoading(false);
       });
 
@@ -125,6 +134,24 @@ const NotificationBell: React.FC<Props> = ({ userId }) => {
     document.addEventListener('mousedown', handle);
     return () => document.removeEventListener('mousedown', handle);
   }, [open]);
+
+  // "Ver mais" — pagina pelo offset do que já está carregado (não por
+  // created_at) porque inserts realtime no topo não devem deslocar a janela.
+  const loadMore = async () => {
+    setLoadingMore(true);
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .range(items.length, items.length + PAGE_SIZE - 1);
+    if (!error) {
+      const page = (data ?? []) as NotificationRow[];
+      setItems(prev => [...prev, ...page]);
+      setHasMore(page.length === PAGE_SIZE);
+    }
+    setLoadingMore(false);
+  };
 
   // Marca individual como lida. Optimistic — atualiza UI antes do response
   // pra não dar laggy. Realtime reconcilia se algo der errado.
@@ -259,6 +286,15 @@ const NotificationBell: React.FC<Props> = ({ userId }) => {
                     );
                   })}
                 </ul>
+              )}
+              {hasMore && !loading && (
+                <button
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="w-full py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#ff0068] hover:bg-slate-50 dark:hover:bg-white/5 transition-all disabled:opacity-50"
+                >
+                  {loadingMore ? 'Carregando…' : 'Ver mais'}
+                </button>
               )}
             </div>
           </motion.div>
