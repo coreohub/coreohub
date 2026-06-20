@@ -8,6 +8,7 @@ import {
   Search,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import PageHeader from '../components/PageHeader';
 import { DndContext, closestCenter, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
 import {
   arrayMove, SortableContext, verticalListSortingStrategy, useSortable
@@ -1362,14 +1363,10 @@ const Schedule = () => {
     <div className="max-w-7xl mx-auto space-y-6 pb-16 animate-in fade-in duration-500">
       {/* ── Header ── */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
-            Sonoplastia & <span className="text-[#ff0068]">Cronograma</span>
-          </h1>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-white/40 mt-0.5">
-            Cronograma inteligente & trilhas sonoras
-          </p>
-        </div>
+        <PageHeader
+          title={<>Sonoplastia & <span className="text-[#ff0068]">Cronograma</span></>}
+          subtitle="Cronograma inteligente & trilhas sonoras"
+        />
 
         <div className="flex items-center gap-2 flex-wrap">
           {/* Edition selector — em modo demo só mostra demos; em modo real só mostra reais.

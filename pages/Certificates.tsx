@@ -15,6 +15,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../services/supabase';
+import PageHeader from '../components/PageHeader';
 import {
   Award, GraduationCap, Loader2, Save, Send, AlertCircle, CheckCircle, Trash2,
   Type, Palette, Image as ImageIcon, FileSignature, Sparkles, X,
@@ -234,10 +235,10 @@ const Certificates: React.FC = () => {
     <div className="max-w-7xl mx-auto space-y-6 pb-20">
 
         <div className="mb-6">
-          <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white flex items-center gap-3">
-            <Award className="text-[#ff0068]" size={28} aria-hidden="true" />
-            Certificados
-          </h1>
+          <PageHeader
+            title="Certificados"
+            icon={<Award className="text-[#ff0068]" size={28} aria-hidden="true" />}
+          />
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Configure o template e emita certificados pra inscritos com presença confirmada. PDFs são gerados sob demanda quando o inscrito baixar.
           </p>

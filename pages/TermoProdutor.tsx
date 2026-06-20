@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { ArrowLeft, ShieldCheck, FileText, AlertTriangle, CheckCircle2, Loader2, ArrowRight, CreditCard, Home } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
+import PageHeader from '../components/PageHeader';
 
 // Versão do Termo. Bump ao alterar conteúdo — produtores existentes precisarão
 // re-aceitar antes da próxima ação que dependa de aceite (ex: criar evento novo,
@@ -106,19 +107,15 @@ const TermoProdutor: React.FC = () => {
         </div>
 
         {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-[#ff0068]/10 flex items-center justify-center">
-            <FileText size={20} className="text-[#ff0068]" />
-          </div>
-          <div>
-            <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
-              Termo de Adesão <span className="text-[#ff0068]">— Produtor</span>
-            </h1>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-0.5">
-              Versão {TERMO_PRODUTOR_VERSION}
-            </p>
-          </div>
-        </div>
+        <PageHeader
+          icon={
+            <div className="w-12 h-12 rounded-2xl bg-[#ff0068]/10 flex items-center justify-center">
+              <FileText size={20} className="text-[#ff0068]" />
+            </div>
+          }
+          title={<>Termo de Adesão <span className="text-[#ff0068]">— Produtor</span></>}
+          subtitle={`Versão ${TERMO_PRODUTOR_VERSION}`}
+        />
 
         {/* Conteúdo do termo */}
         <article className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 space-y-6 text-[13px] leading-relaxed text-slate-700 dark:text-slate-300">

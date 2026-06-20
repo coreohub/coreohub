@@ -13,6 +13,7 @@ import { EventStyle, Subgenre } from '../types';
 import { maskCpfCnpj, unmaskCpfCnpj, maskMoeda, parseMoeda, maskData, parseDataISO, calcIdade, validateCpf, validateCnpj, maskedChange, formatPrecoBR, parsePrecoBR, maskTempo } from '../utils/masks';
 import { humanizeSupabaseError } from '../utils/supabaseErrors';
 import AsaasBadge from '../components/AsaasBadge';
+import PageHeader from '../components/PageHeader';
 import DemoSettingsTab from '../components/DemoSettingsTab';
 import {
   Settings, Clock, Save, Plus, Pencil, Trash2, Check, Info,
@@ -6111,13 +6112,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     <div className="max-w-7xl mx-auto space-y-6 pb-32 text-slate-900 dark:text-white">
 
       {/* Header customizado quando rota dedicada (ex: /narracao-ia) */}
-      {pageLabel && (
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
-            {pageLabel}
-          </h1>
-        </div>
-      )}
+      {pageLabel && <PageHeader title={pageLabel} />}
 
       {/* Tab bar — escondida em rotas dedicadas (forcedTab fixo) */}
       {!forcedTab && (

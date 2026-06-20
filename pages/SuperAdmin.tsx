@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import PageHeader from '../components/PageHeader';
 import {
   listInvites, createInvite, deleteInvite, buildInviteUrl,
   type ProducerInvite,
@@ -463,33 +464,32 @@ const SuperAdmin = () => {
     <SuperAdminMfaGate>
     <div className="max-w-7xl mx-auto space-y-8 pb-20">
       {/* Header */}
-      <header className="flex justify-between items-start gap-4 flex-wrap">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Crown size={12} className="text-[#e3ff0a]" />
-            <span className="text-[9px] font-black text-[#e3ff0a] uppercase tracking-[0.3em]">Painel da Plataforma</span>
-          </div>
-          <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase text-slate-900 dark:text-white">
-            Super <span className="text-[#ff0068]">Admin</span>
-          </h1>
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Visão consolidada da CoreoHub</p>
+      <header>
+        <div className="flex items-center gap-2 mb-1">
+          <Crown size={12} className="text-[#e3ff0a]" />
+          <span className="text-[9px] font-black text-[#e3ff0a] uppercase tracking-[0.3em]">Painel da Plataforma</span>
         </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleExportCSV}
-            disabled={commissions.length === 0}
-            className="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white hover:border-[#ff0068]/40 hover:text-[#ff0068] transition-all disabled:opacity-40"
-          >
-            <Download size={12} /> CSV
-          </button>
-          <button
-            onClick={() => setShowInviteModal(true)}
-            className="flex items-center gap-2 bg-[#ff0068] hover:bg-[#e0005c] text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl shadow-[#ff0068]/20"
-          >
-            <Plus size={14} /> Convidar Produtor
-          </button>
-        </div>
+        <PageHeader
+          title={<>Super <span className="text-[#ff0068]">Admin</span></>}
+          subtitle="Visão consolidada da CoreoHub"
+          actions={
+            <>
+              <button
+                onClick={handleExportCSV}
+                disabled={commissions.length === 0}
+                className="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white hover:border-[#ff0068]/40 hover:text-[#ff0068] transition-all disabled:opacity-40"
+              >
+                <Download size={12} /> CSV
+              </button>
+              <button
+                onClick={() => setShowInviteModal(true)}
+                className="flex items-center gap-2 bg-[#ff0068] hover:bg-[#e0005c] text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl shadow-[#ff0068]/20"
+              >
+                <Plus size={14} /> Convidar Produtor
+              </button>
+            </>
+          }
+        />
       </header>
 
       {error && (

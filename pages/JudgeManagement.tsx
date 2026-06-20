@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UserPlus, Award, Settings, ShieldCheck, Fingerprint, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import PageHeader from '../components/PageHeader';
 
 const JudgeManagement = () => {
   const [showManager, setShowManager] = useState(false);
@@ -14,15 +15,15 @@ const JudgeManagement = () => {
 
   return (
     <div className="max-w-6xl mx-auto space-y-10 animate-in fade-in duration-500 pb-20">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black text-white tracking-tighter uppercase">Banca de <span className="text-[#ff0068]">Jurados</span></h1>
-          <p className="text-slate-500 font-medium text-sm mt-2">Terminais técnicos e competências de avaliação.</p>
-        </div>
-        <button className="bg-[#ff0068] text-white px-10 py-4 rounded-[2rem] font-black text-[10px] uppercase tracking-widest flex items-center gap-3 hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30">
-          <UserPlus size={20} /> Convidar Jurado
-        </button>
-      </div>
+      <PageHeader
+        title={<>Banca de <span className="text-[#ff0068]">Jurados</span></>}
+        subtitle="Terminais técnicos e competências de avaliação."
+        actions={
+          <button className="bg-[#ff0068] text-white px-10 py-4 rounded-[2rem] font-black text-[10px] uppercase tracking-widest flex items-center gap-3 hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30">
+            <UserPlus size={20} /> Convidar Jurado
+          </button>
+        }
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {judges.map(judge => (

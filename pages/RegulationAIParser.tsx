@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { extractRegulationData, extractRegulationFromPdf, RegulationExtract } from '../services/geminiService';
+import PageHeader from '../components/PageHeader';
 import { uploadRegulationPdf, supabase } from '../services/supabase';
 
 type Step = 'upload' | 'processing' | 'review' | 'done';
@@ -497,16 +498,10 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-700 pb-20">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">
-            Importar <span className="text-[#ff0068]">Regulamento ou Edital</span>
-          </h1>
-          <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">
-            IA lê o documento e preenche as configurações do evento automaticamente
-          </p>
-        </div>
-        {step !== 'upload' && (
+      <PageHeader
+        title={<>Importar <span className="text-[#ff0068]">Regulamento ou Edital</span></>}
+        subtitle="IA lê o documento e preenche as configurações do evento automaticamente"
+        actions={step !== 'upload' && (
           <button
             onClick={handleReset}
             className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-[#ff0068] transition-all"
@@ -514,7 +509,7 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
             <RotateCcw size={13} /> Recomeçar
           </button>
         )}
-      </div>
+      />
 
       {/* Step indicator */}
       <div className="flex items-center gap-3">

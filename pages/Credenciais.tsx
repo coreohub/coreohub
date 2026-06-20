@@ -5,6 +5,7 @@ import {
   ClipboardList, Eye, X, Download, Info,
 } from 'lucide-react';
 import EventPickerSheet from '../components/EventPickerSheet';
+import PageHeader from '../components/PageHeader';
 import { supabase } from '../services/supabase';
 import {
   CredentialItem,
@@ -339,30 +340,25 @@ const Credenciais: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-32 sm:pb-28 animate-in fade-in duration-700">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase text-slate-900 dark:text-white">
-            Credenciais
-          </h1>
-          <p className="text-xs text-slate-500 font-bold mt-1">
-            Imprima credenciais de todos os tipos. Modelo A6 com cordão ou adesivo Pimaco 6280.
-          </p>
-        </div>
-
-        {events.length > 1 ? (
-          <EventPickerSheet
-            events={events}
-            selectedEventId={selectedEventId}
-            onSelect={setSelectedEventId}
-            className="shrink-0 w-full sm:w-auto"
-          />
-        ) : events.length === 1 ? (
-          <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 shrink-0">
-            {events[0].name}
-            {events[0].edition_year ? ` · ${events[0].edition_year}` : ''}
-          </div>
-        ) : null}
-      </div>
+      <PageHeader
+        title="Credenciais"
+        subtitle="Imprima credenciais de todos os tipos. Modelo A6 com cordão ou adesivo Pimaco 6280."
+        actions={
+          events.length > 1 ? (
+            <EventPickerSheet
+              events={events}
+              selectedEventId={selectedEventId}
+              onSelect={setSelectedEventId}
+              className="shrink-0 w-full sm:w-auto"
+            />
+          ) : events.length === 1 ? (
+            <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 shrink-0">
+              {events[0].name}
+              {events[0].edition_year ? ` · ${events[0].edition_year}` : ''}
+            </div>
+          ) : null
+        }
+      />
 
       {/* Tabs — em mobile vira scroll horizontal pra caber em 1 linha (padrão
           iOS/Material). Em sm+ usa flex-wrap. */}

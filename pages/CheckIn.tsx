@@ -6,6 +6,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
 import { isRegistrationPaid } from '../utils/registrationStatus';
+import PageHeader from '../components/PageHeader';
 
 interface CheckInItem {
   id: string;
@@ -329,30 +330,26 @@ const CheckIn = () => {
 
       {/* Header */}
       <div className="bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-white/5 px-4 pt-5 pb-4 space-y-4 sticky top-0 z-30">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">
-              Creden<span className="text-[#ff0068]">ciamento</span>
-            </h1>
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mt-0.5">
-              {doneCount} / {total} credenciados
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={fetchData}
-              className="p-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-400 hover:text-[#ff0068] transition-all"
-            >
-              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-            </button>
-            <button
-              onClick={startScanner}
-              className="flex items-center gap-2 px-4 py-3 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-[#ff0068]/20"
-            >
-              <QrCode size={16} /> Escanear QR
-            </button>
-          </div>
-        </div>
+        <PageHeader
+          title={<>Creden<span className="text-[#ff0068]">ciamento</span></>}
+          subtitle={`${doneCount} / ${total} credenciados`}
+          actions={
+            <>
+              <button
+                onClick={fetchData}
+                className="p-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-400 hover:text-[#ff0068] transition-all"
+              >
+                <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+              </button>
+              <button
+                onClick={startScanner}
+                className="flex items-center gap-2 px-4 py-3 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-[#ff0068]/20"
+              >
+                <QrCode size={16} /> Escanear QR
+              </button>
+            </>
+          }
+        />
 
         {/* Progress bar */}
         <div className="h-1.5 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
