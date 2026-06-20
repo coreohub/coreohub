@@ -374,7 +374,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
   };
 
   return (
-    <div className="space-y-8 pb-20 animate-in fade-in duration-700">
+    <div className="max-w-7xl mx-auto space-y-8 pb-20 animate-in fade-in duration-700">
 
       {/* Header — flex-col em mobile pra nao estourar layout horizontal */}
       <header className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">

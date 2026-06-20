@@ -244,7 +244,7 @@ const EquipeProdutor = () => {
 
   /* ══════════════════════════════════════════════════════════════════ */
   return (
-    <div className="space-y-6 pb-20 animate-in fade-in duration-700">
+    <div className="max-w-7xl mx-auto space-y-6 pb-20 animate-in fade-in duration-700">
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
