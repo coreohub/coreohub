@@ -89,8 +89,7 @@ const TermoProdutor: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 px-4 py-8">
-      <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6 pb-20">
         {/* Topbar */}
         <div className="flex items-center justify-between">
           <button
@@ -112,7 +111,7 @@ const TermoProdutor: React.FC = () => {
             <FileText size={20} className="text-[#ff0068]" />
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white italic">
+            <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
               Termo de Adesão <span className="text-[#ff0068]">— Produtor</span>
             </h1>
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-0.5">
@@ -410,7 +409,6 @@ const TermoProdutor: React.FC = () => {
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 };

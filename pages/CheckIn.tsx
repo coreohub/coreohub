@@ -331,7 +331,7 @@ const CheckIn = () => {
       <div className="bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-white/5 px-4 pt-5 pb-4 space-y-4 sticky top-0 z-30">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">
+            <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">
               Creden<span className="text-[#ff0068]">ciamento</span>
             </h1>
             <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mt-0.5">

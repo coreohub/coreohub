@@ -6108,7 +6108,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
      RENDER
   ══════════════════════════════════════════ */
   return (
-    <div className="max-w-5xl mx-auto space-y-6 pb-32 text-slate-900 dark:text-white">
+    <div className="max-w-7xl mx-auto space-y-6 pb-32 text-slate-900 dark:text-white">
 
       {/* Header customizado quando rota dedicada (ex: /narracao-ia) */}
       {pageLabel && (

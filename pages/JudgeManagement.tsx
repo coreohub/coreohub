@@ -16,7 +16,7 @@ const JudgeManagement = () => {
     <div className="max-w-6xl mx-auto space-y-10 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-4xl font-black text-white tracking-tighter uppercase leading-none">Banca de <span className="text-[#ff0068]">Jurados</span></h1>
+          <h1 className="text-2xl md:text-3xl font-black text-white tracking-tighter uppercase">Banca de <span className="text-[#ff0068]">Jurados</span></h1>
           <p className="text-slate-500 font-medium text-sm mt-2">Terminais técnicos e competências de avaliação.</p>
         </div>
         <button className="bg-[#ff0068] text-white px-10 py-4 rounded-[2rem] font-black text-[10px] uppercase tracking-widest flex items-center gap-3 hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30">

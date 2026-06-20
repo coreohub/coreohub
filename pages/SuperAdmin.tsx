@@ -461,7 +461,7 @@ const SuperAdmin = () => {
 
   return (
     <SuperAdminMfaGate>
-    <div className="space-y-8 pb-20">
+    <div className="max-w-7xl mx-auto space-y-8 pb-20">
       {/* Header */}
       <header className="flex justify-between items-start gap-4 flex-wrap">
         <div>
@@ -469,8 +469,8 @@ const SuperAdmin = () => {
             <Crown size={12} className="text-[#e3ff0a]" />
             <span className="text-[9px] font-black text-[#e3ff0a] uppercase tracking-[0.3em]">Painel da Plataforma</span>
           </div>
-          <h1 className="text-4xl font-black tracking-tighter uppercase text-slate-900 dark:text-white">
-            Super <span className="text-[#ff0068] italic">Admin</span>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase text-slate-900 dark:text-white">
+            Super <span className="text-[#ff0068]">Admin</span>
           </h1>
           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Visão consolidada da CoreoHub</p>
         </div>

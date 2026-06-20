@@ -338,7 +338,7 @@ const Credenciais: React.FC = () => {
   const totalSelected = selected.size;
 
   return (
-    <div className="space-y-6 pb-32 sm:pb-28 animate-in fade-in duration-700">
+    <div className="max-w-7xl mx-auto space-y-6 pb-32 sm:pb-28 animate-in fade-in duration-700">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase text-slate-900 dark:text-white">

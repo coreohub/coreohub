@@ -231,11 +231,10 @@ const Certificates: React.FC = () => {
 
   // ────────────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#0b0b0f] py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto">
+    <div className="max-w-7xl mx-auto space-y-6 pb-20">
 
         <div className="mb-6">
-          <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-3">
+          <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white flex items-center gap-3">
             <Award className="text-[#ff0068]" size={28} />
             Certificados
           </h1>
@@ -481,7 +480,6 @@ const Certificates: React.FC = () => {
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 };

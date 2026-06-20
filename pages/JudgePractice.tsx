@@ -42,7 +42,7 @@ const JudgePractice = () => {
             </button>
             <div>
               <span className="px-2 py-0.5 bg-[#ff0068]/20 text-[#ff0068] text-[10px] font-black uppercase tracking-widest rounded-full">Modo Treinamento</span>
-              <h1 className="text-3xl font-black uppercase tracking-tight">Prática de Julgamento</h1>
+              <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Prática de Julgamento</h1>
             </div>
           </div>
           <div className="flex items-center gap-6 p-6 bg-white/5 rounded-[2.5rem] border border-white/10">

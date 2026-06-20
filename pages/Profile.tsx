@@ -305,7 +305,7 @@ const MeuPerfil = () => {
 
       {/* Page title */}
       <div>
-        <h1 className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
+        <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">
           Meu <span className="text-[#ff0068]">Perfil</span>
         </h1>
         <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">
