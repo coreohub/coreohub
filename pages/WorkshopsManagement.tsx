@@ -66,6 +66,14 @@ interface LotRow {
   is_active: boolean;
 }
 
+// Subconjunto de workshop_registrations usado só pra agregar os KPIs do topo.
+interface RegStat {
+  workshop_id: string;
+  status_pagamento: string;
+  preco_pago: number | null;
+  attended: boolean | null;
+}
+
 const NIVEIS: { value: Nivel; label: string }[] = [
   { value: 'todos',         label: 'Todos os níveis' },
   { value: 'iniciante',     label: 'Iniciante' },
@@ -108,6 +116,9 @@ const WorkshopsManagement: React.FC = () => {
   const [selectedScope, setSelectedScope]   = useState<string>('all'); // 'all' | event.id | 'standalone'
   const [workshops, setWorkshops]           = useState<WorkshopRow[]>([]);
   const [lots, setLots]                     = useState<Record<string, LotRow[]>>({});
+  // Inscrições das aulas visíveis (escopo atual) — alimenta a régua de KPIs
+  // no topo. Agregação client-side, mesmo padrão de VendasOverview.
+  const [regs, setRegs]                     = useState<RegStat[]>([]);
   const [loading, setLoading]               = useState(true);
   const [saving, setSaving]                 = useState(false);
   const [feedback, setFeedback]             = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
@@ -198,21 +209,30 @@ const WorkshopsManagement: React.FC = () => {
     }
     setWorkshops(ws ?? []);
 
-    // Carrega lots em batch
+    // Carrega lots + inscrições em batch (workshop_registrations não tem
+    // event_id direto — filtra por workshop_id das aulas visíveis).
     if (ws && ws.length > 0) {
       const ids = ws.map(w => w.id);
-      const { data: lotData } = await supabase
-        .from('workshop_lots')
-        .select('*')
-        .in('workshop_id', ids)
-        .order('ordem', { ascending: true });
+      const [{ data: lotData }, { data: regData }] = await Promise.all([
+        supabase
+          .from('workshop_lots')
+          .select('*')
+          .in('workshop_id', ids)
+          .order('ordem', { ascending: true }),
+        supabase
+          .from('workshop_registrations')
+          .select('workshop_id, status_pagamento, preco_pago, attended')
+          .in('workshop_id', ids),
+      ]);
       const grouped: Record<string, LotRow[]> = {};
       (lotData ?? []).forEach(l => {
         (grouped[l.workshop_id] ??= []).push(l);
       });
       setLots(grouped);
+      setRegs((regData ?? []) as RegStat[]);
     } else {
       setLots({});
+      setRegs([]);
     }
     setLoading(false);
   }, [selectedScope]);
@@ -365,6 +385,22 @@ const WorkshopsManagement: React.FC = () => {
 
   const filteredEvents = useMemo(() => events, [events]);
 
+  // ── KPIs agregados do escopo atual ───────────────────────────────────────
+  // "Vagas vendidas" inclui cortesia/combo grátis (ocupam vaga), mas só
+  // APROVADO entra na receita (cortesia/grátis = R$ 0). Mesma regra do modal
+  // de Compradores e da decisão 2026-06-19.
+  const salesStats = useMemo(() => {
+    const ocupa = (s: string) => s === 'APROVADO' || s === 'GRATUITO' || s === 'CORTESIA';
+    const receita = regs
+      .filter(r => r.status_pagamento === 'APROVADO')
+      .reduce((acc, r) => acc + Number(r.preco_pago ?? 0), 0);
+    const vagasVendidas = regs.filter(r => ocupa(r.status_pagamento)).length;
+    const pendentes = regs.filter(r => r.status_pagamento === 'PENDENTE').length;
+    const presentes = regs.filter(r => r.attended).length;
+    const capacidadeTotal = workshops.reduce((acc, w) => acc + (w.capacidade_max ?? 0), 0);
+    return { receita, vagasVendidas, pendentes, presentes, capacidadeTotal };
+  }, [regs, workshops]);
+
   // ────────────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-7xl mx-auto">
@@ -416,6 +452,22 @@ const WorkshopsManagement: React.FC = () => {
             </button>
           ))}
         </div>
+
+        {/* Régua de KPIs do escopo atual — padrão Eventbrite/Sympla:
+            gestão + vendas na mesma tela. Espelha VendasIngressos. */}
+        {!loading && workshops.length > 0 && (
+          <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-3">
+            <WsMetric icon={DollarSign} label="Receita" value={fmtCurrency(salesStats.receita)} sub="pagamentos aprovados" />
+            <WsMetric
+              icon={Users}
+              label="Vagas vendidas"
+              value={salesStats.capacidadeTotal > 0 ? `${salesStats.vagasVendidas} / ${salesStats.capacidadeTotal}` : String(salesStats.vagasVendidas)}
+              sub={salesStats.capacidadeTotal > 0 ? `${Math.round((salesStats.vagasVendidas / salesStats.capacidadeTotal) * 100)}% lotado` : 'inclui cortesias'}
+            />
+            <WsMetric icon={Clock} label="Pendentes" value={String(salesStats.pendentes)} sub="aguardando pagamento" />
+            <WsMetric icon={UserCheck} label="Presenças" value={`${salesStats.presentes} / ${salesStats.vagasVendidas}`} sub="check-ins confirmados" />
+          </div>
+        )}
 
         {/* Feedback */}
         {feedback && (
@@ -563,6 +615,20 @@ const WorkshopsManagement: React.FC = () => {
     </div>
   );
 };
+
+// ════════════════════════════════════════════════════════════════════════════
+// Card de métrica do topo (mesmo padrão visual de VendasIngressos)
+// ════════════════════════════════════════════════════════════════════════════
+const WsMetric: React.FC<{ icon: React.ElementType; label: string; value: string; sub?: string }> = ({ icon: Icon, label, value, sub }) => (
+  <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4">
+    <div className="p-2 rounded-xl bg-[#ff0068]/10 text-[#ff0068] inline-flex mb-2">
+      <Icon size={16} />
+    </div>
+    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">{label}</p>
+    <p className="text-2xl font-black tracking-tighter text-slate-900 dark:text-white tabular-nums">{value}</p>
+    {sub && <p className="text-[10px] text-slate-500 mt-0.5">{sub}</p>}
+  </div>
+);
 
 // ════════════════════════════════════════════════════════════════════════════
 // Modal: lista de compradores do workshop
