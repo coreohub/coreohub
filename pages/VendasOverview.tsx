@@ -78,6 +78,12 @@ const VendasOverview: React.FC = () => {
         const workshopRegsAprovados = (workshopRegs ?? []).filter((w: any) => w.status_pagamento === 'APROVADO');
         const workshopsReceita = workshopRegsAprovados.reduce((s: number, w: any) => s + Number(w.preco_pago ?? 0), 0);
 
+        // Estimativa (count × taxa atual), não soma real cobrada. `registrations.charged_amount`
+        // não serve de fonte aqui porque é a mesma coluna usada pra snapshot da cobrança de
+        // INSCRIÇÃO (create-payment-asaas) e da TAXA DE SELETIVA (create-video-selection-payment) —
+        // a 2ª escrita sobrescreve a 1ª na mesma row. Precisão real exigiria coluna dedicada
+        // (ex: video_fee_charged_amount). Avaliado 2026-06-20: baixo ROI pra escala atual
+        // (1 produtor, taxa raramente muda no meio do evento) — não implementado.
         const seletivaCount = (regs ?? []).filter(r => r.video_fee_status === 'paid').length;
         const seletivaReceita = seletivaCount * Number(ev?.video_selection_fee ?? 0);
 
