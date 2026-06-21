@@ -35,7 +35,14 @@ interface GroupedResult {
    *  scorecard de patinação artística: TES/PCS visíveis + total combinado). */
   average_score_tecnico: number | null;
   average_score_artistico: number | null;
+  /** Contagem de avaliações COM nota (final_weighted_average != null) — usada
+   *  pra ranking/medalha/CSV. Mostra Avaliada (feedback só-texto/áudio) sempre
+   *  grava final_weighted_average=null, então fica 0 aqui mesmo com feedbacks
+   *  reais — use total_evaluations_count pra esses casos. */
   evaluations_count: number;
+  /** Contagem real de linhas em `evaluations` pra essa coreografia, com ou sem
+   *  nota — é o que decide se há algo pra "Limpar avaliações de teste". */
+  total_evaluations_count: number;
   scores_detail: ScoreDetail[];
   has_outlier: boolean;
 }
@@ -102,8 +109,12 @@ const ResultsPanel = () => {
       setThresholds(cfg?.medal_thresholds ?? DEFAULT_THRESHOLDS);
       setPremiationSystem(cfg?.premiation_system === 'RANKING' ? 'RANKING' : 'THRESHOLD');
       const regras: any = cfg?.regras_avaliacao ?? {};
-      const pesoTecnico   = Number(regras.pesoTecnico   ?? 50) || 0;
-      const pesoArtistico = Number(regras.pesoArtistico ?? 50) || 0;
+      // ?? em vez de || pra default — convenção do projeto (evita zerar peso
+      // legítimo). Number.isFinite cobre o caso de valor salvo não-numérico.
+      const rawPesoTecnico   = Number(regras.pesoTecnico   ?? 50);
+      const rawPesoArtistico = Number(regras.pesoArtistico ?? 50);
+      const pesoTecnico   = Number.isFinite(rawPesoTecnico)   ? rawPesoTecnico   : 50;
+      const pesoArtistico = Number.isFinite(rawPesoArtistico) ? rawPesoArtistico : 50;
 
       // Query refatorada: 3 queries simples sem joins PostgREST.
       // Antes usava `registrations!inner(...)` mas PostgREST as vezes nao
@@ -128,6 +139,12 @@ const ResultsPanel = () => {
           ? supabase.from('judges').select('id, name, tipo_juri').in('id', judgeIds)
           : Promise.resolve({ data: [], error: null }),
       ]);
+      // Sem isso, uma falha em qualquer uma das 2 queries (RLS, coluna ausente
+      // por migration não aplicada, etc.) ficava silenciosa: judgesById/regsById
+      // ficavam vazios e toda a tela corrompia (nomes de jurado virando UUID,
+      // tipo_juri sempre 'tecnico') sem nenhum erro visível.
+      if (regsRes.error) throw regsRes.error;
+      if (judgesRes.error) throw judgesRes.error;
 
       const regsById: Record<string, any> = {};
       (regsRes.data ?? []).forEach((r: any) => { regsById[r.id] = r; });
@@ -199,6 +216,7 @@ const ResultsPanel = () => {
           average_score_tecnico: avgTecnico,
           average_score_artistico: avgArtistico,
           evaluations_count: g.scores_all.length,
+          total_evaluations_count: g.scores_detail.length,
           has_outlier: hasOutlier,
         };
       }).sort((a: any, b: any) => b.average_score - a.average_score);
@@ -271,6 +289,10 @@ const ResultsPanel = () => {
         if (error) throw error;
       }
       alert('Resultados publicados com sucesso!');
+      // Sem isso, o state local fica com resultado_publicado=false (stale) e os
+      // botões "Limpar avaliações de teste" continuam habilitados pras coreografias
+      // que acabaram de ser publicadas — trava de segurança furada por state obsoleto.
+      await fetchResults();
     } catch (err: any) {
       console.error(err);
       alert(err?.message ?? 'Erro ao publicar resultados.');
@@ -283,8 +305,8 @@ const ResultsPanel = () => {
      Só permite limpar coreografias NÃO publicadas — trava de segurança pra
      nunca apagar nota real já enviada ao inscrito (mesma régua do handlePublish). */
   const handleClearOne = async (entry: GroupedResult) => {
-    if (entry.resultado_publicado || entry.evaluations_count === 0) return;
-    if (!window.confirm(`Apagar ${entry.evaluations_count} avaliação${entry.evaluations_count !== 1 ? 'ões' : ''} de "${entry.nome_coreografia}"? Irreversível.`)) return;
+    if (entry.resultado_publicado || entry.total_evaluations_count === 0) return;
+    if (!window.confirm(`Apagar ${entry.total_evaluations_count} avaliação${entry.total_evaluations_count !== 1 ? 'ões' : ''} de "${entry.nome_coreografia}"? Irreversível.`)) return;
     setClearing(entry.id);
     try {
       const { error } = await supabase.from('evaluations').delete().eq('registration_id', entry.id);
@@ -298,8 +320,8 @@ const ResultsPanel = () => {
   };
 
   const handleClearAll = async () => {
-    const candidates = allResults.filter(r => !r.resultado_publicado && r.evaluations_count > 0);
-    const totalEvals = candidates.reduce((s, r) => s + r.evaluations_count, 0);
+    const candidates = allResults.filter(r => !r.resultado_publicado && r.total_evaluations_count > 0);
+    const totalEvals = candidates.reduce((s, r) => s + r.total_evaluations_count, 0);
     if (totalEvals === 0) {
       alert('Não há avaliações de coreografias não publicadas pra limpar.');
       return;
@@ -501,7 +523,7 @@ const ResultsPanel = () => {
           </button>
           <button
             onClick={handleClearAll}
-            disabled={clearing !== null || allResults.every(r => r.resultado_publicado || r.evaluations_count === 0)}
+            disabled={clearing !== null || allResults.every(r => r.resultado_publicado || r.total_evaluations_count === 0)}
             className="px-4 py-3 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-all disabled:opacity-40 flex items-center gap-2"
             title="Apaga avaliações de coreografias ainda não publicadas — use pra zerar testes antes do evento real"
           >
@@ -619,6 +641,20 @@ const ResultsPanel = () => {
           ) : (
             Object.entries(groupedByGenreCat).map(([key, entries]) => {
               const [genre, category] = key.split('|');
+              // Escala mista: nesse grupo, algumas coreografias têm nota combinada
+              // (Técnico+Artístico) e outras só de um lado — não são comparáveis
+              // na mesma régua se os pesos configurados não forem 50/50.
+              const scaleKinds = new Set(
+                entries
+                  .filter(e => e.evaluations_count > 0)
+                  .map(e =>
+                    e.average_score_tecnico != null && e.average_score_artistico != null ? 'combined'
+                    : e.average_score_tecnico != null ? 'tecnico'
+                    : e.average_score_artistico != null ? 'artistico'
+                    : 'none'
+                  )
+              );
+              const hasMixedScale = scaleKinds.size > 1;
               return (
                 <div key={key} className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-3xl overflow-hidden">
                   {/* Group header */}
@@ -627,6 +663,14 @@ const ResultsPanel = () => {
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-300">
                       {genre} · {category}
                     </span>
+                    {hasMixedScale && (
+                      <span
+                        className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-full text-[7px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400"
+                        title="Coreografias deste grupo foram avaliadas por combinações diferentes de jurado Técnico/Artístico — as notas podem não estar na mesma régua se os pesos não forem 50/50."
+                      >
+                        <AlertTriangle size={8} /> Escalas diferentes
+                      </span>
+                    )}
                     <span className="ml-auto text-[8px] font-black text-slate-400 uppercase tracking-widest">
                       {entries.length} coreografia{entries.length !== 1 ? 's' : ''}
                     </span>
@@ -799,7 +843,7 @@ const ResultsPanel = () => {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="px-2 py-1 bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-500/20 rounded-full text-[8px] font-black uppercase tracking-widest">
-                          {entry.evaluations_count} feedback{entry.evaluations_count !== 1 ? 's' : ''}
+                          {entry.total_evaluations_count} feedback{entry.total_evaluations_count !== 1 ? 's' : ''}
                         </span>
                         {isOpen ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
                       </div>
@@ -807,7 +851,18 @@ const ResultsPanel = () => {
 
                     {isOpen && (
                       <div className="px-5 pb-5 pt-2 space-y-3 bg-slate-50 dark:bg-white/[0.02]">
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">Feedbacks dos jurados</p>
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Feedbacks dos jurados</p>
+                          <button
+                            onClick={e => { e.stopPropagation(); handleClearOne(entry); }}
+                            disabled={entry.resultado_publicado || clearing !== null}
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all shrink-0"
+                            title={entry.resultado_publicado ? 'Resultado já publicado — não pode limpar' : 'Apagar feedbacks desta coreografia'}
+                          >
+                            {clearing === entry.id ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                            Limpar
+                          </button>
+                        </div>
                         {entry.scores_detail.map((sd, i) => {
                           const feedbackNote = sd.audit_log?.feedback_text;
                           return (

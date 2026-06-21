@@ -109,6 +109,17 @@ const DEFAULT_CRITERIA: CriterionWithWeight[] = [
   { name: 'Figurino',      peso: 2 },
 ];
 
+// Fallback do Júri Artístico quando o evento ainda não salvou
+// configuracoes.regras_avaliacao.artisticRules (produtor nunca abriu
+// AccountSettings → Avaliação após marcar um jurado como Artístico).
+// NÃO usa DEFAULT_CRITERIA — ele inclui "Técnica", que é exatamente o que
+// o Júri Artístico não deveria avaliar.
+const DEFAULT_ARTISTIC_CRITERIA: CriterionWithWeight[] = [
+  { name: 'Impacto Cênico',  peso: 2 },
+  { name: 'Interpretação',   peso: 2 },
+  { name: 'Impressão Geral', peso: 1 },
+];
+
 /* ── Score scale helpers ── */
 const SCALE_MAX: Record<ScoreScale, number> = { BASE_10: 10, BASE_100: 100 };
 
@@ -517,13 +528,15 @@ const JudgeTerminal = () => {
     genres: typeof genreList,
     tipoJuri?: 'tecnico' | 'artistico',
   ): CriterionWithWeight[] => {
-    if (!config) return DEFAULT_CRITERIA;
     // Júri Artístico avalia com olhar geral — usa o critério artístico configurado
-    // em Avaliação, ignorando o override por gênero (que é só do Técnico).
+    // em Avaliação, ignorando o override por gênero (que é só do Técnico). Checado
+    // ANTES do `!config`: evento sem regras_avaliacao nenhuma ainda precisa do
+    // fallback artístico certo, não do DEFAULT_CRITERIA técnico.
     if (tipoJuri === 'artistico') {
-      const artistic = config.artisticRules;
-      return artistic && artistic.criterios.length > 0 ? artistic.criterios : DEFAULT_CRITERIA;
+      const artistic = config?.artisticRules;
+      return artistic && artistic.criterios.length > 0 ? artistic.criterios : DEFAULT_ARTISTIC_CRITERIA;
     }
+    if (!config) return DEFAULT_CRITERIA;
     const genre = genres.find(g => g.name.toLowerCase().trim() === estiloName?.toLowerCase().trim());
     if (!genre) return config.globalRules.criterios.length > 0 ? config.globalRules.criterios : DEFAULT_CRITERIA;
     const rules = config.overrides[genre.id] ?? config.globalRules;
