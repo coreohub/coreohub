@@ -148,9 +148,15 @@ const JudgesManagement = () => {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
+      // getAllGenres() sem eventId traz os gêneros de TODOS os eventos do
+      // produtor (+ catálogo global) — produtor com 2+ eventos via o mesmo
+      // gênero duplicado na lista (ex: "DANÇA CLÁSSICA" 2x). Escopa pro
+      // evento ativo, igual a tela de Configurações → Gêneros já faz.
+      const { resolveActiveEventId } = await import('../services/supabase');
+      const activeEventId = await resolveActiveEventId();
       const [{ data: judgesData }, genresData] = await Promise.all([
         supabase.from('judges').select('*').order('name'),
-        getAllGenres(),
+        getAllGenres({ eventId: activeEventId }),
       ]);
       setJudges((judgesData || []).map(normalizeJudge));
       setGenres(genresData);
@@ -344,7 +350,9 @@ const JudgesManagement = () => {
     }));
   };
 
-  const genreNames = genres.map(g => g.name);
+  // Defesa extra contra duplicata (ex: fork local + global de mesmo nome
+  // escapando do filtro de getAllGenres) — nunca renderiza o mesmo nome 2x.
+  const genreNames = Array.from(new Set(genres.map(g => g.name)));
   const avatarSrc = (j: Judge) =>
     j.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(j.name)}`;
 

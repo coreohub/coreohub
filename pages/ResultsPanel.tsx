@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../services/supabase';
+import { isStyleInList } from '../utils/styleMatch';
 import {
   BarChart3, Download, RefreshCw, Loader2, Search,
   ChevronDown, ChevronUp, Trophy, CheckCircle2, AlertCircle,
@@ -176,9 +177,8 @@ const ResultsPanel = () => {
         // ser Técnico em K-Pop e Artístico em Danças Urbanas. Checa se o estilo
         // DESTA coreografia está na lista de competencias_artisticas dele.
         const competenciasArtisticas: string[] = judgesById[e.judge_id]?.competencias_artisticas ?? [];
-        const norm = (s: string) => (s || '').toLowerCase().trim();
         const tipoJuri: 'tecnico' | 'artistico' =
-          competenciasArtisticas.some(g => norm(g) === norm(reg.estilo_danca)) ? 'artistico' : 'tecnico';
+          isStyleInList(reg.estilo_danca, competenciasArtisticas) ? 'artistico' : 'tecnico';
         if (e.final_weighted_average != null) {
           const val = Number(e.final_weighted_average);
           grouped[rid].scores_all.push(val);

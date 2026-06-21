@@ -11,6 +11,7 @@ import {
   ChevronLeft, List,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import { isStyleInList } from '../utils/styleMatch';
 import { useT, useLocale, setLocale } from '../hooks/useT';
 import type { JudgeDictKey } from '../i18n/judge-pt';
 import { readJudgeSession, clearJudgeSession } from './JudgeLogin';
@@ -524,9 +525,7 @@ const JudgeTerminal = () => {
   /* ── Tipo de Júri é por ESTILO, não fixo pro jurado — ex: Técnico em K-Pop,
      Artístico em Danças Urbanas, mesmo jurado. */
   const isArtisticForStyle = useCallback((estiloName: string, competenciasArtisticas?: string[]): boolean => {
-    if (!competenciasArtisticas || competenciasArtisticas.length === 0) return false;
-    const norm = (s: string) => s?.toLowerCase().trim();
-    return competenciasArtisticas.some(g => norm(g) === norm(estiloName));
+    return isStyleInList(estiloName, competenciasArtisticas);
   }, []);
 
   /* ── Genre rules resolution ── */
@@ -545,7 +544,7 @@ const JudgeTerminal = () => {
       return artistic && artistic.criterios.length > 0 ? artistic.criterios : DEFAULT_ARTISTIC_CRITERIA;
     }
     if (!config) return DEFAULT_CRITERIA;
-    const genre = genres.find(g => g.name.toLowerCase().trim() === estiloName?.toLowerCase().trim());
+    const genre = genres.find(g => isStyleInList(estiloName, [g.name]));
     if (!genre) return config.globalRules.criterios.length > 0 ? config.globalRules.criterios : DEFAULT_CRITERIA;
     const rules = config.overrides[genre.id] ?? config.globalRules;
     return rules.criterios.length > 0 ? rules.criterios : DEFAULT_CRITERIA;
