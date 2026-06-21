@@ -24,6 +24,9 @@ export interface JudgePublic {
   instagram?: string | null;
   competencias_generos?: string[] | null;
   competencias_formatos?: string[] | null;
+  /** tecnico = avalia dentro da especialidade. artistico = olhar geral
+   *  (impacto cênico/interpretação). Default 'tecnico'. */
+  tipo_juri?: 'tecnico' | 'artistico' | null;
 }
 
 export interface WorkshopTeacherPublic {
@@ -81,6 +84,7 @@ export const PessoasSection: React.FC<PessoasSectionProps> = ({ judges = [], tea
         instagram: j.instagram,
         modalidades: j.competencias_generos ?? [],
         roles: ['judge'],
+        tipo_juri: j.tipo_juri ?? 'tecnico',
       });
     }
 

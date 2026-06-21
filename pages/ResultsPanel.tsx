@@ -3,13 +3,14 @@ import { supabase } from '../services/supabase';
 import {
   BarChart3, Download, RefreshCw, Loader2, Search,
   ChevronDown, ChevronUp, Trophy, CheckCircle2, AlertCircle,
-  Volume2, FileText, AlertTriangle, FileDown,
+  Volume2, FileText, AlertTriangle, FileDown, Trash2,
 } from 'lucide-react';
 
 /* ── Types ── */
 interface ScoreDetail {
   judge: string;
   judge_id: string;
+  tipo_juri: 'tecnico' | 'artistico';
   scores: Record<string, number>;
   final: number | null;
   audio_url: string | null;
@@ -25,7 +26,15 @@ interface GroupedResult {
   categoria: string;
   tipo_apresentacao: string;
   status: string;
+  resultado_publicado: boolean;
+  /** Nota final combinada (Técnico × Artístico, pelos pesos configurados em
+   *  Avaliação) — usada pra ranking/medalhas/publicação, mantém o nome legado
+   *  pra não quebrar o resto do componente. */
   average_score: number;
+  /** Médias separadas por tipo de jurado, exibidas pra transparência (padrão
+   *  scorecard de patinação artística: TES/PCS visíveis + total combinado). */
+  average_score_tecnico: number | null;
+  average_score_artistico: number | null;
   evaluations_count: number;
   scores_detail: ScoreDetail[];
   has_outlier: boolean;
@@ -80,15 +89,21 @@ const ResultsPanel = () => {
   const [exportingPdf, setExportingPdf] = useState(false);
   const [thresholds, setThresholds] = useState<MedalThresholds>(DEFAULT_THRESHOLDS);
   const [premiationSystem, setPremiationSystem] = useState<PremiationSystem>('THRESHOLD');
+  /** id da coreografia sendo limpa, ou 'all' — null = nada em andamento.
+   *  Usado pro botão "Limpar avaliações de teste" (por linha + geral). */
+  const [clearing, setClearing] = useState<string | null>(null);
 
   /* ── Fetch ── */
   const fetchResults = async () => {
     setLoading(true);
     try {
       const { fetchActiveEventConfig } = await import('../services/supabase');
-      const cfg = await fetchActiveEventConfig('medal_thresholds, premiation_system');
+      const cfg = await fetchActiveEventConfig('medal_thresholds, premiation_system, regras_avaliacao');
       setThresholds(cfg?.medal_thresholds ?? DEFAULT_THRESHOLDS);
       setPremiationSystem(cfg?.premiation_system === 'RANKING' ? 'RANKING' : 'THRESHOLD');
+      const regras: any = cfg?.regras_avaliacao ?? {};
+      const pesoTecnico   = Number(regras.pesoTecnico   ?? 50) || 0;
+      const pesoArtistico = Number(regras.pesoArtistico ?? 50) || 0;
 
       // Query refatorada: 3 queries simples sem joins PostgREST.
       // Antes usava `registrations!inner(...)` mas PostgREST as vezes nao
@@ -106,11 +121,11 @@ const ResultsPanel = () => {
       const [regsRes, judgesRes] = await Promise.all([
         regIds.length > 0
           ? supabase.from('registrations')
-              .select('id, nome_coreografia, estudio, estilo_danca, categoria, tipo_apresentacao, status')
+              .select('id, nome_coreografia, estudio, estilo_danca, categoria, tipo_apresentacao, status, resultado_publicado')
               .in('id', regIds)
           : Promise.resolve({ data: [], error: null }),
         judgeIds.length > 0
-          ? supabase.from('judges').select('id, name').in('id', judgeIds)
+          ? supabase.from('judges').select('id, name, tipo_juri').in('id', judgeIds)
           : Promise.resolve({ data: [], error: null }),
       ]);
 
@@ -133,16 +148,24 @@ const ResultsPanel = () => {
             categoria:        reg.categoria         ?? '—',
             tipo_apresentacao: reg.tipo_apresentacao ?? 'Competitiva',
             status:           reg.status            ?? '—',
-            scores_all:    [],
+            resultado_publicado: reg.resultado_publicado === true,
+            scores_all:        [],
+            scores_tecnico:    [],
+            scores_artistico:  [],
             scores_detail: [],
           };
         }
+        // Jurado sem tipo_juri (legado) conta como Técnico — comportamento de hoje.
+        const tipoJuri: 'tecnico' | 'artistico' = judgesById[e.judge_id]?.tipo_juri === 'artistico' ? 'artistico' : 'tecnico';
         if (e.final_weighted_average != null) {
-          grouped[rid].scores_all.push(Number(e.final_weighted_average));
+          const val = Number(e.final_weighted_average);
+          grouped[rid].scores_all.push(val);
+          (tipoJuri === 'artistico' ? grouped[rid].scores_artistico : grouped[rid].scores_tecnico).push(val);
         }
         grouped[rid].scores_detail.push({
           judge:       judgesById[e.judge_id]?.name || e.judge_id,
           judge_id:    e.judge_id,
+          tipo_juri:   tipoJuri,
           scores:      e.scores || {},
           final:       e.final_weighted_average,
           audio_url:   e.audio_url,
@@ -151,13 +174,33 @@ const ResultsPanel = () => {
         });
       });
 
+      const mean = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
+
       const built: GroupedResult[] = Object.values(grouped).map((g: any) => {
-        const avg = g.scores_all.length
-          ? g.scores_all.reduce((a: number, b: number) => a + b, 0) / g.scores_all.length
-          : 0;
+        const avgTecnico   = g.scores_tecnico.length   ? mean(g.scores_tecnico)   : null;
+        const avgArtistico = g.scores_artistico.length ? mean(g.scores_artistico) : null;
+        // Combina pelos pesos configurados (padrão patinação artística TES+PCS).
+        // Se só um dos dois tipos avaliou, a final usa só o disponível — não
+        // penaliza coreografia por falta de banca artística no evento.
+        let combined: number;
+        if (avgTecnico != null && avgArtistico != null) {
+          const totalPeso = pesoTecnico + pesoArtistico;
+          combined = totalPeso > 0
+            ? (avgTecnico * pesoTecnico + avgArtistico * pesoArtistico) / totalPeso
+            : (avgTecnico + avgArtistico) / 2;
+        } else {
+          combined = avgTecnico ?? avgArtistico ?? 0;
+        }
         const hasOutlier = g.scores_all.length >= 2 &&
           (Math.max(...g.scores_all) - Math.min(...g.scores_all)) >= 2.0;
-        return { ...g, average_score: avg, evaluations_count: g.scores_all.length, has_outlier: hasOutlier };
+        return {
+          ...g,
+          average_score: combined,
+          average_score_tecnico: avgTecnico,
+          average_score_artistico: avgArtistico,
+          evaluations_count: g.scores_all.length,
+          has_outlier: hasOutlier,
+        };
       }).sort((a: any, b: any) => b.average_score - a.average_score);
 
       setAllResults(built);
@@ -233,6 +276,44 @@ const ResultsPanel = () => {
       alert(err?.message ?? 'Erro ao publicar resultados.');
     } finally {
       setPublishing(false);
+    }
+  };
+
+  /* ── Limpar avaliações de teste ──
+     Só permite limpar coreografias NÃO publicadas — trava de segurança pra
+     nunca apagar nota real já enviada ao inscrito (mesma régua do handlePublish). */
+  const handleClearOne = async (entry: GroupedResult) => {
+    if (entry.resultado_publicado || entry.evaluations_count === 0) return;
+    if (!window.confirm(`Apagar ${entry.evaluations_count} avaliação${entry.evaluations_count !== 1 ? 'ões' : ''} de "${entry.nome_coreografia}"? Irreversível.`)) return;
+    setClearing(entry.id);
+    try {
+      const { error } = await supabase.from('evaluations').delete().eq('registration_id', entry.id);
+      if (error) throw error;
+      await fetchResults();
+    } catch (err: any) {
+      alert(err?.message ?? 'Erro ao limpar avaliações.');
+    } finally {
+      setClearing(null);
+    }
+  };
+
+  const handleClearAll = async () => {
+    const candidates = allResults.filter(r => !r.resultado_publicado && r.evaluations_count > 0);
+    const totalEvals = candidates.reduce((s, r) => s + r.evaluations_count, 0);
+    if (totalEvals === 0) {
+      alert('Não há avaliações de coreografias não publicadas pra limpar.');
+      return;
+    }
+    if (!window.confirm(`Apagar ${totalEvals} avaliações de ${candidates.length} coreografia${candidates.length !== 1 ? 's' : ''} não publicada${candidates.length !== 1 ? 's' : ''} deste evento? Irreversível.`)) return;
+    setClearing('all');
+    try {
+      const { error } = await supabase.from('evaluations').delete().in('registration_id', candidates.map(r => r.id));
+      if (error) throw error;
+      await fetchResults();
+    } catch (err: any) {
+      alert(err?.message ?? 'Erro ao limpar avaliações.');
+    } finally {
+      setClearing(null);
     }
   };
 
@@ -419,6 +500,15 @@ const ResultsPanel = () => {
               : <><FileDown size={14} /> Exportar PDF</>}
           </button>
           <button
+            onClick={handleClearAll}
+            disabled={clearing !== null || allResults.every(r => r.resultado_publicado || r.evaluations_count === 0)}
+            className="px-4 py-3 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-all disabled:opacity-40 flex items-center gap-2"
+            title="Apaga avaliações de coreografias ainda não publicadas — use pra zerar testes antes do evento real"
+          >
+            {clearing === 'all' ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+            Limpar avaliações de teste
+          </button>
+          <button
             onClick={handlePublish}
             disabled={publishing || allResults.length === 0}
             className="px-5 py-3 bg-[#ff0068] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#d4005a] transition-all shadow-lg shadow-[#ff0068]/20 disabled:opacity-50 flex items-center gap-2"
@@ -584,9 +674,19 @@ const ResultsPanel = () => {
                               <span className={`hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${medal.bg} ${medal.color} ${medal.border}`}>
                                 {medal.label}
                               </span>
-                              <p className={`text-xl font-black italic tabular-nums ${scoreColor(entry.average_score, thresholds)}`}>
-                                {entry.average_score.toFixed(2)}
-                              </p>
+                              <div className="text-right">
+                                <p className={`text-xl font-black italic tabular-nums leading-none ${scoreColor(entry.average_score, thresholds)}`}>
+                                  {entry.average_score.toFixed(2)}
+                                </p>
+                                {/* Breakdown Técnico/Artístico — só quando o evento tem os 2 tipos de jurado avaliando esta coreografia */}
+                                {entry.average_score_tecnico != null && entry.average_score_artistico != null && (
+                                  <p className="text-[7px] font-black uppercase tracking-widest text-slate-400 mt-0.5 whitespace-nowrap">
+                                    <span className="text-sky-500">T {entry.average_score_tecnico.toFixed(1)}</span>
+                                    {' · '}
+                                    <span className="text-violet-500">A {entry.average_score_artistico.toFixed(1)}</span>
+                                  </p>
+                                )}
+                              </div>
                               {isOpen ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
                             </div>
                           </div>
@@ -594,14 +694,34 @@ const ResultsPanel = () => {
                           {/* Expanded: scores + audit per judge */}
                           {isOpen && (
                             <div className="px-5 pb-5 pt-2 space-y-2 bg-slate-50 dark:bg-white/[0.02]">
-                              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                                Notas por jurado · Trilha de auditoria
-                              </p>
+                              <div className="flex items-center justify-between gap-3 mb-2">
+                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                                  Notas por jurado · Trilha de auditoria
+                                </p>
+                                <button
+                                  onClick={e => { e.stopPropagation(); handleClearOne(entry); }}
+                                  disabled={entry.resultado_publicado || clearing !== null}
+                                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all shrink-0"
+                                  title={entry.resultado_publicado ? 'Resultado já publicado — não pode limpar' : 'Apagar avaliações desta coreografia'}
+                                >
+                                  {clearing === entry.id ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                                  Limpar
+                                </button>
+                              </div>
                               {entry.scores_detail.map((sd, i) => (
                                 <div key={i} className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl px-4 py-3">
                                   <div className="flex items-center justify-between gap-3">
                                     <div className="min-w-0">
-                                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{sd.judge}</p>
+                                      <div className="flex items-center gap-1.5">
+                                        <p className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{sd.judge}</p>
+                                        <span className={`px-1 py-0.5 rounded-full text-[6px] font-black uppercase tracking-widest shrink-0 ${
+                                          sd.tipo_juri === 'artistico'
+                                            ? 'bg-violet-500/15 text-violet-600 dark:text-violet-400'
+                                            : 'bg-sky-500/15 text-sky-600 dark:text-sky-400'
+                                        }`}>
+                                          {sd.tipo_juri === 'artistico' ? 'Artístico' : 'Técnico'}
+                                        </span>
+                                      </div>
                                       <p className="text-[8px] text-slate-400">
                                         {sd.submitted_at ? new Date(sd.submitted_at).toLocaleString('pt-BR') : '—'}
                                       </p>

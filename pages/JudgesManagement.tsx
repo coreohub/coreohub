@@ -37,6 +37,11 @@ interface Judge {
    *  Default TRUE — produtor desmarca pra restringir avaliação de vídeo a
    *  um subset dos jurados de palco. */
   can_evaluate_video?: boolean;
+  /** Técnico avalia dentro da própria especialidade (critério por estilo,
+   *  configurado em Avaliação → Override por gênero). Artístico avalia com
+   *  o critério geral (Impacto Cênico/Interpretação), ignorando o override
+   *  por estilo. Default 'tecnico' — comportamento idêntico ao de hoje. */
+  tipo_juri?: 'tecnico' | 'artistico';
 }
 
 const FORMATS = [
@@ -61,6 +66,7 @@ const EMPTY_JUDGE: Omit<Judge, 'id'> = {
   is_public: true,
   gender: null,
   can_evaluate_video: true,
+  tipo_juri: 'tecnico',
 };
 
 const inputCls = 'w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-4 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm';
@@ -171,6 +177,7 @@ const JudgesManagement = () => {
     is_public: row.is_public ?? false,
     gender: row.gender ?? null,
     can_evaluate_video: row.can_evaluate_video ?? true,
+    tipo_juri: row.tipo_juri === 'artistico' ? 'artistico' : 'tecnico',
   });
 
   /* ── open modal ── */
@@ -279,6 +286,7 @@ const JudgesManagement = () => {
         is_public: form.is_public ?? false,
         gender: form.gender ?? null,
         can_evaluate_video: form.can_evaluate_video ?? true,
+        tipo_juri: form.tipo_juri ?? 'tecnico',
       };
 
       const data = await trySaveWithPayload(payload, !editingJudge, editingJudge?.id);
@@ -439,7 +447,16 @@ const JudgesManagement = () => {
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <p className="font-black text-slate-900 dark:text-white text-sm uppercase tracking-tight truncate">{judge.name}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="font-black text-slate-900 dark:text-white text-sm uppercase tracking-tight truncate">{judge.name}</p>
+                      <span className={`px-1.5 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest shrink-0 ${
+                        judge.tipo_juri === 'artistico'
+                          ? 'bg-violet-500/15 text-violet-600 dark:text-violet-400'
+                          : 'bg-sky-500/15 text-sky-600 dark:text-sky-400'
+                      }`}>
+                        {judge.tipo_juri === 'artistico' ? 'Artístico' : 'Técnico'}
+                      </span>
+                    </div>
                     {judge.mini_bio && (
                       <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-2 leading-snug">{judge.mini_bio}</p>
                     )}
@@ -817,6 +834,39 @@ const JudgesManagement = () => {
                 {/* ── TAB: Dados Técnicos ── */}
                 {tab === 'tecnico' && (
                   <>
+                    {/* Tipo de Júri */}
+                    <div>
+                      <label className={labelCls}>Tipo de Júri</label>
+                      <p className="text-[9px] text-slate-400 ml-1 mb-3">
+                        Técnico avalia dentro da própria especialidade (usa o critério configurado pra cada estilo em Avaliação). Artístico avalia com olhar geral sobre impacto cênico/interpretação, com critério próprio (configurado em Avaliação → Critério Artístico).
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {([
+                          { val: 'tecnico' as const, label: 'Técnico', sub: 'Critério por estilo' },
+                          { val: 'artistico' as const, label: 'Artístico', sub: 'Critério geral' },
+                        ]).map(opt => {
+                          const active = (form.tipo_juri ?? 'tecnico') === opt.val;
+                          return (
+                            <button
+                              key={opt.val}
+                              type="button"
+                              onClick={() => setForm(f => ({ ...f, tipo_juri: opt.val }))}
+                              className={`text-left p-3 rounded-xl border transition-all ${
+                                active
+                                  ? 'border-[#ff0068]/60 bg-[#ff0068]/10'
+                                  : 'border-slate-200 dark:border-white/10 hover:border-[#ff0068]/30'
+                              }`}
+                            >
+                              <p className={`text-[11px] font-black uppercase tracking-widest ${active ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>
+                                {opt.label}
+                              </p>
+                              <p className="text-[9px] text-slate-400 mt-0.5">{opt.sub}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
                     {/* Trava de Competência */}
                     <div>
                       <label className={labelCls + ' flex items-center gap-1.5'}>

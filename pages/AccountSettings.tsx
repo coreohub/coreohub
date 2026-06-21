@@ -41,6 +41,13 @@ interface EvalRules {
 interface EvalConfig {
   globalRules: EvalRules;
   overrides: Record<string, EvalRules | null>; // null = inherit global
+  /** Critério do Júri Artístico (Impacto Cênico/Interpretação/Impressão Geral).
+   *  Independente do override por gênero — artístico não usa critério por estilo. */
+  artisticRules?: EvalRules | null;
+  /** Peso de cada lado na nota final combinada da coreografia (Técnico × Artístico).
+   *  Default 50/50 — mesmo padrão de patinação artística (TES+PCS). */
+  pesoTecnico?: number;
+  pesoArtistico?: number;
 }
 
 const DEFAULT_CRITERIOS: EvalCriterion[] = [
@@ -100,6 +107,17 @@ const reconcileTiebreaker = (
 const DEFAULT_GLOBAL_RULES: EvalRules = {
   criterios: DEFAULT_CRITERIOS,
   desempate: buildDefaultTiebreaker(DEFAULT_CRITERIOS),
+};
+
+const DEFAULT_ARTISTIC_CRITERIOS: EvalCriterion[] = [
+  { name: 'Impacto Cênico',   peso: 2 },
+  { name: 'Interpretação',    peso: 2 },
+  { name: 'Impressão Geral',  peso: 1 },
+];
+
+const DEFAULT_ARTISTIC_RULES: EvalRules = {
+  criterios: DEFAULT_ARTISTIC_CRITERIOS,
+  desempate: buildDefaultTiebreaker(DEFAULT_ARTISTIC_CRITERIOS),
 };
 
 const tieLabel = (key: string) =>
@@ -1335,6 +1353,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   /* ── Regras de Avaliação — Global + Exceções ── */
   const [globalRules,    setGlobalRules]    = useState<EvalRules>(DEFAULT_GLOBAL_RULES);
   const [genreOverrides, setGenreOverrides] = useState<Record<string, EvalRules | null>>({});
+  const [artisticRules,  setArtisticRules]  = useState<EvalRules>(DEFAULT_ARTISTIC_RULES);
+  const [pesoTecnico,    setPesoTecnico]    = useState<number>(50);
+  const [pesoArtistico,  setPesoArtistico]  = useState<number>(50);
 
   const isUsingGlobal = (genreId: string) => genreOverrides[genreId] == null;
 
@@ -1370,6 +1391,27 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     if (target < 0 || target >= d.length) return;
     [d[idx], d[target]] = [d[target], d[idx]];
     setGlobalRules({ ...globalRules, desempate: d });
+  };
+
+  /* ── helpers for ARTISTIC rules (Júri Artístico — sem override por gênero) ── */
+  const updateArtisticCriterion = (idx: number, patch: Partial<EvalCriterion>) => {
+    const criterios = artisticRules.criterios.map((c, i) => i === idx ? { ...c, ...patch } : c);
+    setArtisticRules({ criterios, desempate: reconcileTiebreaker(artisticRules.desempate, artisticRules.criterios, criterios) });
+  };
+  const addArtisticCriterion = () => {
+    const criterios = [...artisticRules.criterios, { name: 'Novo Quesito', peso: 1 }];
+    setArtisticRules({ criterios, desempate: reconcileTiebreaker(artisticRules.desempate, artisticRules.criterios, criterios) });
+  };
+  const removeArtisticCriterion = (idx: number) => {
+    const criterios = artisticRules.criterios.filter((_, i) => i !== idx);
+    setArtisticRules({ criterios, desempate: reconcileTiebreaker(artisticRules.desempate, artisticRules.criterios, criterios) });
+  };
+  const moveArtisticTiebreaker = (idx: number, dir: 1 | -1) => {
+    const d = [...artisticRules.desempate];
+    const target = idx + dir;
+    if (target < 0 || target >= d.length) return;
+    [d[idx], d[target]] = [d[target], d[idx]];
+    setArtisticRules({ ...artisticRules, desempate: d });
   };
 
   /* ── helpers for OVERRIDE rules ── */
@@ -1810,6 +1852,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             if (saved.globalRules) {
               setGlobalRules(saved.globalRules);
               setGenreOverrides(saved.overrides ?? {});
+              setArtisticRules(saved.artisticRules ?? DEFAULT_ARTISTIC_RULES);
+              setPesoTecnico(saved.pesoTecnico ?? 50);
+              setPesoArtistico(saved.pesoArtistico ?? 50);
             } else {
               // Legacy: flat GenreRulesMap — migrate: first entry becomes global, rest become overrides
               const entries = Object.entries(saved) as [string, EvalRules][];
@@ -1932,7 +1977,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         gatilho_marcacao:     flowConfig.gatilho_marcacao,
         modo_sonoplastia:     flowConfig.modo_sonoplastia,
         links,
-        regras_avaliacao:    { globalRules, overrides: genreOverrides } satisfies EvalConfig,
+        regras_avaliacao:    { globalRules, overrides: genreOverrides, artisticRules, pesoTecnico, pesoArtistico } satisfies EvalConfig,
         // FIX 2026-05-17 (pós-incidente Usualdance): só salva premios_especiais
         // se foi carregado do banco OU se o user tocou na lista. Sem isso, save
         // com state ainda nos defaults (race condition entre fetch e clique
@@ -5415,6 +5460,81 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   onRemoveCriterion={removeGlobalCriterion}
                   onMoveTiebreaker={moveGlobalTiebreaker}
                 />
+              </div>
+            </div>
+
+            {/* ── CRITÉRIO ARTÍSTICO (Júri Artístico) ── */}
+            <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border-2 border-violet-500/30 rounded-3xl overflow-hidden">
+              <div className="flex items-center gap-3 px-6 py-4 bg-violet-500/5 border-b border-violet-500/10">
+                <div className="p-2 bg-violet-500/10 rounded-xl text-violet-600 dark:text-violet-400">
+                  <Scale size={16} />
+                </div>
+                <div className="flex-1">
+                  <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight">
+                    Critério Artístico
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Usado por jurados marcados como "Júri Artístico" (cadastro em Equipe de Jurados) — olhar geral sobre impacto cênico, interpretação e impressão da apresentação. Não tem override por gênero.
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-500/10 border border-violet-500/20 rounded-xl">
+                  <div className="w-2 h-2 rounded-full bg-violet-500" />
+                  <span className="text-[9px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-400">Artístico</span>
+                </div>
+              </div>
+              <div className="p-6 space-y-6">
+                <RulesEditor
+                  rules={artisticRules}
+                  onUpdateCriterion={updateArtisticCriterion}
+                  onAddCriterion={addArtisticCriterion}
+                  onRemoveCriterion={removeArtisticCriterion}
+                  onMoveTiebreaker={moveArtisticTiebreaker}
+                />
+
+                {/* Peso na nota final combinada — padrão patinação artística (TES+PCS) */}
+                <div className="border-t border-slate-100 dark:border-white/5 pt-5">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                    Peso na nota final da coreografia
+                  </p>
+                  <p className="text-[10px] text-slate-400 mb-3">
+                    A nota final que decide colocação/premiação combina a média do Júri Técnico e do Júri Artístico nessa proporção. Padrão 50/50. Se o evento só tem um dos dois tipos de jurado, a nota final usa só o disponível.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <label className="text-[9px] font-black text-slate-400 uppercase">Técnico</label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={pesoTecnico}
+                          onChange={e => setPesoTecnico(Math.max(0, Math.min(100, Number(e.target.value))))}
+                          className="w-16 text-center bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg py-1.5 text-[11px] font-black text-sky-600 dark:text-sky-400 focus:outline-none focus:border-sky-500/50"
+                        />
+                        <span className="text-[10px] text-slate-400">%</span>
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[9px] font-black text-slate-400 uppercase">Artístico</label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={pesoArtistico}
+                          onChange={e => setPesoArtistico(Math.max(0, Math.min(100, Number(e.target.value))))}
+                          className="w-16 text-center bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg py-1.5 text-[11px] font-black text-violet-600 dark:text-violet-400 focus:outline-none focus:border-violet-500/50"
+                        />
+                        <span className="text-[10px] text-slate-400">%</span>
+                      </div>
+                    </div>
+                  </div>
+                  {(pesoTecnico + pesoArtistico) !== 100 && (
+                    <p className="text-[9px] text-amber-500 font-bold mt-2">
+                      Soma atual: {pesoTecnico + pesoArtistico}% — recomendado somar 100%, mas o sistema normaliza automaticamente no cálculo.
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 

@@ -38,6 +38,10 @@ interface EvalRules {
 interface EvalConfig {
   globalRules: EvalRules;
   overrides: Record<string, EvalRules | null>;
+  /** Critério do Júri Artístico — ignora override por gênero. */
+  artisticRules?: EvalRules | null;
+  pesoTecnico?: number;
+  pesoArtistico?: number;
 }
 
 type ScoreScale = 'BASE_10' | 'BASE_100';
@@ -507,8 +511,19 @@ const JudgeTerminal = () => {
   }, [selectedJudge?.language]);
 
   /* ── Genre rules resolution ── */
-  const resolveGenreCriteria = useCallback((estiloName: string, config: EvalConfig | null, genres: typeof genreList): CriterionWithWeight[] => {
+  const resolveGenreCriteria = useCallback((
+    estiloName: string,
+    config: EvalConfig | null,
+    genres: typeof genreList,
+    tipoJuri?: 'tecnico' | 'artistico',
+  ): CriterionWithWeight[] => {
     if (!config) return DEFAULT_CRITERIA;
+    // Júri Artístico avalia com olhar geral — usa o critério artístico configurado
+    // em Avaliação, ignorando o override por gênero (que é só do Técnico).
+    if (tipoJuri === 'artistico') {
+      const artistic = config.artisticRules;
+      return artistic && artistic.criterios.length > 0 ? artistic.criterios : DEFAULT_CRITERIA;
+    }
     const genre = genres.find(g => g.name.toLowerCase().trim() === estiloName?.toLowerCase().trim());
     if (!genre) return config.globalRules.criterios.length > 0 ? config.globalRules.criterios : DEFAULT_CRITERIA;
     const rules = config.overrides[genre.id] ?? config.globalRules;
@@ -655,7 +670,8 @@ const JudgeTerminal = () => {
         const sessionJudge = judgeSession
           ? judgeList.find(j => j.id === judgeSession.judge_id)
           : null;
-        setSelectedJudge(sessionJudge ?? judgeList[0]);
+        const resolvedJudge = sessionJudge ?? judgeList[0];
+        setSelectedJudge(resolvedJudge);
 
         // Score scale
         if (cfg?.escala_notas) setScoreScale(cfg.escala_notas as ScoreScale);
@@ -689,7 +705,7 @@ const JudgeTerminal = () => {
         // Apply criteria for the first performance
         const firstPerf = sched?.[0];
         const criteria = firstPerf
-          ? resolveGenreCriteria(firstPerf.estilo_danca, parsedConfig, genres)
+          ? resolveGenreCriteria(firstPerf.estilo_danca, parsedConfig, genres, resolvedJudge?.tipo_juri)
           : (parsedConfig?.globalRules.criterios ?? DEFAULT_CRITERIA);
 
         setActiveCriteria(criteria);
@@ -765,7 +781,7 @@ const JudgeTerminal = () => {
   /* ── Update criteria when performance changes ── */
   useEffect(() => {
     if (!currentPerformance) return;
-    const newCriteria = resolveGenreCriteria(currentPerformance.estilo_danca, evalConfig, genreList);
+    const newCriteria = resolveGenreCriteria(currentPerformance.estilo_danca, evalConfig, genreList, selectedJudge?.tipo_juri);
     setActiveCriteria(newCriteria);
     setActiveField(newCriteria[0]?.name ?? '');
     setScores(initScores(newCriteria));
@@ -774,7 +790,7 @@ const JudgeTerminal = () => {
     setTieWarning(null);
     // starredSet NÃO reseta por apresentação — é global por jurado/evento.
     // O estado da estrela na apresentação atual vem de `starredSet.has(currentPerformance.id)`
-  }, [currentIndex, currentPerformance?.estilo_danca, evalConfig, genreList, resolveGenreCriteria]);
+  }, [currentIndex, currentPerformance?.estilo_danca, evalConfig, genreList, resolveGenreCriteria, selectedJudge?.tipo_juri]);
 
   /* ── Phase 4: auto-advance pós-submit quando Mesa de Som troca a live ──
      Quando jurado já submeteu nota E a Mesa marcou outra apresentação como
@@ -1877,7 +1893,14 @@ const JudgeTerminal = () => {
                 )}
               </div>
               <div className="text-left hidden sm:block">
-                    <p className="text-[9px] font-black uppercase text-slate-900 dark:text-white leading-tight">{judgeDisplayName(selectedJudge?.name)}</p>
+                    <div className="flex items-center gap-1">
+                      <p className="text-[9px] font-black uppercase text-slate-900 dark:text-white leading-tight">{judgeDisplayName(selectedJudge?.name)}</p>
+                      {selectedJudge?.tipo_juri === 'artistico' && (
+                        <span className="px-1 py-0.5 bg-violet-500/15 text-violet-600 dark:text-violet-400 rounded-full text-[6px] font-black uppercase tracking-widest leading-none shrink-0">
+                          Artístico
+                        </span>
+                      )}
+                    </div>
                     {selectedJudge?.competencias_generos?.length > 0 && (
                       <div className="flex gap-1 flex-wrap mt-0.5">
                         {selectedJudge.competencias_generos.slice(0, 3).map((g: string) => (
