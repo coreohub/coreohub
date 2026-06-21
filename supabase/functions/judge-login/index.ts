@@ -264,11 +264,19 @@ Deno.serve(async (req) => {
         .select('regras_avaliacao, escala_notas, premios_especiais, pin_inactivity_minutes')
         .eq('id', '1')
         .maybeSingle(),
+      // Mesmo critério do Cronograma (Schedule.tsx): mostra automaticamente
+      // toda inscrição PAGA (status_pagamento APROVADO/CONFIRMADO — cobre
+      // eventos gratuitos, que recebem APROVADO sem Asaas) OU já aprovada
+      // manualmente (status='APROVADA', não perde dado histórico). Sem isso,
+      // o terminal só recebia quem passou por aprovação manual avulsa — fluxo
+      // que o produtor não usa, então as coreografias pagas nunca chegavam
+      // aos jurados. Também respeita excluded_from_schedule (removida do
+      // cronograma = não deve ser avaliada).
       event?.id
         ? supa.from('registrations')
             .select('*')
             .eq('event_id', event.id)
-            .eq('status', 'APROVADA')
+            .or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO')
             .order('ordem_apresentacao', { ascending: true })
         : Promise.resolve({ data: [] } as any),
       supa.from('event_styles').select('id, name'),
@@ -295,7 +303,7 @@ Deno.serve(async (req) => {
       },
       judges: (allJudges ?? []).filter((j: any) => j.is_active !== false),
       config,
-      registrations: registrations ?? [],
+      registrations: (registrations ?? []).filter((r: any) => !r.excluded_from_schedule),
       event_styles: eventStyles ?? [],
       marcacoes: marcacoes ?? [],
     })
