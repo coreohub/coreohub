@@ -2147,7 +2147,9 @@ const JudgeTerminal = () => {
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border text-left transition-all
                       ${isLive
                         ? 'bg-rose-500/10 border-rose-500/40'
-                        : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 hover:border-[#ff0068]/30'}`}
+                        : isEvaluated
+                          ? 'bg-slate-50 dark:bg-white/[0.02] border-slate-100 dark:border-white/5 opacity-50'
+                          : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 hover:border-[#ff0068]/30'}`}
                   >
                     <span className={`shrink-0 w-8 text-center text-sm font-black tabular-nums ${isLive ? 'text-rose-500' : 'text-slate-400'}`}>
                       {p.ordem_apresentacao ?? i + 1}
@@ -2172,8 +2174,12 @@ const JudgeTerminal = () => {
                         {t('queue.liveBadge')}
                       </span>
                     )}
-                    <span className="shrink-0 px-3 py-1.5 bg-[#ff0068]/10 text-[#ff0068] rounded-xl text-[9px] font-black uppercase tracking-widest">
-                      {t('queue.cta')}
+                    <span className={`shrink-0 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${
+                      isEvaluated && !isLive
+                        ? 'bg-slate-100 dark:bg-white/5 text-slate-400'
+                        : 'bg-[#ff0068]/10 text-[#ff0068]'
+                    }`}>
+                      {isEvaluated && !isLive ? t('nav.status.evaluated') : t('queue.cta')}
                     </span>
                   </button>
                 );
