@@ -28,9 +28,6 @@ export interface Person {
   site_url?: string | null;
   modalidades?: string[];          // gêneros que avalia/ensina
   roles: Array<'judge' | 'teacher'>;  // role interno; label é flexionado por gênero no render
-  /** Só relevante pro role 'judge'. tecnico = avalia por especialidade
-   *  (default). artistico = olhar geral (impacto cênico/interpretação). */
-  tipo_juri?: 'tecnico' | 'artistico' | null;
 }
 
 // Heurística pt-BR (fallback): nomes terminados em 'a' são femininos com poucas exceções.
@@ -124,11 +121,6 @@ export const PersonCard: React.FC<PersonCardProps> = ({ person, onClick }) => {
             {person.roles.includes('judge') && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#ff0068]/15 text-[#ff0068] text-[8px] font-black uppercase tracking-widest">
                 <Award size={9} /> {roleLabel('judge', gender)}
-              </span>
-            )}
-            {person.roles.includes('judge') && person.tipo_juri === 'artistico' && (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 text-[8px] font-black uppercase tracking-widest">
-                Artístico
               </span>
             )}
             {person.roles.includes('teacher') && (
@@ -262,11 +254,6 @@ export const PersonModal: React.FC<PersonModalProps> = ({ person, onClose }) => 
                   {person.roles.includes('judge') && (
                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[#ff0068]/15 text-[#ff0068] text-[9px] font-black uppercase tracking-widest">
                       <Award size={10} /> {roleLabel('judge', gender)}
-                    </span>
-                  )}
-                  {person.roles.includes('judge') && person.tipo_juri === 'artistico' && (
-                    <span className="inline-flex items-center px-2 py-1 rounded bg-violet-500/15 text-violet-300 text-[9px] font-black uppercase tracking-widest">
-                      Artístico
                     </span>
                   )}
                   {person.roles.includes('teacher') && (

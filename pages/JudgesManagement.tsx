@@ -37,11 +37,11 @@ interface Judge {
    *  Default TRUE — produtor desmarca pra restringir avaliação de vídeo a
    *  um subset dos jurados de palco. */
   can_evaluate_video?: boolean;
-  /** Técnico avalia dentro da própria especialidade (critério por estilo,
-   *  configurado em Avaliação → Override por gênero). Artístico avalia com
-   *  o critério geral (Impacto Cênico/Interpretação), ignorando o override
-   *  por estilo. Default 'tecnico' — comportamento idêntico ao de hoje. */
-  tipo_juri?: 'tecnico' | 'artistico';
+  /** Subconjunto de `competencias_generos` que esse jurado avalia com critério
+   *  Artístico (Impacto Cênico/Interpretação, configurado em Avaliação).
+   *  Estilo marcado em competencias_generos mas FORA daqui = Técnico (critério
+   *  por estilo/override de gênero) — default, sem precisar marcar nada. */
+  competencias_artisticas: string[];
 }
 
 const FORMATS = [
@@ -58,6 +58,7 @@ const EMPTY_JUDGE: Omit<Judge, 'id'> = {
   instagram: '',
   competencias_generos: [],
   competencias_formatos: [],
+  competencias_artisticas: [],
   pin: '',
   language: 'pt-BR',
   is_active: true,
@@ -66,7 +67,6 @@ const EMPTY_JUDGE: Omit<Judge, 'id'> = {
   is_public: true,
   gender: null,
   can_evaluate_video: true,
-  tipo_juri: 'tecnico',
 };
 
 const inputCls = 'w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-4 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm';
@@ -177,7 +177,7 @@ const JudgesManagement = () => {
     is_public: row.is_public ?? false,
     gender: row.gender ?? null,
     can_evaluate_video: row.can_evaluate_video ?? true,
-    tipo_juri: row.tipo_juri === 'artistico' ? 'artistico' : 'tecnico',
+    competencias_artisticas: row.competencias_artisticas || [],
   });
 
   /* ── open modal ── */
@@ -286,7 +286,10 @@ const JudgesManagement = () => {
         is_public: form.is_public ?? false,
         gender: form.gender ?? null,
         can_evaluate_video: form.can_evaluate_video ?? true,
-        tipo_juri: form.tipo_juri ?? 'tecnico',
+        // Garante que nada em competencias_artisticas sobrou de um estilo que
+        // foi desmarcado em competencias_generos (ex.: produtor marcou K-Pop
+        // como artístico, depois removeu K-Pop da lista de estilos).
+        competencias_artisticas: form.competencias_artisticas.filter(g => form.competencias_generos.includes(g)),
       };
 
       const data = await trySaveWithPayload(payload, !editingJudge, editingJudge?.id);
@@ -316,11 +319,28 @@ const JudgesManagement = () => {
 
   /* ── toggle format/genre ── */
   const toggleList = (field: 'competencias_generos' | 'competencias_formatos', val: string) => {
+    setForm(f => {
+      const isSelected = f[field].includes(val);
+      const next: Omit<Judge, 'id'> = {
+        ...f,
+        [field]: isSelected ? f[field].filter(x => x !== val) : [...f[field], val],
+      };
+      // Desmarcar um estilo também tira ele de "avalia como Artístico" —
+      // não deixa órfão marcado num estilo que o jurado nem julga mais.
+      if (field === 'competencias_generos' && isSelected) {
+        next.competencias_artisticas = f.competencias_artisticas.filter(x => x !== val);
+      }
+      return next;
+    });
+  };
+
+  /* ── toggle Técnico/Artístico pra um estilo já selecionado ── */
+  const toggleArtistico = (genreName: string) => {
     setForm(f => ({
       ...f,
-      [field]: f[field].includes(val)
-        ? f[field].filter(x => x !== val)
-        : [...f[field], val],
+      competencias_artisticas: f.competencias_artisticas.includes(genreName)
+        ? f.competencias_artisticas.filter(g => g !== genreName)
+        : [...f.competencias_artisticas, genreName],
     }));
   };
 
@@ -447,16 +467,7 @@ const JudgesManagement = () => {
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="font-black text-slate-900 dark:text-white text-sm uppercase tracking-tight truncate">{judge.name}</p>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest shrink-0 ${
-                        judge.tipo_juri === 'artistico'
-                          ? 'bg-violet-500/15 text-violet-600 dark:text-violet-400'
-                          : 'bg-sky-500/15 text-sky-600 dark:text-sky-400'
-                      }`}>
-                        {judge.tipo_juri === 'artistico' ? 'Artístico' : 'Técnico'}
-                      </span>
-                    </div>
+                    <p className="font-black text-slate-900 dark:text-white text-sm uppercase tracking-tight truncate">{judge.name}</p>
                     {judge.mini_bio && (
                       <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-2 leading-snug">{judge.mini_bio}</p>
                     )}
@@ -482,14 +493,25 @@ const JudgesManagement = () => {
                   </div>
                 </div>
 
-                {/* Competencies preview */}
+                {/* Competencies preview — modalidade artística destacada em violeta */}
                 {(judge.competencias_generos.length > 0 || judge.competencias_formatos.length > 0) && (
                   <div className="px-5 pb-3 flex flex-wrap gap-1.5">
-                    {judge.competencias_generos.map(g => (
-                      <span key={g} className="px-2 py-0.5 bg-[#ff0068]/10 text-[#ff0068] rounded-full text-[8px] font-black uppercase tracking-widest">
-                        {g}
-                      </span>
-                    ))}
+                    {judge.competencias_generos.map(g => {
+                      const isArtistico = judge.competencias_artisticas?.includes(g);
+                      return (
+                        <span
+                          key={g}
+                          title={isArtistico ? 'Avalia como Artístico' : 'Avalia como Técnico'}
+                          className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${
+                            isArtistico
+                              ? 'bg-violet-500/15 text-violet-600 dark:text-violet-400'
+                              : 'bg-[#ff0068]/10 text-[#ff0068]'
+                          }`}
+                        >
+                          {g}
+                        </span>
+                      );
+                    })}
                     {judge.competencias_formatos.map(f => (
                       <span key={f} className="px-2 py-0.5 bg-slate-200 dark:bg-white/5 text-slate-500 rounded-full text-[8px] font-black uppercase tracking-widest">
                         {f}
@@ -559,7 +581,12 @@ const JudgesManagement = () => {
                         )}
                         <div className="flex flex-wrap gap-1.5">
                           {judge.competencias_generos.map(g => (
-                            <span key={g} className="px-2 py-1 bg-[#ff0068]/10 text-[#ff0068] rounded-xl text-[9px] font-black uppercase tracking-widest">{g}</span>
+                            <span key={g} className="px-2 py-1 bg-[#ff0068]/10 text-[#ff0068] rounded-xl text-[9px] font-black uppercase tracking-widest">
+                              {g}
+                              {judge.competencias_artisticas?.includes(g) && (
+                                <span className="ml-1 text-violet-400" title="Avalia como Artístico">· A</span>
+                              )}
+                            </span>
                           ))}
                           {judge.competencias_formatos.map(f => (
                             <span key={f} className="px-2 py-1 bg-violet-500/10 text-violet-500 rounded-xl text-[9px] font-black uppercase tracking-widest">{f}</span>
@@ -834,59 +861,58 @@ const JudgesManagement = () => {
                 {/* ── TAB: Dados Técnicos ── */}
                 {tab === 'tecnico' && (
                   <>
-                    {/* Tipo de Júri */}
-                    <div>
-                      <label className={labelCls}>Tipo de Júri</label>
-                      <p className="text-[9px] text-slate-400 ml-1 mb-3">
-                        Técnico avalia dentro da própria especialidade (usa o critério configurado pra cada estilo em Avaliação). Artístico avalia com olhar geral sobre impacto cênico/interpretação, com critério próprio (configurado em Avaliação → Critério Artístico).
-                      </p>
-                      <div className="grid grid-cols-2 gap-2">
-                        {([
-                          { val: 'tecnico' as const, label: 'Técnico', sub: 'Critério por estilo' },
-                          { val: 'artistico' as const, label: 'Artístico', sub: 'Critério geral' },
-                        ]).map(opt => {
-                          const active = (form.tipo_juri ?? 'tecnico') === opt.val;
-                          return (
-                            <button
-                              key={opt.val}
-                              type="button"
-                              onClick={() => setForm(f => ({ ...f, tipo_juri: opt.val }))}
-                              className={`text-left p-3 rounded-xl border transition-all ${
-                                active
-                                  ? 'border-[#ff0068]/60 bg-[#ff0068]/10'
-                                  : 'border-slate-200 dark:border-white/10 hover:border-[#ff0068]/30'
-                              }`}
-                            >
-                              <p className={`text-[11px] font-black uppercase tracking-widest ${active ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>
-                                {opt.label}
-                              </p>
-                              <p className="text-[9px] text-slate-400 mt-0.5">{opt.sub}</p>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Trava de Competência */}
+                    {/* Trava de Competência + Tipo de Júri por estilo */}
                     <div>
                       <label className={labelCls + ' flex items-center gap-1.5'}>
                         <Fingerprint size={12} /> Trava de Competência — Gêneros que ele julga
                       </label>
                       <p className="text-[9px] text-slate-400 ml-1 mb-3">
-                        O terminal do jurado só exibirá as apresentações dos gêneros selecionados.
+                        O terminal do jurado só exibirá as apresentações dos gêneros selecionados. Pra cada estilo marcado, escolha se ele avalia como <strong>Técnico</strong> (critério da própria especialidade) ou <strong>Artístico</strong> (olhar geral — Impacto Cênico/Interpretação, configurado em Avaliação → Critério Artístico). Mesmo jurado pode ser Técnico num estilo e Artístico noutro — ex: Técnico em K-Pop, Artístico em Danças Urbanas.
                       </p>
                       {genreNames.length === 0 ? (
                         <p className="text-[10px] text-slate-400 italic">Nenhum gênero cadastrado. Vá em Configurações → Gêneros.</p>
                       ) : (
                         <div className="flex flex-wrap gap-2">
-                          {genreNames.map(g => (
-                            <TagToggle
-                              key={g} item={g}
-                              selected={form.competencias_generos.includes(g)}
-                              onToggle={() => toggleList('competencias_generos', g)}
-                              color="bg-[#ff0068]"
-                            />
-                          ))}
+                          {genreNames.map(g => {
+                            const selected = form.competencias_generos.includes(g);
+                            const isArtistico = form.competencias_artisticas.includes(g);
+                            return (
+                              <div
+                                key={g}
+                                className={`flex items-center rounded-xl border overflow-hidden transition-all ${
+                                  selected
+                                    ? 'border-transparent shadow-md'
+                                    : 'bg-slate-100 dark:bg-white/5 border-slate-300 dark:border-white/10'
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => toggleList('competencias_generos', g)}
+                                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all ${
+                                    selected
+                                      ? (isArtistico ? 'bg-violet-600 text-white' : 'bg-[#ff0068] text-white')
+                                      : 'text-slate-500 dark:text-slate-400 hover:text-[#ff0068]'
+                                  }`}
+                                >
+                                  {g}
+                                </button>
+                                {selected && (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleArtistico(g)}
+                                    title={isArtistico ? 'Avalia como Artístico — clique pra mudar pra Técnico' : 'Avalia como Técnico — clique pra mudar pra Artístico'}
+                                    className={`px-2 py-1.5 text-[8px] font-black uppercase tracking-widest border-l ${
+                                      isArtistico
+                                        ? 'bg-violet-700 text-white border-violet-400/40'
+                                        : 'bg-[#d4005a] text-white border-white/20'
+                                    }`}
+                                  >
+                                    {isArtistico ? 'A' : 'T'}
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

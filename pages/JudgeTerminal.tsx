@@ -521,18 +521,26 @@ const JudgeTerminal = () => {
     }
   }, [selectedJudge?.language]);
 
+  /* ── Tipo de Júri é por ESTILO, não fixo pro jurado — ex: Técnico em K-Pop,
+     Artístico em Danças Urbanas, mesmo jurado. */
+  const isArtisticForStyle = useCallback((estiloName: string, competenciasArtisticas?: string[]): boolean => {
+    if (!competenciasArtisticas || competenciasArtisticas.length === 0) return false;
+    const norm = (s: string) => s?.toLowerCase().trim();
+    return competenciasArtisticas.some(g => norm(g) === norm(estiloName));
+  }, []);
+
   /* ── Genre rules resolution ── */
   const resolveGenreCriteria = useCallback((
     estiloName: string,
     config: EvalConfig | null,
     genres: typeof genreList,
-    tipoJuri?: 'tecnico' | 'artistico',
+    competenciasArtisticas?: string[],
   ): CriterionWithWeight[] => {
     // Júri Artístico avalia com olhar geral — usa o critério artístico configurado
     // em Avaliação, ignorando o override por gênero (que é só do Técnico). Checado
     // ANTES do `!config`: evento sem regras_avaliacao nenhuma ainda precisa do
     // fallback artístico certo, não do DEFAULT_CRITERIA técnico.
-    if (tipoJuri === 'artistico') {
+    if (isArtisticForStyle(estiloName, competenciasArtisticas)) {
       const artistic = config?.artisticRules;
       return artistic && artistic.criterios.length > 0 ? artistic.criterios : DEFAULT_ARTISTIC_CRITERIA;
     }
@@ -541,7 +549,7 @@ const JudgeTerminal = () => {
     if (!genre) return config.globalRules.criterios.length > 0 ? config.globalRules.criterios : DEFAULT_CRITERIA;
     const rules = config.overrides[genre.id] ?? config.globalRules;
     return rules.criterios.length > 0 ? rules.criterios : DEFAULT_CRITERIA;
-  }, []);
+  }, [isArtisticForStyle]);
 
   /* ── Tie detection: check previous scores for same genre ── */
   const checkTie = useCallback(async (judgeId: string, estiloName: string, avgScore: number) => {
@@ -718,7 +726,7 @@ const JudgeTerminal = () => {
         // Apply criteria for the first performance
         const firstPerf = sched?.[0];
         const criteria = firstPerf
-          ? resolveGenreCriteria(firstPerf.estilo_danca, parsedConfig, genres, resolvedJudge?.tipo_juri)
+          ? resolveGenreCriteria(firstPerf.estilo_danca, parsedConfig, genres, resolvedJudge?.competencias_artisticas)
           : (parsedConfig?.globalRules.criterios ?? DEFAULT_CRITERIA);
 
         setActiveCriteria(criteria);
@@ -794,7 +802,7 @@ const JudgeTerminal = () => {
   /* ── Update criteria when performance changes ── */
   useEffect(() => {
     if (!currentPerformance) return;
-    const newCriteria = resolveGenreCriteria(currentPerformance.estilo_danca, evalConfig, genreList, selectedJudge?.tipo_juri);
+    const newCriteria = resolveGenreCriteria(currentPerformance.estilo_danca, evalConfig, genreList, selectedJudge?.competencias_artisticas);
     setActiveCriteria(newCriteria);
     setActiveField(newCriteria[0]?.name ?? '');
     setScores(initScores(newCriteria));
@@ -803,7 +811,7 @@ const JudgeTerminal = () => {
     setTieWarning(null);
     // starredSet NÃO reseta por apresentação — é global por jurado/evento.
     // O estado da estrela na apresentação atual vem de `starredSet.has(currentPerformance.id)`
-  }, [currentIndex, currentPerformance?.estilo_danca, evalConfig, genreList, resolveGenreCriteria, selectedJudge?.tipo_juri]);
+  }, [currentIndex, currentPerformance?.estilo_danca, evalConfig, genreList, resolveGenreCriteria, selectedJudge?.competencias_artisticas]);
 
   /* ── Phase 4: auto-advance pós-submit quando Mesa de Som troca a live ──
      Quando jurado já submeteu nota E a Mesa marcou outra apresentação como
@@ -1908,7 +1916,8 @@ const JudgeTerminal = () => {
               <div className="text-left hidden sm:block">
                     <div className="flex items-center gap-1">
                       <p className="text-[9px] font-black uppercase text-slate-900 dark:text-white leading-tight">{judgeDisplayName(selectedJudge?.name)}</p>
-                      {selectedJudge?.tipo_juri === 'artistico' && (
+                      {/* Tipo de júri é por estilo, não fixo — reflete a apresentação em cena agora */}
+                      {currentPerformance && isArtisticForStyle(currentPerformance.estilo_danca, selectedJudge?.competencias_artisticas) && (
                         <span className="px-1 py-0.5 bg-violet-500/15 text-violet-600 dark:text-violet-400 rounded-full text-[6px] font-black uppercase tracking-widest leading-none shrink-0">
                           Artístico
                         </span>

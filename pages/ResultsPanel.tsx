@@ -136,7 +136,7 @@ const ResultsPanel = () => {
               .in('id', regIds)
           : Promise.resolve({ data: [], error: null }),
         judgeIds.length > 0
-          ? supabase.from('judges').select('id, name, tipo_juri').in('id', judgeIds)
+          ? supabase.from('judges').select('id, name, competencias_artisticas').in('id', judgeIds)
           : Promise.resolve({ data: [], error: null }),
       ]);
       // Sem isso, uma falha em qualquer uma das 2 queries (RLS, coluna ausente
@@ -172,8 +172,13 @@ const ResultsPanel = () => {
             scores_detail: [],
           };
         }
-        // Jurado sem tipo_juri (legado) conta como Técnico — comportamento de hoje.
-        const tipoJuri: 'tecnico' | 'artistico' = judgesById[e.judge_id]?.tipo_juri === 'artistico' ? 'artistico' : 'tecnico';
+        // Tipo de júri é por ESTILO, não fixo pro jurado — mesmo jurado pode
+        // ser Técnico em K-Pop e Artístico em Danças Urbanas. Checa se o estilo
+        // DESTA coreografia está na lista de competencias_artisticas dele.
+        const competenciasArtisticas: string[] = judgesById[e.judge_id]?.competencias_artisticas ?? [];
+        const norm = (s: string) => (s || '').toLowerCase().trim();
+        const tipoJuri: 'tecnico' | 'artistico' =
+          competenciasArtisticas.some(g => norm(g) === norm(reg.estilo_danca)) ? 'artistico' : 'tecnico';
         if (e.final_weighted_average != null) {
           const val = Number(e.final_weighted_average);
           grouped[rid].scores_all.push(val);
