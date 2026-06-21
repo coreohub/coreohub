@@ -239,6 +239,27 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-06-21 — Terminal de júri: 2 bugs críticos + tela de fila como entrada ✅ SHIPADO
+8 commits (`51da0cf` → `e2b53c9`). Disparado pelo Hemer testando o terminal do júri com o cronograma real do Usualdance pela 1ª vez (só tinha usado modo demo antes). Detalhes em [[terminal-juri-bugs-criticos-e-fila-shipado]].
+
+- **🚨 Bug raiz — `resolveActiveEvent()` sempre retornava `null`** (`81a35f6`): a edge function `judge-login` selecionava `events.status`, coluna que **não existe** (é `events.state`). Query falhava (PostgREST 400), código só desestruturava `{ data }` sem checar `error` → terminal via PIN nunca resolvia o evento ativo **em produção, desde sempre**. Validado via curl direto na function antes/depois (32 registrations após o fix). Só não tinha sido percebido porque o demo (`seed-demo-event`) seta dados fictícios que mascaravam o problema.
+- **Bug 2 — terminal só aceitava `status='APROVADA'`** (`c62adda`): mesmo critério que faltava desde o fix do Cronograma em 2026-06-10 — replicado `.or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO')` + `excluded_from_schedule`.
+- **Fix logout** (`f27497e`): "Sair do terminal" navegava pra `/judge-login` sem o `producer_token` (rota real é `/judge-login/:token`) → caía em "Link inválido ou expirado". Corrigido pra preservar o token.
+- **Feature — tela de fila como ponto de entrada** (`6462199`): pesquisa de mercado (CompetitionSuite Judge App) confirmou que jurado escolhe a apresentação numa lista antes de avaliar, não auto-avança. CoreoHub preserva o diferencial que o CompetitionSuite não tem (sync em tempo real via `live_registration_id` — Mesa de Som pode puxar o jurado pra apresentação certa mesmo direto da fila, sem precisar ter submetido nada antes).
+- **Fix badge "AO VIVO"** (`9ecf592`): aparecia sempre que havia apresentação carregada, não só quando era de fato a marcada pelo Mesa de Som. Corrigido pra só mostrar quando `currentPerformance.id === liveRegistrationId`.
+- **Itens já avaliados ficam visíveis mas apagados na fila** (`e2b53c9`): padrão do Voto Popular replicado — opacidade reduzida + CTA muda pra "AVALIADA" cinza.
+- **Cleanup lateral** (`51da0cf`+`1f091fd`): dedup de gêneros duplicados no editor de jurados (`getAllGenres` sem `eventId` trazia de todos os eventos do produtor) + `utils/styleMatch.ts` novo, eliminando lógica de normalização de estilo triplicada.
+- **Lição operacional**: 1º commit do dia ficou só local por ~20min antes de eu notar que faltava `git push` — deploy do Vercel só reflete `origin/main`. Ver [[feedback-commit-local-nao-e-deploy]].
+
+### 2026-06-21 — Tipo de Júri (Técnico/Artístico) por estilo + limpar avaliações teste ✅ SHIPADO
+4 commits (`06ae194` → `c71247c`). Detalhes em [[tipo-juri-por-estilo-shipado]].
+
+- **Apuração**: botão "Limpar avaliações de teste" (header + por linha), só atua em `evaluations` de registrations não publicadas (`resultado_publicado=false`) — nunca toca resultado já visível pro inscrito.
+- **Tipo de Júri corrigido a meio da sessão**: 1ª versão guardava 1 valor fixo por jurado (`judges.tipo_juri`, migration `20260626`). User corrigiu — jurado pode ser Técnico num estilo e Artístico noutro (ex: Sarah Tinel: Técnica em K-Pop, Artística em Danças Urbanas). Migrado pra `judges.competencias_artisticas TEXT[]` (migration `20260627`, revoga a anterior — nunca editar migration já aplicada).
+- **UI do editor**: 2ª iteração de design (lista vertical + `<select>` Técnico/Artístico por estilo), escolhida via `AskUserQuestion` com mockup ASCII comparando padrões de mercado (Google Drive/GitHub) — user pediu visual antes de codar pra config voltada ao produtor. Ver [[feedback-mostrar-mockup-antes-ui-didatica]].
+- **Vitrine pública**: badge Técnico/Artístico removido — pesquisa de mercado (DanceComp Genie/CompetitionSuite/Headliners/Inferno Dance) confirmou que nenhuma plataforma expõe essa distinção pro público.
+- **Combinação de nota**: peso configurável Técnico×Artístico (default 50/50) em Avaliação → Critério Artístico, `ResultsPanel.tsx` mostra breakdown + warning quando um grupo mistura coreografias com escalas diferentes.
+
 ### 2026-06-20 (madrugada) — Bundle P1 + cosméticos do backlog ✅ SHIPADO
 5 commits (`38cc6cb` → `8abf199`). Pegou os itens "P1 — Alta prioridade, baixo esforço" + 1 cosmético do backlog registrado na sessão anterior. Detalhes em [[pageheader-adocao-completa-shipado]].
 
@@ -706,6 +727,12 @@ BaaS aprovado, secrets prod configurados, webhook ativo, primeira subconta criad
 Priorização cronológica detalhada em `memory/MEMORY.md` + cada item tem sua memória dedicada.
 
 ### 🟧 P1 — Alta prioridade, baixo esforço, destravado
+
+**🟧 Auditar outras edge functions pelo mesmo erro `events.status` (coluna não existe, é `events.state`)**: o bug raiz do terminal de júri (2026-06-21) só foi conferido em `judge-login`. Vale grep rápido em `supabase/functions/*/index.ts` por `.select(...status...)` em queries de `events` — se existir o mesmo erro em outra function, ela está silenciosamente retornando dados vazios/null igual o terminal estava. Detalhes em [[terminal-juri-bugs-criticos-e-fila-shipado]].
+
+**🟢 Pendência cosmética — popover "⋮" do terminal de júri redundante com a tela de fila nova**: desde 2026-06-21, o terminal tem uma tela de fila cheia (`showQueueScreen`) como entrada, mas o menu overflow "⋮" no header ainda mostra uma 2ª lista rolável menor (a navegação manual de 2026-06-11) com Anterior/Próximo/pular-pra-#N. Funciona, mas duplica a lista visualmente. Avaliar simplificar removendo a lista de dentro do popover (mantendo Anterior/Próximo/jump-to, que seguem úteis durante a avaliação) se aparecer reclamação de confusão.
+
+**🟢 Pendência de validação — tela de fila do terminal**: testada só com 1 jurado por vez (Jonathan Lupe/Daniela Morais) sem cronograma "ao vivo" ativo de verdade. Falta smoke com múltiplos jurados simultâneos + Mesa de Som marcando "AO VIVO" de fato durante o teste (cenário real do dia do evento).
 
 **✅ Adoção do `PageHeader.tsx` COMPLETA — SHIPADO 2026-06-20 (madrugada)**: as 10 páginas pendentes (`Schedule`, `Certificates`, `SuperAdmin`, `RegulationAIParser`, `TermoProdutor`, `JudgeManagement`, `JudgePractice`, `CheckIn`, `Credenciais`, `AccountSettings`) migradas pro componente (commit `38cc6cb`). Headers com badge/eyebrow acima do h1 (SuperAdmin "Painel da Plataforma", JudgePractice "Modo Treinamento", TermoProdutor "Aceito em") mantêm esses elementos como siblings fora do `PageHeader` — ele só encapsula `icon`+`title`+`subtitle`+`actions`. Validado com Playwright (8 rotas, 0 erros/sem overflow) + print real do `/super-admin` confirmando o painel pós-MFA. Detalhes em [[pageheader-adocao-completa-shipado]].
 
