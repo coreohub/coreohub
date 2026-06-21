@@ -227,13 +227,18 @@ Deno.serve(async (req) => {
 
   // Resolve evento ativo do produtor (mais recente por created_at)
   const resolveActiveEvent = async () => {
-    const { data } = await supa
+    // Coluna real é "state", não "status" (events.status não existe). Antes
+    // disso, a query inteira falhava (PostgREST 400) e o catch silencioso de
+    // { data } sem checar error fazia resolveActiveEvent() retornar sempre
+    // null — terminal nunca recebia event nem registrations, em produção.
+    const { data, error } = await supa
       .from('events')
-      .select('id, name, slug, status, deliberation_status, conferencia_started_at, conferencia_duration_seconds, live_registration_id, live_started_at')
+      .select('id, name, slug, state, deliberation_status, conferencia_started_at, conferencia_duration_seconds, live_registration_id, live_started_at')
       .eq('created_by', producer.id)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
+    if (error) console.error('resolveActiveEvent error:', error.message)
     return data
   }
 
