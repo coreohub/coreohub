@@ -165,6 +165,14 @@ const judgeEn: Record<JudgeDictKey, string> = {
   'criterion.tecnica': 'Technique',
   'criterion.figurino': 'Costume',
   'criterion.coreografia': 'Choreography',
+
+  // Queue entry screen
+  'queue.title': 'Performance Queue',
+  'queue.subtitle': 'Tap a performance to start judging',
+  'queue.cta': 'Judge',
+  'queue.liveBadge': 'LIVE',
+  'queue.empty': 'No performances in your queue.',
+  'header.queueTooltip': 'View performance queue',
 };
 
 export default judgeEn;

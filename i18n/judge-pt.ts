@@ -167,6 +167,15 @@ const judgePt = {
   'criterion.tecnica': 'Técnica',
   'criterion.figurino': 'Figurino',
   'criterion.coreografia': 'Coreografia',
+
+  // Tela de fila — ponto de entrada (padrão CompetitionSuite: jurado escolhe
+  // a apresentação antes de avaliar, em vez de cair direto na nota).
+  'queue.title': 'Fila de Apresentações',
+  'queue.subtitle': 'Toque numa apresentação pra começar a avaliar',
+  'queue.cta': 'Avaliar',
+  'queue.liveBadge': 'AO VIVO',
+  'queue.empty': 'Nenhuma apresentação na sua fila.',
+  'header.queueTooltip': 'Ver fila de apresentações',
 };
 
 export type JudgeDictKey = keyof typeof judgePt;

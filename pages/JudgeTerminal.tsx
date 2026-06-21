@@ -1315,11 +1315,15 @@ const JudgeTerminal = () => {
     setSubmittedAt(null);
     setTieWarning(null);
     setShowDemoTutorial(false);
+    // Tutorial já assume a tela de nota (passo 1 é "toque num quesito") —
+    // demo pula a fila e cai direto na apresentação #1, igual sempre foi.
+    setShowQueueScreen(false);
   };
 
   const exitDemo = () => {
     setSchedule([]);
     setCurrentIndex(0);
+    setShowQueueScreen(true);
     setIsDemoMode(false);
     setPreviewDevice(null);
     setIsSubmitted(false);
@@ -1349,12 +1353,14 @@ const JudgeTerminal = () => {
     setCurrentIndex(idx);
     setShowOverflowMenu(false);
     setPendingNavIdx(null);
+    setShowQueueScreen(false);
   };
 
   /* ── Pedido de navegação: valida bounds e dispara o guard de unsaved.
      Tudo 100% offline (só state local). ── */
   const requestGoToIndex = (idx: number) => {
-    if (idx < 0 || idx >= filteredSchedule.length || idx === currentIndex) return;
+    if (idx < 0 || idx >= filteredSchedule.length) return;
+    if (idx === currentIndex) { setShowQueueScreen(false); return; }
     if (hasUnsavedProgress()) { setPendingNavIdx(idx); return; }
     commitGoToIndex(idx);
   };
@@ -1801,6 +1807,17 @@ const JudgeTerminal = () => {
             <Lock size={12} />
           </button>
 
+          {/* Voltar pra tela de fila (não reseta nada — só troca a visualização) */}
+          {filteredSchedule.length > 0 && (
+            <button
+              onClick={() => setShowQueueScreen(true)}
+              className="p-1.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 transition-all"
+              title={t('header.queueTooltip')}
+            >
+              <List size={12} />
+            </button>
+          )}
+
           {/* Overflow menu — navegação manual (lista + anterior/próximo + #N) */}
           <div className="relative" ref={overflowMenuRef}>
             <button
@@ -2098,6 +2115,65 @@ const JudgeTerminal = () => {
                   {t('empty.demoNote')}
                 </p>
               </div>
+            </div>
+          </div>
+
+        ) : showQueueScreen ? (
+          /* ══ FILA — tela de entrada: jurado escolhe a apresentação antes de
+             avaliar, em vez de cair direto na nota (padrão CompetitionSuite).
+             Item "ao vivo" (Mesa de Som) fica destacado; tocar nele entra
+             direto na nota. ══ */
+          <div className="flex flex-col h-full px-4 py-5 gap-4 overflow-y-auto">
+            <div className="max-w-xl mx-auto w-full">
+              <h2 className="text-xl font-black uppercase tracking-tighter italic text-slate-900 dark:text-white">
+                {t('queue.title')}
+              </h2>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                {t('queue.subtitle')}
+              </p>
+            </div>
+            <div className="max-w-xl mx-auto w-full space-y-1.5 pb-4">
+              {filteredSchedule.map((p: any, i: number) => {
+                const isLive = p.id === liveRegistrationId;
+                const isEvaluated = evaluatedSet.has(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => requestGoToIndex(i)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border text-left transition-all
+                      ${isLive
+                        ? 'bg-rose-500/10 border-rose-500/40'
+                        : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 hover:border-[#ff0068]/30'}`}
+                  >
+                    <span className={`shrink-0 w-8 text-center text-sm font-black tabular-nums ${isLive ? 'text-rose-500' : 'text-slate-400'}`}>
+                      {p.ordem_apresentacao ?? i + 1}
+                    </span>
+                    <span className="shrink-0">
+                      {isLive
+                        ? <span className="block w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                        : isEvaluated
+                          ? <Check size={16} className="text-emerald-500" />
+                          : <span className="block w-2 h-2 rounded-full border border-slate-300 dark:border-slate-600" />}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[12px] font-black uppercase tracking-tight text-slate-900 dark:text-white truncate">
+                        {p.nome_coreografia || '—'}
+                      </span>
+                      <span className="block text-[10px] font-bold text-slate-400 truncate">
+                        {p.estudio} · {p.estilo_danca}
+                      </span>
+                    </span>
+                    {isLive && (
+                      <span className="shrink-0 px-2 py-1 bg-rose-500 text-white rounded-lg text-[8px] font-black uppercase tracking-widest">
+                        {t('queue.liveBadge')}
+                      </span>
+                    )}
+                    <span className="shrink-0 px-3 py-1.5 bg-[#ff0068]/10 text-[#ff0068] rounded-xl text-[9px] font-black uppercase tracking-widest">
+                      {t('queue.cta')}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 

@@ -165,6 +165,14 @@ const judgeEs: Record<JudgeDictKey, string> = {
   'criterion.tecnica': 'Técnica',
   'criterion.figurino': 'Vestuario',
   'criterion.coreografia': 'Coreografía',
+
+  // Pantalla de cola — punto de entrada
+  'queue.title': 'Cola de Presentaciones',
+  'queue.subtitle': 'Toca una presentación para empezar a evaluar',
+  'queue.cta': 'Evaluar',
+  'queue.liveBadge': 'EN VIVO',
+  'queue.empty': 'Ninguna presentación en tu cola.',
+  'header.queueTooltip': 'Ver cola de presentaciones',
 };
 
 export default judgeEs;
