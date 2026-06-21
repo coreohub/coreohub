@@ -277,8 +277,11 @@ const JudgeTerminal = () => {
       ? 'Sair do terminal? Sua nota em andamento será descartada e você precisará digitar o PIN novamente pra voltar.'
       : 'Sair do terminal? Você precisará digitar o PIN novamente pra voltar.';
     if (!confirm(msg)) return;
+    // Rota é /judge-login/:token (token = producer_token) — sem ele, cai na
+    // tela "Link inválido ou expirado" em vez de voltar pro PIN do produtor.
+    const token = judgeSession?.producer_token;
     clearJudgeSession();
-    navigate('/judge-login', { replace: true });
+    navigate(token ? `/judge-login/${token}` : '/judge-login', { replace: true });
   };
 
   /* ── i18n ──
@@ -329,6 +332,11 @@ const JudgeTerminal = () => {
   /* ── Schedule ── */
   const [schedule, setSchedule]             = useState<any[]>([]);
   const [currentIndex, setCurrentIndex]     = useState(0);
+  // Tela de fila como ponto de entrada (padrão CompetitionSuite): jurado vê
+  // a lista e toca numa apresentação pra começar, em vez de cair direto na
+  // nota. O efeito de sync com a Mesa de Som (liveRegistrationId) já tira o
+  // jurado dessa tela automaticamente quando alguém é marcado ao vivo.
+  const [showQueueScreen, setShowQueueScreen] = useState(true);
 
   /* ── Genre rules (loaded once, applied per performance) ── */
   const [evalConfig,  setEvalConfig]  = useState<EvalConfig | null>(null);
@@ -812,17 +820,37 @@ const JudgeTerminal = () => {
     // O estado da estrela na apresentação atual vem de `starredSet.has(currentPerformance.id)`
   }, [currentIndex, currentPerformance?.estilo_danca, evalConfig, genreList, resolveGenreCriteria, selectedJudge?.competencias_artisticas]);
 
-  /* ── Phase 4: auto-advance pós-submit quando Mesa de Som troca a live ──
-     Quando jurado já submeteu nota E a Mesa marcou outra apresentação como
-     ao vivo, terminal pula automaticamente pra essa nova apresentação.
-     Self-paced preservado: se ainda não submeteu, NÃO interrompe avaliação. */
+  /* ── Phase 4: sync com a Mesa de Som via liveRegistrationId ──
+     Dois cenários:
+     1) Jurado ainda está na tela de fila (showQueueScreen, não começou a
+        avaliar nada): a Mesa marca alguém ao vivo → pula a fila e entra
+        direto na nota dessa apresentação. Não precisa de submit prévio,
+        porque não há avaliação em andamento pra preservar.
+     2) Jurado já está avaliando e JÁ submeteu a nota atual: auto-avança pra
+        quem a Mesa marcou como próxima ao vivo. Self-paced preservado — se
+        ainda não submeteu, não interrompe a avaliação em andamento. */
   useEffect(() => {
-    if (!liveRegistrationId || !isSubmitted) return;
-    if (!filteredSchedule.length) return;
-    if (currentPerformance?.id === liveRegistrationId) return;
+    if (!liveRegistrationId || !filteredSchedule.length) return;
     const liveIdx = filteredSchedule.findIndex((r: any) => r.id === liveRegistrationId);
-    if (liveIdx < 0 || liveIdx === currentIndex) return;
-    // Reset states (mesma lógica do handleAdvance, mas vai pro índice da live)
+    if (liveIdx < 0) return; // ao vivo é de outro gênero — não chega pra este jurado
+
+    if (showQueueScreen) {
+      if (liveIdx !== currentIndex) {
+        setIsSubmitted(false);
+        setSubmittedAt(null);
+        rollingChunksRef.current = [];
+        setMicAttempted(false);
+        setTieWarning(null);
+        setFeedbackText('');
+        setShowComment(false);
+        setCurrentIndex(liveIdx);
+      }
+      setShowQueueScreen(false);
+      return;
+    }
+
+    if (!isSubmitted) return;
+    if (currentPerformance?.id === liveRegistrationId || liveIdx === currentIndex) return;
     setIsSubmitted(false);
     setSubmittedAt(null);
     rollingChunksRef.current = [];
@@ -831,7 +859,7 @@ const JudgeTerminal = () => {
     setFeedbackText('');
     setShowComment(false);
     setCurrentIndex(liveIdx);
-  }, [liveRegistrationId, isSubmitted, filteredSchedule, currentPerformance?.id, currentIndex]);
+  }, [liveRegistrationId, isSubmitted, showQueueScreen, filteredSchedule, currentPerformance?.id, currentIndex]);
 
   /* ── Tie check whenever weighted avg changes and all filled ── */
   useEffect(() => {
