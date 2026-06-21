@@ -1715,12 +1715,16 @@ const JudgeTerminal = () => {
       {/* ── Header — denso: 1 linha em mobile, 2 em tablet ── */}
       <header className="shrink-0 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-3 py-1.5 flex items-center justify-between gap-2">
 
-        {/* Live + coreography info */}
+        {/* Live + coreography info — o badge "AO VIVO" só aparece quando a
+            apresentação atual é de fato a marcada pelo Mesa de Som
+            (liveRegistrationId), não só "tem uma apresentação carregada". */}
         <div className="flex items-center gap-2 min-w-0">
-          <div className="flex items-center gap-1 shrink-0">
-            <div className={`w-1.5 h-1.5 rounded-full ${currentPerformance ? 'bg-rose-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`} />
-            <span className="text-[8px] font-black uppercase tracking-[0.2em] text-rose-500 hidden sm:inline">{t('header.live')}</span>
-          </div>
+          {currentPerformance?.id === liveRegistrationId && (
+            <div className="flex items-center gap-1 shrink-0">
+              <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+              <span className="text-[8px] font-black uppercase tracking-[0.2em] text-rose-500 hidden sm:inline">{t('header.live')}</span>
+            </div>
+          )}
           <div className="min-w-0">
             <h2 className="text-sm sm:text-base font-black uppercase tracking-tighter italic leading-none truncate text-slate-900 dark:text-white">
               {currentPerformance?.nome_coreografia || t('header.waiting')}
