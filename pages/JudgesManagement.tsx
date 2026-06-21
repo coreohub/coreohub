@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import imageCompression from 'browser-image-compression';
 import { supabase } from '../services/supabase';
 import { getAllGenres } from '../services/genreService';
+import { normalizeStyleName, isStyleInList } from '../utils/styleMatch';
 import { EventStyle } from '../types';
 
 /* ────────────────────────────────────────────────────────── */
@@ -323,18 +324,21 @@ const JudgesManagement = () => {
     setJudges(js => js.filter(j => j.id !== judge.id));
   };
 
-  /* ── toggle format/genre ── */
+  /* ── toggle format/genre ──
+   * Match case-insensitive (isStyleInList) pq o nome canônico exibido em
+   * genreNames pode diferir em maiúscula/minúscula do que já foi salvo no
+   * jurado (rows duplicadas no banco com a mesma grafia variando o caso). */
   const toggleList = (field: 'competencias_generos' | 'competencias_formatos', val: string) => {
     setForm(f => {
-      const isSelected = f[field].includes(val);
+      const isSelected = isStyleInList(val, f[field]);
       const next: Omit<Judge, 'id'> = {
         ...f,
-        [field]: isSelected ? f[field].filter(x => x !== val) : [...f[field], val],
+        [field]: isSelected ? f[field].filter(x => normalizeStyleName(x) !== normalizeStyleName(val)) : [...f[field], val],
       };
       // Desmarcar um estilo também tira ele de "avalia como Artístico" —
       // não deixa órfão marcado num estilo que o jurado nem julga mais.
       if (field === 'competencias_generos' && isSelected) {
-        next.competencias_artisticas = f.competencias_artisticas.filter(x => x !== val);
+        next.competencias_artisticas = f.competencias_artisticas.filter(x => normalizeStyleName(x) !== normalizeStyleName(val));
       }
       return next;
     });
@@ -344,15 +348,19 @@ const JudgesManagement = () => {
   const toggleArtistico = (genreName: string) => {
     setForm(f => ({
       ...f,
-      competencias_artisticas: f.competencias_artisticas.includes(genreName)
-        ? f.competencias_artisticas.filter(g => g !== genreName)
+      competencias_artisticas: isStyleInList(genreName, f.competencias_artisticas)
+        ? f.competencias_artisticas.filter(g => normalizeStyleName(g) !== normalizeStyleName(genreName))
         : [...f.competencias_artisticas, genreName],
     }));
   };
 
-  // Defesa extra contra duplicata (ex: fork local + global de mesmo nome
-  // escapando do filtro de getAllGenres) — nunca renderiza o mesmo nome 2x.
-  const genreNames = Array.from(new Set(genres.map(g => g.name)));
+  // Defesa extra contra duplicata: o banco tem rows de event_styles repetidas
+  // pro mesmo evento+nome (cleanup histórico incompleto, ver genreService.ts).
+  // Dedup por nome normalizado (case/espaço-insensitive) — Set por string exata
+  // não bastava pq a duplicata real no banco também varia em maiúscula/minúscula.
+  const genreNames = Array.from(
+    new Map(genres.map(g => [normalizeStyleName(g.name), g.name])).values()
+  );
   const avatarSrc = (j: Judge) =>
     j.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(j.name)}`;
 
@@ -882,8 +890,11 @@ const JudgesManagement = () => {
                       ) : (
                         <div className="space-y-1.5">
                           {genreNames.map(g => {
-                            const selected = form.competencias_generos.includes(g);
-                            const isArtistico = form.competencias_artisticas.includes(g);
+                            // Match case-insensitive: o nome canônico em genreNames pode
+                            // diferir em maiúscula/minúscula do que foi salvo no jurado,
+                            // já que vinha de uma das rows duplicadas no banco.
+                            const selected = isStyleInList(g, form.competencias_generos);
+                            const isArtistico = isStyleInList(g, form.competencias_artisticas);
                             return (
                               <div
                                 key={g}
