@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import {
   Loader2, Users, Gavel, GraduationCap, Sparkles,
-  ClipboardList, Eye, X, Download, Info,
+  ClipboardList, Eye, X, Download, Info, ExternalLink,
 } from 'lucide-react';
 import EventPickerSheet from '../components/EventPickerSheet';
 import PageHeader from '../components/PageHeader';
@@ -244,6 +244,14 @@ const Credenciais: React.FC = () => {
     a.click();
     document.body.removeChild(a);
     // Não revoga aqui — modal continua aberto pro user revisar.
+  };
+
+  // Atalho pro caso do iframe não renderizar (ex: Chrome configurado pra
+  // "Baixar PDF em vez de abrir" — o iframe fica preso num ícone de
+  // documento quebrado). Nova aba usa o reader nativo do navegador.
+  const openPreviewInNewTab = () => {
+    if (!previewUrl) return;
+    window.open(previewUrl, '_blank', 'noopener');
   };
 
   /* ── Após render do hidden container, captura QRs e gera PDF ──
@@ -572,6 +580,13 @@ const Credenciais: React.FC = () => {
                 className="px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
               >
                 Fechar
+              </button>
+              <button
+                onClick={openPreviewInNewTab}
+                title="Se a prévia acima não aparecer (ícone quebrado), abra em nova aba"
+                className="flex items-center gap-2 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-white/10 rounded-2xl transition-colors"
+              >
+                <ExternalLink size={14} /> Abrir em nova aba
               </button>
               <button
                 onClick={downloadFromPreview}
