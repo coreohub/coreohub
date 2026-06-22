@@ -92,8 +92,7 @@ const Credenciais: React.FC = () => {
             .from('registrations')
             .select('id,nome_coreografia,estudio,estilo_danca,categoria,formato_participacao,status,status_pagamento')
             .eq('event_id', selectedEventId)
-            .eq('status', 'APROVADA')
-            .in('status_pagamento', ['CONFIRMADO', 'APROVADO'])
+            .or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO')
             .order('nome_coreografia'),
           supabase
             .from('workshops')

@@ -314,6 +314,11 @@ const SortableRow: React.FC<SortableRowProps> = ({
               {reg.formacao}
             </span>
           )}
+          {reg.estilo_danca && (
+            <span className="px-1.5 py-0.5 bg-[#ff0068]/10 text-[#ff0068] rounded-full text-[8px] font-black uppercase tracking-wider">
+              {reg.estilo_danca}
+            </span>
+          )}
           {reg.categoria && (
             <span className="px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500 rounded-full text-[8px] font-black uppercase tracking-wider">
               {reg.categoria}
@@ -1305,11 +1310,12 @@ const Schedule = () => {
         if (!reg.trilha_url) continue;
 
         const num = String(i + 1).padStart(3, '0');
-        const modality = sanitize(reg.formacao || reg.estilo_danca || 'Coreografia');
-        const category = sanitize(reg.categoria || 'Geral');
         const studio = sanitize(reg.estudio || 'Estudio');
+        const coreografia = sanitize(reg.nome_coreografia || 'Coreografia');
+        const style = sanitize(reg.estilo_danca || 'Estilo');
+        const category = sanitize(reg.categoria || 'Geral');
         const ext = reg.trilha_url.split('?')[0].split('.').pop() || 'mp3';
-        const filename = `${num}_${modality}_${category}_${studio}.${ext}`;
+        const filename = `${num}_${studio}_${coreografia}_${style}_${category}.${ext}`;
 
         try {
           const response = await fetch(reg.trilha_url);
@@ -1922,7 +1928,7 @@ const Schedule = () => {
               ZIP com {stats.withTrack} trilha{stats.withTrack !== 1 ? 's' : ''} pronto para download
             </p>
             <p className="text-[9px] text-indigo-500/70 dark:text-indigo-400/50 mt-0.5">
-              Os arquivos serão renomeados no padrão: 001_Formação_Categoria_Estudio.mp3 — na ordem atual do cronograma.
+              Os arquivos serão renomeados no padrão: 001_Estudio_Coreografia_Estilo_Categoria.mp3 — na ordem atual do cronograma.
             </p>
           </div>
         </div>
