@@ -231,13 +231,15 @@ const RulesEditor: React.FC<RulesEditorProps> = ({
               <button
                 onClick={() => onMoveTiebreaker(idx, -1)}
                 disabled={idx === 0}
-                className="p-1 text-slate-300 dark:text-white/20 hover:text-slate-700 dark:hover:text-white disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-all"
-              ><ArrowUp size={11} /></button>
+                aria-label="Mover pra cima"
+                className="p-2 text-slate-300 dark:text-white/20 hover:text-slate-700 dark:hover:text-white disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-all"
+              ><ArrowUp size={14} /></button>
               <button
                 onClick={() => onMoveTiebreaker(idx, 1)}
                 disabled={idx === rules.desempate.length - 1}
-                className="p-1 text-slate-300 dark:text-white/20 hover:text-slate-700 dark:hover:text-white disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-all"
-              ><ArrowDown size={11} /></button>
+                aria-label="Mover pra baixo"
+                className="p-2 text-slate-300 dark:text-white/20 hover:text-slate-700 dark:hover:text-white disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-all"
+              ><ArrowDown size={14} /></button>
             </div>
           </div>
         ))}

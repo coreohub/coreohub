@@ -856,7 +856,22 @@ const Schedule = () => {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'pt-BR';
     utterance.rate = 0.9;
-    window.speechSynthesis.speak(utterance);
+    // Fallback sem narração IA pré-gravada (audios[reg.id] vazio). Sem
+    // voice fixada, o Chrome escolhe a voz default de forma inconsistente
+    // entre chamadas — sintoma "cada play uma voz diferente". getVoices()
+    // também carrega async (lista vazia na 1ª chamada da sessão), então
+    // espera 'voiceschanged' quando necessário pra sempre escolher a
+    // mesma voz pt-BR instalada.
+    const speakWithStableVoice = () => {
+      const ptVoice = window.speechSynthesis.getVoices().find(v => v.lang?.toLowerCase().startsWith('pt'));
+      if (ptVoice) utterance.voice = ptVoice;
+      window.speechSynthesis.speak(utterance);
+    };
+    if (window.speechSynthesis.getVoices().length === 0) {
+      window.speechSynthesis.onvoiceschanged = speakWithStableVoice;
+    } else {
+      speakWithStableVoice();
+    }
   };
 
   const togglePlayPause = () => {
