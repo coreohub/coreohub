@@ -14,7 +14,7 @@ import {
 } from '../utils/credencialPdf';
 
 type TabKey = 'INSCRITOS' | 'WORKSHOPS' | 'EQUIPE' | 'JURADOS' | 'TODOS';
-type PrintMode = 'A6' | 'PIMACO_6280';
+type PrintMode = 'A6' | 'PIMACO_6280' | 'A6_SINGLE';
 
 interface EventOption {
   id: string;
@@ -271,7 +271,7 @@ const Credenciais: React.FC = () => {
           const eventName = events.find(e => e.id === selectedEventId)?.name ?? 'Evento';
           // Filename amigável pra ordenar na pasta. Sanitiza caracteres
           // inválidos em filesystems (\ / : * ? " < > |) trocando por '-'.
-          const tipoLabel = mode === 'A6' ? 'A6 cordão' : 'Adesivo';
+          const tipoLabel = mode === 'A6' ? 'A6 cordão' : mode === 'A6_SINGLE' ? 'A6 1-por-página' : 'Adesivo';
           const sanitizedEvent = eventName.replace(/[\\/:*?"<>|]+/g, '-').trim();
           const fileName = `CoreoHub - Credenciais ${tipoLabel} (${printJob.length}) - ${sanitizedEvent}.pdf`;
           const doc = generateCredentialPdf({
@@ -399,7 +399,7 @@ const Credenciais: React.FC = () => {
           (vai junto com o botão sticky bottom). */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 p-5 space-y-4">
         <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Modo de impressão</p>
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid sm:grid-cols-3 gap-3">
           <button
             onClick={() => setMode('A6')}
             className={`text-left p-4 rounded-2xl border-2 transition-all ${
@@ -411,6 +411,19 @@ const Credenciais: React.FC = () => {
             <p className="text-sm font-black text-slate-900 dark:text-white">A6 cordão</p>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
               105×148mm · 4 por folha A4 · papel cartão 250g · você corta e fura
+            </p>
+          </button>
+          <button
+            onClick={() => setMode('A6_SINGLE')}
+            className={`text-left p-4 rounded-2xl border-2 transition-all ${
+              mode === 'A6_SINGLE'
+                ? 'border-[#ff0068] bg-[#ff0068]/5'
+                : 'border-slate-200 dark:border-white/10 hover:border-[#ff0068]/40'
+            }`}
+          >
+            <p className="text-sm font-black text-slate-900 dark:text-white">1 por página (térmica/pré-cortado)</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+              105×148mm exato · sem corte · pra impressora térmica (Argox/Zebra/Elgin) ou papel A6 pré-cortado de gráfica
             </p>
           </button>
           <button
@@ -492,7 +505,7 @@ const Credenciais: React.FC = () => {
         <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-3">
           <div className="flex flex-col min-w-0 flex-1 sm:flex-none">
             <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 leading-tight truncate">
-              Modo · {mode === 'A6' ? 'A6 cordão' : 'Pimaco 6280'}
+              Modo · {mode === 'A6' ? 'A6 cordão' : mode === 'A6_SINGLE' ? '1 por página' : 'Pimaco 6280'}
             </p>
             <p className="text-[10px] font-black text-slate-700 dark:text-slate-300 tabular-nums">
               {totalSelected} {totalSelected === 1 ? 'selecionado' : 'selecionados'}
@@ -532,13 +545,15 @@ const Credenciais: React.FC = () => {
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Pré-visualização</p>
                 <p className="text-sm font-bold text-slate-900 dark:text-white">
-                  {previewCount} {previewCount === 1 ? (previewMode === 'A6' ? 'credencial' : 'adesivo') : (previewMode === 'A6' ? 'credenciais' : 'adesivos')}
+                  {previewCount} {previewCount === 1 ? (previewMode === 'PIMACO_6280' ? 'adesivo' : 'credencial') : (previewMode === 'PIMACO_6280' ? 'adesivos' : 'credenciais')}
                   {' · '}
-                  {(() => {
-                    const sheets = Math.ceil(previewCount / (previewMode === 'A6' ? 4 : 14));
-                    return `${sheets} ${sheets === 1 ? 'folha A4' : 'folhas A4'}`;
-                  })()}
-                  {previewMode === 'PIMACO_6280' ? ' · Pimaco 6280 ou similar' : ' · papel cartão 250g'}
+                  {previewMode === 'A6_SINGLE'
+                    ? `${previewCount} ${previewCount === 1 ? 'página' : 'páginas'} (105×148mm)`
+                    : (() => {
+                        const sheets = Math.ceil(previewCount / (previewMode === 'A6' ? 4 : 14));
+                        return `${sheets} ${sheets === 1 ? 'folha A4' : 'folhas A4'}`;
+                      })()}
+                  {previewMode === 'PIMACO_6280' ? ' · Pimaco 6280 ou similar' : previewMode === 'A6_SINGLE' ? ' · etiqueta/papel pré-cortado' : ' · papel cartão 250g'}
                 </p>
               </div>
               <button
@@ -563,13 +578,23 @@ const Credenciais: React.FC = () => {
                 <div className="text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed flex flex-wrap items-baseline gap-x-1">
                   <span className="text-[9px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 mr-1">Como imprimir</span>
                   <span>
-                    Imprima em <strong className="text-slate-900 dark:text-white">100%</strong> (sem "Ajustar à página") ·
-                    Papel <strong className="text-slate-900 dark:text-white">A4</strong> ·
-                    Margens <strong className="text-slate-900 dark:text-white">padrão</strong>
-                    {previewMode === 'A6'
-                      ? <> · Papel <strong className="text-slate-900 dark:text-white">cartão 250g</strong> · Cortar nas linhas pontilhadas e furar pro cordão</>
-                      : <> · Folha <strong className="text-slate-900 dark:text-white">Pimaco 6280</strong> ou similar · Cole em credencial pré-impressa</>
-                    }
+                    {previewMode === 'A6_SINGLE' ? (
+                      <>
+                        Imprima em <strong className="text-slate-900 dark:text-white">100%</strong> (sem "Ajustar à página") ·
+                        Papel <strong className="text-slate-900 dark:text-white">105×148mm (A6)</strong> pré-cortado, em rolo de etiqueta térmica ou bloco de gráfica ·
+                        Margens <strong className="text-slate-900 dark:text-white">zero</strong> · Sem corte — 1 página = 1 credencial
+                      </>
+                    ) : (
+                      <>
+                        Imprima em <strong className="text-slate-900 dark:text-white">100%</strong> (sem "Ajustar à página") ·
+                        Papel <strong className="text-slate-900 dark:text-white">A4</strong> ·
+                        Margens <strong className="text-slate-900 dark:text-white">padrão</strong>
+                        {previewMode === 'A6'
+                          ? <> · Papel <strong className="text-slate-900 dark:text-white">cartão 250g</strong> · Cortar nas linhas pontilhadas e furar pro cordão</>
+                          : <> · Folha <strong className="text-slate-900 dark:text-white">Pimaco 6280</strong> ou similar · Cole em credencial pré-impressa</>
+                        }
+                      </>
+                    )}
                   </span>
                 </div>
               </div>

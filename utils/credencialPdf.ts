@@ -193,13 +193,29 @@ export const generateCredentialPdf = (params: {
   items: CredentialItem[];
   qrDataUrls: Record<string, string>;
   eventName: string;
-  mode: 'A6' | 'PIMACO_6280';
+  mode: 'A6' | 'PIMACO_6280' | 'A6_SINGLE';
   /** Embutido como title do PDF — vira o filename quando o user salva
       pelo menu interno do PDF viewer (ex: ícone de download dentro do
       iframe). Sem isso, o browser usa o UUID do blob URL. */
   pdfTitle?: string;
 }): jsPDF => {
   const { items, qrDataUrls, eventName, mode, pdfTitle } = params;
+
+  if (mode === 'A6_SINGLE') {
+    // Página no tamanho exato da credencial (105×148mm) — pra impressora
+    // térmica direto em rolo cortado ou papel pré-cortado A6 de gráfica.
+    // 1 credencial por página, sem linha de corte (não há sobra a cortar).
+    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: [A6_W, A6_H] });
+    if (pdfTitle) doc.setProperties({ title: pdfTitle });
+    items.forEach((item, i) => {
+      if (i > 0) doc.addPage([A6_W, A6_H], 'p');
+      const qr = qrDataUrls[item.id];
+      if (!qr) return;
+      drawA6Card(doc, item, qr, 0, 0, eventName);
+    });
+    return doc;
+  }
+
   const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
   if (pdfTitle) {
     doc.setProperties({ title: pdfTitle });
