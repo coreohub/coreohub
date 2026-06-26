@@ -435,6 +435,9 @@ const App: React.FC = () => {
 
   // Phase 2B+: tablet em modo Terminal redireciona / pra /judge-login/<token>
   // automaticamente (kiosk mode).
+  // Domínio de marketing (coreohub.com / www.coreohub.com) mostra a sales page
+  // na home; app.coreohub.com continua indo pro login/kiosk como sempre.
+  const isMarketingDomain = ['coreohub.com', 'www.coreohub.com'].includes(window.location.hostname);
   const RootRedirect = () => {
     try {
       const isKiosk = localStorage.getItem('coreohub_tablet_kiosk_mode') === 'true';
@@ -447,8 +450,8 @@ const App: React.FC = () => {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<RootRedirect />} />
-        {/* Sales page nova (preview) — acesse via /lp pra ver sem afetar a home */}
+        <Route path="/" element={isMarketingDomain ? <LandingPage /> : <RootRedirect />} />
+        {/* Sales page nova — acesse via /lp também (alias, qualquer domínio) */}
         <Route path="/lp" element={<LandingPage />} />
         {/* Setor público: landing dedicada + PDF técnico imprimível */}
         <Route path="/governo" element={<Suspense fallback={<PageLoader />}><LandingGoverno /></Suspense>} />
