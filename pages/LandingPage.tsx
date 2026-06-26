@@ -5,7 +5,7 @@ import {
   Trophy, Shield, Award, GraduationCap, Mic2, Check, X, ChevronDown,
   Zap, Users, Clock, AlertTriangle, ArrowRight,
   CalendarClock, Globe, IdCard, QrCode,
-  Smartphone, Share2, Mail, MapPin, Search,
+  Smartphone, Share2, Mail, Percent,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { supabase } from '../services/supabase';
@@ -97,15 +97,15 @@ const LandingPage = () => {
             </div>
 
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tighter uppercase leading-[0.95]">
-              A primeira <span className="text-[#ff0068]">IA</span> que monta<br />
-              seu festival de dança<br />
-              em <span className="text-[#ff0068]">30 segundos.</span>
+              Seu festival inteiro num link.<br />
+              Sem planilha, sem Photoshop<br />
+              <span className="text-[#ff0068]">às 2 da manhã.</span>
             </h1>
 
             <p className="text-slate-300 text-lg md:text-2xl font-medium max-w-3xl mx-auto leading-relaxed">
-              Cole o regulamento. Inscrições, banca, palco, ingressos e certificados num link só.
+              A IA lê seu regulamento e monta tudo: inscrições, banca, palco, ingressos e certificados.
               <br className="hidden md:block" />
-              <span className="text-slate-400">Você produz arte. CoreoHub cuida do resto.</span>
+              <span className="text-slate-400">Você produz arte. A CoreoHub cuida do resto.</span>
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
@@ -136,16 +136,20 @@ const LandingPage = () => {
         {/* Stats no rodapé do hero — flexbox normal, sem absolute */}
         <div className="relative z-10 max-w-5xl mx-auto w-full grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-white/5 pt-8 mt-12">
           {[
-            { val: '10%', label: 'Comissão única' },
-            { val: '0', label: 'Mensalidade' },
-            { val: '30s', label: 'Pra publicar evento' },
-            { val: '24/7', label: 'Funciona offline' },
+            { val: '10%', label: 'só quando vende' },
+            { val: 'R$ 0', label: 'de mensalidade' },
+            { val: '30s', label: 'do PDF ao evento no ar' },
           ].map((s, i) => (
             <div key={i} className="text-center">
               <p className="text-2xl md:text-4xl font-black text-white tracking-tighter">{s.val}</p>
               <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mt-1">{s.label}</p>
             </div>
           ))}
+          <div className="text-center flex flex-col items-center justify-center gap-1">
+            <Wifi size={20} className="text-[#ff0068]" />
+            <p className="text-xs md:text-sm font-black uppercase tracking-tight text-white">Wi-Fi caiu?</p>
+            <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">Roda mesmo assim</p>
+          </div>
         </div>
       </section>
 
@@ -552,6 +556,19 @@ const LandingPage = () => {
               Aqui é zero — só paga quando inscrição entra.
             </p>
           </div>
+
+          <p className="text-sm text-slate-400 mt-8">
+            <span className="text-white font-bold">Prefeitura ou instituição?</span><br />
+            SESC, SEST/SENAT, secretarias de cultura e editais públicos têm modelo de proposta próprio.{' '}
+            <a
+              href="https://wa.me/5517997936169?text=Ol%C3%A1%2C%20Sou%20de%20uma%20institui%C3%A7%C3%A3o%20p%C3%BAblica%20e%20gostaria%20de%20falar%20sobre%20a%20CoreoHub"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#ff0068] font-bold hover:underline"
+            >
+              Falar no WhatsApp →
+            </a>
+          </p>
         </div>
       </section>
 
@@ -559,7 +576,7 @@ const LandingPage = () => {
       <section className="px-6 py-24 lg:py-32 border-t border-white/5">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-12">
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Por que CoreoHub</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Por que a CoreoHub</p>
             <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase">
               O que ninguém mais faz.
             </h2>
@@ -573,13 +590,13 @@ const LandingPage = () => {
                   <th className="py-4 px-3 text-center">
                     <div className="inline-flex flex-col items-center">
                       <span className="text-sm font-black uppercase tracking-tight text-[#ff0068]">CoreoHub</span>
-                      <span className="text-[9px] text-slate-500">10% por venda</span>
+                      <span className="text-[9px] text-slate-500">10% só quando vende</span>
                     </div>
                   </th>
                   <th className="py-4 px-3 text-center">
                     <div className="inline-flex flex-col items-center">
                       <span className="text-xs font-bold text-slate-400">Sistemas dedicados</span>
-                      <span className="text-[9px] text-slate-500">R$ 290 a R$ 990/mês</span>
+                      <span className="text-[9px] text-slate-500">Mensalidade fixa*</span>
                     </div>
                   </th>
                   <th className="py-4 px-3 text-center">
@@ -591,40 +608,43 @@ const LandingPage = () => {
                   <th className="py-4 px-3 text-center">
                     <div className="inline-flex flex-col items-center">
                       <span className="text-xs font-bold text-slate-400">Planilha + Pix</span>
-                      <span className="text-[9px] text-slate-500">Você é o sistema</span>
+                      <span className="text-[9px] text-slate-500">Seu tempo: ~3h/dia</span>
                     </div>
                   </th>
                 </tr>
               </thead>
               <tbody className="text-sm">
                 {[
-                  { f: 'IA configura festival pelo PDF',           c: true,  d: false, m: false, p: false },
-                  { f: 'Júri avaliando offline (Wi-Fi caiu)',       c: true,  d: false, m: false, p: false },
-                  { f: 'Seletiva de vídeo integrada',              c: true,  d: false, m: false, p: false },
-                  { f: 'Cronograma com detecção de conflitos',     c: true,  d: false, m: false, p: false },
-                  { f: 'Júri multi-idioma (PT/EN/ES)',             c: true,  d: false, m: false, p: false },
-                  { f: 'Áudio de feedback do jurado',              c: true,  d: false, m: false, p: false },
-                  { f: 'Narração IA com voz profissional',         c: true,  d: false, m: false, p: false },
-                  { f: 'Workshops + ingressos no mesmo carrinho',  c: true,  d: false, m: true,  p: false },
-                  { f: 'Certificado com QR de validação',          c: true,  d: true,  m: false, p: false },
-                  { f: 'Vitrine pública pronta como site',         c: true,  d: true,  m: true,  p: false },
-                  { f: 'Equipe com permissões granulares',         c: true,  d: true,  m: false, p: false },
-                  { f: 'Sem mensalidade',                          c: true,  d: false, m: true,  p: true  },
-                ].map((row, i) => (
-                  <tr key={i} className="border-b border-white/5">
-                    <td className="py-3 pr-4 text-slate-300">{row.f}</td>
-                    <td className="py-3 px-3 text-center">{row.c ? <Check size={16} className="inline text-emerald-400" /> : <X size={16} className="inline text-rose-500" />}</td>
-                    <td className="py-3 px-3 text-center">{row.d ? <Check size={16} className="inline text-slate-400" />  : <X size={16} className="inline text-rose-500/60" />}</td>
-                    <td className="py-3 px-3 text-center">{row.m ? <Check size={16} className="inline text-slate-400" />  : <X size={16} className="inline text-rose-500/60" />}</td>
-                    <td className="py-3 px-3 text-center">{row.p ? <Check size={16} className="inline text-slate-400" />  : <X size={16} className="inline text-rose-500/60" />}</td>
-                  </tr>
-                ))}
+                  { f: 'Preço', type: 'text' as const, c: '10% só quando vende', d: 'Mensalidade fixa*', m: '7-12% + taxa fixa', p: 'Seu tempo: ~3h/dia' },
+                  { f: 'Configura o evento a partir do seu regulamento', type: 'text' as const, c: 'Automático — cole o PDF, a IA extrai tudo', d: 'Manual, categoria por categoria', m: false, p: false },
+                  { f: 'Júri avalia mesmo com Wi-Fi caindo',              type: 'bool' as const, c: true, d: false, m: false, p: false },
+                  { f: 'Detecta conflito de bailarino em várias coreografias', type: 'bool' as const, c: true, d: false, m: false, p: false },
+                  { f: 'Certificado com QR de validação pública',         type: 'bool' as const, c: true, d: false, m: false, p: false },
+                  { f: 'Sem mensalidade, mesmo se o evento não rolar',    type: 'bool' as const, c: true, d: false, m: true,  p: true  },
+                ].map((row, i) => {
+                  const renderCell = (val: string | boolean, colorClass: string) => {
+                    if (typeof val === 'string') return <span className={`text-xs font-bold ${colorClass}`}>{val}</span>;
+                    return val
+                      ? <Check size={16} className={`inline ${colorClass}`} />
+                      : <X size={16} className="inline text-rose-500/60" />;
+                  };
+                  return (
+                    <tr key={i} className="border-b border-white/5">
+                      <td className="py-3 pr-4 text-slate-300">{row.f}</td>
+                      <td className="py-3 px-3 text-center">{renderCell(row.c, 'text-emerald-400')}</td>
+                      <td className="py-3 px-3 text-center">{renderCell(row.d, 'text-slate-400')}</td>
+                      <td className="py-3 px-3 text-center">{renderCell(row.m, 'text-slate-400')}</td>
+                      <td className="py-3 px-3 text-center">{renderCell(row.p, 'text-slate-400')}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
           <p className="text-[9px] text-slate-500 text-center mt-6 italic">
-            Comparação por categoria. Sistemas dedicados = especialistas em festivais (mensalidade). Marketplace genérico = plataformas de eventos não-especializadas. Planilha + Pix = o jeito artesanal.
+            *Valores de mensalidade variam por fornecedor — consulte os próprios sites para comparação atualizada.<br />
+            Sistemas dedicados = especialistas em festivais (mensalidade). Marketplace genérico = plataformas de eventos não-especializadas. Planilha + Pix = o jeito artesanal.
           </p>
         </div>
       </section>
@@ -813,26 +833,42 @@ const LandingPage = () => {
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
-              { icon: GraduationCap, title: 'Workshops integrados',     body: 'Vende workshop como entidade própria, com lotes, professor e combo pra inscritos da mostra. Presença por QR libera certificado.' },
-              { icon: Award,         title: 'Certificados em massa',    body: 'Mostra competitiva + workshop, dois templates. Lazy-cache: o PDF só é gerado quando o inscrito baixa. QR de validação pública.' },
-              { icon: Shield,        title: 'Equipe sob controle',      body: 'Coordenador, Sonoplasta, Recepção, Marcador, Mesário, Coordenador do Júri. Cada um vê só o que precisa. Você dorme em paz.' },
-              { icon: Trophy,        title: 'Premiação configurável',   body: 'Por nota mínima (Ouro/Prata/Bronze), por colocação (1º/2º/3º) ou prêmios especiais com deliberação da banca. Mude num clique.' },
-              { icon: Share2,        title: 'Leaderboard público',      body: 'Resultado oficial em link compartilhável: capa, medalhistas por categoria e exportação PDF. Bailarino reposta no story.' },
-              { icon: Globe,         title: 'Júri em 3 idiomas',        body: 'Jurado escolhe PT, EN ou ES no PIN — termos técnicos traduzidos. Pronto pra evento internacional sem refazer banca.' },
-              { icon: Smartphone,    title: 'PWA instalável',           body: 'Bailarino, jurado e equipe instalam o app pelo navegador, sem app store. Ícone na home, abre offline, atualiza sozinho.' },
-              { icon: Mail,          title: '8 e-mails automáticos',    body: 'Pagamento confirmado, ingresso enviado, presença registrada, certificado disponível, resultado publicado. Zero copy-paste.' },
-              { icon: Sparkles,      title: 'Modo demo recriável',      body: 'Festival completo (50 inscrições, workshops, júri, equipe) clonável em 1 clique. Treina equipe sem sujar dados reais.' },
+              { icon: GraduationCap, title: 'Workshops integrados',   body: 'Vende workshop como entidade própria, com lotes, professor e combo pra inscritos da mostra. Presença por QR libera certificado.' },
+              { icon: Shield,        title: 'Equipe sob controle',    body: 'Coordenador, Sonoplasta, Recepção, Marcador, Mesário, Coordenador do Júri. Cada um vê só o que precisa. Você dorme em paz.' },
+              { icon: Trophy,        title: 'Premiação configurável', body: 'Por nota mínima (Ouro/Prata/Bronze), por colocação (1º/2º/3º) ou prêmios especiais com deliberação da banca. Mude num clique.' },
+              { icon: Share2,        title: 'Leaderboard público',    body: 'Resultado oficial em link compartilhável: capa, medalhistas por categoria e exportação PDF. Bailarino reposta no story.' },
             ].map((f, i) => {
               const Icon = f.icon;
               return (
-                <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/[0.07] transition-all">
-                  <div className="w-12 h-12 rounded-xl bg-[#ff0068]/10 border border-[#ff0068]/20 flex items-center justify-center mb-4">
-                    <Icon size={20} className="text-[#ff0068]" />
+                <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-8 hover:bg-white/[0.07] transition-all">
+                  <div className="w-14 h-14 rounded-xl bg-[#ff0068]/10 border border-[#ff0068]/20 flex items-center justify-center mb-5">
+                    <Icon size={24} className="text-[#ff0068]" />
                   </div>
-                  <h3 className="text-base font-black uppercase tracking-tight text-white mb-2">{f.title}</h3>
+                  <h3 className="text-lg font-black uppercase tracking-tight text-white mb-2">{f.title}</h3>
                   <p className="text-sm text-slate-400 leading-relaxed">{f.body}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="divide-y divide-white/5 border-t border-white/5 mt-8">
+            {[
+              { icon: Award,      title: 'Certificados em massa',           body: 'Mostra competitiva + workshop, dois templates. QR de validação pública.' },
+              { icon: Globe,      title: 'Júri em 3 idiomas',                body: 'Jurado escolhe PT, EN ou ES no PIN. Pronto pra evento internacional.' },
+              { icon: Smartphone, title: 'Direto do celular, sem app store', body: 'Bailarino, jurado e equipe instalam pelo navegador — ícone na tela inicial, abre offline, atualiza sozinho.' },
+              { icon: Mail,       title: 'Tudo automático por e-mail',       body: 'Pagamento confirmado, ingresso enviado, certificado disponível, resultado publicado. Zero copy-paste.' },
+              { icon: Sparkles,   title: 'Teste sem medo',                   body: 'Festival demo completo, clonável em 1 clique. Treina equipe sem sujar dados reais.' },
+            ].map((f, i) => {
+              const Icon = f.icon;
+              return (
+                <div key={i} className="flex items-start gap-4 py-4">
+                  <Icon size={18} className="text-[#ff0068] shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-sm font-black uppercase tracking-tight text-white">{f.title}</h4>
+                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">{f.body}</p>
+                  </div>
                 </div>
               );
             })}
@@ -875,7 +911,7 @@ const LandingPage = () => {
                 <span className="text-[#ff0068]">no CoreoHub.</span>
               </h2>
               <p className="text-slate-300 text-lg max-w-2xl mx-auto leading-relaxed mt-6">
-                Eventos com inscrições abertas neste momento — não é mockup, é a vitrine pública dos produtores que já estão rodando.
+                Eventos com inscrições abertas neste momento — direto da vitrine pública dos produtores que já estão rodando na CoreoHub.
               </p>
             </div>
 
@@ -960,7 +996,7 @@ const LandingPage = () => {
                   Photoshop até as 2 da manhã.
                 </p>
                 <p>
-                  Hoje produzo o <span className="text-white font-bold">Usualdance Festival</span>, produzi o{' '}
+                  Hoje produzo festivais de dança no Brasil, produzi o{' '}
                   <span className="text-white font-bold">Gravidade Festival</span> e fiz parte da equipe do{' '}
                   <span className="text-white font-bold">FIH2</span> — o maior evento de danças urbanas da América Latina.
                 </p>
@@ -1000,23 +1036,23 @@ const LandingPage = () => {
               },
               {
                 q: 'Funciona mesmo offline?',
-                a: 'Sim. O terminal de jurado é a única parte que precisa ser robusta a queda de Wi-Fi (porque é o ponto crítico ao vivo). Sistema salva nota localmente no tablet, mostra indicador visual de pendentes, e sincroniza assim que rede voltar. Áudio de feedback também fica em fila se necessário.',
+                a: 'Sim. Avaliação de jurados, cronograma, check-in por QR e narração funcionam mesmo sem internet no local — o app sincroniza automaticamente quando a conexão volta. Você só precisa de internet pra publicar o evento e receber pagamentos.',
               },
               {
                 q: 'E se eu quiser sair? Tem fidelidade?',
-                a: 'Nenhuma. Você cria evento quando quiser, paga só quando vende inscrição, e leva todos os dados em CSV / PDF quando quiser. Sem multa, sem letra miúda. Acreditamos que se o produto for bom, você fica.',
+                a: 'Não. Não existe contrato de permanência nem multa de cancelamento — você usa enquanto fizer sentido pro seu festival. Se decidir sair, seu histórico de eventos, inscrições e certificados continua acessível e exportável, sem prazo de expiração.',
               },
               {
                 q: 'Tem suporte técnico?',
-                a: 'Sim. WhatsApp e email com resposta em até 4h em dia útil, dia do evento com plantão em horário ampliado. Se tiver problema crítico durante o festival ao vivo, atendemos imediatamente.',
+                a: 'Sim, direto por WhatsApp com nossa equipe — sem ticket, sem fila de atendimento genérico. Na semana do seu festival, o suporte é prioritário: se algo travar no dia, você fala com a gente na hora, não espera resposta de central.',
               },
               {
                 q: 'Quantos festivais por mês posso criar?',
-                a: 'Quantos quiser. Não há limite de eventos, inscrições, jurados ou workshops. O modelo de comissão é por venda, não por volume — é o nosso sucesso é seu sucesso.',
+                a: 'Quantos quiser. Não há limite de festivais, edições ou mostras — você paga só a comissão de cada inscrição vendida, então pode rodar um evento por mês ou dez, sem custo fixo te travando.',
               },
               {
                 q: 'Funciona pra evento gratuito ou edital público?',
-                a: 'Sim. Eventos com inscrição grátis (mostras municipais, JOMI, editais públicos) usam todas as features sem pagar nada. Comissão é só sobre inscrição paga. Cobramos plateia separadamente se você ativar venda de ingressos.',
+                a: 'Sim — temos modelo específico para eventos gratuitos, mostras municipais e editais públicos. Como cada caso tem particularidades (tipo de evento, instituição, verba), fale com a gente pelo WhatsApp e montamos a proposta certa pro seu caso.',
               },
             ].map((item, i) => (
               <div
@@ -1044,75 +1080,21 @@ const LandingPage = () => {
       {/* ─── 13.5 BAILARINO PROCURANDO FESTIVAL (lado demanda) ──────────────────────────────────────────────── */}
       <section className="relative px-6 py-24 lg:py-32 border-t border-white/5 overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(124,58,237,0.12),transparent_60%)]" />
-        <div className="relative max-w-5xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-purple-400 mb-3">Pra quem dança</p>
-              <h2 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter uppercase leading-[0.95] mb-6">
-                Procurando festival<br />pra <span className="text-[#ff0068]">se inscrever?</span>
-              </h2>
-              <p className="text-slate-300 text-lg leading-relaxed mb-6">
-                Vitrine nacional de festivais com inscrições abertas — filtra por estado, mês e modalidade.
-                Cadastra, paga e baixa o certificado num único link, do celular.
-              </p>
-              <ul className="space-y-3 mb-8">
-                {[
-                  'Inscrição direta em 4 cliques (sem planilha, sem boleto manual)',
-                  'Solo, Duo, Trio ou Grupo — escolhe a modalidade no site',
-                  'Recebe credencial com QR pra check-in na entrada',
-                  'Certificado com validação pública, baixa quando quiser',
-                ].map((b, i) => (
-                  <li key={i} className="flex items-start gap-3 text-slate-300">
-                    <Check size={16} className="text-purple-400 shrink-0 mt-1" />
-                    <span className="text-sm leading-relaxed">{b}</span>
-                  </li>
-                ))}
-              </ul>
-              <button
-                onClick={() => navigate('/festivais')}
-                className="inline-flex items-center gap-2 px-8 py-4 bg-purple-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_20px_60px_rgba(124,58,237,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-transform"
-              >
-                <Search size={16} />
-                Encontrar meu festival
-              </button>
-            </div>
-
-            <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 shadow-2xl">
-              <div className="flex items-center gap-2 pb-4 border-b border-white/10 mb-4">
-                <Search size={14} className="text-purple-400" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Buscar festivais</span>
-              </div>
-              <div className="space-y-3">
-                <div className="bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 flex items-center gap-2">
-                  <MapPin size={14} className="text-slate-500 shrink-0" />
-                  <span className="text-xs text-slate-300">São Paulo</span>
-                  <span className="ml-auto text-[9px] font-black uppercase tracking-widest text-purple-400">SP</span>
-                </div>
-                <div className="bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 flex items-center gap-2">
-                  <CalendarClock size={14} className="text-slate-500 shrink-0" />
-                  <span className="text-xs text-slate-300">Junho · Julho · Agosto</span>
-                </div>
-                <div className="bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 flex items-center gap-2">
-                  <Users size={14} className="text-slate-500 shrink-0" />
-                  <span className="text-xs text-slate-300">Solo · Duo · Grupo</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 pt-2">
-                  {[
-                    { name: 'Festival Nordeste', city: 'Recife/PE', date: '12 jun' },
-                    { name: 'Mostra Sul', city: 'Curitiba/PR', date: '24 jun' },
-                    { name: 'CoreoHub Open', city: 'São Paulo/SP', date: '06 jun' },
-                    { name: 'JOMI 2026', city: 'Goiânia/GO', date: '15 jul' },
-                  ].map((f, i) => (
-                    <div key={i} className="bg-white/5 border border-white/10 rounded-lg p-2.5">
-                      <p className="text-[10px] font-black uppercase tracking-tight text-white truncate">{f.name}</p>
-                      <p className="text-[9px] text-slate-500 truncate mt-0.5">{f.city}</p>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] mt-1">{f.date}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
+        <div className="relative max-w-3xl mx-auto text-center">
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-purple-400 mb-3">Pra quem dança</p>
+          <h2 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter uppercase leading-[0.95] mb-6">
+            Procurando festival<br />pra <span className="text-[#ff0068]">se inscrever?</span>
+          </h2>
+          <p className="text-slate-300 text-lg leading-relaxed mb-8 max-w-2xl mx-auto">
+            Veja os festivais com inscrições abertas agora — filtra por estado, mês e modalidade.
+            Inscreve, paga e baixa o certificado, tudo do celular.
+          </p>
+          <button
+            onClick={() => navigate('/festivais')}
+            className="inline-flex items-center gap-2 px-8 py-4 bg-purple-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_20px_60px_rgba(124,58,237,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-transform"
+          >
+            Ver festivais com inscrições abertas <ArrowRight size={16} />
+          </button>
         </div>
       </section>
 
@@ -1138,12 +1120,20 @@ const LandingPage = () => {
                 <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
               </span>
             </button>
+            <a
+              href="https://wa.me/5517997936169?text=Ol%C3%A1%2C%20Gostaria%20de%20Falar%20sobre%20a%20CoreoHub"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-10 py-6 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-base uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2"
+            >
+              Falar no WhatsApp →
+            </a>
           </div>
 
           <div className="grid grid-cols-3 gap-4 max-w-xl mx-auto mt-12 pt-12 border-t border-white/10">
             {[
               { icon: DollarSign, t: 'Sem cartão de crédito' },
-              { icon: Clock,      t: 'Setup em 30 segundos' },
+              { icon: Percent,    t: 'Você só paga quando vende' },
               { icon: Users,      t: 'Cancela quando quiser' },
             ].map((g, i) => {
               const Icon = g.icon;
@@ -1208,7 +1198,7 @@ const LandingPage = () => {
           <div className="border-t border-white/5 pt-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="text-[10px] text-slate-500 leading-relaxed">
               <p className="font-bold text-slate-400 uppercase tracking-widest text-[9px] mb-1">CoreoHub Tecnologia LTDA</p>
-              <p>CNPJ: 00.000.000/0001-00 · São José do Rio Preto/SP</p>
+              <p>São José do Rio Preto/SP</p>
               <p className="mt-1">Pagamentos processados pela Asaas IP S.A. (CNPJ 19.540.550/0001-21), instituição de pagamento autorizada pelo Banco Central.</p>
             </div>
             <p className="text-[10px] text-slate-600 shrink-0">
