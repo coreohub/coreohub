@@ -60,6 +60,13 @@ const PublicEventPage = () => {
     nome: string; preco: number;
     proximo: { preco: number; dataVirada: string; dias: number } | null;
   }>>({});
+  // Passes (Day Pass/Full Pass) publicados do evento — pacote fixo de N
+  // workshops, exibido em destaque ao lado dos workshops individuais.
+  const [publicPasses, setPublicPasses] = useState<Array<{
+    id: string; name: string; description: string | null;
+    preco: number; preco_inscritos_mostra: number | null;
+    workshop_names: string[]; esgotado: boolean;
+  }>>([]);
   // Tier 2: estoque por tipo de ingresso (mapa idx → { sold, remaining, sold_out })
   const [stockByType, setStockByType] = useState<Record<string, { sold: number; remaining: number | null; sold_out: boolean }>>({});
   // Gêneros + modalidades estruturados (event_styles). Renderizado em seção
@@ -215,6 +222,29 @@ const PublicEventPage = () => {
               }
               setWorkshopActiveLot(byWorkshop);
             }
+          }
+
+          // Passes publicados do evento — pacote fixo, exibido em destaque.
+          const { data: passesData } = await supabase
+            .from('workshop_passes')
+            .select('id, name, description, preco, preco_inscritos_mostra')
+            .eq('event_id', eventData.id)
+            .eq('is_published', true);
+          if (Array.isArray(passesData) && passesData.length > 0) {
+            const { data: itemsData } = await supabase
+              .from('workshop_pass_items')
+              .select('pass_id, workshop_id, workshops(name)')
+              .in('pass_id', passesData.map((p: any) => p.id));
+            const namesByPass: Record<string, string[]> = {};
+            (itemsData ?? []).forEach((it: any) => {
+              (namesByPass[it.pass_id] ??= []).push(it.workshops?.name ?? '');
+            });
+            const withStock = await Promise.all(passesData.map(async (p: any) => {
+              const { data: stockRow } = await supabase.rpc('get_workshop_pass_stock', { p_pass_id: p.id });
+              const row = Array.isArray(stockRow) ? stockRow[0] : stockRow;
+              return { ...p, workshop_names: namesByPass[p.id] ?? [], esgotado: Boolean(row?.esgotado) };
+            }));
+            setPublicPasses(withStock);
           }
         }
 
@@ -1154,6 +1184,40 @@ const PublicEventPage = () => {
               <BrandIcon size={24} /> Workshops
             </h2>
             <p className="text-xs text-slate-400">Aprimore sua técnica com quem é referência. Inscritos da mostra têm preço especial.</p>
+
+            {/* Passes (Day Pass/Full Pass) — destaque acima dos workshops avulsos,
+                padrão de convenções de dança (NUVO/JUMP): pacote por nível de acesso. */}
+            {publicPasses.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {publicPasses.map(pass => (
+                  <button
+                    key={pass.id}
+                    onClick={() => !pass.esgotado && navigate(`/checkout-workshop-pass/${pass.id}`)}
+                    disabled={pass.esgotado}
+                    className="text-left bg-gradient-to-br from-[#ff0068]/15 to-[#1de7f2]/10 border-2 border-[#ff0068]/40 hover:border-[#ff0068] rounded-2xl p-5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-[#ff0068] text-white px-2.5 py-1 rounded-full">
+                        <Ticket size={11} />Pass
+                      </span>
+                      {pass.esgotado && (
+                        <span className="text-[10px] font-black uppercase tracking-widest text-rose-400">Esgotado</span>
+                      )}
+                    </div>
+                    <h3 className="font-black uppercase tracking-tight text-white text-base leading-tight">{pass.name}</h3>
+                    {pass.description && <p className="text-xs text-slate-300 mt-1 line-clamp-2">{pass.description}</p>}
+                    <p className="text-[11px] text-slate-400 mt-2">Inclui: {pass.workshop_names.filter(Boolean).join(', ')}</p>
+                    <p className="text-lg font-black text-white pt-2">
+                      {Number(pass.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </p>
+                    {pass.preco_inscritos_mostra != null && (
+                      <p className="text-xs text-violet-300">↓ {Number(pass.preco_inscritos_mostra).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} p/ inscritos</p>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {publicWorkshops.map(ws => {
                 const dataFmt = new Date(ws.data_inicio).toLocaleString('pt-BR', {

@@ -23,6 +23,8 @@
  *   { "type": "audience_ticket_producer",           "payload": { ... } }
  *   { "type": "workshop_registration_confirmed",    "payload": { ... } }
  *   { "type": "workshop_registration_producer",     "payload": { ... } }
+ *   { "type": "workshop_pass_confirmed",            "payload": { ... } }
+ *   { "type": "workshop_pass_confirmed_producer",   "payload": { ... } }
  *   { "type": "event_created_producer",             "payload": { ... } }
  *   { "type": "producer_welcome",                   "payload": { ... } }
  */
@@ -698,6 +700,101 @@ function buildWorkshopProducerNotification(p: WorkshopProducerPayload) {
   }
 }
 
+// ─── Templates: Workshop Pass (Day Pass/Full Pass) ─────────────────────────
+// 1 cobrança → N workshops inclusos. Email consolidado (não N emails
+// separados) — lista os workshops + link de voucher individual de cada um.
+
+interface WorkshopPassConfirmedPayload {
+  buyerName?: string
+  buyerEmail: string
+  produtorEmail?: string
+  passNome?: string
+  items: Array<{ workshopNome: string; voucherUrl: string }>
+  valorPago?: number
+  isCombo?: boolean
+  appUrl?: string
+}
+
+function buildWorkshopPassConfirmation(p: WorkshopPassConfirmedPayload) {
+  const itemRows = (p.items ?? []).map(it => `
+    <div style="margin:10px 0;padding:14px 16px;border:1px solid #e2e8f0;border-radius:12px;">
+      <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#0f172a;">${escape(it.workshopNome)}</p>
+      <a href="${escape(it.voucherUrl)}" style="display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${BRAND_COLOR};text-decoration:none;">
+        Acessar voucher →
+      </a>
+    </div>`).join('')
+
+  const valorRow = typeof p.valorPago === 'number' && p.valorPago > 0
+    ? infoRow('Valor pago', escape(money(p.valorPago)))
+    : (p.isCombo ? infoRow('Valor', '<span style="color:#16a34a;font-weight:700;">Combo grátis (já incluso na inscrição)</span>') : '')
+
+  const contentHtml = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${valorRow}</table>
+    <p style="margin:20px 0 8px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#64748b;">
+      Workshops inclusos no seu pass
+    </p>
+    ${itemRows}
+    <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      Guarde este email como comprovante. Cada workshop tem seu próprio voucher — apresente o QR correspondente no credenciamento de cada aula.
+    </p>`
+
+  const subjectPrefix = p.passNome ? `[${p.passNome}] ` : ''
+  return {
+    subject: `${subjectPrefix}Pass confirmado${p.isCombo ? ' (combo)' : ''}`,
+    html: baseLayout({
+      preheader: `Seu acesso aos workshops do pass ${p.passNome ?? ''} está garantido.`,
+      title: p.isCombo ? 'Pass liberado!' : 'Pass confirmado!',
+      intro: `Olá ${escape(p.buyerName ?? 'aluno(a)')}, ${p.isCombo
+        ? `seu acesso ao pass foi liberado como combo da sua inscrição na mostra.`
+        : `recebemos seu pagamento e suas vagas em todos os workshops do pass estão garantidas.`} Bora dançar!`,
+      contentHtml,
+      ctaLabel: 'Acessar primeiro voucher',
+      ctaUrl: p.items?.[0]?.voucherUrl ?? `${p.appUrl ?? 'https://coreohub.com'}`,
+    }),
+  }
+}
+
+interface WorkshopPassProducerPayload {
+  produtorNome?: string
+  produtorEmail: string
+  passNome?: string
+  buyerName?: string
+  buyerEmail?: string
+  valorBruto?: number
+  comissao?: number
+  valorLiquido?: number
+  isCombo?: boolean
+  appUrl?: string
+}
+
+function buildWorkshopPassProducerNotification(p: WorkshopPassProducerPayload) {
+  const linhas = [
+    p.passNome  ? infoRow('Pass',     escape(p.passNome))  : '',
+    p.buyerName ? infoRow('Aluno(a)', escape(p.buyerName)) : '',
+    p.buyerEmail ? infoRow('Email',   escape(p.buyerEmail)) : '',
+    p.isCombo
+      ? infoRow('Modalidade', '<span style="color:#7c3aed;font-weight:700;">Combo grátis (vinculado à inscrição da mostra)</span>')
+      : (typeof p.valorBruto === 'number' ? infoRow('Valor bruto', escape(money(p.valorBruto))) : ''),
+    !p.isCombo && typeof p.comissao === 'number'     ? infoRow('Comissão plataforma', escape(money(p.comissao)))                                                       : '',
+    !p.isCombo && typeof p.valorLiquido === 'number' ? infoRow('Valor líquido (você recebe)', `<span style="color:#16a34a;">${escape(money(p.valorLiquido))}</span>`) : '',
+  ].filter(Boolean).join('')
+
+  return {
+    subject: `Novo pass vendido — ${p.passNome ?? 'CoreoHub'}`,
+    html: baseLayout({
+      preheader: `Novo aluno comprou o pass ${p.passNome ?? ''}.`,
+      title: 'Novo pass vendido',
+      intro: `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, ${p.isCombo
+        ? `um aluno foi liberado como combo grátis no seu pass (vinculado à inscrição na mostra).`
+        : `um aluno comprou o seu pass de workshops.`}`,
+      contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>`,
+      ctaLabel: 'Ver inscrições',
+      ctaUrl: `${p.appUrl ?? 'https://app.coreohub.com'}/workshops-do-evento`,
+      footerNote: 'Você está recebendo este email por ser o produtor responsável pelo pass.',
+    }),
+  }
+}
+
 // ─── Templates: fatura agregada (carrinho — Sessão 2) ──────────────────────
 // 4 templates novos: criação da fatura, confirmação consolidada, lembrete
 // X dias antes do deadline, último aviso 24h antes.
@@ -1336,6 +1433,8 @@ interface SendEmailRequest {
     | 'audience_ticket_producer'
     | 'workshop_registration_confirmed'
     | 'workshop_registration_producer'
+    | 'workshop_pass_confirmed'
+    | 'workshop_pass_confirmed_producer'
     | 'aggregate_invoice_created'
     | 'aggregate_payment_confirmed'
     | 'aggregate_reminder'
@@ -1510,6 +1609,26 @@ Deno.serve(async (req) => {
         const p = payload as unknown as WorkshopProducerPayload
         if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
         const tpl = buildWorkshopProducerNotification(p)
+        to = p.produtorEmail
+        subject = tpl.subject
+        html = tpl.html
+        break
+      }
+      case 'workshop_pass_confirmed': {
+        const p = payload as unknown as WorkshopPassConfirmedPayload
+        if (!p.buyerEmail) throw new Error('buyerEmail é obrigatório')
+        const tpl = buildWorkshopPassConfirmation(p)
+        to = p.buyerEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.passNome
+        replyTo = p.produtorEmail
+        break
+      }
+      case 'workshop_pass_confirmed_producer': {
+        const p = payload as unknown as WorkshopPassProducerPayload
+        if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
+        const tpl = buildWorkshopPassProducerNotification(p)
         to = p.produtorEmail
         subject = tpl.subject
         html = tpl.html

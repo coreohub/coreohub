@@ -447,6 +447,22 @@ verify_jwt = false
 import_map = "./functions/detect-workshop-combo/deno.json"
 entrypoint = "./functions/detect-workshop-combo/index.ts"
 
+# Workshop Pass (Day Pass/Full Pass): mesmo padrão de create-workshop-registration,
+# mas reserva N workshops inclusos no pass sob 1 única cobrança Asaas (tudo-ou-nada).
+[functions.create-workshop-pass-registration]
+enabled = true
+verify_jwt = false
+import_map = "./functions/create-workshop-pass-registration/deno.json"
+entrypoint = "./functions/create-workshop-pass-registration/index.ts"
+
+# Mesmo padrão de detect-workshop-combo, mas pra Workshop Pass (RPC
+# detect_workshop_pass_combo também é service_role only).
+[functions.detect-workshop-pass-combo]
+enabled = true
+verify_jwt = false
+import_map = "./functions/detect-workshop-pass-combo/deno.json"
+entrypoint = "./functions/detect-workshop-pass-combo/index.ts"
+
 # Tier 2: valida cupom de plateia no checkout. verify_jwt=false (público).
 # Rate-limited 30 tentativas/5min por IP no próprio código da função.
 [functions.validate-audience-coupon]

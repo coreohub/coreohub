@@ -57,6 +57,7 @@ const Coupons                  = lazy(() => import('./pages/Coupons'));
 const WorkshopsManagement      = lazy(() => import('./pages/WorkshopsManagement'));
 const PublicWorkshopPage       = lazy(() => import('./pages/PublicWorkshopPage'));
 const CheckoutWorkshop         = lazy(() => import('./pages/CheckoutWorkshop'));
+const CheckoutWorkshopPass     = lazy(() => import('./pages/CheckoutWorkshopPass'));
 const MeuWorkshop              = lazy(() => import('./pages/MeuWorkshop'));
 const MeusCertificados         = lazy(() => import('./pages/MeusCertificados'));
 const ValidarCertificado       = lazy(() => import('./pages/ValidarCertificado'));
@@ -527,6 +528,7 @@ const App: React.FC = () => {
         {/* Workshops Etapa 1 — todas públicas (vitrine + guest checkout + voucher por token) */}
         <Route path="/workshop/:idOrSlug" element={<Suspense fallback={<PageLoader />}><PublicWorkshopPage /></Suspense>} />
         <Route path="/checkout-workshop/:id" element={<Suspense fallback={<PageLoader />}><CheckoutWorkshop /></Suspense>} />
+        <Route path="/checkout-workshop-pass/:id" element={<Suspense fallback={<PageLoader />}><CheckoutWorkshopPass /></Suspense>} />
         <Route path="/meu-workshop/:token" element={<Suspense fallback={<PageLoader />}><MeuWorkshop /></Suspense>} />
         {/* Etapa 2 Certificados — pública (validação por hash) e privada (lista do inscrito) */}
         <Route path="/validar-certificado/:hash" element={<Suspense fallback={<PageLoader />}><ValidarCertificado /></Suspense>} />

@@ -7,7 +7,7 @@ import imageCompression from 'browser-image-compression';
 import {
   Plus, Trash2, Pencil, Calendar, Clock, MapPin, Loader2, X, AlertCircle, CheckCircle,
   GraduationCap, User, Tag, Layers, DollarSign, Users, Globe, EyeOff, Camera,
-  ShoppingCart, Mail, RefreshCw, UserCheck, Search, Image as ImageIcon,
+  ShoppingCart, Mail, RefreshCw, UserCheck, Search, Image as ImageIcon, Ticket, Sparkles,
 } from 'lucide-react';
 
 type Nivel = 'iniciante' | 'intermediario' | 'avancado' | 'todos';
@@ -609,6 +609,15 @@ const WorkshopsManagement: React.FC = () => {
         <BuyersModal
           workshop={showBuyersModal}
           onClose={() => setShowBuyersModal(null)}
+        />
+      )}
+
+      {/* Passes (Day Pass/Full Pass) — só faz sentido dentro de 1 evento
+          específico, já que agrupa workshops desse mesmo festival. */}
+      {selectedScope !== 'all' && selectedScope !== 'standalone' && (
+        <PassesSection
+          eventId={selectedScope}
+          workshopsInEvent={workshops}
         />
       )}
     </div>
@@ -1652,6 +1661,403 @@ const LotsModal: React.FC<LotsModalProps> = ({ workshop, otherWorkshops, onClose
             </button>
           </div>
         )}
+      </div>
+    </div>,
+    document.body,
+  );
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// Seção: Passes (Day Pass/Full Pass) — pacote fixo de acesso a N workshops
+// do mesmo evento, vendido como produto único (padrão NUVO/JUMP). Compra cria
+// N workshop_registrations (1 por workshop incluso) sob 1 só cobrança Asaas.
+// ════════════════════════════════════════════════════════════════════════════
+interface PassRow {
+  id: string;
+  event_id: string;
+  name: string;
+  description: string | null;
+  preco: number;
+  preco_inscritos_mostra: number | null;
+  auto_detect_combo: boolean;
+  pass_commission_percent: number;
+  pass_fee_mode: FeeMode;
+  pass_max_per_cpf: number;
+  is_published: boolean;
+  workshop_ids: string[];
+}
+
+const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[] }> = ({ eventId, workshopsInEvent }) => {
+  const [passes, setPasses]   = useState<PassRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const emptyForm = {
+    name: '',
+    description: '',
+    preco: 0,
+    preco_inscritos_mostra: '' as string | number,
+    auto_detect_combo: true,
+    pass_commission_percent: 10,
+    pass_fee_mode: 'repassar' as FeeMode,
+    pass_max_per_cpf: 1,
+    is_published: false,
+    workshop_ids: [] as string[],
+  };
+  const [form, setForm] = useState(emptyForm);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const { data: passesData, error } = await supabase
+      .from('workshop_passes')
+      .select('*')
+      .eq('event_id', eventId)
+      .order('created_at', { ascending: false });
+    if (error) {
+      setFeedback({ kind: 'err', msg: error.message });
+      setLoading(false);
+      return;
+    }
+    const list = passesData ?? [];
+    if (list.length > 0) {
+      const { data: itemsData } = await supabase
+        .from('workshop_pass_items')
+        .select('pass_id, workshop_id')
+        .in('pass_id', list.map(p => p.id));
+      const byPass: Record<string, string[]> = {};
+      (itemsData ?? []).forEach((it: any) => { (byPass[it.pass_id] ??= []).push(it.workshop_id); });
+      setPasses(list.map(p => ({ ...p, workshop_ids: byPass[p.id] ?? [] })));
+    } else {
+      setPasses([]);
+    }
+    setLoading(false);
+  }, [eventId]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  useEffect(() => {
+    if (!feedback) return;
+    const t = setTimeout(() => setFeedback(null), 4500);
+    return () => clearTimeout(t);
+  }, [feedback]);
+
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setFormError(null);
+    setShowModal(true);
+  };
+
+  const openEdit = (p: PassRow) => {
+    setEditingId(p.id);
+    setForm({
+      name: p.name,
+      description: p.description ?? '',
+      preco: p.preco,
+      preco_inscritos_mostra: p.preco_inscritos_mostra ?? '',
+      auto_detect_combo: p.auto_detect_combo,
+      pass_commission_percent: p.pass_commission_percent,
+      pass_fee_mode: p.pass_fee_mode,
+      pass_max_per_cpf: p.pass_max_per_cpf,
+      is_published: p.is_published,
+      workshop_ids: p.workshop_ids,
+    });
+    setFormError(null);
+    setShowModal(true);
+  };
+
+  const savePass = async () => {
+    if (!form.name.trim()) return setFormError('Nome do pass é obrigatório');
+    if (Number(form.preco) <= 0) return setFormError('Preço do pass deve ser maior que zero');
+    if (form.workshop_ids.length < 2) return setFormError('Selecione pelo menos 2 workshops pro pass');
+
+    setSaving(true);
+    setFormError(null);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSaving(false); return setFormError('Sessão expirada'); }
+
+    const payload = {
+      event_id: eventId,
+      created_by: user.id,
+      name: form.name.trim(),
+      description: form.description.trim() || null,
+      preco: Number(form.preco),
+      preco_inscritos_mostra: form.preco_inscritos_mostra === '' ? null : Number(form.preco_inscritos_mostra),
+      auto_detect_combo: form.auto_detect_combo,
+      pass_commission_percent: Number(form.pass_commission_percent),
+      pass_fee_mode: form.pass_fee_mode,
+      pass_max_per_cpf: Number(form.pass_max_per_cpf),
+      is_published: form.is_published,
+    };
+
+    let passId = editingId;
+    if (editingId) {
+      const { error } = await supabase.from('workshop_passes').update(payload).eq('id', editingId);
+      if (error) { setSaving(false); return setFormError(error.message); }
+    } else {
+      const { data, error } = await supabase.from('workshop_passes').insert(payload).select('id').single();
+      if (error || !data) { setSaving(false); return setFormError(error?.message ?? 'Falha ao criar pass'); }
+      passId = data.id;
+    }
+
+    // Sincroniza itens: deleta todos e reinsere (simples, sem diffing — pass
+    // raramente tem mais que 10 workshops, custo desprezível).
+    if (passId) {
+      await supabase.from('workshop_pass_items').delete().eq('pass_id', passId);
+      const { error: itemsErr } = await supabase
+        .from('workshop_pass_items')
+        .insert(form.workshop_ids.map(wid => ({ pass_id: passId, workshop_id: wid })));
+      if (itemsErr) {
+        setSaving(false);
+        return setFormError(`Pass salvo, mas falha ao vincular workshops: ${itemsErr.message}`);
+      }
+    }
+
+    setSaving(false);
+    setShowModal(false);
+    setFeedback({ kind: 'ok', msg: editingId ? 'Pass atualizado' : 'Pass criado' });
+    refresh();
+  };
+
+  const togglePublish = async (p: PassRow) => {
+    const { error } = await supabase.from('workshop_passes').update({ is_published: !p.is_published }).eq('id', p.id);
+    if (error) setFeedback({ kind: 'err', msg: error.message });
+    else { setFeedback({ kind: 'ok', msg: p.is_published ? 'Pass despublicado' : 'Pass publicado' }); refresh(); }
+  };
+
+  const removePass = async (p: PassRow) => {
+    if (!confirm(`Remover o pass "${p.name}"? Inscrições já feitas por esse pass não são afetadas.`)) return;
+    const { error } = await supabase.from('workshop_passes').delete().eq('id', p.id);
+    if (error) setFeedback({ kind: 'err', msg: error.message });
+    else { setFeedback({ kind: 'ok', msg: 'Pass removido' }); refresh(); }
+  };
+
+  return (
+    <div className="mt-8">
+      <div className="mb-4 flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-xl font-black uppercase tracking-tighter text-slate-900 dark:text-white flex items-center gap-2">
+            <Ticket className="text-[#ff0068]" size={20} />
+            Passes
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Pacote fixo de acesso a vários workshops (Day Pass/Full Pass). Esgota se qualquer workshop incluso esgotar.
+          </p>
+        </div>
+        <button
+          onClick={openCreate}
+          disabled={workshopsInEvent.length < 2}
+          title={workshopsInEvent.length < 2 ? 'Cadastre pelo menos 2 workshops nesse evento primeiro' : undefined}
+          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 dark:bg-white px-4 py-2.5 text-sm font-bold text-white dark:text-slate-900 hover:opacity-90 disabled:opacity-40 transition"
+        >
+          <Plus size={16} />
+          Novo pass
+        </button>
+      </div>
+
+      {feedback && (
+        <div className={`mb-4 rounded-xl border p-3 text-sm flex items-center gap-2 ${feedback.kind === 'ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200' : 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200'}`}>
+          {feedback.kind === 'ok' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+          {feedback.msg}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-10"><Loader2 size={24} className="animate-spin text-[#ff0068]" /></div>
+      ) : passes.length === 0 ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400 italic">Nenhum pass criado pra esse evento ainda.</p>
+      ) : (
+        <div className="grid gap-3">
+          {passes.map(p => (
+            <div key={p.id} className="rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    {p.is_published ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full"><Globe size={10} />Publicado</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-slate-500/15 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full"><EyeOff size={10} />Rascunho</span>
+                    )}
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-[#ff0068]/15 text-[#ff0068] px-2 py-0.5 rounded-full">Pass</span>
+                  </div>
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white">{p.name}</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {p.workshop_ids.length} workshops inclusos: {p.workshop_ids.map(wid => workshopsInEvent.find(w => w.id === wid)?.name ?? '?').join(', ')}
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+                    <span className="font-black text-slate-900 dark:text-white">{fmtCurrency(p.preco)}</span>
+                    {p.preco_inscritos_mostra != null && (
+                      <span className="text-xs text-violet-600 dark:text-violet-400">↓ {fmtCurrency(p.preco_inscritos_mostra)} p/ inscritos</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => togglePublish(p)}
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${p.is_published ? 'border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10' : 'bg-emerald-600 text-white hover:bg-emerald-500'}`}
+                  >
+                    {p.is_published ? <><EyeOff size={12} />Despublicar</> : <><Globe size={12} />Publicar</>}
+                  </button>
+                  <button
+                    onClick={() => openEdit(p)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-white/10 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition"
+                  >
+                    <Pencil size={12} />Editar
+                  </button>
+                  <button
+                    onClick={() => removePass(p)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 dark:border-rose-500/30 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
+                  >
+                    <Trash2 size={12} />Remover
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showModal && (
+        <PassFormModal
+          form={form}
+          setForm={setForm}
+          formError={formError}
+          saving={saving}
+          isEdit={!!editingId}
+          workshopsInEvent={workshopsInEvent}
+          onClose={() => setShowModal(false)}
+          onSave={savePass}
+        />
+      )}
+    </div>
+  );
+};
+
+interface PassFormModalProps {
+  form: any; setForm: any; formError: string | null; saving: boolean;
+  isEdit: boolean; workshopsInEvent: WorkshopRow[];
+  onClose: () => void; onSave: () => void;
+}
+
+const PassFormModal: React.FC<PassFormModalProps> = ({ form, setForm, formError, saving, isEdit, workshopsInEvent, onClose, onSave }) => {
+  const upd = (k: string, v: any) => setForm((p: any) => ({ ...p, [k]: v }));
+
+  const toggleWorkshop = (id: string) => {
+    setForm((p: any) => ({
+      ...p,
+      workshop_ids: p.workshop_ids.includes(id)
+        ? p.workshop_ids.filter((x: string) => x !== id)
+        : [...p.workshop_ids, id],
+    }));
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="pass-form-title"
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4"
+      onClick={onClose}
+    >
+      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[90vh]" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-5 pb-4 border-b border-slate-200 dark:border-white/10 shrink-0">
+          <h2 id="pass-form-title" className="text-lg sm:text-xl font-black text-slate-900 dark:text-white truncate">{isEdit ? 'Editar pass' : 'Novo pass'}</h2>
+          <button onClick={onClose} aria-label="Fechar" className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg shrink-0"><X size={18} /></button>
+        </div>
+
+        {formError && (
+          <div className="mx-5 sm:mx-6 mt-4 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 p-3 text-sm text-rose-700 dark:text-rose-200 flex items-center gap-2 shrink-0">
+            <AlertCircle size={16} />{formError}
+          </div>
+        )}
+
+        <div className="space-y-5 overflow-y-auto px-5 sm:px-6 py-5 flex-1">
+          <Section title="Identidade">
+            <Field label="Nome do pass *">
+              <input value={form.name} onChange={e => upd('name', e.target.value)} className={inputCls} placeholder="Ex: Full Pass — Todos os workshops" />
+            </Field>
+            <Field label="Descrição">
+              <textarea value={form.description} onChange={e => upd('description', e.target.value)} rows={2} className={inputCls} placeholder="O que o pass inclui, pra quem é indicado..." />
+            </Field>
+          </Section>
+
+          <Section title="Workshops inclusos (mín. 2) *">
+            <div className="space-y-2 max-h-48 overflow-y-auto rounded-lg border border-slate-200 dark:border-white/10 p-3">
+              {workshopsInEvent.length === 0 ? (
+                <p className="text-xs text-slate-500 italic">Nenhum workshop cadastrado nesse evento ainda.</p>
+              ) : (
+                workshopsInEvent.map(w => (
+                  <label key={w.id} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                    <input type="checkbox" checked={form.workshop_ids.includes(w.id)} onChange={() => toggleWorkshop(w.id)} />
+                    {w.name}
+                  </label>
+                ))
+              )}
+            </div>
+          </Section>
+
+          <Section title="Preços">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Preço do pass (R$) *"><input type="number" step="0.01" value={form.preco} onChange={e => upd('preco', e.target.value)} className={inputCls} /></Field>
+              <Field label="Preço para inscritos da mostra (R$)">
+                <input type="number" step="0.01" value={form.preco_inscritos_mostra} onChange={e => upd('preco_inscritos_mostra', e.target.value)} className={inputCls} placeholder="vazio = mesmo preço" />
+              </Field>
+            </div>
+            <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+              <input type="checkbox" checked={form.auto_detect_combo} onChange={e => upd('auto_detect_combo', e.target.checked)} className="mt-1" />
+              <span>
+                Detectar combo automaticamente pelo CPF (cruza com inscrições aprovadas)
+                <span className="block text-xs text-slate-500 dark:text-slate-400">Se desligado, comprador paga o preço cheio</span>
+              </span>
+            </label>
+            <p className="text-xs text-slate-500 dark:text-slate-400 inline-flex items-start gap-1.5">
+              <Sparkles size={12} className="mt-0.5 shrink-0" />
+              Preço é fixo — o pass esgota assim que qualquer workshop incluso ficar sem vaga (tudo-ou-nada).
+            </p>
+          </Section>
+
+          <Section title="Limites & taxas">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Modo da taxa">
+                <select value={form.pass_fee_mode} onChange={e => upd('pass_fee_mode', e.target.value as FeeMode)} className={inputCls}>
+                  <option value="repassar">Repassar ao comprador</option>
+                  <option value="absorver">Absorver no preço</option>
+                </select>
+              </Field>
+              <Field label="Limite de passes por CPF"><input type="number" value={form.pass_max_per_cpf} onChange={e => upd('pass_max_per_cpf', e.target.value)} className={inputCls} /></Field>
+            </div>
+          </Section>
+
+          <Section title="Publicação">
+            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+              <input type="checkbox" checked={form.is_published} onChange={e => upd('is_published', e.target.checked)} />
+              Publicar na vitrine pública (vendas ativas)
+            </label>
+          </Section>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-5 sm:px-6 py-4 border-t border-slate-200 dark:border-white/10 shrink-0 bg-white dark:bg-slate-900">
+          <button onClick={onClose} className="px-4 py-2.5 rounded-lg text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10">Cancelar</button>
+          <button onClick={onSave} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[#ff0068] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#ff1a78] disabled:opacity-50 transition">
+            {saving && <Loader2 size={14} className="animate-spin" />}
+            {isEdit ? 'Salvar alterações' : 'Criar pass'}
+          </button>
+        </div>
       </div>
     </div>,
     document.body,

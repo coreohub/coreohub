@@ -415,6 +415,177 @@ async function handleWorkshopRegistration(opts: {
   })
 }
 
+// ── Handler dedicado pra Workshop Pass (1 cobrança → N workshop_registrations) ──
+// Espelha handleAggregatePayment, mas pra workshop_registrations: atualiza todas
+// as rows do pass_group_id + insere 1 platform_commissions por row, usando os
+// snapshots de preco_pago/commission_amount/producer_amount já rateados na
+// criação (create-workshop-pass-registration) — sem recalcular proporção aqui.
+async function handleWorkshopPassPayment(opts: {
+  supabase: any
+  payment: any
+  statusInterno: string
+  passGroupId: string
+}): Promise<Response> {
+  const { supabase, payment, statusInterno, passGroupId } = opts
+
+  const respHeaders = { ...corsHeaders, 'Content-Type': 'application/json' }
+  const respond = (body: Record<string, unknown>) =>
+    new Response(JSON.stringify(body), { status: 200, headers: respHeaders })
+
+  if (statusInterno === 'APROVADO') {
+    const { data: existing } = await supabase
+      .from('platform_commissions')
+      .select('id')
+      .eq('asaas_payment_id', String(payment.id))
+      .limit(1)
+      .maybeSingle()
+    if (existing) {
+      console.log(`[asaas-webhook][workshop-pass] payment=${payment.id} já processado`)
+      return respond({ status: 'already_processed' })
+    }
+  }
+
+  const updatePayload: Record<string, unknown> = {
+    status_pagamento: statusInterno,
+    payment_method:   payment.billingType ?? null,
+  }
+  if (statusInterno === 'APROVADO') {
+    updatePayload.paid_at = new Date().toISOString()
+  }
+
+  const { data: updatedRows, error: updErr } = await supabase
+    .from('workshop_registrations')
+    .update(updatePayload)
+    .eq('pass_group_id', passGroupId)
+    .select(`
+      id, workshop_id, pass_id, buyer_name, buyer_email, access_token,
+      commission_amount, producer_amount, fee_mode, preco_pago, is_combo
+    `)
+
+  if (updErr) {
+    console.error('[asaas-webhook][workshop-pass] erro update:', updErr.message)
+  }
+  if (!updatedRows || updatedRows.length === 0) {
+    console.error(`[asaas-webhook][workshop-pass] pass_group_id=${passGroupId} sem registrations`)
+    return respond({ status: 'error', reason: 'pass_group_not_found' })
+  }
+
+  if (statusInterno !== 'APROVADO') {
+    return respond({
+      status: 'ok',
+      payment_status:  payment.status,
+      internal_status: statusInterno,
+      pass_group_id:   passGroupId,
+    })
+  }
+
+  // ── APROVADO: insere N platform_commissions (1 por workshop incluso) ────
+  const passId = updatedRows[0].pass_id
+  const { data: pass } = await supabase
+    .from('workshop_passes')
+    .select('id, name, event_id, created_by')
+    .eq('id', passId)
+    .single()
+
+  const paidAt = (updatePayload.paid_at as string | undefined) ?? new Date().toISOString()
+
+  const commissionRows = updatedRows.map((r: any) => ({
+    event_id:                  pass?.event_id ?? null,
+    producer_id:               pass?.created_by ?? null,
+    gross_amount:              parseFloat((Number(r.commission_amount ?? 0) + Number(r.producer_amount ?? 0)).toFixed(2)),
+    commission_amount:         parseFloat(Number(r.commission_amount ?? 0).toFixed(2)),
+    net_amount:                parseFloat(Number(r.producer_amount ?? 0).toFixed(2)),
+    asaas_payment_id:          String(payment.id),
+    commission_type:           'percent',
+    workshop_registration_id:  r.id,
+    kind:                      'workshop',
+    release_at:                computeReleaseAt(paidAt),
+  }))
+
+  const { error: commErr } = await supabase
+    .from('platform_commissions')
+    .upsert(commissionRows, { onConflict: 'asaas_payment_id,workshop_registration_id', ignoreDuplicates: true })
+
+  if (commErr) {
+    console.error('[asaas-webhook][workshop-pass] erro inserir comissões:', commErr.message)
+  } else {
+    const grossTotal = commissionRows.reduce((s: number, c: any) => s + c.gross_amount, 0)
+    console.log(
+      `[asaas-webhook][workshop-pass] APROVADO | group=${passGroupId} N=${updatedRows.length}` +
+      ` bruto=R$${grossTotal.toFixed(2)}`
+    )
+  }
+
+  // ── Emails: 1 consolidado pro comprador + 1 pro produtor ────────────────
+  try {
+    const { data: produtorProfile } = pass?.created_by
+      ? await supabase.from('profiles').select('full_name, email').eq('id', pass.created_by).maybeSingle()
+      : { data: null } as any
+
+    const appUrl = Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'
+
+    const { data: workshopNames } = await supabase
+      .from('workshops')
+      .select('id, name')
+      .in('id', updatedRows.map((r: any) => r.workshop_id))
+    const nameById: Record<string, string> = {}
+    ;(workshopNames ?? []).forEach((w: any) => { nameById[w.id] = w.name })
+
+    const items = updatedRows.map((r: any) => ({
+      workshopNome: nameById[r.workshop_id] ?? 'Workshop',
+      voucherUrl:   `${appUrl}/meu-workshop/${r.access_token}`,
+    }))
+
+    const grossAmount = updatedRows.reduce(
+      (s: number, r: any) => s + Number(r.commission_amount ?? 0) + Number(r.producer_amount ?? 0), 0
+    )
+    const commissionAmount = updatedRows.reduce((s: number, r: any) => s + Number(r.commission_amount ?? 0), 0)
+    const producerAmount   = updatedRows.reduce((s: number, r: any) => s + Number(r.producer_amount ?? 0), 0)
+
+    const emailJobs: Promise<void>[] = []
+
+    if (updatedRows[0].buyer_email) {
+      emailJobs.push(dispararEmail('workshop_pass_confirmed', {
+        buyerName:     updatedRows[0].buyer_name,
+        buyerEmail:    updatedRows[0].buyer_email,
+        produtorEmail: produtorProfile?.email,
+        passNome:      pass?.name,
+        items,
+        valorPago:     grossAmount,
+        isCombo:       Boolean(updatedRows[0].is_combo),
+        appUrl,
+      }))
+    }
+
+    if (produtorProfile?.email) {
+      emailJobs.push(dispararEmail('workshop_pass_confirmed_producer', {
+        produtorNome:  produtorProfile.full_name,
+        produtorEmail: produtorProfile.email,
+        passNome:      pass?.name,
+        buyerName:     updatedRows[0].buyer_name,
+        buyerEmail:    updatedRows[0].buyer_email,
+        valorBruto:    grossAmount,
+        comissao:      commissionAmount,
+        valorLiquido:  producerAmount,
+        isCombo:       Boolean(updatedRows[0].is_combo),
+        appUrl,
+      }))
+    }
+
+    await Promise.all(emailJobs)
+  } catch (emailErr) {
+    console.error('[asaas-webhook][workshop-pass] falha bloco emails:', (emailErr as Error).message)
+  }
+
+  return respond({
+    status:          'ok',
+    payment_status:  payment.status,
+    internal_status: statusInterno,
+    pass_group_id:   passGroupId,
+    registrations:   updatedRows.length,
+  })
+}
+
 // ── Handler dedicado pra fatura agregada (carrinho — 1 cobrança → N registrations) ─
 // Atualiza o payment row + todas as registrations linkadas via payment_group_id,
 // insere N rows em platform_commissions (1 por registration, com valores proporcionais)
@@ -1014,18 +1185,21 @@ Deno.serve(async (req) => {
     // Discriminator do externalReference:
     //   "AT:<group_id>"      = audience ticket (Tier 1/2 plateia)
     //   "WS:<registration>"  = workshop registration (Etapa 1 Workshops)
+    //   "WSP:<group_id>"     = Workshop Pass (Day Pass/Full Pass — 1 cobrança → N workshop_registrations)
     //   "AGG:<payment_id>"   = fatura agregada (carrinho — 1 cobrança → N registrations)
     //   "VS:<registration>"  = taxa de seletiva de vídeo (Modelo 3 — Sessão seletiva)
     //   <uuid>               = registration de inscrição (legado, sem prefix)
     const isAudienceTicket = externalRef.startsWith('AT:')
-    const isWorkshop       = externalRef.startsWith('WS:')
+    const isWorkshop       = externalRef.startsWith('WS:') && !externalRef.startsWith('WSP:')
+    const isWorkshopPass   = externalRef.startsWith('WSP:')
     const isAggregate      = externalRef.startsWith('AGG:')
     const isVideoSelection = externalRef.startsWith('VS:')
     const audienceGroupId  = isAudienceTicket ? externalRef.slice(3) : null
     const workshopRegistrationId = isWorkshop ? externalRef.slice(3) : null
+    const workshopPassGroupId = isWorkshopPass ? externalRef.slice(4) : null
     const aggregatePaymentId = isAggregate ? externalRef.slice(4) : null
     const videoSelectionRegistrationId = isVideoSelection ? externalRef.slice(3) : null
-    const registrationId   = (isAudienceTicket || isWorkshop || isAggregate || isVideoSelection) ? null : externalRef
+    const registrationId   = (isAudienceTicket || isWorkshop || isWorkshopPass || isAggregate || isVideoSelection) ? null : externalRef
 
     // Defesa em profundidade contra forja de webhook (token estatico
     // pode vazar): cross-check via API Asaas. Atacante com token vazado
@@ -1069,6 +1243,7 @@ Deno.serve(async (req) => {
 
     const refType = isAudienceTicket ? 'audience'
                   : isWorkshop       ? 'workshop'
+                  : isWorkshopPass   ? 'workshop_pass'
                   : isAggregate      ? 'aggregate'
                   : isVideoSelection ? 'video_selection'
                                      : 'registration'
@@ -1132,6 +1307,16 @@ Deno.serve(async (req) => {
           })
           .eq('payment_group_id', aggregatePaymentId)
         return ok({ status: 'deleted_cleaned', payment_id: aggregatePaymentId, kind: 'aggregate' })
+      }
+
+      // Workshop Pass (carrinho de N workshop_registrations): mesmo tratamento
+      // do aggregate — libera as rows pra refazer cobrança, não deleta.
+      if (workshopPassGroupId) {
+        await supabase
+          .from('workshop_registrations')
+          .update({ payment_url: null, payment_id: null, status_pagamento: 'PENDENTE' })
+          .eq('pass_group_id', workshopPassGroupId)
+        return ok({ status: 'deleted_cleaned', pass_group_id: workshopPassGroupId, kind: 'workshop_pass' })
       }
 
       // Audience/Workshop: por enquanto só loga, não mexe (esses fluxos têm
@@ -1225,6 +1410,16 @@ Deno.serve(async (req) => {
         payment,
         statusInterno,
         registrationId: workshopRegistrationId,
+      })
+    }
+
+    // ── BRANCH: WORKSHOP PASS (Day Pass/Full Pass — 1 cobrança → N regs) ─────
+    if (isWorkshopPass && workshopPassGroupId) {
+      return await handleWorkshopPassPayment({
+        supabase,
+        payment,
+        statusInterno,
+        passGroupId: workshopPassGroupId,
       })
     }
 
