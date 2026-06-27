@@ -721,10 +721,18 @@ async function handleAggregatePayment(opts: {
   if (statusInterno === 'APROVADO') {
     regUpdate.paid_at = paidAtReal
   }
-  await supabase
+  let regUpdateQuery = supabase
     .from('registrations')
     .update(regUpdate)
     .eq('payment_group_id', paymentId)
+  // Defesa contra evento atrasado/duplicado de fatura agregada já abandonada
+  // (ex.: inscrito pagou por uma cobrança avulsa separada antes desta fatura
+  // vencer) rebaixando um pagamento já confirmado. Só protege em eventos
+  // não-aprovação — APROVADO sempre deve atualizar (é o caminho de sucesso).
+  if (statusInterno !== 'APROVADO') {
+    regUpdateQuery = regUpdateQuery.not('status_pagamento', 'in', '(APROVADO,CONFIRMADO)')
+  }
+  await regUpdateQuery
 
   if (statusInterno !== 'APROVADO') {
     return respond({
@@ -1457,6 +1465,33 @@ Deno.serve(async (req) => {
       if (existing) {
         console.log(`[asaas-webhook] payment_id=${payment.id} já processado, ignorando`)
         return ok({ status: 'already_processed' })
+      }
+    }
+
+    // Defesa contra cobrança duplicada/abandonada sobrescrevendo pagamento
+    // real: é comum o inscrito gerar 2 cobranças pra mesma registration (1
+    // carrinho que expira + 1 avulsa que ela paga, ou vice-versa). Se a
+    // registration já está paga e este evento não é de aprovação, é quase
+    // certo um evento atrasado/duplicado de uma cobrança DIFERENTE (já
+    // abandonada) — ignora pra não rebaixar o pagamento real.
+    // Caso real: Carolina Mellin / "How Sweet" (2026-06-27) — cobrança
+    // avulsa de R$90 venceu e sobrescreveu o pagamento de R$72 já aprovado.
+    if (statusInterno !== 'APROVADO') {
+      const { data: currentReg } = await supabase
+        .from('registrations')
+        .select('status_pagamento, payment_id')
+        .eq('id', registrationId)
+        .maybeSingle()
+
+      const isAlreadyPaid = currentReg?.status_pagamento === 'APROVADO' || currentReg?.status_pagamento === 'CONFIRMADO'
+      const isDifferentPayment = currentReg?.payment_id && currentReg.payment_id !== String(payment.id)
+
+      if (isAlreadyPaid && isDifferentPayment) {
+        console.warn(
+          `[asaas-webhook] registration=${registrationId} já paga (payment_id=${currentReg?.payment_id})` +
+          ` — ignorando evento ${statusInterno} de cobrança diferente payment_id=${payment.id}`
+        )
+        return ok({ status: 'ignored_already_paid', registration_id: registrationId })
       }
     }
 

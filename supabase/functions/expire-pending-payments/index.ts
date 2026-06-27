@@ -125,6 +125,11 @@ Deno.serve(async (req) => {
 
     // Libera registrations linkadas. status_pagamento='VENCIDO' (já é valor
     // existente no enum lógico; webhook usa o mesmo pra OVERDUE).
+    // Guard: só rebaixa quem ainda está PENDENTE. Se o inscrito pagou essa
+    // mesma inscrição por outra cobrança (ex.: retry fora do carrinho) antes
+    // do cron rodar, status_pagamento já é APROVADO/CONFIRMADO/GRATUITO — e
+    // sem esse filtro o cron reescrevia o pagamento real de volta pra VENCIDO
+    // (caso real: Carolina Mellin / Ddi Ro Ri, 2026-06-27).
     await supabase
       .from('registrations')
       .update({
@@ -132,6 +137,7 @@ Deno.serve(async (req) => {
         status_pagamento: 'VENCIDO',
       })
       .eq('payment_group_id', p.id)
+      .eq('status_pagamento', 'PENDENTE')
 
     // Marca payment como EXPIRADO.
     const { error: updErr } = await supabase
