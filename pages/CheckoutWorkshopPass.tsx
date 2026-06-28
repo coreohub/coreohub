@@ -15,6 +15,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import AsaasBadge from '../components/AsaasBadge';
 import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
+import { isEventOver } from '../utils/eventStatus';
 import {
   Loader2, AlertCircle, ArrowLeft, ShieldCheck, User as UserIcon, Mail, Phone, FileText,
   Tag, X, Check, Ticket, Sparkles,
@@ -90,6 +91,17 @@ const CheckoutWorkshopPass: React.FC = () => {
           .eq('is_published', true)
           .maybeSingle();
         if (passErr || !p) { setError('Pass não encontrado'); return; }
+
+        const { data: ev } = await supabase
+          .from('events')
+          .select('start_date, end_date')
+          .eq('id', p.event_id)
+          .maybeSingle();
+        if (isEventOver(ev)) {
+          setError('Este evento já aconteceu. Vendas encerradas.');
+          return;
+        }
+
         setPass(p);
 
         const { data: items } = await supabase

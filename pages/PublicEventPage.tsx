@@ -15,6 +15,7 @@ import { EventAnchorNav, type AnchorSection } from '../components/EventAnchorNav
 import { PessoasSection, type JudgePublic, type WorkshopTeacherPublic } from '../components/PessoasSection';
 import { resolveLote, diffDias, formatDataBRComDia, todayISO, resolveActiveWorkshopLot, findNextWorkshopLot, type Lote } from '../utils/lotes';
 import { formatPrecoBR } from '../utils/masks';
+import { isEventOver } from '../utils/eventStatus';
 import AvisoViradaLote from '../components/AvisoViradaLote';
 
 /** Deriva nome do lote pelo índice/posição. Lote único → null (não mostra label).
@@ -368,7 +369,12 @@ const PublicEventPage = () => {
     );
   }
 
+  // Evento já encerrado (dia inteiro, end_date/start_date 23:59:59) trava
+  // TODAS as compras da vitrine — inscrição, ingresso e workshop/pass.
+  const eventOver = isEventOver(event);
+
   const isRegistrationOpen = (() => {
+    if (eventOver) return false;
     const now = new Date();
     const start = event.registration_start_date ? new Date(event.registration_start_date) : null;
     const end = event.registration_end_date ? new Date(event.registration_end_date) : null;
@@ -728,6 +734,16 @@ const PublicEventPage = () => {
 
       {/* Content */}
       <div className="max-w-5xl mx-auto px-8 py-16 space-y-12">
+        {/* Banner de evento encerrado — padrão Sympla/Eventbrite: página continua
+            no ar (certificado/resultado/compartilhamento), mas todas as compras
+            (inscrição/ingresso/workshop/pass) ficam desabilitadas. */}
+        {eventOver && (
+          <div role="status" className="bg-amber-500/10 border border-amber-500/30 rounded-2xl px-6 py-4 flex items-center gap-3">
+            <Clock size={20} className="text-amber-400 shrink-0" />
+            <p className="text-sm font-bold text-amber-300">Este evento já aconteceu. Vendas e inscrições estão encerradas.</p>
+          </div>
+        )}
+
         {/* Stats Row */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {([
@@ -904,6 +920,9 @@ const PublicEventPage = () => {
                   <Ticket size={24} className="text-[#ff0068]" /> Ingressos
                 </h2>
                 <p className="text-xs text-slate-400">Para o público que vai assistir. Bailarinos inscritos não precisam comprar.</p>
+                {eventOver ? (
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">Vendas encerradas</p>
+                ) : (
                 <a
                   href={config.url_ingressos}
                   target="_blank"
@@ -912,6 +931,7 @@ const PublicEventPage = () => {
                 >
                   <Ticket size={18} /> Comprar Ingressos <ExternalLink size={14} />
                 </a>
+                )}
               </div>
             );
           }
@@ -994,9 +1014,13 @@ const PublicEventPage = () => {
                             </span>
                           ) : null}
 
+                          {eventOver && (
+                            <span className="self-start text-[10px] font-black uppercase tracking-widest text-amber-400 mt-2">Vendas encerradas</span>
+                          )}
+
                           {/* Carrinho multi-tipo: +/− por tipo (padrão Sympla/Eventbrite).
                               Some "Comprar" individual; total vai pra sticky bar. */}
-                          {salesEnabled && preco > 0 && !soldOut && (() => {
+                          {!eventOver && salesEnabled && preco > 0 && !soldOut && (() => {
                             const key = String(realIdx);
                             const qty = cart[key] ?? 0;
                             const isMeia = String(t.nome).toLowerCase().includes('meia');
@@ -1041,7 +1065,7 @@ const PublicEventPage = () => {
                               </div>
                             );
                           })()}
-                          {!salesEnabled && t.link && (
+                          {!eventOver && !salesEnabled && t.link && (
                             <a
                               href={t.link}
                               target="_blank"
@@ -1192,16 +1216,19 @@ const PublicEventPage = () => {
                 {publicPasses.map(pass => (
                   <button
                     key={pass.id}
-                    onClick={() => !pass.esgotado && navigate(`/checkout-workshop-pass/${pass.id}`)}
-                    disabled={pass.esgotado}
+                    onClick={() => !pass.esgotado && !eventOver && navigate(`/checkout-workshop-pass/${pass.id}`)}
+                    disabled={pass.esgotado || eventOver}
                     className="text-left bg-gradient-to-br from-[#ff0068]/15 to-[#1de7f2]/10 border-2 border-[#ff0068]/40 hover:border-[#ff0068] rounded-2xl p-5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="flex items-center justify-between mb-2">
                       <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-[#ff0068] text-white px-2.5 py-1 rounded-full">
                         <Ticket size={11} />Pass
                       </span>
-                      {pass.esgotado && (
+                      {pass.esgotado && !eventOver && (
                         <span className="text-[10px] font-black uppercase tracking-widest text-rose-400">Esgotado</span>
+                      )}
+                      {eventOver && (
+                        <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">Vendas encerradas</span>
                       )}
                     </div>
                     <h3 className="font-black uppercase tracking-tight text-white text-base leading-tight">{pass.name}</h3>

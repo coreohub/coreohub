@@ -24,6 +24,7 @@ import {
 import AsaasBadge from '../components/AsaasBadge';
 import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
 import { resolveLote, todayISO, type Lote } from '../utils/lotes';
+import { isEventOver } from '../utils/eventStatus';
 // Fonte única da matemática de comissão/split (compartilhada com a edge
 // create-audience-ticket). Garante que o total exibido bate com a cobrança.
 import { computeAudienceCart } from '../supabase/functions/_shared/audience-pricing';
@@ -129,7 +130,7 @@ export default function CheckoutIngresso() {
         const filterCol = isUuid ? 'id' : 'slug';
         const { data: ev, error: evErr } = await supabase
           .from('events')
-          .select('id, name, slug, event_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos')
+          .select('id, name, slug, start_date, end_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos')
           .eq(filterCol, idOrSlug)
           .maybeSingle();
         if (evErr || !ev) { setError('Evento não encontrado.'); return; }
@@ -137,12 +138,12 @@ export default function CheckoutIngresso() {
           setError('Venda de ingressos não está disponível para este evento.');
           return;
         }
-        if (ev.event_date) {
-          const deadline = new Date(ev.event_date + 'T23:59:59');
-          if (deadline.getTime() < Date.now()) {
-            setError('Este evento já aconteceu. Vendas de ingressos encerradas.');
-            return;
-          }
+        // Fix 2026-06-28: checava `event_date`, coluna legada sempre NULL nos
+        // eventos reais — esse bloqueio nunca disparava. Fonte real é
+        // start_date/end_date (preenchidas pelo painel).
+        if (isEventOver(ev)) {
+          setError('Este evento já aconteceu. Vendas de ingressos encerradas.');
+          return;
         }
         setEvent(ev);
         // Sanitiza o cart contra os tipos válidos do evento (descarta idx morto).
