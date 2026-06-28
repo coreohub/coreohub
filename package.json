@@ -43,6 +43,7 @@
     "@types/file-saver": "^2.0.7",
     "@types/jszip": "^3.4.0",
     "@types/node": "^22.14.0",
+    "@vercel/functions": "^3.7.4",
     "@vercel/node": "^5.8.2",
     "@vitejs/plugin-react": "^5.0.0",
     "dotenv": "^17.4.2",
