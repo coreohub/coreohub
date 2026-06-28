@@ -38,6 +38,18 @@
       "destination": "/api/og-workshop?slug=:slug"
     },
     {
+      "source": "/",
+      "has": [
+        { "type": "host", "value": "festival.usualdance.com" },
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot).*)"
+        }
+      ],
+      "destination": "/api/og?slug=usualdance-festival-2026"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

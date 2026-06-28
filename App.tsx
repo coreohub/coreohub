@@ -268,6 +268,29 @@ const App: React.FC = () => {
     return (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
   });
   const [config, setConfig] = useState<any>({ nome_evento: "", data_evento: "" });
+  // Domínio próprio por evento (ex: festival.usualdance.com) — resolve
+  // hostname → events.custom_domain. null = checado e não é domínio
+  // customizado; undefined = ainda checando (gate inicial junto do loading).
+  // Plano em [[backlog-dominio-custom-evento]].
+  const [customDomainSlug, setCustomDomainSlug] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    const hostname = window.location.hostname;
+    const KNOWN_HOSTS = ['app.coreohub.com', 'coreohub.com', 'www.coreohub.com', 'localhost', '127.0.0.1'];
+    if (KNOWN_HOSTS.includes(hostname) || hostname.endsWith('.vercel.app')) {
+      setCustomDomainSlug(null);
+      return;
+    }
+    supabase
+      .from('events')
+      .select('slug')
+      .eq('custom_domain', hostname)
+      .maybeSingle()
+      .then(
+        ({ data }) => setCustomDomainSlug(data?.slug ?? null),
+        () => setCustomDomainSlug(null)
+      );
+  }, []);
 
   useEffect(() => {
     if (theme === 'dark') document.documentElement.classList.add('dark');
@@ -420,7 +443,7 @@ const App: React.FC = () => {
     };
   }, []);
 
-  if (loading) {
+  if (loading || customDomainSlug === undefined) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center gap-6">
         <div className="w-16 h-16 border-4 border-[#ff0068] border-t-transparent rounded-full animate-spin shadow-[0_0_30px_rgba(255,0,104,0.3)]" />
@@ -451,7 +474,11 @@ const App: React.FC = () => {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={isMarketingDomain ? <LandingPage /> : <RootRedirect />} />
+        <Route path="/" element={
+          customDomainSlug
+            ? <Suspense fallback={<PageLoader />}><PublicEventPage forcedSlug={customDomainSlug} /></Suspense>
+            : (isMarketingDomain ? <LandingPage /> : <RootRedirect />)
+        } />
         {/* Sales page nova — acesse via /lp também (alias, qualquer domínio) */}
         <Route path="/lp" element={<LandingPage />} />
         {/* Setor público: landing dedicada + PDF técnico imprimível */}

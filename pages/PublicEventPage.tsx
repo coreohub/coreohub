@@ -32,8 +32,12 @@ const TikTokIcon = ({ size = 16 }: { size?: number }) => (
   </svg>
 );
 
-const PublicEventPage = () => {
-  const { idOrSlug } = useParams<{ idOrSlug: string }>();
+// forcedSlug: usado quando a vitrine é servida na raiz "/" de um domínio
+// próprio do evento (ex: festival.usualdance.com) — App.tsx resolve o
+// hostname e passa o slug direto, sem depender do param de rota /evento/:id.
+const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
+  const { idOrSlug: paramIdOrSlug } = useParams<{ idOrSlug: string }>();
+  const idOrSlug = forcedSlug ?? paramIdOrSlug;
   const navigate = useNavigate();
   const [event, setEvent] = useState<any>(null);
   const [config, setConfig] = useState<any>(null);
