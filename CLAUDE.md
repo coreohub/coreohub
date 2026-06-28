@@ -239,6 +239,14 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-06-28 — Domínio próprio: fix preview WhatsApp/Telegram (filesystem ganha de rewrite) ✅ SHIPADO
+1 commit (`cffdaab`), seguindo o domínio próprio por evento shipado mais cedo no mesmo dia (`e58590a`, `festival.usualdance.com`). Disparado pelo user notando que o preview ao compartilhar `festival.usualdance.com` no WhatsApp mostrava o card genérico do CoreoHub, não os dados do evento.
+
+- **Causa raiz**: o `vercel.json` tinha um rewrite condicional (`has: host=festival.usualdance.com` + UA de bot) pra rota raiz `/` → `/api/og?slug=...`. Confirmado via doc oficial da Vercel: **a Vercel sempre prioriza o filesystem sobre rewrites quando o path bate com um arquivo literal** — `/` sempre resolve pro `index.html` do build, então aquele rewrite nunca era avaliado. Bots recebiam sempre as meta tags genéricas do `index.html`. Os outros rewrites de bot (`/evento/:slug`, `/festival/:slug`, `/workshop/:slug`) sempre funcionaram porque esses paths são rotas virtuais do SPA, não arquivos reais.
+- **Fix**: `middleware.ts` novo na raiz do projeto (Vercel Routing Middleware, roda ANTES da resolução de arquivo estático — `@vercel/functions` como devDependency). `matcher: '/'` limita a execução só na rota raiz. Mapa `CUSTOM_DOMAIN_SLUGS` (hostname→slug) continua hardcoded — novo domínio custom = 1 linha nova + redeploy. Regra morta removida do `vercel.json`.
+- **Validado em prod** via curl com UA `WhatsApp/2.23.20.0`: `og:title`/`og:description`/`og:image` corretos do evento.
+- **Decisão registrada**: sem UI de domínio custom no painel do produtor por ora (avaliadas 2 opções — manter manual venceu). Mesmo com UI, ainda sobram 2 passos fora do app (você adicionar o domínio no Vercel + produtor configurar CNAME); baixo ROI com 1 produtor usando. Revisitar se aparecer 2º pedido. Detalhes em [[backlog-dominio-custom-evento]].
+
 ### 2026-06-21 — Terminal de júri: 2 bugs críticos + tela de fila como entrada ✅ SHIPADO
 8 commits (`51da0cf` → `e2b53c9`). Disparado pelo Hemer testando o terminal do júri com o cronograma real do Usualdance pela 1ª vez (só tinha usado modo demo antes). Detalhes em [[terminal-juri-bugs-criticos-e-fila-shipado]].
 
