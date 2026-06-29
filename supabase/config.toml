@@ -402,6 +402,13 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
 
+[functions.sitemap-xml]
+enabled = true
+# Crawlers (Googlebot, Bingbot) não enviam Authorization header — precisa ser público.
+verify_jwt = false
+import_map = "./functions/sitemap-xml/deno.json"
+entrypoint = "./functions/sitemap-xml/index.ts"
+
 [functions.refund-asaas-payment]
 enabled = true
 verify_jwt = true

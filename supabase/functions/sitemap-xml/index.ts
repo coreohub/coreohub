@@ -24,11 +24,15 @@ Deno.serve(async () => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { data: events } = await supabase
+    const { data: events, error: eventsError } = await supabase
       .from('events')
-      .select('slug, id, updated_at')
+      .select('slug, id, created_at, custom_domain')
       .eq('is_public', true)
       .order('start_date', { ascending: false });
+
+    if (eventsError) {
+      console.error('[sitemap-xml] events query failed:', eventsError.message);
+    }
 
     const staticPages = [
       { loc: SITE_URL, priority: 1.0, changefreq: 'daily' },
@@ -39,9 +43,12 @@ Deno.serve(async () => {
 
     const eventEntries = (events ?? []).map((ev) => {
       const slugOrId = ev.slug ?? ev.id;
-      const lastmod = ev.updated_at ? new Date(ev.updated_at).toISOString().split('T')[0] : '';
+      const lastmod = ev.created_at ? new Date(ev.created_at).toISOString().split('T')[0] : '';
+      // Evento com domínio próprio: a URL canônica é o domínio custom, não
+      // app.coreohub.com/evento/:slug — evita conteúdo duplicado no Google.
+      const loc = ev.custom_domain ? `https://${ev.custom_domain}/` : `${SITE_URL}/evento/${slugOrId}`;
       return `  <url>
-    <loc>${SITE_URL}/evento/${slugOrId}</loc>
+    <loc>${loc}</loc>
     ${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
