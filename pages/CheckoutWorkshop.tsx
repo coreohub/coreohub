@@ -424,9 +424,13 @@ const CheckoutWorkshop: React.FC = () => {
                   className={`${inputCls} [color-scheme:dark]`}
                   required
                 >
-                  <option value="">Selecione o bailarino</option>
+                  {/* [color-scheme:dark] no <select> não é suficiente em todo
+                      browser/SO pra colorir a lista de opções aberta (Chrome
+                      Windows ignora pro popup nativo) — estiliza cada <option>
+                      explicitamente pra não ficar texto branco em fundo branco. */}
+                  <option value="" style={{ backgroundColor: '#18181f', color: '#fff' }}>Selecione o bailarino</option>
                   {tokenInfo.bailarinos.map(b => (
-                    <option key={b.id} value={b.id}>{b.nome}</option>
+                    <option key={b.id} value={b.id} style={{ backgroundColor: '#18181f', color: '#fff' }}>{b.nome}</option>
                   ))}
                 </select>
               </FieldLabel>
