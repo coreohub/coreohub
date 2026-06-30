@@ -7,8 +7,9 @@ import {
   ChevronLeft, ChevronRight, Bell, SlidersHorizontal,
   Undo2, Loader2, Eye, Music2, Video, Calendar, User, Instagram,
   TrendingUp, ExternalLink, Pencil, Save, Lock as LockIcon,
-  BarChart3, MessageCircle,
+  BarChart3, MessageCircle, Link2,
 } from 'lucide-react';
+import { isRegistrationPaid } from '../utils/registrationStatus';
 import { supabase } from '../services/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { refundRegistration } from '../services/refundService';
@@ -357,6 +358,7 @@ const Registrations = () => {
      link público do evento. Carregado junto do fetchData. */
   const [activeEventInfo, setActiveEventInfo] = useState<{ name?: string; slug?: string } | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedDiscountLink, setCopiedDiscountLink] = useState(false);
 
   useEffect(() => {
     // Default do dropdown: primeiro evento (ordenado por created_at desc).
@@ -2577,6 +2579,29 @@ const Registrations = () => {
                     </a>
                   );
                 })()}
+                {/* Link de desconto por coreografia — mesmo recurso que o
+                    inscrito tem em /minhas-coreografias, exposto aqui também
+                    pro produtor (que é quem de fato responde os WhatsApps das
+                    famílias) não precisar pedir pro inscrito gerar. */}
+                {isRegistrationPaid(viewingReg.status_pagamento) && viewingReg.discount_token && activeEventInfo?.slug && (
+                  <button
+                    onClick={() => {
+                      const url = `${window.location.origin}/evento/${activeEventInfo.slug}?discount_token=${viewingReg.discount_token}#workshops`;
+                      navigator.clipboard.writeText(url).then(() => {
+                        setCopiedDiscountLink(true);
+                        setTimeout(() => setCopiedDiscountLink(false), 2000);
+                      });
+                    }}
+                    className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center gap-2 ${
+                      copiedDiscountLink
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-200 dark:hover:bg-violet-500/20'
+                    }`}
+                    title="Copiar link de desconto pra mandar pros pais dos bailarinos comprarem o workshop"
+                  >
+                    {copiedDiscountLink ? <><CheckCircle2 size={12} /> Copiado</> : <><Link2 size={12} /> Link desconto</>}
+                  </button>
+                )}
                 {(viewingReg.status_pagamento === 'CONFIRMADO' || viewingReg.status_pagamento === 'APROVADO') && (
                   <button
                     onClick={() => { handleOpenRefund(viewingReg); setViewingReg(null); }}
