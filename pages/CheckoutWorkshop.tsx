@@ -421,7 +421,7 @@ const CheckoutWorkshop: React.FC = () => {
                 <select
                   value={selectedBailarinoId}
                   onChange={e => setSelectedBailarinoId(e.target.value)}
-                  className={inputCls}
+                  className={`${inputCls} [color-scheme:dark]`}
                   required
                 >
                   <option value="">Selecione o bailarino</option>
