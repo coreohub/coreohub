@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import AsaasBadge from '../components/AsaasBadge';
 import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
@@ -51,6 +51,8 @@ const formatPhone = (v: string) => {
 const CheckoutWorkshop: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const discountToken = searchParams.get('discount_token');
 
   const [workshop, setWorkshop] = useState<any>(null);
   const [stock, setStock]       = useState<any>(null);
@@ -77,6 +79,42 @@ const CheckoutWorkshop: React.FC = () => {
   // Anti-fraude: combo só é detectado pra comprador logado (a edge function/RPC
   // exige user_id pra validar dono do CPF). userId === undefined = ainda checando.
   const [userId, setUserId] = useState<string | null | undefined>(undefined);
+
+  // Link de desconto por coreografia (canal sem CPF/login — coreógrafo
+  // compartilha manualmente com as famílias via WhatsApp). ?discount_token=
+  // na URL resolve a lista de bailarinos daquela inscrição; comprador escolhe
+  // quem está se inscrevendo em vez de digitar CPF pra detectar combo.
+  const [tokenInfo, setTokenInfo] = useState<{
+    registrationId: string;
+    coreografia: string;
+    bailarinos: { id: string; nome: string }[];
+  } | null | undefined>(discountToken ? undefined : null);
+  const [selectedBailarinoId, setSelectedBailarinoId] = useState('');
+
+  useEffect(() => {
+    if (!discountToken || !workshop?.event_id) return;
+    let active = true;
+    (async () => {
+      const { data, error: rpcErr } = await supabase.rpc('resolve_discount_token', { p_token: discountToken });
+      if (!active) return;
+      if (rpcErr || !data || data.length === 0) {
+        setTokenInfo(null);
+        return;
+      }
+      // Só vale pro mesmo evento do workshop — token de outro evento é noop.
+      const rows = (data as any[]).filter(r => r.event_id === workshop.event_id);
+      if (rows.length === 0) {
+        setTokenInfo(null);
+        return;
+      }
+      setTokenInfo({
+        registrationId: rows[0].registration_id,
+        coreografia: rows[0].nome_coreografia,
+        bailarinos: rows.map(r => ({ id: r.bailarino_id, nome: r.bailarino_nome })),
+      });
+    })();
+    return () => { active = false; };
+  }, [discountToken, workshop?.event_id]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
@@ -122,6 +160,9 @@ const CheckoutWorkshop: React.FC = () => {
   // Audit T2: debounce 400ms pra não disparar a cada tecla.
   // Audit T1: chama via edge function (RPC foi REVOKE de anon — anti-enumeração CPF).
   useEffect(() => {
+    // Fluxo de link por coreografia (discountToken) tem caminho próprio —
+    // o estado `combo` é setado pela escolha do bailarino, não por CPF.
+    if (discountToken) return;
     if (!workshop?.id || !workshop.event_id || !workshop.auto_detect_combo) {
       setCombo(null);
       return;
@@ -166,7 +207,18 @@ const CheckoutWorkshop: React.FC = () => {
       }
     }, 400);
     return () => { active = false; clearTimeout(debounce); };
-  }, [cpf, workshop?.id, workshop?.event_id, workshop?.auto_detect_combo, userId]);
+  }, [cpf, workshop?.id, workshop?.event_id, workshop?.auto_detect_combo, userId, discountToken]);
+
+  // Escolher um bailarino no fluxo de token já vale como combo encontrado —
+  // reaproveita o mesmo `combo` state que alimenta o cálculo de preço.
+  useEffect(() => {
+    if (!discountToken || !tokenInfo) return;
+    if (!selectedBailarinoId) {
+      setCombo(null);
+      return;
+    }
+    setCombo({ found: true, registration_id: tokenInfo.registrationId, coreografia: tokenInfo.coreografia });
+  }, [discountToken, tokenInfo, selectedBailarinoId]);
 
   // Calcula preço
   const breakdown = useMemo(() => {
@@ -237,7 +289,11 @@ const CheckoutWorkshop: React.FC = () => {
   const canSubmit = !!name.trim()
     && !!email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
     && isValidCpf(cpf)
-    && !paying && !error && !comboLoading;
+    && !paying && !error && !comboLoading
+    // tokenInfo fica `undefined` enquanto a RPC resolve_discount_token ainda
+    // não respondeu — tratar como "sem token" deixaria o comprador submeter
+    // antes do desconto carregar e perder o benefício silenciosamente.
+    && (!discountToken || (tokenInfo !== undefined && (!tokenInfo || !!selectedBailarinoId)));
 
   const handlePay = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -258,6 +314,9 @@ const CheckoutWorkshop: React.FC = () => {
           user_id: user?.id,
           combo_opt_in: true,
           coupon_code: couponApplied?.code,
+          ...(tokenInfo && selectedBailarinoId
+            ? { discount_token: discountToken, bailarino_id: selectedBailarinoId }
+            : {}),
         },
       });
       if (invokeErr) throw new Error(invokeErr.message ?? 'Erro ao criar inscrição');
@@ -350,8 +409,37 @@ const CheckoutWorkshop: React.FC = () => {
             </FieldLabel>
           </div>
 
+          {/* Link de desconto por coreografia (?discount_token=) — seletor de
+              bailarino substitui CPF/login pra detectar o combo. */}
+          {discountToken && tokenInfo && (
+            <div className="bg-violet-500/10 border border-violet-500/30 rounded-xl p-3 space-y-2">
+              <p className="text-sm font-bold text-violet-200 flex items-center gap-2">
+                <Sparkles size={16} className="text-violet-400 shrink-0" />
+                Desconto de inscrito — {tokenInfo.coreografia}
+              </p>
+              <FieldLabel icon={UserIcon} label="Quem está se inscrevendo?">
+                <select
+                  value={selectedBailarinoId}
+                  onChange={e => setSelectedBailarinoId(e.target.value)}
+                  className={inputCls}
+                  required
+                >
+                  <option value="">Selecione o bailarino</option>
+                  {tokenInfo.bailarinos.map(b => (
+                    <option key={b.id} value={b.id}>{b.nome}</option>
+                  ))}
+                </select>
+              </FieldLabel>
+            </div>
+          )}
+          {discountToken && tokenInfo === null && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-sm text-amber-200">
+              Link de desconto inválido ou expirado — preço cheio será aplicado.
+            </div>
+          )}
+
           {/* Combo detection feedback */}
-          {workshop.event_id && workshop.auto_detect_combo && (
+          {!discountToken && workshop.event_id && workshop.auto_detect_combo && (
             <>
               {userId === null && (
                 <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-slate-300 flex items-start gap-2">

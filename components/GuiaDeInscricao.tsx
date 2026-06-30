@@ -7,6 +7,7 @@ import {
   Calendar, Trophy, AlertTriangle, UserCircle, X,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import { isRegistrationPaid } from '../utils/registrationStatus';
 import { Profile as UserProfile } from '../types';
 
 interface Props {
@@ -163,7 +164,7 @@ const GuiaDeInscricao: React.FC<Props> = ({ profile, config }) => {
   const coreoTrilhaApplicable = coreografias.filter(c => !isAwaitingVideo(c));
   const total          = coreoTrilhaApplicable.length;
   const comTrilha      = coreoTrilhaApplicable.filter(c => c.trilha_url).length;
-  const pagas          = coreoTrilhaApplicable.filter(c => c.status === 'PAGO').length;
+  const pagas          = coreoTrilhaApplicable.filter(c => isRegistrationPaid(c.status_pagamento)).length;
   // PR-C: perfil deixa de fazer parte do "completo" — fluxo pode terminar
   // sem perfil (só não emite certificado). Banner separado cobra o perfil.
   const allDone        = hasElenco && total > 0 && comTrilha === total && pagas === total;

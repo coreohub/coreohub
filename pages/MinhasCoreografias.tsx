@@ -6,7 +6,7 @@ import {
   Music2, Plus, Trash2, AlertCircle, Loader2, CheckCircle,
   Clapperboard, Calendar, MapPin, Clock, CreditCard, QrCode,
   ChevronRight, AlertTriangle, ShoppingCart, X, Video,
-  Users, Pencil, Save, RefreshCw, Lock as LockIcon, Tag, Sparkles,
+  Users, Pencil, Save, RefreshCw, Lock as LockIcon, Tag, Sparkles, Link2, Check,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import BailarinosEditor, { type BailarinoFormValue } from '../components/BailarinosEditor';
@@ -50,6 +50,7 @@ interface Registration {
   video_approved_at?:    string | null;
   bailarinos_detalhes?:  any[] | null;
   instagram_principal?:  string | null;
+  discount_token?:       string | null;
   /** Snapshot do video_selection_fee do evento no momento (preview de UI). */
   _videoFee?:            number;
   /** Hidratado do join com events */
@@ -138,6 +139,9 @@ const MinhasCoreografias = () => {
   // event_id -> tem workshop publicado pra vender. Alimenta o card de upsell
   // "Garanta seu workshop com preço de inscrito" por evento.
   const [eventsWithWorkshops, setEventsWithWorkshops] = useState<Record<string, boolean>>({});
+  // id da inscrição cujo link de desconto acabou de ser copiado — feedback
+  // visual de 2s no botão (mesmo padrão de Registrations.tsx).
+  const [copiedDiscountId, setCopiedDiscountId] = useState<string | null>(null);
   const [profileCpf, setProfileCpf]          = useState<string | null>(null);
   const [loading,  setLoading]               = useState(true);
   const [error,    setError]                 = useState<string | null>(null);
@@ -246,7 +250,8 @@ const MinhasCoreografias = () => {
           payment_url, payment_preference_id, payment_id, payment_group_id,
           mod_fee, charged_amount, valor_pago, paid_at, created_at,
           bailarinos_detalhes, instagram_principal,
-          video_url, video_status, video_fee_status, video_approved_at
+          video_url, video_status, video_fee_status, video_approved_at,
+          discount_token
         `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
@@ -1554,6 +1559,30 @@ const MinhasCoreografias = () => {
                             >
                               <Music2 size={11} /> Trilha
                             </button>
+                            {/* Link de desconto por coreografia (sem CPF/login) —
+                                pra família repassar manualmente (WhatsApp) pros
+                                pais/bailarinos comprarem workshop com preço de
+                                inscrito. Carrega o token até o checkout via
+                                /evento/<slug> → /workshop/<id> → /checkout-workshop/<id>. */}
+                            {grupo.eventSlug && eventsWithWorkshops[grupo.eventId] && reg.discount_token && (
+                              <button
+                                onClick={() => {
+                                  const url = `${window.location.origin}/evento/${grupo.eventSlug}?discount_token=${reg.discount_token}#workshops`;
+                                  navigator.clipboard.writeText(url).then(() => {
+                                    setCopiedDiscountId(reg.id);
+                                    setTimeout(() => setCopiedDiscountId(prev => (prev === reg.id ? null : prev)), 2000);
+                                  });
+                                }}
+                                className={`px-3 py-1.5 rounded-lg font-black text-[9px] uppercase tracking-widest flex items-center gap-1.5 transition-all ${
+                                  copiedDiscountId === reg.id
+                                    ? 'bg-emerald-500 text-white'
+                                    : 'bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-200 dark:hover:bg-violet-500/20'
+                                }`}
+                                title="Copiar link de desconto pra mandar pros pais dos bailarinos comprarem o workshop"
+                              >
+                                {copiedDiscountId === reg.id ? <><Check size={11} /> Copiado</> : <><Link2 size={11} /> Link desconto</>}
+                              </button>
+                            )}
                             <button
                               onClick={() => navigate(`/credencial/${reg.id}`)}
                               className="p-2 rounded-lg text-slate-400 hover:text-[#ff0068] hover:bg-slate-100 dark:hover:bg-white/5 transition-all"

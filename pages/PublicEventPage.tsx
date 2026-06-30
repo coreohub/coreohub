@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { trackViewEvent, trackBeginCheckout } from '../services/producerAnalytics';
 import ProducerPixels from '../components/ProducerPixels';
@@ -39,6 +39,10 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   const { idOrSlug: paramIdOrSlug } = useParams<{ idOrSlug: string }>();
   const idOrSlug = forcedSlug ?? paramIdOrSlug;
   const navigate = useNavigate();
+  // Link de desconto por coreografia (?discount_token=) precisa sobreviver
+  // o salto evento → detalhe do workshop → checkout.
+  const [searchParams] = useSearchParams();
+  const discountToken = searchParams.get('discount_token');
   const [event, setEvent] = useState<any>(null);
   const [config, setConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -1264,7 +1268,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 return (
                   <button
                     key={ws.id}
-                    onClick={() => navigate(`/workshop/${ws.slug ?? ws.id}`)}
+                    onClick={() => navigate(`/workshop/${ws.slug ?? ws.id}${discountToken ? `?discount_token=${discountToken}` : ''}`)}
                     className="text-left bg-white/5 border border-white/10 hover:border-[#ff0068]/40 rounded-2xl overflow-hidden transition-colors group"
                   >
                     <div className="aspect-[16/9] bg-gradient-to-br from-[#ff0068]/20 to-purple-500/20 relative overflow-hidden">

@@ -15,6 +15,11 @@ import {
   type ElencoById,
   type ElencoRow,
 } from '../utils/bailarinos';
+import {
+  isRegistrationPaid,
+  isRegistrationPending,
+  registrationDisplayKey,
+} from '../utils/registrationStatus';
 
 const INSCRITO_ROLES = new Set([
   UserRole.STUDIO_DIRECTOR,
@@ -36,12 +41,13 @@ const daysUntil = (d?: string): number | null => {
 };
 
 // ── Status helpers ────────────────────────────────────────────────────────────
+// Keyed pela chave derivada de status_pagamento (registrationDisplayKey).
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  RASCUNHO:             { label: 'Rascunho',          color: 'bg-slate-100 dark:bg-white/10 text-slate-500' },
-  AGUARDANDO_PAGAMENTO: { label: 'Ag. Pagamento',      color: 'bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400' },
-  INSCRITA:             { label: 'Inscrita',           color: 'bg-indigo-100 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400' },
-  PAGO:                 { label: 'Pago',               color: 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' },
-  CANCELADA:            { label: 'Cancelada',          color: 'bg-rose-100 dark:bg-rose-500/15 text-rose-600 dark:text-rose-400' },
+  PENDENTE:         { label: 'Ag. Pagamento', color: 'bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400' },
+  PAGO:             { label: 'Pago',          color: 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' },
+  VENCIDO:          { label: 'Vencida',       color: 'bg-rose-100 dark:bg-rose-500/15 text-rose-600 dark:text-rose-400' },
+  ESTORNADO:        { label: 'Estornada',     color: 'bg-rose-100 dark:bg-rose-500/15 text-rose-600 dark:text-rose-400' },
+  AGUARDANDO_VIDEO: { label: 'Em análise',    color: 'bg-indigo-100 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400' },
 };
 
 // ── Componente principal ──────────────────────────────────────────────────────
@@ -89,8 +95,8 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
   // ── Métricas reais ────────────────────────────────────────────────────────
   const total      = coreografias.length;
   const comTrilha  = coreografias.filter(c => c.trilha_url).length;
-  const pagas      = coreografias.filter(c => c.status === 'PAGO').length;
-  const pendentes  = coreografias.filter(c => c.status === 'AGUARDANDO_PAGAMENTO').length;
+  const pagas      = coreografias.filter(c => isRegistrationPaid(c.status_pagamento)).length;
+  const pendentes  = coreografias.filter(c => isRegistrationPending(c.status_pagamento)).length;
 
   // A3 (2026-05-22 reabilitado em 2026-06-01): banner "dados pendentes" no
   // topo. Conta inscrições pagas (APROVADO/CONFIRMADO) com bailarinos cuja
@@ -339,7 +345,7 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-white/5">
             {coreografias.slice(0, 5).map((coreo) => {
-              const st = STATUS_LABEL[coreo.status] || STATUS_LABEL.RASCUNHO;
+              const st = STATUS_LABEL[registrationDisplayKey(coreo.status_pagamento)] || STATUS_LABEL.PENDENTE;
               return (
                 <div
                   key={coreo.id}

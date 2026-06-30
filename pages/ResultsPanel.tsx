@@ -165,7 +165,7 @@ const ResultsPanel = () => {
             estilo_danca:     reg.estilo_danca      ?? '—',
             categoria:        reg.categoria         ?? '—',
             tipo_apresentacao: reg.tipo_apresentacao ?? 'Competitiva',
-            status:           reg.status            ?? '—',
+            status:           reg.status_pagamento  ?? '—',
             resultado_publicado: reg.resultado_publicado === true,
             scores_all:        [],
             scores_tecnico:    [],

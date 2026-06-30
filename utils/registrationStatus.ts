@@ -32,3 +32,26 @@ export const isRegistrationPending = (status: string | null | undefined): boolea
 /** True se foi rejeitada/cancelada. */
 export const isRegistrationCancelled = (status: string | null | undefined): boolean =>
   status === 'VENCIDO' || status === 'ESTORNADO';
+
+/**
+ * Chave de exibição derivada do `status_pagamento` (fonte única da verdade).
+ *
+ * A coluna `registrations.status` foi aposentada em 2026-06-30: ela era setada
+ * uma vez no Wizard ('AGUARDANDO_PAGAMENTO') e nunca mais atualizada por
+ * ninguém, ficando perpetuamente dessincronizada do pagamento real. Vários
+ * leitores ainda comparavam contra um vocabulário antigo ('PAGO', 'RASCUNHO')
+ * que sequer existia no banco — sempre falso. Use esta função pra derivar o
+ * rótulo de qualquer badge/contagem a partir do `status_pagamento`.
+ */
+export type RegistrationDisplayKey =
+  | 'PAGO' | 'PENDENTE' | 'VENCIDO' | 'ESTORNADO' | 'AGUARDANDO_VIDEO';
+
+export const registrationDisplayKey = (
+  statusPagamento: string | null | undefined,
+): RegistrationDisplayKey => {
+  if (isRegistrationPaid(statusPagamento)) return 'PAGO';
+  if (statusPagamento === 'VENCIDO') return 'VENCIDO';
+  if (statusPagamento === 'ESTORNADO') return 'ESTORNADO';
+  if (statusPagamento === 'AGUARDANDO_VIDEO') return 'AGUARDANDO_VIDEO';
+  return 'PENDENTE';
+};

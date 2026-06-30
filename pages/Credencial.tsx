@@ -268,7 +268,10 @@ const Credencial: React.FC = () => {
   }
 
   const isPago = data.status_pagamento === 'CONFIRMADO' || data.status_pagamento === 'APROVADO';
-  const isAprovada = data.status === 'APROVADA';
+  // Credencial libera com o pagamento confirmado. Antes exigia também
+  // `status === 'APROVADA'` (curadoria manual), mas essa coluna foi aposentada
+  // (2026-06-30) e nunca recebia 'APROVADA' — a credencial nunca liberava.
+  const isAprovada = isPago;
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex flex-col">

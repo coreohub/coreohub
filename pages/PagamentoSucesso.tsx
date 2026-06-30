@@ -86,8 +86,9 @@ const PagamentoSucesso = () => {
           .from('registrations')
           .select('id', { count: 'exact', head: true })
           .eq('user_id', user.id)
-          .neq('status_pagamento', 'APROVADO')
-          .in('status', ['RASCUNHO', 'PRONTA', 'PRONTO', 'AGUARDANDO_PAGAMENTO']);
+          // Fonte única: status_pagamento. (Antes filtrava também `status`,
+          // coluna aposentada em 2026-06-30.)
+          .eq('status_pagamento', 'PENDENTE');
 
         setPendentes(count ?? 0);
       }

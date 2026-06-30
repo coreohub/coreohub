@@ -929,7 +929,9 @@ const InscricaoWizard: React.FC = () => {
           // Duração do arquivo de áudio em si (extraída via HTML5 Audio API).
           // Distinto de event_data.duracao_segundos (duração da COREOGRAFIA).
           duracao_trilha_segundos: trilhaDurationSeconds ?? null,
-          status:               'AGUARDANDO_PAGAMENTO',
+          // `status` aposentado em 2026-06-30 — nunca era atualizado pós-criação
+          // e vivia dessincronizado. status_pagamento é a fonte única. Deixa o
+          // default do banco ('pendente') preencher pra não quebrar leitor legado.
           status_pagamento:     'PENDENTE',
           criado_em:            new Date().toISOString(),
           data_inscricao:       new Date().toISOString(),

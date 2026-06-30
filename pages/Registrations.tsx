@@ -24,6 +24,20 @@ import {
   type ElencoRow,
 } from '../utils/bailarinos';
 
+// Resolve a URL pública da fatura Asaas pra uma inscrição, com fallback pro
+// pagamento agregado ("Pagar Tudo"). Usado tanto no botão "Abrir fatura"
+// quanto na mensagem de WhatsApp — antes cada um tinha sua própria cadeia
+// de fallback com prioridade diferente (achado de revisão 2026-06-30).
+function resolveInvoiceUrl(reg: any): string | null {
+  if (reg.payment_url) return reg.payment_url;
+  if (reg.payment_id) return `https://www.asaas.com/i/${String(reg.payment_id).replace(/^pay_/, '')}`;
+  if (reg.aggregate_payment?.payment_url) return reg.aggregate_payment.payment_url;
+  if (reg.aggregate_payment?.asaas_payment_id) {
+    return `https://www.asaas.com/i/${String(reg.aggregate_payment.asaas_payment_id).replace(/^pay_/, '')}`;
+  }
+  return null;
+}
+
 const Registrations = () => {
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [filteredRegistrations, setFilteredRegistrations] = useState<any[]>([]);
@@ -417,6 +431,22 @@ const Registrations = () => {
         couponCodeById = Object.fromEntries((cps || []).map((c: any) => [c.id, c.code]));
       }
 
+      // Inscrição paga via "Pagar Tudo" (fluxo agregado) grava payment_group_id
+      // apontando pra tabela `payments`, NÃO em registrations.payment_id — o
+      // botão "Abrir fatura"/WhatsApp do modal usava só payment_id e ficava
+      // mudo nesse caso. Hidrata aqui pra servir de fallback.
+      const paymentGroupIds = [...new Set((data || []).map((r: any) => r.payment_group_id).filter(Boolean))];
+      let paymentById: Record<string, { asaas_payment_id: string | null; payment_url: string | null }> = {};
+      if (paymentGroupIds.length > 0) {
+        const { data: pays } = await supabase
+          .from('payments')
+          .select('id, asaas_payment_id, payment_url')
+          .in('id', paymentGroupIds);
+        paymentById = Object.fromEntries(
+          (pays || []).map((p: any) => [p.id, { asaas_payment_id: p.asaas_payment_id, payment_url: p.payment_url }])
+        );
+      }
+
       // Fetch separado do evento ativo (modal + empty state precisam).
       // Não pode ser embed na query principal porque travava o query
       // inteiro em prod (ver bug 2026-05-18).
@@ -438,6 +468,7 @@ const Registrations = () => {
         // Bloco 4: surface coupon_code virtual a partir do JOIN com coupons.
         // Usado pelo side panel + Análise Financeira (Sessão 4.2).
         coupon_code: r.coupon_id ? couponCodeById[r.coupon_id] ?? null : null,
+        aggregate_payment: r.payment_group_id ? paymentById[r.payment_group_id] ?? null : null,
       }));
       setRegistrations(enriched);
       setFilteredRegistrations(enriched);
@@ -972,7 +1003,7 @@ const Registrations = () => {
     const headers = [
       'Data', 'Coreografia', 'Modalidade', 'Tipo', 'Estúdio',
       'Categoria', 'Estilo', 'Inscrito', 'Email', 'WhatsApp',
-      'Status Inscrição', 'Status Pagamento', 'Valor (R$)',
+      'Status Pagamento', 'Valor (R$)',
     ];
     const escape = (v: any) => {
       const s = v == null ? '' : String(v);
@@ -992,7 +1023,6 @@ const Registrations = () => {
       r.profiles?.full_name ?? '',
       r.profiles?.email ?? '',
       r.profiles?.whatsapp ?? '',
-      r.status ?? '',
       r.status_pagamento ?? '',
       r.valor_total != null ? Number(r.valor_total).toFixed(2) : '',
     ].map(escape).join(','));
@@ -2432,7 +2462,6 @@ const Registrations = () => {
                         }
                       />
                     )}
-                    <DetailItem label="Status da inscrição" value={viewingReg.status} />
                   </dl>
                 </section>
 
@@ -2501,8 +2530,7 @@ const Registrations = () => {
                   const nome = viewingReg.profiles?.full_name ?? '';
                   const coreo = viewingReg.nome_coreografia ?? '';
                   const eventoNome = activeEventInfo?.name ?? '';
-                  const url = viewingReg.payment_url
-                    ?? (viewingReg.payment_id ? `https://www.asaas.com/i/${String(viewingReg.payment_id).replace(/^pay_/, '')}` : '');
+                  const url = resolveInvoiceUrl(viewingReg) ?? '';
 
                   let body: string;
                   if (viewingReg.status_pagamento === 'PENDENTE') {
@@ -2530,18 +2558,25 @@ const Registrations = () => {
                   );
                 })()}
                 {/* Deep link Asaas — abre a fatura pública (mesma URL que o
-                    pagador vê). Aceita payment_id com ou sem prefixo 'pay_'. */}
-                {viewingReg.payment_id && (
-                  <a
-                    href={`https://www.asaas.com/i/${String(viewingReg.payment_id).replace(/^pay_/, '')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-xl transition-all flex items-center gap-2"
-                    title="Abrir fatura no Asaas (nova aba)"
-                  >
-                    <ExternalLink size={12} /> Abrir fatura
-                  </a>
-                )}
+                    pagador vê). Aceita payment_id com ou sem prefixo 'pay_'.
+                    Inscrição paga via "Pagar Tudo" (agregado) não tem
+                    payment_id próprio — cai no fallback via payment_group_id
+                    (aggregate_payment, hidratado no fetchData). */}
+                {(() => {
+                  const href = resolveInvoiceUrl(viewingReg);
+                  if (!href) return null;
+                  return (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-xl transition-all flex items-center gap-2"
+                      title="Abrir fatura no Asaas (nova aba)"
+                    >
+                      <ExternalLink size={12} /> Abrir fatura
+                    </a>
+                  );
+                })()}
                 {(viewingReg.status_pagamento === 'CONFIRMADO' || viewingReg.status_pagamento === 'APROVADO') && (
                   <button
                     onClick={() => { handleOpenRefund(viewingReg); setViewingReg(null); }}

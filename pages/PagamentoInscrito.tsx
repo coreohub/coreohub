@@ -68,12 +68,6 @@ const PagamentoInscrito = () => {
   const [payError, setPayError]           = useState<{ id: string; message: string } | null>(null);
   const [justApproved, setJustApproved]   = useState<string | null>(null); // para animação quando webhook aprovar
 
-  // Status que exigem pagamento (coreografia aguardando checkout)
-  const PAYMENT_STATUSES = useMemo(
-    () => new Set(['RASCUNHO', 'PRONTA', 'PRONTO', 'AGUARDANDO_PAGAMENTO']),
-    []
-  );
-
   const fetchCoreografias = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -102,19 +96,17 @@ const PagamentoInscrito = () => {
       }));
 
       setCoreografias(
-        enriched.filter(c =>
-          // Ainda não pagou (status_pagamento != APROVADO) E está em status de pagamento
-          c.status_pagamento !== 'APROVADO' &&
-          PAYMENT_STATUSES.has(c.status) &&
-          c.status !== 'PAGO'
-        )
+        // Inscrições aguardando checkout. Fonte única: status_pagamento.
+        // status_pagamento PENDENTE = falta pagar. (APROVADO já foi pago;
+        // VENCIDO/ESTORNADO não dá pra pagar; AGUARDANDO_VIDEO espera análise.)
+        enriched.filter(c => c.status_pagamento === 'PENDENTE')
       );
     } catch (e: any) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, [navigate, PAYMENT_STATUSES]);
+  }, [navigate]);
 
   useEffect(() => { fetchCoreografias(); }, [fetchCoreografias]);
 

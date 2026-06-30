@@ -91,6 +91,8 @@ Deno.serve(async (req) => {
       user_id,
       coupon_code,
       combo_opt_in,
+      discount_token,
+      bailarino_id,
     } = body as {
       workshop_id?: string
       workshop_lot_id?: string | null
@@ -98,6 +100,8 @@ Deno.serve(async (req) => {
       user_id?: string
       coupon_code?: string
       combo_opt_in?: boolean
+      discount_token?: string
+      bailarino_id?: string
     }
 
     // ── Validações básicas ───────────────────────────────────────────────────
@@ -217,9 +221,46 @@ Deno.serve(async (req) => {
     }
 
     // ── Combo detection (item #3) ────────────────────────────────────────────
+    // 2 canais possíveis: (a) CPF+login — comprador logado, anti-fraude exige
+    // dono da inscrição; (b) discount_token — link gerado pelo coreógrafo por
+    // coreografia, compartilhado manualmente (WhatsApp), sem CPF/login. Posse
+    // do token + escolha do bailarino certo é a credencial nesse canal.
     let isCombo = false
     let comboRegistrationId: string | null = null
-    if (combo_opt_in && workshop.auto_detect_combo && workshop.event_id) {
+    if (discount_token && bailarino_id && workshop.auto_detect_combo && workshop.event_id) {
+      const { data: combo, error: combErr } = await supabase
+        .rpc('detect_workshop_combo_by_token', {
+          p_workshop_id: workshop_id,
+          p_discount_token: discount_token,
+          p_bailarino_id: bailarino_id,
+        })
+      if (combErr) {
+        console.warn('[create-workshop-registration] detect_workshop_combo_by_token erro:', combErr.message)
+      } else {
+        const row = Array.isArray(combo) ? combo[0] : combo
+        if (row?.found && row.registration_id) {
+          isCombo = true
+          comboRegistrationId = row.registration_id
+        }
+      }
+      // Token não bateu (errado/de outro evento) ou bailarino selecionado não
+      // pertence à inscrição — não desiste: se o comprador também está
+      // logado com CPF próprio, tenta o canal normal como reserva (token é
+      // "canal A MAIS", não deveria suprimir o caminho que já funcionava).
+      if (!isCombo && combo_opt_in && workshop.auto_detect_combo && workshop.event_id) {
+        const { data: comboCpf, error: comboCpfErr } = await supabase
+          .rpc('detect_workshop_combo', { p_workshop_id: workshop_id, p_cpf: cpfLimpo, p_user_id: user_id ?? null })
+        if (comboCpfErr) {
+          console.warn('[create-workshop-registration] detect_workshop_combo (fallback) erro:', comboCpfErr.message)
+        } else {
+          const row = Array.isArray(comboCpf) ? comboCpf[0] : comboCpf
+          if (row?.found && row.registration_id) {
+            isCombo = true
+            comboRegistrationId = row.registration_id
+          }
+        }
+      }
+    } else if (combo_opt_in && workshop.auto_detect_combo && workshop.event_id) {
       const { data: combo, error: combErr } = await supabase
         .rpc('detect_workshop_combo', { p_workshop_id: workshop_id, p_cpf: cpfLimpo, p_user_id: user_id ?? null })
       if (combErr) {

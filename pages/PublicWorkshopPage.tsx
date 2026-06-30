@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { diffDias, todayISO, findNextWorkshopLot } from '../utils/lotes';
 import AvisoViradaLote from '../components/AvisoViradaLote';
@@ -77,6 +77,8 @@ const NIVEL_LABEL: Record<string, string> = {
 const PublicWorkshopPage: React.FC = () => {
   const { idOrSlug } = useParams<{ idOrSlug: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const discountToken = searchParams.get('discount_token');
 
   const [workshop, setWorkshop] = useState<Workshop | null>(null);
   const [stock, setStock]       = useState<Stock | null>(null);
@@ -280,7 +282,7 @@ const PublicWorkshopPage: React.FC = () => {
               esconder aqui evita o botão duplicado (mesma ação 2x na tela). */}
           <button
             disabled={!podeComprar}
-            onClick={() => navigate(`/checkout-workshop/${workshop.id}`)}
+            onClick={() => navigate(`/checkout-workshop/${workshop.id}${discountToken ? `?discount_token=${discountToken}` : ''}`)}
             className={`w-full items-center justify-center gap-2 rounded-xl bg-[#ff0068] px-4 py-3 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] disabled:opacity-40 disabled:cursor-not-allowed transition ${podeComprar ? 'hidden sm:flex' : 'flex'}`}
           >
             {podeComprar ? 'Comprar agora' : lotEsgotado ? 'Esgotado' : 'Indisponível'}
@@ -355,7 +357,7 @@ const PublicWorkshopPage: React.FC = () => {
       {podeComprar && (
         <div className="fixed bottom-0 left-0 right-0 sm:hidden bg-[#0b0b0f]/95 backdrop-blur border-t border-white/10 p-3 z-30">
           <button
-            onClick={() => navigate(`/checkout-workshop/${workshop.id}`)}
+            onClick={() => navigate(`/checkout-workshop/${workshop.id}${discountToken ? `?discount_token=${discountToken}` : ''}`)}
             className="w-full rounded-xl bg-[#ff0068] px-4 py-3 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30"
           >
             Comprar · {fmtCurrency(precoAtivo)}

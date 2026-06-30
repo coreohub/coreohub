@@ -103,7 +103,7 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
               estudio: reg.estudio || '—',
               estilo_danca: reg.estilo_danca || '—',
               categoria: reg.categoria || '—',
-              status: reg.status || '—',
+              status: reg.status_pagamento || '—',
               media_final: reg.media_final,
               classificacao_final: reg.classificacao_final,
               resultado_publicado: reg.resultado_publicado,

@@ -5,6 +5,7 @@ import SystemErrorBanner from '../components/SystemErrorBanner';
 import PageHeader from '../components/PageHeader';
 import { getAllGenres } from '../services/genreService';
 import { parseTempoSegundos } from '../utils/masks';
+import { isRegistrationCancelled, registrationDisplayKey } from '../utils/registrationStatus';
 import { EventStyle } from '../types';
 import {
   Music2, Upload, Play, Pause, CheckCircle2, Check,
@@ -26,7 +27,7 @@ interface Coreografia {
   subgenero?: string;
   categoria_nome?: string;
   formacao?: string;
-  status: string;
+  status_pagamento?: string;
   trilha_url?: string;
   status_trilha?: string;
   allow_shorter_track?: boolean;
@@ -48,17 +49,15 @@ interface Coreografia {
    CONSTANTS
 ══════════════════════════════════════════════════════════════ */
 // Trava por PRAZO substitui a trava por pagamento (decisão 2026-06-17):
-// inscrito edita/substitui a trilha até o prazo do produtor. Só status mortos
-// bloqueiam de vez (inscrição cancelada/estornada/reprovada).
-const DEAD_STATUSES = ['CANCELADA', 'CANCELADO', 'ESTORNADA', 'ESTORNADO', 'REPROVADA', 'REPROVADO', 'REJEITADA'];
-
+// inscrito edita/substitui a trilha até o prazo do produtor. Só inscrição
+// "morta" (cancelada/estornada/vencida) bloqueia de vez — derivado de
+// status_pagamento desde que a coluna `status` foi aposentada (2026-06-30).
 const STATUS_CFG: Record<string, { bg: string; text: string; label: string }> = {
-  RASCUNHO:             { bg: 'bg-slate-100 dark:bg-white/8',           text: 'text-slate-500',                        label: 'Rascunho'             },
-  PRONTA:               { bg: 'bg-emerald-100 dark:bg-emerald-500/15',  text: 'text-emerald-600 dark:text-emerald-400', label: 'Pronta'               },
-  PRONTO:               { bg: 'bg-emerald-100 dark:bg-emerald-500/15',  text: 'text-emerald-600 dark:text-emerald-400', label: 'Pronta'               },
-  AGUARDANDO_PAGAMENTO: { bg: 'bg-amber-100 dark:bg-amber-500/15',      text: 'text-amber-600 dark:text-amber-400',     label: 'Aguardando Pagamento' },
-  INSCRITA:             { bg: 'bg-indigo-100 dark:bg-indigo-500/15',    text: 'text-indigo-600 dark:text-indigo-400',   label: 'Inscrita'             },
-  CANCELADA:            { bg: 'bg-rose-100 dark:bg-rose-500/15',        text: 'text-rose-600 dark:text-rose-400',       label: 'Cancelada'            },
+  PENDENTE:         { bg: 'bg-amber-100 dark:bg-amber-500/15',      text: 'text-amber-600 dark:text-amber-400',     label: 'Aguardando Pagamento' },
+  PAGO:             { bg: 'bg-emerald-100 dark:bg-emerald-500/15',  text: 'text-emerald-600 dark:text-emerald-400', label: 'Pago'                 },
+  VENCIDO:          { bg: 'bg-rose-100 dark:bg-rose-500/15',        text: 'text-rose-600 dark:text-rose-400',       label: 'Vencida'              },
+  ESTORNADO:        { bg: 'bg-rose-100 dark:bg-rose-500/15',        text: 'text-rose-600 dark:text-rose-400',       label: 'Estornada'            },
+  AGUARDANDO_VIDEO: { bg: 'bg-indigo-100 dark:bg-indigo-500/15',    text: 'text-indigo-600 dark:text-indigo-400',   label: 'Em análise'           },
 };
 
 const SETUP_SQL = `-- Execute no SQL Editor do Supabase para habilitar a Central de Mídia
@@ -194,7 +193,7 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const hasAudio  = !!coreo.trilha_url;
-  const st        = STATUS_CFG[coreo.status] || STATUS_CFG.RASCUNHO;
+  const st        = STATUS_CFG[registrationDisplayKey(coreo.status_pagamento)] || STATUS_CFG.PENDENTE;
 
   // ── Trava por prazo ──
   // Hoje em America/Sao_Paulo no formato YYYY-MM-DD ('en-CA' = ISO date).
@@ -202,7 +201,7 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
   const deadline   = coreo.prazo_trilhas || coreo.event_date_fallback || null;
   const deadlinePassed = !!deadline && todayISO > deadline; // dia do prazo ainda conta (envios "até")
   const overrideOn = !!coreo.trilha_liberada_pos_prazo;
-  const isDead     = DEAD_STATUSES.includes((coreo.status || '').toUpperCase());
+  const isDead     = isRegistrationCancelled(coreo.status_pagamento);
   const locked     = isDead || (deadlinePassed && !overrideOn);
   const editable   = !locked;
 
