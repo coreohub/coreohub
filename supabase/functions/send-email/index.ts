@@ -29,10 +29,7 @@
  *   { "type": "producer_welcome",                   "payload": { ... } }
  */
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { buildCorsHeaders } from '../_shared/cors.ts'
 
 const BRAND_COLOR = '#ff0068'
 const BRAND_DARK = '#0b0b0f'
@@ -1449,6 +1446,8 @@ interface SendEmailRequest {
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req)
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }

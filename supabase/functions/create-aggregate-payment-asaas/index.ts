@@ -6,12 +6,7 @@
 // Webhook detecta este fluxo via externalReference prefix "AGG:".
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const ALLOWED_ORIGIN = Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'
-const corsHeaders = {
-  'Access-Control-Allow-Origin':  ALLOWED_ORIGIN,
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 
 type RegistrationRow = {
   id:                    string
@@ -50,6 +45,9 @@ function pickActiveLote(formacao: any): { preco: number; data_virada: string | n
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req)
+  const ALLOWED_ORIGIN = resolveOrigin(req)
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }

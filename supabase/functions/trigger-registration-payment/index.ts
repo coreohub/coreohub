@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { buildCorsHeaders } from '../_shared/cors.ts'
 
 // Notifica o inscrito que o vídeo da seletiva foi aprovado e que a 2ª cobrança
 // (taxa de inscrição cheia) está liberada. Chamada por:
@@ -10,13 +11,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 // create-payment-asaas com o JWT dele (ownership natural). Isso evita
 // complicação de bypass de auth e mantém o fluxo limpo.
 
-const ALLOWED_ORIGIN = Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'
-const corsHeaders = {
-  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
 Deno.serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req)
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }

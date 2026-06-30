@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { buildCorsHeaders } from '../_shared/cors.ts'
 
 // Processa o reembolso da taxa de seletiva (Modelo 3) quando o vídeo é
 // REPROVADO. A política vem de events.video_fee_refund_policy:
@@ -13,13 +14,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 // Idempotência: se video_fee_status já é 'waived' (estornado/dispensado),
 // não faz nada e retorna OK.
 
-const ALLOWED_ORIGIN = Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'
-const corsHeaders = {
-  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
 Deno.serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req)
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }

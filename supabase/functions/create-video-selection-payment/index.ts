@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 
 // Cria a cobrança Asaas da TAXA DE SELETIVA (Modelo 3 - Catanduva/SESI/CaconDance).
 // Distinto de create-payment-asaas (cobrança da inscrição cheia) porque:
@@ -12,13 +13,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 // Modelo 2 (taxa R$ 0) NÃO chama essa função — o wizard pula direto pro
 // upload de vídeo marcando video_fee_status='waived'.
 
-const ALLOWED_ORIGIN = Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'
-const corsHeaders = {
-  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
 Deno.serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req)
+  const ALLOWED_ORIGIN = resolveOrigin(req)
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }

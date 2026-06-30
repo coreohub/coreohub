@@ -36,19 +36,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const ALLOWED_ORIGIN = Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'
-const corsHeaders = {
-  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
-
-const json = (data: unknown, status = 200) =>
-  new Response(JSON.stringify(data), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
+import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 
 function isValidCpf(cpf: string): boolean {
   const digits = cpf.replace(/\D/g, '')
@@ -81,6 +69,15 @@ function extractClientIp(req: Request): string {
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req)
+  const ALLOWED_ORIGIN = resolveOrigin(req)
+
+  const json = (data: unknown, status = 200) =>
+    new Response(JSON.stringify(data), {
+      status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -224,7 +221,7 @@ Deno.serve(async (req) => {
     let comboRegistrationId: string | null = null
     if (combo_opt_in && workshop.auto_detect_combo && workshop.event_id) {
       const { data: combo, error: combErr } = await supabase
-        .rpc('detect_workshop_combo', { p_workshop_id: workshop_id, p_cpf: cpfLimpo })
+        .rpc('detect_workshop_combo', { p_workshop_id: workshop_id, p_cpf: cpfLimpo, p_user_id: user_id ?? null })
       if (combErr) {
         console.warn('[create-workshop-registration] detect_workshop_combo erro:', combErr.message)
       } else {
