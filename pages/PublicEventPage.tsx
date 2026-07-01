@@ -604,8 +604,13 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
       || event.politica_ingressos === 'EXTERNO'
       ? { id: 'ingressos', label: 'Ingressos' }
       : null,
-    // "Inscrições" removido do anchor menu — botão CTA "INSCREVA-SE" já cobre.
-    // Anchors descrevem o festival; CTA é a ação. Semantica diferente.
+    // Padrão Sympla/Eventbrite: a aba de inscrição continua navegável mesmo
+    // com o prazo encerrado (usuário que volta pelo link precisa achar a
+    // seção e ver o estado "Inscrições encerradas"); só o CTA flutuante
+    // "INSCREVA-SE" some quando !isRegistrationOpen.
+    Array.isArray(event.formacoes_config) && event.formacoes_config.length > 0
+      ? { id: 'inscricoes', label: 'Inscrições' }
+      : null,
     publicWorkshops.length > 0 ? { id: 'workshops', label: 'Workshops' } : null,
     publicJudges.length > 0 ? { id: 'jurados', label: 'Jurados' } : null,
     enabledAwards.length > 0 ? { id: 'premiacao', label: 'Premiação' } : null,
@@ -1182,7 +1187,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                     </div>
                     {!isRegistrationOpen && (
                       <p className="text-[10px] font-black uppercase tracking-widest text-amber-400 mt-3 pt-3 border-t border-white/5">
-                        Inscrições encerradas ou ainda não abertas
+                        Inscrições encerradas
                       </p>
                     )}
                     {hint && isRegistrationOpen && (
@@ -1364,7 +1369,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           <div>
             <h3 className="text-3xl font-black uppercase tracking-tighter italic">Pronto para dançar?</h3>
             <p className="text-slate-400 text-sm mt-2">
-              {isRegistrationOpen ? 'As inscrições estão abertas. Garanta sua vaga agora.' : 'Inscrições encerradas ou ainda não abertas.'}
+              {isRegistrationOpen ? 'As inscrições estão abertas. Garanta sua vaga agora.' : 'Inscrições encerradas.'}
             </p>
           </div>
           <div className="flex flex-col gap-3 min-w-[200px]">
