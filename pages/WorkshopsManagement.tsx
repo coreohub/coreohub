@@ -1694,6 +1694,9 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // Modal de compradores do pass
+  const [buyersPass, setBuyersPass] = useState<PassRow | null>(null);
+
   // Cortesia de pass: id do pass com form aberto, ou null
   const [courtesyPassId, setCourtesyPassId] = useState<string | null>(null);
   const [courtesyForm, setCourtesyForm] = useState({ name: '', email: '', cpf: '', phone: '' });
@@ -1949,6 +1952,13 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
                     <Pencil size={12} />Editar
                   </button>
                   <button
+                    onClick={() => setBuyersPass(p)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-white/10 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition"
+                    aria-label="Ver compradores deste pass"
+                  >
+                    <ShoppingCart size={12} />Compradores
+                  </button>
+                  <button
                     onClick={() => openCourtesy(p.id)}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 dark:border-violet-500/30 px-3 py-1.5 text-xs font-bold text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10 transition"
                     aria-label="Adicionar cortesia neste pass"
@@ -2026,6 +2036,14 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
             </div>
           ))}
         </div>
+      )}
+
+      {buyersPass && (
+        <PassBuyersModal
+          pass={buyersPass}
+          workshopsInEvent={workshopsInEvent}
+          onClose={() => setBuyersPass(null)}
+        />
       )}
 
       {showModal && (
@@ -2163,6 +2181,201 @@ const PassFormModal: React.FC<PassFormModalProps> = ({ form, setForm, formError,
             {saving && <Loader2 size={14} className="animate-spin" />}
             {isEdit ? 'Salvar alterações' : 'Criar pass'}
           </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// Modal de compradores do pass — agrupa workshop_registrations por pass_group_id
+// (padrão Sympla/Eventbrite: 1 linha por compra, não por workshop incluso)
+// ════════════════════════════════════════════════════════════════════════════
+interface PassBuyerGroup {
+  pass_group_id: string;
+  buyer_name: string;
+  buyer_email: string;
+  buyer_cpf: string;
+  status_pagamento: string;
+  total_preco: number;
+  paid_at: string | null;
+  is_combo: boolean;
+  created_at: string;
+  items: Array<{ workshop_id: string; attended: boolean; attended_at: string | null }>;
+}
+
+const PASS_STATUS_LABEL: Record<string, { label: string; cls: string }> = {
+  APROVADO:  { label: 'Aprovado',  cls: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20' },
+  PENDENTE:  { label: 'Pendente',  cls: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20' },
+  CANCELADO: { label: 'Cancelado', cls: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20' },
+  VENCIDO:   { label: 'Vencido',   cls: 'bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20' },
+  ESTORNADO: { label: 'Estornado', cls: 'bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20' },
+  CORTESIA:  { label: 'Cortesia',  cls: 'bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/20' },
+  GRATUITO:  { label: 'Grátis',    cls: 'bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/20' },
+};
+
+const PassBuyersModal: React.FC<{
+  pass: PassRow;
+  workshopsInEvent: WorkshopRow[];
+  onClose: () => void;
+}> = ({ pass, workshopsInEvent, onClose }) => {
+  const [buyers, setBuyers] = useState<PassBuyerGroup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
+  }, [onClose]);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const { data } = await supabase
+        .from('workshop_registrations')
+        .select('id, pass_group_id, buyer_name, buyer_email, buyer_cpf, status_pagamento, preco_pago, paid_at, is_combo, created_at, workshop_id, attended, attended_at')
+        .eq('pass_id', pass.id)
+        .order('created_at', { ascending: false });
+
+      // Agrupar por pass_group_id client-side
+      const grouped: Record<string, PassBuyerGroup> = {};
+      for (const row of data ?? []) {
+        const gid = row.pass_group_id ?? row.id;
+        if (!grouped[gid]) {
+          grouped[gid] = {
+            pass_group_id: gid,
+            buyer_name: row.buyer_name,
+            buyer_email: row.buyer_email,
+            buyer_cpf: row.buyer_cpf,
+            status_pagamento: row.status_pagamento,
+            total_preco: 0,
+            paid_at: row.paid_at,
+            is_combo: row.is_combo,
+            created_at: row.created_at,
+            items: [],
+          };
+        }
+        grouped[gid].total_preco += row.preco_pago ?? 0;
+        grouped[gid].items.push({ workshop_id: row.workshop_id, attended: row.attended, attended_at: row.attended_at });
+      }
+      setBuyers(Object.values(grouped).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+      setLoading(false);
+    })();
+  }, [pass.id]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return buyers;
+    const q = search.trim().toLowerCase();
+    return buyers.filter(b => b.buyer_name.toLowerCase().includes(q) || b.buyer_email.toLowerCase().includes(q));
+  }, [buyers, search]);
+
+  const stats = useMemo(() => {
+    const total = buyers.length;
+    const cortesias = buyers.filter(b => b.status_pagamento === 'CORTESIA').length;
+    const aprovados = buyers.filter(b => b.status_pagamento === 'APROVADO').length;
+    const receita = buyers.filter(b => b.status_pagamento === 'APROVADO').reduce((s, b) => s + b.total_preco, 0);
+    return { total, cortesias, aprovados, receita };
+  }, [buyers]);
+
+  const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="pass-buyers-title"
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
+      onPointerDown={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-4xl max-h-[92dvh] sm:max-h-[92vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-white/10 shrink-0">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black text-[#ff0068] uppercase tracking-[0.3em]">Compradores do pass</p>
+            <h3 id="pass-buyers-title" className="text-lg sm:text-xl font-black text-slate-900 dark:text-white truncate">{pass.name}</h3>
+          </div>
+          <button onClick={onClose} aria-label="Fechar" className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white shrink-0">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Stats */}
+        {!loading && (
+          <div className="px-5 sm:px-6 py-3 border-b border-slate-200 dark:border-white/10 flex flex-wrap gap-4 shrink-0">
+            <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total</p><p className="text-xl font-black text-slate-900 dark:text-white">{stats.total}</p></div>
+            <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Aprovados</p><p className="text-xl font-black text-emerald-600 dark:text-emerald-400">{stats.aprovados}</p></div>
+            {stats.cortesias > 0 && <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cortesias</p><p className="text-xl font-black text-violet-600 dark:text-violet-400">{stats.cortesias}</p></div>}
+            <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Receita</p><p className="text-xl font-black text-slate-900 dark:text-white tabular-nums">{fmtCurrency(stats.receita)}</p></div>
+          </div>
+        )}
+
+        {/* Search */}
+        <div className="px-5 sm:px-6 py-3 border-b border-slate-200 dark:border-white/10 shrink-0">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar por nome ou e-mail..."
+              className="w-full pl-8 pr-4 py-2 bg-slate-100 dark:bg-white/5 border border-transparent focus:border-[#ff0068]/30 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {/* List */}
+        <div className="overflow-y-auto flex-1 divide-y divide-slate-100 dark:divide-white/5">
+          {loading ? (
+            <div className="flex items-center justify-center py-16"><Loader2 size={24} className="animate-spin text-[#ff0068]" /></div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-2">
+              <ShoppingCart size={32} className="text-slate-300 dark:text-slate-700" />
+              <p className="text-sm text-slate-500">{buyers.length === 0 ? 'Nenhuma venda de pass ainda.' : 'Nenhum resultado para a busca.'}</p>
+            </div>
+          ) : (
+            filtered.map(b => {
+              const st = PASS_STATUS_LABEL[b.status_pagamento] ?? { label: b.status_pagamento, cls: 'bg-slate-500/10 text-slate-600' };
+              const attendedCount = b.items.filter(i => i.attended).length;
+              return (
+                <div key={b.pass_group_id} className="px-5 sm:px-6 py-4">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${st.cls}`}>{st.label}</span>
+                        {b.is_combo && <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">Combo</span>}
+                      </div>
+                      <p className="font-bold text-slate-900 dark:text-white text-sm truncate">{b.buyer_name}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{b.buyer_email}</p>
+                      {/* Workshops incluídos */}
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {b.items.map(item => {
+                          const ws = workshopsInEvent.find(w => w.id === item.workshop_id);
+                          return (
+                            <span
+                              key={item.workshop_id}
+                              className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${item.attended ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20' : 'bg-slate-100 dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'}`}
+                            >
+                              {item.attended && <UserCheck size={9} aria-hidden />}
+                              {ws?.name ?? item.workshop_id.slice(0, 8)}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className={`font-black text-base tabular-nums ${b.status_pagamento === 'CORTESIA' ? 'text-violet-600 dark:text-violet-400' : 'text-slate-900 dark:text-white'}`}>
+                        {b.status_pagamento === 'CORTESIA' ? 'Cortesia' : fmtCurrency(b.total_preco)}
+                      </p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">{attendedCount}/{b.items.length} frequentado{b.items.length !== 1 ? 's' : ''}</p>
+                      <p className="text-[10px] text-slate-400">{fmtDate(b.created_at)}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
     </div>,
