@@ -1409,7 +1409,7 @@ const InscricaoWizard: React.FC = () => {
                   if (!sec) {
                     return (
                       <p className="text-[9px] text-slate-400 mt-1">
-                        Formato minuto:segundo. {maxSec > 0 ? `Máx. da ${modalidade}: ${maxStr}.` : 'Máx. 30:00.'}
+                        Formato minuto:segundo. {maxSec > 0 ? `Máx. da ${modalidade}: ${maxStr}.` : 'Sem limite definido nesta modalidade — confira o regulamento.'}
                       </p>
                     );
                   }
@@ -1429,7 +1429,7 @@ const InscricaoWizard: React.FC = () => {
                   }
                   return (
                     <p className="text-[9px] text-slate-400 mt-1">
-                      Formato minuto:segundo. Máx. 30:00.
+                      Formato minuto:segundo. Sem limite definido nesta modalidade — confira o regulamento.
                     </p>
                   );
                 })()}
