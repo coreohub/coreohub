@@ -490,9 +490,6 @@ const InscricaoWizard: React.FC = () => {
         }
       }
 
-      // Janela de inscrições (registration_start_date/end_date) ainda não
-      // está implementada no DB. Quando estiver, restaurar a checagem aqui.
-      // Por ora, qualquer evento publicado e visível aceita inscrição.
 
       // Pré-popula coreógrafo com nome do user (ele loga, ele inscreve, aparece no recibo).
       const { data: profile } = await supabase
@@ -502,13 +499,26 @@ const InscricaoWizard: React.FC = () => {
         .maybeSingle();
 
       const [{ data: cfg }, { data: legacy }, { data: styles }] = await Promise.all([
-        supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date, tipos_apresentacao').eq('event_id', ev.id).maybeSingle(),
-        supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date, tipos_apresentacao').eq('id', '1').maybeSingle(),
+        supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date, tipos_apresentacao, prazo_inscricao').eq('event_id', ev.id).maybeSingle(),
+        supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date, tipos_apresentacao, prazo_inscricao').eq('id', '1').maybeSingle(),
         // Gêneros estruturados (com sub_types/modalidades). Source of truth nova.
         supabase.from('event_styles').select('id, name, is_active, sub_types').eq('event_id', ev.id).eq('is_active', true).order('name'),
       ]);
       setEventStyles(styles ?? []);
       const finalCfg = cfg && (cfg.categorias || cfg.estilos) ? cfg : legacy;
+
+      // Prazo de inscrição (configuracoes.prazo_inscricao) vence às 23:59:59
+      // do dia informado. Bloqueia entrada direta por link mesmo se o botão
+      // da vitrine (PublicEventPage) já tiver sido burlado/cacheado.
+      if (finalCfg?.prazo_inscricao) {
+        const prazo = finalCfg.prazo_inscricao as string;
+        const deadline = new Date((prazo.includes('T') ? prazo : prazo + 'T23:59:59'));
+        if (Date.now() > deadline.getTime()) {
+          setError('As inscrições para este evento já foram encerradas.');
+          setLoading(false);
+          return;
+        }
+      }
 
       // Aplica regra de tolerância e modo de referência etária do produtor.
       // Mesma estrutura usada em MinhasCoreografias.tsx — ref date conforme

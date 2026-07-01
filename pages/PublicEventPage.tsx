@@ -381,14 +381,17 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   // TODAS as compras da vitrine — inscrição, ingresso e workshop/pass.
   const eventOver = isEventOver(event);
 
+  // Prazo real de inscrição vem de configuracoes.prazo_inscricao (campo que o
+  // produtor preenche em Configurações → Geral). `event.registration_start_date`/
+  // `registration_end_date` são colunas declaradas em types.ts mas nunca
+  // migradas no banco — não usar (ficavam sempre undefined, então o botão
+  // nunca desabilitava de fato).
   const isRegistrationOpen = (() => {
     if (eventOver) return false;
-    const now = new Date();
-    const start = event.registration_start_date ? new Date(event.registration_start_date) : null;
-    const end = event.registration_end_date ? new Date(event.registration_end_date) : null;
-    if (start && now < start) return false;
-    if (end && now > end) return false;
-    return true;
+    const prazo = config?.prazo_inscricao;
+    if (!prazo) return true;
+    const deadline = new Date((prazo.includes('T') ? prazo : prazo + 'T23:59:59'));
+    return Date.now() <= deadline.getTime();
   })();
 
   const formatDate = (dateStr?: string) => {
