@@ -65,6 +65,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json()
     const { kind, workshop_id, buyer_name, buyer_email, buyer_phone } = body
+    const pass_id = body.pass_id as string | undefined
     let event_id = body.event_id as string | undefined
     const buyer_cpf = String(body.buyer_cpf ?? '').replace(/\D/g, '')
 
@@ -74,6 +75,7 @@ Deno.serve(async (req) => {
     if (!isValidCpf(buyer_cpf)) return json({ error: 'CPF inválido' }, 400)
     if (kind === 'workshop' && !workshop_id) return json({ error: 'workshop_id obrigatório pra cortesia de workshop' }, 400)
     if (kind === 'audience' && !event_id) return json({ error: 'event_id obrigatório pra cortesia de ingresso' }, 400)
+    if (kind === 'pass' && !pass_id) return json({ error: 'pass_id obrigatório pra cortesia de pass' }, 400)
 
     const { data: profile } = await supabase
       .from('profiles')
@@ -82,8 +84,6 @@ Deno.serve(async (req) => {
       .maybeSingle()
     const isSuperAdmin = profile?.is_super_admin === true
 
-    // Dono é validado por evento (ingresso) ou direto pelo workshop (cobre
-    // workshops standalone, sem event_id).
     let isOwner = false
     if (kind === 'workshop') {
       const { data: workshop } = await supabase
@@ -94,6 +94,20 @@ Deno.serve(async (req) => {
       if (!workshop) return json({ error: 'Workshop não encontrado' }, 404)
       isOwner = workshop.created_by === user.id
       event_id = workshop.event_id ?? undefined
+    } else if (kind === 'pass') {
+      const { data: pass } = await supabase
+        .from('workshop_passes')
+        .select('id, event_id, created_by')
+        .eq('id', pass_id!)
+        .maybeSingle()
+      if (!pass) return json({ error: 'Pass não encontrado' }, 404)
+      const { data: ev } = await supabase
+        .from('events')
+        .select('id, created_by')
+        .eq('id', pass.event_id)
+        .maybeSingle()
+      isOwner = ev?.created_by === user.id
+      event_id = pass.event_id
     } else {
       const { data: event } = await supabase
         .from('events')
@@ -151,7 +165,70 @@ Deno.serve(async (req) => {
       return json({ registration: reg }, 201)
     }
 
-    return json({ error: "kind deve ser 'audience' ou 'workshop'" }, 400)
+    if (kind === 'pass') {
+      const { data: passItems } = await supabase
+        .from('workshop_pass_items')
+        .select('workshop_id, workshops(id, name)')
+        .eq('pass_id', pass_id!)
+      if (!passItems || passItems.length === 0)
+        return json({ error: 'Pass sem workshops vinculados' }, 400)
+
+      const { data: passInfo } = await supabase
+        .from('workshop_passes')
+        .select('name')
+        .eq('id', pass_id!)
+        .maybeSingle()
+
+      const passGroupId = crypto.randomUUID()
+      const inserts = passItems.map(item => ({
+        workshop_id: item.workshop_id,
+        pass_id: pass_id,
+        pass_group_id: passGroupId,
+        buyer_name,
+        buyer_email,
+        buyer_cpf,
+        buyer_phone: buyer_phone || null,
+        preco_base: 0,
+        preco_pago: 0,
+        status_pagamento: 'CORTESIA',
+        paid_at: new Date().toISOString(),
+        commission_amount: 0,
+        producer_amount: 0,
+      }))
+
+      const { data: regs, error: regError } = await supabase
+        .from('workshop_registrations')
+        .insert(inserts)
+        .select('id, access_token, workshop_id')
+      if (regError) return json({ error: regError.message }, 500)
+
+      // Email best-effort: consolida N vouchers num único email de confirmação.
+      try {
+        const appUrl = 'https://app.coreohub.com'
+        const items = (regs ?? []).map(r => {
+          const ws = (passItems.find(pi => pi.workshop_id === r.workshop_id) as any)
+          const wsName = ws?.workshops?.name ?? ws?.workshop_id ?? r.workshop_id
+          return { workshopNome: wsName, voucherUrl: `${appUrl}/meu-workshop/${r.access_token}` }
+        })
+        await supabase.functions.invoke('send-email', {
+          body: {
+            type: 'workshop_pass_confirmed',
+            payload: {
+              buyerName: buyer_name,
+              buyerEmail: buyer_email,
+              passNome: passInfo?.name ?? 'Pass',
+              items,
+              valorPago: 0,
+              appUrl,
+            },
+          },
+        })
+      } catch (_) {}
+
+      return json({ pass_group_id: passGroupId, registrations: regs }, 201)
+    }
+
+    return json({ error: "kind deve ser 'audience', 'workshop' ou 'pass'" }, 400)
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500)
   }

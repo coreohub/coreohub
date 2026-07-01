@@ -1694,6 +1694,11 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // Cortesia de pass: id do pass com form aberto, ou null
+  const [courtesyPassId, setCourtesyPassId] = useState<string | null>(null);
+  const [courtesyForm, setCourtesyForm] = useState({ name: '', email: '', cpf: '', phone: '' });
+  const [courtesySaving, setCourtesySaving] = useState(false);
+
   const emptyForm = {
     name: '',
     description: '',
@@ -1837,6 +1842,40 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
     else { setFeedback({ kind: 'ok', msg: 'Pass removido' }); refresh(); }
   };
 
+  const openCourtesy = (passId: string) => {
+    setCourtesyPassId(passId);
+    setCourtesyForm({ name: '', email: '', cpf: '', phone: '' });
+  };
+
+  const handleAddPassCourtesy = async () => {
+    if (courtesySaving || !courtesyPassId) return;
+    const cpf = courtesyForm.cpf.replace(/\D/g, '');
+    if (!courtesyForm.name.trim() || !courtesyForm.email.trim() || cpf.length !== 11) {
+      setFeedback({ kind: 'err', msg: 'Preencha nome, e-mail e CPF válido.' });
+      return;
+    }
+    setCourtesySaving(true);
+    try {
+      const { error: invokeErr } = await supabase.functions.invoke('create-courtesy-entry', {
+        body: {
+          kind: 'pass',
+          pass_id: courtesyPassId,
+          buyer_name: courtesyForm.name.trim(),
+          buyer_email: courtesyForm.email.trim(),
+          buyer_cpf: cpf,
+          buyer_phone: courtesyForm.phone.trim() || undefined,
+        },
+      });
+      if (invokeErr) throw new Error(invokeErr.message);
+      setFeedback({ kind: 'ok', msg: 'Cortesia de pass adicionada. E-mail enviado com os vouchers.' });
+      setCourtesyPassId(null);
+    } catch (e: any) {
+      setFeedback({ kind: 'err', msg: e.message ?? 'Erro ao criar cortesia' });
+    } finally {
+      setCourtesySaving(false);
+    }
+  };
+
   return (
     <div className="mt-8">
       <div className="mb-4 flex items-start justify-between flex-wrap gap-3">
@@ -1910,6 +1949,13 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
                     <Pencil size={12} />Editar
                   </button>
                   <button
+                    onClick={() => openCourtesy(p.id)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 dark:border-violet-500/30 px-3 py-1.5 text-xs font-bold text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10 transition"
+                    aria-label="Adicionar cortesia neste pass"
+                  >
+                    <Users size={12} />Cortesia
+                  </button>
+                  <button
                     onClick={() => removePass(p)}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 dark:border-rose-500/30 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
                   >
@@ -1917,6 +1963,66 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
                   </button>
                 </div>
               </div>
+
+              {courtesyPassId === p.id && (
+                <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/10">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-400 mb-3">
+                    Convite gratuito — acesso a todos os workshops deste pass
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <label className="sr-only" htmlFor={`pass-courtesy-name-${p.id}`}>Nome</label>
+                    <input
+                      id={`pass-courtesy-name-${p.id}`}
+                      value={courtesyForm.name}
+                      onChange={e => setCourtesyForm(f => ({ ...f, name: e.target.value }))}
+                      placeholder="Nome"
+                      className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500/50"
+                    />
+                    <label className="sr-only" htmlFor={`pass-courtesy-email-${p.id}`}>E-mail</label>
+                    <input
+                      id={`pass-courtesy-email-${p.id}`}
+                      type="email"
+                      value={courtesyForm.email}
+                      onChange={e => setCourtesyForm(f => ({ ...f, email: e.target.value }))}
+                      placeholder="E-mail"
+                      className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500/50"
+                    />
+                    <label className="sr-only" htmlFor={`pass-courtesy-cpf-${p.id}`}>CPF</label>
+                    <input
+                      id={`pass-courtesy-cpf-${p.id}`}
+                      value={courtesyForm.cpf}
+                      onChange={e => setCourtesyForm(f => ({ ...f, cpf: maskCPF(e.target.value) }))}
+                      placeholder="CPF"
+                      className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500/50"
+                    />
+                    <label className="sr-only" htmlFor={`pass-courtesy-phone-${p.id}`}>Telefone</label>
+                    <input
+                      id={`pass-courtesy-phone-${p.id}`}
+                      value={courtesyForm.phone}
+                      onChange={e => setCourtesyForm(f => ({ ...f, phone: e.target.value }))}
+                      placeholder="Telefone (opcional)"
+                      className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500/50"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 mt-3">
+                    <button
+                      onClick={() => setCourtesyPassId(null)}
+                      disabled={courtesySaving}
+                      className="px-4 py-2 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleAddPassCourtesy}
+                      disabled={courtesySaving}
+                      className="px-4 py-2 bg-violet-500 hover:bg-violet-600 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1.5"
+                    >
+                      {courtesySaving ? <Loader2 size={13} className="animate-spin" /> : <Users size={13} />}
+                      {courtesySaving ? 'Salvando...' : 'Confirmar cortesia'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
