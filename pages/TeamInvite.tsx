@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import { OtpBoxes } from '../components/OtpBoxes';
 import {
   getTeamInviteByToken,
   type TeamInvite,
 } from '../services/teamInviteService';
 import {
-  Users, Loader2, AlertCircle, CheckCircle, ArrowRight, Lock, Mail, User as UserIcon,
+  Users, Loader2, AlertCircle, CheckCircle, ArrowRight, Mail, User as UserIcon,
 } from 'lucide-react';
 
 const ROLE_LABEL: Record<string, string> = {
@@ -17,6 +18,11 @@ const ROLE_LABEL: Record<string, string> = {
   PALCO:       'Marcador de Palco',
 };
 
+// Convite de equipe via código por e-mail (OTP), sem senha — mesmo padrão
+// Slack/Notion/Linear: o código verificado JÁ é login + confirmação de
+// e-mail + aceite do convite, tudo em 1 passo. Evita a dupla-fricção de
+// senha + confirmação por e-mail separada (que travava quando o convidado
+// já tinha conta, ou quando o e-mail de confirmação atrasava/repetia).
 const TeamInviteLanding = () => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
@@ -25,10 +31,14 @@ const TeamInviteLanding = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
 
-  const [form, setForm] = useState({ full_name: '', email: '', password: '' });
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError]   = useState<string | null>(null);
-  const [pendingConfirmation, setPendingConfirmation] = useState(false);
+  const [step, setStep] = useState<'otp-sent' | 'code' | 'name'>('otp-sent');
+  const [otpCode, setOtpCode] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [sending, setSending]   = useState(true);
+  const [verifying, setVerifying] = useState(false);
+  const [savingName, setSavingName] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [resendIn, setResendIn] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -41,7 +51,6 @@ const TeamInviteLanding = () => {
           setError('Este convite expirou. Peça um novo ao produtor.');
         } else {
           setInvite(inv);
-          setForm(f => ({ ...f, email: inv.email, full_name: inv.full_name ?? '' }));
         }
       } catch (e: any) {
         setError(e.message);
@@ -51,6 +60,35 @@ const TeamInviteLanding = () => {
     })();
   }, [token]);
 
+  const sendOtp = async (inv: TeamInvite) => {
+    setSending(true);
+    setFormError(null);
+    try {
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: inv.email,
+        options: { shouldCreateUser: true },
+      });
+      if (otpError) throw otpError;
+      setStep('code');
+      setResendIn(45);
+    } catch (e: any) {
+      setFormError(e.message ?? 'Não foi possível enviar o código. Tente de novo.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  useEffect(() => {
+    if (invite) sendOtp(invite);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invite]);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
+
   // profiles.role só pode ser alterado por service_role/super admin (trigger
   // protect_profiles_privileged_columns, migration 20260509) — um UPDATE
   // direto do client (mesmo sendo o próprio dono da linha) é silenciosamente
@@ -58,56 +96,65 @@ const TeamInviteLanding = () => {
   // apply-team-invite, que roda com service_role.
   const applyInvite = async () => {
     if (!token) return;
-    const { error } = await supabase.functions.invoke('apply-team-invite', { body: { token } });
-    if (error) throw error;
+    const { error: fnError } = await supabase.functions.invoke('apply-team-invite', { body: { token } });
+    if (fnError) throw fnError;
   };
 
-  const handleSignup = async () => {
+  const finishAfterAuth = async () => {
+    // Nome só é pedido se o profile ainda não tiver um (conta nova).
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user?.id ?? '')
+      .maybeSingle();
+
+    await applyInvite();
+
+    if (!profile?.full_name?.trim()) {
+      setStep('name');
+      return;
+    }
+    navigate('/dashboard?welcome=team');
+  };
+
+  const handleVerifyOtp = async (code?: string) => {
     if (!invite) return;
+    const value = (code ?? otpCode).replace(/\D/g, '');
+    if (value.length < 6) { setFormError('Digite o código que chegou no e-mail.'); return; }
+    setVerifying(true);
     setFormError(null);
-    if (!form.full_name.trim()) { setFormError('Informe seu nome completo.'); return; }
-    if (form.password.length < 6) { setFormError('A senha deve ter ao menos 6 caracteres.'); return; }
-    setSubmitting(true);
     try {
-      // Tenta signup; se já existe, faz signIn
-      const { data, error: authError } = await supabase.auth.signUp({
-        email:    form.email,
-        password: form.password,
-        options:  {
-          data: { full_name: form.full_name },
-          emailRedirectTo: `${window.location.origin}/dashboard`,
-        },
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email: invite.email, token: value, type: 'email',
       });
-      let session = data?.session ?? null;
+      if (verifyError) throw verifyError;
+      await finishAfterAuth();
+    } catch (e: any) {
+      const raw = e.message ?? '';
+      setFormError(/expire|invalid|token/i.test(raw) ? 'Código inválido ou expirado. Peça um novo.' : (raw || 'Não foi possível validar o código.'));
+    } finally {
+      setVerifying(false);
+    }
+  };
 
-      if (authError && authError.message.toLowerCase().includes('already')) {
-        const { data: signin, error: signinError } = await supabase.auth.signInWithPassword({
-          email:    form.email,
-          password: form.password,
-        });
-        if (signinError) throw new Error('Já existe conta com este e-mail. Se você já tem senha do CoreoHub, use ela pra entrar (ou clique em "Esqueci a senha" no login).');
-        session = signin.session ?? null;
-      } else if (authError) {
-        throw authError;
-      }
-
-      if (!session) {
-        // Confirmação de e-mail é obrigatória — ainda não há sessão pra
-        // aplicar o convite (RLS bloqueia UPDATE sem auth.uid()). Guarda o
-        // token e finaliza assim que o usuário confirmar (Auth.tsx cuida
-        // disso no callback SIGNED_IN).
-        try { localStorage.setItem('coreohub_pending_team_invite_token', token ?? ''); } catch { /* noop */ }
-        setPendingConfirmation(true);
-        setSubmitting(false);
-        return;
-      }
-
-      await applyInvite();
+  const handleSaveName = async () => {
+    if (!fullName.trim()) { setFormError('Informe seu nome completo.'); return; }
+    setSavingName(true);
+    setFormError(null);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Sessão expirada. Recarregue a página.');
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ full_name: fullName.trim() })
+        .eq('id', user.id);
+      if (updateError) throw updateError;
       navigate('/dashboard?welcome=team');
     } catch (e: any) {
       setFormError(e.message);
     } finally {
-      setSubmitting(false);
+      setSavingName(false);
     }
   };
 
@@ -126,19 +173,6 @@ const TeamInviteLanding = () => {
         <button onClick={() => navigate('/login')} className="text-[#ff0068] text-sm font-bold mx-auto block">
           Ir para o login
         </button>
-      </div>
-    </div>
-  );
-
-  if (pendingConfirmation) return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50 dark:bg-slate-950">
-      <div className="text-center space-y-3 max-w-sm">
-        <Mail size={40} className="text-[#ff0068] mx-auto" />
-        <p className="font-black text-xl text-slate-900 dark:text-white uppercase italic">Confirme seu e-mail</p>
-        <p className="text-slate-500 text-sm">
-          Enviamos um link de confirmação pra <strong>{form.email}</strong>. Clique nele pra ativar sua conta —
-          seu acesso de equipe é liberado automaticamente assim que você confirmar.
-        </p>
       </div>
     </div>
   );
@@ -166,66 +200,116 @@ const TeamInviteLanding = () => {
         </div>
 
         <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 rounded-3xl p-6 space-y-5 shadow-sm">
-          <Field icon={UserIcon} label="Nome completo">
-            <input
-              type="text"
-              value={form.full_name}
-              onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
-              placeholder="Seu nome"
-              className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
-            />
-          </Field>
-
-          <Field icon={Mail} label="E-mail (do convite)">
-            <input
-              type="email"
-              value={form.email}
-              disabled
-              className="w-full bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-600 dark:text-slate-400 cursor-not-allowed"
-            />
-          </Field>
-
-          <Field icon={Lock} label="Crie uma senha (ou use a existente)">
-            <input
-              type="password"
-              value={form.password}
-              onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-              placeholder="Mínimo 6 caracteres"
-              className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
-            />
-          </Field>
-
-          {formError && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl">
-              <AlertCircle size={14} className="text-red-500 shrink-0" />
-              <p className="text-xs text-red-600 dark:text-red-400">{formError}</p>
+          {step === 'otp-sent' && (
+            <div className="text-center py-6 space-y-3">
+              {sending ? (
+                <>
+                  <Loader2 size={28} className="animate-spin text-[#ff0068] mx-auto" />
+                  <p className="text-xs text-slate-500 font-bold">Enviando código pro seu e-mail...</p>
+                </>
+              ) : (
+                <>
+                  <AlertCircle size={28} className="text-amber-400 mx-auto" />
+                  <p className="text-xs text-red-600 dark:text-red-400 font-bold px-4">{formError ?? 'Não foi possível enviar o código.'}</p>
+                  <button
+                    onClick={() => invite && sendOtp(invite)}
+                    className="px-5 py-2.5 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#e0005c] transition-all"
+                  >
+                    Tentar de novo
+                  </button>
+                </>
+              )}
             </div>
           )}
 
-          <button
-            onClick={handleSignup}
-            disabled={submitting}
-            className="w-full flex items-center justify-center gap-2 py-4 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-50 text-white rounded-xl font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20"
-          >
-            {submitting ? <Loader2 size={16} className="animate-spin" /> : <><CheckCircle size={16} /> Entrar na equipe <ArrowRight size={14} /></>}
-          </button>
+          {step === 'code' && invite && (
+            <div className="space-y-5">
+              <div className="text-center space-y-2">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 mb-1">
+                  <Mail size={20} />
+                </div>
+                <p className="text-sm font-black text-slate-900 dark:text-white normal-case">
+                  Enviamos um código pra<br /><span className="text-[#ff0068]">{invite.email}</span>
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold normal-case leading-relaxed px-2">
+                  Digite o código de 6 dígitos que chegou no e-mail.
+                </p>
+              </div>
 
-          <div className="text-[10px] text-center text-slate-400 leading-relaxed">
-            Se você já tem conta no CoreoHub, use a mesma senha — você será automaticamente promovido a membro da equipe.
-          </div>
+              <OtpBoxes
+                value={otpCode}
+                onChange={setOtpCode}
+                onComplete={(v) => handleVerifyOtp(v)}
+                autoFocus
+                disabled={verifying}
+              />
+
+              {formError && (
+                <div role="alert" className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl">
+                  <AlertCircle size={14} className="text-red-500 shrink-0" />
+                  <p className="text-xs text-red-600 dark:text-red-400">{formError}</p>
+                </div>
+              )}
+
+              <button
+                onClick={() => handleVerifyOtp()}
+                disabled={verifying || otpCode.length < 6}
+                className="w-full flex items-center justify-center gap-2 py-4 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-50 text-white rounded-xl font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20"
+              >
+                {verifying ? <Loader2 size={16} className="animate-spin" /> : <><CheckCircle size={16} /> Entrar na equipe <ArrowRight size={14} /></>}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => sendOtp(invite)}
+                disabled={resendIn > 0 || sending}
+                className="w-full text-[10px] font-bold text-slate-400 hover:text-[#ff0068] transition-colors disabled:opacity-50"
+              >
+                {resendIn > 0 ? `Reenviar código em ${resendIn}s` : 'Reenviar código'}
+              </button>
+            </div>
+          )}
+
+          {step === 'name' && (
+            <div className="space-y-5">
+              <div className="text-center space-y-1">
+                <p className="text-sm font-black text-slate-900 dark:text-white uppercase">Só mais um passo</p>
+                <p className="text-[11px] text-slate-500 font-bold normal-case">Como podemos te chamar?</p>
+              </div>
+              <div>
+                <label className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
+                  <UserIcon size={11} /> Nome completo
+                </label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={e => setFullName(e.target.value)}
+                  placeholder="Seu nome"
+                  autoFocus
+                  className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                />
+              </div>
+
+              {formError && (
+                <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl">
+                  <AlertCircle size={14} className="text-red-500 shrink-0" />
+                  <p className="text-xs text-red-600 dark:text-red-400">{formError}</p>
+                </div>
+              )}
+
+              <button
+                onClick={handleSaveName}
+                disabled={savingName}
+                className="w-full flex items-center justify-center gap-2 py-4 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-50 text-white rounded-xl font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20"
+              >
+                {savingName ? <Loader2 size={16} className="animate-spin" /> : <>Concluir <ArrowRight size={14} /></>}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 };
-
-const Field: React.FC<{ icon: any; label: string; children: React.ReactNode }> = ({ icon: Icon, label, children }) => (
-  <div>
-    <label className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
-      <Icon size={11} /> {label}
-    </label>
-    {children}
-  </div>
-);
 
 export default TeamInviteLanding;
