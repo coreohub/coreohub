@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import {
   getTeamInviteByToken,
-  markTeamInviteUsed,
   type TeamInvite,
 } from '../services/teamInviteService';
 import {
@@ -29,6 +28,7 @@ const TeamInviteLanding = () => {
   const [form, setForm] = useState({ full_name: '', email: '', password: '' });
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError]   = useState<string | null>(null);
+  const [pendingConfirmation, setPendingConfirmation] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -51,19 +51,15 @@ const TeamInviteLanding = () => {
     })();
   }, [token]);
 
-  const applyInvite = async (userId: string) => {
-    if (!invite) return;
-    await supabase
-      .from('profiles')
-      .upsert({
-        id:                userId,
-        full_name:         form.full_name,
-        email:             form.email,
-        role:              invite.role,
-        cargo:             invite.cargo,
-        permissoes_custom: invite.permissoes_custom,
-      }, { onConflict: 'id' });
-    if (token) await markTeamInviteUsed(token, userId);
+  // profiles.role só pode ser alterado por service_role/super admin (trigger
+  // protect_profiles_privileged_columns, migration 20260509) — um UPDATE
+  // direto do client (mesmo sendo o próprio dono da linha) é silenciosamente
+  // revertido. Por isso a aplicação do convite passa pela Edge Function
+  // apply-team-invite, que roda com service_role.
+  const applyInvite = async () => {
+    if (!token) return;
+    const { error } = await supabase.functions.invoke('apply-team-invite', { body: { token } });
+    if (error) throw error;
   };
 
   const handleSignup = async () => {
@@ -77,23 +73,36 @@ const TeamInviteLanding = () => {
       const { data, error: authError } = await supabase.auth.signUp({
         email:    form.email,
         password: form.password,
-        options:  { data: { full_name: form.full_name } },
+        options:  {
+          data: { full_name: form.full_name },
+          emailRedirectTo: `${window.location.origin}/dashboard`,
+        },
       });
-      let userId = data?.user?.id ?? null;
+      let session = data?.session ?? null;
 
       if (authError && authError.message.toLowerCase().includes('already')) {
         const { data: signin, error: signinError } = await supabase.auth.signInWithPassword({
           email:    form.email,
           password: form.password,
         });
-        if (signinError) throw new Error('Já existe conta com este e-mail. Senha incorreta.');
-        userId = signin.user?.id ?? null;
+        if (signinError) throw new Error('Já existe conta com este e-mail. Se você já tem senha do CoreoHub, use ela pra entrar (ou clique em "Esqueci a senha" no login).');
+        session = signin.session ?? null;
       } else if (authError) {
         throw authError;
       }
 
-      if (!userId) throw new Error('Não foi possível autenticar.');
-      await applyInvite(userId);
+      if (!session) {
+        // Confirmação de e-mail é obrigatória — ainda não há sessão pra
+        // aplicar o convite (RLS bloqueia UPDATE sem auth.uid()). Guarda o
+        // token e finaliza assim que o usuário confirmar (Auth.tsx cuida
+        // disso no callback SIGNED_IN).
+        try { localStorage.setItem('coreohub_pending_team_invite_token', token ?? ''); } catch { /* noop */ }
+        setPendingConfirmation(true);
+        setSubmitting(false);
+        return;
+      }
+
+      await applyInvite();
       navigate('/dashboard?welcome=team');
     } catch (e: any) {
       setFormError(e.message);
@@ -117,6 +126,19 @@ const TeamInviteLanding = () => {
         <button onClick={() => navigate('/login')} className="text-[#ff0068] text-sm font-bold mx-auto block">
           Ir para o login
         </button>
+      </div>
+    </div>
+  );
+
+  if (pendingConfirmation) return (
+    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50 dark:bg-slate-950">
+      <div className="text-center space-y-3 max-w-sm">
+        <Mail size={40} className="text-[#ff0068] mx-auto" />
+        <p className="font-black text-xl text-slate-900 dark:text-white uppercase italic">Confirme seu e-mail</p>
+        <p className="text-slate-500 text-sm">
+          Enviamos um link de confirmação pra <strong>{form.email}</strong>. Clique nele pra ativar sua conta —
+          seu acesso de equipe é liberado automaticamente assim que você confirmar.
+        </p>
       </div>
     </div>
   );

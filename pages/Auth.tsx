@@ -210,6 +210,24 @@ const Auth = () => {
     }
   };
 
+  // Convite de equipe: se o signup em /equipe-convite/:token precisou de
+  // confirmação de e-mail (sem sessão ainda), o token fica guardado aqui e
+  // só é aplicado quando o SIGNED_IN de verdade acontece (após o clique no
+  // link de confirmação). A Edge Function apply-team-invite roda com
+  // service_role porque o trigger protect_profiles_privileged_columns
+  // bloqueia UPDATE de role feito pelo próprio usuário comum. Ver
+  // pages/TeamInvite.tsx.
+  const applyPendingTeamInvite = async () => {
+    try {
+      const token = localStorage.getItem('coreohub_pending_team_invite_token');
+      if (!token) return;
+      const { error } = await supabase.functions.invoke('apply-team-invite', { body: { token } });
+      if (!error) localStorage.removeItem('coreohub_pending_team_invite_token');
+    } catch {
+      /* best-effort — não bloqueia o login se a Edge Function falhar */
+    }
+  };
+
   // Decide a tela inicial pós-login com base no role do user. Produtor
   // (ORGANIZER) cai direto no /qg-organizador. Demais roles vão pro
   // /dashboard padrão. Lookup feito FORA do callback de onAuthStateChange
@@ -234,6 +252,7 @@ const Auth = () => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         setIsAuthenticating(true);
+        await applyPendingTeamInvite();
         await persistLeadEntryEventId(session.user.id, session.user.created_at);
         await persistLeadEntrySource(session.user.id, session.user.created_at);
         const path = await resolveLandingPath(session.user.id);
@@ -251,6 +270,7 @@ const Auth = () => {
         // setTimeout(..., 0) garante que o navigate roda fora do lock de auth.
         // resolveLandingPath roda DENTRO do timeout (não no callback) — sem deadlock.
         setTimeout(async () => {
+          await applyPendingTeamInvite();
           await persistLeadEntryEventId(session.user.id, session.user.created_at);
           await persistLeadEntrySource(session.user.id, session.user.created_at);
           const path = await resolveLandingPath(session.user.id);
