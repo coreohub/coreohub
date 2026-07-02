@@ -74,6 +74,7 @@ Deno.serve(async (req) => {
         role: invite.role,
         cargo: invite.cargo,
         permissoes_custom: invite.permissoes_custom,
+        team_event_id: invite.event_id ?? undefined,
       }, { onConflict: 'id' })
     if (upsertError) return json({ error: upsertError.message }, 500)
 

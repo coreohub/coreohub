@@ -519,14 +519,24 @@ const Schedule = () => {
   useEffect(() => {
     // Filtra por created_by — events é público (vitrine), então sem o filtro
     // o picker mostraria eventos de OUTROS produtores. Espelha Registrations.tsx.
+    // Membro de equipe não é created_by do evento do produtor — inclui
+    // também o evento vinculado em profiles.team_event_id (setado no
+    // aceite do convite de equipe, ver apply-team-invite).
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { fetchData(null); return; }
-      const { data } = await supabase
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('team_event_id')
+        .eq('id', user.id)
+        .maybeSingle();
+      const query = supabase
         .from('events')
         .select('id,name,edition_year,start_date,created_at,is_demo')
-        .eq('created_by', user.id)
         .order('created_at', { ascending: false });
+      const { data } = profile?.team_event_id
+        ? await query.or(`created_by.eq.${user.id},id.eq.${profile.team_event_id}`)
+        : await query.eq('created_by', user.id);
       if (data && data.length > 0) {
         setAllEvents(data);
         // Default = mais recente criado (consistente com MesaDeSom).

@@ -63,6 +63,13 @@ const ALL_EQUIPE = [
   UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN,
 ];
 
+// "Ser equipe" e "ser inscrito/coreógrafo" não são exclusivos (padrão
+// Eventbrite/Meetup: staff também pode ter as próprias inscrições). Sem
+// isso, quem é convidado como equipe nunca via o menu "Minhas Inscrições"
+// pra se inscrever numa outra mostra, mesmo podendo fazer isso normalmente
+// (o Wizard de inscrição não checa role nenhuma).
+const ALL_USER_OR_EQUIPE = [...ALL_USER, ...ALL_EQUIPE];
+
 // Mapeamento permissão → item de menu (usado para membros com permissoes_custom)
 type PermKey = keyof PermissoesCustom;
 const PERM_MENU: { perm: PermKey; path: string; label: string; icon: React.ElementType }[] = [
@@ -152,7 +159,7 @@ const menuSections: MenuSection[] = [
   },
   {
     section: 'Inscrito',
-    roles: ALL_USER,
+    roles: ALL_USER_OR_EQUIPE,
     items: [
       { path: '/dashboard',           label: 'Início',                icon: LayoutDashboard },
       { path: '/bailarinos',          label: 'Meu Elenco',            icon: Users           },

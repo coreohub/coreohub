@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase, resolveActiveEventId } from './supabase';
 import { UserRole, PermissoesCustom } from '../types';
 
 export interface TeamInvite {
@@ -9,6 +9,7 @@ export interface TeamInvite {
   cargo: string | null;
   role: UserRole;
   permissoes_custom: PermissoesCustom | null;
+  event_id: string | null;
   used_at: string | null;
   used_by: string | null;
   expires_at: string;
@@ -43,6 +44,11 @@ export async function createTeamInvite(input: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Não autenticado');
 
+  // Convite fica vinculado ao evento ativo do produtor — sem isso, quem
+  // aceita o convite não consegue ver o Cronograma/telas de equipe do
+  // evento correto (elas filtram por vínculo, não só por role).
+  const eventId = await resolveActiveEventId();
+
   const token = generateToken();
   const { data, error } = await supabase
     .from('team_invites')
@@ -54,6 +60,7 @@ export async function createTeamInvite(input: {
       role:              input.role,
       permissoes_custom: input.permissoes_custom,
       invited_by:        user.id,
+      event_id:          eventId,
     })
     .select()
     .single();
