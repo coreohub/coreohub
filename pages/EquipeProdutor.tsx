@@ -208,7 +208,7 @@ const EquipeProdutor = () => {
 
   /* ── Remove ── */
   const handleRemove = async (member: Member) => {
-    if (!confirm(`Remover ${member.full_name} da equipe?`)) return;
+    if (!confirm(`Remover ${member.full_name || 'este membro'} da equipe?`)) return;
     const { error } = await supabase
       .from('profiles')
       .update({ role: UserRole.USER, cargo: null, permissoes_custom: null })
@@ -328,12 +328,12 @@ const EquipeProdutor = () => {
                     <div className="flex items-start gap-3">
                       <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-white/10 flex items-center justify-center shrink-0 overflow-hidden">
                         {member.avatar_url
-                          ? <img src={member.avatar_url} alt={member.full_name} className="w-full h-full object-cover" />
-                          : <span className="text-lg font-black text-slate-400">{member.full_name[0]?.toUpperCase()}</span>
+                          ? <img src={member.avatar_url} alt={member.full_name || 'Membro'} className="w-full h-full object-cover" />
+                          : <span className="text-lg font-black text-slate-400">{member.full_name?.[0]?.toUpperCase() ?? '?'}</span>
                         }
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight truncate">{member.full_name}</p>
+                        <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight truncate">{member.full_name || 'Convite pendente de nome'}</p>
                         {member.cargo && (
                           <p className="text-[9px] text-[#ff0068] font-black uppercase tracking-widest flex items-center gap-1 mt-0.5">
                             <Briefcase size={9} /> {member.cargo}
