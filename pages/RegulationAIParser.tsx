@@ -184,7 +184,18 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       if (edited.stage_marking_time_seconds) updates.stage_marking_time_seconds  = edited.stage_marking_time_seconds;
       if (edited.registration_lots?.length)  updates.registration_lots           = edited.registration_lots;
       if (edited.categories?.length)         updates.categories_config           = edited.categories;
-      if (edited.formacoes?.length)          updates.formacoes_config            = edited.formacoes;
+      // Fix 2026-07-02: a IA extrai min_performers/max_performers (ex: "Grupo
+      // de 4 a 15 bailarinos"), mas o resto do sistema (InscricaoWizard,
+      // AccountSettings) lê min_members/max_members dessa mesma config. Sem
+      // esse mapeamento os limites extraídos do regulamento eram salvos mas
+      // nunca aplicados na validação de elenco do Wizard.
+      if (edited.formacoes?.length) {
+        updates.formacoes_config = edited.formacoes.map(f => ({
+          ...f,
+          min_members: f.min_performers ?? (f as any).min_members,
+          max_members: f.max_performers ?? (f as any).max_members,
+        }));
+      }
       if (edited.criteria?.length)           updates.criteria_config             = edited.criteria;
       if (edited.tiebreaker_rules)           updates.tiebreaker_rules            = edited.tiebreaker_rules;
 

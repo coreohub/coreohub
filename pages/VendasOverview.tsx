@@ -109,6 +109,13 @@ const VendasOverview: React.FC = () => {
     [metrics]
   );
 
+  const totalTransacoes = useMemo(
+    () => (metrics ?? []).reduce((s, m) => s + m.count, 0),
+    [metrics]
+  );
+
+  const ticketMedio = totalTransacoes > 0 ? totalGeral / totalTransacoes : 0;
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-700 pb-20">
       <VendasTabs />
@@ -129,8 +136,8 @@ const VendasOverview: React.FC = () => {
         </div>
       ) : (
         <>
-          {/* Card de total geral */}
-          <div className="bg-slate-900 dark:bg-white/5 border border-slate-800 dark:border-white/10 rounded-3xl p-6 flex items-center justify-between gap-4 flex-wrap">
+          {/* Card de total geral + ticket médio */}
+          <div className="bg-slate-900 dark:bg-white/5 border border-slate-800 dark:border-white/10 rounded-3xl p-6 flex items-center justify-between gap-6 flex-wrap">
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-1.5 h-1.5 bg-[#ff0068] rounded-full animate-pulse shadow-[0_0_8px_#ff0068]" />
@@ -139,7 +146,14 @@ const VendasOverview: React.FC = () => {
               <div className="text-3xl md:text-4xl font-black text-white tracking-tighter">{formatBRL(totalGeral)}</div>
               <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-widest">Soma de todas as fontes de receita</p>
             </div>
-            <TrendingUp size={40} className="text-[#ff0068]/40" />
+            <div className="flex items-center gap-6">
+              <div className="border-l border-slate-700 dark:border-white/10 pl-6">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em]">Ticket médio</span>
+                <div className="text-xl md:text-2xl font-black text-white tracking-tighter">{formatBRL(ticketMedio)}</div>
+                <p className="text-[9px] text-slate-500 font-medium mt-0.5">{totalTransacoes} transações pagas</p>
+              </div>
+              <TrendingUp size={40} className="text-[#ff0068]/40 hidden sm:block" />
+            </div>
           </div>
 
           {/* Cards por fonte */}

@@ -34,7 +34,8 @@ BEGIN
   NEW.is_super_admin            := OLD.is_super_admin;
   NEW.is_blocked                := OLD.is_blocked;
   NEW.role                      := OLD.role;
-  NEW.is_coordenador_juri       := OLD.is_coordenador_juri;
+  -- is_coordenador_juri nunca existiu como coluna (fix 20260514) — não
+  -- reintroduzir essa linha.
   NEW.team_event_id             := OLD.team_event_id;
 
   NEW.default_commission_percent := OLD.default_commission_percent;
