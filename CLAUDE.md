@@ -42,9 +42,9 @@ Em produção: ~71 telas, ~30 componentes compartilhados, 31 edge functions Supa
 - Itálico em títulos pra dar movimento (`font-black uppercase tracking-tighter italic`).
 - Sem emojis em código — só se user pedir explícito.
 
-### Landing page (em desenvolvimento)
-- **Design system concluído** (paleta + tipografia + componentes base já definidos no app).
-- **Próximo passo:** estruturar HTML da landing.
+### Landing page
+- **Copy reescrita com PAS (2026-07-02):** `pages/LandingPage.tsx` reescrita com framework Problema → Agitação → Solução. Hero "Seu festival inteiro rodando sozinho. Você só cuida da arte."
+- **Pendente:** substituir os 3 cards de Prova Social (placeholder) por depoimentos reais de jurados e produtores. Considerar adicionar `aggregateRating` ao JSON-LD quando houver avaliações reais.
 - **Páginas atuais relacionadas:** `pages/LandingPage.tsx` (geral), `pages/LandingGoverno.tsx` (vertical edital público), `pages/LandingEstudios.tsx` (vertical estúdio de dança), `pages/PropostaGoverno.tsx`. Todas lazy-loaded.
 
 ### Produtos relacionados (referências)
@@ -238,6 +238,35 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 ## Histórico recente (últimas ~2 semanas)
 
 Cronológico inverso. Detalhes individuais em `memory/`.
+
+### 2026-07-02 — SEO semântico + rewrite da landing page com PAS ✅ SHIPADO
+
+**SEO / metadados** (arquivo: `D:\Documentos\CoreoHub\index.html` — o único que importa, o SPA shell):
+- Open Graph completo (title, description, image, url, type, site_name, locale pt_BR)
+- Twitter Card `summary_large_image`
+- `<link rel="canonical" href="https://www.coreohub.com/">`
+- `<meta name="robots" content="index, follow">`
+- JSON-LD `@graph` com 3 schemas: `Organization`, `SoftwareApplication` (com `offers` 10% comissão), `FAQPage` (6 perguntas — sincronizadas com o FAQ do `LandingPage.tsx`)
+- `og:image` apontando para `/coreohub-avatar.png` (arquivo que existe e retorna 200 — `/coreohub-logo.png` não existe)
+- Validado via Google Rich Results Test: SoftwareApplication ✅ 1 item válido. FAQPage válido mas não gera rich snippet visual (Google restringiu FAQ para gov/big sites desde 2023 — JSON-LD ajuda na citação por IAs)
+
+**Sitemap dinâmico** (`supabase/functions/sitemap-xml/index.ts`):
+- Fix: coluna `updated_at` não existe em `events` (só `created_at`) — query silenciosa retornava vazio
+- Fix: `verify_jwt = false` faltava em `supabase/config.toml` — Googlebot recebia 401
+- Adicionado: suporte a `custom_domain` — evento com domínio próprio usa URL canônica do domínio (evita conteúdo duplicado)
+- Google Search Console: sitemap submetido e processado em ambas as propriedades (`www.coreohub.com` e `app.coreohub.com`), 6 páginas indexadas ✅
+
+**Landing page rewrite** (`pages/LandingPage.tsx` — commit `27d8443`):
+- Framework PAS (Problema → Agitação → Solução) no topo
+- Hero: "Seu festival inteiro rodando sozinho. Você só cuida da arte."
+- Seções novas: Problema, Agitação, Solução (com 3 passos + destaque "página gratuita")
+- Prova Social: 3 cards placeholder (substituir por depoimentos reais de jurados/produtores)
+- Mantidos: IA configura, Seletiva de Vídeo, Cronograma Inteligente, Credenciais Físicas, Narração IA, Calculadora, Comparativo, FAQ (crítico pro JSON-LD FAQPage), CTA Final
+- Removidos: Em Campo, Galeria, Vitrine, Dia do Evento, Features Grid, Demo CTA, Festivais Ativos, Feito por quem dança, Bailarino procurando festival
+- Removido: estado `festivaisAtivos`, interface `FestivalAtivo`, `fetchAtivos` useEffect, `fmtFestivalDate`
+- 0 erros TypeScript (tsc --noEmit limpo)
+
+**Nota**: `D:\Documentos\CoreoHub Site` é um protótipo estático local, **não** é o que está em produção. A pasta de produção é `D:\Documentos\CoreoHub` (Vite React app, auto-deploy Vercel via branch `main`).
 
 ### 2026-06-28 — Domínio próprio: fix preview WhatsApp/Telegram (filesystem ganha de rewrite) ✅ SHIPADO
 1 commit (`cffdaab`), seguindo o domínio próprio por evento shipado mais cedo no mesmo dia (`e58590a`, `festival.usualdance.com`). Disparado pelo user notando que o preview ao compartilhar `festival.usualdance.com` no WhatsApp mostrava o card genérico do CoreoHub, não os dados do evento.
