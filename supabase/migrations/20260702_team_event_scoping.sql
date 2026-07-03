@@ -27,6 +27,14 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  -- SQL Editor / migrations admin rodam como postgres/supabase_admin, sem
+  -- contexto de auth.role()/auth.uid() — sem essa exceção, UPDATE manual
+  -- direto no Dashboard era revertido silenciosamente pra OLD (mesmo padrão
+  -- já usado em protect_registrations_status_columns).
+  IF current_user IN ('postgres', 'supabase_admin', 'supabase_storage_admin') THEN
+    RETURN NEW;
+  END IF;
+
   IF is_super_admin(auth.uid()) THEN
     RETURN NEW;
   END IF;
