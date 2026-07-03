@@ -46,3 +46,4 @@ screenshots/*.report.json
 
 # Playwright auth storage (sessão local, contém token)
 scripts/.playwright-auth/
+.vercel

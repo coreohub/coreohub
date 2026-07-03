@@ -51,7 +51,7 @@ const LandingPage = () => {
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full backdrop-blur-xl">
               <Sparkles size={12} className="text-[#ff0068]" />
               <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300">
-                Gestão inteligente para festivais de dança
+                Configuração automática por IA
               </span>
             </div>
 
