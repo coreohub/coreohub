@@ -70,13 +70,15 @@ const LandingGoverno: React.FC = () => {
             </p>
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tighter uppercase leading-[0.95]">
               Plataforma de gestão para<br />
-              <span className="text-[#ff0068]">festivais e mostras culturais</span><br />
-              do setor público.
+              festivais de dança:<br />
+              <span className="text-[#ff0068]">inscrições, júri e cronograma — do regulamento ao palco, sem planilha.</span>
             </h1>
-            <p className="mt-8 text-slate-300 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
-              Sistema integrado para administração de festivais, mostras competitivas e eventos culturais
-              com conformidade à Lei Geral de Proteção de Dados (LGPD), compatibilidade com a
-              Lei 14.133/2021 e operação adequada para equipes de servidores.
+            <p className="mt-8 text-white text-xl md:text-2xl font-bold max-w-3xl mx-auto">
+              Sua secretaria organiza o festival. A CoreoHub cuida do sistema.
+            </p>
+            <p className="mt-4 text-slate-300 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
+              Inscrições, banca de jurados e cronograma dos festivais e mostras culturais que a sua secretaria
+              organiza — com documentação de conformidade (LGPD e Lei 14.133/2021) pronta pra anexar ao processo.
             </p>
           </motion.div>
 

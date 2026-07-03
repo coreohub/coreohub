@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   ChevronRight, Sparkles, FileText, Wifi, Link as LinkIcon,
@@ -20,6 +20,10 @@ const LandingPage = () => {
   const calcLiquido = calcReceita - calcComissao;
   const fmtBRL = (n: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(n);
+
+  useEffect(() => {
+    document.title = 'CoreoHub — Gestão inteligente para festivais de dança';
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-950 text-white selection:bg-[#ff0068]/30 overflow-x-hidden">
@@ -52,14 +56,14 @@ const LandingPage = () => {
             </div>
 
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tighter uppercase leading-[0.95]">
-              Seu festival inteiro<br />
-              rodando sozinho.<br />
-              <span className="text-[#ff0068]">Você só cuida da arte.</span>
+              Plataforma de gestão<br />
+              para festivais de dança:<br />
+              <span className="text-[#ff0068]">do regulamento ao palco, sem planilha.</span>
             </h1>
 
             <p className="text-slate-300 text-lg md:text-2xl font-medium max-w-3xl mx-auto leading-relaxed">
-              Inscrições, pagamentos, jurados, cronograma e certificados numa única plataforma —
-              do regulamento ao palco, sem planilha e sem mensalidade.
+              Inscrições, júri e cronograma numa única plataforma —
+              sem mensalidade, sem surpresa no dia do evento.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
@@ -100,8 +104,8 @@ const LandingPage = () => {
           ))}
           <div className="text-center flex flex-col items-center justify-center gap-1">
             <Wifi size={20} className="text-[#ff0068]" />
-            <p className="text-xs md:text-sm font-black uppercase tracking-tight text-white">Wi-Fi caiu?</p>
-            <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">Roda mesmo assim</p>
+            <p className="text-xs md:text-sm font-black uppercase tracking-tight text-white">O Wi-Fi caiu?</p>
+            <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">Roda mesmo offline</p>
           </div>
         </div>
       </section>
@@ -115,13 +119,12 @@ const LandingPage = () => {
             produzir arte.<br />
             <span className="text-rose-400">Virou produtor de planilha.</span>
           </h2>
-          <div className="space-y-5 text-slate-300 text-lg leading-relaxed">
-            <p>
-              Inscrição chega, você confere comprovante de Pix. Bailarino manda DM com dúvida que já está no regulamento.
-              Resultado fica preso numa média que você ainda não terminou de calcular. E você ainda precisa organizar o
-              cronograma, emitir certificado por certificado, coordenar equipe sem que ninguém saiba o que o outro está fazendo.
-            </p>
-            <p className="text-white font-bold">
+          <div className="space-y-4 text-slate-300 text-lg leading-relaxed">
+            <p>Inscrição chega. Você confere comprovante de Pix manualmente.</p>
+            <p>Bailarino manda DM com dúvida que já está no regulamento.</p>
+            <p>Resultado fica preso numa planilha que você ainda não terminou.</p>
+            <p>Certificado por certificado, à mão.</p>
+            <p className="text-white font-bold pt-2">
               Cada hora apagando incêndio é uma hora longe do palco. E o palco é por que você começou.
             </p>
           </div>
@@ -188,8 +191,8 @@ const LandingPage = () => {
               {
                 num: '02',
                 icon: LinkIcon,
-                title: 'Compartilhe o link',
-                body: 'O festival ganha uma página oficial pronta: inscrições, pagamentos e confirmações no automático.',
+                title: 'O festival ganha uma página oficial',
+                body: 'Compartilhe o link: inscrições, pagamentos e confirmações no automático.',
               },
               {
                 num: '03',
@@ -279,7 +282,7 @@ const LandingPage = () => {
       {/* ─── 7. CRONOGRAMA INTELIGENTE ──────────────────────────────────────────────── */}
       <FeatureSection
         kicker="Conflito? Antes de acontecer."
-        title={<>Bailarina em <span className="text-[#ff0068]">5 coreografias</span>?<br />Sistema calcula o intervalo.</>}
+        title={<>Bailarina em <span className="text-[#ff0068]">5 coreografias</span>?<br />O sistema calcula o intervalo.</>}
         body="O cronograma identifica quando o mesmo bailarino aparece em apresentações próximas e respeita um intervalo mínimo pra troca de figurino. Se há conflito, ele alerta antes de você publicar — não na frente do público. Reordena com 1 toque, sem refazer planilha."
         bullets={[
           'Detecta bailarinos em múltiplas coreografias (solo, duo, grupo)',
@@ -530,18 +533,20 @@ const LandingPage = () => {
             </p>
           </div>
 
-          <p className="text-sm text-slate-400 mt-8">
-            <span className="text-white font-bold">Prefeitura ou instituição?</span><br />
-            SESC, SEST/SENAT, secretarias de cultura e editais públicos têm modelo de proposta próprio.{' '}
+          <div className="max-w-3xl mx-auto mt-8 bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-left">
+              <p className="text-white font-bold text-sm">Prefeitura ou instituição?</p>
+              <p className="text-slate-400 text-sm mt-1">Secretarias de cultura e editais públicos têm modelo de proposta próprio.</p>
+            </div>
             <a
               href="https://wa.me/5517997936169?text=Ol%C3%A1%2C%20Sou%20de%20uma%20institui%C3%A7%C3%A3o%20p%C3%BAblica%20e%20gostaria%20de%20falar%20sobre%20a%20CoreoHub"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#ff0068] font-bold hover:underline"
+              className="inline-flex items-center gap-2 px-5 py-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-colors shrink-0"
             >
-              Falar no WhatsApp →
+              Falar no WhatsApp <ArrowRight size={14} />
             </a>
-          </p>
+          </div>
         </div>
       </section>
 
@@ -725,7 +730,6 @@ const LandingPage = () => {
                 <li><a href="https://app.coreohub.com/festivais" className="hover:text-[#ff0068]">Festivais ativos</a></li>
                 <li><a href="https://app.coreohub.com/criar-evento" className="hover:text-[#ff0068]">Criar meu festival</a></li>
                 <li><a href="https://app.coreohub.com/login" className="hover:text-[#ff0068]">Entrar</a></li>
-                <li><Link to="/estudios" className="hover:text-[#ff0068]">Para estúdios</Link></li>
                 <li><Link to="/governo" className="hover:text-[#ff0068]">Para o setor público</Link></li>
               </ul>
             </div>
@@ -739,11 +743,6 @@ const LandingPage = () => {
                     +55 17 99793-6169
                   </a>
                 </li>
-                <li>
-                  <a href="https://instagram.com/coreohub" target="_blank" rel="noopener noreferrer" className="hover:text-[#ff0068]">
-                    @coreohub
-                  </a>
-                </li>
               </ul>
             </div>
           </div>
@@ -751,7 +750,7 @@ const LandingPage = () => {
           <div className="border-t border-white/5 pt-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="text-[10px] text-slate-500 leading-relaxed">
               <p className="font-bold text-slate-400 uppercase tracking-widest text-[9px] mb-1">CoreoHub Tecnologia LTDA</p>
-              <p>São José do Rio Preto/SP</p>
+              <p>Votuporanga/SP</p>
               <p className="mt-1">Pagamentos processados pela Asaas IP S.A. (CNPJ 19.540.550/0001-21), instituição de pagamento autorizada pelo Banco Central.</p>
             </div>
             <p className="text-[10px] text-slate-600 shrink-0">

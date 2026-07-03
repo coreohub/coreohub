@@ -121,10 +121,12 @@
          (utils/consent.ts) e chama window.__loadCoreohubMarketing() quando
          o usuário aceita marketing no banner. Sem consent → sem cookies
          de marketing, sem identificação cross-site.
-         Roda só em app.coreohub.com pra não poluir GA com dev/staging. -->
+         Roda nos domínios de produção (app + marketing) pra não poluir GA
+         com dev/staging/preview do Vercel. -->
     <script>
       window.__loadCoreohubMarketing = function () {
-        if (window.location.hostname !== 'app.coreohub.com') return;
+        var PROD_HOSTS = ['app.coreohub.com', 'coreohub.com', 'www.coreohub.com'];
+        if (PROD_HOSTS.indexOf(window.location.hostname) === -1) return;
         if (window.__coreohubMarketingLoaded) return;
         window.__coreohubMarketingLoaded = true;
 
