@@ -55,3 +55,16 @@ export const registrationDisplayKey = (
   if (statusPagamento === 'AGUARDANDO_VIDEO') return 'AGUARDANDO_VIDEO';
   return 'PENDENTE';
 };
+
+/**
+ * Filtro `.or()` do Supabase pro que conta como "inscrição agendável" —
+ * paga (status_pagamento) OU aprovada manualmente pelo `status` legacy.
+ * `status` foi aposentado em 2026-06-30 (deixou de ser escrito), mas rows
+ * antigas ainda têm 'APROVADA' gravado e continuam valendo.
+ *
+ * Usado por Schedule.tsx (Cronograma, fonte da verdade) e replicado em
+ * AccountSettings.tsx (Narração IA, pra mostrar as mesmas inscrições que
+ * vão aparecer no Cronograma). Se essa regra mudar, mude só aqui.
+ */
+export const SCHEDULABLE_REGISTRATIONS_OR_FILTER =
+  'status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO';

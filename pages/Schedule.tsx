@@ -21,6 +21,8 @@ import {
   generateNarrationBatch, generateNarration, fetchNarrationAudios,
   type BatchItem, type NarrationKind,
 } from '../services/narrationApi';
+import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
+import { resolveEstudio } from '../utils/formatters';
 
 type AudioSlot = { audio_url: string; duration_seconds: number; voice_id?: string };
 type AudioMap = Record<string, { entrada?: AudioSlot; saida?: AudioSlot }>;
@@ -312,7 +314,7 @@ const SortableRow: React.FC<SortableRowProps> = ({
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[9px] font-bold text-slate-500 dark:text-white/40 uppercase tracking-widest truncate">
-            {reg.estudio}
+            {resolveEstudio(reg)}
           </span>
           {reg.formacao && (
             <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-white/50 rounded-full text-[8px] font-black uppercase tracking-wider">
@@ -574,7 +576,7 @@ const Schedule = () => {
       let regsQuery = supabase
         .from('registrations')
         .select('*')
-        .or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO')
+        .or(SCHEDULABLE_REGISTRATIONS_OR_FILTER)
         .order('ordem_apresentacao', { ascending: true });
 
       if (eventId) regsQuery = regsQuery.eq('event_id', eventId);
@@ -667,9 +669,7 @@ const Schedule = () => {
       : 'Com a coreografia [COREOGRAFIA], recebam no palco: [ESTUDIO]';
     const tplKey = kind === 'saida' ? 'texto_ia_saida' : 'texto_ia';
     const template = (config?.[tplKey] ?? '').trim() || fallback;
-    // reg.estudio (coluna top-level) fica vazio pra inscrições feitas pelo
-    // Wizard atual, que grava o nome do estúdio em event_data.estudio_nome.
-    const estudioNome = reg.estudio || reg.event_data?.estudio_nome || '';
+    const estudioNome = resolveEstudio(reg);
     let texto = template
       .replaceAll('[COREOGRAFIA]', reg.nome_coreografia ?? '')
       .replaceAll('[ESTUDIO]', estudioNome);
@@ -1391,7 +1391,7 @@ const Schedule = () => {
         if (!reg.trilha_url) continue;
 
         const num = String(i + 1).padStart(3, '0');
-        const studio = sanitize(reg.estudio || 'Estudio');
+        const studio = sanitize(resolveEstudio(reg) || 'Estudio');
         const coreografia = sanitize(reg.nome_coreografia || 'Coreografia');
         const style = sanitize(reg.estilo_danca || 'Estilo');
         const category = sanitize(reg.categoria || 'Geral');
@@ -1737,7 +1737,7 @@ const Schedule = () => {
             </h2>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
               {currentTrack
-                ? (currentTrack.estudio || currentTrack.event_data?.estudio_nome || '')
+                ? resolveEstudio(currentTrack)
                 : 'Clique em "Iniciar" em uma coreografia abaixo'}
             </p>
             {/* Indicador de secao do modo SISTEMA (auto-play sequencial) */}
@@ -1892,7 +1892,7 @@ const Schedule = () => {
               if (!searchLower) return false;
               return (
                 (r.nome_coreografia ?? '').toLowerCase().includes(searchLower) ||
-                (r.estudio ?? '').toLowerCase().includes(searchLower)
+                resolveEstudio(r).toLowerCase().includes(searchLower)
               );
             };
 
@@ -1997,7 +1997,7 @@ const Schedule = () => {
                       {reg.nome_coreografia}
                     </h4>
                     <span className="text-[9px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest truncate">
-                      {reg.estudio}{reg.categoria ? ` · ${reg.categoria}` : ''}
+                      {resolveEstudio(reg)}{reg.categoria ? ` · ${reg.categoria}` : ''}
                     </span>
                   </div>
                   <button
@@ -2046,7 +2046,7 @@ const Schedule = () => {
               <p className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white truncate mt-0.5">
                 {blocoPickerForReg.nome_coreografia}
               </p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{blocoPickerForReg.estudio}</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{resolveEstudio(blocoPickerForReg)}</p>
             </div>
             <div className="overflow-y-auto divide-y divide-slate-100 dark:divide-white/5">
               <button

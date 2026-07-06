@@ -68,6 +68,19 @@ export const formatFullDate = (dateStr: string) => {
   return `${days[date.getDay()]}, ${date.getDate()}/${months[date.getMonth()]}/${date.getFullYear()}`;
 };
 
+/**
+ * Nome do estúdio de uma inscrição. O Wizard atual grava esse dado em
+ * `event_data.estudio_nome` (JSONB) — a coluna top-level `registrations.estudio`
+ * fica vazia pra praticamente toda inscrição recente. Rows antigas/editadas
+ * manualmente ainda podem ter a coluna preenchida, por isso ela vem primeiro.
+ * Usada por Schedule.tsx e AccountSettings.tsx (Narração IA) — mantenha as
+ * duas em sincronia se essa regra mudar.
+ */
+export const resolveEstudio = (reg: {
+  estudio?: string | null;
+  event_data?: { estudio_nome?: string | null } | null;
+}): string => reg.estudio || reg.event_data?.estudio_nome || '';
+
 export const getInitials = (name?: string) => {
   if (!name || typeof name !== 'string' || name.trim() === '') return 'U';
   const filteredParts = name.trim().split(/\s+/).filter(p => p.length > 0);

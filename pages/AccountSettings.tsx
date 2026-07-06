@@ -28,7 +28,8 @@ import {
   Instagram, MessageCircle, Globe, Mail, FileText, Youtube, Smartphone,
   RefreshCw,
 } from 'lucide-react';
-import { formatEventWhatsApp } from '../utils/formatters';
+import { formatEventWhatsApp, resolveEstudio } from '../utils/formatters';
+import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
 import InstallPWAButton from '../components/InstallPWAButton';
 import { previewNarration, fetchNarrationAudios, type NarrationKind } from '../services/narrationApi';
 
@@ -1592,37 +1593,39 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
   // Registrations do evento ativo pra alimentar: chip "N/total prontas" +
   // dropdown "testar com coreografia real" + estimativa de duração.
-  // Mesmo filtro do Cronograma (Schedule.tsx fetchData): status_pagamento
-  // aprovado/confirmado OU status='APROVADA', excluindo removidas do cronograma.
-  const [narrRegs, setNarrRegs] = useState<Array<{
+  // Mesmo filtro do Cronograma (SCHEDULABLE_REGISTRATIONS_OR_FILTER) — se essa
+  // regra mudar, muda só em utils/registrationStatus.ts.
+  interface NarrRegRow {
     id: string; nome_coreografia: string; estudio: string;
     event_data?: { estudio_nome?: string } | null; duracao_trilha_segundos?: number;
-  }>>([]);
-  const [narrAudios, setNarrAudios] = useState<Array<{
+    excluded_from_schedule?: boolean | null;
+  }
+  interface NarrAudioRow {
     registration_id: string; kind: NarrationKind; duration_seconds?: number; voice_id?: string;
-  }>>([]);
+  }
+  const [narrRegs, setNarrRegs] = useState<NarrRegRow[]>([]);
+  const [narrAudios, setNarrAudios] = useState<NarrAudioRow[]>([]);
   const [testRegId, setTestRegId] = useState<string>('');
 
+  // Só busca quando a aba "Fluxo do Evento" (Narração IA) está aberta — nas
+  // demais abas (Pagamentos, Geral, etc) essa query não tem pra que rodar.
   useEffect(() => {
-    if (!activeEventId) return;
+    if (!activeEventId || activeTab !== 'Fluxo do Evento') return;
     (async () => {
-      const { data: regs } = await supabase
-        .from('registrations')
-        .select('id, nome_coreografia, estudio, event_data, duracao_trilha_segundos, excluded_from_schedule')
-        .eq('event_id', activeEventId)
-        .or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO');
-      const qualifying = (regs ?? []).filter((r: any) => !r.excluded_from_schedule);
+      const [regsRes, audiosRes] = await Promise.all([
+        supabase
+          .from('registrations')
+          .select('id, nome_coreografia, estudio, event_data, duracao_trilha_segundos, excluded_from_schedule')
+          .eq('event_id', activeEventId)
+          .or(SCHEDULABLE_REGISTRATIONS_OR_FILTER),
+        fetchNarrationAudios(activeEventId).catch(() => [] as NarrAudioRow[]),
+      ]);
+      const qualifying = ((regsRes.data ?? []) as NarrRegRow[]).filter(r => !r.excluded_from_schedule);
       setNarrRegs(qualifying);
       setTestRegId(prev => prev || qualifying[0]?.id || '');
-      try {
-        const audios = await fetchNarrationAudios(activeEventId);
-        setNarrAudios(audios as any);
-      } catch { /* best-effort, chip só some sem quebrar a tela */ }
+      setNarrAudios(audiosRes as NarrAudioRow[]);
     })();
-  }, [activeEventId]);
-
-  const estudioDe = (r: { estudio: string; event_data?: { estudio_nome?: string } | null }) =>
-    r.estudio || r.event_data?.estudio_nome || '';
+  }, [activeEventId, activeTab]);
 
   const buildPreviewText = (kind: NarrationKind): string => {
     const fallback = kind === 'saida'
@@ -1632,7 +1635,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     const testReg = narrRegs.find(r => r.id === testRegId);
     let texto = tpl
       .replaceAll('[COREOGRAFIA]', testReg?.nome_coreografia || 'Eclipse')
-      .replaceAll('[ESTUDIO]', (testReg ? estudioDe(testReg) : '') || 'Studio Demo');
+      .replaceAll('[ESTUDIO]', (testReg ? resolveEstudio(testReg) : '') || 'Studio Demo');
     flowConfig.pronuncia_personalizada.forEach(({ termo, pronuncia }) => {
       if (termo && pronuncia) texto = texto.replaceAll(termo, pronuncia);
     });
@@ -4516,7 +4519,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     >
                       {narrRegs.map(r => (
                         <option key={r.id} value={r.id}>
-                          {r.nome_coreografia}{estudioDe(r) ? ` · ${estudioDe(r)}` : ''}
+                          {r.nome_coreografia}{resolveEstudio(r) ? ` · ${resolveEstudio(r)}` : ''}
                         </option>
                       ))}
                     </select>
