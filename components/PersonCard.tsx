@@ -26,7 +26,13 @@ export interface Person {
   photo_url?: string | null;
   instagram?: string | null;
   site_url?: string | null;
-  modalidades?: string[];          // gêneros que avalia/ensina
+  /** Gêneros que ela JULGA (judges.competencias_generos) — competência oficial de banca. */
+  modalidadesJulgamento?: string[];
+  /** Modalidade(s) do(s) workshop(s) que ela dá (workshops.modalidade) — texto livre do
+   *  produtor ao cadastrar o workshop, sem vínculo com a lista oficial de gêneros do
+   *  festival. Mantido separado de `modalidadesJulgamento` pra não parecer que ela julga
+   *  um gênero que na verdade é só o nome do workshop (ex.: "Hip Hop" vs "Danças Urbanas"). */
+  modalidadesWorkshop?: string[];
   roles: Array<'judge' | 'teacher'>;  // role interno; label é flexionado por gênero no render
 }
 
@@ -138,10 +144,11 @@ export const PersonCard: React.FC<PersonCardProps> = ({ person, onClick }) => {
           </p>
         )}
 
-        {/* Chips de modalidades */}
-        {person.modalidades && person.modalidades.length > 0 && (
-          <div className="flex flex-wrap gap-1 pt-1">
-            {person.modalidades.slice(0, 3).map(mod => (
+        {/* Chips de modalidades — julgamento e workshop separados, nunca misturados */}
+        {person.modalidadesJulgamento && person.modalidadesJulgamento.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1 pt-1">
+            <Award size={9} className="text-slate-500 shrink-0" aria-hidden="true" />
+            {person.modalidadesJulgamento.slice(0, 3).map(mod => (
               <span
                 key={mod}
                 className="px-1.5 py-0.5 bg-white/5 rounded text-[9px] font-bold text-slate-400 uppercase tracking-wider"
@@ -149,9 +156,27 @@ export const PersonCard: React.FC<PersonCardProps> = ({ person, onClick }) => {
                 {mod}
               </span>
             ))}
-            {person.modalidades.length > 3 && (
+            {person.modalidadesJulgamento.length > 3 && (
               <span className="px-1.5 py-0.5 text-[9px] font-bold text-slate-500">
-                +{person.modalidades.length - 3}
+                +{person.modalidadesJulgamento.length - 3}
+              </span>
+            )}
+          </div>
+        )}
+        {person.modalidadesWorkshop && person.modalidadesWorkshop.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">
+            <Music2 size={9} className="text-purple-400/70 shrink-0" aria-hidden="true" />
+            {person.modalidadesWorkshop.slice(0, 3).map(mod => (
+              <span
+                key={mod}
+                className="px-1.5 py-0.5 bg-purple-500/10 rounded text-[9px] font-bold text-purple-300/80 uppercase tracking-wider"
+              >
+                {mod}
+              </span>
+            ))}
+            {person.modalidadesWorkshop.length > 3 && (
+              <span className="px-1.5 py-0.5 text-[9px] font-bold text-slate-500">
+                +{person.modalidadesWorkshop.length - 3}
               </span>
             )}
           </div>
@@ -270,14 +295,34 @@ export const PersonModal: React.FC<PersonModalProps> = ({ person, onClose }) => 
                 </p>
               )}
 
-              {person.modalidades && person.modalidades.length > 0 && (
+              {person.modalidadesJulgamento && person.modalidadesJulgamento.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Modalidades</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-1.5">
+                    <Award size={11} aria-hidden="true" /> Julga
+                  </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {person.modalidades.map(mod => (
+                    {person.modalidadesJulgamento.map(mod => (
                       <span
                         key={mod}
                         className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-xs font-bold text-slate-300"
+                      >
+                        {mod}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {person.modalidadesWorkshop && person.modalidadesWorkshop.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-1.5">
+                    <Music2 size={11} aria-hidden="true" /> Workshop
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {person.modalidadesWorkshop.map(mod => (
+                      <span
+                        key={mod}
+                        className="px-3 py-1 bg-purple-500/10 border border-purple-500/20 rounded-full text-xs font-bold text-purple-200"
                       >
                         {mod}
                       </span>

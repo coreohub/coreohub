@@ -79,7 +79,7 @@ export const PessoasSection: React.FC<PessoasSectionProps> = ({ judges = [], tea
         bio_short: j.mini_bio,
         photo_url: j.avatar_url,
         instagram: j.instagram,
-        modalidades: j.competencias_generos ?? [],
+        modalidadesJulgamento: j.competencias_generos ?? [],
         roles: ['judge'],
       });
     }
@@ -103,9 +103,12 @@ export const PessoasSection: React.FC<PessoasSectionProps> = ({ judges = [], tea
         if (t.professor_photo_url && !existing.photo_url) {
           existing.photo_url = t.professor_photo_url;
         }
-        // Adiciona modalidade do workshop se não tiver
-        if (t.modalidade && !existing.modalidades?.includes(t.modalidade)) {
-          existing.modalidades = [...(existing.modalidades ?? []), t.modalidade];
+        // Modalidade do workshop fica em campo PRÓPRIO — nunca mesclada com
+        // modalidadesJulgamento. É texto livre do produtor (ex.: "Hip Hop"),
+        // sem vínculo com a lista oficial de gêneros do festival, então não
+        // pode parecer competência de banca (ver comentário no tipo Person).
+        if (t.modalidade && !existing.modalidadesWorkshop?.includes(t.modalidade)) {
+          existing.modalidadesWorkshop = [...(existing.modalidadesWorkshop ?? []), t.modalidade];
         }
       } else {
         map.set(key, {
@@ -115,7 +118,7 @@ export const PessoasSection: React.FC<PessoasSectionProps> = ({ judges = [], tea
           bio_short: t.professor_bio,
           photo_url: t.professor_photo_url,
           instagram: t.professor_instagram,
-          modalidades: t.modalidade ? [t.modalidade] : [],
+          modalidadesWorkshop: t.modalidade ? [t.modalidade] : [],
           roles: ['teacher'],
         });
       }

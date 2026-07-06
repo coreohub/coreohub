@@ -17,6 +17,7 @@ interface CheckInItem {
   trilha_url?: string;
   check_in_status?: string;
   check_in_at?: string;
+  excluded_from_schedule?: boolean;
 }
 
 type FilterTab = 'TODOS' | 'PENDENTE' | 'OK';
@@ -53,12 +54,16 @@ const CheckIn = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+      // Mesmo filtro do Cronograma (Schedule.tsx): só inscrição PAGA (status_pagamento
+      // APROVADO/CONFIRMADO — cobre eventos gratuitos) OU já aprovada manualmente
+      // (status='APROVADA'), e nunca a que o produtor removeu do cronograma.
       const { data, error } = await supabase
         .from('registrations')
-        .select('id,nome_coreografia,estudio,status_pagamento,status_trilha,trilha_url,check_in_status,check_in_at')
+        .select('id,nome_coreografia,estudio,status_pagamento,status_trilha,trilha_url,check_in_status,check_in_at,excluded_from_schedule')
+        .or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO')
         .order('nome_coreografia', { ascending: true });
       if (error) throw error;
-      setItems(data || []);
+      setItems((data || []).filter((r: CheckInItem) => !r.excluded_from_schedule));
     } catch (e) {
       console.error(e);
     } finally {
