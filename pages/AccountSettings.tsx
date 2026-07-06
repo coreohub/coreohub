@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import { formatEventWhatsApp } from '../utils/formatters';
 import InstallPWAButton from '../components/InstallPWAButton';
-import { previewNarration, type NarrationKind } from '../services/narrationApi';
+import { previewNarration, fetchNarrationAudios, type NarrationKind } from '../services/narrationApi';
 
 /* ── Evaluation Rules types ── */
 interface EvalCriterion { name: string; peso: number; displayName?: string; }
@@ -1590,14 +1590,49 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const previewCacheRef = React.useRef<Record<string, string>>({});
   const previewAudioRef = React.useRef<HTMLAudioElement | null>(null);
 
+  // Registrations do evento ativo pra alimentar: chip "N/total prontas" +
+  // dropdown "testar com coreografia real" + estimativa de duração.
+  // Mesmo filtro do Cronograma (Schedule.tsx fetchData): status_pagamento
+  // aprovado/confirmado OU status='APROVADA', excluindo removidas do cronograma.
+  const [narrRegs, setNarrRegs] = useState<Array<{
+    id: string; nome_coreografia: string; estudio: string;
+    event_data?: { estudio_nome?: string } | null; duracao_trilha_segundos?: number;
+  }>>([]);
+  const [narrAudios, setNarrAudios] = useState<Array<{
+    registration_id: string; kind: NarrationKind; duration_seconds?: number; voice_id?: string;
+  }>>([]);
+  const [testRegId, setTestRegId] = useState<string>('');
+
+  useEffect(() => {
+    if (!activeEventId) return;
+    (async () => {
+      const { data: regs } = await supabase
+        .from('registrations')
+        .select('id, nome_coreografia, estudio, event_data, duracao_trilha_segundos, excluded_from_schedule')
+        .eq('event_id', activeEventId)
+        .or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO');
+      const qualifying = (regs ?? []).filter((r: any) => !r.excluded_from_schedule);
+      setNarrRegs(qualifying);
+      setTestRegId(prev => prev || qualifying[0]?.id || '');
+      try {
+        const audios = await fetchNarrationAudios(activeEventId);
+        setNarrAudios(audios as any);
+      } catch { /* best-effort, chip só some sem quebrar a tela */ }
+    })();
+  }, [activeEventId]);
+
+  const estudioDe = (r: { estudio: string; event_data?: { estudio_nome?: string } | null }) =>
+    r.estudio || r.event_data?.estudio_nome || '';
+
   const buildPreviewText = (kind: NarrationKind): string => {
     const fallback = kind === 'saida'
       ? 'Uma salva de palmas para [ESTUDIO]!'
       : 'Com a coreografia [COREOGRAFIA], recebam no palco: [ESTUDIO]';
     const tpl = (kind === 'saida' ? flowConfig.texto_ia_saida : flowConfig.texto_ia)?.trim() || fallback;
+    const testReg = narrRegs.find(r => r.id === testRegId);
     let texto = tpl
-      .replaceAll('[COREOGRAFIA]', 'Eclipse')
-      .replaceAll('[ESTUDIO]', 'Studio Demo');
+      .replaceAll('[COREOGRAFIA]', testReg?.nome_coreografia || 'Eclipse')
+      .replaceAll('[ESTUDIO]', (testReg ? estudioDe(testReg) : '') || 'Studio Demo');
     flowConfig.pronuncia_personalizada.forEach(({ termo, pronuncia }) => {
       if (termo && pronuncia) texto = texto.replaceAll(termo, pronuncia);
     });
@@ -4213,9 +4248,19 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         return (
           <div className="max-w-3xl">
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-6">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Settings size={18} /></div>
-                <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Narração IA</h3>
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Settings size={18} /></div>
+                  <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Narração IA</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/cronograma')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-[#ff0068]/40 hover:text-[#ff0068] transition-all shrink-0"
+                  title="Ver como as narrações tocam no Cronograma do evento"
+                >
+                  <Volume2 size={11} /> Ir pro Cronograma
+                </button>
               </div>
 
               {/* Modo Sonoplastia (Backlog #29 Etapa A) */}
@@ -4253,16 +4298,66 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         <p className={`text-[11px] font-black uppercase tracking-tight ${active ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>{opt.label}</p>
                         <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">{opt.desc}</p>
                         <p className="text-[8px] text-slate-400 dark:text-white/30 uppercase tracking-widest mt-2 italic">{opt.hint}</p>
+                        {opt.v === 'SISTEMA' && (
+                          <p className={`mt-3 text-[10px] rounded-xl px-3 py-2 border transition-all ${
+                            active
+                              ? 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/30'
+                              : 'text-slate-400 dark:text-white/30 bg-transparent border-transparent'
+                          }`}>
+                            💡 Requer Wi-Fi estável no evento — a trilha é buscada da nuvem em tempo real.
+                          </p>
+                        )}
                       </button>
                     );
                   })}
                 </div>
-                {flowConfig.modo_sonoplastia === 'SISTEMA' && (
-                  <p className="mt-3 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">
-                    💡 Modo Sistema requer Wi-Fi estável no evento (a trilha é fetch da nuvem ao vivo). Considere ter o modo Manual como backup ou aguardar a Etapa B (cache offline).
-                  </p>
-                )}
               </div>
+
+              {/* Duração estimada por apresentação — soma narração + espera + trilha
+                  usando dados reais do evento (media dos audios ja gerados + media
+                  do trilha_url ja enviado). Ajuda a calibrar tempo_entrada sem
+                  precisar de tentativa-e-erro ao vivo. */}
+              {narrRegs.length > 0 && (() => {
+                const entradaDurs = narrAudios.filter(a => a.kind === 'entrada' && a.duration_seconds).map(a => a.duration_seconds!);
+                const avgEntrada = entradaDurs.length ? entradaDurs.reduce((s, d) => s + d, 0) / entradaDurs.length : 4;
+                const trilhaDurs = narrRegs.filter(r => r.duracao_trilha_segundos).map(r => r.duracao_trilha_segundos!);
+                const avgTrilha = trilhaDurs.length ? trilhaDurs.reduce((s, d) => s + d, 0) / trilhaDurs.length : 0;
+                const espera = flowConfig.tempo_entrada || 0;
+                const totalUm = avgEntrada + espera + avgTrilha;
+                const totalEvento = totalUm * narrRegs.length;
+                const fmt = (s: number) => {
+                  const m = Math.floor(s / 60);
+                  const sec = Math.round(s % 60);
+                  return m > 0 ? `${m}:${String(sec).padStart(2, '0')}` : `${sec}s`;
+                };
+                return (
+                  <div className="pb-4 border-b border-slate-200 dark:border-white/10">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3 block">
+                      Duração estimada por apresentação
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-3 py-2.5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Narração</p>
+                        <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{fmt(avgEntrada)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-3 py-2.5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Espera</p>
+                        <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{fmt(espera)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-3 py-2.5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Trilha</p>
+                        <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{avgTrilha ? fmt(avgTrilha) : '—'}</p>
+                      </div>
+                      <div className="rounded-2xl border border-[#ff0068]/40 bg-[#ff0068]/5 px-3 py-2.5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068]">Total / apresentação</p>
+                        <p className="text-lg font-black text-[#ff0068] tabular-nums">
+                          {fmt(totalUm)} <span className="text-[10px] font-bold text-slate-400">× {narrRegs.length} = {fmt(totalEvento)}</span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Narração de ENTRADA — sempre ativa */}
               <div>
@@ -4300,7 +4395,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   </button>
                 </div>
                 <p className="text-xs text-slate-500 mb-3">
-                  Tocada manualmente pela Mesa de Som ao "Encerrar Apresentação". Curta (3-8s), agradecimento ou transição.
+                  {flowConfig.modo_sonoplastia === 'SISTEMA'
+                    ? 'No modo Sistema toca sozinha, logo após a trilha. Curta (3-8s), agradecimento ou transição.'
+                    : 'Tocada manualmente pela Mesa de Som ao "Encerrar Apresentação". Curta (3-8s), agradecimento ou transição.'}
                 </p>
                 {flowConfig.narracao_saida_ativa && (
                   <textarea
@@ -4315,9 +4412,30 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
               {/* Voz da narração — picker com sample preview */}
               <div className="pt-4 border-t border-slate-200 dark:border-white/10">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 block">
-                  Voz da Narração
-                </label>
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    Voz da Narração
+                  </label>
+                  {narrRegs.length > 0 && (() => {
+                    const usedVoice = flowConfig.voice_id || 'Charon';
+                    const prontas = narrRegs.filter(r =>
+                      narrAudios.some(a => a.registration_id === r.id && a.kind === 'entrada' && (a.voice_id || 'Charon') === usedVoice)
+                    ).length;
+                    const pct = Math.round((prontas / narrRegs.length) * 100);
+                    return (
+                      <span
+                        className="flex items-center gap-2 text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-full pl-1.5 pr-3 py-1"
+                        title={`${prontas} de ${narrRegs.length} coreografias com narração de entrada já gerada na voz ${usedVoice}. O restante cai no Web Speech do navegador (voz genérica) até você gerar.`}
+                      >
+                        <span
+                          className="w-4 h-4 rounded-full shrink-0"
+                          style={{ background: `conic-gradient(#ff0068 ${pct}%, rgba(148,163,184,0.35) 0)` }}
+                        />
+                        {prontas}/{narrRegs.length} prontas
+                      </span>
+                    );
+                  })()}
+                </div>
                 <p className="text-xs text-slate-500 mb-3">
                   Clique no <Volume2 size={11} className="inline" /> pra ouvir cada voz e escolher a do seu festival.
                 </p>
@@ -4373,13 +4491,15 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   })}
                 </div>
 
-                {/* Testar narração completa — usa template real + voz + pronúncia */}
+                {/* Testar narração completa — usa template real + voz + pronúncia,
+                    com dados de uma coreografia de verdade do evento (quando houver)
+                    em vez do "Eclipse / Studio Demo" fixo. */}
                 <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2">
                   <button
                     type="button"
                     onClick={handleTestNarration}
                     disabled={!!previewing}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-[#ff0068]/10 hover:bg-[#ff0068]/20 border border-[#ff0068]/40 text-[#ff0068] rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-60"
+                    className="flex items-center gap-2 px-4 py-2.5 bg-[#ff0068]/10 hover:bg-[#ff0068]/20 border border-[#ff0068]/40 text-[#ff0068] rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-60 shrink-0"
                     title={flowConfig.narracao_saida_ativa
                       ? 'Toca entrada e depois saída usando seu template, voz e pronúncias'
                       : 'Toca a entrada usando seu template, voz e pronúncias'}
@@ -4388,10 +4508,24 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       ? <><Loader2 size={12} className="animate-spin" /> Gerando {previewing}...</>
                       : <><Play size={12} fill="currentColor" /> Testar com {flowConfig.voice_id || 'Charon'}</>}
                   </button>
-                  <span className="text-[10px] text-slate-400">
-                    Coreografia <span className="text-[#ff0068]">Eclipse</span> · Estúdio <span className="text-[#ff0068]">Studio Demo</span>
-                    {flowConfig.narracao_saida_ativa && ' · entrada + saída'}
-                  </span>
+                  {narrRegs.length > 0 ? (
+                    <select
+                      value={testRegId}
+                      onChange={e => setTestRegId(e.target.value)}
+                      className="min-w-0 flex-1 bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 text-xs"
+                    >
+                      {narrRegs.map(r => (
+                        <option key={r.id} value={r.id}>
+                          {r.nome_coreografia}{estudioDe(r) ? ` · ${estudioDe(r)}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="text-[10px] text-slate-400">
+                      Coreografia <span className="text-[#ff0068]">Eclipse</span> · Estúdio <span className="text-[#ff0068]">Studio Demo</span>
+                      {flowConfig.narracao_saida_ativa && ' · entrada + saída'}
+                    </span>
+                  )}
                 </div>
                 {previewError && (
                   <p className="mt-2 text-[10px] text-rose-500 font-bold">{previewError}</p>

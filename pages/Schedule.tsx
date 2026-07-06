@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   GripVertical, Sparkles, Download, Save, AlertCircle,
   CheckCircle2, Music, MusicIcon, Settings2, RefreshCw,
@@ -47,6 +48,10 @@ interface Registration {
   classificacao_final?: string;
   bloco_id?: string | null;
   excluded_from_schedule?: boolean;
+  // Wizard atual grava o nome do estúdio aqui (event_data.estudio_nome), não
+  // na coluna top-level `estudio` — que fica vazia pra praticamente toda
+  // inscrição recente. Ver buildNarrationText.
+  event_data?: { estudio_nome?: string; [key: string]: any } | null;
 }
 
 interface Bloco {
@@ -441,6 +446,7 @@ const SortableRow: React.FC<SortableRowProps> = ({
 
 // ---------- main component ----------
 const Schedule = () => {
+  const navigate = useNavigate();
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   // Coreografias removidas do cronograma pelo produtor (inscrição/pagamento
   // seguem válidos). Restauráveis via seção "Removidas".
@@ -498,6 +504,10 @@ const Schedule = () => {
   const narrationAudioRef = useRef<HTMLAudioElement | null>(null);
   const trilhaAudioRef = useRef<HTMLAudioElement | null>(null);
   const sequenceTimerRef = useRef<number | null>(null);
+  // Timeout de segurança do modo SISTEMA: se o evento 'ended' de um audio nao
+  // disparar (arquivo com duracao mal-formada, engasgo de rede, etc.), força
+  // a sequencia a avançar mesmo assim em vez de travar em silencio.
+  const failsafeTimerRef = useRef<number | null>(null);
   const saidaAtiva = !!config?.narracao_saida_ativa;
   // Modo MANUAL = sonoplasta toca trilha em equipamento externo (default).
   // Modo SISTEMA = app toca sequencia narracao->wait->trilha->saida automaticamente.
@@ -657,9 +667,12 @@ const Schedule = () => {
       : 'Com a coreografia [COREOGRAFIA], recebam no palco: [ESTUDIO]';
     const tplKey = kind === 'saida' ? 'texto_ia_saida' : 'texto_ia';
     const template = (config?.[tplKey] ?? '').trim() || fallback;
+    // reg.estudio (coluna top-level) fica vazio pra inscrições feitas pelo
+    // Wizard atual, que grava o nome do estúdio em event_data.estudio_nome.
+    const estudioNome = reg.estudio || reg.event_data?.estudio_nome || '';
     let texto = template
       .replaceAll('[COREOGRAFIA]', reg.nome_coreografia ?? '')
-      .replaceAll('[ESTUDIO]', reg.estudio ?? '');
+      .replaceAll('[ESTUDIO]', estudioNome);
     const pronuncias: { termo: string; pronuncia: string }[] = Array.isArray(config?.pronuncia_personalizada)
       ? config.pronuncia_personalizada
       : [];
@@ -688,6 +701,10 @@ const Schedule = () => {
       clearInterval(sequenceTimerRef.current);
       sequenceTimerRef.current = null;
     }
+    if (failsafeTimerRef.current) {
+      clearTimeout(failsafeTimerRef.current);
+      failsafeTimerRef.current = null;
+    }
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
@@ -703,7 +720,10 @@ const Schedule = () => {
   // listener 'ended'. Pode ser interrompida por handleEndLive ou skip.
   const playTrilhaWithSequence = (reg: Registration) => {
     if (!reg.trilha_url) {
-      // Sem trilha: vai direto pra saida (ou fim)
+      // Sem trilha: vai direto pra saida (ou fim). Log explícito — esse é o
+      // motivo nº1 de "narração toca e depois nada acontece" em modo SISTEMA:
+      // a linha não tem trilha_url mesmo que o badge da lista pareça OK.
+      console.warn(`[Cronograma] "${reg.nome_coreografia}" sem trilha_url — sequência pula pra saída/fim sem tocar trilha.`);
       if (saidaAtiva && audios[reg.id]?.saida) {
         setPlayerSection('saida');
         handleAnnounce(reg, 'saida');
@@ -717,8 +737,8 @@ const Schedule = () => {
     trilhaAudioRef.current = audio;
     audio.addEventListener('loadedmetadata', () => setTrilhaDuration(audio.duration || 0));
     audio.addEventListener('timeupdate', () => setTrilhaProgress(audio.currentTime));
-    audio.addEventListener('ended', () => {
-      // Trilha terminou: toca saida (se ativa) ou volta pra idle
+    const advanceAfterTrilha = () => {
+      // Trilha terminou (ou falhou): toca saida (se ativa) ou volta pra idle
       if (saidaAtiva && audios[reg.id]?.saida) {
         setPlayerSection('saida');
         const audioSaida = new Audio(audios[reg.id]!.saida!.audio_url);
@@ -727,13 +747,48 @@ const Schedule = () => {
           setPlayerSection('idle');
           setIsPlaying(false);
         });
+        audioSaida.addEventListener('error', (e) => {
+          console.error('[Cronograma] Falha ao tocar narração de saída, encerrando sequência:', e);
+          setPlayerSection('idle');
+          setIsPlaying(false);
+        });
         audioSaida.play().catch(e => console.warn('Falha ao tocar saida:', e));
       } else {
         setPlayerSection('idle');
         setIsPlaying(false);
       }
+    };
+    audio.addEventListener('ended', advanceAfterTrilha);
+    audio.addEventListener('error', (e) => {
+      console.error('[Cronograma] Falha ao carregar/tocar trilha, avançando sequência:', e);
+      advanceAfterTrilha();
     });
     audio.play().catch(e => console.warn('Falha ao tocar trilha:', e));
+  };
+
+  // 2) Espera (tempo_entrada segundos) com countdown visual, depois toca a
+  //    trilha. Compartilhado pelos dois caminhos de narração de entrada
+  //    (audio pre-renderizado e fallback Web Speech).
+  const advanceToWaitThenTrilha = (reg: Registration) => {
+    const waitSec = Math.max(0, tempoEntrada || 0);
+    if (waitSec === 0) {
+      playTrilhaWithSequence(reg);
+      return;
+    }
+    setPlayerSection('wait');
+    setWaitRemaining(waitSec);
+    let remaining = waitSec;
+    sequenceTimerRef.current = window.setInterval(() => {
+      remaining -= 1;
+      setWaitRemaining(Math.max(0, remaining));
+      if (remaining <= 0) {
+        if (sequenceTimerRef.current) {
+          clearInterval(sequenceTimerRef.current);
+          sequenceTimerRef.current = null;
+        }
+        playTrilhaWithSequence(reg);
+      }
+    }, 1000);
   };
 
   const startSequenceMode = (reg: Registration) => {
@@ -746,48 +801,38 @@ const Schedule = () => {
     if (preEntrada?.audio_url) {
       const audio = new Audio(preEntrada.audio_url);
       narrationAudioRef.current = audio;
-      audio.addEventListener('ended', () => {
-        // 2) Espera (tempo_entrada segundos) com countdown visual
-        const waitSec = Math.max(0, tempoEntrada || 0);
-        if (waitSec === 0) {
-          playTrilhaWithSequence(reg);
-          return;
+      let advanced = false;
+      const advanceOnce = () => {
+        if (advanced) return;
+        advanced = true;
+        if (failsafeTimerRef.current) {
+          clearTimeout(failsafeTimerRef.current);
+          failsafeTimerRef.current = null;
         }
-        setPlayerSection('wait');
-        setWaitRemaining(waitSec);
-        let remaining = waitSec;
-        sequenceTimerRef.current = window.setInterval(() => {
-          remaining -= 1;
-          setWaitRemaining(Math.max(0, remaining));
-          if (remaining <= 0) {
-            if (sequenceTimerRef.current) {
-              clearInterval(sequenceTimerRef.current);
-              sequenceTimerRef.current = null;
-            }
-            playTrilhaWithSequence(reg);
-          }
-        }, 1000);
+        advanceToWaitThenTrilha(reg);
+      };
+      audio.addEventListener('ended', advanceOnce);
+      audio.addEventListener('error', (e) => {
+        console.error('[Cronograma] Falha ao tocar narração de entrada, avançando sequência:', e);
+        advanceOnce();
       });
+      // Timeout de segurança: alguns audios (ex: mp3 sem duracao correta no
+      // header) nunca disparam 'ended' de forma confiavel. Sem isso, a
+      // sequencia trava em silencio depois da narração e a trilha nunca toca
+      // — sintoma relatado em produção. Usa a duracao conhecida (gravada na
+      // geração da narração) + margem de 3s; se ausente, cai pra 20s.
+      const failsafeMs = ((preEntrada.duration_seconds || 17) + 3) * 1000;
+      failsafeTimerRef.current = window.setTimeout(() => {
+        console.warn('[Cronograma] Narração de entrada não disparou "ended" a tempo — avançando sequência via timeout de segurança.');
+        advanceOnce();
+      }, failsafeMs);
       audio.play().catch(e => console.warn('Falha ao tocar entrada:', e));
     } else {
       // Fallback: Web Speech + timer estimado (~10s) pra avancar
       handleAnnounce(reg, 'entrada');
-      setTimeout(() => {
-        const waitSec = Math.max(0, tempoEntrada || 0);
-        setPlayerSection('wait');
-        setWaitRemaining(waitSec);
-        let remaining = waitSec;
-        sequenceTimerRef.current = window.setInterval(() => {
-          remaining -= 1;
-          setWaitRemaining(Math.max(0, remaining));
-          if (remaining <= 0) {
-            if (sequenceTimerRef.current) {
-              clearInterval(sequenceTimerRef.current);
-              sequenceTimerRef.current = null;
-            }
-            playTrilhaWithSequence(reg);
-          }
-        }, 1000);
+      failsafeTimerRef.current = window.setTimeout(() => {
+        failsafeTimerRef.current = null;
+        advanceToWaitThenTrilha(reg);
       }, 10000);
     }
   };
@@ -807,6 +852,10 @@ const Schedule = () => {
         if (sequenceTimerRef.current) {
           clearInterval(sequenceTimerRef.current);
           sequenceTimerRef.current = null;
+        }
+        if (failsafeTimerRef.current) {
+          clearTimeout(failsafeTimerRef.current);
+          failsafeTimerRef.current = null;
         }
         playTrilhaWithSequence(currentTrack);
       } else {
@@ -1498,6 +1547,18 @@ const Schedule = () => {
           >
             {isGenerating && <Loader2 size={12} className="animate-spin" />}
             {isGenerating ? 'Gerando...' : 'Gerar Ordem Inteligente'}
+          </button>
+
+          {/* Atalho recíproco pra Configurações > Narração IA — pra quando o
+              sonoplasta precisa ajustar voz/template no meio de um evento
+              sem sair navegando pelo menu num momento de estresse. */}
+          <button
+            onClick={() => navigate('/narracao-ia')}
+            className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:border-slate-400 dark:hover:border-white/20 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
+            title="Ajustar template, voz e modo de sonoplastia da Narração IA"
+          >
+            <Volume2 size={12} />
+            Ajustar Narração IA
           </button>
 
           {/* IA de Narração — gerar todas em batch */}
