@@ -737,7 +737,14 @@ const Schedule = () => {
     trilhaAudioRef.current = audio;
     audio.addEventListener('loadedmetadata', () => setTrilhaDuration(audio.duration || 0));
     audio.addEventListener('timeupdate', () => setTrilhaProgress(audio.currentTime));
+    // Guard contra 'ended' e 'error' disparando os dois pro mesmo audio (ex:
+    // engasgo de rede dispara 'error' e um 'ended' tardio ainda chega depois)
+    // — sem isso, a saida tocaria 2x e narrationAudioRef perderia a
+    // referencia da 1a instancia.
+    let trilhaAdvanced = false;
     const advanceAfterTrilha = () => {
+      if (trilhaAdvanced) return;
+      trilhaAdvanced = true;
       // Trilha terminou (ou falhou): toca saida (se ativa) ou volta pra idle
       if (saidaAtiva && audios[reg.id]?.saida) {
         setPlayerSection('saida');
@@ -1729,7 +1736,9 @@ const Schedule = () => {
               {currentTrack?.nome_coreografia || 'Nenhuma selecionada'}
             </h2>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-              {currentTrack?.estudio || 'Clique em "Iniciar" em uma coreografia abaixo'}
+              {currentTrack
+                ? (currentTrack.estudio || currentTrack.event_data?.estudio_nome || '')
+                : 'Clique em "Iniciar" em uma coreografia abaixo'}
             </p>
             {/* Indicador de secao do modo SISTEMA (auto-play sequencial) */}
             {modoSistema && currentTrack && playerSection !== 'idle' && (
