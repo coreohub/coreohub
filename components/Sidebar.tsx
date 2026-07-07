@@ -9,7 +9,7 @@ import {
   ClipboardList, ShieldCheck, Mic2, Settings,
   Clapperboard, Music2,
   PersonStanding, Headphones, Filter, CreditCard,
-  Video, FileSearch, Tag, GraduationCap,
+  Video, FileSearch, Tag, GraduationCap, MonitorPlay,
 } from 'lucide-react';
 import { UserRole, Profile as UserProfile, PermissoesCustom } from '../types';
 
@@ -117,6 +117,7 @@ const menuSections: MenuSection[] = [
       { path: '/manage-schedule', label: 'Cronograma',        icon: Calendar      },
       { path: '/narracao-ia', label: 'Narração IA', icon: Mic2 },
       { path: '/marcacao-palco',  label: 'Marcação de Palco', icon: PersonStanding },
+      { path: '/telao-palco',     label: 'Telão de Palco',    icon: MonitorPlay   },
       { path: '/credenciais',     label: 'Credenciais',       icon: QrCode        },
     ],
   },

@@ -79,6 +79,8 @@ const Ingressos                = lazy(() => import('./pages/Ingressos'));
 const Live                     = lazy(() => import('./pages/Live'));
 const Certificates             = lazy(() => import('./pages/Certificates'));
 const StageMarker              = lazy(() => import('./pages/StageMarker'));
+const TelaoDisplay             = lazy(() => import('./pages/TelaoDisplay'));
+const TelaoControle            = lazy(() => import('./pages/TelaoControle'));
 const EquipeProdutor           = lazy(() => import('./pages/EquipeProdutor'));
 const SuporteJuri              = lazy(() => import('./pages/SuporteJuri'));
 const VideoSelection           = lazy(() => import('./pages/VideoSelection'));
@@ -490,6 +492,8 @@ const App: React.FC = () => {
         <Route path="/register" element={<Auth />} />
         <Route path="/judge-login" element={<Suspense fallback={<PageLoader />}><JudgeLogin /></Suspense>} />
         <Route path="/judge-login/:token" element={<Suspense fallback={<PageLoader />}><JudgeLogin /></Suspense>} />
+        <Route path="/telao" element={<Suspense fallback={<PageLoader />}><TelaoDisplay /></Suspense>} />
+        <Route path="/telao/:code" element={<Suspense fallback={<PageLoader />}><TelaoDisplay /></Suspense>} />
         <Route path="/convite/:token" element={<Suspense fallback={<PageLoader />}><ProducerInviteLanding /></Suspense>} />
         <Route path="/equipe-convite/:token" element={<Suspense fallback={<PageLoader />}><TeamInviteLanding /></Suspense>} />
 
@@ -523,6 +527,7 @@ const App: React.FC = () => {
 
         <Route path="/check-in" element={<PrivateRoute {...privateRouteProps}><CheckIn /></PrivateRoute>} />
         <Route path="/marcacao-palco" element={<PrivateRoute {...privateRouteProps}><StageMarker /></PrivateRoute>} />
+        <Route path="/telao-palco" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><TelaoControle /></Suspense></PrivateRoute>} />
         <Route path="/minha-equipe" element={<PrivateRoute {...privateRouteProps}><EquipeProdutor /></PrivateRoute>} />
         <Route path="/suporte-juri" element={<PrivateRoute {...privateRouteProps}><SuporteJuri /></PrivateRoute>} />
         <Route path="/ingressos" element={<PrivateRoute {...privateRouteProps}><Ingressos /></PrivateRoute>} />
