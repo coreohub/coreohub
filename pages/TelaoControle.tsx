@@ -1,10 +1,27 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { MonitorPlay, Copy, ExternalLink, RefreshCw, Check, Loader2, FlaskConical, Power, Radio, Trophy, Medal, X } from 'lucide-react';
+import { MonitorPlay, Copy, ExternalLink, RefreshCw, Check, Loader2, FlaskConical, Power, Radio, Trophy, X, Search, Hand } from 'lucide-react';
 import { supabase, resolveActiveEventId } from '../services/supabase';
 import PageHeader from '../components/PageHeader';
 
-interface Grupo { categoria: string; estilo: string; }
-interface Premio { id: string; nome: string; valor?: string; }
+interface Premio { id: string; nome: string; valor?: string; description?: string; }
+interface Coreo { nome: string; estudio: string; }
+type Reveal = { tipo: 'faixa'; faixa: 'ouro' | 'prata' | 'bronze' } | { tipo: 'maior_nota' } | { tipo: 'premio' } | { tipo: 'manual' };
+
+// Classifica cada prêmio cadastrado pelo nome/descrição no jeito de revelar.
+const classify = (a: Premio): Reveal => {
+  const t = `${a.nome ?? ''} ${a.description ?? ''}`.toLowerCase();
+  if (/\bouro\b|gold/.test(t))         return { tipo: 'faixa', faixa: 'ouro' };
+  if (/\bprata\b|silver/.test(t))      return { tipo: 'faixa', faixa: 'prata' };
+  if (/\bbronze\b/.test(t))            return { tipo: 'faixa', faixa: 'bronze' };
+  if (/maior nota|grand.?prix/.test(t)) return { tipo: 'maior_nota' };
+  if (/voto popular|vote\./.test(t))   return { tipo: 'manual' };
+  return { tipo: 'premio' };
+};
+
+const revealLabel: Record<string, string> = {
+  ouro: 'Faixa Ouro', prata: 'Faixa Prata', bronze: 'Faixa Bronze',
+  maior_nota: 'Maior nota', premio: 'Deliberação', manual: 'Escolha manual',
+};
 
 /**
  * Tela de controle do Telão de Palco (produtor). Gera/mostra o código curto
@@ -23,39 +40,45 @@ const TelaoControle: React.FC = () => {
   const [copied, setCopied] = useState<'link' | 'code' | null>(null);
   const [modo, setModo] = useState<'ao_vivo' | 'premiacao'>('ao_vivo');
   const [premiacao, setPremiacao] = useState<any>(null);
-  const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [premios, setPremios] = useState<Premio[]>([]);
+  const [coreos, setCoreos] = useState<Coreo[]>([]);
+  const [manualFor, setManualFor] = useState<Premio | null>(null);
+  const [manualSearch, setManualSearch] = useState('');
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const publicUrl = code ? `${origin}/telao/${code}` : '';
 
-  // Carrega os grupos (categoria+estilo) e prêmios especiais pra revelar.
+  // Carrega os prêmios especiais + coreografias (pra escolha manual do vencedor).
   const loadPremiacaoOptions = useCallback(async (id: string) => {
-    const [{ data: regs }, { data: cfg }] = await Promise.all([
+    const [{ data: cfg }, { data: regs }] = await Promise.all([
+      supabase.from('configuracoes').select('premios_especiais').eq('event_id', id).maybeSingle(),
       supabase.from('registrations')
-        .select('categoria, estilo_danca')
+        .select('nome_coreografia, estudio, event_data')
         .eq('event_id', id)
         .or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO'),
-      supabase.from('configuracoes').select('premios_especiais').eq('event_id', id).maybeSingle(),
     ]);
-    const seen = new Set<string>();
-    const gs: Grupo[] = [];
-    (regs ?? []).forEach((r: any) => {
-      const categoria = (r.categoria ?? '').trim();
-      const estilo = (r.estilo_danca ?? '').trim();
-      if (!categoria && !estilo) return;
-      const key = `${categoria}||${estilo}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      gs.push({ categoria, estilo });
-    });
-    gs.sort((a, b) => (a.categoria + a.estilo).localeCompare(b.categoria + b.estilo));
-    setGrupos(gs);
 
     const raw = (cfg as any)?.premios_especiais ?? [];
     setPremios((Array.isArray(raw) ? raw : [])
-      .filter((a: any) => a && a.enabled !== false && (a.id != null))
-      .map((a: any) => ({ id: String(a.id), nome: a.nome ?? a.name ?? 'Prêmio', valor: a.valor ? String(a.valor) : undefined })));
+      .filter((a: any) => a && a.enabled !== false && a.id != null)
+      .map((a: any) => ({
+        id: String(a.id),
+        nome: (a.nome ?? a.name ?? 'Prêmio').trim(),
+        valor: a.valor ? String(a.valor) : undefined,
+        description: a.description ?? a.descricao ?? '',
+      })));
+
+    const seen = new Set<string>();
+    const cs: Coreo[] = [];
+    (regs ?? []).forEach((r: any) => {
+      const nome = (r.nome_coreografia ?? '').trim();
+      const estudio = (r.estudio?.trim?.() || r.event_data?.estudio_nome || '').trim();
+      if (!nome || seen.has(nome)) return;
+      seen.add(nome);
+      cs.push({ nome, estudio });
+    });
+    cs.sort((a, b) => a.nome.localeCompare(b.nome));
+    setCoreos(cs);
   }, []);
 
   const load = useCallback(async () => {
@@ -106,6 +129,32 @@ const TelaoControle: React.FC = () => {
       setPremiacao(payload);
     } catch (e) { console.error(e); alert('Não foi possível enviar ao telão.'); }
     finally { setBusy(false); }
+  };
+
+  const fmtValor = (v?: string) =>
+    v ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '';
+
+  const revelarAward = (a: Premio) => {
+    const r = classify(a);
+    const valor = fmtValor(a.valor);
+    if (r.tipo === 'faixa')      return sendPremiacao({ tipo: 'faixa', faixa: r.faixa, titulo: a.nome, valor });
+    if (r.tipo === 'maior_nota') return sendPremiacao({ tipo: 'maior_nota', titulo: a.nome, valor });
+    if (r.tipo === 'manual')     { setManualFor(a); setManualSearch(''); return; }
+    return sendPremiacao({ tipo: 'premio', award_id: a.id, titulo: a.nome, valor });
+  };
+
+  const revelarManual = (a: Premio, c: Coreo) => {
+    sendPremiacao({ tipo: 'manual', titulo: a.nome, valor: fmtValor(a.valor), nome: c.nome, estudio: c.estudio });
+    setManualFor(null);
+  };
+
+  const isActive = (a: Premio, r: Reveal) => {
+    if (!premiacao) return false;
+    if (premiacao.tipo === 'manual' && premiacao.titulo === a.nome) return true;
+    if (r.tipo === 'faixa')      return premiacao.tipo === 'faixa' && premiacao.faixa === r.faixa && premiacao.titulo === a.nome;
+    if (r.tipo === 'maior_nota') return premiacao.tipo === 'maior_nota' && premiacao.titulo === a.nome;
+    if (r.tipo === 'premio')     return premiacao.tipo === 'premio' && String(premiacao.award_id) === a.id;
+    return false;
   };
 
   const handleGenerate = async () => {
@@ -272,58 +321,71 @@ const TelaoControle: React.FC = () => {
         )}
       </div>
 
-      {/* Premiação — revelar pódios e prêmios (modo premiação) */}
+      {/* Premiação — revelar prêmios cadastrados (modo premiação) */}
       {code && modo === 'premiacao' && (
         <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-3xl p-6 space-y-5">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Revelar no telão</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-1.5"><Trophy size={12} aria-hidden /> Revelar no telão</p>
             <button onClick={() => sendPremiacao({ tipo: 'idle' })} disabled={busy}
               className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all disabled:opacity-50">
               <X size={12} /> Limpar telão
             </button>
           </div>
 
-          {/* Pódio por grupo */}
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5"><Medal size={12} aria-hidden /> Pódio por grupo</p>
-            {grupos.length === 0 ? (
-              <p className="text-xs text-slate-500">Nenhum grupo com inscrições ainda.</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {grupos.map((g, i) => {
-                  const active = premiacao?.tipo === 'podio' && (premiacao?.categoria ?? '') === g.categoria && (premiacao?.estilo ?? '') === g.estilo;
-                  return (
-                    <button key={i} onClick={() => sendPremiacao({ tipo: 'podio', categoria: g.categoria, estilo: g.estilo })} disabled={busy}
-                      className={`flex items-center justify-between gap-2 px-4 py-3 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all text-left disabled:opacity-50 ${active ? 'bg-[#ff0068] text-white shadow-md' : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/10'}`}>
-                      <span className="truncate">{[g.categoria, g.estilo].filter(Boolean).join(' · ') || 'Sem grupo'}</span>
-                      {active ? <Check size={14} /> : <ExternalLink size={13} className="opacity-50" />}
+          {premios.length === 0 ? (
+            <p className="text-xs text-slate-500">Nenhum prêmio configurado. Configure em <b className="text-slate-700 dark:text-slate-300">Resultados → Premiação</b>.</p>
+          ) : (
+            <div className="space-y-2">
+              {premios.map((a) => {
+                const r = classify(a);
+                const active = isActive(a, r);
+                return (
+                  <div key={a.id} className="flex items-center gap-2">
+                    <button onClick={() => revelarAward(a)} disabled={busy}
+                      className={`flex-1 min-w-0 flex items-center justify-between gap-2 px-4 py-3 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all text-left disabled:opacity-50 ${active ? 'bg-[#ff0068] text-white shadow-md' : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/10'}`}>
+                      <span className="truncate">{a.nome}{a.valor && <span className="opacity-60"> · R$ {Number(a.valor).toLocaleString('pt-BR')}</span>}</span>
+                      <span className={`shrink-0 text-[8px] px-2 py-0.5 rounded ${active ? 'bg-white/20 text-white' : 'bg-black/5 dark:bg-white/10 text-slate-500 dark:text-slate-400'}`}>
+                        {revealLabel[r.tipo === 'faixa' ? r.faixa : r.tipo]}
+                      </span>
                     </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                    <button onClick={() => { setManualFor(a); setManualSearch(''); }} disabled={busy}
+                      title="Escolher vencedor na mão" aria-label={`Escolher vencedor na mão para ${a.nome}`}
+                      className="shrink-0 p-3 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 transition-all">
+                      <Hand size={14} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
-          {/* Prêmios especiais */}
-          {premios.length > 0 && (
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5"><Trophy size={12} aria-hidden /> Prêmios especiais</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {premios.map((p) => {
-                  const active = premiacao?.tipo === 'premio' && String(premiacao?.award_id) === p.id;
-                  return (
-                    <button key={p.id} onClick={() => sendPremiacao({ tipo: 'premio', award_id: p.id, award_name: p.nome, valor: p.valor ?? '' })} disabled={busy}
-                      className={`flex items-center justify-between gap-2 px-4 py-3 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all text-left disabled:opacity-50 ${active ? 'bg-[#ff0068] text-white shadow-md' : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/10'}`}>
-                      <span className="truncate">{p.nome}</span>
-                      {active ? <Check size={14} /> : <ExternalLink size={13} className="opacity-50" />}
-                    </button>
-                  );
-                })}
+          {/* Escolha manual do vencedor */}
+          {manualFor && (
+            <div className="bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 truncate">Vencedor de "{manualFor.nome}"</p>
+                <button onClick={() => setManualFor(null)} aria-label="Fechar" className="shrink-0 text-slate-500 hover:text-slate-900 dark:hover:text-white"><X size={14} /></button>
+              </div>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
+                <input value={manualSearch} onChange={(e) => setManualSearch(e.target.value)} placeholder="Buscar coreografia…" autoFocus
+                  aria-label="Buscar coreografia"
+                  className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-[#ff0068]/50" />
+              </div>
+              <div className="max-h-56 overflow-y-auto space-y-1">
+                {coreos.filter((c) => !manualSearch || `${c.nome} ${c.estudio}`.toLowerCase().includes(manualSearch.toLowerCase())).slice(0, 40).map((c, i) => (
+                  <button key={i} onClick={() => revelarManual(manualFor, c)} disabled={busy}
+                    className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-left bg-white dark:bg-white/5 hover:bg-[#ff0068]/10 text-slate-700 dark:text-slate-200 text-xs font-bold uppercase tracking-wide transition-all">
+                    <span className="truncate">{c.nome}</span>
+                    {c.estudio && <span className="shrink-0 text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[45%]">{c.estudio}</span>}
+                  </button>
+                ))}
+                {coreos.length === 0 && <p className="text-xs text-slate-500 p-2">Nenhuma coreografia encontrada.</p>}
               </div>
             </div>
           )}
 
-          <p className="text-[11px] text-slate-500">O pódio mostra Ouro/Prata/Bronze por nota do grupo. O vencedor de cada prêmio vem da votação dos jurados. Nada aparece na plateia até você clicar.</p>
+          <p className="text-[11px] text-slate-500">Faixas (Ouro/Prata/Bronze) e Maior Nota saem da média dos jurados; prêmios de deliberação, da votação. O <b className="text-slate-600 dark:text-slate-400">✋</b> escolhe o vencedor na mão (ex: Voto Popular). Nada aparece na plateia até você clicar.</p>
         </div>
       )}
 

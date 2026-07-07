@@ -48,16 +48,21 @@ A **mesma URL/telão** tem dois modos, trocados no painel (**Operação → Tel�
 Palco → Modo do telão**). O computador do LED não muda nada.
 
 - **Ao vivo:** o placar nota/média por apresentação (acima).
-- **Premiação:** você **revela** um item por vez pela cerimônia:
-  - **Pódio por grupo** — escolha um grupo (categoria · estilo) e o telão mostra
-    **Ouro / Prata / Bronze** por nota (top 3 da média).
-  - **Prêmios especiais** — escolha um prêmio e o telão mostra o **vencedor**
-    (coreografia mais votada pelos jurados na deliberação) + o valor, se houver.
-  - **Limpar telão** volta pra tela neutra da premiação.
+- **Premiação:** a tela lista **os prêmios que você cadastrou** (Resultados →
+  Premiação) e você **revela um por vez** pela cerimônia. Cada prêmio é resolvido
+  automaticamente pelo tipo (detectado pelo nome/descrição):
+  - **Faixa de medalha** (Troféu Ouro/Prata/Bronze) → lista as coreografias na
+    faixa de média do evento (ex: Ouro ≥ 9,0), festival inteiro, por média.
+  - **Maior Nota do Festival** → a coreografia de maior média.
+  - **Deliberação** (Melhor Bailarino/Coreógrafo…) → o mais votado pelos jurados.
+  - **✋ Escolher na mão** → você seleciona a coreografia vencedora (ex: Troféu
+    Voto Popular, que vem de plataforma externa). Disponível em qualquer prêmio.
+  - **Limpar telão** volta pra tela neutra.
 
-Nada aparece na plateia até você clicar — você controla o ritmo da cerimônia.
-Pódio e vencedor são calculados na hora, a partir das notas/deliberação já no
-sistema (mesma fonte da Apuração e da Premiação).
+Nada aparece na plateia até você clicar — você controla o ritmo. Faixas e Maior
+Nota saem das notas dos jurados; deliberação, da votação — mesma fonte da
+Apuração e da Premiação. As faixas usam o sistema de medalha do próprio evento
+(`medal_thresholds`).
 
 ## Segurança / encerramento
 

@@ -15,16 +15,16 @@ import { supabase } from '../services/supabase';
  */
 
 interface Jurado { nome: string; nota: number | null; avaliou: boolean; }
-interface PodioItem { posicao: number; medalha: 'Ouro' | 'Prata' | 'Bronze'; nome: string; estudio: string; media: number; }
-interface PremioItem { nome: string; estudio: string; votos?: number; }
+interface PremItem { nome: string; estudio: string; categoria?: string; estilo?: string; media?: number; }
 interface TelaoState {
   status: 'off' | 'idle' | 'waiting' | 'result' | 'premiacao';
-  tipo?: 'podio' | 'premio' | 'idle';
+  tipo?: 'faixa' | 'maior_nota' | 'premio' | 'manual' | 'idle';
   event_name?: string;
   event_id?: string;
   titulo?: string;
   valor?: string | null;
-  itens?: (PodioItem | PremioItem)[];
+  faixa?: 'ouro' | 'prata' | 'bronze' | null;
+  itens?: PremItem[];
   coreografia?: { numero: number | null; nome: string; estudio: string; categoria: string; estilo: string; tipo: string };
   jurados?: Jurado[];
   media?: number | null;
@@ -98,30 +98,33 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .tl-score.tl-pop, .tl-judge.tl-wait .tl-nameplate, .tl-place { animation: none; } }
 
 /* ── PREMIAÇÃO ── */
-.tl-title { font-size: min(5.4cqb, 3.4cqi); font-weight: 900; font-style: italic; text-transform: uppercase;
+.tl-title { font-size: min(5.4cqb, 3.6cqi); font-weight: 900; font-style: italic; text-transform: uppercase;
   letter-spacing: -.02em; color: #fff; text-align: center; }
-.tl-podium { display: flex; justify-content: center; align-items: stretch; gap: min(4cqb, 3cqi); width: 100%; flex-wrap: wrap; }
-.tl-place { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: min(1.4cqb, .9cqi);
-  padding: min(3.5cqb, 2.4cqi) min(4cqb, 3cqi); border-radius: 18px; border: 2px solid; min-width: min(30cqi, 260px);
-  animation: tl-pop .5s cubic-bezier(.2,.9,.3,1.2) both; }
-.tl-place--ouro   { border-color: rgba(255,201,60,.5);  background: rgba(255,201,60,.09); }
-.tl-place--prata  { border-color: rgba(200,206,216,.45); background: rgba(200,206,216,.07); }
-.tl-place--bronze { border-color: rgba(208,138,69,.5);  background: rgba(208,138,69,.08); }
-.tl-place:nth-child(2) { animation-delay: .08s; }
-.tl-place:nth-child(3) { animation-delay: .16s; }
-.tl-medal-label { font-size: min(3.4cqb, 2.2cqi); font-weight: 900; text-transform: uppercase; letter-spacing: .14em; }
-.tl-place--ouro   .tl-medal-label { color: #ffc93c; }
-.tl-place--prata  .tl-medal-label { color: #c8ced8; }
-.tl-place--bronze .tl-medal-label { color: #d08a45; }
-.tl-place-media { font-size: min(9cqb, 5.5cqi); font-weight: 900; font-style: italic; line-height: 1; letter-spacing: -.04em;
-  font-variant-numeric: tabular-nums; color: #fff; }
-.tl-place-nome { font-size: min(4.4cqb, 2.8cqi); font-weight: 900; font-style: italic; text-transform: uppercase; color: #fff; text-align: center; }
-.tl-place-estudio { font-size: min(2.8cqb, 1.9cqi); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #8a8f98; text-align: center; }
+.tl-title--ouro   { color: #ffc93c; }
+.tl-title--prata  { color: #c8ced8; }
+.tl-title--bronze { color: #d08a45; }
 
-.tl-premio-winner { font-size: min(14cqb, 8cqi); font-weight: 900; font-style: italic; text-transform: uppercase;
+/* faixa de medalha: grade que acomoda de 1 a N coreografias */
+.tl-faixa { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(40cqi, 340px), 1fr));
+  gap: min(2.4cqb, 1.6cqi) 6%; width: 100%; }
+.tl-cell { display: flex; align-items: baseline; justify-content: space-between; gap: .6em;
+  border-bottom: 1px solid rgba(255,255,255,.12); padding-bottom: min(1cqb, .6cqi);
+  animation: tl-pop .45s cubic-bezier(.2,.9,.3,1.2) both; }
+.tl-cell-nome { font-size: min(4cqb, 2.5cqi); font-weight: 800; font-style: italic; text-transform: uppercase;
+  color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-cell-est { font-size: min(2.5cqb, 1.7cqi); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #8a8f98; }
+.tl-cell-media { font-size: min(4.4cqb, 2.7cqi); font-weight: 900; font-style: italic; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.tl-faixa--ouro   .tl-cell-media { color: #ffc93c; }
+.tl-faixa--prata  .tl-cell-media { color: #c8ced8; }
+.tl-faixa--bronze .tl-cell-media { color: #d08a45; }
+
+/* vencedor único (maior nota / prêmio / manual) */
+.tl-winner { font-size: min(14cqb, 8cqi); font-weight: 900; font-style: italic; text-transform: uppercase;
   letter-spacing: -.03em; line-height: .95; color: #fff; text-align: center; text-shadow: 0 0 44px rgba(255,0,104,.35);
   animation: tl-pop .5s cubic-bezier(.2,.9,.3,1.2) both; }
-.tl-premio-estudio { font-size: min(4cqb, 2.6cqi); font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: #8a8f98; }
+.tl-winner-est { font-size: min(4cqb, 2.6cqi); font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: #8a8f98; }
+.tl-winner-media { font-size: min(11cqb, 6.5cqi); font-weight: 900; font-style: italic; font-variant-numeric: tabular-nums;
+  color: #ffc93c; line-height: 1; text-shadow: 0 0 40px rgba(255,201,60,.4); }
 .tl-valor { display: inline-block; margin-top: min(1cqb, .6cqi); padding: .3em .9em; border-radius: 999px;
   border: 2px solid rgba(227,255,10,.5); color: #e3ff0a; font-size: min(3.6cqb, 2.3cqi); font-weight: 900;
   text-transform: uppercase; letter-spacing: .06em; }
@@ -326,33 +329,47 @@ const TelaoDisplay: React.FC = () => {
             </>
           )}
 
-          {!loading && data?.status === 'premiacao' && data.tipo === 'podio' && (
+          {!loading && data?.status === 'premiacao' && data.tipo === 'faixa' && (
             <>
-              {data.titulo && <div className="tl-title">{data.titulo}</div>}
+              {data.titulo && <div className={`tl-title tl-title--${data.faixa ?? ''}`}>{data.titulo}</div>}
               {data.itens && data.itens.length > 0 ? (
-                <div className="tl-podium">
-                  {(data.itens as PodioItem[]).map((it, i) => (
-                    <div key={i} className={`tl-place tl-place--${it.medalha === 'Ouro' ? 'ouro' : it.medalha === 'Prata' ? 'prata' : 'bronze'}`}>
-                      <span className="tl-medal-label">{it.medalha}</span>
-                      <div className="tl-place-media">{fmtMedia(it.media)}</div>
-                      <div className="tl-place-nome">{it.nome}</div>
-                      {it.estudio && <div className="tl-place-estudio">{it.estudio}</div>}
+                <div className={`tl-faixa tl-faixa--${data.faixa ?? ''}`}>
+                  {data.itens.map((it, i) => (
+                    <div key={i} className="tl-cell">
+                      <span className="tl-cell-nome">{it.nome}{it.estudio && <span className="tl-cell-est"> · {it.estudio}</span>}</span>
+                      <span className="tl-cell-media">{fmtMedia(it.media)}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <span className="tl-hint">Sem notas pra este grupo ainda</span>
+                <span className="tl-hint">Nenhuma coreografia nesta faixa ainda</span>
               )}
             </>
           )}
 
-          {!loading && data?.status === 'premiacao' && data.tipo === 'premio' && (
+          {!loading && data?.status === 'premiacao' && data.tipo === 'maior_nota' && (
+            <>
+              {data.titulo && <div className="tl-title tl-title--ouro">{data.titulo}</div>}
+              {data.itens && data.itens.length > 0 ? (
+                <>
+                  <div className="tl-winner">{data.itens[0].nome}</div>
+                  {data.itens[0].estudio && <div className="tl-winner-est">{data.itens[0].estudio}</div>}
+                  {data.itens[0].media != null && <div className="tl-winner-media">{fmtMedia(data.itens[0].media)}</div>}
+                  {data.valor && <span className="tl-valor">{data.valor}</span>}
+                </>
+              ) : (
+                <span className="tl-hint">Sem notas ainda</span>
+              )}
+            </>
+          )}
+
+          {!loading && data?.status === 'premiacao' && (data.tipo === 'premio' || data.tipo === 'manual') && (
             <>
               {data.titulo && <div className="tl-title">{data.titulo}</div>}
               {data.itens && data.itens.length > 0 ? (
                 <>
-                  <div className="tl-premio-winner">{(data.itens[0] as PremioItem).nome}</div>
-                  {(data.itens[0] as PremioItem).estudio && <div className="tl-premio-estudio">{(data.itens[0] as PremioItem).estudio}</div>}
+                  <div className="tl-winner">{data.itens[0].nome}</div>
+                  {data.itens[0].estudio && <div className="tl-winner-est">{data.itens[0].estudio}</div>}
                   {data.valor && <span className="tl-valor">{data.valor}</span>}
                 </>
               ) : (

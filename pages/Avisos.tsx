@@ -29,6 +29,13 @@ const emptyForm = {
   expires_at: '',
 };
 
+// Limites reais (enforced, não só sugeridos) — card é notificação, não texto
+// livre. Título/texto cabem em 1-3 linhas no card da Início sem quebrar layout.
+const TITLE_MAX = 60;
+const BODY_MAX = 200;
+const CTA_LABEL_MAX = 24;
+const CTA_URL_MAX = 300;
+
 const Avisos: React.FC = () => {
   const [events, setEvents] = useState<EventOption[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -286,10 +293,14 @@ const Avisos: React.FC = () => {
 
             <div className="space-y-4 overflow-y-auto px-5 sm:px-6 py-5 flex-1">
               <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Título</label>
+                <div className="flex items-baseline justify-between mb-1.5">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">Título</label>
+                  <span className="text-[9px] font-bold text-slate-400">{form.title.length}/{TITLE_MAX}</span>
+                </div>
                 <input
                   type="text"
                   value={form.title}
+                  maxLength={TITLE_MAX}
                   onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                   placeholder="Ex: Mudança de local do credenciamento"
                   className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40 focus:border-[#ff0068]/50"
@@ -297,22 +308,31 @@ const Avisos: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Texto</label>
+                <div className="flex items-baseline justify-between mb-1.5">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">Texto</label>
+                  <span className="text-[9px] font-bold text-slate-400">{form.body.length}/{BODY_MAX}</span>
+                </div>
                 <textarea
                   value={form.body}
+                  maxLength={BODY_MAX}
                   onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
                   rows={4}
                   placeholder="Ex: O credenciamento foi movido pra entrada lateral do ginásio."
                   className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40 focus:border-[#ff0068]/50 resize-none"
                 />
+                <p className="text-[9px] text-slate-400 mt-1">Curto e direto — o card é uma notificação, não um comunicado longo.</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Texto do botão (opcional)</label>
+                  <div className="flex items-baseline justify-between mb-1.5">
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">Texto do botão (opcional)</label>
+                    <span className="text-[9px] font-bold text-slate-400">{form.cta_label.length}/{CTA_LABEL_MAX}</span>
+                  </div>
                   <input
                     type="text"
                     value={form.cta_label}
+                    maxLength={CTA_LABEL_MAX}
                     onChange={e => setForm(f => ({ ...f, cta_label: e.target.value }))}
                     placeholder="Ver mapa"
                     className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40 focus:border-[#ff0068]/50"
@@ -323,12 +343,16 @@ const Avisos: React.FC = () => {
                   <input
                     type="text"
                     value={form.cta_url}
+                    maxLength={CTA_URL_MAX}
                     onChange={e => setForm(f => ({ ...f, cta_url: e.target.value }))}
                     placeholder="https://..."
                     className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40 focus:border-[#ff0068]/50"
                   />
                 </div>
               </div>
+              {form.cta_label.trim() && !form.cta_url.trim() && (
+                <p className="text-[10px] text-amber-500 -mt-2">Sem link, o botão não aparece pro inscrito — só o texto/imagem do aviso.</p>
+              )}
 
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Expira em (opcional)</label>

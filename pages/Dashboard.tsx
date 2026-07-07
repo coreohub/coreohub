@@ -9,7 +9,8 @@ import { motion } from 'framer-motion';
 import { Profile as UserProfile, UserRole } from '../types';
 import { supabase } from '../services/supabase';
 import GuiaDeInscricao from '../components/GuiaDeInscricao';
-import InicioAvisos from '../components/InicioAvisos';
+import { AvisosDoProdutor, OrdemApresentacao } from '../components/InicioAvisos';
+import { useInicioAvisos } from '../hooks/useInicioAvisos';
 import {
   hasIncompleteBailarinos,
   collectAllBailarinosIds,
@@ -99,6 +100,7 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
   // real da inscrição do usuário (achado durante QA de 2026-07-07). Fallback
   // pra config.event_id só serve quem ainda não tem nenhuma inscrição.
   const inscritoEventId = coreografias[0]?.event_id ?? config?.event_id ?? null;
+  const { announcements, ordemItems } = useInicioAvisos(inscritoEventId, profile.id);
 
   // ── Métricas reais ────────────────────────────────────────────────────────
   const total      = coreografias.length;
@@ -155,6 +157,12 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
         </div>
       )}
 
+      {/* ── Avisos do produtor (apenas inscritos) ──
+          Fica logo no topo, antes até do Guia de Inscrição — é informação
+          operacional urgente (mudança de local, atraso), diferente de
+          onboarding. Padrão Stripe/Slack: banner de aviso > checklist. */}
+      {isInscrito && <AvisosDoProdutor announcements={announcements} />}
+
       {/* ── A3 banner "dados pendentes" ──
           Reabilitado 2026-06-01 (refator). Click leva pro /minhas-coreografias
           onde inscrito edita CPF/nasc do próprio elenco (etapa 5). Bloqueia
@@ -192,10 +200,9 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
         <GuiaDeInscricao profile={profile} config={config} />
       )}
 
-      {/* ── Avisos do produtor + Ordem de apresentação (apenas inscritos) ── */}
-      {isInscrito && inscritoEventId && (
-        <InicioAvisos eventId={inscritoEventId} userId={profile.id} />
-      )}
+      {/* ── Ordem de apresentação (apenas inscritos) — baixa urgência, fica
+          depois do Guia, não compete com Avisos que já está no topo. ── */}
+      {isInscrito && <OrdemApresentacao items={ordemItems} />}
 
       {/* ── Card do Evento ── */}
       {(config?.nome_evento || config?.data_evento || config?.endereco) && (
