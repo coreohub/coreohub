@@ -68,7 +68,7 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
       setError(null);
       const { data, error: err } = await supabase
         .from('registrations')
-        .select('id, status, status_pagamento, trilha_url, nome:nome_coreografia, formacao:formato_participacao, formato_participacao, categoria_nome:categoria, estilo_nome:estilo_danca, bailarinos_detalhes')
+        .select('id, event_id, status, status_pagamento, trilha_url, nome:nome_coreografia, formacao:formato_participacao, formato_participacao, categoria_nome:categoria, estilo_nome:estilo_danca, bailarinos_detalhes')
         .eq('user_id', profile.id)
         .order('criado_em', { ascending: false });
       if (err) setError('Não foi possível carregar suas inscrições. Recarregue a página em instantes.');
@@ -92,6 +92,13 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
     };
     fetchCoreografias();
   }, [profile.id]);
+
+  // Evento ativo do inscrito: deriva das próprias inscrições (fonte confiável),
+  // não da `config` global — essa cai na row legacy `id='1'` pra quem não é
+  // produtor, e o `event_id` dessa row não necessariamente bate com o evento
+  // real da inscrição do usuário (achado durante QA de 2026-07-07). Fallback
+  // pra config.event_id só serve quem ainda não tem nenhuma inscrição.
+  const inscritoEventId = coreografias[0]?.event_id ?? config?.event_id ?? null;
 
   // ── Métricas reais ────────────────────────────────────────────────────────
   const total      = coreografias.length;
@@ -186,8 +193,8 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
       )}
 
       {/* ── Avisos do produtor + Ordem de apresentação (apenas inscritos) ── */}
-      {isInscrito && config?.event_id && (
-        <InicioAvisos eventId={config.event_id} userId={profile.id} />
+      {isInscrito && inscritoEventId && (
+        <InicioAvisos eventId={inscritoEventId} userId={profile.id} />
       )}
 
       {/* ── Card do Evento ── */}
