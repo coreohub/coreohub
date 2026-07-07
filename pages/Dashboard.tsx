@@ -99,7 +99,11 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
   // produtor, e o `event_id` dessa row não necessariamente bate com o evento
   // real da inscrição do usuário (achado durante QA de 2026-07-07). Fallback
   // pra config.event_id só serve quem ainda não tem nenhuma inscrição.
-  const inscritoEventId = coreografias[0]?.event_id ?? config?.event_id ?? null;
+  // Só resolve depois que `coreografias` terminou de carregar — evita disparar
+  // a busca de avisos/ordem com o fallback legacy (config.event_id, não
+  // confiável) enquanto o fetch real ainda está em andamento, e depois
+  // re-disparar de novo com o evento certo (race visível em QA 2026-07-07).
+  const inscritoEventId = loading ? null : (coreografias[0]?.event_id ?? config?.event_id ?? null);
   const { announcements, ordemItems } = useInicioAvisos(inscritoEventId, profile.id);
 
   // ── Métricas reais ────────────────────────────────────────────────────────
