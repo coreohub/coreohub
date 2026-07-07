@@ -4520,10 +4520,10 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     <select
                       value={testRegId}
                       onChange={e => setTestRegId(e.target.value)}
-                      className="min-w-0 flex-1 bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 text-xs"
+                      className="min-w-0 flex-1 bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 text-xs dark:[color-scheme:dark]"
                     >
                       {narrRegs.map(r => (
-                        <option key={r.id} value={r.id}>
+                        <option key={r.id} value={r.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
                           {r.nome_coreografia}{resolveEstudio(r) ? ` · ${resolveEstudio(r)}` : ''}
                         </option>
                       ))}
