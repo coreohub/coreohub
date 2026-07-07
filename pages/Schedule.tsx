@@ -23,6 +23,7 @@ import {
 } from '../services/narrationApi';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
 import { resolveEstudio } from '../utils/formatters';
+import { isStyleInList } from '../utils/styleMatch';
 
 type AudioSlot = { audio_url: string; duration_seconds: number; voice_id?: string };
 type AudioMap = Record<string, { entrada?: AudioSlot; saida?: AudioSlot }>;
@@ -62,6 +63,13 @@ interface Bloco {
   name: string;
   ordem: number;
   cor?: string | null;
+}
+
+interface Judge {
+  id: string;
+  name: string;
+  competencias_generos?: string[] | null;
+  is_active?: boolean;
 }
 
 // ---------- conflict detection ----------
@@ -120,14 +128,22 @@ const getElenco = (reg: any): any[] => {
     : (reg.bailarinos_detalhes || []);
 };
 
-function generateSmartOrder(registrations: Registration[], minInterval: number): Registration[] {
+function generateSmartOrder(
+  registrations: Registration[],
+  minInterval: number,
+  opts?: { judgeSignatures?: Record<string, string>; minimizeJudgeChanges?: boolean }
+): Registration[] {
   const result: Registration[] = [];
   const remaining = [...registrations];
   const lastSeenPosition: Record<string, number> = {};
+  const judgeSignatures = opts?.judgeSignatures ?? {};
+  const minimizeJudgeChanges = !!opts?.minimizeJudgeChanges;
+  let lastSignature: string | null = null;
 
   while (remaining.length > 0) {
     let bestIdx = 0; // default 0 — se ninguem tem conflito, pega primeiro
     let bestConflicts = Infinity;
+    let bestPanelChange = Infinity; // 0 = mesma banca da anterior, 1 = troca
 
     for (let i = 0; i < remaining.length; i++) {
       const reg = remaining[i];
@@ -143,10 +159,23 @@ function generateSmartOrder(registrations: Registration[], minInterval: number):
         }
       });
 
-      if (conflicts < bestConflicts) {
+      // Critério de banca só desempata dentro do mesmo nível de conflito —
+      // intervalo de segurança de bailarino nunca é sacrificado por conveniência
+      // de jurado.
+      let panelChange = 0;
+      if (minimizeJudgeChanges) {
+        const sig = judgeSignatures[reg.id] ?? '';
+        panelChange = (lastSignature !== null && sig !== lastSignature) ? 1 : 0;
+      }
+
+      if (
+        conflicts < bestConflicts ||
+        (conflicts === bestConflicts && panelChange < bestPanelChange)
+      ) {
         bestConflicts = conflicts;
+        bestPanelChange = panelChange;
         bestIdx = i;
-        if (conflicts === 0) break;
+        if (conflicts === 0 && panelChange === 0) break;
       }
     }
 
@@ -158,6 +187,7 @@ function generateSmartOrder(registrations: Registration[], minInterval: number):
       if (id) lastSeenPosition[id] = result.length;
     });
 
+    if (minimizeJudgeChanges) lastSignature = judgeSignatures[chosen.id] ?? '';
     result.push(chosen);
   }
 
@@ -169,6 +199,7 @@ interface SortableRowProps {
   reg: Registration;
   index: number;
   conflicts: { dancerName: string; otherIndex: number }[];
+  judgeNames?: string[];
   audioSet?: { entrada?: AudioSlot; saida?: AudioSlot };
   saidaAtiva: boolean;
   isLive: boolean;
@@ -188,7 +219,7 @@ interface SortableRowProps {
 }
 
 const SortableRow: React.FC<SortableRowProps> = ({
-  reg, index, conflicts,
+  reg, index, conflicts, judgeNames,
   audioSet, saidaAtiva, isLive, isGenerating, batchInProgress, updatingLive, currentVoice,
   blocos, matchesSearch, recentlyMoved, onOpenBlocoPicker,
   onGenerateOne, onAnnounce, onPrepare, onMarkLiveOnly, onExclude,
@@ -329,6 +360,17 @@ const SortableRow: React.FC<SortableRowProps> = ({
           {reg.categoria && (
             <span className="px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500 rounded-full text-[8px] font-black uppercase tracking-wider">
               {reg.categoria}
+            </span>
+          )}
+          {/* Banca de jurados que avalia essa coreografia — ajuda o produtor a
+              ver de relance se a composição está agrupada ou dispersa, sem
+              precisar cruzar estilo x competências de cabeça. */}
+          {judgeNames && judgeNames.length > 0 && (
+            <span
+              className="px-1.5 py-0.5 bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-[#1de7f2] rounded-full text-[8px] font-black uppercase tracking-wider cursor-help"
+              title={`Banca: ${judgeNames.join(', ')}`}
+            >
+              {judgeNames.map(n => n.trim().charAt(0).toUpperCase()).join('')}
             </span>
           )}
         </div>
@@ -472,6 +514,10 @@ const Schedule = () => {
   const [allEvents, setAllEvents] = useState<{ id: string; name: string; edition_year?: number; is_demo?: boolean }[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
+  /* Banca de jurados — minimizar troca ao gerar ordem inteligente */
+  const [judges, setJudges] = useState<Judge[]>([]);
+  const [minimizeJudgeChanges, setMinimizeJudgeChanges] = useState(false);
+
   /* Blocos (Etapa 2 da fusão) */
   const [blocos, setBlocos] = useState<Bloco[]>([]);
   const [showBlocosManager, setShowBlocosManager] = useState(false);
@@ -613,6 +659,15 @@ const Schedule = () => {
       const list = regs || [];
       setRegistrations(list);
       setOrderChanged(false);
+
+      // Jurados do produtor (RLS já escopa pra created_by) — usados só pra
+      // calcular a banca que avalia cada coreografia (chip visual + critério
+      // opcional de "minimizar troca de jurados" no Gerar Ordem Inteligente).
+      const { data: judgesData } = await supabase
+        .from('judges')
+        .select('id, name, competencias_generos, is_active')
+        .order('name');
+      setJudges((judgesData || []).filter((j: Judge) => j.is_active !== false));
 
       // Etapa 2: blocos do cronograma
       if (eventId) {
@@ -1112,6 +1167,20 @@ const Schedule = () => {
     [registrations, minInterval]
   );
 
+  // Banca de jurados por coreografia: cruza estilo_danca com as competências
+  // de gênero de cada jurado ativo. sigMap serve pro algoritmo (string
+  // comparável), namesMap alimenta o chip visual da linha.
+  const judgeBanca = useMemo(() => {
+    const sigMap: Record<string, string> = {};
+    const namesMap: Record<string, string[]> = {};
+    registrations.forEach((reg) => {
+      const matched = judges.filter((j) => isStyleInList(reg.estilo_danca, j.competencias_generos));
+      sigMap[reg.id] = matched.map((j) => j.id).sort().join(',');
+      namesMap[reg.id] = matched.map((j) => j.name);
+    });
+    return { sigMap, namesMap };
+  }, [registrations, judges]);
+
   const stats = useMemo(() => {
     const withTrack = registrations.filter((r) => !!r.trilha_url).length;
     const conflictCount = Object.keys(conflicts).length;
@@ -1303,17 +1372,27 @@ const Schedule = () => {
     // via dropdown na linha.
     const sortedBlocos = [...blocos].sort((a, b) => a.ordem - b.ordem);
     const result: Registration[] = [];
+    const genOpts = { judgeSignatures: judgeBanca.sigMap, minimizeJudgeChanges };
     for (const bloco of sortedBlocos) {
       const regsDoBloco = registrations.filter(r => r.bloco_id === bloco.id);
-      const ordered = generateSmartOrder([...regsDoBloco], minInterval);
+      const ordered = generateSmartOrder([...regsDoBloco], minInterval, genOpts);
       result.push(...ordered);
     }
     const semBloco = registrations.filter(r => !r.bloco_id);
-    const orderedSemBloco = generateSmartOrder([...semBloco], minInterval);
+    const orderedSemBloco = generateSmartOrder([...semBloco], minInterval, genOpts);
     result.push(...orderedSemBloco);
     setRegistrations(result);
     setOrderChanged(true);
     setIsGenerating(false);
+
+    if (minimizeJudgeChanges) {
+      let trocas = 0;
+      for (let i = 1; i < result.length; i++) {
+        if ((judgeBanca.sigMap[result[i].id] ?? '') !== (judgeBanca.sigMap[result[i - 1].id] ?? '')) trocas++;
+      }
+      setSavedMsg(`Ordem gerada · ${trocas} troca${trocas !== 1 ? 's' : ''} de banca de jurados`);
+      setTimeout(() => setSavedMsg(''), 4500);
+    }
   };
 
   // Publica as coreografias do cronograma no Voto Popular (push pro projeto isolado).
@@ -1545,6 +1624,22 @@ const Schedule = () => {
             {blocos.length > 0 && (
               <span className="ml-1 px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/10 text-slate-500 text-[8px] tabular-nums">{blocos.length}</span>
             )}
+          </button>
+
+          {/* Modificador opt-in do "Gerar Ordem Inteligente" — quando ligado,
+              o algoritmo prioriza manter a mesma banca de jurados avaliando
+              em sequência (desempate dentro do intervalo de segurança, nunca
+              o sobrepõe). Desligado, comportamento é o de sempre (aleatório). */}
+          <button
+            onClick={() => setMinimizeJudgeChanges((v) => !v)}
+            className={`flex items-center gap-1.5 px-3 py-2 border rounded-xl text-[9px] font-black uppercase tracking-widest transition-all
+              ${minimizeJudgeChanges
+                ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-transparent'
+                : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400'}`}
+            title="Ao gerar a ordem, evita trocar a composição de jurados a cada coreografia — só entra em ação junto com 'Gerar Ordem Inteligente'. O Intervalo de Segurança de bailarinos continua tendo prioridade."
+          >
+            <Users size={12} />
+            Minimizar troca de jurados
           </button>
 
           <button
@@ -1903,6 +1998,7 @@ const Schedule = () => {
                   reg={reg}
                   index={startIdx + localIdx}
                   conflicts={conflicts[reg.id] || []}
+                  judgeNames={judgeBanca.namesMap[reg.id]}
                   audioSet={audios[reg.id]}
                   saidaAtiva={saidaAtiva}
                   isLive={currentTrack?.id === reg.id}
