@@ -15,10 +15,16 @@ import { supabase } from '../services/supabase';
  */
 
 interface Jurado { nome: string; nota: number | null; avaliou: boolean; }
+interface PodioItem { posicao: number; medalha: 'Ouro' | 'Prata' | 'Bronze'; nome: string; estudio: string; media: number; }
+interface PremioItem { nome: string; estudio: string; votos?: number; }
 interface TelaoState {
-  status: 'off' | 'idle' | 'waiting' | 'result';
+  status: 'off' | 'idle' | 'waiting' | 'result' | 'premiacao';
+  tipo?: 'podio' | 'premio' | 'idle';
   event_name?: string;
   event_id?: string;
+  titulo?: string;
+  valor?: string | null;
+  itens?: (PodioItem | PremioItem)[];
   coreografia?: { numero: number | null; nome: string; estudio: string; categoria: string; estilo: string; tipo: string };
   jurados?: Jurado[];
   media?: number | null;
@@ -89,7 +95,36 @@ const CSS = `
 
 @keyframes tl-pop { from { transform: scale(.72); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes tl-blink { 0%,100% { opacity: .28; } 50% { opacity: .7; } }
-@media (prefers-reduced-motion: reduce) { .tl-score.tl-pop, .tl-judge.tl-wait .tl-nameplate { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .tl-score.tl-pop, .tl-judge.tl-wait .tl-nameplate, .tl-place { animation: none; } }
+
+/* ── PREMIAÇÃO ── */
+.tl-title { font-size: min(5.4cqb, 3.4cqi); font-weight: 900; font-style: italic; text-transform: uppercase;
+  letter-spacing: -.02em; color: #fff; text-align: center; }
+.tl-podium { display: flex; justify-content: center; align-items: stretch; gap: min(4cqb, 3cqi); width: 100%; flex-wrap: wrap; }
+.tl-place { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: min(1.4cqb, .9cqi);
+  padding: min(3.5cqb, 2.4cqi) min(4cqb, 3cqi); border-radius: 18px; border: 2px solid; min-width: min(30cqi, 260px);
+  animation: tl-pop .5s cubic-bezier(.2,.9,.3,1.2) both; }
+.tl-place--ouro   { border-color: rgba(255,201,60,.5);  background: rgba(255,201,60,.09); }
+.tl-place--prata  { border-color: rgba(200,206,216,.45); background: rgba(200,206,216,.07); }
+.tl-place--bronze { border-color: rgba(208,138,69,.5);  background: rgba(208,138,69,.08); }
+.tl-place:nth-child(2) { animation-delay: .08s; }
+.tl-place:nth-child(3) { animation-delay: .16s; }
+.tl-medal-label { font-size: min(3.4cqb, 2.2cqi); font-weight: 900; text-transform: uppercase; letter-spacing: .14em; }
+.tl-place--ouro   .tl-medal-label { color: #ffc93c; }
+.tl-place--prata  .tl-medal-label { color: #c8ced8; }
+.tl-place--bronze .tl-medal-label { color: #d08a45; }
+.tl-place-media { font-size: min(9cqb, 5.5cqi); font-weight: 900; font-style: italic; line-height: 1; letter-spacing: -.04em;
+  font-variant-numeric: tabular-nums; color: #fff; }
+.tl-place-nome { font-size: min(4.4cqb, 2.8cqi); font-weight: 900; font-style: italic; text-transform: uppercase; color: #fff; text-align: center; }
+.tl-place-estudio { font-size: min(2.8cqb, 1.9cqi); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #8a8f98; text-align: center; }
+
+.tl-premio-winner { font-size: min(14cqb, 8cqi); font-weight: 900; font-style: italic; text-transform: uppercase;
+  letter-spacing: -.03em; line-height: .95; color: #fff; text-align: center; text-shadow: 0 0 44px rgba(255,0,104,.35);
+  animation: tl-pop .5s cubic-bezier(.2,.9,.3,1.2) both; }
+.tl-premio-estudio { font-size: min(4cqb, 2.6cqi); font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: #8a8f98; }
+.tl-valor { display: inline-block; margin-top: min(1cqb, .6cqi); padding: .3em .9em; border-radius: 999px;
+  border: 2px solid rgba(227,255,10,.5); color: #e3ff0a; font-size: min(3.6cqb, 2.3cqi); font-weight: 900;
+  text-transform: uppercase; letter-spacing: .06em; }
 
 /* botão de tela cheia — discreto, some sozinho */
 .tl-fsbtn { position: fixed; bottom: 18px; right: 18px; z-index: 10; border: 0; cursor: pointer;
@@ -280,6 +315,48 @@ const TelaoDisplay: React.FC = () => {
                   </div>
                   <span className="tl-waiting-tag">Apresentação avaliada</span>
                 </>
+              )}
+            </>
+          )}
+
+          {!loading && data?.status === 'premiacao' && data.tipo === 'idle' && (
+            <>
+              {data.event_name && <span className="tl-festival">{data.event_name}</span>}
+              <span className="tl-hint">Premiação</span>
+            </>
+          )}
+
+          {!loading && data?.status === 'premiacao' && data.tipo === 'podio' && (
+            <>
+              {data.titulo && <div className="tl-title">{data.titulo}</div>}
+              {data.itens && data.itens.length > 0 ? (
+                <div className="tl-podium">
+                  {(data.itens as PodioItem[]).map((it, i) => (
+                    <div key={i} className={`tl-place tl-place--${it.medalha === 'Ouro' ? 'ouro' : it.medalha === 'Prata' ? 'prata' : 'bronze'}`}>
+                      <span className="tl-medal-label">{it.medalha}</span>
+                      <div className="tl-place-media">{fmtMedia(it.media)}</div>
+                      <div className="tl-place-nome">{it.nome}</div>
+                      {it.estudio && <div className="tl-place-estudio">{it.estudio}</div>}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <span className="tl-hint">Sem notas pra este grupo ainda</span>
+              )}
+            </>
+          )}
+
+          {!loading && data?.status === 'premiacao' && data.tipo === 'premio' && (
+            <>
+              {data.titulo && <div className="tl-title">{data.titulo}</div>}
+              {data.itens && data.itens.length > 0 ? (
+                <>
+                  <div className="tl-premio-winner">{(data.itens[0] as PremioItem).nome}</div>
+                  {(data.itens[0] as PremioItem).estudio && <div className="tl-premio-estudio">{(data.itens[0] as PremioItem).estudio}</div>}
+                  {data.valor && <span className="tl-valor">{data.valor}</span>}
+                </>
+              ) : (
+                <span className="tl-hint">Vencedor a definir</span>
               )}
             </>
           )}

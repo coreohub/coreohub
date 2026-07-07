@@ -42,6 +42,23 @@ fosse um monitor; a página preenche `100dvw × 100dvh` seja qual for a resoluç
   estilo da coreografia (mesma regra do terminal do júri). Jurado com
   competências vazias avalia tudo.
 
+## Modo Premiação (pódio + prêmios)
+
+A **mesma URL/telão** tem dois modos, trocados no painel (**Operação → Telão de
+Palco → Modo do telão**). O computador do LED não muda nada.
+
+- **Ao vivo:** o placar nota/média por apresentação (acima).
+- **Premiação:** você **revela** um item por vez pela cerimônia:
+  - **Pódio por grupo** — escolha um grupo (categoria · estilo) e o telão mostra
+    **Ouro / Prata / Bronze** por nota (top 3 da média).
+  - **Prêmios especiais** — escolha um prêmio e o telão mostra o **vencedor**
+    (coreografia mais votada pelos jurados na deliberação) + o valor, se houver.
+  - **Limpar telão** volta pra tela neutra da premiação.
+
+Nada aparece na plateia até você clicar — você controla o ritmo da cerimônia.
+Pódio e vencedor são calculados na hora, a partir das notas/deliberação já no
+sistema (mesma fonte da Apuração e da Premiação).
+
 ## Segurança / encerramento
 
 - O telão mostra só **média agregada** (sem CPF ou dado sensível).

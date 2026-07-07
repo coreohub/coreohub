@@ -1,7 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { MonitorPlay, Copy, ExternalLink, RefreshCw, Check, Loader2, FlaskConical, Power } from 'lucide-react';
+import { MonitorPlay, Copy, ExternalLink, RefreshCw, Check, Loader2, FlaskConical, Power, Radio, Trophy, Medal, X } from 'lucide-react';
 import { supabase, resolveActiveEventId } from '../services/supabase';
 import PageHeader from '../components/PageHeader';
+
+interface Grupo { categoria: string; estilo: string; }
+interface Premio { id: string; nome: string; valor?: string; }
 
 /**
  * Tela de controle do Telão de Palco (produtor). Gera/mostra o código curto
@@ -18,9 +21,42 @@ const TelaoControle: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<'link' | 'code' | null>(null);
+  const [modo, setModo] = useState<'ao_vivo' | 'premiacao'>('ao_vivo');
+  const [premiacao, setPremiacao] = useState<any>(null);
+  const [grupos, setGrupos] = useState<Grupo[]>([]);
+  const [premios, setPremios] = useState<Premio[]>([]);
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const publicUrl = code ? `${origin}/telao/${code}` : '';
+
+  // Carrega os grupos (categoria+estilo) e prêmios especiais pra revelar.
+  const loadPremiacaoOptions = useCallback(async (id: string) => {
+    const [{ data: regs }, { data: cfg }] = await Promise.all([
+      supabase.from('registrations')
+        .select('categoria, estilo_danca')
+        .eq('event_id', id)
+        .or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO'),
+      supabase.from('configuracoes').select('premios_especiais').eq('event_id', id).maybeSingle(),
+    ]);
+    const seen = new Set<string>();
+    const gs: Grupo[] = [];
+    (regs ?? []).forEach((r: any) => {
+      const categoria = (r.categoria ?? '').trim();
+      const estilo = (r.estilo_danca ?? '').trim();
+      if (!categoria && !estilo) return;
+      const key = `${categoria}||${estilo}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      gs.push({ categoria, estilo });
+    });
+    gs.sort((a, b) => (a.categoria + a.estilo).localeCompare(b.categoria + b.estilo));
+    setGrupos(gs);
+
+    const raw = (cfg as any)?.premios_especiais ?? [];
+    setPremios((Array.isArray(raw) ? raw : [])
+      .filter((a: any) => a && a.enabled !== false && (a.id != null))
+      .map((a: any) => ({ id: String(a.id), nome: a.nome ?? a.name ?? 'Prêmio', valor: a.valor ? String(a.valor) : undefined })));
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -29,7 +65,7 @@ const TelaoControle: React.FC = () => {
       if (!id) { setLoading(false); return; }
       const { data } = await supabase
         .from('events')
-        .select('id, name, telao_code, telao_ativo')
+        .select('id, name, telao_code, telao_ativo, telao_modo, telao_premiacao')
         .eq('id', id)
         .maybeSingle();
       if (data) {
@@ -37,13 +73,40 @@ const TelaoControle: React.FC = () => {
         setEventName(data.name ?? '');
         setCode(data.telao_code ?? null);
         setAtivo(data.telao_ativo === true);
+        setModo(data.telao_modo === 'premiacao' ? 'premiacao' : 'ao_vivo');
+        setPremiacao(data.telao_premiacao ?? null);
+        loadPremiacaoOptions(data.id);
       }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadPremiacaoOptions]);
 
   useEffect(() => { load(); }, [load]);
+
+  const handleSetModo = async (m: 'ao_vivo' | 'premiacao') => {
+    if (!eventId || m === modo) return;
+    setBusy(true);
+    try {
+      const { error } = await supabase.rpc('set_telao_modo', { p_event_id: eventId, p_modo: m });
+      if (error) throw error;
+      setModo(m);
+      if (m === 'ao_vivo') setPremiacao(null);
+    } catch (e) { console.error(e); alert('Não foi possível trocar o modo do telão.'); }
+    finally { setBusy(false); }
+  };
+
+  const sendPremiacao = async (payload: any) => {
+    if (!eventId) return;
+    setBusy(true);
+    try {
+      const { error } = await supabase.rpc('set_telao_premiacao', { p_event_id: eventId, p_premiacao: payload });
+      if (error) throw error;
+      setModo('premiacao');
+      setPremiacao(payload);
+    } catch (e) { console.error(e); alert('Não foi possível enviar ao telão.'); }
+    finally { setBusy(false); }
+  };
 
   const handleGenerate = async () => {
     if (!eventId) return;
@@ -181,6 +244,21 @@ const TelaoControle: React.FC = () => {
               <RefreshCw size={12} /> Gerar novo código (invalida o atual)
             </button>
 
+            {/* Modo do telão */}
+            <div className="pt-4 border-t border-slate-200 dark:border-white/10">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">Modo do telão</p>
+              <div className="inline-flex gap-1 p-1 bg-slate-100 dark:bg-white/5 rounded-xl">
+                <button onClick={() => handleSetModo('ao_vivo')} disabled={busy}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all disabled:opacity-50 ${modo === 'ao_vivo' ? 'bg-[#ff0068] text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
+                  <Radio size={13} /> Ao vivo
+                </button>
+                <button onClick={() => handleSetModo('premiacao')} disabled={busy}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all disabled:opacity-50 ${modo === 'premiacao' ? 'bg-[#ff0068] text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
+                  <Trophy size={13} /> Premiação
+                </button>
+              </div>
+            </div>
+
             {/* Preview ao vivo */}
             {ativo && (
               <div>
@@ -193,6 +271,61 @@ const TelaoControle: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* Premiação — revelar pódios e prêmios (modo premiação) */}
+      {code && modo === 'premiacao' && (
+        <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-3xl p-6 space-y-5">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Revelar no telão</p>
+            <button onClick={() => sendPremiacao({ tipo: 'idle' })} disabled={busy}
+              className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all disabled:opacity-50">
+              <X size={12} /> Limpar telão
+            </button>
+          </div>
+
+          {/* Pódio por grupo */}
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5"><Medal size={12} aria-hidden /> Pódio por grupo</p>
+            {grupos.length === 0 ? (
+              <p className="text-xs text-slate-500">Nenhum grupo com inscrições ainda.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {grupos.map((g, i) => {
+                  const active = premiacao?.tipo === 'podio' && (premiacao?.categoria ?? '') === g.categoria && (premiacao?.estilo ?? '') === g.estilo;
+                  return (
+                    <button key={i} onClick={() => sendPremiacao({ tipo: 'podio', categoria: g.categoria, estilo: g.estilo })} disabled={busy}
+                      className={`flex items-center justify-between gap-2 px-4 py-3 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all text-left disabled:opacity-50 ${active ? 'bg-[#ff0068] text-white shadow-md' : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/10'}`}>
+                      <span className="truncate">{[g.categoria, g.estilo].filter(Boolean).join(' · ') || 'Sem grupo'}</span>
+                      {active ? <Check size={14} /> : <ExternalLink size={13} className="opacity-50" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Prêmios especiais */}
+          {premios.length > 0 && (
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5"><Trophy size={12} aria-hidden /> Prêmios especiais</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {premios.map((p) => {
+                  const active = premiacao?.tipo === 'premio' && String(premiacao?.award_id) === p.id;
+                  return (
+                    <button key={p.id} onClick={() => sendPremiacao({ tipo: 'premio', award_id: p.id, award_name: p.nome, valor: p.valor ?? '' })} disabled={busy}
+                      className={`flex items-center justify-between gap-2 px-4 py-3 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all text-left disabled:opacity-50 ${active ? 'bg-[#ff0068] text-white shadow-md' : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/10'}`}>
+                      <span className="truncate">{p.nome}</span>
+                      {active ? <Check size={14} /> : <ExternalLink size={13} className="opacity-50" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <p className="text-[11px] text-slate-500">O pódio mostra Ouro/Prata/Bronze por nota do grupo. O vencedor de cada prêmio vem da votação dos jurados. Nada aparece na plateia até você clicar.</p>
+        </div>
+      )}
 
       {/* Como usar */}
       <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-3xl p-6 space-y-3">
