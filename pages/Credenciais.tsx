@@ -7,6 +7,8 @@ import {
 import EventPickerSheet from '../components/EventPickerSheet';
 import PageHeader from '../components/PageHeader';
 import { supabase } from '../services/supabase';
+import { resolveEstudio } from '../utils/formatters';
+import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
 import {
   CredentialItem,
   CredentialType,
@@ -90,9 +92,9 @@ const Credenciais: React.FC = () => {
         const [regsRes, wsRes, judgesRes] = await Promise.all([
           supabase
             .from('registrations')
-            .select('id,nome_coreografia,estudio,estilo_danca,categoria,formato_participacao,status,status_pagamento')
+            .select('id,nome_coreografia,estudio,event_data,estilo_danca,categoria,formato_participacao,status,status_pagamento')
             .eq('event_id', selectedEventId)
-            .or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO')
+            .or(SCHEDULABLE_REGISTRATIONS_OR_FILTER)
             .order('nome_coreografia'),
           supabase
             .from('workshops')
@@ -108,7 +110,7 @@ const Credenciais: React.FC = () => {
           id: `reg-${r.id}`,
           type: 'INSCRITO',
           name: r.nome_coreografia || 'Sem nome',
-          subtitle: r.estudio || undefined,
+          subtitle: resolveEstudio(r) || undefined,
           category: [r.formato_participacao, r.categoria].filter(Boolean).join(' · ') || undefined,
           qrValue: r.id,
         }));

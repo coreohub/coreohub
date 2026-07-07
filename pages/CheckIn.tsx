@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
-import { isRegistrationPaid } from '../utils/registrationStatus';
+import { isRegistrationPaid, SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
 import PageHeader from '../components/PageHeader';
 
 interface CheckInItem {
@@ -60,7 +60,7 @@ const CheckIn = () => {
       const { data, error } = await supabase
         .from('registrations')
         .select('id,nome_coreografia,estudio,status_pagamento,status_trilha,trilha_url,check_in_status,check_in_at,excluded_from_schedule')
-        .or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO')
+        .or(SCHEDULABLE_REGISTRATIONS_OR_FILTER)
         .order('nome_coreografia', { ascending: true });
       if (error) throw error;
       setItems((data || []).filter((r: CheckInItem) => !r.excluded_from_schedule));

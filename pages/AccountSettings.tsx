@@ -1606,11 +1606,16 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [narrRegs, setNarrRegs] = useState<NarrRegRow[]>([]);
   const [narrAudios, setNarrAudios] = useState<NarrAudioRow[]>([]);
   const [testRegId, setTestRegId] = useState<string>('');
+  // Evita refetch redundante: só busca de novo se o evento mudou desde a
+  // última vez, mesmo que o produtor saia e volte pra esta aba várias vezes.
+  const narrLoadedForEventRef = useRef<string | null>(null);
 
   // Só busca quando a aba "Fluxo do Evento" (Narração IA) está aberta — nas
   // demais abas (Pagamentos, Geral, etc) essa query não tem pra que rodar.
   useEffect(() => {
     if (!activeEventId || activeTab !== 'Fluxo do Evento') return;
+    if (narrLoadedForEventRef.current === activeEventId) return;
+    narrLoadedForEventRef.current = activeEventId;
     (async () => {
       const [regsRes, audiosRes] = await Promise.all([
         supabase
