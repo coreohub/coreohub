@@ -9,6 +9,7 @@ import { motion } from 'framer-motion';
 import { Profile as UserProfile, UserRole } from '../types';
 import { supabase } from '../services/supabase';
 import GuiaDeInscricao from '../components/GuiaDeInscricao';
+import InicioAvisos from '../components/InicioAvisos';
 import {
   hasIncompleteBailarinos,
   collectAllBailarinosIds,
@@ -182,6 +183,11 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
       {/* ── Guia de Inscrição (apenas inscritos) ── */}
       {isInscrito && (
         <GuiaDeInscricao profile={profile} config={config} />
+      )}
+
+      {/* ── Avisos do produtor + Ordem de apresentação (apenas inscritos) ── */}
+      {isInscrito && config?.event_id && (
+        <InicioAvisos eventId={config.event_id} userId={profile.id} />
       )}
 
       {/* ── Card do Evento ── */}

@@ -54,6 +54,7 @@ const MeuIngresso              = lazy(() => import('./pages/MeuIngresso'));
 const VendasIngressos          = lazy(() => import('./pages/VendasIngressos'));
 const VendasOverview           = lazy(() => import('./pages/VendasOverview'));
 const Coupons                  = lazy(() => import('./pages/Coupons'));
+const Avisos                   = lazy(() => import('./pages/Avisos'));
 const WorkshopsManagement      = lazy(() => import('./pages/WorkshopsManagement'));
 const PublicWorkshopPage       = lazy(() => import('./pages/PublicWorkshopPage'));
 const CheckoutWorkshop         = lazy(() => import('./pages/CheckoutWorkshop'));
@@ -569,6 +570,7 @@ const App: React.FC = () => {
         <Route path="/vendas-ingressos" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><VendasIngressos /></Suspense></PrivateRoute>} />
         <Route path="/workshops-do-evento" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><WorkshopsManagement /></Suspense></PrivateRoute>} />
         <Route path="/cupons"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><Coupons /></Suspense></PrivateRoute>} />
+        <Route path="/avisos"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><Avisos /></Suspense></PrivateRoute>} />
         <Route path="/festival/:idOrSlug" element={<FestivalShowcase />} />
         {/* Inscrição unificada: ambas as rotas renderizam o mesmo Wizard.
             /inscrever (sem modalidade) → mostra Passo 0 (seleção visual de
