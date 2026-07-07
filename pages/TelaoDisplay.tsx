@@ -97,6 +97,7 @@ const CSS = `
   text-transform: uppercase; letter-spacing: .1em; padding: 10px 16px; border-radius: 999px; backdrop-filter: blur(6px);
   transition: opacity .3s; }
 .tl-fsbtn:hover { background: rgba(255,255,255,.2); }
+.tl-fsbtn:focus-visible { outline: 2px solid #ff0068; outline-offset: 2px; }
 
 /* tela de entrada por código */
 .tl-entry { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 24px; }
