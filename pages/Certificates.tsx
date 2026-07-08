@@ -14,11 +14,11 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { supabase } from '../services/supabase';
+import { supabase, supabaseUrl } from '../services/supabase';
 import PageHeader from '../components/PageHeader';
 import {
   Award, GraduationCap, Loader2, Save, Send, AlertCircle, CheckCircle, Trash2,
-  Type, Palette, Image as ImageIcon, FileSignature, Sparkles, X,
+  Type, Palette, Image as ImageIcon, FileSignature, Sparkles, X, Eye,
 } from 'lucide-react';
 
 type TemplateType = 'mostra' | 'workshop';
@@ -29,9 +29,9 @@ interface CertTemplate {
   template_type: TemplateType;
   name: string;
   /** Compat: aceita os nomes legados (mostra-classico, mostra-premium,
-   * workshop-minimalista) mas no save sempre normaliza pra 'classico' ou
-   * 'workshop'. */
-  preset_template: 'classico' | 'workshop' | 'mostra-classico' | 'workshop-minimalista' | 'mostra-premium' | 'custom';
+   * workshop-minimalista) mas no save sempre normaliza pra 'classico',
+   * 'workshop' ou 'ouro'. */
+  preset_template: 'classico' | 'workshop' | 'ouro' | 'mostra-classico' | 'workshop-minimalista' | 'mostra-premium' | 'custom';
   background_url: string | null;
   layout_json: any[];
   font_family_default: string;
@@ -46,15 +46,23 @@ interface EventOption { id: string; name: string }
 
 interface BatchResult { total: number; created: number; skipped: number }
 
-// 2 templates ativos. Os legados (mostra-classico, mostra-premium,
+// 3 templates ativos. Os legados (mostra-classico, mostra-premium,
 // workshop-minimalista) caem em 'classico' ou 'workshop' no save.
 const PRESETS = [
   { id: 'classico', label: 'Clássico', desc: 'Borda dupla rosa, fundo creme, texto centralizado. Padrão pra mostras competitivas.', for: 'mostra'   as TemplateType },
+  { id: 'ouro',     label: 'Ouro Real', desc: 'Moldura dourada ornamentada, tipografia clássica, selo com fita — certificado com cara de diploma de peso.', for: 'mostra' as TemplateType },
   { id: 'workshop', label: 'Workshop', desc: 'Linhas finas, tipografia clean, foco no nome do aluno.',                              for: 'workshop' as TemplateType },
+  { id: 'ouro',     label: 'Ouro Real', desc: 'Mesma moldura dourada ornamentada, adaptada pro certificado de workshop.', for: 'workshop' as TemplateType },
 ];
 
+// Cores default do preset 'ouro' — aplicadas só ao trocar pra esse preset
+// num template ainda não salvo (não sobrescreve customização já feita).
+const OURO_DEFAULT_ACCENT = '#a97e2e';
+const OURO_DEFAULT_PRIMARY = '#241c10';
+
 /** Normaliza preset legado pro novo nome. */
-const normalizePreset = (p?: string | null): 'classico' | 'workshop' | 'custom' => {
+const normalizePreset = (p?: string | null): 'classico' | 'workshop' | 'ouro' | 'custom' => {
+  if (p === 'ouro') return 'ouro';
   if (p === 'mostra-classico' || p === 'mostra-premium' || p === 'classico') return 'classico';
   if (p === 'workshop-minimalista' || p === 'workshop') return 'workshop';
   return 'custom';
@@ -70,12 +78,15 @@ const Certificates: React.FC = () => {
 
   // Form state (controlled)
   const [formName, setFormName]     = useState('');
-  const [formPreset, setFormPreset] = useState<'classico' | 'workshop' | 'custom'>('classico');
+  const [formPreset, setFormPreset] = useState<'classico' | 'workshop' | 'ouro' | 'custom'>('classico');
   const [formBgUrl, setFormBgUrl]   = useState('');
   const [formAccent, setFormAccent] = useState('#ff0068');
   const [formPrimary, setFormPrimary] = useState('#0b0b0f');
   const [formSigs, setFormSigs]     = useState<string[]>([]);
   const [formTitles, setFormTitles] = useState<string[]>([]);
+
+  // Pré-visualização em PDF (dados fictícios, não toca certificates_issued)
+  const [previewing, setPreviewing] = useState(false);
 
   // Emit batch state
   const [events, setEvents]                 = useState<EventOption[]>([]);
@@ -161,6 +172,46 @@ const Certificates: React.FC = () => {
     const t = setTimeout(() => setFeedback(null), 4500);
     return () => clearTimeout(t);
   }, [feedback]);
+
+  // Troca de preset: 'ouro' tem paleta própria (dourado + tinta escura) —
+  // só aplica os defaults se o template ainda não foi salvo, pra não
+  // sobrescrever cor que o produtor já customizou.
+  const selectPreset = (id: 'classico' | 'workshop' | 'ouro') => {
+    setFormPreset(id);
+    if (id === 'ouro' && !template?.id) {
+      setFormAccent(OURO_DEFAULT_ACCENT);
+      setFormPrimary(OURO_DEFAULT_PRIMARY);
+    }
+  };
+
+  // ── Pré-visualizar PDF (dados fictícios) ───────────────────────────────
+  const previewPdf = async () => {
+    if (!template?.id) return;
+    setPreviewing(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${supabaseUrl}/functions/v1/get-certificate-pdf`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ preview: true, template_id: template.id }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? 'Erro ao gerar preview');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e: any) {
+      setFeedback({ kind: 'err', msg: e.message ?? String(e) });
+    } finally {
+      setPreviewing(false);
+    }
+  };
 
   // ── Save template ──────────────────────────────────────────────────────
   const saveTemplate = async () => {
@@ -269,7 +320,7 @@ const Certificates: React.FC = () => {
                   {visiblePresets.map(p => (
                     <button
                       key={p.id}
-                      onClick={() => setFormPreset(p.id as any)}
+                      onClick={() => selectPreset(p.id as 'classico' | 'workshop' | 'ouro')}
                       className={`text-left rounded-xl border p-3 transition ${formPreset === p.id ? 'border-[#ff0068] bg-[#ff0068]/5' : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'}`}
                     >
                       <div className="aspect-[297/210] rounded-md bg-gradient-to-br from-amber-50 to-rose-50 dark:from-slate-700 dark:to-slate-800 mb-2 flex items-center justify-center">
@@ -441,6 +492,17 @@ const Certificates: React.FC = () => {
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 italic mt-2">
                   Preview com dados de exemplo. PDF final terá nome real do inscrito + QR de validação no rodapé.
                 </p>
+                <button
+                  onClick={previewPdf}
+                  disabled={previewing || !template?.id}
+                  className="w-full mt-3 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-white/10 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-50 transition"
+                >
+                  {previewing ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />}
+                  Pré-visualizar PDF
+                </button>
+                {!template?.id && (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 italic">Salve o template pra pré-visualizar o PDF real</p>
+                )}
               </Card>
 
               {/* Emitir batch */}
