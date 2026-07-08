@@ -5,7 +5,7 @@ import SystemErrorBanner from '../components/SystemErrorBanner';
 import PageHeader from '../components/PageHeader';
 import { getAllGenres } from '../services/genreService';
 import { parseTempoSegundos } from '../utils/masks';
-import { isRegistrationCancelled, registrationDisplayKey } from '../utils/registrationStatus';
+import { isRegistrationCancelled, isRegistrationPaid, registrationDisplayKey } from '../utils/registrationStatus';
 import { EventStyle } from '../types';
 import {
   Music2, Upload, Play, Pause, CheckCircle2, Check,
@@ -641,6 +641,10 @@ const CentralDeMidia = () => {
   const enviadas  = coreografias.filter(c => !!c.trilha_url).length;
   const pendentes = total - enviadas;
 
+  // CTA de pagamento só faz sentido pra coreografias ainda não pagas
+  const naoPagas         = coreografias.filter(c => !isRegistrationPaid(c.status_pagamento));
+  const naoPagasEnviadas = naoPagas.filter(c => !!c.trilha_url).length;
+
   // ── Erro de sistema (substituiu banner SQL bruto) ──
   if (!tableReady) {
     return (
@@ -690,7 +694,7 @@ const CentralDeMidia = () => {
       )}
 
       {/* ── CTA pagamento (todas as trilhas enviadas) ── */}
-      {!loading && total > 0 && enviadas === total && (
+      {!loading && naoPagas.length > 0 && naoPagasEnviadas === naoPagas.length && (
         <div className="flex items-center justify-between gap-4 p-4 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center shrink-0">
@@ -715,11 +719,11 @@ const CentralDeMidia = () => {
       )}
 
       {/* ── CTA pagamento (trilhas pendentes mas lembrete) ── */}
-      {!loading && total > 0 && enviadas < total && (
+      {!loading && naoPagas.length > 0 && naoPagasEnviadas < naoPagas.length && (
         <div className="flex items-center justify-between gap-4 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-2xl">
           <div className="min-w-0">
             <p className="font-black text-[11px] uppercase tracking-widest text-amber-700 dark:text-amber-400">
-              {total - enviadas} trilha{total - enviadas !== 1 ? 's' : ''} pendente{total - enviadas !== 1 ? 's' : ''}
+              {naoPagas.length - naoPagasEnviadas} trilha{naoPagas.length - naoPagasEnviadas !== 1 ? 's' : ''} pendente{naoPagas.length - naoPagasEnviadas !== 1 ? 's' : ''}
             </p>
             <p className="text-[9px] font-bold text-amber-600/70 dark:text-amber-500/70 mt-0.5">
               Você já pode pagar mesmo sem enviar todas as trilhas.
