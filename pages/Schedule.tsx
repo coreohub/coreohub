@@ -515,6 +515,10 @@ const Schedule = () => {
   const [schedulePublishedAt, setSchedulePublishedAt] = useState<string | null>(null);
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [isPublishingSchedule, setIsPublishingSchedule] = useState(false);
+  // Depois de publicar, o modal vira uma 2ª etapa oferecendo postar também
+  // um Aviso destacado — null = etapa 1 (confirmação), objeto = etapa 2.
+  const [publishResult, setPublishResult] = useState<{ notified: number } | null>(null);
+  const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
@@ -1538,6 +1542,10 @@ const Schedule = () => {
     if (!selectedEventId) return;
     setIsPublishingSchedule(true);
     try {
+      // Captura antes de escrever — depois do upsert o diff sempre daria 0.
+      const isFirstPublish = !schedulePublishedAt;
+      const hadChanges = publishDiff.changed > 0;
+
       const orderUpdates = computeOrderUpdates();
       const updates = orderUpdates.map(u => ({
         id: u.id,
@@ -1570,7 +1578,20 @@ const Schedule = () => {
       }));
       setOrderChanged(false);
       setSchedulePublishedAt(nowIso);
-      setShowPublishModal(false);
+
+      // Notifica só quando faz sentido — 1ª publicação ou quando algo de
+      // fato mudou. Publicar de novo sem alteração nenhuma não deveria
+      // reenviar a mesma notificação pra todo mundo.
+      let notified = 0;
+      if (isFirstPublish || hadChanges) {
+        const { data: count, error: notifyError } = await supabase.rpc('notify_schedule_published', {
+          p_event_id: selectedEventId,
+        });
+        if (notifyError) console.error('Erro ao notificar inscritos:', notifyError);
+        else notified = count ?? 0;
+      }
+
+      setPublishResult({ notified });
       setSavedMsg('Ordem publicada — os inscritos já veem a posição atual.');
       setTimeout(() => setSavedMsg(''), 4000);
     } catch (err) {
@@ -1580,6 +1601,40 @@ const Schedule = () => {
     } finally {
       setIsPublishingSchedule(false);
     }
+  };
+
+  /** Etapa 2 do modal de publicação — sugestão de 1 clique pra também
+      destacar a publicação como Aviso na Início (reaproveita event_announcements,
+      já usado em /avisos). Texto fixo v1, sem edição — quem quiser algo
+      customizado cria manualmente em Avisos. */
+  const handlePostAnnouncement = async () => {
+    if (!selectedEventId) return;
+    setIsPostingAnnouncement(true);
+    try {
+      const { error } = await supabase.from('event_announcements').insert({
+        event_id: selectedEventId,
+        title: 'Ordem de apresentação publicada',
+        body: 'Confira sua posição na fila de apresentação na tela Início.',
+        cta_label: 'Ver ordem',
+        cta_url: '/dashboard',
+      });
+      if (error) throw error;
+      setShowPublishModal(false);
+      setPublishResult(null);
+      setSavedMsg('Aviso publicado também!');
+      setTimeout(() => setSavedMsg(''), 3000);
+    } catch (err) {
+      console.error('Erro ao publicar aviso:', err);
+      setSavedMsg('Falha ao publicar o aviso. Tente de novo em /avisos.');
+      setTimeout(() => setSavedMsg(''), 4000);
+    } finally {
+      setIsPostingAnnouncement(false);
+    }
+  };
+
+  const handleClosePublishModal = () => {
+    setShowPublishModal(false);
+    setPublishResult(null);
   };
 
   const handleDownloadZip = async () => {
@@ -1833,7 +1888,7 @@ const Schedule = () => {
               Publicar congela o snapshot que o card "Ordem de apresentação"
               do inscrito exibe. Ver [[schedule-publish-fase2]]. */}
           <button
-            onClick={() => setShowPublishModal(true)}
+            onClick={() => { setPublishResult(null); setShowPublishModal(true); }}
             disabled={registrations.length === 0}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-emerald-600/20 transition-all disabled:opacity-50"
             title="Publica a ordem atual pros inscritos verem no painel deles"
@@ -2287,73 +2342,129 @@ const Schedule = () => {
         </div>
       )}
 
-      {/* ── Modal Publicar pros inscritos ── */}
+      {/* ── Modal Publicar pros inscritos (2 etapas: confirmar → sugerir Aviso) ── */}
       {showPublishModal && (
         <div
           className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
-          onClick={() => !isPublishingSchedule && setShowPublishModal(false)}
+          onClick={() => !isPublishingSchedule && !isPostingAnnouncement && handleClosePublishModal()}
         >
           <div
             className="w-full max-w-md bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-white/10 rounded-t-3xl sm:rounded-3xl overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
-            <div className="p-5 border-b border-slate-200 dark:border-white/10 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                <Megaphone size={16} />
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Publicar</p>
-                <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic text-base">
-                  Ordem de apresentação
-                </h3>
-              </div>
-            </div>
+            {!publishResult ? (
+              <>
+                <div className="p-5 border-b border-slate-200 dark:border-white/10 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <Megaphone size={16} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Publicar</p>
+                    <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic text-base">
+                      Ordem de apresentação
+                    </h3>
+                  </div>
+                </div>
 
-            <div className="p-5 space-y-3">
-              <p className="text-xs text-slate-600 dark:text-slate-300">
-                {scheduleCoverage.organizadas} de {scheduleCoverage.total} coreografias organizadas em blocos.
-              </p>
+                <div className="p-5 space-y-3">
+                  <p className="text-xs text-slate-600 dark:text-slate-300">
+                    {scheduleCoverage.organizadas} de {scheduleCoverage.total} coreografias organizadas em blocos.
+                  </p>
 
-              {scheduleCoverage.semBloco > 0 && (
-                <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl">
-                  <AlertTriangle size={14} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                    {scheduleCoverage.semBloco} coreografia{scheduleCoverage.semBloco !== 1 ? 's' : ''} ainda sem bloco —
-                    {' '}vão aparecer no fim da lista pro inscrito de cada uma.
+                  {scheduleCoverage.semBloco > 0 && (
+                    <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl">
+                      <AlertTriangle size={14} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                        {scheduleCoverage.semBloco} coreografia{scheduleCoverage.semBloco !== 1 ? 's' : ''} ainda sem bloco —
+                        {' '}vão aparecer no fim da lista pro inscrito de cada uma.
+                      </p>
+                    </div>
+                  )}
+
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {schedulePublishedAt
+                      ? (publishDiff.changed > 0
+                          ? `${publishDiff.changed} coreografia${publishDiff.changed !== 1 ? 's' : ''} vão mudar de posição/bloco desde a última publicação (${formatDateTimeBr(schedulePublishedAt)}). Os inscritos afetados serão notificados no sininho.`
+                          : `Nenhuma mudança desde a última publicação (${formatDateTimeBr(schedulePublishedAt)}) — ninguém será notificado de novo.`)
+                      : 'Esta é a primeira publicação — todos os inscritos organizados serão notificados no sininho.'}
+                  </p>
+
+                  <p className="text-[9px] text-slate-400 dark:text-white/30">
+                    Depois de publicar, o card "Ordem de apresentação" na Início de cada inscrito atualiza na hora.
                   </p>
                 </div>
-              )}
 
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                {schedulePublishedAt
-                  ? (publishDiff.changed > 0
-                      ? `${publishDiff.changed} coreografia${publishDiff.changed !== 1 ? 's' : ''} vão mudar de posição/bloco desde a última publicação (${formatDateTimeBr(schedulePublishedAt)}).`
-                      : `Nenhuma mudança desde a última publicação (${formatDateTimeBr(schedulePublishedAt)}).`)
-                  : 'Esta é a primeira publicação — nenhum inscrito viu a ordem ainda.'}
-              </p>
+                <div className="flex gap-2 p-4 border-t border-slate-200 dark:border-white/10">
+                  <button
+                    onClick={handleClosePublishModal}
+                    disabled={isPublishingSchedule}
+                    className="flex-1 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handlePublishSchedule}
+                    disabled={isPublishingSchedule}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-600/20 transition-all disabled:opacity-60"
+                  >
+                    {isPublishingSchedule ? <Loader2 size={12} className="animate-spin" /> : <Megaphone size={12} />}
+                    {isPublishingSchedule ? 'Publicando...' : 'Publicar agora'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="p-5 border-b border-slate-200 dark:border-white/10 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <CheckCircle2 size={16} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Publicado</p>
+                    <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic text-base">
+                      {publishResult.notified > 0
+                        ? `${publishResult.notified} inscrito${publishResult.notified !== 1 ? 's' : ''} notificado${publishResult.notified !== 1 ? 's' : ''}`
+                        : 'Ordem publicada'}
+                    </h3>
+                  </div>
+                </div>
 
-              <p className="text-[9px] text-slate-400 dark:text-white/30">
-                Depois de publicar, o card "Ordem de apresentação" na Início de cada inscrito atualiza na hora.
-              </p>
-            </div>
+                <div className="p-5 space-y-3">
+                  <p className="text-xs text-slate-600 dark:text-slate-300">
+                    Quer também destacar isso com um Aviso na tela Início? Fica mais visível que só a notificação do sininho.
+                  </p>
+                  <div className="p-3 bg-[#ff0068]/5 border border-[#ff0068]/20 rounded-xl">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#ff0068]">Aviso do produtor</p>
+                    <h4 className="font-black text-sm text-slate-900 dark:text-white mt-0.5">
+                      Ordem de apresentação publicada
+                    </h4>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                      Confira sua posição na fila de apresentação na tela Início.
+                    </p>
+                  </div>
+                  <p className="text-[9px] text-slate-400 dark:text-white/30">
+                    Pode editar ou remover depois em Operação → Avisos.
+                  </p>
+                </div>
 
-            <div className="flex gap-2 p-4 border-t border-slate-200 dark:border-white/10">
-              <button
-                onClick={() => setShowPublishModal(false)}
-                disabled={isPublishingSchedule}
-                className="flex-1 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handlePublishSchedule}
-                disabled={isPublishingSchedule}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-600/20 transition-all disabled:opacity-60"
-              >
-                {isPublishingSchedule ? <Loader2 size={12} className="animate-spin" /> : <Megaphone size={12} />}
-                {isPublishingSchedule ? 'Publicando...' : 'Publicar agora'}
-              </button>
-            </div>
+                <div className="flex gap-2 p-4 border-t border-slate-200 dark:border-white/10">
+                  <button
+                    onClick={handleClosePublishModal}
+                    disabled={isPostingAnnouncement}
+                    className="flex-1 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors disabled:opacity-50"
+                  >
+                    Não, obrigado
+                  </button>
+                  <button
+                    onClick={handlePostAnnouncement}
+                    disabled={isPostingAnnouncement}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-[#ff0068] hover:bg-[#d4005a] text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 transition-all disabled:opacity-60"
+                  >
+                    {isPostingAnnouncement ? <Loader2 size={12} className="animate-spin" /> : <Megaphone size={12} />}
+                    {isPostingAnnouncement ? 'Publicando...' : 'Postar Aviso também'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
