@@ -2730,7 +2730,7 @@ const Schedule = () => {
           onClick={() => setBlocoPickerForReg(null)}
         >
           <div
-            className="w-full max-w-md bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-white/10 rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col max-h-[80vh]"
+            className="w-full max-w-md bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-white/10 rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col max-h-[80dvh]"
             onClick={e => e.stopPropagation()}
           >
             <div className="p-5 border-b border-slate-200 dark:border-white/10">
@@ -2778,11 +2778,11 @@ const Schedule = () => {
 
       {showBlocosManager && (
         <div
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start justify-center p-4 sm:p-8"
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8"
           onClick={() => setShowBlocosManager(false)}
         >
           <div
-            className="w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl overflow-hidden flex flex-col max-h-[85vh]"
+            className="w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl overflow-hidden flex flex-col max-h-[85dvh]"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-white/10">
