@@ -5,7 +5,7 @@ import SystemErrorBanner from '../components/SystemErrorBanner';
 import PageHeader from '../components/PageHeader';
 import { getAllGenres } from '../services/genreService';
 import { parseTempoSegundos } from '../utils/masks';
-import { isRegistrationCancelled, isRegistrationPaid, registrationDisplayKey } from '../utils/registrationStatus';
+import { isRegistrationCancelled, isRegistrationPending, registrationDisplayKey } from '../utils/registrationStatus';
 import { EventStyle } from '../types';
 import {
   Music2, Upload, Play, Pause, CheckCircle2, Check,
@@ -641,8 +641,10 @@ const CentralDeMidia = () => {
   const enviadas  = coreografias.filter(c => !!c.trilha_url).length;
   const pendentes = total - enviadas;
 
-  // CTA de pagamento só faz sentido pra coreografias ainda não pagas
-  const naoPagas         = coreografias.filter(c => !isRegistrationPaid(c.status_pagamento));
+  // CTA de pagamento só faz sentido pra coreografias com pagamento PENDENTE
+  // (ESTORNADO/VENCIDO são inscrições mortas, não "precisam pagar" — e
+  // /pagamento filtra estritamente por PENDENTE, ver PagamentoInscrito.tsx)
+  const naoPagas         = coreografias.filter(c => isRegistrationPending(c.status_pagamento));
   const naoPagasEnviadas = naoPagas.filter(c => !!c.trilha_url).length;
 
   // ── Erro de sistema (substituiu banner SQL bruto) ──
@@ -723,7 +725,7 @@ const CentralDeMidia = () => {
         <div className="flex items-center justify-between gap-4 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-2xl">
           <div className="min-w-0">
             <p className="font-black text-[11px] uppercase tracking-widest text-amber-700 dark:text-amber-400">
-              {naoPagas.length - naoPagasEnviadas} trilha{naoPagas.length - naoPagasEnviadas !== 1 ? 's' : ''} pendente{naoPagas.length - naoPagasEnviadas !== 1 ? 's' : ''}
+              {naoPagas.length - naoPagasEnviadas} inscriç{naoPagas.length - naoPagasEnviadas !== 1 ? 'ões' : 'ão'} não paga{naoPagas.length - naoPagasEnviadas !== 1 ? 's' : ''} sem trilha enviada
             </p>
             <p className="text-[9px] font-bold text-amber-600/70 dark:text-amber-500/70 mt-0.5">
               Você já pode pagar mesmo sem enviar todas as trilhas.
