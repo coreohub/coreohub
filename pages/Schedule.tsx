@@ -1628,15 +1628,24 @@ const Schedule = () => {
     try {
       const updates = computeOrderUpdates();
 
-      // Upsert em lote — era um UPDATE sequencial por linha (N round-trips,
-      // sem atomicidade: falha no meio deixava parte do cronograma com
-      // número novo e parte com número velho, podendo duplicar posição).
-      // 1 requisição, executada pelo Postgres como único statement.
+      // UPDATE por linha (paralelo), não upsert. `.upsert(...,{onConflict})`
+      // monta um INSERT ... ON CONFLICT DO UPDATE no Postgres — sob RLS isso
+      // pode falhar pro produtor (que só tem policy de UPDATE em
+      // registrations, não de INSERT, desde o fix de 2026-05-22), mesmo
+      // quando toda linha já existe e só seria atualizada. UPDATE direto
+      // evita esse caminho por completo. Bug real: "Falha ao salvar ordem"
+      // sempre disparando pro produtor (Usualdance Festival, 2026-07-08).
       if (updates.length > 0) {
-        const { error } = await supabase
-          .from('registrations')
-          .upsert(updates, { onConflict: 'id' });
-        if (error) throw error;
+        const results = await Promise.all(
+          updates.map(u =>
+            supabase
+              .from('registrations')
+              .update({ ordem_apresentacao: u.ordem_apresentacao, bloco_id: u.bloco_id })
+              .eq('id', u.id)
+          )
+        );
+        const firstError = results.find(r => r.error)?.error;
+        if (firstError) throw firstError;
       }
 
       setOrderChanged(false);
@@ -1644,8 +1653,9 @@ const Schedule = () => {
       setTimeout(() => setSavedMsg(''), 3000);
     } catch (err) {
       console.error('Erro ao salvar ordem:', err);
-      setSavedMsg('Falha ao salvar ordem. Tente de novo.');
-      setTimeout(() => setSavedMsg(''), 3000);
+      const msg = (err as { message?: string })?.message;
+      setSavedMsg(msg ? `Falha ao salvar ordem: ${msg}` : 'Falha ao salvar ordem. Tente de novo.');
+      setTimeout(() => setSavedMsg(''), 5000);
     } finally {
       setIsSaving(false);
     }
@@ -1670,9 +1680,25 @@ const Schedule = () => {
         ordem_apresentacao_publicado: u.ordem_apresentacao,
         bloco_id_publicado: u.bloco_id,
       }));
+      // UPDATE por linha (paralelo) — mesmo motivo do handleSaveOrder acima:
+      // upsert vira INSERT ON CONFLICT sob o capô, que pode esbarrar em RLS
+      // que só libera UPDATE pro produtor.
       if (updates.length > 0) {
-        const { error } = await supabase.from('registrations').upsert(updates, { onConflict: 'id' });
-        if (error) throw error;
+        const results = await Promise.all(
+          updates.map(u =>
+            supabase
+              .from('registrations')
+              .update({
+                ordem_apresentacao: u.ordem_apresentacao,
+                bloco_id: u.bloco_id,
+                ordem_apresentacao_publicado: u.ordem_apresentacao_publicado,
+                bloco_id_publicado: u.bloco_id_publicado,
+              })
+              .eq('id', u.id)
+          )
+        );
+        const firstError = results.find(r => r.error)?.error;
+        if (firstError) throw firstError;
       }
 
       const nowIso = new Date().toISOString();
@@ -1715,8 +1741,9 @@ const Schedule = () => {
       setTimeout(() => setSavedMsg(''), 4000);
     } catch (err) {
       console.error('Erro ao publicar ordem:', err);
-      setSavedMsg('Falha ao publicar. Tente de novo.');
-      setTimeout(() => setSavedMsg(''), 3000);
+      const msg = (err as { message?: string })?.message;
+      setSavedMsg(msg ? `Falha ao publicar: ${msg}` : 'Falha ao publicar. Tente de novo.');
+      setTimeout(() => setSavedMsg(''), 5000);
     } finally {
       setIsPublishingSchedule(false);
     }
