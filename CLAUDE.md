@@ -241,6 +241,20 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-07-08 — Certificado preset "Ouro Real" + fundo custom + preview PDF ✅ SHIPADO
+
+Commit `c7a8a78`. Resolve pedido de modelo de certificado mais sofisticado — 3 direções visuais mockadas num artifact HTML fiel às fontes reais do gerador (`pdf-lib` só tem Helvetica/Times sem fonte embutida), "Ouro Real" (diploma tradicional dourado ornamentado) escolhido pelo user sobre "Editorial CoreoHub" (moderno).
+
+- **Preset `ouro`** em `get-certificate-pdf/index.ts`: moldura dourada dupla + 4 cantos ornamentados (linhas), filete+losango entre título/subtítulo, Times inteiro (Roman/Bold/Italic/BoldItalic — `pickFont()` novo escolhe por `fontFamily:'times'` no `LayoutTag`), selo circular + fita bordô via `drawEllipse`+`drawRectangle rotate(degrees())`, nome do evento em bordô fixo (paleta do preset, não configurável na v1). `DEFAULT_LAYOUT_OURO_MOSTRA`/`_WORKSHOP` novos, paralelos aos já existentes.
+- **Fix do gap real `background_url`**: o campo sempre existiu no schema/UI (desde 2026-05-04) mas o gerador NUNCA desenhava a imagem — sempre caía no fundo sólido. `embedBackgroundImage()` novo busca+embute (png/jpg) full-bleed com overlay branco 55% opacity por cima pra manter texto legível.
+- **Preview em PDF real**: novo modo `{ preview: true, template_id }` no mesmo edge function — gera PDF com dados fictícios (Maria Silva Oliveira / Renascer / Festival CoreoHub Demo), valida ownership do template (producer_id ou COREOHUB_ADMIN), devolve o PDF direto na resposta (sem tocar `certificates_issued`/bucket). Botão "Pré-visualizar PDF" em `Certificates.tsx` (gate igual ao "Emitir": desabilitado até `template?.id` existir).
+- **Frontend**: `PRESETS` ganha entrada 'ouro' pra mostra E workshop; `selectPreset()` novo aplica defaults de cor (dourado `#a97e2e` + tinta `#241c10`) só quando o template ainda não foi salvo (não sobrescreve customização existente).
+- **2 bugs achados e corrigidos no mockup ANTES de codar** (artifact HTML, não no código real): selo sem `translateX(-50%)` ficava desalinhado da fita; rodapé "Emitido por CoreoHub" cruzava a linha da moldura por margem vertical apertada demais — ambos verificados via screenshot Playwright do próprio mockup antes de seguir pra implementação.
+- **Validação real**: `deno check` limpo antes do deploy (achou 1 erro de tipagem real — `Response(pdfBytes,...)` precisa de `ArrayBuffer`, não `Uint8Array` direto, mesmo padrão já usado no upload). Deploy via CLI. Clique real em produção (autorizado pelo user): selecionou Ouro Real → Salvar → Pré-visualizar, capturado via `page.route()` interceptando a resposta do fetch (network response direto via `response.body()` retornava 0 bytes, mesmo com Service Worker bloqueado — causa não investigada a fundo, contornado com route interception). PDF real de 6.1KB confirmado com todos os elementos (moldura, selo, fita, QR, tipografia) batendo com o mockup aprovado.
+- **⚠️ Efeito colateral real**: o clique de validação salvou "Ouro Real" como o template de Mostra ATIVO do evento do Hemer (antes era "Modelo padrão Mostra" sem preset escolhido) — não foi um teste descartável, é a config real agora. Avisado ao user.
+
+**Pendências**: preview do preset 'ouro' e do fundo customizado só testados nesse 1 clique real — falta emitir um lote de verdade (produtor real clicando "Emitir certificados") pra confirmar que a mesma renderização se replica no fluxo de emissão em massa (`emit-certificates-batch` não foi tocado, só cria rows com `pdf_url=NULL`; a geração de fato passa pelo mesmo `generatePdf()` só quando o inscrito clica Baixar — deveria funcionar igual, mas não foi exercitado nesse caminho específico).
+
 ### 2026-07-08 — Botão de login fixo na vitrine ✅ SHIPADO (2 achados de revisão em aberto)
 
 Commit `39b4138`. Disparado por relato de usuários do Usualdance Festival não achando onde fazer login na vitrine pública (`/evento/:slug` e domínio próprio `festival.usualdance.com`) — a página não tinha nenhum link de acesso à conta.
