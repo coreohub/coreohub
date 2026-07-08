@@ -10,6 +10,7 @@ import {
   BarChart3, MessageCircle, Link2,
 } from 'lucide-react';
 import { isRegistrationPaid } from '../utils/registrationStatus';
+import { toTitleCase } from '../utils/formatters';
 import { supabase } from '../services/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { refundRegistration } from '../services/refundService';
@@ -1578,13 +1579,13 @@ const Registrations = () => {
                     {(reg.inscrito_nome ?? reg.profiles?.full_name) && (
                       <div className="min-w-0">
                         <p className="text-slate-400 uppercase tracking-widest font-bold text-[9px]">Inscrito</p>
-                        <p className="text-slate-700 dark:text-slate-300 font-bold truncate">{reg.inscrito_nome ?? reg.profiles?.full_name}</p>
+                        <p className="text-slate-700 dark:text-slate-300 font-bold truncate">{toTitleCase(reg.inscrito_nome ?? reg.profiles?.full_name)}</p>
                       </div>
                     )}
                     {reg.estudio && (
                       <div className="min-w-0">
                         <p className="text-slate-400 uppercase tracking-widest font-bold text-[9px]">Estúdio</p>
-                        <p className="text-slate-700 dark:text-slate-300 font-bold truncate">{reg.estudio}</p>
+                        <p className="text-slate-700 dark:text-slate-300 font-bold truncate">{toTitleCase(reg.estudio)}</p>
                       </div>
                     )}
                     {reg.categoria && (
@@ -1762,12 +1763,12 @@ const Registrations = () => {
                       <p className="font-black text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-[#ff0068] transition-colors">{reg.nome_coreografia}</p>
                       <p className="text-[9px] text-[#ff0068] font-bold uppercase tracking-widest">{reg.tipo_apresentacao}</p>
                       {/* Mostra estúdio + categoria em mobile (colunas escondidas em <md/<lg) */}
-                      <p className="text-[10px] text-slate-500 mt-1 md:hidden">{reg.estudio}{reg.categoria ? ` · ${reg.categoria}` : ''}</p>
+                      <p className="text-[10px] text-slate-500 mt-1 md:hidden">{toTitleCase(reg.estudio)}{reg.categoria ? ` · ${reg.categoria}` : ''}</p>
                     </td>
                     <td className="px-4 sm:px-8 py-6 text-xs font-bold text-slate-700 dark:text-slate-200 hidden lg:table-cell truncate max-w-[160px]">
-                      {reg.inscrito_nome ?? reg.profiles?.full_name ?? <span className="text-slate-400 font-normal">—</span>}
+                      {toTitleCase(reg.inscrito_nome ?? reg.profiles?.full_name) || <span className="text-slate-400 font-normal">—</span>}
                     </td>
-                    <td className="px-4 sm:px-8 py-6 text-xs font-bold text-slate-600 dark:text-slate-300 hidden md:table-cell">{reg.estudio}</td>
+                    <td className="px-4 sm:px-8 py-6 text-xs font-bold text-slate-600 dark:text-slate-300 hidden md:table-cell">{toTitleCase(reg.estudio)}</td>
                     <td className="px-4 sm:px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden xl:table-cell">{reg.categoria}</td>
                     <td className="px-4 sm:px-8 py-6 text-[10px] text-slate-500 hidden xl:table-cell whitespace-nowrap">
                       {reg.created_at ? new Date(reg.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
@@ -2198,7 +2199,7 @@ const Registrations = () => {
                   <h2 id="reg-panel-title" className="font-black text-lg uppercase tracking-tight text-slate-900 dark:text-white leading-tight break-words">
                     {viewingReg.nome_coreografia ?? 'Sem nome'}
                   </h2>
-                  {viewingReg.estudio && <p className="text-[11px] text-slate-500 mt-1 truncate">{viewingReg.estudio}</p>}
+                  {viewingReg.estudio && <p className="text-[11px] text-slate-500 mt-1 truncate">{toTitleCase(viewingReg.estudio)}</p>}
                 </div>
               </div>
 
@@ -2216,10 +2217,10 @@ const Registrations = () => {
                     <section>
                       <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2"><User size={12} /> Inscrito</h3>
                       <dl className="grid grid-cols-2 gap-3 text-[12px]">
-                        <DetailItem label="Nome" value={nome} />
+                        <DetailItem label="Nome" value={toTitleCase(nome)} />
                         <DetailItem label="E-mail" value={email} />
                         <DetailItem label="WhatsApp" value={whatsapp} />
-                        <DetailItem label="Estúdio / Escola" value={viewingReg.estudio} />
+                        <DetailItem label="Estúdio / Escola" value={toTitleCase(viewingReg.estudio)} />
                       </dl>
                     </section>
                   );

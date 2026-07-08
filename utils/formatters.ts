@@ -81,6 +81,23 @@ export const resolveEstudio = (reg: {
   event_data?: { estudio_nome?: string | null } | null;
 }): string => reg.estudio || reg.event_data?.estudio_nome || '';
 
+// Conectores PT-BR que ficam minúsculos em Title Case (exceto na 1ª palavra).
+// Corrige exibições tipo "New Corpus escola de dança" → "New Corpus Escola de Dança".
+const TITLE_CASE_LOWERCASE_WORDS = new Set(['de', 'da', 'do', 'das', 'dos', 'e']);
+
+export const toTitleCase = (value?: string | null): string => {
+  if (!value) return '';
+  return value
+    .toLowerCase()
+    .split(' ')
+    .map((word, idx) => {
+      if (!word) return word;
+      if (idx > 0 && TITLE_CASE_LOWERCASE_WORDS.has(word)) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(' ');
+};
+
 export const getInitials = (name?: string) => {
   if (!name || typeof name !== 'string' || name.trim() === '') return 'U';
   const filteredParts = name.trim().split(/\s+/).filter(p => p.length > 0);

@@ -289,7 +289,7 @@ Deno.serve(async (req) => {
       billingType:       'UNDEFINED', // inscrito escolhe: PIX, cartão ou boleto
       value:             chargedAmount,
       dueDate:           dueDateStr,
-      description:       `Inscrição - ${coreo.nome ?? 'Coreografia'} | ${event.name}`,
+      description:       `Inscrição - ${coreo.nome_coreografia ?? 'Coreografia'} | ${event.name}`,
       externalReference: registration_id,
       split: [
         {
