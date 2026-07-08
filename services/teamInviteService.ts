@@ -73,6 +73,23 @@ export async function deleteTeamInvite(id: string): Promise<void> {
   if (error) throw error;
 }
 
+/** Edita role/cargo/permissões de um convite ainda não aceito — o membro
+ *  recebe o escopo atualizado assim que aceitar (não precisa gerar novo link). */
+export async function updateTeamInvite(id: string, updates: {
+  role?: UserRole;
+  cargo?: string | null;
+  permissoes_custom?: PermissoesCustom;
+}): Promise<TeamInvite> {
+  const { data, error } = await supabase
+    .from('team_invites')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as TeamInvite;
+}
+
 export async function getTeamInviteByToken(token: string): Promise<TeamInvite | null> {
   const { data, error } = await supabase
     .from('team_invites')

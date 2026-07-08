@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   UserPlus, Trash2, RefreshCw, Loader2, Mail,
   Shield, Users, Headphones, Music2, PersonStanding,
@@ -6,12 +6,13 @@ import {
   Calendar, CreditCard, QrCode, Mic2,
   ClipboardList, Filter, ChevronDown, Star,
   Copy, ExternalLink, Ticket, Clock, Send, MailWarning,
+  Search, Pencil,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
 import { UserRole, PermissoesCustom, PERMISSOES_DEFAULT } from '../types';
 import {
-  createTeamInvite, buildTeamInviteUrl, listTeamInvites, deleteTeamInvite,
+  createTeamInvite, buildTeamInviteUrl, listTeamInvites, deleteTeamInvite, updateTeamInvite,
   TeamInvite,
 } from '../services/teamInviteService';
 
@@ -115,6 +116,45 @@ const PERM_GROUPS: { label: string; items: { key: PermKey; label: string; icon: 
   },
 ];
 
+/** Grade de checkboxes de permissão — compartilhada pelos 3 lugares que
+ *  editam PermissoesCustom (convite novo, editar membro, editar convite
+ *  pendente) pra não triplicar o mesmo bloco de JSX. */
+const PermGroupsChecklist = ({ perms, onToggle }: { perms: PermissoesCustom; onToggle: (key: PermKey) => void }) => (
+  <>
+    {PERM_GROUPS.map(group => (
+      <div key={group.label} className="space-y-1">
+        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 ml-1">{group.label}</p>
+        <div className="bg-slate-50 dark:bg-white/5 rounded-2xl overflow-hidden divide-y divide-slate-100 dark:divide-white/5">
+          {group.items.map(item => {
+            const Icon = item.icon;
+            const active = perms[item.key];
+            return (
+              <label key={item.key} className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-white/5 transition-colors">
+                <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all ${active ? 'bg-[#ff0068] border-[#ff0068]' : 'border-slate-300 dark:border-white/20'}`}>
+                  {active && <Check size={10} className="text-white" />}
+                </div>
+                <input type="checkbox" className="sr-only" checked={active} onChange={() => onToggle(item.key)} />
+                <Icon size={12} className="text-slate-400 shrink-0" />
+                <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">{item.label}</span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+    ))}
+  </>
+);
+
+/** "há 3 dias" / "hoje" a partir de um timestamp ISO — mesmo padrão de
+ *  NotificationBell.tsx, replicado aqui (páginas são self-contained). */
+const relativeDays = (iso?: string | null): string | null => {
+  if (!iso) return null;
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (days <= 0) return 'hoje';
+  if (days === 1) return 'há 1 dia';
+  return `há ${days} dias`;
+};
+
 /* ── Member type ── */
 interface Member {
   id: string;
@@ -139,6 +179,27 @@ const EquipeProdutor = () => {
   const [invitesLoading, setInvitesLoading] = useState(true);
   const [resendingId, setResendingId]       = useState<string | null>(null);
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
+  const [invitesExpanded, setInvitesExpanded] = useState(false);
+
+  /* Editar convite pendente (role + permissões, antes do aceite) */
+  const [editInvite, setEditInvite]           = useState<TeamInvite | null>(null);
+  const [editInviteRole, setEditInviteRole]   = useState<UserRole>(UserRole.RECEPCAO);
+  const [editInvitePerms, setEditInvitePerms] = useState<PermissoesCustom>(PERMISSOES_DEFAULT);
+  const [savingInviteEdit, setSavingInviteEdit] = useState(false);
+
+  /* Busca na lista de membros */
+  const [memberSearch, setMemberSearch] = useState('');
+
+  /* Toast + confirmação (substitui alert()/confirm() nativos do browser) */
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = (type: 'success' | 'error', message: string) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToast({ type, message });
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 3500);
+  };
+  const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null);
+  const askConfirm = (message: string, onConfirm: () => void) => setConfirmDialog({ message, onConfirm });
 
   /* Invite modal state */
   const [inviteOpen, setInviteOpen]   = useState(false);
@@ -200,13 +261,17 @@ const EquipeProdutor = () => {
 
   const isInviteExpired = (invite: TeamInvite) => new Date(invite.expires_at).getTime() < Date.now();
 
-  const handleCancelInvite = async (invite: TeamInvite) => {
-    if (!confirm(`Cancelar o convite pra ${invite.email}?`)) return;
+  const handleCancelInvite = (invite: TeamInvite) => {
+    askConfirm(`Cancelar o convite pra ${invite.email}?`, () => void commitCancelInvite(invite));
+  };
+
+  const commitCancelInvite = async (invite: TeamInvite) => {
     try {
       await deleteTeamInvite(invite.id);
       setPendingInvites(prev => prev.filter(i => i.id !== invite.id));
+      showToast('success', 'Convite cancelado.');
     } catch (e: any) {
-      alert('Erro ao cancelar convite: ' + e.message);
+      showToast('error', 'Erro ao cancelar convite: ' + e.message);
     }
   };
 
@@ -237,9 +302,46 @@ const EquipeProdutor = () => {
       setCopiedInviteId(fresh.id);
       setTimeout(() => setCopiedInviteId(null), 2500);
     } catch (e: any) {
-      alert('Erro ao reenviar convite: ' + e.message);
+      showToast('error', 'Erro ao reenviar convite: ' + e.message);
     } finally {
       setResendingId(null);
+    }
+  };
+
+  /* ── Editar convite pendente (role + permissões antes do aceite) ── */
+  const openEditInvite = (invite: TeamInvite) => {
+    setEditInvite(invite);
+    setEditInviteRole(invite.role);
+    setEditInvitePerms(invite.permissoes_custom ?? { ...PERMISSOES_DEFAULT });
+  };
+
+  const saveEditInvite = () => {
+    if (!editInvite) return;
+    if (permCount(editInvitePerms) === 0) {
+      askConfirm(
+        `Sem nenhuma permissão marcada, ${editInvite.email} não vai conseguir acessar nada no painel ao aceitar. Salvar mesmo assim?`,
+        () => void commitEditInvite(),
+      );
+      return;
+    }
+    void commitEditInvite();
+  };
+
+  const commitEditInvite = async () => {
+    if (!editInvite) return;
+    setSavingInviteEdit(true);
+    try {
+      const updated = await updateTeamInvite(editInvite.id, {
+        role: editInviteRole,
+        permissoes_custom: editInvitePerms,
+      });
+      setPendingInvites(prev => prev.map(i => i.id === editInvite.id ? updated : i));
+      setEditInvite(null);
+      showToast('success', 'Convite atualizado.');
+    } catch (e: any) {
+      showToast('error', 'Erro ao atualizar convite: ' + e.message);
+    } finally {
+      setSavingInviteEdit(false);
     }
   };
 
@@ -254,8 +356,19 @@ const EquipeProdutor = () => {
   const togglePerm = (key: PermKey) =>
     setPerms(prev => ({ ...prev, [key]: !prev[key] }));
 
-  const handleInvite = async () => {
+  const handleInvite = () => {
     if (!inviteEmail.trim()) { setInviteError('Informe o e-mail.'); return; }
+    if (permCount(perms) === 0) {
+      askConfirm(
+        'Sem nenhuma permissão marcada, esse membro não vai conseguir acessar nada no painel ao aceitar o convite. Convidar mesmo assim?',
+        () => void doCreateInvite(),
+      );
+      return;
+    }
+    void doCreateInvite();
+  };
+
+  const doCreateInvite = async () => {
     setInviting(true);
     setInviteError(null);
     try {
@@ -268,6 +381,7 @@ const EquipeProdutor = () => {
       setInviteUrl(buildTeamInviteUrl(invite.token));
       setInviteSuccess(true);
       setPendingInvites(prev => [invite, ...prev]);
+      setInvitesExpanded(true);
     } catch (e: any) {
       setInviteError(e.message || 'Erro ao gerar convite.');
     } finally {
@@ -296,14 +410,18 @@ const EquipeProdutor = () => {
   };
 
   /* ── Remove ── */
-  const handleRemove = async (member: Member) => {
-    if (!confirm(`Remover ${member.full_name || 'este membro'} da equipe?`)) return;
+  const handleRemove = (member: Member) => {
+    askConfirm(`Remover ${member.full_name || 'este membro'} da equipe?`, () => void commitRemove(member));
+  };
+
+  const commitRemove = async (member: Member) => {
     const { error } = await supabase
       .from('profiles')
       .update({ role: UserRole.USER, cargo: null, permissoes_custom: null })
       .eq('id', member.id);
-    if (error) { alert('Erro: ' + error.message); return; }
+    if (error) { showToast('error', 'Erro: ' + error.message); return; }
     setMembers(prev => prev.filter(m => m.id !== member.id));
+    showToast('success', `${member.full_name || 'Membro'} removido da equipe.`);
   };
 
   /* ── Edit permissions ── */
@@ -312,7 +430,19 @@ const EquipeProdutor = () => {
     setEditPerms(member.permissoes_custom ?? { ...PERMISSOES_DEFAULT });
   };
 
-  const saveEditPerms = async () => {
+  const saveEditPerms = () => {
+    if (!editMember) return;
+    if (permCount(editPerms) === 0) {
+      askConfirm(
+        `Sem nenhuma permissão marcada, ${editMember.full_name || 'este membro'} vai perder acesso a tudo no painel. Salvar mesmo assim?`,
+        () => void commitEditPerms(),
+      );
+      return;
+    }
+    void commitEditPerms();
+  };
+
+  const commitEditPerms = async () => {
     if (!editMember) return;
     setSavingEdit(true);
     const { error } = await supabase
@@ -320,9 +450,10 @@ const EquipeProdutor = () => {
       .update({ permissoes_custom: editPerms })
       .eq('id', editMember.id);
     setSavingEdit(false);
-    if (error) { alert('Erro: ' + error.message); return; }
+    if (error) { showToast('error', 'Erro: ' + error.message); return; }
     setMembers(prev => prev.map(m => m.id === editMember.id ? { ...m, permissoes_custom: editPerms } : m));
     setEditMember(null);
+    showToast('success', 'Permissões atualizadas.');
   };
 
   /* ── Helpers ── */
@@ -330,6 +461,16 @@ const EquipeProdutor = () => {
     p ? Object.values(p).filter(Boolean).length : 0;
 
   const selectedPreset = roleInfo(inviteRole);
+
+  const filteredMembers = (() => {
+    const q = memberSearch.trim().toLowerCase();
+    if (!q) return members;
+    return members.filter(m =>
+      m.full_name?.toLowerCase().includes(q) ||
+      m.email?.toLowerCase().includes(q) ||
+      m.cargo?.toLowerCase().includes(q)
+    );
+  })();
 
   /* ══════════════════════════════════════════════════════════════════ */
   return (
@@ -395,76 +536,101 @@ const EquipeProdutor = () => {
             })}
           </div>
 
-          {/* Pending invites */}
+          {/* Pending invites — colapsável, clique no header abre/fecha */}
           {!invitesLoading && pendingInvites.length > 0 && (
             <div className="space-y-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-                <MailWarning size={12} /> Convites pendentes ({pendingInvites.length})
-              </p>
-              <div className="space-y-2">
-                {pendingInvites.map(invite => {
-                  const info = roleInfo(invite.role);
-                  const Icon = info?.icon ?? Users;
-                  const expired = isInviteExpired(invite);
-                  const isCopied = copiedInviteId === invite.id;
-                  const isResending = resendingId === invite.id;
-                  return (
-                    <div
-                      key={invite.id}
-                      className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded-2xl"
-                    >
-                      <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-500/10 flex items-center justify-center shrink-0">
-                        <Icon size={16} className="text-amber-600 dark:text-amber-400" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-black text-xs text-slate-900 dark:text-white truncate">{invite.email}</p>
-                        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5 flex items-center gap-1 flex-wrap">
-                          {info?.label ?? invite.role}
-                          {invite.cargo && <><span className="opacity-40">·</span>{invite.cargo}</>}
-                          <span className="opacity-40">·</span>
-                          <span className={`flex items-center gap-1 normal-case font-bold ${expired ? 'text-rose-500' : 'text-amber-600 dark:text-amber-400'}`}>
-                            <Clock size={9} />
-                            {expired
-                              ? 'Expirado'
-                              : `Expira em ${Math.max(1, Math.ceil((new Date(invite.expires_at).getTime() - Date.now()) / 86_400_000))}d`}
-                          </span>
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {expired ? (
-                          <button
-                            onClick={() => handleResendInvite(invite)}
-                            disabled={isResending}
-                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
-                              isCopied ? 'bg-emerald-500/10 text-emerald-500' : 'bg-[#ff0068]/10 text-[#ff0068] hover:bg-[#ff0068]/20'
-                            }`}
+              <button
+                onClick={() => setInvitesExpanded(v => !v)}
+                aria-expanded={invitesExpanded}
+                className="w-full flex items-center justify-between gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              >
+                <span className="flex items-center gap-1.5">
+                  <MailWarning size={12} /> Convites pendentes ({pendingInvites.length})
+                </span>
+                <ChevronDown size={14} className={`transition-transform ${invitesExpanded ? 'rotate-180' : ''}`} />
+              </button>
+              <AnimatePresence initial={false}>
+                {invitesExpanded && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="space-y-2 pt-1">
+                      {pendingInvites.map(invite => {
+                        const info = roleInfo(invite.role);
+                        const Icon = info?.icon ?? Users;
+                        const expired = isInviteExpired(invite);
+                        const isCopied = copiedInviteId === invite.id;
+                        const isResending = resendingId === invite.id;
+                        const invitedAgo = relativeDays(invite.created_at);
+                        return (
+                          <div
+                            key={invite.id}
+                            className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded-2xl"
                           >
-                            {isResending ? <Loader2 size={12} className="animate-spin" /> : isCopied ? <Check size={12} /> : <Send size={12} />}
-                            {isCopied ? 'Link copiado!' : 'Reenviar'}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleCopyInviteUrl(invite)}
-                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
-                              isCopied ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-[#ff0068]'
-                            }`}
-                          >
-                            {isCopied ? <Check size={12} /> : <Copy size={12} />}
-                            {isCopied ? 'Copiado!' : 'Copiar link'}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleCancelInvite(invite)}
-                          aria-label={`Cancelar convite de ${invite.email}`}
-                          className="p-2 text-slate-300 hover:text-rose-500 transition-all rounded-lg hover:bg-rose-500/10"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
+                            <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-500/10 flex items-center justify-center shrink-0">
+                              <Icon size={16} className="text-amber-600 dark:text-amber-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-black text-xs text-slate-900 dark:text-white truncate">{invite.email}</p>
+                              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5 flex items-center gap-1 flex-wrap">
+                                {info?.label ?? invite.role}
+                                {invite.cargo && <><span className="opacity-40">·</span>{invite.cargo}</>}
+                                {invitedAgo && <><span className="opacity-40">·</span><span className="normal-case">Convidado {invitedAgo}</span></>}
+                                <span className="opacity-40">·</span>
+                                <span className={`flex items-center gap-1 normal-case font-bold ${expired ? 'text-rose-500' : 'text-amber-600 dark:text-amber-400'}`}>
+                                  <Clock size={9} />
+                                  {expired
+                                    ? 'Expirado'
+                                    : `Expira em ${Math.max(1, Math.ceil((new Date(invite.expires_at).getTime() - Date.now()) / 86_400_000))}d`}
+                                </span>
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                onClick={() => openEditInvite(invite)}
+                                aria-label={`Editar permissões do convite de ${invite.email}`}
+                                className="p-2 text-slate-400 hover:text-[#ff0068] transition-all rounded-lg hover:bg-[#ff0068]/10"
+                              >
+                                <Pencil size={13} />
+                              </button>
+                              {expired ? (
+                                <button
+                                  onClick={() => handleResendInvite(invite)}
+                                  disabled={isResending}
+                                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                                    isCopied ? 'bg-emerald-500/10 text-emerald-500' : 'bg-[#ff0068]/10 text-[#ff0068] hover:bg-[#ff0068]/20'
+                                  }`}
+                                >
+                                  {isResending ? <Loader2 size={12} className="animate-spin" /> : isCopied ? <Check size={12} /> : <Send size={12} />}
+                                  {isCopied ? 'Link copiado!' : 'Reenviar'}
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleCopyInviteUrl(invite)}
+                                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                                    isCopied ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-[#ff0068]'
+                                  }`}
+                                >
+                                  {isCopied ? <Check size={12} /> : <Copy size={12} />}
+                                  {isCopied ? 'Copiado!' : 'Copiar link'}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleCancelInvite(invite)}
+                                aria-label={`Cancelar convite de ${invite.email}`}
+                                className="p-2 text-slate-300 hover:text-rose-500 transition-all rounded-lg hover:bg-rose-500/10"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
-              </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
 
@@ -480,58 +646,82 @@ const EquipeProdutor = () => {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {members.map(member => {
-                const info = roleInfo(member.role);
-                const Icon = info?.icon ?? Users;
-                const active_perms = permCount(member.permissoes_custom);
-                return (
-                  <div key={member.id} className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 rounded-3xl p-5 space-y-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-white/10 flex items-center justify-center shrink-0 overflow-hidden">
-                        {member.avatar_url
-                          ? <img src={member.avatar_url} alt={member.full_name || 'Membro'} className="w-full h-full object-cover" />
-                          : <span className="text-lg font-black text-slate-400">{member.full_name?.[0]?.toUpperCase() ?? '?'}</span>
-                        }
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight truncate">{member.full_name || 'Convite pendente de nome'}</p>
-                        {member.cargo && (
-                          <p className="text-[9px] text-[#ff0068] font-black uppercase tracking-widest flex items-center gap-1 mt-0.5">
-                            <Briefcase size={9} /> {member.cargo}
-                          </p>
-                        )}
-                        <p className="text-[9px] text-slate-400 font-bold truncate flex items-center gap-1 mt-0.5">
-                          <Mail size={9} />{member.email}
-                        </p>
-                      </div>
-                      <button onClick={() => handleRemove(member)} className="p-1.5 text-slate-300 hover:text-rose-500 transition-all rounded-lg hover:bg-rose-500/10">
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
+            <>
+              {/* Busca — nome, e-mail ou cargo */}
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                <input
+                  type="text"
+                  placeholder="Buscar por nome, e-mail ou cargo..."
+                  value={memberSearch}
+                  onChange={e => setMemberSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-[#ff0068]/50 transition-all"
+                />
+              </div>
 
-                    {/* Role badge */}
-                    <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[9px] font-black uppercase tracking-widest w-fit ${info?.color ?? 'text-slate-500 border-slate-200'}`}>
-                      <Icon size={11} />
-                      {info?.label ?? member.role}
-                    </div>
+              {filteredMembers.length === 0 ? (
+                <div className="py-14 text-center">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nenhum membro encontrado pra "{memberSearch}"</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {filteredMembers.map(member => {
+                    const info = roleInfo(member.role);
+                    const Icon = info?.icon ?? Users;
+                    const active_perms = permCount(member.permissoes_custom);
+                    const memberSince = relativeDays(member.created_at);
+                    return (
+                      <div key={member.id} className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 rounded-3xl p-5 space-y-4">
+                        <div className="flex items-start gap-3">
+                          <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-white/10 flex items-center justify-center shrink-0 overflow-hidden">
+                            {member.avatar_url
+                              ? <img src={member.avatar_url} alt={member.full_name || 'Membro'} className="w-full h-full object-cover" />
+                              : <span className="text-lg font-black text-slate-400">{member.full_name?.[0]?.toUpperCase() ?? '?'}</span>
+                            }
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight truncate">{member.full_name || 'Convite pendente de nome'}</p>
+                            {member.cargo && (
+                              <p className="text-[9px] text-[#ff0068] font-black uppercase tracking-widest flex items-center gap-1 mt-0.5">
+                                <Briefcase size={9} /> {member.cargo}
+                              </p>
+                            )}
+                            <p className="text-[9px] text-slate-400 font-bold truncate flex items-center gap-1 mt-0.5">
+                              <Mail size={9} />{member.email}
+                            </p>
+                            {memberSince && (
+                              <p className="text-[9px] text-slate-400 mt-0.5">Na equipe {memberSince}</p>
+                            )}
+                          </div>
+                          <button onClick={() => handleRemove(member)} className="p-1.5 text-slate-300 hover:text-rose-500 transition-all rounded-lg hover:bg-rose-500/10">
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
 
-                    {/* Permissions summary */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-                        {active_perms} permiss{active_perms !== 1 ? 'ões' : 'ão'} ativa{active_perms !== 1 ? 's' : ''}
-                      </span>
-                      <button
-                        onClick={() => openEdit(member)}
-                        className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-[#ff0068]/10 hover:text-[#ff0068] transition-all"
-                      >
-                        Editar
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                        {/* Role badge */}
+                        <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[9px] font-black uppercase tracking-widest w-fit ${info?.color ?? 'text-slate-500 border-slate-200'}`}>
+                          <Icon size={11} />
+                          {info?.label ?? member.role}
+                        </div>
+
+                        {/* Permissions summary */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+                            {active_perms} permiss{active_perms !== 1 ? 'ões' : 'ão'} ativa{active_perms !== 1 ? 's' : ''}
+                          </span>
+                          <button
+                            onClick={() => openEdit(member)}
+                            className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-[#ff0068]/10 hover:text-[#ff0068] transition-all"
+                          >
+                            Editar
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
         </>
       ) : (
@@ -729,27 +919,7 @@ const EquipeProdutor = () => {
                       <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Permissões</label>
                       <span className="text-[9px] text-slate-400 font-bold">{permCount(perms)} ativas</span>
                     </div>
-                    {PERM_GROUPS.map(group => (
-                      <div key={group.label} className="space-y-1">
-                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 ml-1">{group.label}</p>
-                        <div className="bg-slate-50 dark:bg-white/5 rounded-2xl overflow-hidden divide-y divide-slate-100 dark:divide-white/5">
-                          {group.items.map(item => {
-                            const Icon = item.icon;
-                            const active = perms[item.key];
-                            return (
-                              <label key={item.key} className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-white/5 transition-colors">
-                                <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all ${active ? 'bg-[#ff0068] border-[#ff0068]' : 'border-slate-300 dark:border-white/20'}`}>
-                                  {active && <Check size={10} className="text-white" />}
-                                </div>
-                                <input type="checkbox" className="sr-only" checked={active} onChange={() => togglePerm(item.key)} />
-                                <Icon size={12} className="text-slate-400 shrink-0" />
-                                <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">{item.label}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
+                    <PermGroupsChecklist perms={perms} onToggle={togglePerm} />
                   </div>
 
                   {inviteError && (
@@ -818,27 +988,7 @@ const EquipeProdutor = () => {
                 </div>
 
                 {/* Checkboxes */}
-                {PERM_GROUPS.map(group => (
-                  <div key={group.label} className="space-y-1">
-                    <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 ml-1">{group.label}</p>
-                    <div className="bg-slate-50 dark:bg-white/5 rounded-2xl overflow-hidden divide-y divide-slate-100 dark:divide-white/5">
-                      {group.items.map(item => {
-                        const Icon = item.icon;
-                        const active = editPerms[item.key];
-                        return (
-                          <label key={item.key} className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-white/5 transition-colors">
-                            <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all ${active ? 'bg-[#ff0068] border-[#ff0068]' : 'border-slate-300 dark:border-white/20'}`}>
-                              {active && <Check size={10} className="text-white" />}
-                            </div>
-                            <input type="checkbox" className="sr-only" checked={active} onChange={() => setEditPerms(prev => ({ ...prev, [item.key]: !prev[item.key] }))} />
-                            <Icon size={12} className="text-slate-400 shrink-0" />
-                            <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">{item.label}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
+                <PermGroupsChecklist perms={editPerms} onToggle={key => setEditPerms(prev => ({ ...prev, [key]: !prev[key] }))} />
 
                 <div className="flex gap-3 pt-2">
                   <button onClick={() => setEditMember(null)} className="flex-1 py-3 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 transition-all">
@@ -856,6 +1006,118 @@ const EquipeProdutor = () => {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          EDITAR CONVITE PENDENTE (role + permissões, antes do aceite)
+      ══════════════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {editInvite && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setEditInvite(null)} className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-200 dark:border-white/10 shadow-2xl overflow-y-auto max-h-[90vh]"
+            >
+              <div className="p-8 border-b border-slate-100 dark:border-white/5 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-900 z-10 rounded-t-[3rem]">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">
+                    Editar <span className="text-[#ff0068]">Convite</span>
+                  </h2>
+                  <p className="text-[9px] text-slate-400 font-bold mt-0.5 uppercase tracking-widest">{editInvite.email} · ainda não aceito</p>
+                </div>
+                <button onClick={() => setEditInvite(null)} className="p-2 text-slate-400 hover:text-rose-500"><X size={20} /></button>
+              </div>
+
+              <div className="p-8 space-y-5">
+                {/* Quick presets */}
+                <div className="space-y-2">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Aplicar preset</p>
+                  <div className="flex flex-wrap gap-2">
+                    {EQUIPE_ROLES.map(r => (
+                      <button
+                        key={r.value}
+                        onClick={() => { setEditInviteRole(r.value); setEditInvitePerms({ ...r.preset }); }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${r.color} ${editInviteRole === r.value ? 'ring-2 ring-[#ff0068]/40' : ''}`}
+                      >
+                        <r.icon size={10} /> {r.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Checkboxes */}
+                <PermGroupsChecklist perms={editInvitePerms} onToggle={key => setEditInvitePerms(prev => ({ ...prev, [key]: !prev[key] }))} />
+
+                <div className="flex gap-3 pt-2">
+                  <button onClick={() => setEditInvite(null)} className="flex-1 py-3 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 transition-all">
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={saveEditInvite}
+                    disabled={savingInviteEdit}
+                    className="flex-1 py-3 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-[#ff0068]/20 disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
+                  >
+                    {savingInviteEdit ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                    {savingInviteEdit ? 'Salvando...' : 'Salvar'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          CONFIRMAÇÃO (substitui confirm() nativo do browser)
+      ══════════════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {confirmDialog && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setConfirmDialog(null)} className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              className="relative w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 shadow-2xl p-6 space-y-5"
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/10 flex items-center justify-center shrink-0">
+                  <AlertCircle size={18} className="text-amber-500" />
+                </div>
+                <p className="text-sm font-bold text-slate-700 dark:text-slate-200 pt-1.5">{confirmDialog.message}</p>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setConfirmDialog(null)} className="flex-1 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 transition-all">
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => { const fn = confirmDialog.onConfirm; setConfirmDialog(null); fn(); }}
+                  className="flex-1 py-2.5 bg-[#ff0068] hover:bg-[#d4005a] text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                >
+                  Confirmar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          TOAST (substitui alert() nativo do browser)
+      ══════════════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 40, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40 }}
+            className="fixed bottom-6 inset-x-4 z-[200] flex justify-center pointer-events-none"
+          >
+            <div className={`pointer-events-auto max-w-sm w-full sm:w-auto flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl text-white text-xs font-bold ${
+              toast.type === 'success' ? 'bg-emerald-500' : 'bg-rose-500'
+            }`}>
+              {toast.type === 'success' ? <Check size={16} className="shrink-0" /> : <AlertCircle size={16} className="shrink-0" />}
+              <span>{toast.message}</span>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
