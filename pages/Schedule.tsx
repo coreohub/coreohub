@@ -1786,8 +1786,10 @@ const Schedule = () => {
   /** Exporta a ordem de apresentação em PDF — prática de mercado (Joinville,
       Catanduva, CompetitionSuite/DanceComp Genie sempre publicam a "ordem do
       dia" impressa/PDF pra bailarinos, pais, staff e júri conferirem sem
-      depender do app). Horário estimado usa a mesma duração de trilha +
-      buffer de entrada/intervalo já calculados pros cards de runtime. */
+      depender do app). Sem horário por coreografia de propósito: o cronograma
+      ao vivo sempre atrasa, e prometer minuto exato gera mais reclamação do
+      que não mostrar — mesmo princípio já aplicado no card "Ordem de
+      apresentação" da tela Início do inscrito. */
   const handleExportPdf = async () => {
     if (registrations.length === 0) return;
     setIsExportingPdf(true);
@@ -1810,11 +1812,7 @@ const Schedule = () => {
       doc.text(eventName, pageWidth / 2, 19, { align: 'center' });
 
       const sortedBlocos = [...blocos].sort((a, b) => a.ordem - b.ordem);
-      const bufferSecs = tempoEntrada + intervaloSeguranca;
       let cursorY = 36;
-      let acumuladoSecs = 0;
-      const now = new Date();
-      now.setSeconds(0, 0);
 
       const gruposParaExportar: { nome: string; regs: Registration[] }[] = [
         ...sortedBlocos.map(b => ({ nome: b.name, regs: registrations.filter(r => r.bloco_id === b.id) })),
@@ -1830,22 +1828,16 @@ const Schedule = () => {
         doc.setTextColor(40, 40, 40);
         cursorY += 4;
 
-        const body = grupo.regs.map((r, i) => {
-          const horario = new Date(now.getTime() + acumuladoSecs * 1000);
-          const trackSecs = trackDurations[r.id] || 0;
-          acumuladoSecs += trackSecs + bufferSecs;
-          return [
-            String(r.ordem_apresentacao ?? i + 1),
-            horario.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-            r.nome_coreografia || '—',
-            toTitleCase(resolveEstudio(r)) || '—',
-            r.categoria || '—',
-            r.estilo_danca || '—',
-          ];
-        });
+        const body = grupo.regs.map((r, i) => [
+          String(r.ordem_apresentacao ?? i + 1),
+          r.nome_coreografia || '—',
+          toTitleCase(resolveEstudio(r)) || '—',
+          r.categoria || '—',
+          r.estilo_danca || '—',
+        ]);
 
         autoTable(doc, {
-          head: [['Nº', 'Horário est.', 'Coreografia', 'Estúdio', 'Categoria', 'Estilo']],
+          head: [['Nº', 'Coreografia', 'Estúdio', 'Categoria', 'Estilo']],
           body,
           startY: cursorY,
           theme: 'striped',
@@ -1854,7 +1846,6 @@ const Schedule = () => {
           alternateRowStyles: { fillColor: [248, 248, 250] },
           columnStyles: {
             0: { cellWidth: 10, halign: 'center', fontStyle: 'bold' },
-            1: { cellWidth: 20, halign: 'center' },
           },
           margin: { left: 14, right: 14 },
         });
@@ -1865,7 +1856,7 @@ const Schedule = () => {
       doc.setFontSize(7);
       doc.setTextColor(150, 150, 150);
       doc.text(
-        'Horários estimados a partir do início da sessão — o cronograma ao vivo pode atrasar. Gerado por CoreoHub.',
+        'Ordem sequencial de apresentação — horários variam ao vivo. Gerado por CoreoHub.',
         14, doc.internal.pageSize.getHeight() - 8
       );
 
