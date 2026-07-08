@@ -54,6 +54,9 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   // Evita disparar view_event duas vezes pro mesmo evento se o useEffect
   // re-rodar (re-render pós-setEvent + pixelsReady toggle).
   const [viewTracked, setViewTracked] = useState(false);
+  // Botão de login fixo na vitrine — usuários do Usualdance relataram não
+  // achar onde entrar. null = ainda checando sessão (evita flash "Entrar").
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const [publicJudges, setPublicJudges] = useState<JudgePublic[]>([]);
   // Workshops Etapa 1: lista pública dos workshops do evento (publicados)
   const [publicWorkshops, setPublicWorkshops] = useState<Array<{
@@ -84,6 +87,14 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   // Carrinho multi-tipo de ingressos: mapa realIdx(string) → quantidade.
   // React state local (não localStorage) — sessão zera ao sair, padrão Sympla.
   const [cart, setCart] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setIsLoggedIn(!!data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (!idOrSlug) return;
@@ -736,15 +747,25 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
       <EventAnchorNav
         sections={visibleSections}
         cta={
-          isRegistrationOpen ? (
+          <div className="flex items-center gap-2">
+            {isRegistrationOpen && (
+              <Link
+                to={`/festival/${slugOrId}/register`}
+                onClick={onInscrevaseClick}
+                className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 bg-[#ff0068] text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all"
+              >
+                Inscreva-se <ChevronRight size={12} />
+              </Link>
+            )}
+            {/* Botão de login fixo — vitrine não tinha nenhum link de acesso
+                à conta, usuários do Usualdance relataram não achar onde entrar. */}
             <Link
-              to={`/festival/${slugOrId}/register`}
-              onClick={onInscrevaseClick}
-              className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 bg-[#ff0068] text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all"
+              to={isLoggedIn ? '/dashboard' : `/login?redirectTo=${encodeURIComponent(`/evento/${idOrSlug}`)}`}
+              className="inline-flex items-center px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/20 text-white hover:border-[#ff0068] hover:text-[#ff0068] transition-colors whitespace-nowrap"
             >
-              Inscreva-se <ChevronRight size={12} />
+              {isLoggedIn ? 'Minha conta' : 'Entrar'}
             </Link>
-          ) : undefined
+          </div>
         }
       />
 
