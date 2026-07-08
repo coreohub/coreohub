@@ -114,7 +114,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         //   - registration_start_date / registration_end_date (janela de inscrição)
         //   - slots_limit (vagas)
         // Reativar quando as migrations forem criadas.
-        const { data: eventData } = await supabase
+        const { data: eventData, error: eventError } = await supabase
           .from('events')
           .select(`
             id, slug, name, description, cover_url,
@@ -129,6 +129,16 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           `)
           .eq(filterCol, idOrSlug)
           .maybeSingle();
+
+        // Lição 2026-07-08: `data` vem null tanto quando a row não existe
+        // quanto quando o select falha (ex.: coluna sem migration aplicada
+        // em prod — PGRST204). Sem logar o error, os dois casos ficam
+        // indistinguíveis de "Evento não encontrado" e o debug vira
+        // adivinhação. Loga sempre que error existir, mesmo seguindo pro
+        // mesmo fallback de UX.
+        if (eventError) {
+          console.error('[PublicEventPage] erro ao buscar evento (idOrSlug=' + idOrSlug + '):', eventError);
+        }
 
         if (!eventData) {
           // Slug não encontrado em events. Tenta no histórico — pode ser slug
