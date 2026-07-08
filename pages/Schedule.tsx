@@ -2805,16 +2805,16 @@ const Schedule = () => {
 
       {showBlocosManager && (
         <div
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8"
+          className="fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8"
           onClick={() => setShowBlocosManager(false)}
         >
           <div
             className="w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl overflow-hidden flex flex-col max-h-[85dvh]"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-white/10">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-white/10">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-500/10 rounded-xl text-amber-600 dark:text-amber-400">
+                <div className="p-2 bg-[#ff0068]/10 rounded-2xl text-[#ff0068]">
                   <Layers size={18} />
                 </div>
                 <div>
@@ -2828,7 +2828,7 @@ const Schedule = () => {
               </div>
               <button
                 onClick={() => setShowBlocosManager(false)}
-                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 text-slate-500"
+                className="p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white rounded-lg"
               >
                 <X size={18} />
               </button>
@@ -2863,7 +2863,7 @@ const Schedule = () => {
                       <button
                         onClick={() => handleMoveBloco(bloco, 'up')}
                         disabled={idx === 0}
-                        className="p-1.5 text-slate-400 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="p-1.5 text-slate-400 hover:text-[#ff0068] hover:bg-[#ff0068]/10 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
                         title="Subir"
                       >
                         <ArrowUp size={14} />
@@ -2871,14 +2871,14 @@ const Schedule = () => {
                       <button
                         onClick={() => handleMoveBloco(bloco, 'down')}
                         disabled={idx === arr.length - 1}
-                        className="p-1.5 text-slate-400 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="p-1.5 text-slate-400 hover:text-[#ff0068] hover:bg-[#ff0068]/10 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
                         title="Descer"
                       >
                         <ArrowDown size={14} />
                       </button>
                       <button
                         onClick={() => handleRenameBloco(bloco)}
-                        className="p-1.5 text-slate-400 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg"
+                        className="p-1.5 text-slate-400 hover:text-[#ff0068] hover:bg-[#ff0068]/10 rounded-lg"
                         title="Renomear"
                       >
                         <Edit3 size={14} />
@@ -2900,7 +2900,7 @@ const Schedule = () => {
               <button
                 onClick={handleAddBloco}
                 disabled={!selectedEventId}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-amber-500/20 transition-all disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 transition-all disabled:opacity-50"
               >
                 <Plus size={14} />
                 Adicionar Bloco
