@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import PageHeader from '../components/PageHeader';
-import { DndContext, closestCenter, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, closestCenter, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors, useDroppable } from '@dnd-kit/core';
 import {
   arrayMove, SortableContext, verticalListSortingStrategy, useSortable
 } from '@dnd-kit/sortable';
@@ -98,7 +98,7 @@ function buildConflictMap(
 
   registrations.forEach((reg, index) => {
     elencoOf(reg).forEach((dancer: any) => {
-      const id = dancer.cpf || dancer.full_name || dancer.name;
+      const id = dancer.cpf || dancer.full_name || dancer.nome || dancer.name;
       if (!id) return;
       if (!dancerPositions[id]) dancerPositions[id] = [];
       dancerPositions[id].push(index);
@@ -115,8 +115,9 @@ function buildConflictMap(
         const r2 = registrations[nxt];
         const r1Elenco = elencoOf(r1);
         const dancerName =
-          r1Elenco.find((d: any) => (d.cpf || d.full_name || d.name) === dancerId)?.full_name ||
-          r1Elenco.find((d: any) => (d.cpf || d.full_name || d.name) === dancerId)?.name ||
+          r1Elenco.find((d: any) => (d.cpf || d.full_name || d.nome || d.name) === dancerId)?.full_name ||
+          r1Elenco.find((d: any) => (d.cpf || d.full_name || d.nome || d.name) === dancerId)?.nome ||
+          r1Elenco.find((d: any) => (d.cpf || d.full_name || d.nome || d.name) === dancerId)?.name ||
           dancerId;
 
         if (!conflictMap[r1.id]) conflictMap[r1.id] = [];
@@ -163,7 +164,7 @@ function generateSmartOrder(
       let conflicts = 0;
 
       getElenco(reg).forEach((dancer: any) => {
-        const id = dancer.cpf || dancer.full_name || dancer.name;
+        const id = dancer.cpf || dancer.full_name || dancer.nome || dancer.name;
         if (!id) return;
         const last = lastSeenPosition[id];
         if (last !== undefined && position - last < minInterval) {
@@ -195,7 +196,7 @@ function generateSmartOrder(
     const chosen = remaining.splice(bestIdx, 1)[0];
 
     getElenco(chosen).forEach((dancer: any) => {
-      const id = dancer.cpf || dancer.full_name || dancer.name;
+      const id = dancer.cpf || dancer.full_name || dancer.nome || dancer.name;
       if (id) lastSeenPosition[id] = result.length;
     });
 
@@ -205,6 +206,28 @@ function generateSmartOrder(
 
   return result;
 }
+
+// ---------- empty bloco drop zone ----------
+// Bloco sem nenhuma coreografia não tinha SortableContext nem alvo soltável —
+// dnd-kit precisa de um `over` válido pra detectar o drop, então arrastar pra
+// um bloco recém-criado (ainda vazio) não tinha onde cair.
+const EMPTY_BLOCO_PREFIX = 'empty-bloco-';
+
+const EmptyBlocoDropZone: React.FC<{ blocoId: string }> = ({ blocoId }) => {
+  const { setNodeRef, isOver } = useDroppable({ id: `${EMPTY_BLOCO_PREFIX}${blocoId}` });
+  return (
+    <p
+      ref={setNodeRef}
+      className={`text-center py-4 text-[9px] font-bold italic rounded-2xl border-2 border-dashed transition-colors ${
+        isOver
+          ? 'border-[#ff0068] bg-[#ff0068]/10 text-[#ff0068]'
+          : 'border-transparent text-slate-400 dark:text-white/30'
+      }`}
+    >
+      Nenhuma coreografia atribuída a este bloco ainda — arraste uma pra cá
+    </p>
+  );
+};
 
 // ---------- sortable row ----------
 interface SortableRowProps {
@@ -1438,8 +1461,36 @@ const Schedule = () => {
     // bloco_id da coreografia arrastada imediato no DB (igual handleAssignBloco)
     // e marca ordem como suja pra produtor salvar manual.
     const fromReg = registrations.find(r => r.id === active.id);
-    const toReg   = registrations.find(r => r.id === over.id);
     const fromBlocoId = fromReg?.bloco_id ?? null;
+
+    // Drop na zona vazia de um bloco (over.id não é uma registration, é o
+    // placeholder EMPTY_BLOCO_PREFIX+blocoId) — não há item pra dar arrayMove,
+    // só troca o bloco_id.
+    if (typeof over.id === 'string' && over.id.startsWith(EMPTY_BLOCO_PREFIX)) {
+      const toBlocoId = over.id.slice(EMPTY_BLOCO_PREFIX.length);
+      if (fromBlocoId === toBlocoId) return;
+      setRegistrations(prev => prev.map(r => r.id === active.id ? { ...r, bloco_id: toBlocoId } : r));
+      setOrderChanged(true);
+      setRecentlyMovedId(active.id);
+      setTimeout(() => setRecentlyMovedId(curr => (curr === active.id ? null : curr)), 2000);
+      const { error } = await supabase
+        .from('registrations')
+        .update({ bloco_id: toBlocoId })
+        .eq('id', active.id);
+      if (error) {
+        console.error('[Schedule] falha ao salvar bloco_id no drag:', error);
+        setRegistrations(prev => prev.map(r => r.id === active.id ? { ...r, bloco_id: fromBlocoId } : r));
+        setSavedMsg('Falha ao mover. Tente de novo.');
+        setTimeout(() => setSavedMsg(''), 3000);
+      } else {
+        const blocoNome = blocos.find(b => b.id === toBlocoId)?.name ?? 'bloco';
+        setSavedMsg(`Movida pra ${blocoNome}`);
+        setTimeout(() => setSavedMsg(''), 2200);
+      }
+      return;
+    }
+
+    const toReg   = registrations.find(r => r.id === over.id);
     const toBlocoId   = toReg?.bloco_id ?? null;
     setRegistrations((prev) => {
       const oldIndex = prev.findIndex((r) => r.id === active.id);
@@ -2452,9 +2503,7 @@ const Schedule = () => {
                     <div className="h-px flex-1 bg-[#ff0068]/30" />
                   </div>
                   {regs.length === 0 ? (
-                    <p className="text-center py-4 text-[9px] font-bold text-slate-400 dark:text-white/30 italic">
-                      Nenhuma coreografia atribuída a este bloco ainda
-                    </p>
+                    <EmptyBlocoDropZone blocoId={bloco.id} />
                   ) : (
                     <SortableContext items={regs.map(r => r.id)} strategy={verticalListSortingStrategy}>
                       {renderRows(regs, startIdx)}

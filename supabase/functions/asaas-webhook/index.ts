@@ -43,6 +43,18 @@ const STATUS_MAP: Record<string, string> = {
   RECEIVED_IN_CASH_UNDONE:       'ESTORNADO',
 }
 
+// Asaas reenvia/atrasa webhooks (retry, fila fora de ordem). Um evento
+// OVERDUE/PENDING que chega DEPOIS do RECEIVED/CONFIRMED da mesma cobrança
+// nunca deve rebaixar um pagamento já aprovado de volta pra vencido/pendente
+// — só ESTORNADO é downgrade legítima pós-aprovação (refund/chargeback real).
+// Caso real: Princesa Florine / New Corpus (2026-07-08), OVERDUE chegou
+// depois do RECEIVED pra pay_1i1xpp0m3krzvwv8 e reverteu o pagamento real.
+const STALE_DOWNGRADE_STATUSES = new Set(['VENCIDO', 'PENDENTE'])
+function isStaleDowngrade(statusInterno: string, currentStatus: string | null | undefined): boolean {
+  return STALE_DOWNGRADE_STATUSES.has(statusInterno) &&
+    (currentStatus === 'APROVADO' || currentStatus === 'CONFIRMADO')
+}
+
 async function dispararEmail(
   type:
     | 'payment_confirmed_registrant'
@@ -101,6 +113,19 @@ async function handleAudienceTicket(opts: {
     if (existing) {
       console.log(`[asaas-webhook][audience] payment=${payment.id} já processado`)
       return respond({ status: 'already_processed' })
+    }
+  }
+
+  if (STALE_DOWNGRADE_STATUSES.has(statusInterno)) {
+    const { data: currentTicket } = await supabase
+      .from('audience_tickets')
+      .select('status_pagamento')
+      .eq('payment_id', String(payment.id))
+      .limit(1)
+      .maybeSingle()
+    if (isStaleDowngrade(statusInterno, currentTicket?.status_pagamento)) {
+      console.warn(`[asaas-webhook][audience] ignorando evento ${statusInterno} fora de ordem — payment=${payment.id} já aprovado`)
+      return respond({ status: 'ignored_stale_downgrade', payment_id: String(payment.id) })
     }
   }
 
@@ -277,6 +302,18 @@ async function handleWorkshopRegistration(opts: {
     }
   }
 
+  if (STALE_DOWNGRADE_STATUSES.has(statusInterno)) {
+    const { data: currentRow } = await supabase
+      .from('workshop_registrations')
+      .select('status_pagamento')
+      .eq('id', registrationId)
+      .maybeSingle()
+    if (isStaleDowngrade(statusInterno, currentRow?.status_pagamento)) {
+      console.warn(`[asaas-webhook][workshop] ignorando evento ${statusInterno} fora de ordem — registration=${registrationId} já aprovada`)
+      return respond({ status: 'ignored_stale_downgrade', registration_id: registrationId })
+    }
+  }
+
   const updatePayload: Record<string, unknown> = {
     status_pagamento: statusInterno,
     payment_method:   payment.billingType ?? null,
@@ -442,6 +479,19 @@ async function handleWorkshopPassPayment(opts: {
     if (existing) {
       console.log(`[asaas-webhook][workshop-pass] payment=${payment.id} já processado`)
       return respond({ status: 'already_processed' })
+    }
+  }
+
+  if (STALE_DOWNGRADE_STATUSES.has(statusInterno)) {
+    const { data: currentRow } = await supabase
+      .from('workshop_registrations')
+      .select('status_pagamento')
+      .eq('pass_group_id', passGroupId)
+      .limit(1)
+      .maybeSingle()
+    if (isStaleDowngrade(statusInterno, currentRow?.status_pagamento)) {
+      console.warn(`[asaas-webhook][workshop-pass] ignorando evento ${statusInterno} fora de ordem — pass_group=${passGroupId} já aprovado`)
+      return respond({ status: 'ignored_stale_downgrade', pass_group_id: passGroupId })
     }
   }
 
@@ -613,6 +663,18 @@ async function handleAggregatePayment(opts: {
     if (existing) {
       console.log(`[asaas-webhook][aggregate] payment=${payment.id} já processado`)
       return respond({ status: 'already_processed' })
+    }
+  }
+
+  if (STALE_DOWNGRADE_STATUSES.has(statusInterno)) {
+    const { data: currentPayment } = await supabase
+      .from('payments')
+      .select('status')
+      .eq('id', paymentId)
+      .maybeSingle()
+    if (isStaleDowngrade(statusInterno, currentPayment?.status)) {
+      console.warn(`[asaas-webhook][aggregate] ignorando evento ${statusInterno} fora de ordem — payment=${paymentId} já aprovado`)
+      return respond({ status: 'ignored_stale_downgrade', payment_id: paymentId })
     }
   }
 
@@ -1007,6 +1069,21 @@ async function handleVideoSelectionFee(opts: {
     registrationStatus = 'VENCIDO'
   } else if (statusInterno === 'ESTORNADO') {
     videoFeeStatus = 'waived'
+  }
+
+  // Evento OVERDUE fora de ordem nunca deve rebaixar a inscrição se ela já
+  // está com pagamento aprovado (a taxa B/inscrição pode já ter sido paga
+  // por outro fluxo enquanto a taxa A de seletiva ainda estava pendente).
+  if (registrationStatus === 'VENCIDO') {
+    const { data: currentReg } = await supabase
+      .from('registrations')
+      .select('status_pagamento')
+      .eq('id', registrationId)
+      .maybeSingle()
+    if (isStaleDowngrade('VENCIDO', currentReg?.status_pagamento)) {
+      console.warn(`[asaas-webhook][video_selection] ignorando evento VENCIDO fora de ordem — registration=${registrationId} já aprovada`)
+      registrationStatus = undefined
+    }
   }
 
   const updatePayload: Record<string, unknown> = {}
@@ -1468,14 +1545,19 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Defesa contra cobrança duplicada/abandonada sobrescrevendo pagamento
-    // real: é comum o inscrito gerar 2 cobranças pra mesma registration (1
-    // carrinho que expira + 1 avulsa que ela paga, ou vice-versa). Se a
-    // registration já está paga e este evento não é de aprovação, é quase
-    // certo um evento atrasado/duplicado de uma cobrança DIFERENTE (já
-    // abandonada) — ignora pra não rebaixar o pagamento real.
-    // Caso real: Carolina Mellin / "How Sweet" (2026-06-27) — cobrança
-    // avulsa de R$90 venceu e sobrescreveu o pagamento de R$72 já aprovado.
+    // Defesa contra cobrança duplicada/abandonada OU evento fora de ordem da
+    // MESMA cobrança sobrescrevendo pagamento real. É comum o inscrito gerar
+    // 2 cobranças pra mesma registration (1 carrinho que expira + 1 avulsa
+    // que ela paga, ou vice-versa) — evento atrasado/duplicado de uma
+    // cobrança DIFERENTE (já abandonada) deve ser ignorado.
+    // Caso real 1: Carolina Mellin / "How Sweet" (2026-06-27) — cobrança
+    // avulsa de R$90 venceu e sobrescreveu o pagamento de R$72 já aprovado
+    // (cobranças diferentes).
+    // Caso real 2: Princesa Florine / New Corpus (2026-07-08) — Asaas
+    // reenviou/atrasou o evento OVERDUE da MESMA cobrança (pay_1i1xpp0m3krzvwv8)
+    // depois do RECEIVED já ter aprovado, revertendo o pagamento real pra
+    // VENCIDO. VENCIDO/PENDENTE nunca rebaixam um pagamento aprovado, mesmo
+    // vindo da mesma cobrança — só ESTORNADO (refund real) segue aplicando.
     if (statusInterno !== 'APROVADO') {
       const { data: currentReg } = await supabase
         .from('registrations')
@@ -1485,11 +1567,12 @@ Deno.serve(async (req) => {
 
       const isAlreadyPaid = currentReg?.status_pagamento === 'APROVADO' || currentReg?.status_pagamento === 'CONFIRMADO'
       const isDifferentPayment = currentReg?.payment_id && currentReg.payment_id !== String(payment.id)
+      const isStaleSamePaymentDowngrade = STALE_DOWNGRADE_STATUSES.has(statusInterno)
 
-      if (isAlreadyPaid && isDifferentPayment) {
+      if (isAlreadyPaid && (isDifferentPayment || isStaleSamePaymentDowngrade)) {
         console.warn(
           `[asaas-webhook] registration=${registrationId} já paga (payment_id=${currentReg?.payment_id})` +
-          ` — ignorando evento ${statusInterno} de cobrança diferente payment_id=${payment.id}`
+          ` — ignorando evento ${statusInterno} ${isDifferentPayment ? 'de cobrança diferente' : 'fora de ordem'} payment_id=${payment.id}`
         )
         return ok({ status: 'ignored_already_paid', registration_id: registrationId })
       }
