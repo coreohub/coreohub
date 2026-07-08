@@ -33,13 +33,18 @@ export interface OrdemItem {
 export const useInicioAvisos = (eventId: string | null | undefined, userId: string) => {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [ordemItems, setOrdemItems] = useState<OrdemItem[]>([]);
+  // events.event_time — o mesmo horário que já aparece no cabeçalho da
+  // vitrine pública. Usado como âncora única (não por bloco) no card de
+  // ordem: dá noção de tempo sem prometer precisão por apresentação, que o
+  // cronograma ao vivo sempre atrasa (decisão 2026-07-07/09).
+  const [eventTime, setEventTime] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!eventId) { setLoading(false); return; }
     (async () => {
       const nowIso = new Date().toISOString();
-      const [{ data: avisos }, { data: regs }] = await Promise.all([
+      const [{ data: avisos }, { data: regs }, { data: evRow }] = await Promise.all([
         supabase.from('event_announcements')
           .select('id, title, body, cta_label, cta_url, expires_at')
           .eq('event_id', eventId)
@@ -56,9 +61,11 @@ export const useInicioAvisos = (eventId: string | null | undefined, userId: stri
           // ficaria órfão sem esse filtro (mesma regra do Cronograma real).
           .or(SCHEDULABLE_REGISTRATIONS_OR_FILTER)
           .order('ordem_apresentacao_publicado', { ascending: true }),
+        supabase.from('events').select('event_time').eq('id', eventId).maybeSingle(),
       ]);
 
       setAnnouncements((avisos ?? []).filter(a => !a.expires_at || a.expires_at >= nowIso));
+      setEventTime(evRow?.event_time ?? null);
 
       if (regs && regs.length > 0) {
         const blocoIds = [...new Set(regs.map(r => r.bloco_id_publicado).filter(Boolean))] as string[];
@@ -80,5 +87,5 @@ export const useInicioAvisos = (eventId: string | null | undefined, userId: stri
     })();
   }, [eventId, userId]);
 
-  return { announcements, ordemItems, loading };
+  return { announcements, ordemItems, eventTime, loading };
 };

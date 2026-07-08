@@ -104,7 +104,7 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
   // confiável) enquanto o fetch real ainda está em andamento, e depois
   // re-disparar de novo com o evento certo (race visível em QA 2026-07-07).
   const inscritoEventId = loading ? null : (coreografias[0]?.event_id ?? config?.event_id ?? null);
-  const { announcements, ordemItems } = useInicioAvisos(inscritoEventId, profile.id);
+  const { announcements, ordemItems, eventTime } = useInicioAvisos(inscritoEventId, profile.id);
 
   // ── Métricas reais ────────────────────────────────────────────────────────
   const total      = coreografias.length;
@@ -206,7 +206,7 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
 
       {/* ── Ordem de apresentação (apenas inscritos) — baixa urgência, fica
           depois do Guia, não compete com Avisos que já está no topo. ── */}
-      {isInscrito && <OrdemApresentacao items={ordemItems} />}
+      {isInscrito && <OrdemApresentacao items={ordemItems} eventTime={eventTime} />}
 
       {/* ── Card do Evento ── */}
       {(config?.nome_evento || config?.data_evento || config?.endereco) && (

@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Megaphone, ListOrdered, ExternalLink } from 'lucide-react';
+import { Megaphone, ListOrdered, ExternalLink, Clock } from 'lucide-react';
 import type { Announcement, OrdemItem } from '../hooks/useInicioAvisos';
 
 /** Avisos manuais do produtor. Aparece perto do topo da Início — é
@@ -41,8 +41,11 @@ export const AvisosDoProdutor: React.FC<{ announcements: Announcement[] }> = ({ 
 };
 
 /** Card informativo da posição na fila de apresentação. Baixa urgência —
- *  fica mais abaixo na tela, não compete com Avisos nem com o Guia. */
-export const OrdemApresentacao: React.FC<{ items: OrdemItem[] }> = ({ items }) => {
+ *  fica mais abaixo na tela, não compete com Avisos nem com o Guia.
+ *  `eventTime` (events.event_time, "HH:MM:SS") é âncora única — mesmo
+ *  horário que já aparece no cabeçalho da vitrine pública. Não é por bloco
+ *  (cronograma ao vivo atrasa), só dá noção de "a partir de quando". */
+export const OrdemApresentacao: React.FC<{ items: OrdemItem[]; eventTime?: string | null }> = ({ items, eventTime }) => {
   if (items.length === 0) return null;
   return (
     <motion.div
@@ -59,6 +62,12 @@ export const OrdemApresentacao: React.FC<{ items: OrdemItem[] }> = ({ items }) =
           <h3 className="font-black text-sm text-slate-900 dark:text-white">Ordem de apresentação</h3>
         </div>
       </div>
+      {eventTime && (
+        <div className="flex items-center gap-1.5 mb-3 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+          <Clock size={11} className="shrink-0" />
+          A mostra começa por volta das {eventTime.slice(0, 5)} — horário pode atrasar.
+        </div>
+      )}
       <div className="space-y-2">
         {items.map(item => (
           <div
