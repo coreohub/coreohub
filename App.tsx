@@ -83,6 +83,7 @@ const Certificates             = lazy(() => import('./pages/Certificates'));
 const StageMarker              = lazy(() => import('./pages/StageMarker'));
 const TelaoDisplay             = lazy(() => import('./pages/TelaoDisplay'));
 const TelaoControle            = lazy(() => import('./pages/TelaoControle'));
+const EntrarJuri                = lazy(() => import('./pages/EntrarJuri'));
 const EquipeProdutor           = lazy(() => import('./pages/EquipeProdutor'));
 const SuporteJuri              = lazy(() => import('./pages/SuporteJuri'));
 const VideoSelection           = lazy(() => import('./pages/VideoSelection'));
@@ -494,6 +495,7 @@ const App: React.FC = () => {
         <Route path="/register" element={<Auth />} />
         <Route path="/judge-login" element={<Suspense fallback={<PageLoader />}><JudgeLogin /></Suspense>} />
         <Route path="/judge-login/:token" element={<Suspense fallback={<PageLoader />}><JudgeLogin /></Suspense>} />
+        <Route path="/entrar-juri" element={<Suspense fallback={<PageLoader />}><EntrarJuri /></Suspense>} />
         <Route path="/telao" element={<Suspense fallback={<PageLoader />}><TelaoDisplay /></Suspense>} />
         <Route path="/telao/:code" element={<Suspense fallback={<PageLoader />}><TelaoDisplay /></Suspense>} />
         <Route path="/convite/:token" element={<Suspense fallback={<PageLoader />}><ProducerInviteLanding /></Suspense>} />

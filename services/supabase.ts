@@ -157,6 +157,22 @@ export const uploadEventRules = async (eventId: string, file: File) => {
   return publicUrl;
 };
 
+export const uploadEventDocument = async (eventId: string, file: File) => {
+  const fileExt = file.name.split('.').pop();
+  const fileName = `doc_${eventId}_${Date.now()}.${fileExt}`;
+  const { error } = await supabase.storage
+    .from('event-rules')
+    .upload(fileName, file);
+
+  if (error) throw error;
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('event-rules')
+    .getPublicUrl(fileName);
+
+  return publicUrl;
+};
+
 export const uploadMusic = async (eventId: string, file: File) => {
   const fileExt = file.name.split('.').pop();
   const fileName = `music_${eventId}_${Date.now()}.${fileExt}`;

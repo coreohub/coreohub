@@ -121,7 +121,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             location, city, state,
             start_date, end_date, event_time,
             instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event,
-            regulation_pdf_url,
+            regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label,
             programacao_config, ingressos_config, formacoes_config, patrocinadores_config,
             politica_ingressos, audience_sales_enabled,
             audience_max_per_purchase, audience_max_per_cpf,
@@ -805,25 +805,67 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           ))}
         </div>
 
+        {/* Link de destaque — CTA genérico (Voto Popular, transmissão ao
+            vivo, qualquer ação externa relevante do dia). Fica logo no topo,
+            visível pra qualquer visitante sem precisar rolar a página. */}
+        {event.destaque_link_url && (
+          <a
+            href={event.destaque_link_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 px-6 py-4 bg-[#1de7f2]/10 border border-[#1de7f2]/30 hover:bg-[#1de7f2]/20 rounded-2xl transition-all group"
+          >
+            <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
+              <span className="motion-safe:animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1de7f2] opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#1de7f2]" />
+            </span>
+            <p className="flex-1 text-sm font-black uppercase tracking-tight text-[#1de7f2]">
+              {event.destaque_link_label || 'Acessar'}
+            </p>
+            <ExternalLink size={16} aria-hidden="true" className="text-[#1de7f2]/70 group-hover:text-[#1de7f2] transition-colors" />
+          </a>
+        )}
+
         {/* Regulamento PDF — sobe antes da descrição porque é documento crítico
             que o inscrito precisa conhecer antes de decidir se inscrever */}
-        {event.regulation_pdf_url && (
+        {(event.regulation_pdf_url || (event.documentos_extras && event.documentos_extras.length > 0)) && (
           <div className="space-y-4">
-            <h2 className="text-2xl font-black uppercase tracking-tighter">Regulamento</h2>
-            <a
-              href={event.regulation_pdf_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              download
-              className="inline-flex items-center gap-3 px-6 py-4 bg-white/5 border border-white/10 hover:border-[#ff0068]/40 hover:bg-[#ff0068]/5 rounded-2xl transition-all group"
-            >
-              <FileText size={20} className="text-[#ff0068]" />
-              <div className="flex-1 text-left">
-                <p className="text-xs font-black uppercase tracking-tight">Baixar regulamento</p>
-                <p className="text-[10px] text-slate-400 font-bold">PDF oficial do festival</p>
-              </div>
-              <Download size={16} className="text-slate-400 group-hover:text-[#ff0068] transition-colors" />
-            </a>
+            <h2 className="text-2xl font-black uppercase tracking-tighter">Documentos</h2>
+            <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+              {event.regulation_pdf_url && (
+                <a
+                  href={event.regulation_pdf_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download
+                  className="inline-flex items-center gap-3 px-6 py-4 bg-white/5 border border-white/10 hover:border-[#ff0068]/40 hover:bg-[#ff0068]/5 rounded-2xl transition-all group"
+                >
+                  <FileText size={20} aria-hidden="true" className="text-[#ff0068]" />
+                  <div className="flex-1 text-left">
+                    <p className="text-xs font-black uppercase tracking-tight">Baixar regulamento</p>
+                    <p className="text-[10px] text-slate-400 font-bold">PDF oficial do festival</p>
+                  </div>
+                  <Download size={16} className="text-slate-400 group-hover:text-[#ff0068] transition-colors" />
+                </a>
+              )}
+              {(event.documentos_extras ?? []).map((doc: { nome: string; url: string }, idx: number) => (
+                <a
+                  key={`${doc.url}-${idx}`}
+                  href={doc.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download
+                  className="inline-flex items-center gap-3 px-6 py-4 bg-white/5 border border-white/10 hover:border-[#ff0068]/40 hover:bg-[#ff0068]/5 rounded-2xl transition-all group"
+                >
+                  <FileText size={20} aria-hidden="true" className="text-[#ff0068]" />
+                  <div className="flex-1 text-left">
+                    <p className="text-xs font-black uppercase tracking-tight">{doc.nome}</p>
+                    <p className="text-[10px] text-slate-400 font-bold">PDF</p>
+                  </div>
+                  <Download size={16} className="text-slate-400 group-hover:text-[#ff0068] transition-colors" />
+                </a>
+              ))}
+            </div>
           </div>
         )}
 

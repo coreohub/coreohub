@@ -1126,7 +1126,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     website_event:      '',
     email_event:        '',
     regulation_pdf_url: '',
+    documentos_extras:  [] as { nome: string; url: string }[],
+    destaque_link_url:   '',
+    destaque_link_label: '',
   });
+  const [novoDocNome, setNovoDocNome] = useState('');
   // Marketing pixels do produtor (Fase 4B). IDs públicos — vão no HTML do
   // cliente. Disparam eventos em paralelo aos pixels master da CoreoHub.
   const [marketing, setMarketing] = useState({
@@ -1743,7 +1747,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         let myEvent: any = null;
         if (user) {
           const evRes = await supabase
-            .from('events').select('id, slug, name, description, cover_url, location, city, state, instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, producer_ga4_id, producer_meta_pixel_id')
+            .from('events').select('id, slug, name, description, cover_url, location, city, state, instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, producer_ga4_id, producer_meta_pixel_id')
             .eq('created_by', user.id)
             .order('created_at', { ascending: false })
             .limit(1).maybeSingle();
@@ -1765,6 +1769,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               website_event:      myEvent.website_event ?? '',
               email_event:        myEvent.email_event ?? '',
               regulation_pdf_url: myEvent.regulation_pdf_url ?? '',
+              documentos_extras:  Array.isArray(myEvent.documentos_extras) ? myEvent.documentos_extras : [],
+              destaque_link_url:   myEvent.destaque_link_url ?? '',
+              destaque_link_label: myEvent.destaque_link_label ?? '',
             });
             const loadedMarketing = {
               producer_ga4_id:        (myEvent as any).producer_ga4_id ?? '',
@@ -2065,6 +2072,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           website_event:      identity.website_event || null,
           email_event:        identity.email_event || null,
           regulation_pdf_url: identity.regulation_pdf_url || null,
+          documentos_extras:   identity.documentos_extras,
+          destaque_link_url:   identity.destaque_link_url || null,
+          destaque_link_label: identity.destaque_link_label || null,
           producer_ga4_id:        marketing.producer_ga4_id.trim() || null,
           producer_meta_pixel_id: marketing.producer_meta_pixel_id.trim() || null,
         })
@@ -2680,6 +2690,112 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 <p className="text-[10px] text-slate-400 mt-1">
                   Aceita regulamento privado ou edital público (prefeitura, JOMI, Bolsa Cultura).
                   Disponibilizado pra download na vitrine. Lembra de "Salvar" no fim da página.
+                </p>
+              </div>
+
+              {/* Documentos extras — além do regulamento, produtor pode
+                  disponibilizar outros PDFs (tabela de preços, termo de
+                  imagem, ficha técnica) pra download na vitrine. Padrão
+                  Sympla/Eventbrite: anexos com nome livre, quantidade
+                  ilimitada. Reusa o bucket 'event-rules' (mesma política). */}
+              <div className="border-t border-slate-200 dark:border-white/10 pt-5">
+                <label className={label}><FileText size={11} className="inline mr-1" /> Outros documentos (opcional)</label>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <input
+                    type="text"
+                    value={novoDocNome}
+                    onChange={e => setNovoDocNome(e.target.value)}
+                    placeholder="Ex: Tabela de Preços, Termo de Imagem..."
+                    aria-label="Nome do documento"
+                    className={`${input} sm:flex-1`}
+                  />
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    aria-label="Arquivo PDF do documento"
+                    disabled={!novoDocNome.trim() || identityUploading}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const nome = novoDocNome.trim();
+                      if (!nome) { alert('Dê um nome pro documento antes de escolher o arquivo.'); return; }
+                      setIdentityUploading(true);
+                      try {
+                        const { data: { user } } = await supabase.auth.getUser();
+                        if (!user) throw new Error('Usuário não autenticado.');
+                        const { data: ev } = await supabase
+                          .from('events').select('id')
+                          .eq('created_by', user.id)
+                          .order('created_at', { ascending: false })
+                          .limit(1).maybeSingle();
+                        if (!ev?.id) throw new Error('Crie um evento primeiro.');
+                        const { uploadEventDocument } = await import('../services/supabase');
+                        const url = await uploadEventDocument(ev.id, file);
+                        setIdentity(prev => ({ ...prev, documentos_extras: [...prev.documentos_extras, { nome, url }] }));
+                        setNovoDocNome('');
+                        e.target.value = '';
+                      } catch (err: any) {
+                        alert(`Erro ao enviar documento: ${err?.message ?? err}`);
+                      } finally {
+                        setIdentityUploading(false);
+                      }
+                    }}
+                    className={`${input} sm:flex-1 disabled:opacity-50`}
+                  />
+                  {identityUploading && <Loader2 size={14} className="animate-spin text-[#ff0068] shrink-0" />}
+                </div>
+                {identity.documentos_extras.length > 0 && (
+                  <ul className="mt-3 space-y-1.5">
+                    {identity.documentos_extras.map((doc, idx) => (
+                      <li key={`${doc.url}-${idx}`} className="flex items-center gap-2 text-[11px] bg-slate-50 dark:bg-white/5 rounded-lg px-3 py-2">
+                        <FileText size={12} className="text-[#ff0068] shrink-0" />
+                        <a href={doc.url} target="_blank" rel="noopener noreferrer" className="flex-1 underline truncate">{doc.nome}</a>
+                        <button
+                          type="button"
+                          aria-label={`Remover ${doc.nome}`}
+                          onClick={() => setIdentity(prev => ({ ...prev, documentos_extras: prev.documentos_extras.filter((_, i) => i !== idx) }))}
+                          className="text-slate-400 hover:text-rose-500 transition-colors shrink-0"
+                        >
+                          <X size={14} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Dê um nome, escolha o PDF. Aparece na vitrine ao lado do regulamento. Lembra de "Salvar" no fim da página.
+                </p>
+              </div>
+
+              {/* Link de destaque na vitrine — CTA genérico pra qualquer
+                  destino externo relevante do dia do evento (ex: Voto
+                  Popular do Usualdance em vote.usualdance.com). Campo
+                  genérico (não hardcoded pra 1 produtor) pra qualquer
+                  festival poder usar no futuro. */}
+              <div className="border-t border-slate-200 dark:border-white/10 pt-5">
+                <label className={label}><ChevronRight size={11} className="inline mr-1" /> Link de destaque na vitrine (opcional)</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input
+                    type="text"
+                    value={identity.destaque_link_label}
+                    onChange={e => setIdentity({ ...identity, destaque_link_label: e.target.value })}
+                    placeholder="Ex: Vote no seu favorito"
+                    aria-label="Texto do botão de destaque"
+                    className={input}
+                    maxLength={40}
+                  />
+                  <input
+                    type="text"
+                    value={identity.destaque_link_url}
+                    onChange={e => setIdentity({ ...identity, destaque_link_url: e.target.value })}
+                    placeholder="https://vote.seudominio.com"
+                    aria-label="URL do link de destaque"
+                    className={input}
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Vira um botão de destaque na página pública do evento — use pra apontar visitantes pro Voto Popular ou qualquer outra ação externa.
+                  Some da vitrine se deixar em branco.
                 </p>
               </div>
             </div>

@@ -6,7 +6,7 @@ import {
   Loader2, FileArchive, Users, ChevronDown, ChevronUp, Info,
   Volume2, Play, Pause, Radio, StopCircle, AlertTriangle,
   Layers, X, Plus, Trash2, ArrowUp, ArrowDown, Edit3, SkipForward,
-  Search, Megaphone,
+  Search, Megaphone, FileText,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import PageHeader from '../components/PageHeader';
@@ -519,9 +519,18 @@ const Schedule = () => {
   // um Aviso destacado — null = etapa 1 (confirmação), objeto = etapa 2.
   const [publishResult, setPublishResult] = useState<{ notified: number } | null>(null);
   const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
+  // Alcance da última publicação — "N de M já visualizaram". Só existe
+  // depois de pelo menos 1 publish; nunca expõe quem, só a contagem.
+  const [readStats, setReadStats] = useState<{ total: number; read: number } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  // Duração das trilhas, lida via metadata do <audio> (o banco só guarda a
+  // URL — nunca a duração). Cache por registration.id evita reler a mesma
+  // faixa a cada render; preload='metadata' baixa só o cabeçalho do arquivo.
+  const [trackDurations, setTrackDurations] = useState<Record<string, number>>({});
+  const trackDurationsRequested = useRef<Set<string>>(new Set());
   const [minInterval, setMinInterval] = useState(10);
   const [tempoEntrada, setTempoEntrada] = useState(15);
   const [intervaloSeguranca, setIntervaloSeguranca] = useState(3);
@@ -658,8 +667,17 @@ const Schedule = () => {
           .eq('id', eventId)
           .maybeSingle();
         setSchedulePublishedAt(evRow?.schedule_published_at ?? null);
+
+        if (evRow?.schedule_published_at) {
+          const { data: stats } = await supabase.rpc('get_schedule_publish_read_stats', { p_event_id: eventId });
+          const row = stats?.[0];
+          setReadStats(row ? { total: row.total_notified, read: row.total_read } : null);
+        } else {
+          setReadStats(null);
+        }
       } else {
         setSchedulePublishedAt(null);
+        setReadStats(null);
       }
 
       // Lê o config da ROW DO EVENTO (multi-tenant), não da legacy id='1'.
@@ -1223,6 +1241,53 @@ const Schedule = () => {
     };
   }, [registrations, conflicts]);
 
+  // Lê a duração de cada trilha via metadata do áudio (banco só guarda a
+  // URL). preload='metadata' baixa só o cabeçalho, não o arquivo inteiro.
+  // Alimenta o "tempo total de música" por bloco/dia e o PDF de ordem.
+  // Fila com concorrência limitada — evento grande (150-200+ inscritos)
+  // não deve disparar 150-200 requisições de metadata simultâneas.
+  const trackDurationQueueRef = useRef<{ id: string; url: string }[]>([]);
+  const trackDurationActiveRef = useRef(0);
+  const MAX_CONCURRENT_DURATION_PROBES = 6;
+
+  const pumpTrackDurationQueue = () => {
+    while (trackDurationActiveRef.current < MAX_CONCURRENT_DURATION_PROBES && trackDurationQueueRef.current.length > 0) {
+      const next = trackDurationQueueRef.current.shift()!;
+      trackDurationActiveRef.current += 1;
+      const audio = new Audio();
+      audio.preload = 'metadata';
+      audio.src = next.url;
+      const done = () => {
+        trackDurationActiveRef.current -= 1;
+        pumpTrackDurationQueue();
+      };
+      audio.addEventListener('loadedmetadata', () => {
+        if (Number.isFinite(audio.duration) && audio.duration > 0) {
+          setTrackDurations(prev => ({ ...prev, [next.id]: audio.duration }));
+        }
+        done();
+      }, { once: true });
+      audio.addEventListener('error', done, { once: true });
+    }
+  };
+
+  useEffect(() => {
+    registrations.forEach((reg) => {
+      if (!reg.trilha_url || trackDurationsRequested.current.has(reg.id)) return;
+      trackDurationsRequested.current.add(reg.id);
+      trackDurationQueueRef.current.push({ id: reg.id, url: reg.trilha_url });
+    });
+    pumpTrackDurationQueue();
+  }, [registrations]);
+
+  const fmtDuracaoTotal = (totalSeconds: number): string => {
+    const mins = Math.round(totalSeconds / 60);
+    if (mins < 60) return `${mins}min`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
+  };
+
   // ---------- Blocos: CRUD ----------
   const handleAddBloco = async () => {
     if (!selectedEventId) return;
@@ -1592,6 +1657,9 @@ const Schedule = () => {
       }
 
       setPublishResult({ notified });
+      // Otimista: ninguém leu ainda a leva que acabou de sair. Se não notificou
+      // de novo (sem mudança), mantém o readStats anterior como está.
+      if (isFirstPublish || hadChanges) setReadStats({ total: notified, read: 0 });
       setSavedMsg('Ordem publicada — os inscritos já veem a posição atual.');
       setTimeout(() => setSavedMsg(''), 4000);
     } catch (err) {
@@ -1635,6 +1703,101 @@ const Schedule = () => {
   const handleClosePublishModal = () => {
     setShowPublishModal(false);
     setPublishResult(null);
+  };
+
+  /** Exporta a ordem de apresentação em PDF — prática de mercado (Joinville,
+      Catanduva, CompetitionSuite/DanceComp Genie sempre publicam a "ordem do
+      dia" impressa/PDF pra bailarinos, pais, staff e júri conferirem sem
+      depender do app). Horário estimado usa a mesma duração de trilha +
+      buffer de entrada/intervalo já calculados pros cards de runtime. */
+  const handleExportPdf = async () => {
+    if (registrations.length === 0) return;
+    setIsExportingPdf(true);
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
+
+      const eventName = allEvents.find(e => e.id === selectedEventId)?.name || 'Cronograma';
+      const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      doc.setFillColor(255, 0, 104);
+      doc.rect(0, 0, pageWidth, 26, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Ordem de Apresentação', pageWidth / 2, 12, { align: 'center' });
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(eventName, pageWidth / 2, 19, { align: 'center' });
+
+      const sortedBlocos = [...blocos].sort((a, b) => a.ordem - b.ordem);
+      const bufferSecs = tempoEntrada + intervaloSeguranca;
+      let cursorY = 36;
+      let acumuladoSecs = 0;
+      const now = new Date();
+      now.setSeconds(0, 0);
+
+      const gruposParaExportar: { nome: string; regs: Registration[] }[] = [
+        ...sortedBlocos.map(b => ({ nome: b.name, regs: registrations.filter(r => r.bloco_id === b.id) })),
+        { nome: 'Sem bloco', regs: registrations.filter(r => !r.bloco_id) },
+      ].filter(g => g.regs.length > 0);
+
+      for (const grupo of gruposParaExportar) {
+        if (cursorY > 260) { doc.addPage(); cursorY = 20; }
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 0, 104);
+        doc.text(grupo.nome, 14, cursorY);
+        doc.setTextColor(40, 40, 40);
+        cursorY += 4;
+
+        const body = grupo.regs.map((r, i) => {
+          const horario = new Date(now.getTime() + acumuladoSecs * 1000);
+          const trackSecs = trackDurations[r.id] || 0;
+          acumuladoSecs += trackSecs + bufferSecs;
+          return [
+            String(r.ordem_apresentacao ?? i + 1),
+            horario.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+            r.nome_coreografia || '—',
+            resolveEstudio(r) || '—',
+            r.categoria || '—',
+            r.estilo_danca || '—',
+          ];
+        });
+
+        autoTable(doc, {
+          head: [['Nº', 'Horário est.', 'Coreografia', 'Estúdio', 'Categoria', 'Estilo']],
+          body,
+          startY: cursorY,
+          theme: 'striped',
+          headStyles: { fillColor: [40, 40, 40], textColor: 255, fontSize: 8, fontStyle: 'bold' },
+          bodyStyles: { fontSize: 8, textColor: 40 },
+          alternateRowStyles: { fillColor: [248, 248, 250] },
+          columnStyles: {
+            0: { cellWidth: 10, halign: 'center', fontStyle: 'bold' },
+            1: { cellWidth: 20, halign: 'center' },
+          },
+          margin: { left: 14, right: 14 },
+        });
+
+        cursorY = (doc as any).lastAutoTable.finalY + 8;
+      }
+
+      doc.setFontSize(7);
+      doc.setTextColor(150, 150, 150);
+      doc.text(
+        'Horários estimados a partir do início da sessão — o cronograma ao vivo pode atrasar. Gerado por CoreoHub.',
+        14, doc.internal.pageSize.getHeight() - 8
+      );
+
+      doc.save(`ordem-apresentacao-${eventName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`);
+    } catch (err) {
+      console.error('Erro ao gerar PDF da ordem:', err);
+      alert('Erro ao gerar o PDF. Tente de novo.');
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   const handleDownloadZip = async () => {
@@ -1906,6 +2069,17 @@ const Schedule = () => {
               ? <><Loader2 size={12} className="animate-spin" />{downloadProgress}%</>
               : <><FileArchive size={12} />Baixar Trilhas ZIP</>}
           </button>
+
+          <button
+            onClick={handleExportPdf}
+            disabled={isExportingPdf || registrations.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:border-slate-400 dark:hover:border-white/20 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-60"
+            title="Gera PDF com a ordem de apresentação, horário estimado e bloco de cada coreografia"
+          >
+            {isExportingPdf
+              ? <><Loader2 size={12} className="animate-spin" />Gerando...</>
+              : <><FileText size={12} />Exportar PDF</>}
+          </button>
         </div>
       </div>
 
@@ -1923,6 +2097,11 @@ const Schedule = () => {
               ? `Última publicação: ${formatDateTimeBr(schedulePublishedAt)}`
               : 'Ainda não publicado pros inscritos'}
           </span>
+          {readStats && readStats.total > 0 && (
+            <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+              {readStats.read}/{readStats.total} já visualizaram
+            </span>
+          )}
         </div>
       )}
 
@@ -2012,12 +2191,24 @@ const Schedule = () => {
       )}
 
       {/* ── Stats ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
           { label: 'Total', value: stats.total, color: 'text-slate-900 dark:text-white', bg: 'bg-white dark:bg-white/5', border: 'border-slate-200 dark:border-white/10' },
           { label: 'Com Trilha', value: stats.withTrack, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-500/10', border: 'border-emerald-200 dark:border-emerald-500/20' },
           { label: 'Sem Trilha', value: stats.withoutTrack, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10', border: 'border-amber-200 dark:border-amber-500/20' },
           { label: 'Conflitos', value: stats.conflicts, color: 'text-rose-500', bg: 'bg-rose-50 dark:bg-rose-500/10', border: 'border-rose-200 dark:border-rose-500/20' },
+          // Runtime estimado do dia inteiro: soma de trilhas lidas + buffer
+          // de entrada/intervalo por apresentação (mesma config da Narração
+          // IA). "+" quando ainda falta ler a duração de alguma trilha.
+          (() => {
+            const totalMusicSecs = registrations.reduce((acc, r) => acc + (trackDurations[r.id] || 0), 0);
+            const totalMissing = registrations.filter(r => r.trilha_url && trackDurations[r.id] == null).length;
+            const totalBufferSecs = registrations.length * (tempoEntrada + intervaloSeguranca);
+            const label = totalMusicSecs > 0
+              ? `~${fmtDuracaoTotal(totalMusicSecs + totalBufferSecs)}${totalMissing > 0 ? '+' : ''}`
+              : '—';
+            return { label: 'Duração Estimada', value: label, color: 'text-[#1de7f2]', bg: 'bg-[#1de7f2]/10', border: 'border-[#1de7f2]/20' };
+          })(),
         ].map((s) => (
           <div key={s.label} className={`${s.bg} border ${s.border} rounded-2xl p-4 space-y-1`}>
             <p className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-white/40">{s.label}</p>
@@ -2239,12 +2430,24 @@ const Schedule = () => {
               const regs = registrations.filter(r => r.bloco_id === bloco.id);
               const startIdx = globalIdx;
               globalIdx += regs.length;
+              // Soma a duração das trilhas já lidas + buffer de troca
+              // (entrada+intervalo, mesma config usada pela Narração IA) por
+              // apresentação — estimativa de runtime do bloco, padrão de
+              // mercado (CompetitionSuite/DanceComp Genie mostram isso em
+              // todo cronograma pra produtor calcular hora de término).
+              const musicSecs = regs.reduce((acc, r) => acc + (trackDurations[r.id] || 0), 0);
+              const missingCount = regs.filter(r => r.trilha_url && trackDurations[r.id] == null).length;
+              const bufferSecs = regs.length * (tempoEntrada + intervaloSeguranca);
+              const runtimeLabel = musicSecs > 0
+                ? `~${fmtDuracaoTotal(musicSecs + bufferSecs)}${missingCount > 0 ? '+' : ''}`
+                : null;
               sections.push(
                 <div key={bloco.id} className="space-y-2">
                   <div className="flex items-center gap-2 pt-2">
                     <div className="h-px flex-1 bg-[#ff0068]/30" />
                     <span className="text-[10px] font-black uppercase tracking-widest text-[#ff0068] px-2">
                       {bloco.name} · {regs.length}
+                      {runtimeLabel && <span className="text-slate-400 dark:text-white/30 normal-case tracking-normal"> · {runtimeLabel} estimado</span>}
                     </span>
                     <div className="h-px flex-1 bg-[#ff0068]/30" />
                   </div>

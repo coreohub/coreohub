@@ -4,6 +4,7 @@ import {
   ShieldCheck, KeyRound, X, Save, Loader2, RefreshCw,
   Mic, Award, ChevronDown, ChevronUp, Upload, Camera,
   CheckCircle2, AlertCircle, Copy, Eye, EyeOff, Link as LinkIcon,
+  Hash, Sparkles,
 } from 'lucide-react';
 
 const generatePin = (): string => String(Math.floor(Math.random() * 10000)).padStart(4, '0');
@@ -124,6 +125,47 @@ const JudgesManagement = () => {
       await navigator.clipboard.writeText(text);
       setCopiedField(field);
       setTimeout(() => setCopiedField(null), 1500);
+    } catch {}
+  };
+
+  /* Código curto de acesso (/entrar-juri) — mesmo padrão Kahoot do Telão de
+     Palco. Resolve o problema de logar um dispositivo novo sem depender de
+     e-mail/WhatsApp: produtor mostra/fala 6 caracteres, jurado digita em
+     app.coreohub.com/entrar-juri e cai direto na seleção de nome + PIN. */
+  const [shortCode, setShortCode] = useState<string | null>(null);
+  const [shortCodeOpen, setShortCodeOpen] = useState(false);
+  const [shortCodeLoading, setShortCodeLoading] = useState(false);
+  const [shortCodeCopied, setShortCodeCopied] = useState(false);
+
+  const toggleShortCodePanel = async () => {
+    setShortCodeOpen(o => !o);
+    if (shortCode !== null) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data: profile } = await supabase
+      .from('profiles').select('judge_short_code').eq('id', user.id).maybeSingle();
+    setShortCode(profile?.judge_short_code ?? '');
+  };
+
+  const generateShortCode = async () => {
+    setShortCodeLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('regenerate_judge_short_code');
+      if (error) throw error;
+      setShortCode(data as string);
+    } catch (e: any) {
+      alert(e.message || 'Erro ao gerar código.');
+    } finally {
+      setShortCodeLoading(false);
+    }
+  };
+
+  const copyShortCode = async () => {
+    if (!shortCode) return;
+    try {
+      await navigator.clipboard.writeText(shortCode);
+      setShortCodeCopied(true);
+      setTimeout(() => setShortCodeCopied(false), 1500);
     } catch {}
   };
 
@@ -414,6 +456,14 @@ const JudgesManagement = () => {
             }
           </button>
           <button
+            onClick={toggleShortCodePanel}
+            aria-expanded={shortCodeOpen}
+            className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all flex items-center gap-2"
+            title="Código curto pra dispositivo novo entrar em app.coreohub.com/entrar-juri"
+          >
+            <Hash size={14} /> Código de acesso
+          </button>
+          <button
             onClick={openAdd}
             className="px-5 py-3 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-[#ff0068]/20 flex items-center gap-2"
           >
@@ -421,6 +471,56 @@ const JudgesManagement = () => {
           </button>
         </div>
       </div>
+
+      {/* Código curto de acesso (/entrar-juri) — alternativa ao link longo
+          pra logar um dispositivo novo sem e-mail/WhatsApp. */}
+      {shortCodeOpen && (
+        <div className="p-5 bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-2xl flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068] shrink-0"><Hash size={18} /></div>
+          <div className="flex-1">
+            <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white">
+              Acesso rápido em dispositivo novo
+            </p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+              Peça pro jurado abrir <span className="font-bold">app.coreohub.com/entrar-juri</span> e digitar o código abaixo — sem precisar de e-mail ou WhatsApp.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {shortCode ? (
+              <>
+                <span className="px-4 py-2.5 bg-slate-100 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl text-lg font-black tracking-[0.25em] text-slate-900 dark:text-white">
+                  {shortCode}
+                </span>
+                <button
+                  onClick={copyShortCode}
+                  className="p-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-500 hover:text-[#ff0068] transition-colors"
+                  title="Copiar código"
+                  aria-label="Copiar código"
+                >
+                  {shortCodeCopied ? <CheckCircle2 size={16} className="text-emerald-500" /> : <Copy size={16} />}
+                </button>
+                <button
+                  onClick={generateShortCode}
+                  disabled={shortCodeLoading}
+                  className="p-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-500 hover:text-[#ff0068] transition-colors disabled:opacity-50"
+                  title="Gerar novo código (revoga o atual)"
+                  aria-label="Gerar novo código"
+                >
+                  {shortCodeLoading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={generateShortCode}
+                disabled={shortCodeLoading}
+                className="px-4 py-2.5 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {shortCodeLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Gerar código
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Jurados ocultos da vitrine — ação rápida pra publicar todos */}
       {!loading && hiddenJudges.length > 0 && (
