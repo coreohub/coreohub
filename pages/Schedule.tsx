@@ -22,7 +22,7 @@ import {
   type BatchItem, type NarrationKind,
 } from '../services/narrationApi';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
-import { resolveEstudio } from '../utils/formatters';
+import { resolveEstudio, toTitleCase } from '../utils/formatters';
 import { isStyleInList } from '../utils/styleMatch';
 
 type AudioSlot = { audio_url: string; duration_seconds: number; voice_id?: string };
@@ -1838,7 +1838,7 @@ const Schedule = () => {
             String(r.ordem_apresentacao ?? i + 1),
             horario.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
             r.nome_coreografia || '—',
-            resolveEstudio(r) || '—',
+            toTitleCase(resolveEstudio(r)) || '—',
             r.categoria || '—',
             r.estilo_danca || '—',
           ];
@@ -2765,7 +2765,7 @@ const Schedule = () => {
               <p className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white truncate mt-0.5">
                 {blocoPickerForReg.nome_coreografia}
               </p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{resolveEstudio(blocoPickerForReg)}</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{toTitleCase(resolveEstudio(blocoPickerForReg))}</p>
             </div>
             <div className="overflow-y-auto divide-y divide-slate-100 dark:divide-white/5">
               <button
