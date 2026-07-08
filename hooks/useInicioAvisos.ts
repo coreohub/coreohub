@@ -23,6 +23,12 @@ export interface OrdemItem {
  * Puramente informativo — carrega 1x no mount, sem realtime (decisão
  * 2026-07-07: ordem de apresentação não precisa refletir mudança ao vivo,
  * o Cronograma/Terminal do dia é quem serve isso em tempo real).
+ *
+ * Lê `ordem_apresentacao_publicado`/`bloco_id_publicado` (snapshot
+ * congelado quando o produtor clica "Publicar pros inscritos" no
+ * Cronograma) — NÃO as colunas live `ordem_apresentacao`/`bloco_id`, que o
+ * produtor pode estar reorganizando à vontade sem que isso vaze aqui antes
+ * da hora (Fase 2 do plano draft→publish, 2026-07-08).
  */
 export const useInicioAvisos = (eventId: string | null | undefined, userId: string) => {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -40,21 +46,22 @@ export const useInicioAvisos = (eventId: string | null | undefined, userId: stri
           .eq('active', true)
           .order('created_at', { ascending: false }),
         supabase.from('registrations')
-          .select('id, nome_coreografia, ordem_apresentacao, bloco_id')
+          .select('id, nome_coreografia, ordem_apresentacao_publicado, bloco_id_publicado')
           .eq('event_id', eventId)
           .eq('user_id', userId)
-          .not('ordem_apresentacao', 'is', null)
+          .not('ordem_apresentacao_publicado', 'is', null)
+          .eq('excluded_from_schedule', false)
           // Blinda contra coreografia que foi paga, ganhou posição no
           // Cronograma, e depois foi estornada — ordem_apresentacao antigo
           // ficaria órfão sem esse filtro (mesma regra do Cronograma real).
           .or(SCHEDULABLE_REGISTRATIONS_OR_FILTER)
-          .order('ordem_apresentacao', { ascending: true }),
+          .order('ordem_apresentacao_publicado', { ascending: true }),
       ]);
 
       setAnnouncements((avisos ?? []).filter(a => !a.expires_at || a.expires_at >= nowIso));
 
       if (regs && regs.length > 0) {
-        const blocoIds = [...new Set(regs.map(r => r.bloco_id).filter(Boolean))] as string[];
+        const blocoIds = [...new Set(regs.map(r => r.bloco_id_publicado).filter(Boolean))] as string[];
         let blocosMap: Record<string, string> = {};
         if (blocoIds.length > 0) {
           const { data: blocos } = await supabase.from('cronograma_blocos').select('id, name').in('id', blocoIds);
@@ -63,8 +70,8 @@ export const useInicioAvisos = (eventId: string | null | undefined, userId: stri
         setOrdemItems(regs.map(r => ({
           id: r.id,
           nome: r.nome_coreografia,
-          ordem: r.ordem_apresentacao,
-          blocoNome: r.bloco_id ? blocosMap[r.bloco_id] ?? null : null,
+          ordem: r.ordem_apresentacao_publicado,
+          blocoNome: r.bloco_id_publicado ? blocosMap[r.bloco_id_publicado] ?? null : null,
         })));
       } else {
         setOrdemItems([]);

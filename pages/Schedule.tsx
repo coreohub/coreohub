@@ -6,7 +6,7 @@ import {
   Loader2, FileArchive, Users, ChevronDown, ChevronUp, Info,
   Volume2, Play, Pause, Radio, StopCircle, AlertTriangle,
   Layers, X, Plus, Trash2, ArrowUp, ArrowDown, Edit3, SkipForward,
-  Search,
+  Search, Megaphone,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import PageHeader from '../components/PageHeader';
@@ -51,6 +51,10 @@ interface Registration {
   classificacao_final?: string;
   bloco_id?: string | null;
   excluded_from_schedule?: boolean;
+  // Snapshot congelado na última publicação — o que o inscrito vê hoje,
+  // independente de quanto o produtor já reorganizou desde então.
+  ordem_apresentacao_publicado?: number | null;
+  bloco_id_publicado?: string | null;
   // Wizard atual grava o nome do estúdio aqui (event_data.estudio_nome), não
   // na coluna top-level `estudio` — que fica vazia pra praticamente toda
   // inscrição recente. Ver buildNarrationText.
@@ -70,6 +74,14 @@ interface Judge {
   name: string;
   competencias_generos?: string[] | null;
   is_active?: boolean;
+}
+
+/** "08/07 14:32", fuso Brasil — usado no status de última publicação. */
+function formatDateTimeBr(iso: string): string {
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+  }).format(new Date(iso));
 }
 
 // ---------- conflict detection ----------
@@ -499,6 +511,10 @@ const Schedule = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  // ── Publicar pros inscritos (draft → publish) ──
+  const [schedulePublishedAt, setSchedulePublishedAt] = useState<string | null>(null);
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [isPublishingSchedule, setIsPublishingSchedule] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
@@ -630,6 +646,17 @@ const Schedule = () => {
       const { data: allQualifying } = await regsQuery;
       const regs = (allQualifying || []).filter((r: Registration) => !r.excluded_from_schedule);
       setExcludedRegs((allQualifying || []).filter((r: Registration) => r.excluded_from_schedule));
+
+      if (eventId) {
+        const { data: evRow } = await supabase
+          .from('events')
+          .select('schedule_published_at')
+          .eq('id', eventId)
+          .maybeSingle();
+        setSchedulePublishedAt(evRow?.schedule_published_at ?? null);
+      } else {
+        setSchedulePublishedAt(null);
+      }
 
       // Lê o config da ROW DO EVENTO (multi-tenant), não da legacy id='1'.
       // Bug 2026-06-11: produtor (não-super-admin) salva voice_id só na row do
@@ -1279,12 +1306,24 @@ const Schedule = () => {
   const handleExcludeFromSchedule = async (regId: string) => {
     const reg = registrations.find(r => r.id === regId);
     if (!reg) return;
-    // Optimistic
+    // Optimistic. Zera ordem_apresentacao/bloco_id (rascunho) E as colunas
+    // _publicado — remover é uma ação de segurança (engano, cancelamento) e
+    // precisa sumir do card do inscrito na hora, sem esperar a próxima
+    // publicação. Sem isso, o número antigo ficava órfão e continuava
+    // aparecendo no card "Ordem de apresentação" mesmo depois de removida.
     setRegistrations(prev => prev.filter(r => r.id !== regId));
-    setExcludedRegs(prev => [...prev, { ...reg, excluded_from_schedule: true }]);
+    setExcludedRegs(prev => [...prev, {
+      ...reg, excluded_from_schedule: true,
+      ordem_apresentacao: undefined, bloco_id: null,
+      ordem_apresentacao_publicado: null, bloco_id_publicado: null,
+    }]);
     const { data, error } = await supabase
       .from('registrations')
-      .update({ excluded_from_schedule: true })
+      .update({
+        excluded_from_schedule: true,
+        ordem_apresentacao: null, bloco_id: null,
+        ordem_apresentacao_publicado: null, bloco_id_publicado: null,
+      })
       .eq('id', regId)
       .select('id');
     if (error || !data?.length) {
@@ -1412,33 +1451,72 @@ const Schedule = () => {
     }
   };
 
+  /** Calcula ordem global respeitando blocos: blocos em ordem (bloco.ordem),
+      dentro de cada bloco a ordem visual atual (registrations array).
+      Coreografias sem bloco vão pro final como resíduo. Compartilhado entre
+      "Salvar Ordem" (rascunho, usado ao vivo por Terminal/Telão) e
+      "Publicar pros inscritos" (snapshot congelado) — ambos precisam do
+      mesmo cálculo, já que o array local não guarda ordem_apresentacao
+      atualizado entre um save e outro (só a posição no array importa). */
+  const computeOrderUpdates = (): { id: string; ordem_apresentacao: number; bloco_id: string | null }[] => {
+    const sortedBlocos = [...blocos].sort((a, b) => a.ordem - b.ordem);
+    const updates: { id: string; ordem_apresentacao: number; bloco_id: string | null }[] = [];
+    let globalIdx = 1;
+    for (const bloco of sortedBlocos) {
+      registrations
+        .filter(r => r.bloco_id === bloco.id)
+        .forEach(r => {
+          updates.push({ id: r.id, ordem_apresentacao: globalIdx++, bloco_id: bloco.id });
+        });
+    }
+    registrations
+      .filter(r => !r.bloco_id)
+      .forEach(r => {
+        updates.push({ id: r.id, ordem_apresentacao: globalIdx++, bloco_id: null });
+      });
+    return updates;
+  };
+
+  /** Coreografias organizadas em algum bloco vs. ainda soltas em "Sem bloco".
+      Mostrado perto do botão Publicar pra não deixar o produtor às cegas
+      sobre se já deu pra todo mundo uma posição. */
+  const scheduleCoverage = useMemo(() => {
+    const total = registrations.length;
+    const semBloco = registrations.filter(r => !r.bloco_id).length;
+    return { total, organizadas: total - semBloco, semBloco };
+  }, [registrations]);
+
+  /** Quantas coreografias mudariam de posição/bloco se publicasse agora,
+      comparado com o snapshot `_publicado` atual (o que o inscrito já vê). */
+  const publishDiff = useMemo(() => {
+    const fresh = computeOrderUpdates();
+    const byId = new Map(registrations.map(r => [r.id, r]));
+    let changed = 0;
+    for (const u of fresh) {
+      const r = byId.get(u.id);
+      if (!r) continue;
+      if ((r.ordem_apresentacao_publicado ?? null) !== u.ordem_apresentacao ||
+          (r.bloco_id_publicado ?? null) !== (u.bloco_id ?? null)) {
+        changed++;
+      }
+    }
+    return { changed, total: fresh.length };
+  }, [registrations, blocos]); // eslint-disable-line
+
   const handleSaveOrder = async () => {
     setIsSaving(true);
     try {
-      // Calcula ordem global respeitando blocos: blocos em ordem (bloco.ordem),
-      // dentro de cada bloco a ordem visual atual (registrations array).
-      // Coreografias sem bloco vão pro final como residuo.
-      const sortedBlocos = [...blocos].sort((a, b) => a.ordem - b.ordem);
-      const updates: { id: string; ordem_apresentacao: number; bloco_id: string | null }[] = [];
-      let globalIdx = 1;
-      for (const bloco of sortedBlocos) {
-        registrations
-          .filter(r => r.bloco_id === bloco.id)
-          .forEach(r => {
-            updates.push({ id: r.id, ordem_apresentacao: globalIdx++, bloco_id: bloco.id });
-          });
-      }
-      registrations
-        .filter(r => !r.bloco_id)
-        .forEach(r => {
-          updates.push({ id: r.id, ordem_apresentacao: globalIdx++, bloco_id: null });
-        });
+      const updates = computeOrderUpdates();
 
-      for (const u of updates) {
-        await supabase
+      // Upsert em lote — era um UPDATE sequencial por linha (N round-trips,
+      // sem atomicidade: falha no meio deixava parte do cronograma com
+      // número novo e parte com número velho, podendo duplicar posição).
+      // 1 requisição, executada pelo Postgres como único statement.
+      if (updates.length > 0) {
+        const { error } = await supabase
           .from('registrations')
-          .update({ ordem_apresentacao: u.ordem_apresentacao, bloco_id: u.bloco_id })
-          .eq('id', u.id);
+          .upsert(updates, { onConflict: 'id' });
+        if (error) throw error;
       }
 
       setOrderChanged(false);
@@ -1446,8 +1524,61 @@ const Schedule = () => {
       setTimeout(() => setSavedMsg(''), 3000);
     } catch (err) {
       console.error('Erro ao salvar ordem:', err);
+      setSavedMsg('Falha ao salvar ordem. Tente de novo.');
+      setTimeout(() => setSavedMsg(''), 3000);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  /** Congela o arranjo atual em `_publicado` — só a partir daqui o inscrito
+      vê o novo número. Grava também nas colunas "live" (equivalente a um
+      Salvar Ordem), então Publicar funciona mesmo sem clicar Salvar antes. */
+  const handlePublishSchedule = async () => {
+    if (!selectedEventId) return;
+    setIsPublishingSchedule(true);
+    try {
+      const orderUpdates = computeOrderUpdates();
+      const updates = orderUpdates.map(u => ({
+        id: u.id,
+        ordem_apresentacao: u.ordem_apresentacao,
+        bloco_id: u.bloco_id,
+        ordem_apresentacao_publicado: u.ordem_apresentacao,
+        bloco_id_publicado: u.bloco_id,
+      }));
+      if (updates.length > 0) {
+        const { error } = await supabase.from('registrations').upsert(updates, { onConflict: 'id' });
+        if (error) throw error;
+      }
+
+      const nowIso = new Date().toISOString();
+      const { data, error: evError } = await supabase
+        .from('events')
+        .update({ schedule_published_at: nowIso })
+        .eq('id', selectedEventId)
+        .select('id');
+      if (evError) throw evError;
+      if (!data?.length) throw new Error('RLS bloqueou update em events.schedule_published_at');
+
+      const byId = new Map(updates.map(u => [u.id, u]));
+      setRegistrations(prev => prev.map(r => {
+        const u = byId.get(r.id);
+        return u
+          ? { ...r, ordem_apresentacao: u.ordem_apresentacao, bloco_id: u.bloco_id,
+              ordem_apresentacao_publicado: u.ordem_apresentacao_publicado, bloco_id_publicado: u.bloco_id_publicado }
+          : r;
+      }));
+      setOrderChanged(false);
+      setSchedulePublishedAt(nowIso);
+      setShowPublishModal(false);
+      setSavedMsg('Ordem publicada — os inscritos já veem a posição atual.');
+      setTimeout(() => setSavedMsg(''), 4000);
+    } catch (err) {
+      console.error('Erro ao publicar ordem:', err);
+      setSavedMsg('Falha ao publicar. Tente de novo.');
+      setTimeout(() => setSavedMsg(''), 3000);
+    } finally {
+      setIsPublishingSchedule(false);
     }
   };
 
@@ -1697,6 +1828,20 @@ const Schedule = () => {
             </button>
           )}
 
+          {/* Publicar pros inscritos — separado do Salvar Ordem de propósito.
+              Salvar grava o rascunho (usado ao vivo por Terminal/Telão);
+              Publicar congela o snapshot que o card "Ordem de apresentação"
+              do inscrito exibe. Ver [[schedule-publish-fase2]]. */}
+          <button
+            onClick={() => setShowPublishModal(true)}
+            disabled={registrations.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-emerald-600/20 transition-all disabled:opacity-50"
+            title="Publica a ordem atual pros inscritos verem no painel deles"
+          >
+            <Megaphone size={12} />
+            Publicar pros inscritos
+          </button>
+
           <button
             onClick={handleDownloadZip}
             disabled={isDownloading || stats.withTrack === 0}
@@ -1708,6 +1853,23 @@ const Schedule = () => {
           </button>
         </div>
       </div>
+
+      {/* ── Cobertura + status de publicação ── */}
+      {registrations.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1">
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+            {scheduleCoverage.organizadas}/{scheduleCoverage.total} organizadas em blocos
+            {scheduleCoverage.semBloco > 0 && (
+              <span className="text-amber-500"> · {scheduleCoverage.semBloco} sem bloco</span>
+            )}
+          </span>
+          <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 dark:text-white/30">
+            {schedulePublishedAt
+              ? `Última publicação: ${formatDateTimeBr(schedulePublishedAt)}`
+              : 'Ainda não publicado pros inscritos'}
+          </span>
+        </div>
+      )}
 
       {/* ── Saved feedback ── */}
       {savedMsg && (
@@ -2121,6 +2283,77 @@ const Schedule = () => {
             <p className="text-[9px] text-indigo-500/70 dark:text-indigo-400/50 mt-0.5">
               Os arquivos serão renomeados no padrão: 001_Estudio_Coreografia_Estilo_Categoria.mp3 — na ordem atual do cronograma.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Publicar pros inscritos ── */}
+      {showPublishModal && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => !isPublishingSchedule && setShowPublishModal(false)}
+        >
+          <div
+            className="w-full max-w-md bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-white/10 rounded-t-3xl sm:rounded-3xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="p-5 border-b border-slate-200 dark:border-white/10 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <Megaphone size={16} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Publicar</p>
+                <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic text-base">
+                  Ordem de apresentação
+                </h3>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-3">
+              <p className="text-xs text-slate-600 dark:text-slate-300">
+                {scheduleCoverage.organizadas} de {scheduleCoverage.total} coreografias organizadas em blocos.
+              </p>
+
+              {scheduleCoverage.semBloco > 0 && (
+                <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl">
+                  <AlertTriangle size={14} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                    {scheduleCoverage.semBloco} coreografia{scheduleCoverage.semBloco !== 1 ? 's' : ''} ainda sem bloco —
+                    {' '}vão aparecer no fim da lista pro inscrito de cada uma.
+                  </p>
+                </div>
+              )}
+
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                {schedulePublishedAt
+                  ? (publishDiff.changed > 0
+                      ? `${publishDiff.changed} coreografia${publishDiff.changed !== 1 ? 's' : ''} vão mudar de posição/bloco desde a última publicação (${formatDateTimeBr(schedulePublishedAt)}).`
+                      : `Nenhuma mudança desde a última publicação (${formatDateTimeBr(schedulePublishedAt)}).`)
+                  : 'Esta é a primeira publicação — nenhum inscrito viu a ordem ainda.'}
+              </p>
+
+              <p className="text-[9px] text-slate-400 dark:text-white/30">
+                Depois de publicar, o card "Ordem de apresentação" na Início de cada inscrito atualiza na hora.
+              </p>
+            </div>
+
+            <div className="flex gap-2 p-4 border-t border-slate-200 dark:border-white/10">
+              <button
+                onClick={() => setShowPublishModal(false)}
+                disabled={isPublishingSchedule}
+                className="flex-1 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handlePublishSchedule}
+                disabled={isPublishingSchedule}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-600/20 transition-all disabled:opacity-60"
+              >
+                {isPublishingSchedule ? <Loader2 size={12} className="animate-spin" /> : <Megaphone size={12} />}
+                {isPublishingSchedule ? 'Publicando...' : 'Publicar agora'}
+              </button>
+            </div>
           </div>
         </div>
       )}
