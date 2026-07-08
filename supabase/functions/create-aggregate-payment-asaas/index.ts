@@ -7,6 +7,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
+import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 
 type RegistrationRow = {
   id:                    string
@@ -487,7 +488,9 @@ Deno.serve(async (req) => {
       if (!parsed.ok && parsed.raw) {
         console.error(`[create-aggregate-payment-asaas] search customer não-JSON status=${searchRes.status} raw=${parsed.raw}`)
       }
-      customerId = parsed.data?.data?.[0]?.id
+      const found = parsed.data?.data?.[0]
+      customerId = found?.id
+      await ensureNotificationDisabled(ASAAS_BASE_URL, asaasHeaders, found)
     }
     if (!customerId) {
       const custRes = await fetch(`${ASAAS_BASE_URL}/customers`, {

@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
+import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 
 Deno.serve(async (req) => {
   const corsHeaders = buildCorsHeaders(req)
@@ -245,7 +246,9 @@ Deno.serve(async (req) => {
     if (cpfLimpo) {
       const searchRes  = await fetch(`${ASAAS_BASE_URL}/customers?cpfCnpj=${cpfLimpo}&limit=1`, { headers: asaasHeaders })
       const searchData = await searchRes.json()
-      customerId = searchData.data?.[0]?.id
+      const found = searchData.data?.[0]
+      customerId = found?.id
+      await ensureNotificationDisabled(ASAAS_BASE_URL, asaasHeaders, found)
     }
 
     if (!customerId!) {

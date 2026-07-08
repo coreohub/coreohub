@@ -37,6 +37,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
+import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 
 function isValidCpf(cpf: string): boolean {
   const digits = cpf.replace(/\D/g, '')
@@ -452,7 +453,9 @@ Deno.serve(async (req) => {
     try {
       const searchRes  = await fetch(`${ASAAS_BASE_URL}/customers?cpfCnpj=${cpfLimpo}&limit=1`, { headers: asaasHeaders })
       const searchData = await searchRes.json()
-      customerId = searchData.data?.[0]?.id ?? null
+      const found = searchData.data?.[0]
+      customerId = found?.id ?? null
+      await ensureNotificationDisabled(ASAAS_BASE_URL, asaasHeaders, found)
     } catch { /* ignore */ }
 
     if (!customerId) {

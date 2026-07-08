@@ -32,6 +32,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { computeAudienceCart, round2 } from '../_shared/audience-pricing.ts'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
+import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 
 // Valida CPF formato + dígito verificador (mod-11)
 function isValidCpf(cpf: string): boolean {
@@ -402,7 +403,9 @@ Deno.serve(async (req) => {
     try {
       const searchRes  = await fetch(`${ASAAS_BASE_URL}/customers?cpfCnpj=${cpfLimpo}&limit=1`, { headers: asaasHeaders })
       const searchData = await searchRes.json()
-      customerId = searchData.data?.[0]?.id ?? null
+      const found = searchData.data?.[0]
+      customerId = found?.id ?? null
+      await ensureNotificationDisabled(ASAAS_BASE_URL, asaasHeaders, found)
     } catch { /* ignore */ }
 
     if (!customerId) {

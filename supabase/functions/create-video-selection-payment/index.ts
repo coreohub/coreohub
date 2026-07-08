@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
+import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 
 // Cria a cobrança Asaas da TAXA DE SELETIVA (Modelo 3 - Catanduva/SESI/CaconDance).
 // Distinto de create-payment-asaas (cobrança da inscrição cheia) porque:
@@ -210,7 +211,9 @@ Deno.serve(async (req) => {
     let customerId: string | undefined
     const searchRes  = await fetch(`${ASAAS_BASE_URL}/customers?cpfCnpj=${cpfLimpo}&limit=1`, { headers: asaasHeaders })
     const searchData = await searchRes.json()
-    customerId = searchData.data?.[0]?.id
+    const foundCustomer = searchData.data?.[0]
+    customerId = foundCustomer?.id
+    await ensureNotificationDisabled(ASAAS_BASE_URL, asaasHeaders, foundCustomer)
     if (!customerId) {
       const custRes = await fetch(`${ASAAS_BASE_URL}/customers`, {
         method: 'POST',
