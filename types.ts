@@ -17,6 +17,7 @@ export enum UserRole {
   SONOPLASTA   = 'SONOPLASTA',    // opera áudio + reordena cronograma
   RECEPCAO     = 'RECEPCAO',      // recepção e backstage
   PALCO        = 'PALCO',         // marcação de palco
+  APOIO_WORKSHOP = 'APOIO_WORKSHOP', // só escaneia QR de presença em workshops
 }
 
 export enum EventFormat {
@@ -268,7 +269,15 @@ export interface PermissoesCustom {
   validar_pagamentos: boolean;
   cronograma_leitura: boolean;
   cronograma_editar: boolean;
-  credenciamento: boolean;
+  /** Escopos de credenciamento/QR por tipo de crachá — substituem o antigo
+   *  flag único `credenciamento` (2026-07-08). Permite, por ex., um staff
+   *  de apoio em workshops que só escaneia QR de workshop, sem enxergar
+   *  nem marcar check-in de inscritos/ingressos/equipe/jurados. */
+  checkin_inscritos: boolean;
+  checkin_ingressos: boolean;
+  checkin_workshops: boolean;
+  checkin_equipe: boolean;
+  checkin_jurados: boolean;
   marcacao_palco: boolean;
   suporte_juri: boolean;
   inscricoes_leitura: boolean;
@@ -295,7 +304,11 @@ export const PERMISSOES_DEFAULT: PermissoesCustom = {
   validar_pagamentos: false,
   cronograma_leitura: false,
   cronograma_editar: false,
-  credenciamento: false,
+  checkin_inscritos: false,
+  checkin_ingressos: false,
+  checkin_workshops: false,
+  checkin_equipe: false,
+  checkin_jurados: false,
   marcacao_palco: false,
   suporte_juri: false,
   inscricoes_leitura: false,

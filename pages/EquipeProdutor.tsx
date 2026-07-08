@@ -5,12 +5,15 @@ import {
   Check, X, AlertCircle, Briefcase,
   Calendar, CreditCard, QrCode, Mic2,
   ClipboardList, Filter, ChevronDown, Star,
-  Copy, ExternalLink, Ticket,
+  Copy, ExternalLink, Ticket, Clock, Send, MailWarning,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
 import { UserRole, PermissoesCustom, PERMISSOES_DEFAULT } from '../types';
-import { createTeamInvite, buildTeamInviteUrl } from '../services/teamInviteService';
+import {
+  createTeamInvite, buildTeamInviteUrl, listTeamInvites, deleteTeamInvite,
+  TeamInvite,
+} from '../services/teamInviteService';
 
 /* ── Role presets ── */
 const EQUIPE_ROLES: {
@@ -22,31 +25,37 @@ const EQUIPE_ROLES: {
     value: UserRole.COORDENADOR, label: 'Coordenador',
     desc: 'Acesso amplo — cronograma, credenciamento, jurados, palco e vendas.',
     icon: Shield, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: true, credenciamento: true, marcacao_palco: true, suporte_juri: true, inscricoes_leitura: true, triagem: true, seletiva_video: true, vendas_ingressos: true, gerenciar_cupons: true, gerenciar_workshops: true, emitir_certificados: true, resultados_leitura: true },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: true, checkin_inscritos: true, checkin_ingressos: true, checkin_workshops: true, checkin_equipe: true, checkin_jurados: true, marcacao_palco: true, suporte_juri: true, inscricoes_leitura: true, triagem: true, seletiva_video: true, vendas_ingressos: true, gerenciar_cupons: true, gerenciar_workshops: true, emitir_certificados: true, resultados_leitura: true },
   },
   {
     value: UserRole.MESARIO, label: 'Coordenador do Júri',
     desc: 'Suporte à banca: verifica terminais e controla presença dos jurados. Lidera a premiação.',
     icon: Headphones, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: false, marcacao_palco: false, suporte_juri: true, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: true },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, checkin_inscritos: false, checkin_ingressos: false, checkin_workshops: false, checkin_equipe: false, checkin_jurados: false, marcacao_palco: false, suporte_juri: true, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: true },
   },
   {
     value: UserRole.SONOPLASTA, label: 'Sonoplasta',
     desc: 'Opera o áudio e pode reordenar o cronograma em tempo real.',
     icon: Music2, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: true, credenciamento: false, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: false },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: true, checkin_inscritos: false, checkin_ingressos: false, checkin_workshops: false, checkin_equipe: false, checkin_jurados: false, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: false },
   },
   {
     value: UserRole.RECEPCAO, label: 'Recepção / Palco',
     desc: 'Acompanha o cronograma, faz check-in de público e tira dúvidas sobre vendas.',
     icon: Users, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: true, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: true, triagem: false, seletiva_video: false, vendas_ingressos: true, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: false },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, checkin_inscritos: true, checkin_ingressos: true, checkin_workshops: true, checkin_equipe: false, checkin_jurados: false, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: true, triagem: false, seletiva_video: false, vendas_ingressos: true, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: false },
   },
   {
     value: UserRole.PALCO, label: 'Marcador de Palco',
     desc: 'Prepara o palco entre apresentações com cronômetro dedicado.',
     icon: PersonStanding, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, credenciamento: false, marcacao_palco: true, suporte_juri: false, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: false },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, checkin_inscritos: false, checkin_ingressos: false, checkin_workshops: false, checkin_equipe: false, checkin_jurados: false, marcacao_palco: true, suporte_juri: false, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: false },
+  },
+  {
+    value: UserRole.APOIO_WORKSHOP, label: 'Apoio de Workshop',
+    desc: 'Só escaneia QR de presença nas aulas de workshop — sem ver inscrições, ingressos, dados financeiros ou outros crachás.',
+    icon: QrCode, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: false, cronograma_editar: false, checkin_inscritos: false, checkin_ingressos: false, checkin_workshops: true, checkin_equipe: false, checkin_jurados: false, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: false },
   },
 ];
 
@@ -66,9 +75,18 @@ const PERM_GROUPS: { label: string; items: { key: PermKey; label: string; icon: 
     ],
   },
   {
+    label: 'Credenciamento (QR)',
+    items: [
+      { key: 'checkin_inscritos', label: 'Escanear — Inscritos',  icon: QrCode },
+      { key: 'checkin_ingressos', label: 'Escanear — Ingressos',  icon: QrCode },
+      { key: 'checkin_workshops', label: 'Escanear — Workshops',  icon: QrCode },
+      { key: 'checkin_equipe',    label: 'Escanear — Equipe',     icon: QrCode },
+      { key: 'checkin_jurados',   label: 'Escanear — Jurados',    icon: QrCode },
+    ],
+  },
+  {
     label: 'Operacional',
     items: [
-      { key: 'credenciamento',  label: 'Credenciamento / QR', icon: QrCode },
       { key: 'marcacao_palco',  label: 'Marcação de Palco', icon: Mic2 },
       { key: 'suporte_juri',    label: 'Coordenador do Júri', icon: Star },
     ],
@@ -116,6 +134,12 @@ const EquipeProdutor = () => {
   const [loading, setLoading]         = useState(true);
   const [activeTab, setActiveTab]     = useState<'EQUIPE' | 'PERMISSOES'>('EQUIPE');
 
+  /* Convites pendentes (ainda não aceitos) */
+  const [pendingInvites, setPendingInvites] = useState<TeamInvite[]>([]);
+  const [invitesLoading, setInvitesLoading] = useState(true);
+  const [resendingId, setResendingId]       = useState<string | null>(null);
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
+
   /* Invite modal state */
   const [inviteOpen, setInviteOpen]   = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -153,7 +177,71 @@ const EquipeProdutor = () => {
     }
   }, []);
 
-  useEffect(() => { fetchMembers(); }, [fetchMembers]);
+  const fetchInvites = useCallback(async () => {
+    setInvitesLoading(true);
+    try {
+      const invites = await listTeamInvites();
+      // Convite aceito (used_at preenchido) já virou membro em `profiles` —
+      // só interessa mostrar aqui quem ainda não aceitou.
+      setPendingInvites(invites.filter(i => !i.used_at));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setInvitesLoading(false);
+    }
+  }, []);
+
+  const fetchAll = useCallback(() => {
+    fetchMembers();
+    fetchInvites();
+  }, [fetchMembers, fetchInvites]);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const isInviteExpired = (invite: TeamInvite) => new Date(invite.expires_at).getTime() < Date.now();
+
+  const handleCancelInvite = async (invite: TeamInvite) => {
+    if (!confirm(`Cancelar o convite pra ${invite.email}?`)) return;
+    try {
+      await deleteTeamInvite(invite.id);
+      setPendingInvites(prev => prev.filter(i => i.id !== invite.id));
+    } catch (e: any) {
+      alert('Erro ao cancelar convite: ' + e.message);
+    }
+  };
+
+  const handleCopyInviteUrl = async (invite: TeamInvite) => {
+    try {
+      await navigator.clipboard.writeText(buildTeamInviteUrl(invite.token));
+      setCopiedInviteId(invite.id);
+      setTimeout(() => setCopiedInviteId(null), 2000);
+    } catch { /* clipboard bloqueado */ }
+  };
+
+  /** Convite expirado: gera um novo (mesmo email/cargo/role/permissões) e
+   *  descarta o antigo — mais simples que estender expires_at, e evita um
+   *  segundo token válido pro mesmo convite circulando. */
+  const handleResendInvite = async (invite: TeamInvite) => {
+    setResendingId(invite.id);
+    try {
+      const fresh = await createTeamInvite({
+        email:             invite.email,
+        full_name:         invite.full_name ?? undefined,
+        cargo:             invite.cargo ?? undefined,
+        role:              invite.role,
+        permissoes_custom: invite.permissoes_custom ?? PERMISSOES_DEFAULT,
+      });
+      await deleteTeamInvite(invite.id);
+      await navigator.clipboard.writeText(buildTeamInviteUrl(fresh.token)).catch(() => {});
+      setPendingInvites(prev => [fresh, ...prev.filter(i => i.id !== invite.id)]);
+      setCopiedInviteId(fresh.id);
+      setTimeout(() => setCopiedInviteId(null), 2500);
+    } catch (e: any) {
+      alert('Erro ao reenviar convite: ' + e.message);
+    } finally {
+      setResendingId(null);
+    }
+  };
 
   /* ── Invite ── */
   const applyPreset = (role: UserRole) => {
@@ -179,6 +267,7 @@ const EquipeProdutor = () => {
       });
       setInviteUrl(buildTeamInviteUrl(invite.token));
       setInviteSuccess(true);
+      setPendingInvites(prev => [invite, ...prev]);
     } catch (e: any) {
       setInviteError(e.message || 'Erro ao gerar convite.');
     } finally {
@@ -257,8 +346,8 @@ const EquipeProdutor = () => {
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={fetchMembers} className="p-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-400 hover:text-[#ff0068] transition-all">
-            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+          <button onClick={fetchAll} className="p-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-400 hover:text-[#ff0068] transition-all">
+            <RefreshCw size={18} className={(loading || invitesLoading) ? 'animate-spin' : ''} />
           </button>
           <button
             onClick={() => { setInviteOpen(true); setInviteError(null); setInviteSuccess(false); }}
@@ -305,6 +394,79 @@ const EquipeProdutor = () => {
               );
             })}
           </div>
+
+          {/* Pending invites */}
+          {!invitesLoading && pendingInvites.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                <MailWarning size={12} /> Convites pendentes ({pendingInvites.length})
+              </p>
+              <div className="space-y-2">
+                {pendingInvites.map(invite => {
+                  const info = roleInfo(invite.role);
+                  const Icon = info?.icon ?? Users;
+                  const expired = isInviteExpired(invite);
+                  const isCopied = copiedInviteId === invite.id;
+                  const isResending = resendingId === invite.id;
+                  return (
+                    <div
+                      key={invite.id}
+                      className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded-2xl"
+                    >
+                      <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-500/10 flex items-center justify-center shrink-0">
+                        <Icon size={16} className="text-amber-600 dark:text-amber-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-xs text-slate-900 dark:text-white truncate">{invite.email}</p>
+                        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5 flex items-center gap-1 flex-wrap">
+                          {info?.label ?? invite.role}
+                          {invite.cargo && <><span className="opacity-40">·</span>{invite.cargo}</>}
+                          <span className="opacity-40">·</span>
+                          <span className={`flex items-center gap-1 normal-case font-bold ${expired ? 'text-rose-500' : 'text-amber-600 dark:text-amber-400'}`}>
+                            <Clock size={9} />
+                            {expired
+                              ? 'Expirado'
+                              : `Expira em ${Math.max(1, Math.ceil((new Date(invite.expires_at).getTime() - Date.now()) / 86_400_000))}d`}
+                          </span>
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {expired ? (
+                          <button
+                            onClick={() => handleResendInvite(invite)}
+                            disabled={isResending}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                              isCopied ? 'bg-emerald-500/10 text-emerald-500' : 'bg-[#ff0068]/10 text-[#ff0068] hover:bg-[#ff0068]/20'
+                            }`}
+                          >
+                            {isResending ? <Loader2 size={12} className="animate-spin" /> : isCopied ? <Check size={12} /> : <Send size={12} />}
+                            {isCopied ? 'Link copiado!' : 'Reenviar'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleCopyInviteUrl(invite)}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                              isCopied ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-[#ff0068]'
+                            }`}
+                          >
+                            {isCopied ? <Check size={12} /> : <Copy size={12} />}
+                            {isCopied ? 'Copiado!' : 'Copiar link'}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleCancelInvite(invite)}
+                          aria-label={`Cancelar convite de ${invite.email}`}
+                          className="p-2 text-slate-300 hover:text-rose-500 transition-all rounded-lg hover:bg-rose-500/10"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Members list */}
           {loading ? (

@@ -7,6 +7,18 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
 import { isRegistrationPaid, SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
 import PageHeader from '../components/PageHeader';
+import { PermissoesCustom } from '../types';
+import { useMyPermissions } from '../hooks/usePermission';
+
+type ScanKind = 'INSCRITO' | 'INGRESSO' | 'WORKSHOP' | 'EQUIPE' | 'JURADO';
+
+const SCAN_KIND_LABEL: Record<ScanKind, string> = {
+  INSCRITO: 'Inscrito', INGRESSO: 'Ingresso', WORKSHOP: 'Workshop', EQUIPE: 'Equipe', JURADO: 'Jurado',
+};
+const SCAN_KIND_PERM: Record<ScanKind, keyof PermissoesCustom> = {
+  INSCRITO: 'checkin_inscritos', INGRESSO: 'checkin_ingressos', WORKSHOP: 'checkin_workshops',
+  EQUIPE: 'checkin_equipe', JURADO: 'checkin_jurados',
+};
 
 interface CheckInItem {
   id: string;
@@ -38,7 +50,6 @@ const CheckIn = () => {
   const [filterTab, setFilterTab] = useState<FilterTab>('TODOS');
 
   /* QR scanner */
-  type ScanKind = 'INSCRITO' | 'INGRESSO' | 'WORKSHOP' | 'EQUIPE' | 'JURADO';
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanResult, setScanResult] = useState<{
     type: 'success' | 'error' | 'duplicate';
@@ -50,8 +61,14 @@ const CheckIn = () => {
   const streamRef = useRef<MediaStream | null>(null);
   const scanLoopRef = useRef<number | null>(null);
 
+  /* ── minhas permissões ── */
+  const { has: hasPerm, loading: permsLoading } = useMyPermissions();
+  const canScan = useCallback((kind: ScanKind) => hasPerm(SCAN_KIND_PERM[kind]), [hasPerm]);
+  const hasInscritosAccess = hasPerm('checkin_inscritos');
+
   /* ── fetch ── */
   const fetchData = useCallback(async () => {
+    if (!permsLoading && !hasInscritosAccess) { setLoading(false); return; }
     setLoading(true);
     try {
       // Mesmo filtro do Cronograma (Schedule.tsx): só inscrição PAGA (status_pagamento
@@ -69,7 +86,7 @@ const CheckIn = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [permsLoading, hasInscritosAccess]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -116,7 +133,7 @@ const CheckIn = () => {
     }
 
     // 1) Inscrição (registrations.id)
-    const item = items.find(i => i.id === id);
+    const item = canScan('INSCRITO') ? items.find(i => i.id === id) : undefined;
     if (item) {
       if (item.check_in_status === 'OK') {
         const t = item.check_in_at ? formatTime(item.check_in_at) : '';
@@ -147,11 +164,13 @@ const CheckIn = () => {
     }
 
     // 2) Ingresso plateia (audience_tickets.id)
-    const { data: ticket } = await supabase
-      .from('audience_tickets')
-      .select('id, ticket_type_nome, ticket_type_kind, buyer_name, status_pagamento, check_in_status, check_in_at')
-      .eq('id', id)
-      .maybeSingle();
+    const { data: ticket } = canScan('INGRESSO')
+      ? await supabase
+          .from('audience_tickets')
+          .select('id, ticket_type_nome, ticket_type_kind, buyer_name, status_pagamento, check_in_status, check_in_at')
+          .eq('id', id)
+          .maybeSingle()
+      : { data: null };
     if (ticket) {
       if (ticket.check_in_status === 'OK') {
         const t = ticket.check_in_at ? formatTime(ticket.check_in_at) : '';
@@ -189,11 +208,13 @@ const CheckIn = () => {
     }
 
     // 3) Workshop (workshop_registrations.access_token)
-    const { data: ws } = await supabase
-      .from('workshop_registrations')
-      .select('id, buyer_name, attended, attended_at, status_pagamento, workshops(name)')
-      .eq('access_token', id)
-      .maybeSingle();
+    const { data: ws } = canScan('WORKSHOP')
+      ? await supabase
+          .from('workshop_registrations')
+          .select('id, buyer_name, attended, attended_at, status_pagamento, workshops(name)')
+          .eq('access_token', id)
+          .maybeSingle()
+      : { data: null };
     if (ws) {
       const wsAny = ws as any;
       const workshopName = Array.isArray(wsAny.workshops) ? wsAny.workshops[0]?.name : wsAny.workshops?.name;
@@ -226,11 +247,13 @@ const CheckIn = () => {
     }
 
     // 4) Equipe (profiles.id com role staff/coordenador)
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id, full_name, role, cargo, last_checkin_at')
-      .eq('id', id)
-      .maybeSingle();
+    const { data: profile } = canScan('EQUIPE')
+      ? await supabase
+          .from('profiles')
+          .select('id, full_name, role, cargo, last_checkin_at')
+          .eq('id', id)
+          .maybeSingle()
+      : { data: null };
     if (profile && STAFF_ROLES.includes(String(profile.role))) {
       const isCoord = profile.role === 'COORDENADOR';
       if (profile.last_checkin_at) {
@@ -253,11 +276,13 @@ const CheckIn = () => {
     }
 
     // 5) Jurado (judges.id)
-    const { data: judge } = await supabase
-      .from('judges')
-      .select('id, name, last_checkin_at')
-      .eq('id', id)
-      .maybeSingle();
+    const { data: judge } = canScan('JURADO')
+      ? await supabase
+          .from('judges')
+          .select('id, name, last_checkin_at')
+          .eq('id', id)
+          .maybeSingle()
+      : { data: null };
     if (judge) {
       if (judge.last_checkin_at) {
         const t = formatTime(judge.last_checkin_at);
@@ -277,8 +302,15 @@ const CheckIn = () => {
       return;
     }
 
-    setScanResult({ type: 'error', message: 'QR não reconhecido (inscrição, ingresso, workshop, equipe ou jurado).' });
-  }, [items]);
+    const allowedKinds = (['INSCRITO', 'INGRESSO', 'WORKSHOP', 'EQUIPE', 'JURADO'] as ScanKind[])
+      .filter(canScan).map(k => SCAN_KIND_LABEL[k]);
+    setScanResult({
+      type: 'error',
+      message: allowedKinds.length > 0
+        ? `QR não reconhecido nos tipos que você pode escanear (${allowedKinds.join(', ')}).`
+        : 'Você não tem permissão pra escanear nenhum tipo de crachá. Acione o coordenador.',
+    });
+  }, [items, canScan]);
 
   /* ── QR scanner via BarcodeDetector or fallback ── */
   const startScanner = async () => {
@@ -337,7 +369,7 @@ const CheckIn = () => {
       <div className="bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-white/5 px-4 pt-5 pb-4 space-y-4 sticky top-0 z-30">
         <PageHeader
           title={<>Creden<span className="text-[#ff0068]">ciamento</span></>}
-          subtitle={`${doneCount} / ${total} credenciados`}
+          subtitle={hasInscritosAccess ? `${doneCount} / ${total} credenciados` : 'Escaneie o QR pra marcar presença'}
           actions={
             <>
               <button
@@ -358,49 +390,59 @@ const CheckIn = () => {
           }
         />
 
-        {/* Progress bar */}
-        <div className="h-1.5 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
-          <motion.div
-            className="h-full bg-emerald-500 rounded-full"
-            initial={{ width: 0 }}
-            animate={{ width: total > 0 ? `${(doneCount / total) * 100}%` : '0%' }}
-            transition={{ duration: 0.5 }}
-          />
-        </div>
+        {hasInscritosAccess && (
+          <>
+            {/* Progress bar */}
+            <div className="h-1.5 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
+              <motion.div
+                className="h-full bg-emerald-500 rounded-full"
+                initial={{ width: 0 }}
+                animate={{ width: total > 0 ? `${(doneCount / total) * 100}%` : '0%' }}
+                transition={{ duration: 0.5 }}
+              />
+            </div>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
-          <input
-            type="text"
-            placeholder="Buscar coreografia ou estúdio..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-[#ff0068]/50 transition-all"
-          />
-        </div>
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+              <input
+                type="text"
+                placeholder="Buscar coreografia ou estúdio..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-[#ff0068]/50 transition-all"
+              />
+            </div>
 
-        {/* Filter tabs */}
-        <div className="flex gap-1 bg-slate-100 dark:bg-white/5 p-1 rounded-2xl">
-          {(['TODOS', 'PENDENTE', 'OK'] as FilterTab[]).map(t => (
-            <button
-              key={t}
-              onClick={() => setFilterTab(t)}
-              className={`flex-1 min-h-11 py-2.5 px-1 rounded-xl text-[10px] font-black uppercase tracking-tight sm:tracking-widest transition-all ${
-                filterTab === t
-                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-              }`}
-            >
-              {t === 'TODOS' ? `Todos (${total})` : t === 'OK' ? `Feitos (${doneCount})` : `Pendentes (${total - doneCount})`}
-            </button>
-          ))}
-        </div>
+            {/* Filter tabs */}
+            <div className="flex gap-1 bg-slate-100 dark:bg-white/5 p-1 rounded-2xl">
+              {(['TODOS', 'PENDENTE', 'OK'] as FilterTab[]).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setFilterTab(t)}
+                  className={`flex-1 min-h-11 py-2.5 px-1 rounded-xl text-[10px] font-black uppercase tracking-tight sm:tracking-widest transition-all ${
+                    filterTab === t
+                      ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                  }`}
+                >
+                  {t === 'TODOS' ? `Todos (${total})` : t === 'OK' ? `Feitos (${doneCount})` : `Pendentes (${total - doneCount})`}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* List */}
       <div className="flex-1 px-4 pt-4 space-y-2">
-        {loading ? (
+        {!hasInscritosAccess ? (
+          <div className="py-20 text-center">
+            <QrCode size={40} className="mx-auto text-slate-300 dark:text-slate-700 mb-3" />
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Toque em "Escanear QR" acima</p>
+            <p className="text-[10px] text-slate-400 mt-1">Seu acesso é só pra credenciamento por QR — sem lista de inscrições.</p>
+          </div>
+        ) : loading ? (
           <div className="flex justify-center py-20">
             <div className="w-8 h-8 border-4 border-[#ff0068] border-t-transparent rounded-full animate-spin" />
           </div>

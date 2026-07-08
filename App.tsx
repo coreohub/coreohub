@@ -12,6 +12,7 @@ import ImpersonateBanner from './components/ImpersonateBanner';
 import Header from './components/Header';
 import BottomNavBar from './components/BottomNavBar';
 import CookieBanner from './components/CookieBanner';
+import RequirePermission from './components/RequirePermission';
 
 // Páginas principais — carregamento imediato (rota mais usada pelos inscritos)
 import Dashboard from './pages/Dashboard';
@@ -505,12 +506,17 @@ const App: React.FC = () => {
         <Route path="/profile" element={<PrivateRoute {...privateRouteProps}><Profile /></PrivateRoute>} />
         <Route path="/meus-resultados" element={<PrivateRoute {...privateRouteProps}><MyResults activeRole={activeRole!} /></PrivateRoute>} />
         <Route path="/credencial/:registrationId" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><Credencial /></Suspense></PrivateRoute>} />
-        <Route path="/credenciais" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><Credenciais /></Suspense></PrivateRoute>} />
+        {/* Credenciais.tsx imprime o roster INTEIRO (inscritos+equipe+jurados),
+            sem filtro interno por tipo — só quem tem checkin_inscritos entra
+            (escopo mais amplo, equivalente ao antigo credenciamento=true).
+            checkin_workshops sozinho (ex: Apoio de Workshop) NÃO libera essa
+            rota, senão veria/imprimiria crachá de gente fora do escopo dele. */}
+        <Route path="/credenciais" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="checkin_inscritos"><Credenciais /></RequirePermission></Suspense></PrivateRoute>} />
 
-        <Route path="/qg-organizador" element={<PrivateRoute {...privateRouteProps}><ProducerDashboard profile={profile!} /></PrivateRoute>} />
-        <Route path="/registrations" element={<PrivateRoute {...privateRouteProps}><Registrations /></PrivateRoute>} />
-        <Route path="/manage-schedule" element={<PrivateRoute {...privateRouteProps}><Schedule /></PrivateRoute>} />
-        <Route path="/apuracao" element={<PrivateRoute {...privateRouteProps}><ResultsPanel /></PrivateRoute>} />
+        <Route path="/qg-organizador" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm="financeiro"><ProducerDashboard profile={profile!} /></RequirePermission></PrivateRoute>} />
+        <Route path="/registrations" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm={['inscricoes_leitura', 'triagem']}><Registrations /></RequirePermission></PrivateRoute>} />
+        <Route path="/manage-schedule" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm={['cronograma_leitura', 'cronograma_editar']}><Schedule /></RequirePermission></PrivateRoute>} />
+        <Route path="/apuracao" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm="resultados_leitura"><ResultsPanel /></RequirePermission></PrivateRoute>} />
         <Route path="/equipe-jurados" element={<PrivateRoute {...privateRouteProps}><JudgesManagement /></PrivateRoute>} />
         <Route path="/account-settings" element={<PrivateRoute {...privateRouteProps}><AccountSettings onSaveSuccess={fetchConfig} /></PrivateRoute>} />
         <Route path="/termo-produtor" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><TermoProdutor /></Suspense></PrivateRoute>} />
@@ -526,15 +532,18 @@ const App: React.FC = () => {
         <Route path="/judge-practice" element={<PrivateRoute {...privateRouteProps}><JudgePractice /></PrivateRoute>} />
         <Route path="/equipe-jurados-config" element={<PrivateRoute {...privateRouteProps}><JudgeManagement /></PrivateRoute>} />
 
-        <Route path="/check-in" element={<PrivateRoute {...privateRouteProps}><CheckIn /></PrivateRoute>} />
-        <Route path="/marcacao-palco" element={<PrivateRoute {...privateRouteProps}><StageMarker /></PrivateRoute>} />
+        {/* CheckIn.tsx já se blinda por dentro (restringe por tipo de QR) —
+            aqui só garante que quem não tem NENHUM escopo de checkin_* nem
+            entra na página. */}
+        <Route path="/check-in" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm={['checkin_inscritos', 'checkin_ingressos', 'checkin_workshops', 'checkin_equipe', 'checkin_jurados']}><CheckIn /></RequirePermission></PrivateRoute>} />
+        <Route path="/marcacao-palco" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm="marcacao_palco"><StageMarker /></RequirePermission></PrivateRoute>} />
         <Route path="/telao-palco" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><TelaoControle /></Suspense></PrivateRoute>} />
         <Route path="/minha-equipe" element={<PrivateRoute {...privateRouteProps}><EquipeProdutor /></PrivateRoute>} />
-        <Route path="/suporte-juri" element={<PrivateRoute {...privateRouteProps}><SuporteJuri /></PrivateRoute>} />
+        <Route path="/suporte-juri" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm="suporte_juri"><SuporteJuri /></RequirePermission></PrivateRoute>} />
         <Route path="/ingressos" element={<PrivateRoute {...privateRouteProps}><Ingressos /></PrivateRoute>} />
         <Route path="/live" element={<PrivateRoute {...privateRouteProps}><Live /></PrivateRoute>} />
 
-        <Route path="/seletiva-video"       element={<PrivateRoute {...privateRouteProps}><VideoSelection /></PrivateRoute>} />
+        <Route path="/seletiva-video"       element={<PrivateRoute {...privateRouteProps}><RequirePermission perm="seletiva_video"><VideoSelection /></RequirePermission></PrivateRoute>} />
         {/* Compat 301 — refactor 2026-05-19 consolidou em /minhas-coreografias */}
         <Route path="/minha-seletiva"       element={<Navigate to="/minhas-coreografias?tab=selecao" replace />} />
         <Route path="/importar-regulamento" element={<PrivateRoute {...privateRouteProps}><RegulationAIParser /></PrivateRoute>} />
@@ -543,7 +552,7 @@ const App: React.FC = () => {
         <Route path="/event-config" element={<PrivateRoute {...privateRouteProps}><RegistrationGradeConfig /></PrivateRoute>} />
         <Route path="/ai-analysis" element={<PrivateRoute {...privateRouteProps}><AIAnalysis /></PrivateRoute>} />
         <Route path="/super-admin" element={<PrivateRoute {...privateRouteProps}><SuperAdminDashboard /></PrivateRoute>} />
-        <Route path="/certificados" element={<PrivateRoute {...privateRouteProps}><Certificates /></PrivateRoute>} />
+        <Route path="/certificados" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm="emitir_certificados"><Certificates /></RequirePermission></PrivateRoute>} />
         <Route path="/trilhas" element={<PrivateRoute {...privateRouteProps}><TracksManagement /></PrivateRoute>} />
         <Route path="/battle-config" element={<PrivateRoute {...privateRouteProps}><BattleConfig /></PrivateRoute>} />
         <Route path="/battle-arena" element={<PrivateRoute {...privateRouteProps}><BattleArenaLive /></PrivateRoute>} />
@@ -567,9 +576,9 @@ const App: React.FC = () => {
         <Route path="/validar-certificado/:hash" element={<Suspense fallback={<PageLoader />}><ValidarCertificado /></Suspense>} />
         <Route path="/meus-certificados" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><MeusCertificados /></Suspense></PrivateRoute>} />
         <Route path="/vendas"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><VendasOverview /></Suspense></PrivateRoute>} />
-        <Route path="/vendas-ingressos" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><VendasIngressos /></Suspense></PrivateRoute>} />
-        <Route path="/workshops-do-evento" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><WorkshopsManagement /></Suspense></PrivateRoute>} />
-        <Route path="/cupons"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><Coupons /></Suspense></PrivateRoute>} />
+        <Route path="/vendas-ingressos" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="vendas_ingressos"><VendasIngressos /></RequirePermission></Suspense></PrivateRoute>} />
+        <Route path="/workshops-do-evento" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="gerenciar_workshops"><WorkshopsManagement /></RequirePermission></Suspense></PrivateRoute>} />
+        <Route path="/cupons"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="gerenciar_cupons"><Coupons /></RequirePermission></Suspense></PrivateRoute>} />
         <Route path="/avisos"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><Avisos /></Suspense></PrivateRoute>} />
         <Route path="/festival/:idOrSlug" element={<FestivalShowcase />} />
         {/* Inscrição unificada: ambas as rotas renderizam o mesmo Wizard.

@@ -59,7 +59,7 @@ const ALL_USER      = [UserRole.USER, UserRole.STUDIO_DIRECTOR, UserRole.CHOREOG
 // Equipe operacional — todos os sub-roles + organizer + admin
 const ALL_EQUIPE = [
   UserRole.COORDENADOR, UserRole.MESARIO, UserRole.SONOPLASTA,
-  UserRole.RECEPCAO, UserRole.PALCO,
+  UserRole.RECEPCAO, UserRole.PALCO, UserRole.APOIO_WORKSHOP,
   UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN,
 ];
 
@@ -74,8 +74,16 @@ const ALL_USER_OR_EQUIPE = [...ALL_USER, ...ALL_EQUIPE];
 type PermKey = keyof PermissoesCustom;
 const PERM_MENU: { perm: PermKey; path: string; label: string; icon: React.ElementType }[] = [
   { perm: 'cronograma_leitura', path: '/manage-schedule', label: 'Cronograma',          icon: Calendar        },
-  { perm: 'credenciamento',     path: '/check-in',        label: 'Credenciamento',      icon: QrCode          },
-  { perm: 'credenciamento',     path: '/credenciais',     label: 'Credenciais',         icon: QrCode          },
+  // Qualquer escopo de checkin_* já libera o menu — CheckIn.tsx restringe
+  // por dentro pra só oferecer os tipos de QR que o membro de fato tem.
+  { perm: 'checkin_inscritos',  path: '/check-in',        label: 'Credenciamento',      icon: QrCode          },
+  { perm: 'checkin_ingressos',  path: '/check-in',        label: 'Credenciamento',      icon: QrCode          },
+  { perm: 'checkin_workshops',  path: '/check-in',        label: 'Credenciamento',      icon: QrCode          },
+  { perm: 'checkin_equipe',     path: '/check-in',        label: 'Credenciamento',      icon: QrCode          },
+  { perm: 'checkin_jurados',    path: '/check-in',        label: 'Credenciamento',      icon: QrCode          },
+  // Credenciais.tsx não filtra por tipo — imprime todo o roster do evento.
+  // Só quem tem checkin_inscritos (escopo amplo) ganha esse item de menu.
+  { perm: 'checkin_inscritos',  path: '/credenciais',     label: 'Credenciais',         icon: QrCode          },
   { perm: 'marcacao_palco',     path: '/marcacao-palco',  label: 'Marcação de Palco',   icon: PersonStanding  },
   { perm: 'suporte_juri',       path: '/suporte-juri',    label: 'Coordenador do Júri', icon: Headphones      },
   { perm: 'inscricoes_leitura', path: '/registrations',   label: 'Inscrições',          icon: ClipboardList   },

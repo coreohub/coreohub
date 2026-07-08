@@ -1572,7 +1572,9 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
     const STAFF_PERMS_DEFAULT = {
       financeiro: false, validar_pagamentos: false,
       cronograma_leitura: true, cronograma_editar: false,
-      credenciamento: false, marcacao_palco: false,
+      checkin_inscritos: false, checkin_ingressos: false,
+      checkin_workshops: false, checkin_equipe: false, checkin_jurados: false,
+      marcacao_palco: false,
       suporte_juri: false, inscricoes_leitura: false,
       triagem: false, vendas_ingressos: false,
     }
@@ -1581,7 +1583,7 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
         role: 'COORDENADOR',
         full_name: 'Renata Lopes',
         cargo: 'Coordenadora geral [DEMO]',
-        perms: { ...STAFF_PERMS_DEFAULT, cronograma_editar: true, credenciamento: true, marcacao_palco: true, suporte_juri: true, inscricoes_leitura: true, triagem: true, vendas_ingressos: true },
+        perms: { ...STAFF_PERMS_DEFAULT, cronograma_editar: true, checkin_inscritos: true, checkin_ingressos: true, checkin_workshops: true, checkin_equipe: true, checkin_jurados: true, marcacao_palco: true, suporte_juri: true, inscricoes_leitura: true, triagem: true, vendas_ingressos: true },
       },
       {
         role: 'SONOPLASTA',
