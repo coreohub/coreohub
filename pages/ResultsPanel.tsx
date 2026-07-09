@@ -77,13 +77,6 @@ const getMedalByRank = (rank: number) => {
 const resolveMedal = (score: number, rank: number, system: PremiationSystem, t: MedalThresholds) =>
   system === 'RANKING' ? getMedalByRank(rank) : getMedalByThreshold(score, t);
 
-const scoreColor = (score: number, t: MedalThresholds) => {
-  if (score >= t.gold)   return 'text-yellow-500 dark:text-yellow-400';
-  if (score >= t.silver) return 'text-emerald-500 dark:text-emerald-400';
-  if (score >= t.bronze) return 'text-amber-600 dark:text-amber-400';
-  return 'text-rose-500 dark:text-rose-400';
-};
-
 /* ── Component ── */
 const ResultsPanel = () => {
   const [allResults, setAllResults] = useState<GroupedResult[]>([]);
@@ -724,7 +717,7 @@ const ResultsPanel = () => {
                                 {medal.label}
                               </span>
                               <div className="text-right">
-                                <p className={`text-xl font-black italic tabular-nums leading-none ${scoreColor(entry.average_score, thresholds)}`}>
+                                <p className="text-xl font-black italic tabular-nums leading-none text-slate-900 dark:text-white">
                                   {entry.average_score.toFixed(2)}
                                 </p>
                                 {/* Breakdown Técnico/Artístico — só quando o evento tem os 2 tipos de jurado avaliando esta coreografia */}
@@ -787,7 +780,7 @@ const ResultsPanel = () => {
                                           <Volume2 size={12} />
                                         </button>
                                       )}
-                                      <span className={`text-base font-black italic tabular-nums ${scoreColor(sd.final ?? 0, thresholds)}`}>
+                                      <span className="text-base font-black italic tabular-nums text-slate-900 dark:text-white">
                                         {sd.final != null ? Number(sd.final).toFixed(2) : '—'}
                                       </span>
                                     </div>
