@@ -617,7 +617,7 @@ const Schedule = () => {
   // Pre-cache das trilhas do modo TRILHA: baixa tudo pro Cache Storage do
   // navegador assim que a tela carrega, pra tocar independente da rede na
   // hora do play (motivo real do modo — reduzir risco de engasgo ao vivo).
-  const [precacheStatus, setPrecacheStatus] = useState<{ done: number; total: number } | null>(null);
+  const [precacheStatus, setPrecacheStatus] = useState<{ done: number; total: number; failed: number } | null>(null);
   const [playerSection, setPlayerSection] = useState<'idle' | 'entrada' | 'wait' | 'trilha' | 'saida'>('idle');
   const [trilhaProgress, setTrilhaProgress] = useState(0);
   const [trilhaDuration, setTrilhaDuration] = useState(0);
@@ -795,6 +795,14 @@ const Schedule = () => {
     }
   };
 
+  // Chave estável do conjunto de trilhas do evento — evita reiniciar o
+  // pré-cache (e piscar o selo de progresso) a cada reordenação/atribuição
+  // de bloco, que recria o array `registrations` mas não muda as trilhas.
+  const trilhasKey = useMemo(
+    () => registrations.filter((r) => !!r.trilha_url).map((r) => `${r.id}:${r.trilha_url}`).sort().join('|'),
+    [registrations],
+  );
+
   // Pre-cache das trilhas quando modo TRILHA está ativo. Roda em background,
   // sem travar a tela — cache.match dedup natural evita rebaixar trilhas já
   // baixadas em fetchs anteriores (reload de página, troca de evento e volta).
@@ -807,10 +815,11 @@ const Schedule = () => {
     (async () => {
       const withTrack = registrations.filter((r) => !!r.trilha_url);
       if (withTrack.length === 0) { setPrecacheStatus(null); return; }
-      setPrecacheStatus({ done: 0, total: withTrack.length });
+      setPrecacheStatus({ done: 0, total: withTrack.length, failed: 0 });
       try {
         const cache = await caches.open(`coreohub-trilhas-${selectedEventId}`);
         let done = 0;
+        let failed = 0;
         for (const reg of withTrack) {
           if (cancelled) return;
           const url = reg.trilha_url!;
@@ -818,20 +827,27 @@ const Schedule = () => {
           if (!existing) {
             try {
               const res = await fetch(url);
-              if (res.ok) await cache.put(url, res.clone());
+              if (res.ok) {
+                await cache.put(url, res.clone());
+              } else {
+                failed += 1;
+                console.warn(`[Cronograma] Trilha de "${reg.nome_coreografia}" retornou HTTP ${res.status} — não cacheada.`);
+              }
             } catch (e) {
+              failed += 1;
               console.warn(`[Cronograma] Falha ao pré-cachear trilha de "${reg.nome_coreografia}":`, e);
             }
           }
           done += 1;
-          if (!cancelled) setPrecacheStatus({ done, total: withTrack.length });
+          if (!cancelled) setPrecacheStatus({ done, total: withTrack.length, failed });
         }
       } catch (e) {
         console.warn('[Cronograma] Falha ao abrir cache de trilhas:', e);
       }
     })();
     return () => { cancelled = true; };
-  }, [modoTrilha, selectedEventId, registrations]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modoTrilha, selectedEventId, trilhasKey]);
 
   // Resolve a URL da trilha pro <audio>: cache local (modo TRILHA já
   // pré-cacheado) tem prioridade; sem cache (ou API indisponível), cai pra
@@ -2370,16 +2386,23 @@ const Schedule = () => {
 
       {/* Indicador de pré-cache do modo TRILHA — some sozinho quando termina */}
       {modoTrilha && precacheStatus && precacheStatus.done < precacheStatus.total && (
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest">
-          <Loader2 size={12} className="animate-spin" />
+        <div aria-live="polite" className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest">
+          <Loader2 size={12} className="animate-spin" aria-hidden="true" />
           Baixando trilhas pro tablet: {precacheStatus.done}/{precacheStatus.total}
         </div>
       )}
       {modoTrilha && precacheStatus && precacheStatus.done === precacheStatus.total && precacheStatus.total > 0 && (
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest">
-          <CheckCircle2 size={12} />
-          {precacheStatus.total} trilhas prontas offline neste tablet
-        </div>
+        precacheStatus.failed > 0 ? (
+          <div aria-live="polite" className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-black uppercase tracking-widest">
+            <AlertTriangle size={12} aria-hidden="true" />
+            {precacheStatus.total - precacheStatus.failed}/{precacheStatus.total} trilhas offline · {precacheStatus.failed} não baixaram (toca da rede se houver conexão)
+          </div>
+        ) : (
+          <div aria-live="polite" className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest">
+            <CheckCircle2 size={12} aria-hidden="true" />
+            {precacheStatus.total} trilhas prontas offline neste tablet
+          </div>
+        )
       )}
 
       {/* ── Stats ── */}
