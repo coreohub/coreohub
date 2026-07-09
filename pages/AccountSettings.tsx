@@ -33,6 +33,9 @@ import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus
 import InstallPWAButton from '../components/InstallPWAButton';
 import { previewNarration, fetchNarrationAudios, type NarrationKind } from '../services/narrationApi';
 
+const MAX_DOC_SIZE_MB = 10;
+const MAX_DOC_SIZE_BYTES = MAX_DOC_SIZE_MB * 1024 * 1024;
+
 /* ── Evaluation Rules types ── */
 interface EvalCriterion { name: string; peso: number; displayName?: string; }
 interface EvalRules {
@@ -2655,9 +2658,16 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   <input
                     type="file"
                     accept="application/pdf"
+                    aria-label="Arquivo PDF do regulamento"
+                    disabled={identityUploading}
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
+                      if (file.size > MAX_DOC_SIZE_BYTES) {
+                        alert(`Arquivo muito grande (${(file.size / 1024 / 1024).toFixed(1)}MB). Máximo ${MAX_DOC_SIZE_MB}MB.`);
+                        e.target.value = '';
+                        return;
+                      }
                       setIdentityUploading(true);
                       try {
                         const { data: { user } } = await supabase.auth.getUser();
@@ -2675,20 +2685,30 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         alert(`Erro ao enviar PDF: ${err?.message ?? err}`);
                       } finally {
                         setIdentityUploading(false);
+                        e.target.value = '';
                       }
                     }}
-                    className={`${input} flex-1`}
+                    className={`${input} flex-1 disabled:opacity-50`}
                   />
                   {identityUploading && <Loader2 size={14} className="animate-spin text-[#ff0068]" />}
                 </div>
                 {identity.regulation_pdf_url && (
-                  <p className="text-[10px] text-emerald-500 mt-2">
-                    ✓ Regulamento enviado.{' '}
-                    <a href={identity.regulation_pdf_url} target="_blank" rel="noopener noreferrer" className="underline">Ver PDF</a>
+                  <p className="text-[10px] text-emerald-500 mt-2 flex items-center gap-2">
+                    <span>✓ Regulamento enviado.{' '}
+                      <a href={identity.regulation_pdf_url} target="_blank" rel="noopener noreferrer" className="underline">Ver PDF</a>
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Remover regulamento"
+                      onClick={() => setIdentity({ ...identity, regulation_pdf_url: '' })}
+                      className="text-slate-400 hover:text-rose-500 transition-colors"
+                    >
+                      <X size={12} />
+                    </button>
                   </p>
                 )}
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Aceita regulamento privado ou edital público (prefeitura, JOMI, Bolsa Cultura).
+                  Aceita regulamento privado ou edital público (prefeitura, JOMI, Bolsa Cultura). Máx {MAX_DOC_SIZE_MB}MB.
                   Disponibilizado pra download na vitrine. Lembra de "Salvar" no fim da página.
                 </p>
               </div>
@@ -2713,12 +2733,17 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     type="file"
                     accept="application/pdf"
                     aria-label="Arquivo PDF do documento"
-                    disabled={!novoDocNome.trim() || identityUploading}
+                    disabled={identityUploading}
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
                       const nome = novoDocNome.trim();
-                      if (!nome) { alert('Dê um nome pro documento antes de escolher o arquivo.'); return; }
+                      if (!nome) { alert('Dê um nome pro documento antes de escolher o arquivo.'); e.target.value = ''; return; }
+                      if (file.size > MAX_DOC_SIZE_BYTES) {
+                        alert(`Arquivo muito grande (${(file.size / 1024 / 1024).toFixed(1)}MB). Máximo ${MAX_DOC_SIZE_MB}MB.`);
+                        e.target.value = '';
+                        return;
+                      }
                       setIdentityUploading(true);
                       try {
                         const { data: { user } } = await supabase.auth.getUser();
@@ -2763,7 +2788,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   </ul>
                 )}
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Dê um nome, escolha o PDF. Aparece na vitrine ao lado do regulamento. Lembra de "Salvar" no fim da página.
+                  Dê um nome, escolha o PDF (máx {MAX_DOC_SIZE_MB}MB). Aparece na vitrine ao lado do regulamento. Lembra de "Salvar" no fim da página.
                 </p>
               </div>
 
