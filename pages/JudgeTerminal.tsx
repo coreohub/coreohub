@@ -968,7 +968,9 @@ const JudgeTerminal = () => {
       rec.start(1000); // timeslice de 1 segundo
       setMediaRecorder(rec);
       setIsRecording(true);
-    } catch { /* mic denied */ }
+    } catch (err) {
+      console.error('[JudgeTerminal] microfone negado/indisponível:', err);
+    }
   };
 
   const stopRecording = () => {
