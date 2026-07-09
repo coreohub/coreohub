@@ -179,6 +179,7 @@ const processItem = async (item: OutboxItem) => {
     return { success: true };
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
+    console.error(`[outboxDrainer] falha em ${item.op} (tentativa ${item.attempts + 1}):`, errMsg);
     const nextAttempts = item.attempts + 1;
     const cap = maxAttempts(item.op);
 
