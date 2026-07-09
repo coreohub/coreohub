@@ -74,13 +74,27 @@ Deno.serve(async (req) => {
       .from('judges').select('id').eq('id', judge_id).eq('created_by', producer.id).maybeSingle()
     if (!judge) return json({ ok: false, reason: 'judge_not_found' }, 404)
 
-    // Valida registration pertence a um evento do produtor
-    const { data: reg } = await supa
+    // Valida registration pertence a um evento do produtor. Query em 2 passos
+    // (sem embedded join) — PostgREST às vezes falha em resolver
+    // registrations->events via "events!inner(...)" e o `data` vem null
+    // silenciosamente quando o error não é checado (mesma classe de bug já
+    // documentada em ResultsPanel.tsx). Bug real: upload de áudio sempre
+    // rejeitado com 403 mesmo pra inscrições legítimas do próprio produtor.
+    const { data: reg, error: regErr } = await supa
       .from('registrations')
-      .select('id, events!inner(created_by)')
+      .select('id, event_id')
       .eq('id', registration_id)
       .maybeSingle()
-    if (!reg || (reg as any).events?.created_by !== producer.id) {
+    if (regErr) return json({ error: 'db_error', detail: regErr.message }, 500)
+    if (!reg) return json({ ok: false, reason: 'registration_not_found_or_not_yours' }, 403)
+
+    const { data: regEvent, error: regEvErr } = await supa
+      .from('events')
+      .select('created_by')
+      .eq('id', reg.event_id)
+      .maybeSingle()
+    if (regEvErr) return json({ error: 'db_error', detail: regEvErr.message }, 500)
+    if (!regEvent || regEvent.created_by !== producer.id) {
       return json({ ok: false, reason: 'registration_not_found_or_not_yours' }, 403)
     }
 
@@ -156,7 +170,7 @@ Deno.serve(async (req) => {
     // Verifica lockout antes de comparar PIN
     const { data: attempts } = await supa
       .from('judge_login_attempts')
-      .select('failed_count, locked_until')
+      .select('failed_count, locked_until, updated_at')
       .eq('judge_id', judge_id)
       .maybeSingle()
 
@@ -364,14 +378,23 @@ Deno.serve(async (req) => {
 
     if (!evalRow.registration_id) return json({ ok: false, reason: 'missing_registration' }, 400)
 
-    // Valida que a registration pertence a um evento do produtor
-    const { data: reg } = await supa
+    // Valida que a registration pertence a um evento do produtor. 2 passos
+    // (sem embedded join) — ver comentário no branch multipart acima.
+    const { data: reg, error: regErr } = await supa
       .from('registrations')
-      .select('id, event_id, events!inner(created_by)')
+      .select('id, event_id')
       .eq('id', evalRow.registration_id)
       .maybeSingle()
+    if (regErr) return json({ error: 'db_error', detail: regErr.message }, 500)
+    if (!reg) return json({ ok: false, reason: 'registration_not_found_or_not_yours' }, 403)
 
-    if (!reg || (reg as any).events?.created_by !== producer.id) {
+    const { data: regEvent, error: regEvErr } = await supa
+      .from('events')
+      .select('created_by')
+      .eq('id', reg.event_id)
+      .maybeSingle()
+    if (regEvErr) return json({ error: 'db_error', detail: regEvErr.message }, 500)
+    if (!regEvent || regEvent.created_by !== producer.id) {
       return json({ ok: false, reason: 'registration_not_found_or_not_yours' }, 403)
     }
 
@@ -422,14 +445,23 @@ Deno.serve(async (req) => {
     const judge = await verifyJudge(judge_id)
     if (!judge) return json({ ok: false, reason: 'judge_not_found' }, 404)
 
-    // Resolve event_id pela registration + valida ownership
-    const { data: reg } = await supa
+    // Resolve event_id pela registration + valida ownership. 2 passos (sem
+    // embedded join) — ver comentário no branch multipart acima.
+    const { data: reg, error: regErr } = await supa
       .from('registrations')
-      .select('id, event_id, events!inner(created_by)')
+      .select('id, event_id')
       .eq('id', registration_id)
       .maybeSingle()
+    if (regErr) return json({ error: 'db_error', detail: regErr.message }, 500)
+    if (!reg) return json({ ok: false, reason: 'registration_not_found_or_not_yours' }, 403)
 
-    if (!reg || (reg as any).events?.created_by !== producer.id) {
+    const { data: regEvent, error: regEvErr } = await supa
+      .from('events')
+      .select('created_by')
+      .eq('id', reg.event_id)
+      .maybeSingle()
+    if (regEvErr) return json({ error: 'db_error', detail: regEvErr.message }, 500)
+    if (!regEvent || regEvent.created_by !== producer.id) {
       return json({ ok: false, reason: 'registration_not_found_or_not_yours' }, 403)
     }
 
@@ -685,16 +717,27 @@ Deno.serve(async (req) => {
       return json({ ok: false, reason: 'not_allowed_to_evaluate_video' }, 403)
     }
 
-    // Valida registration pertence a um evento do produtor + multi-jurado ativo
-    const { data: reg } = await supa
+    // Valida registration pertence a um evento do produtor + multi-jurado
+    // ativo. 2 passos (sem embedded join) — ver comentário no branch
+    // multipart acima.
+    const { data: reg, error: regErr } = await supa
       .from('registrations')
-      .select('id, event_id, events!inner(created_by, video_evaluators_count)')
+      .select('id, event_id')
       .eq('id', registration_id)
       .maybeSingle()
-    if (!reg || (reg as any).events?.created_by !== producer.id) {
+    if (regErr) return json({ error: 'db_error', detail: regErr.message }, 500)
+    if (!reg) return json({ ok: false, reason: 'registration_not_found_or_not_yours' }, 403)
+
+    const { data: regEvent, error: regEvErr } = await supa
+      .from('events')
+      .select('created_by, video_evaluators_count')
+      .eq('id', reg.event_id)
+      .maybeSingle()
+    if (regEvErr) return json({ error: 'db_error', detail: regEvErr.message }, 500)
+    if (!regEvent || regEvent.created_by !== producer.id) {
       return json({ ok: false, reason: 'registration_not_found_or_not_yours' }, 403)
     }
-    if (((reg as any).events?.video_evaluators_count ?? 1) < 2) {
+    if ((regEvent.video_evaluators_count ?? 1) < 2) {
       // Modo solo decide via VideoSelection.tsx — não aceita voto de jurado.
       return json({ ok: false, reason: 'event_not_multi_judge' }, 400)
     }
