@@ -398,6 +398,13 @@ Deno.serve(async (req) => {
       return json({ ok: false, reason: 'registration_not_found_or_not_yours' }, 403)
     }
 
+    // event_id nunca era gravado aqui — a policy RLS "producer_manages_evaluations"
+    // exige evaluations.event_id = events.id (created_by=produtor) pro produtor
+    // conseguir LER a própria avaliação. Sem isso, toda avaliação gravava com
+    // event_id NULL e a Apuração (query roda como o produtor, sujeita a RLS)
+    // sempre via 0 resultados mesmo com dados reais na tabela.
+    ;(evalRow as any).event_id = reg.event_id
+
     // Phase 5: replay-safe insert. Se o cliente mandar client_uuid, usamos
     // upsert com ignoreDuplicates pra detectar replay. Sem client_uuid (legacy)
     // mantém INSERT cru — não regride comportamento atual.

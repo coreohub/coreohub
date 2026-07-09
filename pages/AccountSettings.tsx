@@ -4468,7 +4468,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                               ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
                               : 'text-slate-400 dark:text-white/30 bg-transparent border-transparent'
                           }`}>
-                            💾 Trilhas baixadas pro tablet ao abrir o Cronograma — toca do cache local, sem depender da rede na hora do play.
+                            💾 Trilhas baixadas pro dispositivo ao abrir o Cronograma — toca do cache local, sem depender da rede na hora do play.
                           </p>
                         )}
                       </button>

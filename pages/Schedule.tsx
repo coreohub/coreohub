@@ -2390,7 +2390,7 @@ const Schedule = () => {
       {modoTrilha && precacheStatus && precacheStatus.done < precacheStatus.total && (
         <div aria-live="polite" className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest">
           <Loader2 size={12} className="animate-spin" aria-hidden="true" />
-          Baixando trilhas pro tablet: {precacheStatus.done}/{precacheStatus.total}
+          Baixando trilhas pro dispositivo: {precacheStatus.done}/{precacheStatus.total}
         </div>
       )}
       {modoTrilha && precacheStatus && precacheStatus.done === precacheStatus.total && precacheStatus.total > 0 && (
@@ -2402,7 +2402,7 @@ const Schedule = () => {
         ) : (
           <div aria-live="polite" className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest">
             <CheckCircle2 size={12} aria-hidden="true" />
-            {precacheStatus.total} trilhas prontas offline neste tablet
+            {precacheStatus.total} trilhas prontas offline neste dispositivo
           </div>
         )
       )}
