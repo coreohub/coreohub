@@ -4,7 +4,7 @@ import {
   GripVertical, Sparkles, Download, Save, AlertCircle,
   CheckCircle2, Music, MusicIcon, Settings2, RefreshCw,
   Loader2, FileArchive, Users, ChevronDown, ChevronUp, Info,
-  Volume2, Play, Pause, Radio, StopCircle, AlertTriangle,
+  Volume2, Play, Pause, Radio, Square, AlertTriangle,
   Layers, X, Plus, Trash2, ArrowUp, ArrowDown, Edit3, SkipForward,
   Search, Megaphone, FileText,
 } from 'lucide-react';
@@ -2526,7 +2526,7 @@ const Schedule = () => {
                 ? 'Encerrar com narração de saída (toca antes de zerar live)'
                 : 'Encerrar transmissão (jurados pararão de ver AO VIVO)'}
             >
-              <StopCircle size={24} />
+              <Square size={20} fill="currentColor" />
             </button>
           </div>
         </div>
