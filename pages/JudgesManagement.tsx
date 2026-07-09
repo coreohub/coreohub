@@ -9,6 +9,7 @@ import {
 
 const generatePin = (): string => String(Math.floor(Math.random() * 10000)).padStart(4, '0');
 import { motion, AnimatePresence } from 'motion/react';
+import { QRCodeCanvas } from 'qrcode.react';
 import imageCompression from 'browser-image-compression';
 import { supabase } from '../services/supabase';
 import { getAllGenres } from '../services/genreService';
@@ -169,21 +170,43 @@ const JudgesManagement = () => {
     } catch {}
   };
 
-  const copyJudgeAccessLink = async () => {
-    // Busca o token do produtor logado pra gerar link público assinado
+  // Link direto assinado (token por produtor) — antes só copiava pro
+  // clipboard sem mostrar nada na tela. Agora abre um painel com a URL
+  // visível + QR code (padrão Kahoot/Eventbrite: scan pra abrir direto
+  // num dispositivo novo, sem digitar nada) + botão copiar.
+  const [judgeAccessUrl, setJudgeAccessUrl] = useState<string | null>(null);
+  const [linkPanelOpen, setLinkPanelOpen] = useState(false);
+  const [linkPanelLoading, setLinkPanelLoading] = useState(false);
+
+  const fetchJudgeAccessUrl = async (): Promise<string | null> => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) return null;
     const { data: profile } = await supabase
       .from('profiles')
       .select('judge_access_token')
       .eq('id', user.id)
       .maybeSingle();
     const token = profile?.judge_access_token;
-    if (!token) {
-      alert('Não foi possível gerar o link. Recarregue a página e tente de novo.');
-      return;
+    if (!token) return null;
+    return `${window.location.origin}/judge-login/${token}`;
+  };
+
+  const toggleLinkPanel = async () => {
+    setLinkPanelOpen(o => !o);
+    if (judgeAccessUrl !== null) return;
+    setLinkPanelLoading(true);
+    try {
+      const url = await fetchJudgeAccessUrl();
+      if (!url) { alert('Não foi possível gerar o link. Recarregue a página e tente de novo.'); return; }
+      setJudgeAccessUrl(url);
+    } finally {
+      setLinkPanelLoading(false);
     }
-    const url = `${window.location.origin}/judge-login/${token}`;
+  };
+
+  const copyJudgeAccessLink = async () => {
+    const url = judgeAccessUrl ?? await fetchJudgeAccessUrl();
+    if (!url) { alert('Não foi possível gerar o link. Recarregue a página e tente de novo.'); return; }
     await copyToClipboard(url, 'link');
   };
 
@@ -445,15 +468,13 @@ const JudgesManagement = () => {
             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
           </button>
           <button
-            onClick={copyJudgeAccessLink}
+            onClick={toggleLinkPanel}
             disabled={judges.length === 0}
+            aria-expanded={linkPanelOpen}
             className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Copiar link de acesso pros jurados"
+            title="Ver link + QR code de acesso pros jurados"
           >
-            {copiedField === 'link'
-              ? <><CheckCircle2 size={14} className="text-emerald-500" /> Link copiado</>
-              : <><LinkIcon size={14} /> Link dos jurados</>
-            }
+            <LinkIcon size={14} /> Link dos jurados
           </button>
           <button
             onClick={toggleShortCodePanel}
@@ -471,6 +492,47 @@ const JudgesManagement = () => {
           </button>
         </div>
       </div>
+
+      {/* Link direto assinado — URL visível + QR code pra escanear com a
+          câmera do celular/tablet e abrir o terminal direto, sem digitar
+          nada (padrão Kahoot/Eventbrite pra credenciamento em massa). */}
+      {linkPanelOpen && (
+        <div className="p-5 bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-2xl flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068] shrink-0"><LinkIcon size={18} /></div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white">
+              Link direto de acesso
+            </p>
+            {linkPanelLoading ? (
+              <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> Gerando link...</p>
+            ) : judgeAccessUrl ? (
+              <>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate" title={judgeAccessUrl}>{judgeAccessUrl}</p>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Escaneie o QR com a câmera do celular/tablet do jurado pra abrir direto — ou copie o link e mande por WhatsApp.
+                </p>
+              </>
+            ) : (
+              <p className="text-[10px] text-rose-400 mt-1">Não foi possível gerar o link.</p>
+            )}
+          </div>
+          {judgeAccessUrl && (
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="p-2 bg-white rounded-xl">
+                <QRCodeCanvas value={judgeAccessUrl} size={72} level="M" />
+              </div>
+              <button
+                onClick={copyJudgeAccessLink}
+                className="p-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-500 hover:text-[#ff0068] transition-colors"
+                title="Copiar link"
+                aria-label="Copiar link"
+              >
+                {copiedField === 'link' ? <CheckCircle2 size={16} className="text-emerald-500" /> : <Copy size={16} />}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Código curto de acesso (/entrar-juri) — alternativa ao link longo
           pra logar um dispositivo novo sem e-mail/WhatsApp. */}
