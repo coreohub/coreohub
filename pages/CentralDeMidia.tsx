@@ -6,6 +6,7 @@ import PageHeader from '../components/PageHeader';
 import { getAllGenres } from '../services/genreService';
 import { parseTempoSegundos } from '../utils/masks';
 import { isRegistrationCancelled, isRegistrationPending, registrationDisplayKey } from '../utils/registrationStatus';
+import { resolveTrilhaUrl } from '../utils/formatters';
 import { EventStyle } from '../types';
 import {
   Music2, Upload, Play, Pause, CheckCircle2, Check,
@@ -393,7 +394,7 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
             {/* Prévia (player neutro + selo de limite de duração) */}
             {hasAudio && coreo.trilha_url && (
               <TrackPreview
-                url={coreo.trilha_url}
+                url={resolveTrilhaUrl(coreo.trilha_url)}
                 filename={coreo.trilha_filename}
                 durationSeconds={coreo.duracao_trilha_segundos}
                 maxSeconds={coreo.max_time_seconds}

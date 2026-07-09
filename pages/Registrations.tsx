@@ -10,7 +10,7 @@ import {
   BarChart3, MessageCircle, Link2,
 } from 'lucide-react';
 import { isRegistrationPaid } from '../utils/registrationStatus';
-import { toTitleCase } from '../utils/formatters';
+import { toTitleCase, resolveTrilhaUrl } from '../utils/formatters';
 import { supabase } from '../services/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { refundRegistration } from '../services/refundService';
@@ -2385,7 +2385,7 @@ const Registrations = () => {
                     <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-xl">
                       <span className="text-slate-500">Trilha sonora</span>
                       {viewingReg.trilha_url ? (
-                        <a href={viewingReg.trilha_url.startsWith('http') ? viewingReg.trilha_url : '#'} target="_blank" rel="noopener noreferrer" className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                        <a href={resolveTrilhaUrl(viewingReg.trilha_url)} target="_blank" rel="noopener noreferrer" className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
                           <CheckCircle2 size={12} /> Enviada
                         </a>
                       ) : (

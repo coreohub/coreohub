@@ -22,7 +22,7 @@ import {
   type BatchItem, type NarrationKind,
 } from '../services/narrationApi';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
-import { resolveEstudio, toTitleCase } from '../utils/formatters';
+import { resolveEstudio, toTitleCase, resolveTrilhaUrl } from '../utils/formatters';
 import { isStyleInList } from '../utils/styleMatch';
 
 type AudioSlot = { audio_url: string; duration_seconds: number; voice_id?: string };
@@ -822,7 +822,7 @@ const Schedule = () => {
         let failed = 0;
         for (const reg of withTrack) {
           if (cancelled) return;
-          const url = reg.trilha_url!;
+          const url = resolveTrilhaUrl(reg.trilha_url);
           const existing = await cache.match(url);
           if (!existing) {
             try {
@@ -849,10 +849,12 @@ const Schedule = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modoTrilha, selectedEventId, trilhasKey]);
 
-  // Resolve a URL da trilha pro <audio>: cache local (modo TRILHA já
+  // Resolve o path/URL crua do banco pra URL tocável (ver resolveTrilhaUrl)
+  // e, se possível, pro blob já pré-cacheado — cache local (modo TRILHA já
   // pré-cacheado) tem prioridade; sem cache (ou API indisponível), cai pra
   // rede direto — nunca bloqueia o play.
-  const resolveTrilhaSrc = async (url: string): Promise<string> => {
+  const resolveTrilhaSrc = async (pathOrUrl: string): Promise<string> => {
+    const url = resolveTrilhaUrl(pathOrUrl);
     if (!modoTrilha || !selectedEventId || !('caches' in window)) return url;
     try {
       const cache = await caches.open(`coreohub-trilhas-${selectedEventId}`);
@@ -941,7 +943,7 @@ const Schedule = () => {
       return;
     }
     setPlayerSection('trilha');
-    const audio = new Audio(reg.trilha_url);
+    const audio = new Audio(resolveTrilhaUrl(reg.trilha_url));
     trilhaAudioRef.current = audio;
     audio.addEventListener('loadedmetadata', () => setTrilhaDuration(audio.duration || 0));
     audio.addEventListener('timeupdate', () => setTrilhaProgress(audio.currentTime));
@@ -1423,7 +1425,7 @@ const Schedule = () => {
     registrations.forEach((reg) => {
       if (!reg.trilha_url || trackDurationsRequested.current.has(reg.id)) return;
       trackDurationsRequested.current.add(reg.id);
-      trackDurationQueueRef.current.push({ id: reg.id, url: reg.trilha_url });
+      trackDurationQueueRef.current.push({ id: reg.id, url: resolveTrilhaUrl(reg.trilha_url) });
     });
     pumpTrackDurationQueue();
   }, [registrations]);
@@ -2021,7 +2023,7 @@ const Schedule = () => {
         const filename = `${num}_${studio}_${coreografia}_${style}_${category}.${ext}`;
 
         try {
-          const response = await fetch(reg.trilha_url);
+          const response = await fetch(resolveTrilhaUrl(reg.trilha_url));
           const blob = await response.blob();
           folder.file(filename, blob);
         } catch {

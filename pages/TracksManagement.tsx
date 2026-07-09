@@ -4,6 +4,7 @@ import {
   AlertCircle, Play, Mic, Loader2, Sparkles
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import { resolveTrilhaUrl } from '../utils/formatters';
 import { motion, AnimatePresence } from 'motion/react';
 
 const TracksManagement = () => {
@@ -130,7 +131,7 @@ const TracksManagement = () => {
               <button onClick={handleAnnounce} className="px-6 py-3 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#ff0068]/20"><Mic size={18} /></button>
               <button onClick={() => { if (isPlaying) audioRef.current?.pause(); else audioRef.current?.play(); setIsPlaying(!isPlaying); }} className="p-4 bg-emerald-500 text-white rounded-xl"><Play size={20} /></button>
             </div>
-            <audio ref={audioRef} src={currentTrack.trilha_url} className="hidden" />
+            <audio ref={audioRef} src={resolveTrilhaUrl(currentTrack.trilha_url)} className="hidden" />
           </div>
         </div>
       )}

@@ -1,3 +1,22 @@
+import { supabase } from '../services/supabase';
+
+/**
+ * registrations.trilha_url vem em 2 formatos dependendo de quem enviou:
+ *   - Inscrito via InscricaoWizard: salva só o PATH interno do bucket
+ *     'trilhas' (ex: "userId/evento_123.mp3"), sem domínio.
+ *   - Produtor via CentralDeMidia: salva a URL PÚBLICA completa (http...).
+ * Todo consumidor (Schedule.tsx: play, ZIP, duração; CentralDeMidia player)
+ * precisa resolver pro formato tocável — sem isso, o <audio>/fetch tenta
+ * carregar o path relativo à página (ex: app.coreohub.com/userId/..mp3) e
+ * falha silenciosamente. Bug real: coreografias com trilha enviada só pelo
+ * inscrito (nunca reenviada pela Central de Mídia) não tocavam em produção.
+ */
+export const resolveTrilhaUrl = (pathOrUrl?: string | null): string => {
+  if (!pathOrUrl) return '';
+  if (pathOrUrl.startsWith('http')) return pathOrUrl;
+  return supabase.storage.from('trilhas').getPublicUrl(pathOrUrl).data.publicUrl;
+};
+
 export const formatWhatsApp = (value: string) => {
   const nums = value.replace(/\D/g, '');
   if (nums.length <= 10) return nums.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
