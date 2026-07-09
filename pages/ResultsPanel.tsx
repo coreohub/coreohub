@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '../services/supabase';
 import { isStyleInList } from '../utils/styleMatch';
 import {
@@ -93,6 +93,39 @@ const ResultsPanel = () => {
   /** id da coreografia sendo limpa, ou 'all' — null = nada em andamento.
    *  Usado pro botão "Limpar avaliações de teste" (por linha + geral). */
   const [clearing, setClearing] = useState<string | null>(null);
+
+  /* ── Player de áudio único — evita 2 comentários tocando sobrepostos
+     quando o produtor clica em "Ouvir Áudio" mais de uma vez (mesmo
+     padrão já usado em MyResults.tsx pro inscrito). ── */
+  const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const playAudio = useCallback((url: string) => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+      audioRef.current = null;
+    }
+    if (playingAudio === url) {
+      setPlayingAudio(null);
+      return;
+    }
+    setPlayingAudio(url);
+    const audio = new Audio(url);
+    audioRef.current = audio;
+    audio.play().catch(() => setPlayingAudio(null));
+    audio.onended = () => setPlayingAudio(null);
+  }, [playingAudio]);
+
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+        audioRef.current = null;
+      }
+    };
+  }, []);
 
   /* ── Fetch ── */
   const fetchResults = async () => {
@@ -773,9 +806,13 @@ const ResultsPanel = () => {
                                     <div className="flex items-center gap-2 shrink-0">
                                       {sd.audio_url && (
                                         <button
-                                          onClick={e => { e.stopPropagation(); new Audio(sd.audio_url!).play(); }}
-                                          className="p-1.5 bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/20 rounded-lg text-violet-500 hover:bg-violet-100 dark:hover:bg-violet-500/20 transition-all"
-                                          title="Ouvir áudio do jurado"
+                                          onClick={e => { e.stopPropagation(); playAudio(sd.audio_url!); }}
+                                          className={`p-1.5 rounded-lg transition-all ${
+                                            playingAudio === sd.audio_url
+                                              ? 'bg-violet-500 text-white'
+                                              : 'bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/20 text-violet-500 hover:bg-violet-100 dark:hover:bg-violet-500/20'
+                                          }`}
+                                          title={playingAudio === sd.audio_url ? 'Pausar áudio do jurado' : 'Ouvir áudio do jurado'}
                                         >
                                           <Volume2 size={12} />
                                         </button>
@@ -881,10 +918,14 @@ const ResultsPanel = () => {
                                 </div>
                                 {sd.audio_url && (
                                   <button
-                                    onClick={e => { e.stopPropagation(); new Audio(sd.audio_url!).play(); }}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/20 rounded-xl text-[9px] font-black text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-500/20 transition-all"
+                                    onClick={e => { e.stopPropagation(); playAudio(sd.audio_url!); }}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black transition-all ${
+                                      playingAudio === sd.audio_url
+                                        ? 'bg-violet-500 text-white'
+                                        : 'bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/20 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-500/20'
+                                    }`}
                                   >
-                                    <Volume2 size={11} /> Ouvir Áudio
+                                    <Volume2 size={11} /> {playingAudio === sd.audio_url ? 'Pausar' : 'Ouvir Áudio'}
                                   </button>
                                 )}
                               </div>
