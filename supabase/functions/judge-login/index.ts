@@ -405,22 +405,18 @@ Deno.serve(async (req) => {
     // sempre via 0 resultados mesmo com dados reais na tabela.
     ;(evalRow as any).event_id = reg.event_id
 
-    // Phase 5: replay-safe insert. Se o cliente mandar client_uuid, usamos
-    // upsert com ignoreDuplicates pra detectar replay. Sem client_uuid (legacy)
-    // mantém INSERT cru — não regride comportamento atual.
-    let deduplicated = false
-    if (evalRow.client_uuid) {
-      const { data: upserted, error } = await supa
-        .from('evaluations')
-        .upsert([evalRow], { onConflict: 'client_uuid', ignoreDuplicates: true })
-        .select('id')
-      if (error) return json({ error: 'db_error', detail: error.message }, 500)
-      // ignoreDuplicates retorna [] quando bateu no UNIQUE — sinal de replay
-      deduplicated = !upserted || upserted.length === 0
-    } else {
-      const { error } = await supa.from('evaluations').insert([evalRow])
-      if (error) return json({ error: 'db_error', detail: error.message }, 500)
-    }
+    // Upsert por (judge_id, registration_id) — chave de negócio real. Reavaliar
+    // (2 dispositivos com o mesmo jurado, retry do outbox, ou reenvio manual)
+    // ATUALIZA a nota existente em vez de criar uma 2ª linha fantasma, que a
+    // Apuração lia como "divergência entre jurados" quando era a mesma pessoa
+    // avaliando 2x. client_uuid segue gravado (auditoria/idempotência do
+    // outbox), mas não é mais o alvo do conflito — a unicidade real é por
+    // jurado+coreografia (migration 20260709_evaluations_unique_judge_registration.sql).
+    const { error } = await supa
+      .from('evaluations')
+      .upsert([evalRow], { onConflict: 'judge_id,registration_id' })
+    if (error) return json({ error: 'db_error', detail: error.message }, 500)
+    const deduplicated = false
 
     // Phase 2B: também aceita destaques (prêmios especiais nomeados pelo jurado).
     // Phase 5: pula destaques no replay pra não duplicar (insert sem client_uuid).

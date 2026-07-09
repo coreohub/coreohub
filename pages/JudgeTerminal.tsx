@@ -1159,6 +1159,7 @@ const JudgeTerminal = () => {
         const evalRow = {
           registration_id:        currentPerformance.id,
           judge_id:               selectedJudge.id,
+          event_id:               currentPerformance.event_id,
           scores:                 {},
           criteria_weights:       [],
           final_weighted_average: null,
@@ -1169,14 +1170,18 @@ const JudgeTerminal = () => {
         if (judgeSession) {
           await enqueueEvaluation({ evalPayload: evalRow, audioBlob });
         } else {
-          // Fluxo legado (produtor logado): upload de áudio direto + insert
+          // Fluxo legado (produtor logado): upload de áudio direto + upsert.
+          // Reavaliar (2 dispositivos, ou reabrir e reenviar) atualiza a nota
+          // do mesmo jurado em vez de criar uma 2ª linha fantasma que a
+          // Apuração lia como "divergência entre jurados".
           let audioUrl: string | null = null;
           if (audioBlob) {
             const fn = `feedback_${currentPerformance.id}_${selectedJudge.id}_${Date.now()}.webm`;
             const { data: up, error: ue } = await supabase.storage.from('audio-feedbacks').upload(fn, audioBlob);
             if (!ue && up) audioUrl = supabase.storage.from('audio-feedbacks').getPublicUrl(fn).data.publicUrl;
           }
-          const { error: evalErr } = await supabase.from('evaluations').insert([{ ...evalRow, audio_url: audioUrl }]);
+          const { error: evalErr } = await supabase.from('evaluations')
+            .upsert([{ ...evalRow, audio_url: audioUrl }], { onConflict: 'judge_id,registration_id' });
           if (evalErr) throw evalErr;
         }
         setIsSubmitted(true);
@@ -1206,6 +1211,7 @@ const JudgeTerminal = () => {
       const evalRow = {
         registration_id:        currentPerformance.id,
         judge_id:               selectedJudge.id,
+        event_id:               currentPerformance.event_id,
         scores:                 numScores,
         criteria_weights:       activeCriteria,
         final_weighted_average: weightedAvg,
@@ -1217,13 +1223,16 @@ const JudgeTerminal = () => {
       if (judgeSession) {
         await enqueueEvaluation({ evalPayload: evalRow, audioBlob });
       } else {
+        // Upsert em vez de insert — reavaliar atualiza a nota do mesmo
+        // jurado em vez de duplicar (ver comentário no branch "Avaliada" acima).
         let audioUrl: string | null = null;
         if (audioBlob) {
           const fn = `feedback_${currentPerformance.id}_${selectedJudge.id}_${Date.now()}.webm`;
           const { data: up, error: ue } = await supabase.storage.from('audio-feedbacks').upload(fn, audioBlob);
           if (!ue && up) audioUrl = supabase.storage.from('audio-feedbacks').getPublicUrl(fn).data.publicUrl;
         }
-        const { error: evalErr } = await supabase.from('evaluations').insert([{ ...evalRow, audio_url: audioUrl }]);
+        const { error: evalErr } = await supabase.from('evaluations')
+          .upsert([{ ...evalRow, audio_url: audioUrl }], { onConflict: 'judge_id,registration_id' });
         if (evalErr) throw evalErr;
       }
 

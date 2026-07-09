@@ -757,7 +757,9 @@ const ResultsPanel = () => {
                                   Limpar
                                 </button>
                               </div>
-                              {entry.scores_detail.map((sd, i) => (
+                              {entry.scores_detail.map((sd, i) => {
+                                const feedbackNote = sd.audit_log?.feedback_text;
+                                return (
                                 <div key={i} className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl px-4 py-3">
                                   <div className="flex items-center justify-between gap-3">
                                     <div className="min-w-0">
@@ -800,8 +802,13 @@ const ResultsPanel = () => {
                                       ))}
                                     </div>
                                   )}
+                                  {feedbackNote && (
+                                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed border-t border-slate-100 dark:border-slate-800 mt-2 pt-2">
+                                      {feedbackNote}
+                                    </p>
+                                  )}
                                 </div>
-                              ))}
+                              );})}
                               {/* Outlier alert */}
                               {entry.has_outlier && (
                                 <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl">
