@@ -1179,6 +1179,7 @@ const JudgeTerminal = () => {
             const fn = `feedback_${currentPerformance.id}_${selectedJudge.id}_${Date.now()}.webm`;
             const { data: up, error: ue } = await supabase.storage.from('audio-feedbacks').upload(fn, audioBlob);
             if (!ue && up) audioUrl = supabase.storage.from('audio-feedbacks').getPublicUrl(fn).data.publicUrl;
+            else if (ue) console.error('[JudgeTerminal] upload audio-feedbacks falhou:', ue.message);
           }
           const { error: evalErr } = await supabase.from('evaluations')
             .upsert([{ ...evalRow, audio_url: audioUrl }], { onConflict: 'judge_id,registration_id' });
