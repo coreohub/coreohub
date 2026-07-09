@@ -243,6 +243,22 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-07-09 — Terminal de júri: nota duplicada + áudio nunca persistia + polimentos na Apuração ✅ SHIPADO
+
+7 commits (`d55ed03` → `7137b51`). Disparado por relato do Hemer: "os quesitos que aparecem pro jurado não são os mesmos configurados" + depois "avaliei e não vejo áudio" + "entramos sem querer em 2 dispositivos com o mesmo jurado".
+
+- **🐛 Investigação de quesitos divergentes — não era bug**: Sarah Tinel tem `competencias_artisticas` cobrindo quase todos os estilos dela (só K-Pop fica Técnico) — exatamente o exemplo documentado quando a feature "Tipo de Júri por estilo" foi criada em 2026-06-21. Config real do banco confirmada via SQL, nada a corrigir.
+- **🚨 Bug real — avaliação duplicada por jurado em 2 dispositivos** (`d55ed03`, migration `20260709_evaluations_unique_judge_registration.sql`): `evaluations` nunca teve trava por `(judge_id, registration_id)` — reabrir/reavaliar (2 devices, ou só re-submeter) sempre fazia `INSERT`, nunca `UPDATE`. Achado real em prod: Victor Big com 2 notas divergentes pra mesma coreografia, Daniela Morais com 3 — a Apuração lia isso como "divergência entre jurados" (outlier falso) quando era a MESMA pessoa avaliando 2x. Fix: migration dedupe (mantém a nota mais recente) + `UNIQUE(judge_id, registration_id)` + os 3 pontos que gravam nota (`JudgeTerminal.tsx` fluxo legado, `judge-login/index.ts` fluxo PIN+outbox) viraram `upsert` no lugar de `insert`.
+- **🚨 Bug real — áudio do jurado nunca persistia, 3 camadas** (`825c45a` → `d813ae7`):
+  1. Bucket `audio-feedbacks` nunca existia em produção (commit anterior à sessão, `919d0aa`/migration `20260709_audio_feedbacks_bucket.sql` — aplicada nessa sessão).
+  2. 2 pontos de erro **engolidos silenciosamente**, sem log algum: upload falho no fluxo legado (`catch` vazio) e permissão de microfone negada (`catch { /* mic denied */ }`) — ambos ganharam `console.error` explícito.
+  3. **Causa raiz de verdade**: `outboxDrainer.ts` (fila offline do fluxo real de jurado via PIN) carrega toda a fila em memória 1x no início do `drainOutbox()`. Quando `upload-audio` processa com sucesso ANTES do `submit-evaluation` dependente (mesma rodada, ordenação intencional), ele patcha o `audio_url` real no IndexedDB — mas o objeto `submit-evaluation` já carregado no array `items` continha um snapshot desatualizado (`audio_url: null`), e era esse que ia pro servidor. Nenhuma das duas operações falhava, por isso não aparecia erro nenhum apesar de 3 rodadas de log adicionado. Fix: `processItem` agora relê o item direto do IndexedDB (`getOutboxItem`, novo helper em `offlineStore.ts`) antes de checar dependência de áudio e antes de despachar.
+- **UI da Apuração — 3 ajustes** (`8dccd81`, `7137b51`):
+  1. Comentário escrito do jurado (`feedback_text`) passou a aparecer também na trilha de auditoria da aba "Mostra Competitiva" (antes só existia na aba "Mostra Avaliada" — texto ficava salvo no banco mas invisível nessa tela).
+  2. Nota numérica perdeu a cor por faixa (dourado/verde/âmbar/rosa) a pedido do Hemer — fica sempre branca/slate. Badge de medalha (Ouro/Prata/Bronze, configurável) continua colorido normalmente.
+  3. **Player de áudio único** — "Ouvir Áudio" criava um `new Audio().play()` solto a cada clique; 2 cliques tocavam 2 comentários sobrepostos. Mesmo padrão já usado em `MyResults.tsx` (lado do inscrito, que já estava correto): 1 `audioRef` compartilhado, toggle play/pause, pausa o anterior antes de tocar um novo.
+- **Descoberta lateral — `/entrar-juri` já existe e funciona**: código curto de 6 caracteres estilo Kahoot (migration `20260709_docs_voto_juri_short_code.sql`, já documentada) pra logar jurado em dispositivo novo sem QR/link longo. Só achado 1 link morto no rodapé de `EntrarJuri.tsx` ("Já tem o link direto? Acesse por aqui" aponta pra `/judge-login` sem token, que trava em "Link inválido") — **não corrigido ainda**, reportado.
+
 ### 2026-07-08 (noite) — Bundle Cronograma + webhook stale downgrade + migration não aplicada (2 bugs de produção) ✅ SHIPADO
 
 6 commits (`77aed6e` → `97a58d7`). Sessão reativa — todos os itens vieram de reports do produtor testando o Cronograma do Usualdance Festival às vésperas do evento (11/07).
@@ -833,6 +849,8 @@ BaaS aprovado, secrets prod configurados, webhook ativo, primeira subconta criad
 Priorização cronológica detalhada em `memory/MEMORY.md` + cada item tem sua memória dedicada.
 
 ### 🟧 P1 — Alta prioridade, baixo esforço, destravado
+
+**🟢 Link morto no rodapé de `/entrar-juri` (2026-07-09)**: "Já tem o link direto? Acesse por aqui" aponta pra `/judge-login` sem token — cai direto na tela "Link inválido ou expirado" (rota exige `:token` na URL, ver `pages/JudgeLogin.tsx`). Trocar por um link real (com token) ou remover a frase.
 
 **🟡 Migration commitada ≠ migration aplicada — auditar outras colunas recentes (2026-07-08 noite)**: `20260709_docs_voto_juri_short_code.sql` ficou meses sem rodar em prod (nunca colada no SQL Editor) e quebrou 2 telas ao mesmo tempo antes de alguém notar (vitrine pública em domínio custom + Configurações→Identidade), porque nenhum dos dois `select()` checava `error` — só `data`, que vem `null` tanto pra "não existe" quanto pra "coluna não existe no schema" (PGRST204). `PublicEventPage.tsx` já ganhou log defensivo; `AccountSettings.tsx` (linha ~1750, mesmo padrão de select amplo) ainda não. Vale: (1) replicar o log de erro lá, (2) considerar uma rotina de checar `information_schema.columns` vs. migrations commitadas não aplicadas antes de fechar sessão, já que o workflow do produtor é sempre colar SQL manual (nunca CLI/CI automatizado).
 
