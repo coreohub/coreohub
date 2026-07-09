@@ -25,6 +25,7 @@
 import {
   computeBackoff,
   getAudioBlob,
+  getOutboxItem,
   listDrainable,
   removeAudioBlob,
   removeOutboxItem,
@@ -138,7 +139,14 @@ const dispatch = async (item: OutboxItem): Promise<{ ok: true; result?: unknown 
   }
 };
 
-const processItem = async (item: OutboxItem) => {
+const processItem = async (rawItem: OutboxItem) => {
+  // Relê do IndexedDB antes de processar — `rawItem` pode ser uma cópia
+  // capturada no início do drain, já obsoleta se um upload-audio anterior
+  // (processado antes, na MESMA rodada) já tiver patchado o audio_url deste
+  // item. Sem isso, a nota subia sempre com audio_url:null mesmo quando o
+  // áudio já tinha sido enviado com sucesso segundos antes.
+  const item = (await getOutboxItem(rawItem.client_uuid)) ?? rawItem;
+
   // Pré-check: eval esperando upload de áudio. Se blob ainda existe, pula
   // sem incrementar attempts (senão a eval esgota MAX_ATTEMPTS só esperando
   // o áudio que tem ladder de retry própria).

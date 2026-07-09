@@ -194,6 +194,14 @@ export const removeOutboxItem = async (client_uuid: string) => {
   await db.delete('outbox', client_uuid);
 };
 
+/** Lê o item mais recente direto do IndexedDB — usado pra evitar processar
+ *  uma cópia obsoleta em memória (ex: submit-evaluation cujo audio_url já
+ *  foi patchado por um upload-audio processado antes, na mesma drenagem). */
+export const getOutboxItem = async (client_uuid: string): Promise<OutboxItem | undefined> => {
+  const db = await getDB();
+  return await db.get('outbox', client_uuid);
+};
+
 export const listOutbox = async (judge_id: string): Promise<OutboxItem[]> => {
   const db = await getDB();
   const all = await db.getAll('outbox');
