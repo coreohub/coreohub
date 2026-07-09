@@ -1587,7 +1587,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     intervalo_seguranca: 3,
     tempo_marcacao_palco: 45,
     gatilho_marcacao: 'MANUAL_MARCADOR' as 'MANUAL_MARCADOR' | 'MANUAL_COORDENADOR' | 'AUTO_SONOPLASTA',
-    modo_sonoplastia: 'MANUAL' as 'MANUAL' | 'SISTEMA',
+    modo_sonoplastia: 'MANUAL' as 'MANUAL' | 'SISTEMA' | 'TRILHA',
   });
 
   /* Test narration — gera entrada (+ saida se ativa) com template real
@@ -4417,7 +4417,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3 block">
                   Modo de Sonoplastia
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {([
                     {
                       v: 'MANUAL' as const,
@@ -4430,6 +4430,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       label: 'Sistema',
                       desc: 'App toca tudo em sequência: narração → espera → trilha → narração saída.',
                       hint: 'Eventos sem técnico · mostras escolares',
+                    },
+                    {
+                      v: 'TRILHA' as const,
+                      label: 'Trilha',
+                      desc: 'App toca só a trilha da coreografia (sem narração IA). Narrador anuncia ao vivo no microfone.',
+                      hint: 'Narrador ao vivo · reduz risco de rede',
                     },
                   ]).map(opt => {
                     const active = flowConfig.modo_sonoplastia === opt.v;
@@ -4454,6 +4460,15 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                               : 'text-slate-400 dark:text-white/30 bg-transparent border-transparent'
                           }`}>
                             💡 Requer Wi-Fi estável no evento — a trilha é buscada da nuvem em tempo real.
+                          </p>
+                        )}
+                        {opt.v === 'TRILHA' && (
+                          <p className={`mt-3 text-[10px] rounded-xl px-3 py-2 border transition-all ${
+                            active
+                              ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
+                              : 'text-slate-400 dark:text-white/30 bg-transparent border-transparent'
+                          }`}>
+                            💾 Trilhas baixadas pro tablet ao abrir o Cronograma — toca do cache local, sem depender da rede na hora do play.
                           </p>
                         )}
                       </button>
@@ -4546,6 +4561,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 <p className="text-xs text-slate-500 mb-3">
                   {flowConfig.modo_sonoplastia === 'SISTEMA'
                     ? 'No modo Sistema toca sozinha, logo após a trilha. Curta (3-8s), agradecimento ou transição.'
+                    : flowConfig.modo_sonoplastia === 'TRILHA'
+                    ? 'Ignorada no modo Trilha — o narrador encerra ao vivo no microfone, sem áudio do app.'
                     : 'Tocada manualmente pela Mesa de Som ao "Encerrar Apresentação". Curta (3-8s), agradecimento ou transição.'}
                 </p>
                 {flowConfig.narracao_saida_ativa && (

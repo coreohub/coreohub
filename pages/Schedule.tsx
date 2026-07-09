@@ -611,7 +611,13 @@ const Schedule = () => {
   const saidaAtiva = !!config?.narracao_saida_ativa;
   // Modo MANUAL = sonoplasta toca trilha em equipamento externo (default).
   // Modo SISTEMA = app toca sequencia narracao->wait->trilha->saida automaticamente.
+  // Modo TRILHA = app toca so a trilha (pre-cacheada), narrador anuncia ao vivo no microfone.
   const modoSistema = config?.modo_sonoplastia === 'SISTEMA';
+  const modoTrilha = config?.modo_sonoplastia === 'TRILHA';
+  // Pre-cache das trilhas do modo TRILHA: baixa tudo pro Cache Storage do
+  // navegador assim que a tela carrega, pra tocar independente da rede na
+  // hora do play (motivo real do modo — reduzir risco de engasgo ao vivo).
+  const [precacheStatus, setPrecacheStatus] = useState<{ done: number; total: number } | null>(null);
   const [playerSection, setPlayerSection] = useState<'idle' | 'entrada' | 'wait' | 'trilha' | 'saida'>('idle');
   const [trilhaProgress, setTrilhaProgress] = useState(0);
   const [trilhaDuration, setTrilhaDuration] = useState(0);
@@ -789,6 +795,62 @@ const Schedule = () => {
     }
   };
 
+  // Pre-cache das trilhas quando modo TRILHA está ativo. Roda em background,
+  // sem travar a tela — cache.match dedup natural evita rebaixar trilhas já
+  // baixadas em fetchs anteriores (reload de página, troca de evento e volta).
+  useEffect(() => {
+    if (!modoTrilha || !selectedEventId || !('caches' in window)) {
+      setPrecacheStatus(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const withTrack = registrations.filter((r) => !!r.trilha_url);
+      if (withTrack.length === 0) { setPrecacheStatus(null); return; }
+      setPrecacheStatus({ done: 0, total: withTrack.length });
+      try {
+        const cache = await caches.open(`coreohub-trilhas-${selectedEventId}`);
+        let done = 0;
+        for (const reg of withTrack) {
+          if (cancelled) return;
+          const url = reg.trilha_url!;
+          const existing = await cache.match(url);
+          if (!existing) {
+            try {
+              const res = await fetch(url);
+              if (res.ok) await cache.put(url, res.clone());
+            } catch (e) {
+              console.warn(`[Cronograma] Falha ao pré-cachear trilha de "${reg.nome_coreografia}":`, e);
+            }
+          }
+          done += 1;
+          if (!cancelled) setPrecacheStatus({ done, total: withTrack.length });
+        }
+      } catch (e) {
+        console.warn('[Cronograma] Falha ao abrir cache de trilhas:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [modoTrilha, selectedEventId, registrations]);
+
+  // Resolve a URL da trilha pro <audio>: cache local (modo TRILHA já
+  // pré-cacheado) tem prioridade; sem cache (ou API indisponível), cai pra
+  // rede direto — nunca bloqueia o play.
+  const resolveTrilhaSrc = async (url: string): Promise<string> => {
+    if (!modoTrilha || !selectedEventId || !('caches' in window)) return url;
+    try {
+      const cache = await caches.open(`coreohub-trilhas-${selectedEventId}`);
+      const hit = await cache.match(url);
+      if (hit) {
+        const blob = await hit.blob();
+        return URL.createObjectURL(blob);
+      }
+    } catch (e) {
+      console.warn('[Cronograma] Falha ao ler cache de trilha, usando rede:', e);
+    }
+    return url;
+  };
+
   // ---------- narração helpers (espelhando MesaDeSom) ----------
   const buildNarrationText = (reg: Registration, kind: NarrationKind = 'entrada'): string => {
     const fallback = kind === 'saida'
@@ -820,9 +882,12 @@ const Schedule = () => {
       narrationAudioRef.current = null;
     }
     if (trilhaAudioRef.current) {
+      const prevSrc = trilhaAudioRef.current.src;
       trilhaAudioRef.current.pause();
       trilhaAudioRef.current.src = '';
       trilhaAudioRef.current = null;
+      // Object URL do blob cacheado (modo TRILHA) — liberar memória.
+      if (prevSrc.startsWith('blob:')) URL.revokeObjectURL(prevSrc);
     }
     if (sequenceTimerRef.current) {
       clearInterval(sequenceTimerRef.current);
@@ -1034,6 +1099,33 @@ const Schedule = () => {
     audio.play().catch(e => console.warn('Falha ao tocar narração:', e));
   };
 
+  // Modo TRILHA: toca só a trilha da coreografia (sem narração IA) — o
+  // narrador anuncia ao vivo no microfone. Usa o cache local quando
+  // disponível (pré-cacheado no efeito acima), senão cai pra rede.
+  const playTrilhaOnly = async (reg: Registration) => {
+    stopAnyAudio();
+    if (!reg.trilha_url) {
+      console.warn(`[Cronograma] "${reg.nome_coreografia}" sem trilha_url — nada pra tocar em modo Trilha.`);
+      return;
+    }
+    setPlayerSection('trilha');
+    setIsPlaying(true);
+    const src = await resolveTrilhaSrc(reg.trilha_url);
+    const audio = new Audio(src);
+    trilhaAudioRef.current = audio;
+    audio.addEventListener('loadedmetadata', () => setTrilhaDuration(audio.duration || 0));
+    audio.addEventListener('timeupdate', () => setTrilhaProgress(audio.currentTime));
+    audio.addEventListener('play', () => setIsPlaying(true));
+    audio.addEventListener('pause', () => setIsPlaying(false));
+    audio.addEventListener('ended', () => { setPlayerSection('idle'); setIsPlaying(false); });
+    audio.addEventListener('error', (e) => {
+      console.error('[Cronograma] Falha ao tocar trilha (modo Trilha):', e);
+      setPlayerSection('idle');
+      setIsPlaying(false);
+    });
+    audio.play().catch(e => console.warn('Falha ao tocar trilha:', e));
+  };
+
   const handleAnnounce = (reg: Registration, kind: NarrationKind = 'entrada') => {
     const pre = audios[reg.id]?.[kind];
     if (pre?.audio_url) {
@@ -1068,6 +1160,19 @@ const Schedule = () => {
   };
 
   const togglePlayPause = () => {
+    if (modoTrilha) {
+      const t = trilhaAudioRef.current;
+      if (t && t.src) {
+        if (t.paused) {
+          t.play().catch(e => console.warn('Falha ao retomar trilha:', e));
+        } else {
+          t.pause();
+        }
+        return;
+      }
+      if (currentTrack) playTrilhaOnly(currentTrack);
+      return;
+    }
     const a = narrationAudioRef.current;
     if (a && a.src) {
       if (a.paused) {
@@ -1103,6 +1208,9 @@ const Schedule = () => {
     if (modoSistema) {
       // Modo SISTEMA: dispara sequencia automatica entrada->wait->trilha->saida
       startSequenceMode(reg);
+    } else if (modoTrilha) {
+      // Modo TRILHA: so toca a trilha (cache local), narrador anuncia ao vivo.
+      await playTrilhaOnly(reg);
     } else {
       // Modo MANUAL (default): so toca a narracao de entrada; sonoplasta
       // controla a trilha em equipamento externo.
@@ -1121,7 +1229,8 @@ const Schedule = () => {
 
   const handleEndLive = async () => {
     const ending = currentTrack;
-    if (saidaAtiva && ending && audios[ending.id]?.saida) {
+    // Modo TRILHA nunca toca narração de saída — o narrador encerra ao vivo.
+    if (!modoTrilha && saidaAtiva && ending && audios[ending.id]?.saida) {
       handleAnnounce(ending, 'saida');
     } else {
       stopAnyAudio();
@@ -2259,6 +2368,20 @@ const Schedule = () => {
         </div>
       )}
 
+      {/* Indicador de pré-cache do modo TRILHA — some sozinho quando termina */}
+      {modoTrilha && precacheStatus && precacheStatus.done < precacheStatus.total && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest">
+          <Loader2 size={12} className="animate-spin" />
+          Baixando trilhas pro tablet: {precacheStatus.done}/{precacheStatus.total}
+        </div>
+      )}
+      {modoTrilha && precacheStatus && precacheStatus.done === precacheStatus.total && precacheStatus.total > 0 && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest">
+          <CheckCircle2 size={12} />
+          {precacheStatus.total} trilhas prontas offline neste tablet
+        </div>
+      )}
+
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
@@ -2342,19 +2465,23 @@ const Schedule = () => {
           </div>
 
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => currentTrack && handleAnnounce(currentTrack)}
-              disabled={!currentTrack}
-              className="p-4 bg-white/5 text-white rounded-2xl hover:bg-white/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
-              title="Anunciar com Narração IA"
-            >
-              <Volume2 size={24} className="group-hover:text-[#ff0068] transition-colors" />
-            </button>
+            {/* Modo TRILHA não tem narração IA — narrador fala ao vivo no
+                microfone, então esse botão só existe nos outros 2 modos. */}
+            {!modoTrilha && (
+              <button
+                onClick={() => currentTrack && handleAnnounce(currentTrack)}
+                disabled={!currentTrack}
+                className="p-4 bg-white/5 text-white rounded-2xl hover:bg-white/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
+                title="Anunciar com Narração IA"
+              >
+                <Volume2 size={24} className="group-hover:text-[#ff0068] transition-colors" />
+              </button>
+            )}
             <button
               onClick={togglePlayPause}
               disabled={!currentTrack}
               className="w-16 h-16 bg-[#ff0068] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-[#ff0068]/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              title={isPlaying ? 'Pausar narração' : 'Tocar narração'}
+              title={isPlaying ? (modoTrilha ? 'Pausar trilha' : 'Pausar narração') : (modoTrilha ? 'Tocar trilha' : 'Tocar narração')}
             >
               {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" className="ml-1" />}
             </button>
