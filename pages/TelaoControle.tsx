@@ -142,6 +142,10 @@ const TelaoControle: React.FC = () => {
     festival_not_found: 'Este evento não está vinculado a um festival no Voto Popular.',
     group_not_linked: 'A coreografia vencedora não está vinculada a essa inscrição no CoreoHub.',
     registration_not_found: 'Inscrição vencedora não encontrada no CoreoHub.',
+    unauthorized: 'Sessão expirada — recarregue a página e tente de novo.',
+    'evento não encontrado': 'Evento não encontrado.',
+    'sem permissão': 'Você não tem permissão pra revelar esse resultado neste evento.',
+    'integração do voto não configurada': 'Integração com o Voto Popular não está configurada (fala com o suporte).',
   };
 
   const revelarAward = async (a: Premio) => {
@@ -164,8 +168,18 @@ const TelaoControle: React.FC = () => {
           await sendPremiacao({ tipo: 'manual', titulo: a.nome, valor, nome: w.nome, estudio: w.estudio });
           return;
         }
-        const reason = (data as any)?.reason as string | undefined;
-        setVotoError(reason ? (votoReasonLabel[reason] ?? 'Resultado automático indisponível.') : 'Resultado automático indisponível.');
+        // Em status != 2xx, supabase.functions.invoke devolve data:null — sem
+        // ler o corpo real da resposta (error.context), toda falha de config/
+        // auth/permissão colapsava na mesma mensagem genérica "indisponível",
+        // impossível de diagnosticar na hora da cerimônia.
+        let reason = (data as any)?.reason ?? (data as any)?.error as string | undefined;
+        if (!reason && error && typeof (error as any).context?.json === 'function') {
+          try {
+            const body = await (error as any).context.json();
+            reason = body?.reason ?? body?.error;
+          } catch { /* corpo não era JSON — segue com reason undefined */ }
+        }
+        setVotoError(reason ? (votoReasonLabel[reason] ?? reason) : 'Resultado automático indisponível.');
       } catch {
         setVotoError('Não foi possível buscar o resultado automático do Voto Popular.');
       } finally {

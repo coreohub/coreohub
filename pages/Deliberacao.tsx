@@ -128,8 +128,17 @@ const Deliberacao: React.FC = () => {
     try {
       await removeMarcacao(registration_id);
       setData(prev => prev ? { ...prev, marcacoes: prev.marcacoes.filter(m => m.registration_id !== registration_id) } : prev);
+      // Sem isso, uma atribuição de prêmio já feita pra essa marcação (hidratada
+      // de data.deliberations no load) continuava em `attributions` e voltava
+      // sozinha no próximo "Enviar premiação" (snapshot semantics reinsere tudo
+      // que está em `attributions`) — a marcação "removida" reaparecia.
+      setAttributions(prev => prev.filter(a => a.registration_id !== registration_id));
     } catch (e: any) {
-      setSubmitError(e?.message ?? 'Não foi possível remover a marcação.');
+      setSubmitError(
+        e?.message === 'already_released'
+          ? 'Resultados já liberados pelo produtor — não é mais possível remover marcações.'
+          : (e?.message ?? 'Não foi possível remover a marcação.')
+      );
     } finally {
       setRemovingOrphan(null);
     }
@@ -280,9 +289,10 @@ const Deliberacao: React.FC = () => {
                       {myAttribs.map(a => (
                         <button
                           key={a.award_id}
-                          onClick={() => removeAttribution(m.registration_id, a.award_id)}
-                          className="flex items-center gap-1.5 px-2.5 py-1 bg-violet-100 dark:bg-violet-500/15 border border-violet-200 dark:border-violet-500/30 rounded-full text-violet-700 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-500/25 transition-all"
-                          title="Remover esta atribuição"
+                          onClick={() => !locked && removeAttribution(m.registration_id, a.award_id)}
+                          disabled={locked}
+                          className="flex items-center gap-1.5 px-2.5 py-1 bg-violet-100 dark:bg-violet-500/15 border border-violet-200 dark:border-violet-500/30 rounded-full text-violet-700 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-500/25 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+                          title={locked ? 'Resultados já liberados — não é mais possível alterar' : 'Remover esta atribuição'}
                         >
                           <Trophy size={10} />
                           <span className="text-[10px] font-black uppercase tracking-widest">{a.award_name}</span>

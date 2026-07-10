@@ -50,6 +50,7 @@ const judgeEn: Record<JudgeDictKey, string> = {
   'jumpTo.placeholder': 'E.g. 12',
   'jumpTo.cta': 'Go',
   'jumpTo.notFound': 'Performance #{n} not found',
+  'jumpTo.textAmbiguous': '{count} performances match this search — tap the right one in the list below.',
   'jumpTo.hint': '{count} performances available',
 
   // Manual navigation (performance list + previous)

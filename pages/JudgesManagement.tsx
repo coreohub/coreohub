@@ -298,19 +298,34 @@ const JudgesManagement = () => {
       const activeJudges = judges.filter(j => j.is_active !== false);
       if (activeJudges.length === 0) { alert('Nenhum jurado ativo pra gerar a súmula.'); return; }
 
+      // `judges` não tem event_id (é uma entidade do produtor, reusada entre
+      // edições) — sem isso, jurado de uma edição anterior ainda marcado
+      // ativo, cujos gêneros configurados não batem com NENHUMA coreografia
+      // do evento atual, ganhava uma folha inteira em branco pra imprimir à
+      // toa. Pula quem não teria nada pra avaliar neste evento.
+      const judgesWithQueue = activeJudges
+        .map(judge => {
+          const genresOf = judge.competencias_generos ?? [];
+          const queue = genresOf.length === 0
+            ? schedule
+            : schedule.filter((r: any) => isStyleInList(r.estilo_danca, genresOf));
+          return { judge, queue };
+        })
+        .filter(({ queue }) => queue.length > 0);
+
+      if (judgesWithQueue.length === 0) {
+        alert('Nenhum jurado ativo tem apresentações na fila deste evento — confira as competências de gênero configuradas.');
+        return;
+      }
+
       const { default: jsPDF } = await import('jspdf');
       const { default: autoTable } = await import('jspdf-autotable');
       const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
 
-      activeJudges.forEach((judge, idx) => {
+      judgesWithQueue.forEach(({ judge, queue }, idx) => {
         if (idx > 0) doc.addPage();
-
-        const genresOf = judge.competencias_generos ?? [];
-        const queue = genresOf.length === 0
-          ? schedule
-          : schedule.filter((r: any) => isStyleInList(r.estilo_danca, genresOf));
 
         doc.setFillColor(255, 0, 104);
         doc.rect(0, 0, pageWidth, 24, 'F');

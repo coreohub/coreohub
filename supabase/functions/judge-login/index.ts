@@ -531,14 +531,21 @@ Deno.serve(async (req) => {
       ? awardsRaw.filter((a: any) => a && a.enabled)
       : []
 
-    // Carrega só as registrations marcadas (otimiza payload)
+    // Carrega só as registrations marcadas (otimiza payload). Sem checar
+    // `error` aqui, uma falha transitória nessa query fazia TODA marcação
+    // parecer "órfã" no /deliberacao (registrations virava [] mesmo com as
+    // inscrições intactas) — e como marcacoes_juri.registration_id tem
+    // ON DELETE CASCADE, uma órfã de verdade (inscrição realmente apagada)
+    // já teria apagado a própria marcação junto. Se chegou até aqui com
+    // marcacoes não-vazio mas essa query falhar, é bug de fetch, não órfã.
     const regIds = (marcacoes ?? []).map((m: any) => m.registration_id)
     let registrations: any[] = []
     if (regIds.length > 0) {
-      const { data: regs } = await supa
+      const { data: regs, error: regsErr } = await supa
         .from('registrations')
         .select('id, nome_coreografia, estudio, estilo_danca, categoria, tipo_apresentacao, formacao')
         .in('id', regIds)
+      if (regsErr) return json({ error: 'db_error', detail: regsErr.message }, 500)
       registrations = regs ?? []
     }
 
@@ -562,6 +569,13 @@ Deno.serve(async (req) => {
 
     const event = await resolveActiveEvent()
     if (!event?.id) return json({ ok: false, reason: 'no_event' }, 400)
+
+    // Mesma trava do submit-deliberation — sem isso, o botão "Remover
+    // marcação" (desabilitado só no client via `locked`) ainda apagava
+    // marcacoes_juri de verdade pós-LIBERADO via POST direto/aba stale.
+    if (event.deliberation_status === 'LIBERADO') {
+      return json({ ok: false, reason: 'already_released' }, 409)
+    }
 
     // Sem checar se a registration existe (diferente de submit-star) — é
     // exatamente pra desatolar marcações cuja inscrição foi apagada depois

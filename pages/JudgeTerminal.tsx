@@ -1412,15 +1412,23 @@ const JudgeTerminal = () => {
       return;
     }
     // Texto: se sobrou só 1 resultado na busca, Enter/"Ir" já pula pra ele.
+    // 0 ou 2+ resultados precisa de feedback explícito — sem isso, Enter
+    // parecia não fazer nada (só o branch numérico setava erro antes).
     const q = raw.toLowerCase();
     const matches = filteredSchedule
       .map((p: any, i: number) => ({ p, i }))
       .filter(({ p }) => `${p.nome_coreografia ?? ''} ${p.estudio ?? ''}`.toLowerCase().includes(q));
-    if (matches.length === 1) {
-      setJumpToInput('');
-      setJumpToError(null);
-      requestGoToIndex(matches[0].i);
+    if (matches.length === 0) {
+      setJumpToError(t('nav.searchEmpty'));
+      return;
     }
+    if (matches.length > 1) {
+      setJumpToError(t('jumpTo.textAmbiguous', { count: String(matches.length) }));
+      return;
+    }
+    setJumpToInput('');
+    setJumpToError(null);
+    requestGoToIndex(matches[0].i);
   };
 
   /* ── PIN handlers ── */

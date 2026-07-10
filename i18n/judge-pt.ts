@@ -52,6 +52,7 @@ const judgePt = {
   'jumpTo.placeholder': 'Ex: 12',
   'jumpTo.cta': 'Ir',
   'jumpTo.notFound': 'Apresentação #{n} não encontrada',
+  'jumpTo.textAmbiguous': '{count} apresentações batem com essa busca — toque na certa na lista abaixo.',
   'jumpTo.hint': '{count} apresentações disponíveis',
 
   // Navegação manual (lista de apresentações + anterior)

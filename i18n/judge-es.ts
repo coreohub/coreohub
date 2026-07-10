@@ -50,6 +50,7 @@ const judgeEs: Record<JudgeDictKey, string> = {
   'jumpTo.placeholder': 'Ej.: 12',
   'jumpTo.cta': 'Ir',
   'jumpTo.notFound': 'Presentación #{n} no encontrada',
+  'jumpTo.textAmbiguous': '{count} presentaciones coinciden con esa búsqueda — toca la correcta en la lista de abajo.',
   'jumpTo.hint': '{count} presentaciones disponibles',
 
   // Navegación manual (lista de presentaciones + anterior)
