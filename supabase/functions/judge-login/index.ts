@@ -526,9 +526,20 @@ Deno.serve(async (req) => {
         .maybeSingle(),
     ])
 
+    // Só oferece pro jurado atribuir os prêmios do tipo "deliberação" (ex:
+    // Melhor Bailarino/Coreógrafo). Faixa (Ouro/Prata/Bronze), Maior Nota e
+    // Voto Popular se calculam sozinhos no Telão (TelaoControle.tsx:classify)
+    // — atribuir marcação a eles aqui não tem efeito nenhum na revelação,
+    // só confundia o jurado (dropdown oferecia opção que não fazia nada).
+    // Mesma regex de classify(), duplicada aqui porque o edge function (Deno)
+    // não importa código do frontend React.
+    const isAutoComputedAward = (name: string, description?: string) => {
+      const t = `${name ?? ''} ${description ?? ''}`.toLowerCase()
+      return /\bouro\b|gold|\bprata\b|silver|\bbronze\b|maior nota|grand.?prix|voto popular|vote\./.test(t)
+    }
     const awardsRaw = (configByEvent ?? configLegacy)?.premios_especiais ?? []
     const awards = Array.isArray(awardsRaw)
-      ? awardsRaw.filter((a: any) => a && a.enabled)
+      ? awardsRaw.filter((a: any) => a && a.enabled && !isAutoComputedAward(a.name, a.description))
       : []
 
     // Carrega só as registrations marcadas (otimiza payload). Sem checar
