@@ -539,7 +539,7 @@ const App: React.FC = () => {
             entra na página. */}
         <Route path="/check-in" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm={['checkin_inscritos', 'checkin_ingressos', 'checkin_workshops', 'checkin_equipe', 'checkin_jurados']}><CheckIn /></RequirePermission></PrivateRoute>} />
         <Route path="/marcacao-palco" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm="marcacao_palco"><StageMarker /></RequirePermission></PrivateRoute>} />
-        <Route path="/telao-palco" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><TelaoControle /></Suspense></PrivateRoute>} />
+        <Route path="/telao-palco" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="controle_telao"><TelaoControle /></RequirePermission></Suspense></PrivateRoute>} />
         <Route path="/minha-equipe" element={<PrivateRoute {...privateRouteProps}><EquipeProdutor /></PrivateRoute>} />
         <Route path="/suporte-juri" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm="suporte_juri"><SuporteJuri /></RequirePermission></PrivateRoute>} />
         <Route path="/ingressos" element={<PrivateRoute {...privateRouteProps}><Ingressos /></PrivateRoute>} />
@@ -581,7 +581,7 @@ const App: React.FC = () => {
         <Route path="/vendas-ingressos" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="vendas_ingressos"><VendasIngressos /></RequirePermission></Suspense></PrivateRoute>} />
         <Route path="/workshops-do-evento" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="gerenciar_workshops"><WorkshopsManagement /></RequirePermission></Suspense></PrivateRoute>} />
         <Route path="/cupons"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="gerenciar_cupons"><Coupons /></RequirePermission></Suspense></PrivateRoute>} />
-        <Route path="/avisos"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><Avisos /></Suspense></PrivateRoute>} />
+        <Route path="/avisos"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="gerenciar_avisos"><Avisos /></RequirePermission></Suspense></PrivateRoute>} />
         <Route path="/festival/:idOrSlug" element={<FestivalShowcase />} />
         {/* Inscrição unificada: ambas as rotas renderizam o mesmo Wizard.
             /inscrever (sem modalidade) → mostra Passo 0 (seleção visual de

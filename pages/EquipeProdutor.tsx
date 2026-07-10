@@ -26,37 +26,37 @@ const EQUIPE_ROLES: {
     value: UserRole.COORDENADOR, label: 'Coordenador',
     desc: 'Acesso amplo — cronograma, credenciamento, jurados, palco e vendas.',
     icon: Shield, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: true, checkin_inscritos: true, checkin_ingressos: true, checkin_workshops: true, checkin_equipe: true, checkin_jurados: true, marcacao_palco: true, suporte_juri: true, inscricoes_leitura: true, triagem: true, seletiva_video: true, vendas_ingressos: true, gerenciar_cupons: true, gerenciar_workshops: true, emitir_certificados: true, resultados_leitura: true },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: true, checkin_inscritos: true, checkin_ingressos: true, checkin_workshops: true, checkin_equipe: true, checkin_jurados: true, marcacao_palco: true, suporte_juri: true, inscricoes_leitura: true, triagem: true, seletiva_video: true, vendas_ingressos: true, gerenciar_cupons: true, gerenciar_workshops: true, emitir_certificados: true, resultados_leitura: true, controle_telao: true, gerenciar_avisos: true },
   },
   {
     value: UserRole.MESARIO, label: 'Coordenador do Júri',
     desc: 'Suporte à banca: verifica terminais e controla presença dos jurados. Lidera a premiação.',
     icon: Headphones, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, checkin_inscritos: false, checkin_ingressos: false, checkin_workshops: false, checkin_equipe: false, checkin_jurados: false, marcacao_palco: false, suporte_juri: true, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: true },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, checkin_inscritos: false, checkin_ingressos: false, checkin_workshops: false, checkin_equipe: false, checkin_jurados: false, marcacao_palco: false, suporte_juri: true, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: true, controle_telao: false, gerenciar_avisos: false },
   },
   {
     value: UserRole.SONOPLASTA, label: 'Sonoplasta',
     desc: 'Opera o áudio e pode reordenar o cronograma em tempo real.',
     icon: Music2, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: true, checkin_inscritos: false, checkin_ingressos: false, checkin_workshops: false, checkin_equipe: false, checkin_jurados: false, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: false },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: true, checkin_inscritos: false, checkin_ingressos: false, checkin_workshops: false, checkin_equipe: false, checkin_jurados: false, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: false, controle_telao: false, gerenciar_avisos: false },
   },
   {
     value: UserRole.RECEPCAO, label: 'Recepção / Palco',
     desc: 'Acompanha o cronograma, faz check-in de público e tira dúvidas sobre vendas.',
     icon: Users, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, checkin_inscritos: true, checkin_ingressos: true, checkin_workshops: true, checkin_equipe: false, checkin_jurados: false, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: true, triagem: false, seletiva_video: false, vendas_ingressos: true, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: false },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, checkin_inscritos: true, checkin_ingressos: true, checkin_workshops: true, checkin_equipe: false, checkin_jurados: false, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: true, triagem: false, seletiva_video: false, vendas_ingressos: true, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: false, controle_telao: false, gerenciar_avisos: false },
   },
   {
     value: UserRole.PALCO, label: 'Marcador de Palco',
     desc: 'Prepara o palco entre apresentações com cronômetro dedicado.',
     icon: PersonStanding, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, checkin_inscritos: false, checkin_ingressos: false, checkin_workshops: false, checkin_equipe: false, checkin_jurados: false, marcacao_palco: true, suporte_juri: false, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: false },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: true, cronograma_editar: false, checkin_inscritos: false, checkin_ingressos: false, checkin_workshops: false, checkin_equipe: false, checkin_jurados: false, marcacao_palco: true, suporte_juri: false, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: false, controle_telao: false, gerenciar_avisos: false },
   },
   {
     value: UserRole.APOIO_WORKSHOP, label: 'Apoio de Workshop',
     desc: 'Só escaneia QR de presença nas aulas de workshop — sem ver inscrições, ingressos, dados financeiros ou outros crachás.',
     icon: QrCode, color: 'text-slate-700 dark:text-white bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10',
-    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: false, cronograma_editar: false, checkin_inscritos: false, checkin_ingressos: false, checkin_workshops: true, checkin_equipe: false, checkin_jurados: false, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: false },
+    preset: { financeiro: false, validar_pagamentos: false, cronograma_leitura: false, cronograma_editar: false, checkin_inscritos: false, checkin_ingressos: false, checkin_workshops: true, checkin_equipe: false, checkin_jurados: false, marcacao_palco: false, suporte_juri: false, inscricoes_leitura: false, triagem: false, seletiva_video: false, vendas_ingressos: false, gerenciar_cupons: false, gerenciar_workshops: false, emitir_certificados: false, resultados_leitura: false, controle_telao: false, gerenciar_avisos: false },
   },
 ];
 
@@ -90,6 +90,8 @@ const PERM_GROUPS: { label: string; items: { key: PermKey; label: string; icon: 
     items: [
       { key: 'marcacao_palco',  label: 'Marcação de Palco', icon: Mic2 },
       { key: 'suporte_juri',    label: 'Coordenador do Júri', icon: Star },
+      { key: 'controle_telao',  label: 'Telão de Palco', icon: Mic2 },
+      { key: 'gerenciar_avisos', label: 'Avisos do Produtor', icon: Star },
     ],
   },
   {

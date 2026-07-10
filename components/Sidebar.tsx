@@ -86,6 +86,8 @@ const PERM_MENU: { perm: PermKey; path: string; label: string; icon: React.Eleme
   { perm: 'checkin_inscritos',  path: '/credenciais',     label: 'Credenciais',         icon: QrCode          },
   { perm: 'marcacao_palco',     path: '/marcacao-palco',  label: 'Marcação de Palco',   icon: PersonStanding  },
   { perm: 'suporte_juri',       path: '/suporte-juri',    label: 'Coordenador do Júri', icon: Headphones      },
+  { perm: 'controle_telao',     path: '/telao-palco',     label: 'Telão de Palco',      icon: MonitorPlay     },
+  { perm: 'gerenciar_avisos',   path: '/avisos',          label: 'Avisos',              icon: Megaphone       },
   { perm: 'inscricoes_leitura', path: '/registrations',   label: 'Inscrições',          icon: ClipboardList   },
   { perm: 'triagem',            path: '/registrations',   label: 'Triagem',             icon: Filter          },
   { perm: 'seletiva_video',     path: '/seletiva-video',  label: 'Seletiva de Vídeo',   icon: Video           },

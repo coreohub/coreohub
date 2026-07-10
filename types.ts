@@ -297,6 +297,14 @@ export interface PermissoesCustom {
   /** Leitura de Apuração + Premiação. Coordenador/Mesário acompanha
    *  resultados durante e após o evento (read-only). */
   resultados_leitura: boolean;
+  /** Controla o Telão de Palco (gerar/regenerar código, ligar/desligar,
+   *  revelar premiação). Rota sensível — sem essa permissão explícita,
+   *  só o produtor/COREOHUB_ADMIN acessa (2026-07-10, achado de revisão:
+   *  a rota não tinha nenhum gate, só ficava escondida do menu). */
+  controle_telao: boolean;
+  /** Publica Avisos vistos por todos os inscritos do evento. Mesma
+   *  classe de achado do controle_telao — rota sem gate até 2026-07-10. */
+  gerenciar_avisos: boolean;
 }
 
 export const PERMISSOES_DEFAULT: PermissoesCustom = {
@@ -319,6 +327,8 @@ export const PERMISSOES_DEFAULT: PermissoesCustom = {
   gerenciar_workshops: false,
   emitir_certificados: false,
   resultados_leitura: false,
+  controle_telao: false,
+  gerenciar_avisos: false,
 };
 
 export interface Profile {
