@@ -3,7 +3,7 @@ import {
   UserPlus, Pencil, Trash2, Instagram, Fingerprint,
   ShieldCheck, KeyRound, X, Save, Loader2, RefreshCw,
   Mic, Award, ChevronDown, ChevronUp, Upload, Camera,
-  CheckCircle2, AlertCircle, Copy, Eye, EyeOff, Link as LinkIcon,
+  CheckCircle2, AlertCircle, Copy, Eye, EyeOff,
   Hash, Sparkles, FileDown, MessageCircle,
 } from 'lucide-react';
 
@@ -117,11 +117,11 @@ const JudgesManagement = () => {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [showPin, setShowPin] = useState(false);
-  const [copiedField, setCopiedField] = useState<'pin' | 'link' | 'invite' | null>(null);
+  const [copiedField, setCopiedField] = useState<'pin' | 'invite' | null>(null);
   const [revealedPinId, setRevealedPinId] = useState<string | null>(null);
   const [publishingAll, setPublishingAll] = useState(false);
 
-  const copyToClipboard = async (text: string, field: 'pin' | 'link' | 'invite') => {
+  const copyToClipboard = async (text: string, field: 'pin' | 'invite') => {
     try {
       await navigator.clipboard.writeText(text);
       setCopiedField(field);
@@ -129,13 +129,30 @@ const JudgesManagement = () => {
     } catch {}
   };
 
-  /* Código curto de acesso (/entrar-juri) — mesmo padrão Kahoot do Telão de
-     Palco. Resolve o problema de logar um dispositivo novo sem depender de
-     e-mail/WhatsApp: produtor mostra/fala 6 caracteres, jurado digita em
-     app.coreohub.com/entrar-juri e cai direto na seleção de nome + PIN. */
+  /* Acesso do jurado — 1 link só (app.coreohub.com/entrar-juri) + 1 código
+     de 6 caracteres, mesmo padrão Kahoot (kahoot.it + PIN). O link assinado
+     por token (/judge-login/<uuid>) continua existindo como rota interna —
+     é pra onde /entrar-juri redireciona depois de resolver o código — mas
+     nunca mais aparece pro produtor copiar/compartilhar: expor 2 "links"
+     pra fazer a mesma coisa é o que gerava a confusão original. A QR code
+     também aponta pro /entrar-juri (com o código já preenchido), não pro
+     link cru — escanear ou digitar caem no mesmo lugar. */
   const [shortCode, setShortCode] = useState<string | null>(null);
   const [shortCodeLoading, setShortCodeLoading] = useState(false);
   const [shortCodeCopied, setShortCodeCopied] = useState(false);
+  const [invitePanelOpen, setInvitePanelOpen] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(false);
+
+  const fetchShortCode = async (): Promise<string> => {
+    if (shortCode !== null) return shortCode;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return '';
+    const { data: profile } = await supabase
+      .from('profiles').select('judge_short_code').eq('id', user.id).maybeSingle();
+    const code = profile?.judge_short_code ?? '';
+    setShortCode(code);
+    return code;
+  };
 
   const generateShortCode = async () => {
     setShortCodeLoading(true);
@@ -159,102 +176,29 @@ const JudgesManagement = () => {
     } catch {}
   };
 
-  // Link direto assinado (token por produtor) — antes só copiava pro
-  // clipboard sem mostrar nada na tela. Agora abre um painel com a URL
-  // visível + QR code (padrão Kahoot/Eventbrite: scan pra abrir direto
-  // num dispositivo novo, sem digitar nada) + botão copiar.
-  const [judgeAccessUrl, setJudgeAccessUrl] = useState<string | null>(null);
-  const [linkPanelLoading, setLinkPanelLoading] = useState(false);
-
-  const fetchJudgeAccessUrl = async (): Promise<string | null> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('judge_access_token')
-      .eq('id', user.id)
-      .maybeSingle();
-    const token = profile?.judge_access_token;
-    if (!token) return null;
-    return `${window.location.origin}/judge-login/${token}`;
-  };
-
-  /* Painel único "Convidar jurados" — antes eram 2 botões/painéis separados
-     (Link dos jurados / Código de acesso), forçando o produtor a decidir
-     qual abrir sem saber a diferença. Agora é 1 botão com abas, cada uma
-     carrega o próprio dado sob demanda (lazy) na primeira vez que é vista. */
-  const [invitePanelOpen, setInvitePanelOpen] = useState(false);
-  const [inviteTab, setInviteTab] = useState<'link' | 'code'>('link');
-
-  const loadInviteTabData = async (tab: 'link' | 'code') => {
-    if (tab === 'link') {
-      if (judgeAccessUrl !== null) return;
-      setLinkPanelLoading(true);
-      try {
-        const url = await fetchJudgeAccessUrl();
-        if (!url) { alert('Não foi possível gerar o link. Recarregue a página e tente de novo.'); return; }
-        setJudgeAccessUrl(url);
-      } finally {
-        setLinkPanelLoading(false);
-      }
-    } else {
-      if (shortCode !== null) return;
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data: profile } = await supabase
-        .from('profiles').select('judge_short_code').eq('id', user.id).maybeSingle();
-      setShortCode(profile?.judge_short_code ?? '');
-    }
-  };
+  const entrarJuriUrl = (code: string) => `${window.location.origin}/entrar-juri?code=${code}`;
 
   const toggleInvitePanel = async () => {
     const opening = !invitePanelOpen;
     setInvitePanelOpen(opening);
-    if (opening) await loadInviteTabData(inviteTab);
+    if (opening) await fetchShortCode();
   };
 
-  const switchInviteTab = async (tab: 'link' | 'code') => {
-    setInviteTab(tab);
-    await loadInviteTabData(tab);
-  };
-
-  const copyJudgeAccessLink = async () => {
-    const url = judgeAccessUrl ?? await fetchJudgeAccessUrl();
-    if (!url) { alert('Não foi possível gerar o link. Recarregue a página e tente de novo.'); return; }
-    await copyToClipboard(url, 'link');
-  };
-
-  /* Convite pronto pra WhatsApp — bunda link + código curto + o lembrete de
-     instalar app numa mensagem só, em vez do produtor ter que explicar isso
-     na hora ou copiar link e código separados (2 cliques + 2 explicações). */
-  const [inviteLoading, setInviteLoading] = useState(false);
-
+  /* Convite pronto pra WhatsApp — 1 link + 1 código, sem o link cru assinado
+     por token que só confundia (2 "links" fazendo a mesma coisa). */
   const copyInviteMessage = async () => {
     setInviteLoading(true);
     try {
-      const url = judgeAccessUrl ?? await fetchJudgeAccessUrl();
-      if (!url) { alert('Não foi possível gerar o link. Recarregue a página e tente de novo.'); return; }
-      setJudgeAccessUrl(url);
-
-      let code = shortCode;
-      if (code === null) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: profile } = await supabase
-            .from('profiles').select('judge_short_code').eq('id', user.id).maybeSingle();
-          code = profile?.judge_short_code ?? '';
-        }
-      }
+      let code = await fetchShortCode();
       if (!code) {
         const { data, error } = await supabase.rpc('regenerate_judge_short_code');
         if (error) throw error;
         code = data as string;
+        setShortCode(code);
       }
-      setShortCode(code);
 
       const message = `Você foi convidado(a) como jurado(a)!\n\n` +
-        `Toque no link pra entrar direto:\n${url}\n\n` +
-        `Sem o link? Acesse app.coreohub.com/entrar-juri e digite o código: ${code}\n\n` +
+        `Acesse app.coreohub.com/entrar-juri e digite o código: ${code}\n\n` +
         `Quando abrir, toque em "Instalar app" pra deixar salvo na tela do celular/tablet.`;
 
       await copyToClipboard(message, 'invite');
@@ -681,9 +625,9 @@ const JudgesManagement = () => {
             aria-expanded={invitePanelOpen}
             aria-controls="invite-panel"
             className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Ver link (QR code) ou código curto de acesso pros jurados"
+            title="Ver código + QR de acesso pros jurados"
           >
-            <LinkIcon size={14} /> Link e código
+            <Hash size={14} /> Código de acesso
           </button>
           <button
             onClick={exportSumulaPDF}
@@ -702,127 +646,61 @@ const JudgesManagement = () => {
         </div>
       </div>
 
-      {/* Painel único "Convidar jurados" com 2 abas — Link direto (QR, pra
-          escanear e abrir sem digitar nada) e Código curto (pra ler em voz
-          alta ou digitar em app.coreohub.com/entrar-juri). Antes eram 2
-          botões/painéis separados sem explicar quando usar cada um. */}
+      {/* Painel único de acesso do jurado — 1 link (app.coreohub.com/entrar-juri)
+          + 1 código de 6 caracteres, mesmo padrão Kahoot (kahoot.it + PIN).
+          A QR aponta pro próprio /entrar-juri com o código preenchido — ela
+          é só um atalho pro mesmo link, não um segundo caminho diferente. */}
       {invitePanelOpen && (
-        <div id="invite-panel" className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden">
-          <div role="tablist" aria-label="Forma de convite" className="flex border-b border-slate-100 dark:border-white/10">
-            <button
-              id="invite-tab-link"
-              role="tab"
-              aria-selected={inviteTab === 'link'}
-              aria-controls="invite-tabpanel-link"
-              onClick={() => switchInviteTab('link')}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 text-[10px] font-black uppercase tracking-widest transition-colors ${
-                inviteTab === 'link'
-                  ? 'text-[#ff0068] border-b-2 border-[#ff0068]'
-                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
-              }`}
-            >
-              <LinkIcon size={13} /> Link direto (QR)
-            </button>
-            <button
-              id="invite-tab-code"
-              role="tab"
-              aria-selected={inviteTab === 'code'}
-              aria-controls="invite-tabpanel-code"
-              onClick={() => switchInviteTab('code')}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 text-[10px] font-black uppercase tracking-widest transition-colors ${
-                inviteTab === 'code'
-                  ? 'text-[#ff0068] border-b-2 border-[#ff0068]'
-                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
-              }`}
-            >
-              <Hash size={13} /> Código curto
-            </button>
+        <div id="invite-panel" className="p-5 bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-2xl flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068] shrink-0"><Hash size={18} /></div>
+          <div className="flex-1">
+            <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white">
+              Acesso do jurado
+            </p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+              Peça pro jurado abrir <span className="font-bold">app.coreohub.com/entrar-juri</span> e digitar o código — ou escanear o QR, que abre o mesmo link com o código já preenchido.
+            </p>
+            <p className="text-[10px] text-slate-400 mt-1">
+              Ao entrar, o jurado vai ver os botões <strong className="text-slate-500 dark:text-slate-300">"Instalar app"</strong> (salva na tela do dispositivo) e <strong className="text-slate-500 dark:text-slate-300">"Configurar como Terminal"</strong> (fixa o tablet nessa tela pras próximas vezes).
+            </p>
           </div>
-
-          {inviteTab === 'link' ? (
-            <div id="invite-tabpanel-link" role="tabpanel" aria-labelledby="invite-tab-link" className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white">
-                  Link direto de acesso
-                </p>
-                {linkPanelLoading ? (
-                  <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> Gerando link...</p>
-                ) : judgeAccessUrl ? (
-                  <>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate" title={judgeAccessUrl}>{judgeAccessUrl}</p>
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      Use pra <strong className="text-slate-500 dark:text-slate-300">1 dispositivo por vez</strong>: escaneie o QR com a câmera do celular/tablet do jurado, ou copie o link e mande por WhatsApp.
-                    </p>
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      Ao abrir, o jurado vai ver os botões <strong className="text-slate-500 dark:text-slate-300">"Instalar app"</strong> (salva na tela do dispositivo) e <strong className="text-slate-500 dark:text-slate-300">"Configurar como Terminal"</strong> (fixa o tablet nessa tela pras próximas vezes) — não precisa mais fazer nada além disso.
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-[10px] text-rose-400 mt-1">Não foi possível gerar o link.</p>
-                )}
-              </div>
-              {judgeAccessUrl && (
-                <div className="flex items-center gap-3 shrink-0">
-                  <div className="p-2 bg-white rounded-xl">
-                    <QRCodeCanvas value={judgeAccessUrl} size={72} level="M" />
-                  </div>
-                  <button
-                    onClick={copyJudgeAccessLink}
-                    className="p-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-500 hover:text-[#ff0068] transition-colors"
-                    title="Copiar link"
-                    aria-label="Copiar link"
-                  >
-                    {copiedField === 'link' ? <CheckCircle2 size={16} className="text-emerald-500" /> : <Copy size={16} />}
-                  </button>
+          <div className="flex items-center gap-3 shrink-0">
+            {shortCode ? (
+              <>
+                <div className="p-2 bg-white rounded-xl">
+                  <QRCodeCanvas value={entrarJuriUrl(shortCode)} size={72} level="M" />
                 </div>
-              )}
-            </div>
-          ) : (
-            <div id="invite-tabpanel-code" role="tabpanel" aria-labelledby="invite-tab-code" className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-              <div className="flex-1">
-                <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white">
-                  Acesso rápido em vários dispositivos
-                </p>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  Use pra <strong className="text-slate-700 dark:text-slate-300">falar em voz alta</strong> pra vários jurados de uma vez (padrão Kahoot): peça pra abrirem <span className="font-bold">app.coreohub.com/entrar-juri</span> e digitarem o código abaixo — sem precisar de e-mail ou WhatsApp.
-                </p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {shortCode ? (
-                  <>
-                    <span className="px-4 py-2.5 bg-slate-100 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl text-lg font-black tracking-[0.25em] text-slate-900 dark:text-white">
-                      {shortCode}
-                    </span>
-                    <button
-                      onClick={copyShortCode}
-                      className="p-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-500 hover:text-[#ff0068] transition-colors"
-                      title="Copiar código"
-                      aria-label="Copiar código"
-                    >
-                      {shortCodeCopied ? <CheckCircle2 size={16} className="text-emerald-500" /> : <Copy size={16} />}
-                    </button>
-                    <button
-                      onClick={generateShortCode}
-                      disabled={shortCodeLoading}
-                      className="p-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-500 hover:text-[#ff0068] transition-colors disabled:opacity-50"
-                      title="Gerar novo código (revoga o atual)"
-                      aria-label="Gerar novo código"
-                    >
-                      {shortCodeLoading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={generateShortCode}
-                    disabled={shortCodeLoading}
-                    className="px-4 py-2.5 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2 disabled:opacity-50"
-                  >
-                    {shortCodeLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Gerar código
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
+                <span className="px-4 py-2.5 bg-slate-100 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl text-lg font-black tracking-[0.25em] text-slate-900 dark:text-white">
+                  {shortCode}
+                </span>
+                <button
+                  onClick={copyShortCode}
+                  className="p-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-500 hover:text-[#ff0068] transition-colors"
+                  title="Copiar código"
+                  aria-label="Copiar código"
+                >
+                  {shortCodeCopied ? <CheckCircle2 size={16} className="text-emerald-500" /> : <Copy size={16} />}
+                </button>
+                <button
+                  onClick={generateShortCode}
+                  disabled={shortCodeLoading}
+                  className="p-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-500 hover:text-[#ff0068] transition-colors disabled:opacity-50"
+                  title="Gerar novo código (revoga o atual)"
+                  aria-label="Gerar novo código"
+                >
+                  {shortCodeLoading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={generateShortCode}
+                disabled={shortCodeLoading}
+                className="px-4 py-2.5 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {shortCodeLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Gerar código
+              </button>
+            )}
+          </div>
         </div>
       )}
 

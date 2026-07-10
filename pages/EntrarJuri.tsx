@@ -1,29 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Gavel, Loader2, ArrowRight, AlertCircle } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
 /**
- * Entrada por código curto pro Terminal de Júri — mesmo padrão Kahoot já
- * validado no Telão de Palco (/telao). Resolve o problema de logar um
- * dispositivo novo sem precisar de e-mail/WhatsApp: o produtor mostra/fala
- * um código de 6 caracteres (gerado em /equipe-jurados-config) e o jurado
- * digita aqui — sem nunca ver o UUID longo do link direto.
+ * Entrada por código curto pro Terminal de Júri — mesmo padrão Kahoot
+ * (kahoot.it + PIN): 1 link único, 1 código de 6 caracteres. O produtor
+ * mostra/fala o código (gerado em /equipe-jurados) e o jurado digita aqui
+ * — sem nunca ver o link assinado por token que existe só como rota
+ * interna de destino. A QR code do produtor também aponta pra cá com
+ * `?code=` preenchido — escanear é só um atalho pro mesmo formulário,
+ * não um segundo caminho diferente.
  *
  * Rota: /entrar-juri (pública, sem login).
  */
 const EntrarJuri: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const autoSubmittedRef = useRef(false);
 
-  useEffect(() => { inputRef.current?.focus(); }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = code.trim();
+  const submitCode = async (raw: string) => {
+    const trimmed = raw.trim();
     if (trimmed.length < 4) {
       setError('Digite o código completo.');
       return;
@@ -44,6 +45,27 @@ const EntrarJuri: React.FC = () => {
       setError('Não foi possível verificar o código agora. Tente de novo.');
       setLoading(false);
     }
+  };
+
+  // QR code do produtor codifica /entrar-juri?code=XXXXXX — escanear entra
+  // sozinho, sem o jurado digitar nada (mesma experiência que copiar o link
+  // direto oferecia antes, mas sem expor 2 caminhos diferentes).
+  useEffect(() => {
+    const fromQuery = searchParams.get('code');
+    if (fromQuery && !autoSubmittedRef.current) {
+      autoSubmittedRef.current = true;
+      const normalized = fromQuery.toUpperCase().slice(0, 6);
+      setCode(normalized);
+      submitCode(normalized);
+      return;
+    }
+    inputRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submitCode(code);
   };
 
   return (
@@ -87,10 +109,6 @@ const EntrarJuri: React.FC = () => {
             {loading ? <Loader2 size={16} className="animate-spin" /> : <>Entrar <ArrowRight size={14} /></>}
           </button>
         </form>
-
-        <p className="text-center text-[10px] text-slate-500 mt-8">
-          Recebeu um link direto do produtor (com QR code)? Abra ele no navegador — não precisa digitar o código aqui.
-        </p>
       </div>
     </div>
   );
