@@ -679,6 +679,7 @@ const JudgesManagement = () => {
             onClick={toggleInvitePanel}
             disabled={judges.length === 0}
             aria-expanded={invitePanelOpen}
+            aria-controls="invite-panel"
             className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Ver link (QR code) ou código curto de acesso pros jurados"
           >
@@ -706,24 +707,32 @@ const JudgesManagement = () => {
           alta ou digitar em app.coreohub.com/entrar-juri). Antes eram 2
           botões/painéis separados sem explicar quando usar cada um. */}
       {invitePanelOpen && (
-        <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden">
-          <div className="flex border-b border-slate-100 dark:border-white/10">
+        <div id="invite-panel" className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden">
+          <div role="tablist" aria-label="Forma de convite" className="flex border-b border-slate-100 dark:border-white/10">
             <button
+              id="invite-tab-link"
+              role="tab"
+              aria-selected={inviteTab === 'link'}
+              aria-controls="invite-tabpanel-link"
               onClick={() => switchInviteTab('link')}
               className={`flex-1 flex items-center justify-center gap-2 py-3 text-[10px] font-black uppercase tracking-widest transition-colors ${
                 inviteTab === 'link'
                   ? 'text-[#ff0068] border-b-2 border-[#ff0068]'
-                  : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
               }`}
             >
               <LinkIcon size={13} /> Link direto (QR)
             </button>
             <button
+              id="invite-tab-code"
+              role="tab"
+              aria-selected={inviteTab === 'code'}
+              aria-controls="invite-tabpanel-code"
               onClick={() => switchInviteTab('code')}
               className={`flex-1 flex items-center justify-center gap-2 py-3 text-[10px] font-black uppercase tracking-widest transition-colors ${
                 inviteTab === 'code'
                   ? 'text-[#ff0068] border-b-2 border-[#ff0068]'
-                  : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
               }`}
             >
               <Hash size={13} /> Código curto
@@ -731,7 +740,7 @@ const JudgesManagement = () => {
           </div>
 
           {inviteTab === 'link' ? (
-            <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div id="invite-tabpanel-link" role="tabpanel" aria-labelledby="invite-tab-link" className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white">
                   Link direto de acesso
@@ -769,7 +778,7 @@ const JudgesManagement = () => {
               )}
             </div>
           ) : (
-            <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div id="invite-tabpanel-code" role="tabpanel" aria-labelledby="invite-tab-code" className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="flex-1">
                 <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white">
                   Acesso rápido em vários dispositivos
