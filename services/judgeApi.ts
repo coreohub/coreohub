@@ -230,6 +230,21 @@ export const toggleStar = async (registration_id: string): Promise<boolean> => {
   return Boolean(data.starred);
 };
 
+/** Apaga uma marcação órfã (registration já deletada) — diferente de toggleStar,
+ *  não exige que a inscrição ainda exista. */
+export const removeMarcacao = async (registration_id: string): Promise<void> => {
+  const { token, judge_id } = requireJudgeSession();
+  const { data, status } = await callJudgeFn({
+    action: 'remove-marcacao',
+    token,
+    judge_id,
+    registration_id,
+  });
+  if (status !== 200 || !data?.ok) {
+    throw new Error(data?.detail ?? data?.reason ?? 'failed_to_remove_marcacao');
+  }
+};
+
 /** Lista marcações + deliberações já feitas pelo jurado (pra tela /deliberacao). */
 export const fetchStarred = async (): Promise<StarredData> => {
   const { token, judge_id } = requireJudgeSession();

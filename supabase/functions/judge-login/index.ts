@@ -15,6 +15,8 @@
  *   Phase 3 — Deliberação de prêmios especiais:
  *   { action: "submit-star", token, judge_id, registration_id } — toggle estrela na apresentação
  *   { action: "get-starred", token, judge_id } — lista marcações do jurado pra /deliberacao
+ *   { action: "remove-marcacao", token, judge_id, registration_id } — apaga marcação órfã
+ *     (registration já deletada — submit-star não serve pra isso pois exige a registration existir)
  *   { action: "submit-deliberation", token, judge_id, attributions: [{ registration_id, award_id, award_name }] }
  *   { action: "get-conferencia", token, judge_id } — atribuições do jurado + agregado anônimo do evento
  *
@@ -550,6 +552,30 @@ Deno.serve(async (req) => {
     })
   }
 
+  // ─── action: remove-marcacao (apaga marcação órfã — registration já deletada) ──
+  if (action === 'remove-marcacao') {
+    const { judge_id, registration_id } = body ?? {}
+    if (!judge_id || !registration_id) return json({ ok: false, reason: 'missing_fields' }, 400)
+
+    const judge = await verifyJudge(judge_id)
+    if (!judge) return json({ ok: false, reason: 'judge_not_found' }, 404)
+
+    const event = await resolveActiveEvent()
+    if (!event?.id) return json({ ok: false, reason: 'no_event' }, 400)
+
+    // Sem checar se a registration existe (diferente de submit-star) — é
+    // exatamente pra desatolar marcações cuja inscrição foi apagada depois
+    // de marcada, que "get-starred" retorna mas nenhuma tela consegue exibir.
+    const { error } = await supa
+      .from('marcacoes_juri')
+      .delete()
+      .eq('judge_id', judge_id)
+      .eq('event_id', event.id)
+      .eq('registration_id', registration_id)
+    if (error) return json({ error: 'db_error', detail: error.message }, 500)
+    return json({ ok: true })
+  }
+
   // ─── action: submit-deliberation (jurado atribui prêmios às marcações) ──
   if (action === 'submit-deliberation') {
     const { judge_id, attributions } = body ?? {}
@@ -562,6 +588,14 @@ Deno.serve(async (req) => {
 
     const event = await resolveActiveEvent()
     if (!event?.id) return json({ ok: false, reason: 'no_event' }, 400)
+
+    // Trava real: o banner do /deliberacao promete "resultados já liberados,
+    // não podem mais ser alteradas" — mas até aqui isso só existia como texto
+    // na UI, sem checagem no servidor. Qualquer POST direto (ou uma corrida
+    // de clique) ainda conseguia sobrescrever deliberações pós-LIBERADO.
+    if (event.deliberation_status === 'LIBERADO') {
+      return json({ ok: false, reason: 'already_released' }, 409)
+    }
 
     // Strategy: snapshot semantics — apaga deliberações antigas do jurado
     // pro evento e reinsere. Idempotente, simples de raciocinar.

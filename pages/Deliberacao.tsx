@@ -19,7 +19,7 @@ import {
   Star, Trophy, ChevronLeft, Loader2, Check, AlertCircle,
   Plus, X as XIcon, Send,
 } from 'lucide-react';
-import { fetchStarred, submitDeliberation, type StarredData, type DeliberationAttribution } from '../services/judgeApi';
+import { fetchStarred, submitDeliberation, removeMarcacao, type StarredData, type DeliberationAttribution } from '../services/judgeApi';
 import { readJudgeSession } from './JudgeLogin';
 
 type Attribution = { registration_id: string; award_id: string; award_name: string };
@@ -34,6 +34,8 @@ const Deliberacao: React.FC = () => {
   const [attributions, setAttributions] = useState<Attribution[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitted,  setSubmitted]  = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [removingOrphan, setRemovingOrphan] = useState<string | null>(null);
 
   /* ── Load ── */
   useEffect(() => {
@@ -91,6 +93,7 @@ const Deliberacao: React.FC = () => {
 
   const handleSubmit = async () => {
     setSubmitting(true);
+    setSubmitError(null);
     try {
       const payload: DeliberationAttribution[] = attributions.map(a => ({
         registration_id: a.registration_id,
@@ -102,9 +105,33 @@ const Deliberacao: React.FC = () => {
       // Vai pra conferência depois de 1.5s
       setTimeout(() => navigate('/conferencia'), 1500);
     } catch (e: any) {
-      setError(e?.message ?? 'failed_to_submit');
+      // Erro inline — antes usava o mesmo state `error` da tela de carregamento,
+      // que substituía a tela INTEIRA (perdia as marcações/atribuições feitas).
+      setSubmitError(
+        e?.message === 'already_released'
+          ? 'Resultados já liberados pelo produtor — não é mais possível enviar/alterar atribuições.'
+          : (e?.message ?? 'Não foi possível enviar. Tente de novo.')
+      );
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const locked = data?.event?.deliberation_status === 'LIBERADO';
+
+  // Marcação órfã: registration foi apagada depois de marcada com ⭐. Sem isso
+  // ela ficava contando em "N apresentações marcadas" mas invisível na lista
+  // (regsById.get() retornava undefined e o card nem renderizava) — jurado via
+  // o contador não bater com o que aparecia na tela, sem explicação nenhuma.
+  const removeOrphan = async (registration_id: string) => {
+    setRemovingOrphan(registration_id);
+    try {
+      await removeMarcacao(registration_id);
+      setData(prev => prev ? { ...prev, marcacoes: prev.marcacoes.filter(m => m.registration_id !== registration_id) } : prev);
+    } catch (e: any) {
+      setSubmitError(e?.message ?? 'Não foi possível remover a marcação.');
+    } finally {
+      setRemovingOrphan(null);
     }
   };
 
@@ -203,7 +230,26 @@ const Deliberacao: React.FC = () => {
 
             {marcacoes.map(m => {
               const reg = regsById.get(m.registration_id);
-              if (!reg) return null;
+              if (!reg) {
+                return (
+                  <div
+                    key={m.registration_id}
+                    className="bg-slate-50 dark:bg-white/5 border border-dashed border-slate-300 dark:border-white/20 rounded-2xl p-4 flex items-center gap-3"
+                  >
+                    <AlertCircle size={16} className="text-slate-400 shrink-0" />
+                    <p className="min-w-0 flex-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                      Coreografia não encontrada — provavelmente foi removida da inscrição depois de marcada.
+                    </p>
+                    <button
+                      onClick={() => removeOrphan(m.registration_id)}
+                      disabled={removingOrphan === m.registration_id || locked}
+                      className="shrink-0 px-3 py-1.5 bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/20 disabled:opacity-40 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 transition-all"
+                    >
+                      {removingOrphan === m.registration_id ? '…' : 'Remover marcação'}
+                    </button>
+                  </div>
+                );
+              }
 
               const myAttribs = awardsForReg(m.registration_id);
               const availableAwards = (data?.awards ?? []).filter(a =>
@@ -247,7 +293,7 @@ const Deliberacao: React.FC = () => {
                   )}
 
                   {/* Dropdown pra adicionar prêmio */}
-                  {availableAwards.length > 0 && (
+                  {availableAwards.length > 0 && !locked && (
                     <div className="pl-6">
                       <select
                         value=""
@@ -283,16 +329,21 @@ const Deliberacao: React.FC = () => {
       {marcacoes.length > 0 && (
         <footer className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 px-4 py-3">
           <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
-            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-              {submitted
-                ? <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400"><Check size={12} /> Enviado!</span>
-                : `${attributions.length} atribuiç${attributions.length === 1 ? 'ão' : 'ões'} pra enviar`
-              }
-            </p>
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                {submitted
+                  ? <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400"><Check size={12} /> Enviado!</span>
+                  : `${attributions.length} atribuiç${attributions.length === 1 ? 'ão' : 'ões'} pra enviar`
+                }
+              </p>
+              {submitError && (
+                <p role="alert" className="mt-1 text-[10px] font-bold text-rose-500 truncate">{submitError}</p>
+              )}
+            </div>
             <button
               onClick={handleSubmit}
-              disabled={submitting || submitted}
-              className="px-5 py-2.5 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#d4005a] transition-all disabled:opacity-50 flex items-center gap-2"
+              disabled={submitting || submitted || locked}
+              className="shrink-0 px-5 py-2.5 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#d4005a] transition-all disabled:opacity-50 flex items-center gap-2"
             >
               {submitting ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
               {submitted ? 'Enviado' : 'Enviar premiação'}

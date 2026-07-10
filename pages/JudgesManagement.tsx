@@ -4,7 +4,7 @@ import {
   ShieldCheck, KeyRound, X, Save, Loader2, RefreshCw,
   Mic, Award, ChevronDown, ChevronUp, Upload, Camera,
   CheckCircle2, AlertCircle, Copy, Eye, EyeOff, Link as LinkIcon,
-  Hash, Sparkles,
+  Hash, Sparkles, FileDown,
 } from 'lucide-react';
 
 const generatePin = (): string => String(Math.floor(Math.random() * 10000)).padStart(4, '0');
@@ -252,6 +252,135 @@ const JudgesManagement = () => {
     competencias_artisticas: row.competencias_artisticas || [],
   });
 
+  /* ── Súmula Geral (PDF) — folha em branco por jurado, contingência de papel
+     se o terminal cair. 1 grupo de páginas por jurado ativo, listando só as
+     apresentações que caem na fila DELE (mesmo filtro de gênero do terminal:
+     JudgeTerminal.tsx `filteredSchedule`). Critérios/pesos vêm de
+     regras_avaliacao.globalRules — overrides por gênero não entram aqui
+     ainda (mesma limitação seria replicar toda a lógica de resolveGenreCriteria
+     do terminal; a maioria dos eventos usa os mesmos critérios pro evento
+     inteiro, overrides são exceção pontual). */
+  const [exportingSumula, setExportingSumula] = useState(false);
+
+  const exportSumulaPDF = async () => {
+    setExportingSumula(true);
+    try {
+      const { resolveActiveEventId, fetchActiveEventConfig } = await import('../services/supabase');
+      const eventId = await resolveActiveEventId();
+      if (!eventId) { alert('Nenhum evento ativo encontrado.'); return; }
+
+      let eventName = 'Evento';
+      let editionYear = new Date().getFullYear();
+      const { data: ev } = await supabase.from('events').select('name, edition_year, start_date').eq('id', eventId).maybeSingle();
+      if (ev) {
+        eventName = ev.name || eventName;
+        editionYear = ev.edition_year ?? (ev.start_date ? new Date(ev.start_date).getFullYear() : editionYear);
+      }
+
+      const cfg = await fetchActiveEventConfig('regras_avaliacao, escala_notas');
+      const DEFAULT_CRITERIOS = [
+        { name: 'Performance', peso: 2 }, { name: 'Criatividade', peso: 2 },
+        { name: 'Musicalidade', peso: 2 }, { name: 'Técnica', peso: 2 }, { name: 'Figurino', peso: 2 },
+      ];
+      const globalCriterios = (cfg?.regras_avaliacao as any)?.globalRules?.criterios;
+      const criterios: { name: string; peso: number }[] = Array.isArray(globalCriterios) && globalCriterios.length > 0
+        ? globalCriterios : DEFAULT_CRITERIOS;
+      const scale = cfg?.escala_notas === 'BASE_100' ? '0–100' : '0–10';
+
+      const { data: regs } = await supabase
+        .from('registrations')
+        .select('id, nome_coreografia, estudio, estilo_danca, ordem_apresentacao, excluded_from_schedule, event_data')
+        .eq('event_id', eventId)
+        .or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO')
+        .order('ordem_apresentacao', { ascending: true });
+      const schedule = (regs ?? []).filter((r: any) => !r.excluded_from_schedule);
+
+      const activeJudges = judges.filter(j => j.is_active !== false);
+      if (activeJudges.length === 0) { alert('Nenhum jurado ativo pra gerar a súmula.'); return; }
+
+      const { default: jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
+      const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+
+      activeJudges.forEach((judge, idx) => {
+        if (idx > 0) doc.addPage();
+
+        const genresOf = judge.competencias_generos ?? [];
+        const queue = genresOf.length === 0
+          ? schedule
+          : schedule.filter((r: any) => isStyleInList(r.estilo_danca, genresOf));
+
+        doc.setFillColor(255, 0, 104);
+        doc.rect(0, 0, pageWidth, 24, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(15);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Súmula Geral de Avaliação', 14, 11);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${eventName.toUpperCase()} · Edição ${editionYear} · Jurado: ${judge.name} · Escala ${scale}`, 14, 18);
+
+        let y = 32;
+        doc.setFontSize(7.5);
+        doc.setTextColor(120, 120, 120);
+        doc.text('ASSINATURA', 14, y);
+        doc.text('DATA', pageWidth - 40, y);
+        doc.setDrawColor(200, 200, 200);
+        doc.line(14, y + 7, 130, y + 7);
+        doc.line(pageWidth - 40, y + 7, pageWidth - 14, y + 7);
+        y += 14;
+
+        const head = ['Nº', 'Coreografia', 'Estúdio/Grupo', ...criterios.map(c => `${c.name} (peso ${c.peso})`), 'Nota Final', 'Obs.'];
+        const body = queue.length > 0
+          ? queue.map((r: any) => [
+              String(r.ordem_apresentacao ?? '—'),
+              r.nome_coreografia ?? '—',
+              (r.estudio?.trim?.() || r.event_data?.estudio_nome || '—'),
+              ...criterios.map(() => ''),
+              '',
+              '',
+            ])
+          : [['—', 'Nenhuma apresentação na fila deste jurado (gêneros configurados não batem com o cronograma)', '', ...criterios.map(() => ''), '', '']];
+
+        const critStart = 3;
+        const columnStyles: Record<number, any> = {
+          0: { cellWidth: 9, halign: 'center', fontStyle: 'bold' },
+          1: { cellWidth: 46, fontStyle: 'bold' },
+          2: { cellWidth: 40 },
+          [critStart + criterios.length]: { cellWidth: 22, halign: 'center', fillColor: [255, 240, 246] },
+        };
+        criterios.forEach((_, i) => { columnStyles[critStart + i] = { cellWidth: 26, halign: 'center' }; });
+
+        autoTable(doc, {
+          head: [head],
+          body,
+          startY: y,
+          theme: 'grid',
+          headStyles: { fillColor: [26, 26, 26], textColor: 255, fontSize: 6.8, fontStyle: 'bold', halign: 'center', valign: 'middle' },
+          bodyStyles: { fontSize: 8, textColor: 40, minCellHeight: 9 },
+          columnStyles,
+          margin: { left: 14, right: 14 },
+        });
+
+        doc.setFontSize(7.5);
+        doc.setTextColor(140, 140, 140);
+        doc.text('Confirmo que as notas acima são minhas — assinatura do jurado. Só contingência de papel: em caso de rede voltar, avaliação real fica no terminal.', 14, pageHeight - 8);
+      });
+
+      const slug = (eventName || 'evento')
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
+      doc.save(`sumula-geral-${editionYear}-${slug}.pdf`);
+    } catch (err) {
+      console.error('Erro ao exportar súmula:', err);
+      alert('Falha ao gerar a súmula: ' + (err instanceof Error ? err.message : 'desconhecido'));
+    } finally {
+      setExportingSumula(false);
+    }
+  };
+
   /* ── open modal ── */
   const openAdd = () => {
     setEditingJudge(null);
@@ -483,6 +612,14 @@ const JudgesManagement = () => {
             title="Código curto pra dispositivo novo entrar em app.coreohub.com/entrar-juri"
           >
             <Hash size={14} /> Código de acesso
+          </button>
+          <button
+            onClick={exportSumulaPDF}
+            disabled={exportingSumula || judges.length === 0}
+            className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Baixa 1 folha em branco por jurado — contingência de papel se o terminal falhar no dia"
+          >
+            {exportingSumula ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />} Súmula (PDF)
           </button>
           <button
             onClick={openAdd}
