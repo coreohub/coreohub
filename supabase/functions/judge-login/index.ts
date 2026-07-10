@@ -543,7 +543,7 @@ Deno.serve(async (req) => {
     if (regIds.length > 0) {
       const { data: regs, error: regsErr } = await supa
         .from('registrations')
-        .select('id, nome_coreografia, estudio, estilo_danca, categoria, tipo_apresentacao, formacao')
+        .select('id, nome_coreografia, estudio, estilo_danca, categoria, tipo_apresentacao')
         .in('id', regIds)
       if (regsErr) return json({ error: 'db_error', detail: regsErr.message }, 500)
       registrations = regs ?? []
@@ -705,7 +705,7 @@ Deno.serve(async (req) => {
     // Vídeos aguardando avaliação (submitted) do evento
     const { data: regs } = await supa
       .from('registrations')
-      .select('id, video_url, video_status, ordem_apresentacao, estilo_danca, categoria, tipo_apresentacao, formacao, formato_participacao')
+      .select('id, video_url, video_status, ordem_apresentacao, estilo_danca, categoria, tipo_apresentacao, formato_participacao')
       .eq('event_id', event.id)
       .eq('video_status', 'submitted')
       .not('video_url', 'is', null)
@@ -734,7 +734,7 @@ Deno.serve(async (req) => {
         video_url: r.video_url,
         estilo:    r.estilo_danca ?? null,
         categoria: r.categoria ?? null,
-        formacao:  r.formacao ?? r.formato_participacao ?? null,
+        formacao:  r.formato_participacao ?? null,
         tipo:      r.tipo_apresentacao ?? null,
       }))
 
