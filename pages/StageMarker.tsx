@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, CheckCircle2, RotateCcw, AlertTriangle, Clock, Users, Music, ChevronRight, Wifi, WifiOff, Settings2, Save, Loader2, Search, X } from 'lucide-react';
+import { Play, CheckCircle2, RotateCcw, AlertTriangle, Clock, Users, Music, ChevronRight, Wifi, WifiOff, Settings2, Save, Loader2, Search, X, Radio } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
+import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
+import EventPickerSheet, { EventPickerOption } from '../components/EventPickerSheet';
 
 type TimerState = 'WAITING' | 'MARKING' | 'READY';
 
@@ -13,6 +15,7 @@ interface Presentation {
   estilo_danca?: string;
   elenco?: any[];
   ordem_apresentacao?: number;
+  excluded_from_schedule?: boolean;
 }
 
 const fmtTime = (seconds: number) => {
@@ -35,6 +38,15 @@ const StageMarker = () => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
+  // Multi-tenant: evento selecionado (mesmo padrão do Schedule.tsx). Sem isso
+  // a query de apresentações misturava coreografias de todos os eventos do
+  // produtor (bug real — nunca filtrava event_id).
+  const [allEvents, setAllEvents] = useState<EventPickerOption[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  // live_registration_id do evento — situational awareness (o que está NO
+  // PALCO agora, decidido pelo Cronograma/Mesa de Som), não dirige o
+  // currentIndex local (marcador trabalha adiantado em relação ao show).
+  const [liveRegistrationId, setLiveRegistrationId] = useState<string | null>(null);
   const [marcarPalcoAtivo, setMarcarPalcoAtivo] = useState(true);
   const [gatilho, setGatilho] = useState<'MANUAL_MARCADOR' | 'MANUAL_COORDENADOR' | 'AUTO_SONOPLASTA'>('MANUAL_MARCADOR');
   const [tempoMarcacao, setTempoMarcacao] = useState(45);
@@ -66,36 +78,102 @@ const StageMarker = () => {
     sync();
   }, [online]); // eslint-disable-line
 
-  /* ── load config + presentations ── */
+  /* ── load list of events (mesmo padrão do Schedule.tsx) ── */
   useEffect(() => {
-    const fetchData = async () => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('team_event_id')
+        .eq('id', user.id)
+        .maybeSingle();
+      const query = supabase
+        .from('events')
+        .select('id,name,edition_year,start_date,created_at,is_demo')
+        .order('created_at', { ascending: false });
+      const { data } = profile?.team_event_id
+        ? await query.or(`created_by.eq.${user.id},id.eq.${profile.team_event_id}`)
+        : await query.eq('created_by', user.id);
+      if (data && data.length > 0) {
+        setAllEvents(data);
+        setSelectedEventId(prev => prev ?? data[0].id);
+      } else {
+        setLoading(false);
+      }
+    })();
+  }, []); // eslint-disable-line
+
+  /* ── load config + presentations do evento selecionado ── */
+  useEffect(() => {
+    if (!selectedEventId) return;
+    const fetchData = async (eventId: string) => {
       setLoading(true);
       try {
-        const { fetchActiveEventConfig } = await import('../services/supabase');
-        const [cfg, { data: regs }] = await Promise.all([
-          fetchActiveEventConfig('tempo_marcacao_palco,marcar_palco_ativo,gatilho_marcacao'),
-          supabase
-            .from('registrations')
-            .select('id,nome_coreografia,estudio,categoria,estilo_danca,elenco,ordem_apresentacao')
-            // status_pagamento = 'APROVADO' (atual) OU 'CONFIRMADO' (legacy)
-            .in('status_pagamento', ['APROVADO', 'CONFIRMADO'])
-            .order('ordem_apresentacao', { ascending: true }),
+        let regsQuery = supabase
+          .from('registrations')
+          .select('id,nome_coreografia,estudio,categoria,estilo_danca,elenco,ordem_apresentacao,excluded_from_schedule')
+          .eq('event_id', eventId)
+          .or(SCHEDULABLE_REGISTRATIONS_OR_FILTER)
+          .order('ordem_apresentacao', { ascending: true });
+
+        // Lê o config da ROW DO EVENTO (multi-tenant), fallback legacy id='1'
+        // só se o evento não tiver row própria. Mesmo padrão do Cronograma
+        // (bug 2026-06-11: ler id='1' vazava config entre produtores).
+        let cfgQuery = supabase
+          .from('configuracoes')
+          .select('tempo_marcacao_palco,marcar_palco_ativo,gatilho_marcacao')
+          .eq('id', eventId)
+          .maybeSingle();
+
+        const [{ data: regs }, { data: cfgRow }, { data: ev }] = await Promise.all([
+          regsQuery,
+          cfgQuery,
+          supabase.from('events').select('live_registration_id').eq('id', eventId).maybeSingle(),
         ]);
+
+        let cfg = cfgRow;
+        if (!cfg) {
+          const { data: legacy } = await supabase
+            .from('configuracoes')
+            .select('tempo_marcacao_palco,marcar_palco_ativo,gatilho_marcacao')
+            .eq('id', '1')
+            .maybeSingle();
+          cfg = legacy;
+        }
+
         const t = cfg?.tempo_marcacao_palco ?? 45;
         setTotalTime(t);
         setRemaining(t);
         setTempoMarcacao(t);
         setMarcarPalcoAtivo(cfg?.marcar_palco_ativo ?? true);
         setGatilho(cfg?.gatilho_marcacao ?? 'MANUAL_MARCADOR');
-        setPresentations(regs || []);
+        setPresentations((regs || []).filter(r => !r.excluded_from_schedule));
+        setLiveRegistrationId(ev?.live_registration_id ?? null);
+        setCurrentIndex(0);
+        setState('WAITING');
       } catch (e) {
         console.error(e);
       } finally {
         setLoading(false);
       }
     };
-    fetchData();
-  }, []);
+    fetchData(selectedEventId);
+  }, [selectedEventId]);
+
+  /* ── realtime: acompanha o que a Mesa de Som/Cronograma marcou AO VIVO ── */
+  useEffect(() => {
+    if (!selectedEventId) return;
+    const channel = supabase
+      .channel(`stage-marker-live-${selectedEventId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'events', filter: `id=eq.${selectedEventId}`,
+      }, (payload: any) => {
+        setLiveRegistrationId(payload.new?.live_registration_id ?? null);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [selectedEventId]);
 
   /* ── countdown ── */
   const stopInterval = useCallback(() => {
@@ -165,13 +243,14 @@ const StageMarker = () => {
   };
 
   const handleSaveSettings = async () => {
+    if (!selectedEventId) return;
     setSavingSettings(true);
     try {
       await supabase.from('configuracoes').update({
         tempo_marcacao_palco: tempoMarcacao,
         marcar_palco_ativo:   marcarPalcoAtivo,
         gatilho_marcacao:     gatilho,
-      }).eq('id', 1);
+      }).eq('id', selectedEventId);
       setTotalTime(tempoMarcacao);
       setRemaining(tempoMarcacao);
       setShowSettings(false);
@@ -205,6 +284,10 @@ const StageMarker = () => {
   }[state];
 
   const circumference = 2 * Math.PI * 90; // radius 90
+  const liveReg = React.useMemo(
+    () => (liveRegistrationId ? presentations.find(p => p.id === liveRegistrationId) : null),
+    [liveRegistrationId, presentations]
+  );
 
   if (loading) {
     return (
@@ -214,18 +297,27 @@ const StageMarker = () => {
     );
   }
 
+  if (!selectedEventId) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center py-20 gap-2">
+        <p className="text-sm font-black uppercase tracking-widest text-slate-400">Nenhum evento encontrado</p>
+        <p className="text-[10px] text-slate-500">Crie ou selecione um evento pra usar o Marcador de Palco.</p>
+      </div>
+    );
+  }
+
   return (
     <div className={`flex flex-col bg-gradient-to-b ${stateColor} text-white rounded-3xl overflow-hidden transition-colors duration-700 min-h-[calc(100vh-5rem)]`}>
 
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-5 pb-3">
-        <div>
+      <div className="flex items-center justify-between px-5 pt-5 pb-3 gap-2">
+        <div className="min-w-0">
           <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400">Marcador de Palco</p>
           <p className="text-[11px] font-black uppercase tracking-widest text-white">
             #{currentIndex + 1} / {presentations.length}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {pendingSync.length > 0 && (
             <span className="text-[8px] font-black text-amber-400 uppercase tracking-widest bg-amber-400/10 px-2 py-1 rounded-full">
               {pendingSync.length} pend.
@@ -241,6 +333,33 @@ const StageMarker = () => {
             <Settings2 size={14} />
           </button>
         </div>
+      </div>
+
+      {/* Evento + o que está AO VIVO agora (Cronograma/Mesa de Som) — situational
+          awareness pra equipe de bastidor saber onde o show está de verdade,
+          sem forçar o marcador (que trabalha adiantado) a pular de item. */}
+      <div className="px-5 mb-3 flex flex-col sm:flex-row sm:items-center gap-2">
+        {allEvents.length > 1 && (
+          <EventPickerSheet
+            events={allEvents}
+            selectedEventId={selectedEventId}
+            onSelect={setSelectedEventId}
+            emptyLabel="Selecionar evento"
+          />
+        )}
+        {liveReg ? (
+          <div className="flex items-center gap-1.5 px-3 py-2 bg-rose-500/10 border border-rose-500/30 rounded-xl">
+            <Radio size={12} className="text-rose-400 animate-pulse shrink-0" />
+            <span className="text-[9px] font-black uppercase tracking-widest text-rose-300 truncate">
+              Ao vivo agora: {liveReg.nome_coreografia}
+            </span>
+          </div>
+        ) : liveRegistrationId ? (
+          <div className="flex items-center gap-1.5 px-3 py-2 bg-white/5 border border-white/10 rounded-xl">
+            <Radio size={12} className="text-slate-500 shrink-0" />
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Ao vivo agora: fora da lista</span>
+          </div>
+        ) : null}
       </div>
 
       {/* Barra de busca inline — estilo Registrations (visivel sempre).
@@ -354,6 +473,12 @@ const StageMarker = () => {
                           {p.estudio} · {p.estilo_danca} · {p.categoria}
                         </p>
                       </div>
+                      {p.id === liveRegistrationId && (
+                        <span className="flex items-center gap-1 text-rose-400 shrink-0">
+                          <Radio size={11} className="animate-pulse" aria-hidden="true" />
+                          <span className="sr-only">Ao vivo agora</span>
+                        </span>
+                      )}
                       {isMarked && (
                         <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400 shrink-0">Marcada</span>
                       )}
