@@ -77,6 +77,22 @@ const getMedalByRank = (rank: number) => {
 const resolveMedal = (score: number, rank: number, system: PremiationSystem, t: MedalThresholds) =>
   system === 'RANKING' ? getMedalByRank(rank) : getMedalByThreshold(score, t);
 
+/* ── Prêmios especiais no PDF: mesma classificação por nome usada no Telão
+ *  de Palco (pages/TelaoControle.tsx) — mantém as 2 telas consistentes sobre
+ *  o que é "Ouro/Prata/Bronze" (faixa festival-wide), "Maior nota", prêmio
+ *  por deliberação dos jurados ou escolha manual (ex: Voto Popular). ── */
+interface SpecialAwardCfg { id: string; nome: string; valor?: string; description?: string; }
+type AwardReveal = { tipo: 'faixa'; faixa: 'ouro' | 'prata' | 'bronze' } | { tipo: 'maior_nota' } | { tipo: 'premio' } | { tipo: 'manual' };
+const classifyAward = (a: SpecialAwardCfg): AwardReveal => {
+  const t = `${a.nome ?? ''} ${a.description ?? ''}`.toLowerCase();
+  if (/\bouro\b|gold/.test(t))          return { tipo: 'faixa', faixa: 'ouro' };
+  if (/\bprata\b|silver/.test(t))       return { tipo: 'faixa', faixa: 'prata' };
+  if (/\bbronze\b/.test(t))             return { tipo: 'faixa', faixa: 'bronze' };
+  if (/maior nota|grand.?prix/.test(t)) return { tipo: 'maior_nota' };
+  if (/voto popular|vote\./.test(t))    return { tipo: 'manual' };
+  return { tipo: 'premio' };
+};
+
 /* ── Component ── */
 const ResultsPanel = () => {
   const [allResults, setAllResults] = useState<GroupedResult[]>([]);
@@ -466,11 +482,12 @@ const ResultsPanel = () => {
             r.average_score.toFixed(2),
             String(r.evaluations_count),
             medal.label,
+            r.has_outlier ? '⚠' : '',
           ];
         });
 
         autoTable(doc, {
-          head: [['Pos.', 'Coreografia', 'Estúdio', 'Média', 'Jurados', 'Medalha']],
+          head: [['Pos.', 'Coreografia', 'Estúdio', 'Média', 'Jurados', 'Medalha', 'Outlier']],
           body: tableData,
           startY: cursorY,
           theme: 'striped',
@@ -482,11 +499,115 @@ const ResultsPanel = () => {
             3: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
             4: { cellWidth: 18, halign: 'center' },
             5: { cellWidth: 24, halign: 'center' },
+            6: { cellWidth: 16, halign: 'center', textColor: [200, 100, 0] },
           },
           margin: { left: 20, right: 20 },
         });
 
         cursorY = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      // ── Prêmios Especiais — mesma classificação do Telão de Palco (TelaoControle.tsx),
+      // pra bater com o que o produtor configurou em Configurações → Prêmios.
+      if (eventId) {
+        const { fetchActiveEventConfig } = await import('../services/supabase');
+        const specialCfg = await fetchActiveEventConfig('premios_especiais');
+        const rawAwards: any[] = Array.isArray(specialCfg?.premios_especiais) ? specialCfg.premios_especiais : [];
+        const awards: SpecialAwardCfg[] = rawAwards
+          .filter((a: any) => a && a.enabled !== false && a.id != null)
+          .map((a: any) => ({
+            id: String(a.id),
+            nome: (a.nome ?? a.name ?? 'Prêmio').trim(),
+            valor: a.valor ? String(a.valor) : undefined,
+            description: a.description ?? a.descricao ?? '',
+          }));
+
+        if (awards.length > 0) {
+          // Winner por deliberação dos jurados (tipo 'premio') vem da mesma
+          // view que alimenta /deliberacoes e o Telão — só busca se necessário.
+          const premioAwardIds = awards.filter(a => classifyAward(a).tipo === 'premio').map(a => a.id);
+          let deliberationWinners: Record<string, { nome: string; estudio: string }> = {};
+          if (premioAwardIds.length > 0) {
+            const { data: agg } = await supabase
+              .from('deliberation_aggregate')
+              .select('award_id, registration_id, judge_count')
+              .eq('event_id', eventId)
+              .in('award_id', premioAwardIds);
+            const byAward: Record<string, { registration_id: string; judge_count: number }> = {};
+            (agg ?? []).forEach((row: any) => {
+              const cur = byAward[row.award_id];
+              if (!cur || row.judge_count > cur.judge_count) byAward[row.award_id] = row;
+            });
+            const winnerRegIds = Object.values(byAward).map(w => w.registration_id);
+            if (winnerRegIds.length > 0) {
+              const { data: winnerRegs } = await supabase
+                .from('registrations')
+                .select('id, nome_coreografia, estudio, event_data')
+                .in('id', winnerRegIds);
+              const regById: Record<string, any> = {};
+              (winnerRegs ?? []).forEach((r: any) => { regById[r.id] = r; });
+              Object.entries(byAward).forEach(([awardId, w]) => {
+                const r = regById[w.registration_id];
+                if (r) {
+                  deliberationWinners[awardId] = {
+                    nome: r.nome_coreografia ?? '—',
+                    estudio: (r.estudio?.trim?.() || r.event_data?.estudio_nome || '—'),
+                  };
+                }
+              });
+            }
+          }
+
+          doc.addPage();
+          cursorY = 20;
+          doc.setFontSize(16);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(255, 0, 104);
+          doc.text('Prêmios Especiais', 20, cursorY);
+          doc.setTextColor(40, 40, 40);
+          cursorY += 10;
+
+          const fmtValor = (v?: string) => v ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '';
+
+          const awardRows = awards.map(a => {
+            const r = classifyAward(a);
+            let vencedor = '—';
+            if (r.tipo === 'faixa') {
+              const lo = r.faixa === 'ouro' ? thresholds.gold : r.faixa === 'prata' ? thresholds.silver : thresholds.bronze;
+              const hi = r.faixa === 'ouro' ? null : r.faixa === 'prata' ? thresholds.gold : thresholds.silver;
+              const naFaixa = competitiva
+                .filter(x => x.evaluations_count > 0 && x.average_score >= lo && (hi == null || x.average_score < hi))
+                .sort((x, y) => y.average_score - x.average_score);
+              vencedor = naFaixa.length > 0
+                ? naFaixa.map(x => `${x.nome_coreografia} (${x.average_score.toFixed(2)})`).join('; ')
+                : 'Nenhuma coreografia na faixa';
+            } else if (r.tipo === 'maior_nota') {
+              const top = competitiva.filter(x => x.evaluations_count > 0).sort((x, y) => y.average_score - x.average_score)[0];
+              vencedor = top ? `${top.nome_coreografia} (${top.average_score.toFixed(2)})` : '—';
+            } else if (r.tipo === 'premio') {
+              const w = deliberationWinners[a.id];
+              vencedor = w ? `${w.nome} · ${w.estudio}` : 'Deliberação dos jurados pendente';
+            } else {
+              vencedor = 'A definir na cerimônia (ex.: Voto Popular externo)';
+            }
+            return [a.nome, fmtValor(a.valor) || '—', vencedor];
+          });
+
+          autoTable(doc, {
+            head: [['Prêmio', 'Valor', 'Vencedor']],
+            body: awardRows,
+            startY: cursorY,
+            theme: 'striped',
+            headStyles: { fillColor: [40, 40, 40], textColor: 255, fontSize: 9, fontStyle: 'bold' },
+            bodyStyles: { fontSize: 9, textColor: 40 },
+            alternateRowStyles: { fillColor: [248, 248, 250] },
+            columnStyles: {
+              0: { cellWidth: 45, fontStyle: 'bold' },
+              1: { cellWidth: 25, halign: 'center' },
+            },
+            margin: { left: 20, right: 20 },
+          });
+        }
       }
 
       // Rodape em todas paginas

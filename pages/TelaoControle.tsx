@@ -20,7 +20,7 @@ const classify = (a: Premio): Reveal => {
 
 const revealLabel: Record<string, string> = {
   ouro: 'Faixa Ouro', prata: 'Faixa Prata', bronze: 'Faixa Bronze',
-  maior_nota: 'Maior nota', premio: 'Deliberação', manual: 'Escolha manual',
+  maior_nota: 'Maior nota', premio: 'Deliberação', manual: 'Voto Popular · Automático',
 };
 
 /**
@@ -44,6 +44,7 @@ const TelaoControle: React.FC = () => {
   const [coreos, setCoreos] = useState<Coreo[]>([]);
   const [manualFor, setManualFor] = useState<Premio | null>(null);
   const [manualSearch, setManualSearch] = useState('');
+  const [votoError, setVotoError] = useState<string | null>(null);
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const publicUrl = code ? `${origin}/telao/${code}` : '';
@@ -134,12 +135,46 @@ const TelaoControle: React.FC = () => {
   const fmtValor = (v?: string) =>
     v ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '';
 
-  const revelarAward = (a: Premio) => {
+  const votoReasonLabel: Record<string, string> = {
+    voting_not_closed: 'A votação do Voto Popular ainda está aberta — encerre no console do operador pra revelar.',
+    tie: 'Empate no Voto Popular — escolha o vencedor na mão.',
+    no_votes: 'Nenhum voto registrado ainda no Voto Popular.',
+    festival_not_found: 'Este evento não está vinculado a um festival no Voto Popular.',
+    group_not_linked: 'A coreografia vencedora não está vinculada a essa inscrição no CoreoHub.',
+    registration_not_found: 'Inscrição vencedora não encontrada no CoreoHub.',
+  };
+
+  const revelarAward = async (a: Premio) => {
+    setVotoError(null);
     const r = classify(a);
     const valor = fmtValor(a.valor);
     if (r.tipo === 'faixa')      return sendPremiacao({ tipo: 'faixa', faixa: r.faixa, titulo: a.nome, valor });
     if (r.tipo === 'maior_nota') return sendPremiacao({ tipo: 'maior_nota', titulo: a.nome, valor });
-    if (r.tipo === 'manual')     { setManualFor(a); setManualSearch(''); return; }
+    if (r.tipo === 'manual') {
+      // Troféu Voto Popular: automático é a via principal (padrão de mercado —
+      // reduz erro humano na hora da cerimônia). Busca digitada é só o fallback,
+      // caso a votação ainda esteja aberta, dê empate, ou a integração falhe.
+      setBusy(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('get-voto-popular-winner', {
+          body: { event_id: eventId },
+        });
+        if (!error && (data as any)?.ok) {
+          const w = data as { nome: string; estudio: string };
+          await sendPremiacao({ tipo: 'manual', titulo: a.nome, valor, nome: w.nome, estudio: w.estudio });
+          return;
+        }
+        const reason = (data as any)?.reason as string | undefined;
+        setVotoError(reason ? (votoReasonLabel[reason] ?? 'Resultado automático indisponível.') : 'Resultado automático indisponível.');
+      } catch {
+        setVotoError('Não foi possível buscar o resultado automático do Voto Popular.');
+      } finally {
+        setBusy(false);
+      }
+      setManualFor(a);
+      setManualSearch('');
+      return;
+    }
     return sendPremiacao({ tipo: 'premio', award_id: a.id, titulo: a.nome, valor });
   };
 
@@ -348,7 +383,7 @@ const TelaoControle: React.FC = () => {
                         {revealLabel[r.tipo === 'faixa' ? r.faixa : r.tipo]}
                       </span>
                     </button>
-                    <button onClick={() => { setManualFor(a); setManualSearch(''); }} disabled={busy}
+                    <button onClick={() => { setVotoError(null); setManualFor(a); setManualSearch(''); }} disabled={busy}
                       title="Escolher vencedor na mão" aria-label={`Escolher vencedor na mão para ${a.nome}`}
                       className="shrink-0 p-3 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 transition-all">
                       <Hand size={14} />
@@ -357,6 +392,12 @@ const TelaoControle: React.FC = () => {
                 );
               })}
             </div>
+          )}
+
+          {votoError && (
+            <p role="alert" className="text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl px-3 py-2">
+              {votoError}
+            </p>
           )}
 
           {/* Escolha manual do vencedor */}

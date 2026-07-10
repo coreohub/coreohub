@@ -8,7 +8,7 @@ import {
   Zap, Crown, Users, Award, Shirt,
   Monitor, Tablet, Smartphone, LogOut,
   MoreVertical, FastForward, MessageSquare,
-  ChevronLeft, List,
+  ChevronLeft, List, Search,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { isStyleInList } from '../utils/styleMatch';
@@ -325,6 +325,7 @@ const JudgeTerminal = () => {
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const [jumpToInput, setJumpToInput]           = useState('');
   const [jumpToError, setJumpToError]           = useState<string | null>(null);
+  const [queueSearch, setQueueSearch]           = useState('');
   // Guard de navegação: índice-alvo aguardando confirmação de descarte.
   const [pendingNavIdx, setPendingNavIdx]       = useState<number | null>(null);
   const overflowMenuRef = useRef<HTMLDivElement | null>(null);
@@ -365,6 +366,10 @@ const JudgeTerminal = () => {
   // a Mesa de Som. Quando muda, terminal mostra banner "AO VIVO" e auto-advance
   // após jurado submeter nota.
   const [liveRegistrationId, setLiveRegistrationId] = useState<string | null>(null);
+
+  // Fase de deliberação do evento (COLETANDO/DELIBERACAO/CONFERENCIA/LIBERADO)
+  // — controla se o atalho "Deliberação de Prêmios" aparece no menu ⋮.
+  const [deliberationStatus, setDeliberationStatus] = useState<string | null>(null);
 
   /* ── Audio ── */
   const [isRecording,   setIsRecording]   = useState(false);
@@ -612,6 +617,7 @@ const JudgeTerminal = () => {
           if (td.registrations) setSchedule(td.registrations);
           // Phase 4: atualiza âncora de "ao vivo" via polling
           setLiveRegistrationId(td.event?.live_registration_id ?? null);
+          setDeliberationStatus(td.event?.deliberation_status ?? null);
         } catch (e) {
           // Silencioso — não interrompe avaliação por falha de polling
           console.warn('Polling falhou:', e);
@@ -630,6 +636,7 @@ const JudgeTerminal = () => {
         // Phase 4: Mesa de Som mudou live_registration_id
         const newLive = payload.new?.live_registration_id ?? null;
         setLiveRegistrationId(newLive);
+        setDeliberationStatus(payload.new?.deliberation_status ?? null);
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -656,6 +663,7 @@ const JudgeTerminal = () => {
               setStarredSet(new Set(td.marcacoes.map(m => m.registration_id)));
             }
             setLiveRegistrationId(td.event?.live_registration_id ?? null);
+            setDeliberationStatus(td.event?.deliberation_status ?? null);
           });
           const td = cached.data;
           jData = td.judges;
@@ -666,6 +674,7 @@ const JudgeTerminal = () => {
             setStarredSet(new Set(td.marcacoes.map(m => m.registration_id)));
           }
           setLiveRegistrationId(td.event?.live_registration_id ?? null);
+          setDeliberationStatus(td.event?.deliberation_status ?? null);
         } else {
           // Fluxo legado: produtor/admin logado no device, queries diretas via RLS.
           const { fetchActiveEventConfig } = await import('../services/supabase');
@@ -676,7 +685,7 @@ const JudgeTerminal = () => {
             supabase.from('event_styles').select('id, name'),
             // Phase 4: lê live_registration_id do evento ativo
             supabase.from('events')
-              .select('live_registration_id')
+              .select('live_registration_id, deliberation_status')
               .order('created_at', { ascending: false })
               .limit(1)
               .maybeSingle(),
@@ -685,6 +694,7 @@ const JudgeTerminal = () => {
           cfg = cfgRes;
           sched = schedRes.data;
           gData = gRes.data;
+          setDeliberationStatus(evRes.data?.deliberation_status ?? null);
           if (evRes.data?.live_registration_id) {
             setLiveRegistrationId(evRes.data.live_registration_id);
           }
@@ -1837,7 +1847,7 @@ const JudgeTerminal = () => {
           {/* Overflow menu — navegação manual (lista + anterior/próximo + #N) */}
           <div className="relative" ref={overflowMenuRef}>
             <button
-              onClick={() => { setShowOverflowMenu(p => !p); setJumpToError(null); }}
+              onClick={() => { setShowOverflowMenu(p => !p); setJumpToError(null); setQueueSearch(''); }}
               className="p-1.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 transition-all"
               title={t('header.moreTooltip')}
             >
@@ -1896,17 +1906,40 @@ const JudgeTerminal = () => {
                   <p className="mb-2 text-[9px] font-bold text-rose-500 uppercase tracking-widest">{jumpToError}</p>
                 )}
 
-                {/* Lista rolável da fila inteira do jurado */}
-                {filteredSchedule.length === 0 ? (
-                  <p className="py-6 text-center text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                    {t('nav.empty')}
-                  </p>
-                ) : (
+                {/* Linha 3: busca por nome da coreografia/estúdio (não precisa saber o número) */}
+                <div className="relative mb-2">
+                  <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    aria-label={t('nav.searchLabel')}
+                    placeholder={t('nav.searchPlaceholder')}
+                    value={queueSearch}
+                    onChange={e => setQueueSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068] transition-all"
+                  />
+                </div>
+
+                {/* Lista rolável da fila inteira do jurado (filtrada pela busca acima) */}
+                {(() => {
+                  const q = queueSearch.trim().toLowerCase();
+                  const visible = q
+                    ? filteredSchedule
+                        .map((p: any, i: number) => ({ p, i }))
+                        .filter(({ p }) => `${p.nome_coreografia ?? ''} ${p.estudio ?? ''}`.toLowerCase().includes(q))
+                    : filteredSchedule.map((p: any, i: number) => ({ p, i }));
+                  if (visible.length === 0) {
+                    return (
+                      <p className="py-6 text-center text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                        {q ? t('nav.searchEmpty') : t('nav.empty')}
+                      </p>
+                    );
+                  }
+                  return (
                   <div
                     className="max-h-72 overflow-y-auto overscroll-contain -mx-1 px-1 space-y-1"
                     style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
                   >
-                    {filteredSchedule.map((p: any, i: number) => {
+                    {visible.map(({ p, i }: { p: any; i: number }) => {
                       const isCurrent = i === currentIndex;
                       const isEvaluated = evaluatedSet.has(p.id);
                       const statusLabel = isCurrent
@@ -1948,6 +1981,18 @@ const JudgeTerminal = () => {
                       );
                     })}
                   </div>
+                  );
+                })()}
+
+                {/* Deliberação de Prêmios — só aparece quando o produtor abriu essa
+                    fase em /deliberacoes (senão confunde durante a coleta de notas). */}
+                {(deliberationStatus === 'DELIBERACAO' || deliberationStatus === 'CONFERENCIA') && (
+                  <button
+                    onClick={() => { setShowOverflowMenu(false); navigate('/deliberacao'); }}
+                    className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#ff0068]/10 hover:bg-[#ff0068]/20 border border-[#ff0068]/30 rounded-xl text-[10px] font-black uppercase tracking-widest text-[#ff0068] transition-all"
+                  >
+                    <Star size={12} className="fill-current" /> {t('nav.deliberation')}
+                  </button>
                 )}
               </div>
             )}
