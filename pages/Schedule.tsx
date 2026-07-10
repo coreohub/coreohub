@@ -236,6 +236,7 @@ interface SortableRowProps {
   conflicts: { dancerName: string; otherIndex: number }[];
   judgeNames?: string[];
   audioSet?: { entrada?: AudioSlot; saida?: AudioSlot };
+  trackDuration?: number;
   saidaAtiva: boolean;
   isLive: boolean;
   isGenerating: boolean;
@@ -255,7 +256,7 @@ interface SortableRowProps {
 
 const SortableRow: React.FC<SortableRowProps> = ({
   reg, index, conflicts, judgeNames,
-  audioSet, saidaAtiva, isLive, isGenerating, batchInProgress, updatingLive, currentVoice,
+  audioSet, trackDuration, saidaAtiva, isLive, isGenerating, batchInProgress, updatingLive, currentVoice,
   blocos, matchesSearch, recentlyMoved, onOpenBlocoPicker,
   onGenerateOne, onAnnounce, onPrepare, onMarkLiveOnly, onExclude,
 }) => {
@@ -428,7 +429,11 @@ const SortableRow: React.FC<SortableRowProps> = ({
         {hasTrack ? (
           <div className="flex items-center gap-1 px-2 py-1 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 rounded-xl">
             <Music size={10} />
-            <span className="text-[8px] font-black uppercase tracking-widest">Trilha OK</span>
+            <span className="text-[8px] font-black uppercase tracking-widest tabular-nums">
+              {trackDuration
+                ? `${Math.floor(trackDuration / 60)}:${String(Math.floor(trackDuration % 60)).padStart(2, '0')}`
+                : 'Trilha OK'}
+            </span>
           </div>
         ) : (
           <div className="flex items-center gap-1 px-2 py-1 bg-amber-50 dark:bg-amber-500/10 text-amber-500 rounded-xl">
@@ -2462,29 +2467,31 @@ const Schedule = () => {
             </p>
             {/* Indicador de secao do modo SISTEMA (auto-play sequencial) */}
             {modoSistema && currentTrack && playerSection !== 'idle' && (
-              <div className="pt-2 space-y-1.5">
-                <div className="flex items-center gap-2 flex-wrap text-[9px] font-black uppercase tracking-widest">
-                  <span className={`px-2 py-0.5 rounded-full ${playerSection === 'entrada' ? 'bg-violet-500 text-white' : 'bg-white/5 text-slate-500'}`}>1 Narração</span>
-                  <span className={`px-2 py-0.5 rounded-full ${playerSection === 'wait' ? 'bg-amber-500 text-white' : 'bg-white/5 text-slate-500'}`}>
-                    2 Espera{playerSection === 'wait' ? ` (${waitRemaining}s)` : ''}
-                  </span>
-                  <span className={`px-2 py-0.5 rounded-full ${playerSection === 'trilha' ? 'bg-[#ff0068] text-white' : 'bg-white/5 text-slate-500'}`}>3 Trilha</span>
-                  {saidaAtiva && (
-                    <span className={`px-2 py-0.5 rounded-full ${playerSection === 'saida' ? 'bg-emerald-500 text-white' : 'bg-white/5 text-slate-500'}`}>4 Saída</span>
-                  )}
-                </div>
-                {/* Barra de progresso da trilha */}
-                {playerSection === 'trilha' && trilhaDuration > 0 && (
-                  <div className="space-y-0.5">
-                    <div className="h-1 bg-white/10 rounded-full overflow-hidden">
-                      <div className="h-full bg-[#ff0068] transition-all" style={{ width: `${(trilhaProgress / trilhaDuration) * 100}%` }} />
-                    </div>
-                    <div className="flex justify-between text-[8px] font-bold text-slate-400 tabular-nums">
-                      <span>{Math.floor(trilhaProgress / 60)}:{String(Math.floor(trilhaProgress % 60)).padStart(2, '0')}</span>
-                      <span>{Math.floor(trilhaDuration / 60)}:{String(Math.floor(trilhaDuration % 60)).padStart(2, '0')}</span>
-                    </div>
-                  </div>
+              <div className="pt-2 flex items-center gap-2 flex-wrap text-[9px] font-black uppercase tracking-widest">
+                <span className={`px-2 py-0.5 rounded-full ${playerSection === 'entrada' ? 'bg-violet-500 text-white' : 'bg-white/5 text-slate-500'}`}>1 Narração</span>
+                <span className={`px-2 py-0.5 rounded-full ${playerSection === 'wait' ? 'bg-amber-500 text-white' : 'bg-white/5 text-slate-500'}`}>
+                  2 Espera{playerSection === 'wait' ? ` (${waitRemaining}s)` : ''}
+                </span>
+                <span className={`px-2 py-0.5 rounded-full ${playerSection === 'trilha' ? 'bg-[#ff0068] text-white' : 'bg-white/5 text-slate-500'}`}>3 Trilha</span>
+                {saidaAtiva && (
+                  <span className={`px-2 py-0.5 rounded-full ${playerSection === 'saida' ? 'bg-emerald-500 text-white' : 'bg-white/5 text-slate-500'}`}>4 Saída</span>
                 )}
+              </div>
+            )}
+            {/* Barra de progresso da trilha — modo SISTEMA (na etapa 3) ou modo
+                TRILHA (toca só a música, sem sequência de seções). Bug fixado
+                2026-07-10: antes só aparecia presa atrás de modoSistema, então
+                o modo Trilha (provavelmente o mais usado ao vivo) tocava a
+                música sem nunca mostrar progresso/duração pro sonoplasta. */}
+            {((modoSistema || modoTrilha) && playerSection === 'trilha') && trilhaDuration > 0 && (
+              <div className="pt-2 space-y-0.5">
+                <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full bg-[#ff0068] transition-all" style={{ width: `${(trilhaProgress / trilhaDuration) * 100}%` }} />
+                </div>
+                <div className="flex justify-between text-[8px] font-bold text-slate-400 tabular-nums">
+                  <span>{Math.floor(trilhaProgress / 60)}:{String(Math.floor(trilhaProgress % 60)).padStart(2, '0')}</span>
+                  <span>{Math.floor(trilhaDuration / 60)}:{String(Math.floor(trilhaDuration % 60)).padStart(2, '0')}</span>
+                </div>
               </div>
             )}
           </div>
@@ -2629,6 +2636,7 @@ const Schedule = () => {
                   conflicts={conflicts[reg.id] || []}
                   judgeNames={judgeBanca.namesMap[reg.id]}
                   audioSet={audios[reg.id]}
+                  trackDuration={trackDurations[reg.id]}
                   saidaAtiva={saidaAtiva}
                   isLive={currentTrack?.id === reg.id}
                   isGenerating={generatingId === reg.id}
