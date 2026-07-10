@@ -89,7 +89,7 @@ const EntrarJuri: React.FC = () => {
         </form>
 
         <p className="text-center text-[10px] text-slate-500 mt-8">
-          Já tem o link direto? <a href="/judge-login" className="underline hover:text-slate-300">Acesse por aqui</a>.
+          Recebeu um link direto do produtor (com QR code)? Abra ele no navegador — não precisa digitar o código aqui.
         </p>
       </div>
     </div>

@@ -4,7 +4,7 @@ import {
   ShieldCheck, KeyRound, X, Save, Loader2, RefreshCw,
   Mic, Award, ChevronDown, ChevronUp, Upload, Camera,
   CheckCircle2, AlertCircle, Copy, Eye, EyeOff, Link as LinkIcon,
-  Hash, Sparkles, FileDown,
+  Hash, Sparkles, FileDown, MessageCircle,
 } from 'lucide-react';
 
 const generatePin = (): string => String(Math.floor(Math.random() * 10000)).padStart(4, '0');
@@ -117,11 +117,11 @@ const JudgesManagement = () => {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [showPin, setShowPin] = useState(false);
-  const [copiedField, setCopiedField] = useState<'pin' | 'link' | null>(null);
+  const [copiedField, setCopiedField] = useState<'pin' | 'link' | 'invite' | null>(null);
   const [revealedPinId, setRevealedPinId] = useState<string | null>(null);
   const [publishingAll, setPublishingAll] = useState(false);
 
-  const copyToClipboard = async (text: string, field: 'pin' | 'link') => {
+  const copyToClipboard = async (text: string, field: 'pin' | 'link' | 'invite') => {
     try {
       await navigator.clipboard.writeText(text);
       setCopiedField(field);
@@ -208,6 +208,47 @@ const JudgesManagement = () => {
     const url = judgeAccessUrl ?? await fetchJudgeAccessUrl();
     if (!url) { alert('Não foi possível gerar o link. Recarregue a página e tente de novo.'); return; }
     await copyToClipboard(url, 'link');
+  };
+
+  /* Convite pronto pra WhatsApp — bunda link + código curto + o lembrete de
+     instalar app numa mensagem só, em vez do produtor ter que explicar isso
+     na hora ou copiar link e código separados (2 cliques + 2 explicações). */
+  const [inviteLoading, setInviteLoading] = useState(false);
+
+  const copyInviteMessage = async () => {
+    setInviteLoading(true);
+    try {
+      const url = judgeAccessUrl ?? await fetchJudgeAccessUrl();
+      if (!url) { alert('Não foi possível gerar o link. Recarregue a página e tente de novo.'); return; }
+      setJudgeAccessUrl(url);
+
+      let code = shortCode;
+      if (code === null) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles').select('judge_short_code').eq('id', user.id).maybeSingle();
+          code = profile?.judge_short_code ?? '';
+        }
+      }
+      if (!code) {
+        const { data, error } = await supabase.rpc('regenerate_judge_short_code');
+        if (error) throw error;
+        code = data as string;
+      }
+      setShortCode(code);
+
+      const message = `Você foi convidado(a) como jurado(a)!\n\n` +
+        `Toque no link pra entrar direto:\n${url}\n\n` +
+        `Sem o link? Acesse app.coreohub.com/entrar-juri e digite o código: ${code}\n\n` +
+        `Quando abrir, toque em "Instalar app" pra deixar salvo na tela do celular/tablet.`;
+
+      await copyToClipboard(message, 'invite');
+    } catch (e: any) {
+      alert(e.message || 'Erro ao montar o convite.');
+    } finally {
+      setInviteLoading(false);
+    }
   };
 
   /* ── fetch ── */
@@ -612,6 +653,15 @@ const JudgesManagement = () => {
             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
           </button>
           <button
+            onClick={copyInviteMessage}
+            disabled={judges.length === 0 || inviteLoading}
+            className="px-4 py-3 bg-[#ff0068]/10 border border-[#ff0068]/30 rounded-2xl text-[10px] font-black uppercase tracking-widest text-[#ff0068] hover:bg-[#ff0068]/20 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Copia link + código + lembrete de instalar o app numa mensagem só, pronta pra colar no WhatsApp"
+          >
+            {inviteLoading ? <Loader2 size={14} className="animate-spin" /> : (copiedField === 'invite' ? <CheckCircle2 size={14} /> : <MessageCircle size={14} />)}
+            {copiedField === 'invite' ? 'Convite copiado!' : 'Copiar convite'}
+          </button>
+          <button
             onClick={toggleLinkPanel}
             disabled={judges.length === 0}
             aria-expanded={linkPanelOpen}
@@ -662,6 +712,9 @@ const JudgesManagement = () => {
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate" title={judgeAccessUrl}>{judgeAccessUrl}</p>
                 <p className="text-[10px] text-slate-400 mt-1">
                   Escaneie o QR com a câmera do celular/tablet do jurado pra abrir direto — ou copie o link e mande por WhatsApp.
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Ao abrir, o jurado vai ver os botões <strong className="text-slate-500 dark:text-slate-300">"Instalar app"</strong> (salva na tela do dispositivo) e <strong className="text-slate-500 dark:text-slate-300">"Configurar como Terminal"</strong> (fixa o tablet nessa tela pras próximas vezes) — não precisa mais fazer nada além disso.
                 </p>
               </>
             ) : (
