@@ -323,9 +323,11 @@ const JudgeTerminal = () => {
 
   /* ── Header overflow menu (item 38 — pular pra #N) ── */
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+  // Campo único: número (pula direto pra apresentação #N) OU texto (filtra a
+  // lista por nome/estúdio). Antes eram 2 campos separados — jurado não
+  // achava a busca por nome porque só via o campo numérico "Ex: 12".
   const [jumpToInput, setJumpToInput]           = useState('');
   const [jumpToError, setJumpToError]           = useState<string | null>(null);
-  const [queueSearch, setQueueSearch]           = useState('');
   // Guard de navegação: índice-alvo aguardando confirmação de descarte.
   const [pendingNavIdx, setPendingNavIdx]       = useState<number | null>(null);
   const overflowMenuRef = useRef<HTMLDivElement | null>(null);
@@ -1395,16 +1397,30 @@ const JudgeTerminal = () => {
      jurado digita aqui e pula direto. ── */
   const handleJumpTo = () => {
     const raw = jumpToInput.trim();
+    if (!raw) return;
+    // Puramente numérico: pula direto pra apresentação #N (atalho Wi-Fi caído).
     const n = parseInt(raw, 10);
-    if (!raw || Number.isNaN(n)) return;
-    const idx = filteredSchedule.findIndex((r: any) => Number(r.ordem_apresentacao) === n);
-    if (idx < 0) {
-      setJumpToError(t('jumpTo.notFound', { n: String(n) }));
+    if (/^\d+$/.test(raw) && !Number.isNaN(n)) {
+      const idx = filteredSchedule.findIndex((r: any) => Number(r.ordem_apresentacao) === n);
+      if (idx < 0) {
+        setJumpToError(t('jumpTo.notFound', { n: String(n) }));
+        return;
+      }
+      setJumpToInput('');
+      setJumpToError(null);
+      requestGoToIndex(idx);
       return;
     }
-    setJumpToInput('');
-    setJumpToError(null);
-    requestGoToIndex(idx);
+    // Texto: se sobrou só 1 resultado na busca, Enter/"Ir" já pula pra ele.
+    const q = raw.toLowerCase();
+    const matches = filteredSchedule
+      .map((p: any, i: number) => ({ p, i }))
+      .filter(({ p }) => `${p.nome_coreografia ?? ''} ${p.estudio ?? ''}`.toLowerCase().includes(q));
+    if (matches.length === 1) {
+      setJumpToInput('');
+      setJumpToError(null);
+      requestGoToIndex(matches[0].i);
+    }
   };
 
   /* ── PIN handlers ── */
@@ -1847,7 +1863,7 @@ const JudgeTerminal = () => {
           {/* Overflow menu — navegação manual (lista + anterior/próximo + #N) */}
           <div className="relative" ref={overflowMenuRef}>
             <button
-              onClick={() => { setShowOverflowMenu(p => !p); setJumpToError(null); setQueueSearch(''); }}
+              onClick={() => { setShowOverflowMenu(p => !p); setJumpToError(null); setJumpToInput(''); }}
               className="p-1.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 transition-all"
               title={t('header.moreTooltip')}
             >
@@ -1881,19 +1897,22 @@ const JudgeTerminal = () => {
                   </button>
                 </div>
 
-                {/* Linha 2: atalho "pular pra #N" (Wi-Fi caído) */}
+                {/* Linha 2: campo único — número pula direto pra #N, texto filtra
+                    a lista abaixo por nome/estúdio (Wi-Fi caído OU busca por nome). */}
                 <div className="flex items-center gap-2 mb-2">
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    aria-label={t('jumpTo.label')}
-                    placeholder={t('jumpTo.placeholder')}
-                    value={jumpToInput}
-                    onChange={e => { setJumpToInput(e.target.value); setJumpToError(null); }}
-                    onKeyDown={e => { if (e.key === 'Enter') handleJumpTo(); }}
-                    className="flex-1 w-0 px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm font-black text-slate-900 dark:text-white tabular-nums focus:outline-none focus:border-[#ff0068] transition-all"
-                  />
+                  <div className="relative flex-1 w-0">
+                    <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      inputMode="search"
+                      aria-label={t('nav.searchLabel')}
+                      placeholder={t('nav.searchPlaceholder')}
+                      value={jumpToInput}
+                      onChange={e => { setJumpToInput(e.target.value); setJumpToError(null); }}
+                      onKeyDown={e => { if (e.key === 'Enter') handleJumpTo(); }}
+                      className="w-full pl-8 pr-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068] transition-all"
+                    />
+                  </div>
                   <button
                     onClick={handleJumpTo}
                     disabled={!jumpToInput.trim()}
@@ -1906,22 +1925,10 @@ const JudgeTerminal = () => {
                   <p className="mb-2 text-[9px] font-bold text-rose-500 uppercase tracking-widest">{jumpToError}</p>
                 )}
 
-                {/* Linha 3: busca por nome da coreografia/estúdio (não precisa saber o número) */}
-                <div className="relative mb-2">
-                  <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                  <input
-                    type="text"
-                    aria-label={t('nav.searchLabel')}
-                    placeholder={t('nav.searchPlaceholder')}
-                    value={queueSearch}
-                    onChange={e => setQueueSearch(e.target.value)}
-                    className="w-full pl-8 pr-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068] transition-all"
-                  />
-                </div>
-
-                {/* Lista rolável da fila inteira do jurado (filtrada pela busca acima) */}
+                {/* Lista rolável da fila inteira do jurado (filtrada pelo campo acima) */}
                 {(() => {
-                  const q = queueSearch.trim().toLowerCase();
+                  const raw = jumpToInput.trim();
+                  const q = /^\d+$/.test(raw) ? '' : raw.toLowerCase();
                   const visible = q
                     ? filteredSchedule
                         .map((p: any, i: number) => ({ p, i }))
@@ -1984,9 +1991,11 @@ const JudgeTerminal = () => {
                   );
                 })()}
 
-                {/* Deliberação de Prêmios — só aparece quando o produtor abriu essa
-                    fase em /deliberacoes (senão confunde durante a coleta de notas). */}
-                {(deliberationStatus === 'DELIBERACAO' || deliberationStatus === 'CONFERENCIA') && (
+                {/* Deliberação de Prêmios — some só durante COLETANDO (jurado ainda
+                    tá avaliando, marcar prêmio ainda não faz sentido). Fica visível em
+                    DELIBERACAO/CONFERENCIA/LIBERADO — mesmo depois de liberado o jurado
+                    pode precisar voltar e ajustar uma atribuição. */}
+                {deliberationStatus != null && deliberationStatus !== 'COLETANDO' && (
                   <button
                     onClick={() => { setShowOverflowMenu(false); navigate('/deliberacao'); }}
                     className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#ff0068]/10 hover:bg-[#ff0068]/20 border border-[#ff0068]/30 rounded-xl text-[10px] font-black uppercase tracking-widest text-[#ff0068] transition-all"

@@ -54,10 +54,13 @@ type PremiationSystem = 'THRESHOLD' | 'RANKING';
 const DEFAULT_THRESHOLDS: MedalThresholds = { gold: 9.0, silver: 8.0, bronze: 7.0 };
 
 /* ── Medal styles ── */
-const MEDAL_GOLD          = { label: 'Ouro',         color: 'text-yellow-500', bg: 'bg-yellow-50 dark:bg-yellow-500/10', border: 'border-yellow-200 dark:border-yellow-500/30' };
-const MEDAL_SILVER        = { label: 'Prata',        color: 'text-slate-400',  bg: 'bg-slate-50 dark:bg-slate-800',      border: 'border-slate-300 dark:border-slate-600'      };
-const MEDAL_BRONZE        = { label: 'Bronze',       color: 'text-amber-600',  bg: 'bg-amber-50 dark:bg-amber-500/10',   border: 'border-amber-200 dark:border-amber-500/30'   };
-const MEDAL_PARTICIPATION = { label: 'Participação', color: 'text-slate-500',  bg: 'bg-slate-50 dark:bg-white/5',        border: 'border-slate-200 dark:border-white/10'       };
+const MEDAL_GOLD          = { label: 'Ouro',         color: 'text-yellow-500', dot: 'bg-yellow-500', bg: 'bg-yellow-50 dark:bg-yellow-500/10', border: 'border-yellow-200 dark:border-yellow-500/30' };
+const MEDAL_SILVER        = { label: 'Prata',        color: 'text-slate-400',  dot: 'bg-slate-400',  bg: 'bg-slate-50 dark:bg-slate-800',      border: 'border-slate-300 dark:border-slate-600'      };
+const MEDAL_BRONZE        = { label: 'Bronze',       color: 'text-amber-600',  dot: 'bg-amber-600',  bg: 'bg-amber-50 dark:bg-amber-500/10',   border: 'border-amber-200 dark:border-amber-500/30'   };
+// Sem label de "Participação" — nem todo evento configura essa faixa como um
+// prêmio real (ex: Usualdance não tem essa categoria). Traço honesto: "abaixo
+// de bronze", sem inventar uma medalha que o produtor não ofereceu.
+const MEDAL_PARTICIPATION = { label: '—', color: 'text-slate-500',  dot: 'bg-slate-400',  bg: 'bg-slate-50 dark:bg-white/5',        border: 'border-slate-200 dark:border-white/10'       };
 
 /* ── Helpers ── */
 const getMedalByThreshold = (score: number, t: MedalThresholds) => {
@@ -388,13 +391,19 @@ const ResultsPanel = () => {
 
   /* ── CSV Export ── */
   const exportCSV = () => {
-    const rows: (string | number)[][] = [
-      ['Posição', 'Coreografia', 'Estúdio', 'Gênero', 'Categoria', 'Tipo', 'Média', 'Nº Jurados', 'Medalha'],
-    ];
+    // "Posição" só faz sentido em modo RANKING (medalha decidida pela colocação
+    // dentro do grupo). Em THRESHOLD (nota mínima — caso do Usualdance), a
+    // ordem é só de leitura; incluir "1°/2°" sugeriria uma disputa de posição
+    // que não é como a medalha é decidida.
+    const header = premiationSystem === 'RANKING'
+      ? ['Posição', 'Coreografia', 'Estúdio/Grupo', 'Gênero', 'Categoria', 'Tipo', 'Média', 'Nº Jurados', 'Medalha', 'Outlier']
+      : ['Coreografia', 'Estúdio/Grupo', 'Gênero', 'Categoria', 'Tipo', 'Média', 'Nº Jurados', 'Medalha', 'Outlier'];
+    const rows: (string | number)[][] = [header];
     Object.entries(groupedByGenreCat).forEach(([, entries]) => {
       entries.forEach((r, i) => {
         const medal = resolveMedal(r.average_score, i, premiationSystem, thresholds);
-        rows.push([`${i + 1}°`, r.nome_coreografia, r.estudio, r.estilo_danca, r.categoria, r.tipo_apresentacao, r.average_score.toFixed(2), r.evaluations_count, medal.label]);
+        const base = [r.nome_coreografia, r.estudio, r.estilo_danca, r.categoria, r.tipo_apresentacao, r.average_score.toFixed(2), r.evaluations_count, medal.label, r.has_outlier ? 'Sim' : ''];
+        rows.push(premiationSystem === 'RANKING' ? [`${i + 1}°`, ...base] : base);
       });
     });
     const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
@@ -452,12 +461,19 @@ const ResultsPanel = () => {
       doc.text(`Modo de premiação: ${premiationSystem === 'RANKING' ? 'Por colocação (top 3 por categoria)' : 'Por nota mínima'}`, 20, 77);
       if (outlierCount > 0) {
         doc.setTextColor(200, 100, 0);
-        doc.text(`⚠ ${outlierCount} ${outlierCount === 1 ? 'coreografia com outlier' : 'coreografias com outlier'} (divergência ≥ 2.0 entre jurados)`, 20, 83);
+        // "!" em vez de "⚠" — o Helvetica embutido do jsPDF (sem fonte custom)
+        // não tem esse glifo Unicode e renderizava como "&" no PDF gerado.
+        doc.text(`! ${outlierCount} ${outlierCount === 1 ? 'coreografia com outlier' : 'coreografias com outlier'} (divergência >= 2.0 entre jurados) — marcadas na coluna Outlier de cada tabela`, 20, 83);
         doc.setTextColor(40, 40, 40);
       }
 
       let cursorY = 95;
       const groups = Object.entries(groupedByGenreCat);
+      // "Pos." (1°/2°/3°) só faz sentido em modo RANKING, onde a colocação
+      // decide a medalha. Em THRESHOLD (nota mínima) a ordem é só de leitura —
+      // mostrar "1°/2°" sugeriria uma disputa de posição que não é como a
+      // medalha é decidida (2 coreografias podem empatar em Ouro, por ex.).
+      const showPos = premiationSystem === 'RANKING';
 
       for (const [key, entries] of groups) {
         // Quebra de pagina se nao cabe header + ao menos 2 linhas
@@ -466,28 +482,43 @@ const ResultsPanel = () => {
           cursorY = 20;
         }
 
+        // "K-Pop|Livre" → título é o ESTILO (gênero de dança), legenda pequena
+        // abaixo esclarece que o segundo termo é a CATEGORIA (faixa/nível) —
+        // o "|" cru confundia porque nada indicava o que cada lado significava.
+        const [estiloKey, categoriaKey] = key.split('|');
+
         doc.setFontSize(13);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(255, 0, 104);
-        doc.text(key, 20, cursorY);
+        doc.text(estiloKey || '—', 20, cursorY);
+        cursorY += 4.5;
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(130, 130, 130);
+        doc.text(`ESTILO · CATEGORIA: ${(categoriaKey || '—').toUpperCase()}`, 20, cursorY);
         doc.setTextColor(40, 40, 40);
         cursorY += 4;
 
         const tableData = entries.map((r, i) => {
           const medal = resolveMedal(r.average_score, i, premiationSystem, thresholds);
-          return [
-            `${i + 1}°`,
+          const row = [
             r.nome_coreografia,
             r.estudio,
             r.average_score.toFixed(2),
             String(r.evaluations_count),
             medal.label,
-            r.has_outlier ? '⚠' : '',
+            r.has_outlier ? 'Sim' : '',
           ];
+          return showPos ? [`${i + 1}°`, ...row] : row;
         });
 
+        const head = showPos
+          ? ['Pos.', 'Coreografia', 'Estúdio/Grupo', 'Média', 'Jurados', 'Medalha', 'Outlier']
+          : ['Coreografia', 'Estúdio/Grupo', 'Média', 'Jurados', 'Medalha', 'Outlier'];
+        const off = showPos ? 1 : 0;
+
         autoTable(doc, {
-          head: [['Pos.', 'Coreografia', 'Estúdio', 'Média', 'Jurados', 'Medalha', 'Outlier']],
+          head: [head],
           body: tableData,
           startY: cursorY,
           theme: 'striped',
@@ -495,11 +526,11 @@ const ResultsPanel = () => {
           bodyStyles: { fontSize: 9, textColor: 40 },
           alternateRowStyles: { fillColor: [248, 248, 250] },
           columnStyles: {
-            0: { cellWidth: 14, halign: 'center', fontStyle: 'bold' },
-            3: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
-            4: { cellWidth: 18, halign: 'center' },
-            5: { cellWidth: 24, halign: 'center' },
-            6: { cellWidth: 16, halign: 'center', textColor: [200, 100, 0] },
+            ...(showPos ? { 0: { cellWidth: 14, halign: 'center', fontStyle: 'bold' } } : {}),
+            [2 + off]: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
+            [3 + off]: { cellWidth: 18, halign: 'center' },
+            [4 + off]: { cellWidth: 24, halign: 'center' },
+            [5 + off]: { cellWidth: 16, halign: 'center', textColor: [200, 100, 0], fontStyle: 'bold' },
           },
           margin: { left: 20, right: 20 },
         });
@@ -838,15 +869,23 @@ const ResultsPanel = () => {
                             className="flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
                             onClick={() => setExpandedId(isOpen ? null : entry.id)}
                           >
-                            {/* Position badge */}
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
-                              idx === 0 ? 'bg-yellow-100 dark:bg-yellow-500/20 text-yellow-600 dark:text-yellow-400' :
-                              idx === 1 ? 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300' :
-                              idx === 2 ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-500' :
-                              'bg-slate-50 dark:bg-white/5 text-slate-400'
-                            }`}>
-                              {idx + 1}°
-                            </div>
+                            {/* Position badge — só numera colocação em modo RANKING. Em
+                                THRESHOLD (nota mínima) a ordem na lista é só de leitura,
+                                não decide a medalha, então não mostra "1°/2°". */}
+                            {premiationSystem === 'RANKING' ? (
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
+                                idx === 0 ? 'bg-yellow-100 dark:bg-yellow-500/20 text-yellow-600 dark:text-yellow-400' :
+                                idx === 1 ? 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300' :
+                                idx === 2 ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-500' :
+                                'bg-slate-50 dark:bg-white/5 text-slate-400'
+                              }`}>
+                                {idx + 1}°
+                              </div>
+                            ) : (
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${medal.bg} ${medal.border} border`}>
+                                <span className={`w-2.5 h-2.5 rounded-full ${medal.dot}`} />
+                              </div>
+                            )}
 
                             {/* Info */}
                             <div className="flex-1 min-w-0">
