@@ -134,19 +134,8 @@ const JudgesManagement = () => {
      e-mail/WhatsApp: produtor mostra/fala 6 caracteres, jurado digita em
      app.coreohub.com/entrar-juri e cai direto na seleção de nome + PIN. */
   const [shortCode, setShortCode] = useState<string | null>(null);
-  const [shortCodeOpen, setShortCodeOpen] = useState(false);
   const [shortCodeLoading, setShortCodeLoading] = useState(false);
   const [shortCodeCopied, setShortCodeCopied] = useState(false);
-
-  const toggleShortCodePanel = async () => {
-    setShortCodeOpen(o => !o);
-    if (shortCode !== null) return;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data: profile } = await supabase
-      .from('profiles').select('judge_short_code').eq('id', user.id).maybeSingle();
-    setShortCode(profile?.judge_short_code ?? '');
-  };
 
   const generateShortCode = async () => {
     setShortCodeLoading(true);
@@ -175,7 +164,6 @@ const JudgesManagement = () => {
   // visível + QR code (padrão Kahoot/Eventbrite: scan pra abrir direto
   // num dispositivo novo, sem digitar nada) + botão copiar.
   const [judgeAccessUrl, setJudgeAccessUrl] = useState<string | null>(null);
-  const [linkPanelOpen, setLinkPanelOpen] = useState(false);
   const [linkPanelLoading, setLinkPanelLoading] = useState(false);
 
   const fetchJudgeAccessUrl = async (): Promise<string | null> => {
@@ -191,17 +179,43 @@ const JudgesManagement = () => {
     return `${window.location.origin}/judge-login/${token}`;
   };
 
-  const toggleLinkPanel = async () => {
-    setLinkPanelOpen(o => !o);
-    if (judgeAccessUrl !== null) return;
-    setLinkPanelLoading(true);
-    try {
-      const url = await fetchJudgeAccessUrl();
-      if (!url) { alert('Não foi possível gerar o link. Recarregue a página e tente de novo.'); return; }
-      setJudgeAccessUrl(url);
-    } finally {
-      setLinkPanelLoading(false);
+  /* Painel único "Convidar jurados" — antes eram 2 botões/painéis separados
+     (Link dos jurados / Código de acesso), forçando o produtor a decidir
+     qual abrir sem saber a diferença. Agora é 1 botão com abas, cada uma
+     carrega o próprio dado sob demanda (lazy) na primeira vez que é vista. */
+  const [invitePanelOpen, setInvitePanelOpen] = useState(false);
+  const [inviteTab, setInviteTab] = useState<'link' | 'code'>('link');
+
+  const loadInviteTabData = async (tab: 'link' | 'code') => {
+    if (tab === 'link') {
+      if (judgeAccessUrl !== null) return;
+      setLinkPanelLoading(true);
+      try {
+        const url = await fetchJudgeAccessUrl();
+        if (!url) { alert('Não foi possível gerar o link. Recarregue a página e tente de novo.'); return; }
+        setJudgeAccessUrl(url);
+      } finally {
+        setLinkPanelLoading(false);
+      }
+    } else {
+      if (shortCode !== null) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from('profiles').select('judge_short_code').eq('id', user.id).maybeSingle();
+      setShortCode(profile?.judge_short_code ?? '');
     }
+  };
+
+  const toggleInvitePanel = async () => {
+    const opening = !invitePanelOpen;
+    setInvitePanelOpen(opening);
+    if (opening) await loadInviteTabData(inviteTab);
+  };
+
+  const switchInviteTab = async (tab: 'link' | 'code') => {
+    setInviteTab(tab);
+    await loadInviteTabData(tab);
   };
 
   const copyJudgeAccessLink = async () => {
@@ -662,21 +676,13 @@ const JudgesManagement = () => {
             {copiedField === 'invite' ? 'Convite copiado!' : 'Copiar convite'}
           </button>
           <button
-            onClick={toggleLinkPanel}
+            onClick={toggleInvitePanel}
             disabled={judges.length === 0}
-            aria-expanded={linkPanelOpen}
+            aria-expanded={invitePanelOpen}
             className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Ver link + QR code de acesso pros jurados"
+            title="Ver link (QR code) ou código curto de acesso pros jurados"
           >
-            <LinkIcon size={14} /> Link dos jurados
-          </button>
-          <button
-            onClick={toggleShortCodePanel}
-            aria-expanded={shortCodeOpen}
-            className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all flex items-center gap-2"
-            title="Código curto pra dispositivo novo entrar em app.coreohub.com/entrar-juri"
-          >
-            <Hash size={14} /> Código de acesso
+            <LinkIcon size={14} /> Link e código
           </button>
           <button
             onClick={exportSumulaPDF}
@@ -695,97 +701,119 @@ const JudgesManagement = () => {
         </div>
       </div>
 
-      {/* Link direto assinado — URL visível + QR code pra escanear com a
-          câmera do celular/tablet e abrir o terminal direto, sem digitar
-          nada (padrão Kahoot/Eventbrite pra credenciamento em massa). */}
-      {linkPanelOpen && (
-        <div className="p-5 bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-2xl flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068] shrink-0"><LinkIcon size={18} /></div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white">
-              Link direto de acesso
-            </p>
-            {linkPanelLoading ? (
-              <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> Gerando link...</p>
-            ) : judgeAccessUrl ? (
-              <>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate" title={judgeAccessUrl}>{judgeAccessUrl}</p>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Escaneie o QR com a câmera do celular/tablet do jurado pra abrir direto — ou copie o link e mande por WhatsApp.
-                </p>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Ao abrir, o jurado vai ver os botões <strong className="text-slate-500 dark:text-slate-300">"Instalar app"</strong> (salva na tela do dispositivo) e <strong className="text-slate-500 dark:text-slate-300">"Configurar como Terminal"</strong> (fixa o tablet nessa tela pras próximas vezes) — não precisa mais fazer nada além disso.
-                </p>
-              </>
-            ) : (
-              <p className="text-[10px] text-rose-400 mt-1">Não foi possível gerar o link.</p>
-            )}
+      {/* Painel único "Convidar jurados" com 2 abas — Link direto (QR, pra
+          escanear e abrir sem digitar nada) e Código curto (pra ler em voz
+          alta ou digitar em app.coreohub.com/entrar-juri). Antes eram 2
+          botões/painéis separados sem explicar quando usar cada um. */}
+      {invitePanelOpen && (
+        <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden">
+          <div className="flex border-b border-slate-100 dark:border-white/10">
+            <button
+              onClick={() => switchInviteTab('link')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 text-[10px] font-black uppercase tracking-widest transition-colors ${
+                inviteTab === 'link'
+                  ? 'text-[#ff0068] border-b-2 border-[#ff0068]'
+                  : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+              }`}
+            >
+              <LinkIcon size={13} /> Link direto (QR)
+            </button>
+            <button
+              onClick={() => switchInviteTab('code')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 text-[10px] font-black uppercase tracking-widest transition-colors ${
+                inviteTab === 'code'
+                  ? 'text-[#ff0068] border-b-2 border-[#ff0068]'
+                  : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+              }`}
+            >
+              <Hash size={13} /> Código curto
+            </button>
           </div>
-          {judgeAccessUrl && (
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="p-2 bg-white rounded-xl">
-                <QRCodeCanvas value={judgeAccessUrl} size={72} level="M" />
+
+          {inviteTab === 'link' ? (
+            <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                  Link direto de acesso
+                </p>
+                {linkPanelLoading ? (
+                  <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> Gerando link...</p>
+                ) : judgeAccessUrl ? (
+                  <>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate" title={judgeAccessUrl}>{judgeAccessUrl}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Use pra <strong className="text-slate-500 dark:text-slate-300">1 dispositivo por vez</strong>: escaneie o QR com a câmera do celular/tablet do jurado, ou copie o link e mande por WhatsApp.
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Ao abrir, o jurado vai ver os botões <strong className="text-slate-500 dark:text-slate-300">"Instalar app"</strong> (salva na tela do dispositivo) e <strong className="text-slate-500 dark:text-slate-300">"Configurar como Terminal"</strong> (fixa o tablet nessa tela pras próximas vezes) — não precisa mais fazer nada além disso.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-[10px] text-rose-400 mt-1">Não foi possível gerar o link.</p>
+                )}
               </div>
-              <button
-                onClick={copyJudgeAccessLink}
-                className="p-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-500 hover:text-[#ff0068] transition-colors"
-                title="Copiar link"
-                aria-label="Copiar link"
-              >
-                {copiedField === 'link' ? <CheckCircle2 size={16} className="text-emerald-500" /> : <Copy size={16} />}
-              </button>
+              {judgeAccessUrl && (
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="p-2 bg-white rounded-xl">
+                    <QRCodeCanvas value={judgeAccessUrl} size={72} level="M" />
+                  </div>
+                  <button
+                    onClick={copyJudgeAccessLink}
+                    className="p-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-500 hover:text-[#ff0068] transition-colors"
+                    title="Copiar link"
+                    aria-label="Copiar link"
+                  >
+                    {copiedField === 'link' ? <CheckCircle2 size={16} className="text-emerald-500" /> : <Copy size={16} />}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex-1">
+                <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                  Acesso rápido em vários dispositivos
+                </p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Use pra <strong className="text-slate-700 dark:text-slate-300">falar em voz alta</strong> pra vários jurados de uma vez (padrão Kahoot): peça pra abrirem <span className="font-bold">app.coreohub.com/entrar-juri</span> e digitarem o código abaixo — sem precisar de e-mail ou WhatsApp.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {shortCode ? (
+                  <>
+                    <span className="px-4 py-2.5 bg-slate-100 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl text-lg font-black tracking-[0.25em] text-slate-900 dark:text-white">
+                      {shortCode}
+                    </span>
+                    <button
+                      onClick={copyShortCode}
+                      className="p-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-500 hover:text-[#ff0068] transition-colors"
+                      title="Copiar código"
+                      aria-label="Copiar código"
+                    >
+                      {shortCodeCopied ? <CheckCircle2 size={16} className="text-emerald-500" /> : <Copy size={16} />}
+                    </button>
+                    <button
+                      onClick={generateShortCode}
+                      disabled={shortCodeLoading}
+                      className="p-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-500 hover:text-[#ff0068] transition-colors disabled:opacity-50"
+                      title="Gerar novo código (revoga o atual)"
+                      aria-label="Gerar novo código"
+                    >
+                      {shortCodeLoading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={generateShortCode}
+                    disabled={shortCodeLoading}
+                    className="px-4 py-2.5 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {shortCodeLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Gerar código
+                  </button>
+                )}
+              </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* Código curto de acesso (/entrar-juri) — alternativa ao link longo
-          pra logar um dispositivo novo sem e-mail/WhatsApp. */}
-      {shortCodeOpen && (
-        <div className="p-5 bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-2xl flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068] shrink-0"><Hash size={18} /></div>
-          <div className="flex-1">
-            <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white">
-              Acesso rápido em dispositivo novo
-            </p>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-              Peça pro jurado abrir <span className="font-bold">app.coreohub.com/entrar-juri</span> e digitar o código abaixo — sem precisar de e-mail ou WhatsApp.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {shortCode ? (
-              <>
-                <span className="px-4 py-2.5 bg-slate-100 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl text-lg font-black tracking-[0.25em] text-slate-900 dark:text-white">
-                  {shortCode}
-                </span>
-                <button
-                  onClick={copyShortCode}
-                  className="p-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-500 hover:text-[#ff0068] transition-colors"
-                  title="Copiar código"
-                  aria-label="Copiar código"
-                >
-                  {shortCodeCopied ? <CheckCircle2 size={16} className="text-emerald-500" /> : <Copy size={16} />}
-                </button>
-                <button
-                  onClick={generateShortCode}
-                  disabled={shortCodeLoading}
-                  className="p-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-500 hover:text-[#ff0068] transition-colors disabled:opacity-50"
-                  title="Gerar novo código (revoga o atual)"
-                  aria-label="Gerar novo código"
-                >
-                  {shortCodeLoading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={generateShortCode}
-                disabled={shortCodeLoading}
-                className="px-4 py-2.5 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2 disabled:opacity-50"
-              >
-                {shortCodeLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Gerar código
-              </button>
-            )}
-          </div>
         </div>
       )}
 
