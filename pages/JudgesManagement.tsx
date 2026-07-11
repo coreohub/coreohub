@@ -14,6 +14,7 @@ import imageCompression from 'browser-image-compression';
 import { supabase } from '../services/supabase';
 import { getAllGenres } from '../services/genreService';
 import { normalizeStyleName, isStyleInList } from '../utils/styleMatch';
+import { resolveEstudio, toTitleCase } from '../utils/formatters';
 import { EventStyle } from '../types';
 
 /* ────────────────────────────────────────────────────────── */
@@ -395,6 +396,195 @@ const JudgesManagement = () => {
     }
   };
 
+  /* ── Cronograma de Jurados (PDF) — uso do Coordenador do Júri pra acompanhar
+     quando a banca de jurados muda ao longo da sequência real de apresentação
+     (ordem_apresentacao, contínua entre blocos — bloco é só divisão visual da
+     tela de Cronograma). Cada jurado fica na mesma coluna enquanto continua
+     avaliando; quem sai libera a coluna pra quem entra, então a troca aparece
+     sem precisar ler célula por célula. Confirmado com o produtor em sessão
+     (dados reais do Usualdance Festival, trocas nas posições 4,5,15,16,17,
+     19,20,21,33 batendo com o cálculo). */
+  const [exportingJudgeSchedule, setExportingJudgeSchedule] = useState(false);
+
+  const exportJudgeSchedulePDF = async () => {
+    setExportingJudgeSchedule(true);
+    try {
+      const { resolveActiveEventId } = await import('../services/supabase');
+      const eventId = await resolveActiveEventId();
+      if (!eventId) { alert('Nenhum evento ativo encontrado.'); return; }
+
+      let eventName = 'Evento';
+      const { data: ev } = await supabase.from('events').select('name').eq('id', eventId).maybeSingle();
+      if (ev?.name) eventName = ev.name;
+
+      const [{ data: regs }, { data: blocosData }] = await Promise.all([
+        supabase
+          .from('registrations')
+          .select('id, nome_coreografia, estudio, estilo_danca, ordem_apresentacao, excluded_from_schedule, bloco_id, event_data')
+          .eq('event_id', eventId)
+          .or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO')
+          .order('ordem_apresentacao', { ascending: true }),
+        supabase.from('cronograma_blocos').select('id, name, ordem').eq('event_id', eventId).order('ordem'),
+      ]);
+
+      const schedule = (regs ?? []).filter((r: any) => !r.excluded_from_schedule && r.ordem_apresentacao != null);
+      if (schedule.length === 0) { alert('Nenhuma apresentação com ordem definida encontrada no Cronograma.'); return; }
+
+      const blocosList = blocosData ?? [];
+      const blocosById = new Map(blocosList.map((b: any) => [b.id, b]));
+
+      const activeJudges = judges.filter(j => j.is_active !== false);
+      if (activeJudges.length === 0) { alert('Nenhum jurado ativo pra montar a banca.'); return; }
+
+      const getBanca = (estilo: string | null): string[] => {
+        if (!estilo) return [];
+        return activeJudges
+          .filter(j => isStyleInList(estilo, j.competencias_generos))
+          .map(j => j.name)
+          .sort();
+      };
+
+      const maxCols = Math.max(1, ...schedule.map((r: any) => getBanca(r.estilo_danca).length));
+
+      type LinhaJurados = {
+        ordem: number; nome: string; estudio: string; estilo: string; blocoName: string;
+        cols: (string | null)[]; mudou: boolean[]; trocou: boolean;
+      };
+      const linhas: LinhaJurados[] = [];
+      let prevCols: (string | null)[] | null = null;
+
+      schedule.forEach((r: any) => {
+        const banca = getBanca(r.estilo_danca);
+        const cols: (string | null)[] = new Array(maxCols).fill(null);
+        const mudou: boolean[] = new Array(maxCols).fill(false);
+
+        if (!prevCols) {
+          banca.forEach((j, i) => { cols[i] = j; });
+        } else {
+          const usados = new Set<string>();
+          prevCols.forEach((j, i) => {
+            if (j && banca.includes(j)) { cols[i] = j; usados.add(j); }
+          });
+          const restantes = banca.filter(j => !usados.has(j));
+          let ri = 0;
+          for (let i = 0; i < maxCols; i++) {
+            if (cols[i] === null && ri < restantes.length) { cols[i] = restantes[ri++]; mudou[i] = true; }
+          }
+        }
+
+        const bloco = r.bloco_id ? blocosById.get(r.bloco_id) : null;
+        linhas.push({
+          ordem: r.ordem_apresentacao,
+          nome: r.nome_coreografia || '—',
+          estudio: toTitleCase(resolveEstudio(r)) || '—',
+          estilo: r.estilo_danca || '—',
+          blocoName: (bloco as any)?.name || 'Sem bloco',
+          cols,
+          mudou,
+          trocou: prevCols !== null && mudou.some(Boolean),
+        });
+        prevCols = cols;
+      });
+
+      const gruposMap = new Map<string, LinhaJurados[]>();
+      linhas.forEach(r => {
+        if (!gruposMap.has(r.blocoName)) gruposMap.set(r.blocoName, []);
+        gruposMap.get(r.blocoName)!.push(r);
+      });
+      const blocosOrdenadosNomes = [...blocosList].sort((a: any, b: any) => a.ordem - b.ordem).map((b: any) => b.name);
+      const gruposOrdenados = [
+        ...blocosOrdenadosNomes.filter(n => gruposMap.has(n)),
+        ...(gruposMap.has('Sem bloco') ? ['Sem bloco'] : []),
+      ];
+
+      const { default: jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
+      const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      doc.setFillColor(255, 0, 104);
+      doc.rect(0, 0, pageWidth, 26, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Cronograma de Jurados', pageWidth / 2, 12, { align: 'center' });
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${eventName} · uso do Coordenador do Júri`, pageWidth / 2, 19, { align: 'center' });
+
+      let cursorY = 36;
+      const totalCols = 4 + maxCols;
+      const jurHead = Array.from({ length: maxCols }, (_, i) => `Jurado ${i + 1}`);
+
+      gruposOrdenados.forEach(blocoName => {
+        const grupoLinhas = gruposMap.get(blocoName)!;
+        if (cursorY > 250) { doc.addPage(); cursorY = 20; }
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 0, 104);
+        doc.text(blocoName, 14, cursorY);
+        doc.setTextColor(40, 40, 40);
+        cursorY += 4;
+
+        const body: any[] = [];
+        grupoLinhas.forEach(r => {
+          if (r.trocou) {
+            body.push([{
+              content: '⟳ Troca de jurado(a)',
+              colSpan: totalCols,
+              styles: { halign: 'center', fillColor: [255, 0, 104], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+            }]);
+          }
+          body.push([
+            String(r.ordem),
+            r.nome,
+            r.estudio,
+            r.estilo,
+            ...r.cols.map((j, i) => j
+              ? { content: j, styles: r.mudou[i] ? { fillColor: [255, 0, 104], textColor: 255, fontStyle: 'bold' } : {} }
+              : '—'),
+          ]);
+        });
+
+        const columnStyles: Record<number, any> = {
+          0: { cellWidth: 8, halign: 'center', fontStyle: 'bold' },
+        };
+        for (let i = 0; i < maxCols; i++) columnStyles[4 + i] = { halign: 'center', fontSize: 7.5 };
+
+        autoTable(doc, {
+          head: [['Nº', 'Coreografia', 'Estúdio', 'Estilo', ...jurHead]],
+          body,
+          startY: cursorY,
+          theme: 'striped',
+          headStyles: { fillColor: [40, 40, 40], textColor: 255, fontSize: 7, fontStyle: 'bold' },
+          bodyStyles: { fontSize: 8, textColor: 40 },
+          alternateRowStyles: { fillColor: [248, 248, 250] },
+          columnStyles,
+          margin: { left: 14, right: 14 },
+        });
+
+        cursorY = (doc as any).lastAutoTable.finalY + 8;
+      });
+
+      doc.setFontSize(7);
+      doc.setTextColor(150, 150, 150);
+      doc.text(
+        'Uso interno do Coordenador do Júri · troca calculada em relação à apresentação anterior (contínua entre blocos) · Gerado por CoreoHub.',
+        14, doc.internal.pageSize.getHeight() - 8,
+      );
+
+      const slug = (eventName || 'evento')
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
+      doc.save(`cronograma-jurados-${slug}.pdf`);
+    } catch (err) {
+      console.error('Erro ao exportar cronograma de jurados:', err);
+      alert('Falha ao gerar o PDF: ' + (err instanceof Error ? err.message : 'desconhecido'));
+    } finally {
+      setExportingJudgeSchedule(false);
+    }
+  };
+
   /* ── open modal ── */
   const openAdd = () => {
     setEditingJudge(null);
@@ -636,6 +826,14 @@ const JudgesManagement = () => {
             title="Baixa 1 folha em branco por jurado — contingência de papel se o terminal falhar no dia"
           >
             {exportingSumula ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />} Súmula (PDF)
+          </button>
+          <button
+            onClick={exportJudgeSchedulePDF}
+            disabled={exportingJudgeSchedule || judges.length === 0}
+            className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="PDF de uso do Coordenador do Júri — mostra quando a banca de jurados muda ao longo da sequência de apresentação"
+          >
+            {exportingJudgeSchedule ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />} Cronograma de Jurados (PDF)
           </button>
           <button
             onClick={openAdd}
