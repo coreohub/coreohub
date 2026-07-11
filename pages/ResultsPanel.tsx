@@ -609,17 +609,22 @@ const ResultsPanel = () => {
               const naFaixa = competitiva
                 .filter(x => x.evaluations_count > 0 && x.average_score >= lo && (hi == null || x.average_score < hi))
                 .sort((x, y) => y.average_score - x.average_score);
+              // Uma coreografia por linha (autotable respeita \n) — a faixa Ouro
+              // pode ter muitas coreografias; juntar tudo com "; " virava um
+              // parágrafo ilegível numa célula só.
               vencedor = naFaixa.length > 0
-                ? naFaixa.map(x => `${x.nome_coreografia} (${x.average_score.toFixed(2)})`).join('; ')
+                ? naFaixa.map(x => `${x.nome_coreografia} (${x.average_score.toFixed(2)})`).join('\n')
                 : 'Nenhuma coreografia na faixa';
             } else if (r.tipo === 'maior_nota') {
               const top = competitiva.filter(x => x.evaluations_count > 0).sort((x, y) => y.average_score - x.average_score)[0];
               vencedor = top ? `${top.nome_coreografia} (${top.average_score.toFixed(2)})` : '—';
             } else if (r.tipo === 'premio') {
+              // Prêmio de deliberação da banca. Sem jargão "deliberação pendente"
+              // quando não houve deliberação — o produtor revela na mão no telão.
               const w = deliberationWinners[a.id];
-              vencedor = w ? `${w.nome} · ${w.estudio}` : 'Deliberação dos jurados pendente';
+              vencedor = w ? `${w.nome} · ${w.estudio}` : 'A revelar na cerimônia';
             } else {
-              vencedor = 'A definir na cerimônia (ex.: Voto Popular externo)';
+              vencedor = 'A revelar na cerimônia (Voto Popular)';
             }
             return [a.nome, fmtValor(a.valor) || '—', vencedor];
           });

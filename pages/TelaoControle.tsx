@@ -44,20 +44,27 @@ const TelaoControle: React.FC = () => {
   const [coreos, setCoreos] = useState<Coreo[]>([]);
   const [manualFor, setManualFor] = useState<Premio | null>(null);
   const [manualSearch, setManualSearch] = useState('');
+  const [manualEstudio, setManualEstudio] = useState('');
   const [votoError, setVotoError] = useState<string | null>(null);
+  // Se a banca nunca rodou a Deliberação de Prêmios, prêmios classificados como
+  // 'premio' (ex: Melhor Bailarino/Coreógrafo) não têm vencedor automático —
+  // clicar neles abre direto o campo de digitar o vencedor na mão.
+  const [hasDeliberation, setHasDeliberation] = useState(false);
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const publicUrl = code ? `${origin}/telao/${code}` : '';
 
   // Carrega os prêmios especiais + coreografias (pra escolha manual do vencedor).
   const loadPremiacaoOptions = useCallback(async (id: string) => {
-    const [{ data: cfg }, { data: regs }] = await Promise.all([
+    const [{ data: cfg }, { data: regs }, { count: delibCount }] = await Promise.all([
       supabase.from('configuracoes').select('premios_especiais').eq('event_id', id).maybeSingle(),
       supabase.from('registrations')
         .select('nome_coreografia, estudio, event_data')
         .eq('event_id', id)
         .or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO'),
+      supabase.from('deliberation_aggregate').select('id', { count: 'exact', head: true }).eq('event_id', id),
     ]);
+    setHasDeliberation((delibCount ?? 0) > 0);
 
     const raw = (cfg as any)?.premios_especiais ?? [];
     setPremios((Array.isArray(raw) ? raw : [])
@@ -187,6 +194,16 @@ const TelaoControle: React.FC = () => {
       }
       setManualFor(a);
       setManualSearch('');
+      setManualEstudio('');
+      return;
+    }
+    // 'premio' = vencedor por deliberação da banca. Se ninguém deliberou, não há
+    // fonte automática (ex: Melhor Bailarino/Coreógrafo do Usualdance) — abre o
+    // campo de digitar o vencedor na mão em vez de revelar uma tela vazia no LED.
+    if (!hasDeliberation) {
+      setManualFor(a);
+      setManualSearch('');
+      setManualEstudio('');
       return;
     }
     return sendPremiacao({ tipo: 'premio', award_id: a.id, titulo: a.nome, valor });
@@ -194,7 +211,16 @@ const TelaoControle: React.FC = () => {
 
   const revelarManual = (a: Premio, c: Coreo) => {
     sendPremiacao({ tipo: 'manual', titulo: a.nome, valor: fmtValor(a.valor), nome: c.nome, estudio: c.estudio });
-    setManualFor(null);
+    setManualFor(null); setManualSearch(''); setManualEstudio('');
+  };
+
+  // Vencedor digitado livre (pessoa/coreografia que não está na lista) — ex:
+  // Melhor Bailarino(a). Nome obrigatório, estúdio/grupo opcional.
+  const revelarManualLivre = (a: Premio) => {
+    const nome = manualSearch.trim();
+    if (!nome) return;
+    sendPremiacao({ tipo: 'manual', titulo: a.nome, valor: fmtValor(a.valor), nome, estudio: manualEstudio.trim() });
+    setManualFor(null); setManualSearch(''); setManualEstudio('');
   };
 
   const isActive = (a: Premio, r: Reveal) => {
@@ -397,7 +423,7 @@ const TelaoControle: React.FC = () => {
                         {revealLabel[r.tipo === 'faixa' ? r.faixa : r.tipo]}
                       </span>
                     </button>
-                    <button onClick={() => { setVotoError(null); setManualFor(a); setManualSearch(''); }} disabled={busy}
+                    <button onClick={() => { setVotoError(null); setManualFor(a); setManualSearch(''); setManualEstudio(''); }} disabled={busy}
                       title="Escolher vencedor na mão" aria-label={`Escolher vencedor na mão para ${a.nome}`}
                       className="shrink-0 p-3 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 transition-all">
                       <Hand size={14} />
@@ -421,26 +447,46 @@ const TelaoControle: React.FC = () => {
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 truncate">Vencedor de "{manualFor.nome}"</p>
                 <button onClick={() => setManualFor(null)} aria-label="Fechar" className="shrink-0 text-slate-500 hover:text-slate-900 dark:hover:text-white"><X size={14} /></button>
               </div>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
-                <input value={manualSearch} onChange={(e) => setManualSearch(e.target.value)} placeholder="Buscar coreografia…" autoFocus
-                  aria-label="Buscar coreografia"
-                  className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-[#ff0068]/50" />
+
+              {/* Digitar o vencedor na mão (pessoa ou coreografia que não está na
+                  lista) — ex: Melhor Bailarino(a). O mesmo campo filtra a lista abaixo. */}
+              <div className="space-y-2">
+                <input value={manualSearch}
+                  onChange={(e) => setManualSearch(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') revelarManualLivre(manualFor); }}
+                  placeholder="Nome do vencedor (pessoa ou coreografia)" autoFocus
+                  aria-label="Nome do vencedor"
+                  className="w-full px-3 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-[#ff0068]/50" />
+                <input value={manualEstudio}
+                  onChange={(e) => setManualEstudio(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') revelarManualLivre(manualFor); }}
+                  placeholder="Estúdio / grupo (opcional)"
+                  aria-label="Estúdio ou grupo"
+                  className="w-full px-3 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-[#ff0068]/50" />
+                <button onClick={() => revelarManualLivre(manualFor)} disabled={busy || !manualSearch.trim()}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-40 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all">
+                  <Trophy size={13} /> Revelar no telão
+                </button>
               </div>
-              <div className="max-h-56 overflow-y-auto space-y-1">
-                {coreos.filter((c) => !manualSearch || `${c.nome} ${c.estudio}`.toLowerCase().includes(manualSearch.toLowerCase())).slice(0, 40).map((c, i) => (
-                  <button key={i} onClick={() => revelarManual(manualFor, c)} disabled={busy}
-                    className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-left bg-white dark:bg-white/5 hover:bg-[#ff0068]/10 text-slate-700 dark:text-slate-200 text-xs font-bold uppercase tracking-wide transition-all">
-                    <span className="truncate">{c.nome}</span>
-                    {c.estudio && <span className="shrink-0 text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[45%]">{c.estudio}</span>}
-                  </button>
-                ))}
-                {coreos.length === 0 && <p className="text-xs text-slate-500 p-2">Nenhuma coreografia encontrada.</p>}
-              </div>
+
+              {coreos.length > 0 && (
+                <>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5 pt-1"><Search size={10} aria-hidden /> ou toque numa coreografia avaliada</p>
+                  <div className="max-h-48 overflow-y-auto space-y-1">
+                    {coreos.filter((c) => !manualSearch || `${c.nome} ${c.estudio}`.toLowerCase().includes(manualSearch.toLowerCase())).slice(0, 40).map((c, i) => (
+                      <button key={i} onClick={() => revelarManual(manualFor, c)} disabled={busy}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-left bg-white dark:bg-white/5 hover:bg-[#ff0068]/10 text-slate-700 dark:text-slate-200 text-xs font-bold uppercase tracking-wide transition-all">
+                        <span className="truncate">{c.nome}</span>
+                        {c.estudio && <span className="shrink-0 text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[45%]">{c.estudio}</span>}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
 
-          <p className="text-[11px] text-slate-500">Faixas (Ouro/Prata/Bronze) e Maior Nota saem da média dos jurados; prêmios de deliberação, da votação. O <b className="text-slate-600 dark:text-slate-400">✋</b> escolhe o vencedor na mão (ex: Voto Popular). Nada aparece na plateia até você clicar.</p>
+          <p className="text-[11px] text-slate-500">Faixas (Ouro/Prata/Bronze) e Maior Nota saem da média dos jurados. Prêmios sem cálculo automático — como <b className="text-slate-600 dark:text-slate-400">Melhor Bailarino(a)</b> ou <b className="text-slate-600 dark:text-slate-400">Voto Popular</b> — abrem um campo pra você <b className="text-slate-600 dark:text-slate-400">digitar o vencedor</b> (também dá pelo ✋). Nada aparece na plateia até você revelar.</p>
         </div>
       )}
 
