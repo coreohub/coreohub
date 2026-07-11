@@ -510,8 +510,8 @@ const JudgesManagement = () => {
       doc.rect(0, 0, pageWidth, 26, 'F');
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Cronograma de Jurados', pageWidth / 2, 12, { align: 'center' });
+      doc.setFont('helvetica', 'bolditalic');
+      doc.text('CRONOGRAMA DE JURADOS', pageWidth / 2, 12, { align: 'center' });
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
       doc.text(`${eventName} · uso do Coordenador do Júri`, pageWidth / 2, 19, { align: 'center' });
@@ -587,9 +587,30 @@ const JudgesManagement = () => {
             }
           },
           didDrawCell: (data: any) => {
-            if (data.section !== 'body' || data.column.index < 4) return;
+            if (data.section !== 'body') return;
             const raw = data.cell.raw;
             if (!raw || typeof raw !== 'object') return;
+
+            // Linha "TROCA" — mockup tem duas réguas rosa flanqueando o texto
+            // (.linha::before/::after). autoTable só desenha o texto centralizado,
+            // então a gente adiciona as réguas na mão.
+            if (raw.content === 'TROCA') {
+              const { x, y, width, height } = data.cell;
+              const cy = y + height / 2;
+              const cx = x + width / 2;
+              doc.setFontSize(7);
+              doc.setFont('helvetica', 'bold');
+              const tw = doc.getTextWidth('TROCA');
+              const gap = 4;
+              doc.setDrawColor(255, 0, 104);
+              doc.setLineWidth(0.3);
+              doc.line(x + 2, cy, cx - tw / 2 - gap, cy);
+              doc.line(cx + tw / 2 + gap, cy, x + width - 2, cy);
+              doc.setFont('helvetica', 'normal');
+              return;
+            }
+
+            if (data.column.index < 4) return;
             const label = String(raw.content);
             const mudou = !!raw.mudou;
             const { x, y, width, height } = data.cell;
