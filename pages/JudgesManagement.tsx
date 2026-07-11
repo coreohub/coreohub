@@ -530,10 +530,12 @@ const JudgesManagement = () => {
         const body: any[] = [];
         grupoLinhas.forEach(r => {
           if (r.trocou) {
+            // Helvetica (fonte nativa do jsPDF, sem embed) não tem glifo pra
+            // símbolos tipo ⟳/⚠ — vira "'ó" ilegível. Texto puro só.
             body.push([{
-              content: '⟳ Troca de jurado(a)',
+              content: 'TROCA',
               colSpan: totalCols,
-              styles: { halign: 'center', fillColor: [255, 0, 104], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+              styles: { halign: 'center', fillColor: [255, 255, 255], textColor: [255, 0, 104], fontStyle: 'bold', fontSize: 7, minCellHeight: 3, cellPadding: 1 },
             }]);
           }
           body.push([
@@ -542,7 +544,12 @@ const JudgesManagement = () => {
             r.estudio,
             r.estilo,
             ...r.cols.map((j, i) => j
-              ? { content: j, styles: r.mudou[i] ? { fillColor: [255, 0, 104], textColor: 255, fontStyle: 'bold' } : {} }
+              ? {
+                  content: j,
+                  styles: r.mudou[i]
+                    ? { fillColor: [255, 0, 104], textColor: 255, fontStyle: 'bold' }
+                    : { fillColor: [241, 241, 244], textColor: 51 },
+                }
               : '—'),
           ]);
         });
