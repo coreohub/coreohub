@@ -476,7 +476,7 @@ const JudgesManagement = () => {
         const bloco = r.bloco_id ? blocosById.get(r.bloco_id) : null;
         linhas.push({
           ordem: r.ordem_apresentacao,
-          nome: r.nome_coreografia || '—',
+          nome: toTitleCase(r.nome_coreografia) || '—',
           estudio: toTitleCase(resolveEstudio(r)) || '—',
           estilo: r.estilo_danca || '—',
           blocoName: (bloco as any)?.name || 'Sem bloco',
@@ -523,7 +523,7 @@ const JudgesManagement = () => {
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(255, 0, 104);
-        doc.text(blocoName, 14, cursorY);
+        doc.text(blocoName.toUpperCase(), 14, cursorY);
         doc.setTextColor(40, 40, 40);
         cursorY += 4;
 
@@ -543,14 +543,10 @@ const JudgesManagement = () => {
             r.nome,
             r.estudio,
             r.estilo,
-            ...r.cols.map((j, i) => j
-              ? {
-                  content: j,
-                  styles: r.mudou[i]
-                    ? { fillColor: [255, 0, 104], textColor: 255, fontStyle: 'bold' }
-                    : { fillColor: [241, 241, 244], textColor: 51 },
-                }
-              : '—'),
+            // content vira só o "raw" que o didParseCell/didDrawCell leem pra
+            // desenhar o pill arredondado (autoTable não tem border-radius
+            // nativo por célula) — mudou marca cor rosa vs cinza claro.
+            ...r.cols.map((j, i) => (j ? { content: j, mudou: r.mudou[i] } : '—')),
           ]);
         });
 
@@ -560,7 +556,7 @@ const JudgesManagement = () => {
         for (let i = 0; i < maxCols; i++) columnStyles[4 + i] = { halign: 'center', fontSize: 7.5 };
 
         autoTable(doc, {
-          head: [['Nº', 'Coreografia', 'Estúdio', 'Estilo', ...jurHead]],
+          head: [['Nº', 'Coreografia', 'Estúdio', 'Estilo', ...jurHead].map(h => h.toUpperCase())],
           body,
           startY: cursorY,
           theme: 'striped',
@@ -569,6 +565,33 @@ const JudgesManagement = () => {
           alternateRowStyles: { fillColor: [248, 248, 250] },
           columnStyles,
           margin: { left: 14, right: 14 },
+          didParseCell: (data: any) => {
+            // Célula de jurado (col >= 4, corpo, raw é objeto {content,mudou})
+            // esconde o texto default — a gente redesenha na mão no didDrawCell
+            // como pill arredondado, igual ao mockup aprovado.
+            if (data.section === 'body' && data.column.index >= 4 && data.cell.raw && typeof data.cell.raw === 'object') {
+              data.cell.text = [];
+            }
+          },
+          didDrawCell: (data: any) => {
+            if (data.section !== 'body' || data.column.index < 4) return;
+            const raw = data.cell.raw;
+            if (!raw || typeof raw !== 'object') return;
+            const { x, y, width, height } = data.cell;
+            const padX = 1.2, padY = 1.8;
+            const pillX = x + padX;
+            const pillY = y + padY;
+            const pillW = Math.max(width - padX * 2, 1);
+            const pillH = Math.max(height - padY * 2, 1);
+            const mudou = !!raw.mudou;
+            if (mudou) doc.setFillColor(255, 0, 104); else doc.setFillColor(241, 241, 244);
+            doc.roundedRect(pillX, pillY, pillW, pillH, 1.4, 1.4, 'F');
+            doc.setFontSize(7.5);
+            doc.setFont('helvetica', mudou ? 'bold' : 'normal');
+            if (mudou) doc.setTextColor(255, 255, 255); else doc.setTextColor(51, 51, 51);
+            doc.text(String(raw.content), x + width / 2, y + height / 2, { align: 'center', baseline: 'middle' });
+            doc.setFont('helvetica', 'normal');
+          },
         });
 
         cursorY = (doc as any).lastAutoTable.finalY + 8;
