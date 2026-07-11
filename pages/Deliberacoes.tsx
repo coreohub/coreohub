@@ -43,6 +43,20 @@ const STATUS_DESCRIPTION: Record<DeliberationStatus, string> = {
   LIBERADO:    'Resultados visíveis pro produtor e disponíveis pra publicação.',
 };
 
+/* ── Classificação do prêmio pelo nome/descrição — MESMA lógica do Telão de
+ *  Palco (TelaoControle.tsx) e do PDF (ResultsPanel.tsx), pra as 3 telas
+ *  concordarem sobre o que é faixa / maior nota / deliberação / manual. ── */
+type AwardReveal = { tipo: 'faixa'; faixa: 'ouro' | 'prata' | 'bronze' } | { tipo: 'maior_nota' } | { tipo: 'premio' } | { tipo: 'manual' };
+const classifyAward = (nome: string, description: string): AwardReveal => {
+  const t = `${nome ?? ''} ${description ?? ''}`.toLowerCase();
+  if (/\bouro\b|gold/.test(t))          return { tipo: 'faixa', faixa: 'ouro' };
+  if (/\bprata\b|silver/.test(t))       return { tipo: 'faixa', faixa: 'prata' };
+  if (/\bbronze\b/.test(t))             return { tipo: 'faixa', faixa: 'bronze' };
+  if (/maior nota|grand.?prix/.test(t)) return { tipo: 'maior_nota' };
+  if (/voto popular|vote\./.test(t))    return { tipo: 'manual' };
+  return { tipo: 'premio' };
+};
+
 const Deliberacoes: React.FC = () => {
   const [event, setEvent] = useState<any>(null);
   const [aggregate, setAggregate] = useState<any[]>([]);
@@ -50,6 +64,8 @@ const Deliberacoes: React.FC = () => {
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [judges, setJudges] = useState<any[]>([]);
   const [awards, setAwards] = useState<any[]>([]);
+  const [medias, setMedias] = useState<{ registration_id: string; final_weighted_average: number | null }[]>([]);
+  const [thresholds, setThresholds] = useState<{ gold: number; silver: number; bronze: number }>({ gold: 9, silver: 8, bronze: 7 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [advancing, setAdvancing] = useState(false);
@@ -82,7 +98,7 @@ const Deliberacoes: React.FC = () => {
         supabase.from('judges')
           .select('id, name, avatar_url'),
         supabase.from('configuracoes')
-          .select('premios_especiais').eq('event_id', ev.id).maybeSingle(),
+          .select('premios_especiais, medal_thresholds').eq('event_id', ev.id).maybeSingle(),
       ]);
 
       setAggregate(aggRes.data ?? []);
@@ -91,6 +107,22 @@ const Deliberacoes: React.FC = () => {
       setJudges(judgesRes.data ?? []);
       const awardsRaw = (configRes.data as any)?.premios_especiais ?? [];
       setAwards(Array.isArray(awardsRaw) ? awardsRaw.filter((a: any) => a?.enabled) : []);
+      const thr = (configRes.data as any)?.medal_thresholds;
+      setThresholds({
+        gold:   Number(thr?.gold   ?? 9),
+        silver: Number(thr?.silver ?? 8),
+        bronze: Number(thr?.bronze ?? 7),
+      });
+
+      // Médias dos jurados por coreografia — alimenta "Vencedores por prêmio"
+      // (faixa Ouro/Prata/Bronze + Maior Nota saem daqui, igual ao Telão/PDF).
+      const regIds = (regsRes.data ?? []).map((r: any) => r.id);
+      const { data: evalsData } = regIds.length > 0
+        ? await supabase.from('evaluations')
+            .select('registration_id, final_weighted_average')
+            .in('registration_id', regIds)
+        : { data: [] };
+      setMedias((evalsData as any) ?? []);
     } catch (e: any) {
       setError(e?.message ?? 'failed_to_load');
     } finally {
@@ -136,6 +168,70 @@ const Deliberacoes: React.FC = () => {
     m.forEach(arr => arr.sort((a, b) => b.judge_count - a.judge_count));
     return m;
   }, [aggregate]);
+
+  // Média final por coreografia (média das notas dos jurados que fecharam nota)
+  const mediaByReg = useMemo(() => {
+    const acc = new Map<string, { soma: number; n: number }>();
+    medias.forEach(e => {
+      if (e.final_weighted_average == null) return;
+      const cur = acc.get(e.registration_id) ?? { soma: 0, n: 0 };
+      cur.soma += Number(e.final_weighted_average); cur.n += 1;
+      acc.set(e.registration_id, cur);
+    });
+    const m = new Map<string, number>();
+    acc.forEach((v, k) => { if (v.n > 0) m.set(k, v.soma / v.n); });
+    return m;
+  }, [medias]);
+
+  // Coreografias ordenadas por média (desc) — base pra faixa/maior nota.
+  const rankedByMedia = useMemo(() => {
+    return registrations
+      .map(r => ({ reg: r, media: mediaByReg.get(r.id) }))
+      .filter((x): x is { reg: any; media: number } => x.media != null)
+      .sort((a, b) => b.media - a.media);
+  }, [registrations, mediaByReg]);
+
+  /* ── Vencedores por prêmio — o "quem ganhou" que faltava nesta tela.
+     faixa/maior_nota saem das médias; deliberação usa o agregado da banca;
+     manual (Voto Popular) é revelado na cerimônia. ── */
+  type Winner = { nome: string; estudio?: string; media?: number };
+  type AwardResult = { fonte: string; hint?: string; winners: Winner[] };
+  const winnersByAward = useMemo(() => {
+    const m = new Map<string, AwardResult>();
+    awards.forEach((aw: any) => {
+      const r = classifyAward(aw.name ?? '', aw.description ?? '');
+      if (r.tipo === 'faixa') {
+        const lo = r.faixa === 'ouro' ? thresholds.gold : r.faixa === 'prata' ? thresholds.silver : thresholds.bronze;
+        const hi = r.faixa === 'ouro' ? null : r.faixa === 'prata' ? thresholds.gold : thresholds.silver;
+        const naFaixa = rankedByMedia.filter(x => x.media >= lo && (hi == null || x.media < hi));
+        m.set(aw.id, {
+          fonte: `Faixa ${r.faixa} · média dos jurados`,
+          hint: naFaixa.length === 0 ? 'Nenhuma coreografia nesta faixa' : undefined,
+          winners: naFaixa.map(x => ({ nome: x.reg.nome_coreografia ?? '—', estudio: x.reg.estudio, media: x.media })),
+        });
+      } else if (r.tipo === 'maior_nota') {
+        const top = rankedByMedia[0];
+        m.set(aw.id, {
+          fonte: 'Maior média do festival',
+          hint: top ? undefined : 'Sem notas ainda',
+          winners: top ? [{ nome: top.reg.nome_coreografia ?? '—', estudio: top.reg.estudio, media: top.media }] : [],
+        });
+      } else if (r.tipo === 'manual') {
+        m.set(aw.id, { fonte: 'Revelado na cerimônia (Voto Popular)', winners: [] });
+      } else {
+        // 'premio' = deliberação da banca
+        const entries = aggByAward.get(aw.id) ?? [];
+        const top = entries[0];
+        const reg = top ? regsById.get(top.registration_id) : null;
+        m.set(aw.id, {
+          fonte: 'Deliberação da banca',
+          hint: reg ? undefined : 'Sem deliberação — revele o vencedor na mão no Telão',
+          winners: reg ? [{ nome: reg.nome_coreografia ?? '—', estudio: reg.estudio }] : [],
+        });
+      }
+    });
+    return m;
+  }, [awards, thresholds, rankedByMedia, aggByAward, regsById]);
 
   /* ── Avançar fase do gate ── */
   const advancePhase = async () => {
@@ -192,6 +288,9 @@ const Deliberacoes: React.FC = () => {
   const status = event?.deliberation_status as DeliberationStatus;
   const totalMarcacoes = marcacoes.length;
   const totalDeliberations = aggregate.reduce((s, a) => s + a.judge_count, 0);
+  // Só mostra os painéis de deliberação (⭐/indicações) quando a banca usou esse
+  // fluxo — senão viram "0% / Nenhuma indicação" confuso pra quem não delibera.
+  const showDeliberation = totalMarcacoes > 0 || totalDeliberations > 0;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20">
@@ -238,6 +337,57 @@ const Deliberacoes: React.FC = () => {
           <p className="text-xl font-black text-slate-900 dark:text-white mt-0.5">{awards.length}</p>
         </div>
       </div>
+
+      {/* Vencedores por prêmio — quem ganhou (faixa/maior nota das médias,
+          deliberação da banca, manual na cerimônia) */}
+      {awards.length > 0 && (
+        <div>
+          <h2 className="text-base font-black uppercase tracking-tight text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+            <Trophy size={16} className="text-[#ff0068]" />
+            Vencedores por prêmio
+          </h2>
+          <div className="space-y-3">
+            {awards.map((aw: any) => {
+              const res = winnersByAward.get(aw.id);
+              return (
+                <div key={aw.id} className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden">
+                  <div className="px-4 py-3 bg-slate-50 dark:bg-white/[0.03] border-b border-slate-100 dark:border-white/10 flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white truncate">{aw.name}</h3>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] mt-0.5 truncate">{res?.fonte}</p>
+                    </div>
+                    {aw.valor != null && Number(aw.valor) > 0 && (
+                      <span className="shrink-0 text-[10px] font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
+                        R$ {Number(aw.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    )}
+                  </div>
+                  {res && res.winners.length > 0 ? (
+                    <div className="divide-y divide-slate-100 dark:divide-white/5">
+                      {res.winners.map((w, idx) => (
+                        <div key={idx} className="px-4 py-3 flex items-center gap-3">
+                          <Trophy size={14} className={`shrink-0 ${idx === 0 ? 'text-yellow-500' : 'text-slate-300 dark:text-slate-600'}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white truncate">{w.nome}</p>
+                            {w.estudio && <p className="text-[9px] text-slate-500 uppercase font-bold truncate">{w.estudio}</p>}
+                          </div>
+                          {w.media != null && (
+                            <span className="shrink-0 text-lg font-black italic tabular-nums text-slate-900 dark:text-white">{w.media.toFixed(2)}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-5 text-center">
+                      <p className="text-[10px] text-slate-400 italic">{res?.hint ?? 'A revelar na cerimônia'}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Gate de fase */}
       <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-3xl p-5">
@@ -290,7 +440,8 @@ const Deliberacoes: React.FC = () => {
         </div>
       </div>
 
-      {/* Painel agregado por prêmio */}
+      {/* Painel agregado por prêmio (deliberação da banca) */}
+      {showDeliberation && (
       <div>
         <h2 className="text-base font-black uppercase tracking-tight text-slate-900 dark:text-white mb-3 flex items-center gap-2">
           <Trophy size={16} className="text-[#ff0068]" />
@@ -389,8 +540,10 @@ const Deliberacoes: React.FC = () => {
           </div>
         )}
       </div>
+      )}
 
       {/* Marcações por jurado */}
+      {showDeliberation && (
       <div>
         <h2 className="text-base font-black uppercase tracking-tight text-slate-900 dark:text-white mb-3 flex items-center gap-2">
           <Star size={16} className="text-amber-500" />
@@ -415,6 +568,7 @@ const Deliberacoes: React.FC = () => {
           })}
         </div>
       </div>
+      )}
     </div>
   );
 };
