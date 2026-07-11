@@ -15,6 +15,7 @@ import { supabase } from '../services/supabase';
 import { getAllGenres } from '../services/genreService';
 import { normalizeStyleName, isStyleInList } from '../utils/styleMatch';
 import { resolveEstudio, toTitleCase } from '../utils/formatters';
+import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
 import { EventStyle } from '../types';
 
 /* ────────────────────────────────────────────────────────── */
@@ -291,7 +292,7 @@ const JudgesManagement = () => {
         .from('registrations')
         .select('id, nome_coreografia, estudio, estilo_danca, ordem_apresentacao, excluded_from_schedule, event_data')
         .eq('event_id', eventId)
-        .or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO')
+        .or(SCHEDULABLE_REGISTRATIONS_OR_FILTER)
         .order('ordem_apresentacao', { ascending: true });
       const schedule = (regs ?? []).filter((r: any) => !r.excluded_from_schedule);
 
@@ -422,7 +423,7 @@ const JudgesManagement = () => {
           .from('registrations')
           .select('id, nome_coreografia, estudio, estilo_danca, ordem_apresentacao, excluded_from_schedule, bloco_id, event_data')
           .eq('event_id', eventId)
-          .or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO')
+          .or(SCHEDULABLE_REGISTRATIONS_OR_FILTER)
           .order('ordem_apresentacao', { ascending: true }),
         supabase.from('cronograma_blocos').select('id, name, ordem').eq('event_id', eventId).order('ordem'),
       ]);
