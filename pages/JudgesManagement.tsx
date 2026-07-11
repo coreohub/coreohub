@@ -500,7 +500,10 @@ const JudgesManagement = () => {
 
       const { default: jsPDF } = await import('jspdf');
       const { default: autoTable } = await import('jspdf-autotable');
-      const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+      // Paisagem — 7 colunas (Nº + coreografia + estúdio + estilo + N jurados)
+      // não cabem em retrato sem quebrar "Jazz/Contemporâneo" no meio da
+      // palavra. Horizontal dá 269mm de largura útil, tudo em 1 linha.
+      const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
       const pageWidth = doc.internal.pageSize.getWidth();
 
       doc.setFillColor(255, 0, 104);
@@ -519,7 +522,7 @@ const JudgesManagement = () => {
 
       gruposOrdenados.forEach(blocoName => {
         const grupoLinhas = gruposMap.get(blocoName)!;
-        if (cursorY > 250) { doc.addPage(); cursorY = 20; }
+        if (cursorY > 180) { doc.addPage(); cursorY = 20; }
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(255, 0, 104);
@@ -554,14 +557,14 @@ const JudgesManagement = () => {
         // texto de cada célula. Como o texto dos jurados é esvaziado no
         // didParseCell (a gente redesenha o pill na mão), as colunas de jurado
         // colapsavam pra ~0 e os nomes vazavam/sobrepunham. Com cellWidth
-        // explícito a largura não depende do conteúdo. A4 retrato usável =
-        // 182mm (210 - 14 - 14 de margem).
-        const judgeColW = Math.max(20, Math.floor((182 - 8 - 36 - 38 - 22) / maxCols));
+        // explícito a largura não depende do conteúdo. A4 paisagem usável =
+        // 269mm (297 - 14 - 14 de margem) — cabe tudo em 1 linha sem quebrar.
+        const judgeColW = Math.max(28, Math.floor((269 - 10 - 58 - 58 - 33) / maxCols));
         const columnStyles: Record<number, any> = {
-          0: { cellWidth: 8, halign: 'center', fontStyle: 'bold' },
-          1: { cellWidth: 36 },
-          2: { cellWidth: 38 },
-          3: { cellWidth: 22 },
+          0: { cellWidth: 10, halign: 'center', fontStyle: 'bold' },
+          1: { cellWidth: 58 },
+          2: { cellWidth: 58 },
+          3: { cellWidth: 33 },
         };
         for (let i = 0; i < maxCols; i++) columnStyles[4 + i] = { cellWidth: judgeColW, halign: 'center' };
 
