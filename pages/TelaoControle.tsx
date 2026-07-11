@@ -3,7 +3,7 @@ import { MonitorPlay, Copy, ExternalLink, RefreshCw, Check, Loader2, FlaskConica
 import { supabase, resolveActiveEventId } from '../services/supabase';
 import PageHeader from '../components/PageHeader';
 
-interface Premio { id: string; nome: string; valor?: string; description?: string; }
+interface Premio { id: string; nome: string; valor?: string; description?: string; winner_nome?: string; winner_estudio?: string; }
 interface Coreo { nome: string; estudio: string; }
 type Reveal = { tipo: 'faixa'; faixa: 'ouro' | 'prata' | 'bronze' } | { tipo: 'maior_nota' } | { tipo: 'premio' } | { tipo: 'manual' };
 
@@ -74,6 +74,8 @@ const TelaoControle: React.FC = () => {
         nome: (a.nome ?? a.name ?? 'Prêmio').trim(),
         valor: a.valor ? String(a.valor) : undefined,
         description: a.description ?? a.descricao ?? '',
+        winner_nome: a.winner_nome ?? undefined,
+        winner_estudio: a.winner_estudio ?? undefined,
       })));
 
     const seen = new Set<string>();
@@ -139,6 +141,20 @@ const TelaoControle: React.FC = () => {
     finally { setBusy(false); }
   };
 
+  // Grava o vencedor dentro do próprio prêmio em configuracoes.premios_especiais
+  // (fonte da verdade compartilhada com a tela de Premiação) — read-modify-write
+  // pra não perder os outros prêmios/flags. Não bloqueia a revelação no telão.
+  const persistAwardWinner = useCallback(async (awardId: string, nome: string, estudio: string) => {
+    if (!eventId) return;
+    try {
+      const { data } = await supabase.from('configuracoes').select('premios_especiais').eq('event_id', eventId).maybeSingle();
+      const arr = Array.isArray((data as any)?.premios_especiais) ? (data as any).premios_especiais : [];
+      const next = arr.map((a: any) => String(a?.id) === String(awardId) ? { ...a, winner_nome: nome, winner_estudio: estudio } : a);
+      await supabase.from('configuracoes').update({ premios_especiais: next }).eq('event_id', eventId);
+      setPremios((prev) => prev.map((p) => p.id === awardId ? { ...p, winner_nome: nome, winner_estudio: estudio } : p));
+    } catch (e) { console.error('persistAwardWinner', e); }
+  }, [eventId]);
+
   const fmtValor = (v?: string) =>
     v ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '';
 
@@ -161,6 +177,11 @@ const TelaoControle: React.FC = () => {
     const valor = fmtValor(a.valor);
     if (r.tipo === 'faixa')      return sendPremiacao({ tipo: 'faixa', faixa: r.faixa, titulo: a.nome, valor });
     if (r.tipo === 'maior_nota') return sendPremiacao({ tipo: 'maior_nota', titulo: a.nome, valor });
+    // Vencedor já registrado (digitado aqui ou na tela de Premiação) = fonte da
+    // verdade: revela direto, sem recalcular nem re-perguntar.
+    if ((r.tipo === 'manual' || r.tipo === 'premio') && a.winner_nome) {
+      return sendPremiacao({ tipo: 'manual', titulo: a.nome, valor, nome: a.winner_nome, estudio: a.winner_estudio ?? '' });
+    }
     if (r.tipo === 'manual') {
       // Troféu Voto Popular: automático é a via principal (padrão de mercado —
       // reduz erro humano na hora da cerimônia). Busca digitada é só o fallback,
@@ -193,8 +214,8 @@ const TelaoControle: React.FC = () => {
         setBusy(false);
       }
       setManualFor(a);
-      setManualSearch('');
-      setManualEstudio('');
+      setManualSearch(a.winner_nome ?? '');
+      setManualEstudio(a.winner_estudio ?? '');
       return;
     }
     // 'premio' = vencedor por deliberação da banca. Se ninguém deliberou, não há
@@ -202,8 +223,8 @@ const TelaoControle: React.FC = () => {
     // campo de digitar o vencedor na mão em vez de revelar uma tela vazia no LED.
     if (!hasDeliberation) {
       setManualFor(a);
-      setManualSearch('');
-      setManualEstudio('');
+      setManualSearch(a.winner_nome ?? '');
+      setManualEstudio(a.winner_estudio ?? '');
       return;
     }
     return sendPremiacao({ tipo: 'premio', award_id: a.id, titulo: a.nome, valor });
@@ -211,15 +232,19 @@ const TelaoControle: React.FC = () => {
 
   const revelarManual = (a: Premio, c: Coreo) => {
     sendPremiacao({ tipo: 'manual', titulo: a.nome, valor: fmtValor(a.valor), nome: c.nome, estudio: c.estudio });
+    persistAwardWinner(a.id, c.nome, c.estudio ?? '');
     setManualFor(null); setManualSearch(''); setManualEstudio('');
   };
 
   // Vencedor digitado livre (pessoa/coreografia que não está na lista) — ex:
-  // Melhor Bailarino(a). Nome obrigatório, estúdio/grupo opcional.
+  // Melhor Bailarino(a). Nome obrigatório, estúdio/grupo opcional. Grava no
+  // registro do prêmio (não some ao trocar de prêmio) além de revelar no telão.
   const revelarManualLivre = (a: Premio) => {
     const nome = manualSearch.trim();
     if (!nome) return;
-    sendPremiacao({ tipo: 'manual', titulo: a.nome, valor: fmtValor(a.valor), nome, estudio: manualEstudio.trim() });
+    const estudio = manualEstudio.trim();
+    sendPremiacao({ tipo: 'manual', titulo: a.nome, valor: fmtValor(a.valor), nome, estudio });
+    persistAwardWinner(a.id, nome, estudio);
     setManualFor(null); setManualSearch(''); setManualEstudio('');
   };
 
@@ -418,12 +443,19 @@ const TelaoControle: React.FC = () => {
                   <div key={a.id} className="flex items-center gap-2">
                     <button onClick={() => revelarAward(a)} disabled={busy}
                       className={`flex-1 min-w-0 flex items-center justify-between gap-2 px-4 py-3 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all text-left disabled:opacity-50 ${active ? 'bg-[#ff0068] text-white shadow-md' : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/10'}`}>
-                      <span className="truncate">{a.nome}{a.valor && <span className="opacity-60"> · R$ {Number(a.valor).toLocaleString('pt-BR')}</span>}</span>
+                      <span className="min-w-0 flex flex-col gap-0.5">
+                        <span className="truncate">{a.nome}{a.valor && <span className="opacity-60"> · R$ {Number(a.valor).toLocaleString('pt-BR')}</span>}</span>
+                        {a.winner_nome && (
+                          <span className={`truncate text-[9px] font-bold normal-case tracking-normal ${active ? 'text-white/80' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                            Vencedor: {a.winner_nome}{a.winner_estudio ? ` · ${a.winner_estudio}` : ''}
+                          </span>
+                        )}
+                      </span>
                       <span className={`shrink-0 text-[8px] px-2 py-0.5 rounded ${active ? 'bg-white/20 text-white' : 'bg-black/5 dark:bg-white/10 text-slate-500 dark:text-slate-400'}`}>
                         {revealLabel[r.tipo === 'faixa' ? r.faixa : r.tipo]}
                       </span>
                     </button>
-                    <button onClick={() => { setVotoError(null); setManualFor(a); setManualSearch(''); setManualEstudio(''); }} disabled={busy}
+                    <button onClick={() => { setVotoError(null); setManualFor(a); setManualSearch(a.winner_nome ?? ''); setManualEstudio(a.winner_estudio ?? ''); }} disabled={busy}
                       title="Escolher vencedor na mão" aria-label={`Escolher vencedor na mão para ${a.nome}`}
                       className="shrink-0 p-3 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 transition-all">
                       <Hand size={14} />

@@ -66,6 +66,11 @@ const Deliberacoes: React.FC = () => {
   const [awards, setAwards] = useState<any[]>([]);
   const [medias, setMedias] = useState<{ registration_id: string; final_weighted_average: number | null }[]>([]);
   const [thresholds, setThresholds] = useState<{ gold: number; silver: number; bronze: number }>({ gold: 9, silver: 8, bronze: 7 });
+  // Edição dos vencedores digitados na mão (Melhor Bailarino/Coreógrafo, Voto
+  // Popular) — persistidos em configuracoes.premios_especiais ao salvar.
+  const [winnerEdits, setWinnerEdits] = useState<Record<string, { nome: string; estudio: string }>>({});
+  const [savingWinners, setSavingWinners] = useState(false);
+  const [winnersSaved, setWinnersSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [advancing, setAdvancing] = useState(false);
@@ -106,7 +111,12 @@ const Deliberacoes: React.FC = () => {
       setRegistrations(regsRes.data ?? []);
       setJudges(judgesRes.data ?? []);
       const awardsRaw = (configRes.data as any)?.premios_especiais ?? [];
-      setAwards(Array.isArray(awardsRaw) ? awardsRaw.filter((a: any) => a?.enabled) : []);
+      const enabledAwards = Array.isArray(awardsRaw) ? awardsRaw.filter((a: any) => a?.enabled) : [];
+      setAwards(enabledAwards);
+      const initEdits: Record<string, { nome: string; estudio: string }> = {};
+      enabledAwards.forEach((a: any) => { if (a?.id != null) initEdits[String(a.id)] = { nome: a.winner_nome ?? '', estudio: a.winner_estudio ?? '' }; });
+      setWinnerEdits(initEdits);
+      setWinnersSaved(false);
       const thr = (configRes.data as any)?.medal_thresholds;
       setThresholds({
         gold:   Number(thr?.gold   ?? 9),
@@ -268,6 +278,35 @@ const Deliberacoes: React.FC = () => {
     }
   };
 
+  /* ── Salvar vencedores digitados na mão em premios_especiais ──
+     Read-modify-write pra preservar os prêmios/flags; só toca winner_nome/
+     winner_estudio dos prêmios editáveis. É a mesma fonte que o Telão lê. */
+  const saveWinners = async () => {
+    if (!event) return;
+    setSavingWinners(true);
+    try {
+      const { data, error } = await supabase.from('configuracoes')
+        .select('premios_especiais').eq('event_id', event.id).maybeSingle();
+      if (error) throw error;
+      const arr = Array.isArray((data as any)?.premios_especiais) ? (data as any).premios_especiais : [];
+      const next = arr.map((a: any) => {
+        const edit = winnerEdits[String(a?.id)];
+        if (!edit) return a;
+        return { ...a, winner_nome: edit.nome.trim(), winner_estudio: edit.estudio.trim() };
+      });
+      const { error: upErr } = await supabase.from('configuracoes')
+        .update({ premios_especiais: next }).eq('event_id', event.id);
+      if (upErr) throw upErr;
+      setWinnersSaved(true);
+      setTimeout(() => setWinnersSaved(false), 2500);
+      await fetchData();
+    } catch (e: any) {
+      alert('Erro ao salvar vencedores: ' + (e?.message ?? 'desconhecido'));
+    } finally {
+      setSavingWinners(false);
+    }
+  };
+
   /* ── Renders ── */
   if (loading) {
     return (
@@ -338,23 +377,45 @@ const Deliberacoes: React.FC = () => {
         </div>
       </div>
 
-      {/* Vencedores por prêmio — quem ganhou (faixa/maior nota das médias,
-          deliberação da banca, manual na cerimônia) */}
-      {awards.length > 0 && (
+      {/* Vencedores por prêmio — auto (faixa/maior nota das médias) read-only;
+          prêmios de pessoa / Voto Popular são digitados e salvos aqui (mesma
+          fonte que o Telão revela). */}
+      {awards.length > 0 && (() => {
+        const awardMeta = awards.map((aw: any) => {
+          const rev = classifyAward(aw.name ?? '', aw.description ?? '');
+          const auto = rev.tipo === 'faixa' || rev.tipo === 'maior_nota';
+          const hasDelibWinner = rev.tipo === 'premio' && (aggByAward.get(aw.id)?.length ?? 0) > 0 && !aw.winner_nome;
+          return { aw, rev, editable: !auto && !hasDelibWinner };
+        });
+        const hasEditable = awardMeta.some(m => m.editable);
+        return (
         <div>
-          <h2 className="text-base font-black uppercase tracking-tight text-slate-900 dark:text-white mb-3 flex items-center gap-2">
-            <Trophy size={16} className="text-[#ff0068]" />
-            Vencedores por prêmio
-          </h2>
+          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+            <h2 className="text-base font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+              <Trophy size={16} className="text-[#ff0068]" />
+              Vencedores por prêmio
+            </h2>
+            {hasEditable && (
+              <button onClick={saveWinners} disabled={savingWinners}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#d4005a] transition-all disabled:opacity-50">
+                {savingWinners ? <Loader2 size={12} className="animate-spin" /> : winnersSaved ? <CheckCircle2 size={12} /> : <Send size={12} />}
+                {winnersSaved ? 'Salvo' : 'Salvar vencedores'}
+              </button>
+            )}
+          </div>
           <div className="space-y-3">
-            {awards.map((aw: any) => {
+            {awardMeta.map(({ aw, rev, editable }) => {
               const res = winnersByAward.get(aw.id);
+              const edit = winnerEdits[aw.id] ?? { nome: '', estudio: '' };
+              const fonte = editable
+                ? (rev.tipo === 'manual' ? 'Voto Popular / definido na cerimônia' : 'Prêmio da banca — digite o vencedor')
+                : res?.fonte;
               return (
                 <div key={aw.id} className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden">
                   <div className="px-4 py-3 bg-slate-50 dark:bg-white/[0.03] border-b border-slate-100 dark:border-white/10 flex items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <h3 className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white truncate">{aw.name}</h3>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] mt-0.5 truncate">{res?.fonte}</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] mt-0.5 truncate">{fonte}</p>
                     </div>
                     {aw.valor != null && Number(aw.valor) > 0 && (
                       <span className="shrink-0 text-[10px] font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
@@ -362,7 +423,21 @@ const Deliberacoes: React.FC = () => {
                       </span>
                     )}
                   </div>
-                  {res && res.winners.length > 0 ? (
+
+                  {editable ? (
+                    <div className="p-4 space-y-2">
+                      <input value={edit.nome}
+                        onChange={(e) => setWinnerEdits((p) => ({ ...p, [aw.id]: { ...edit, nome: e.target.value } }))}
+                        placeholder="Nome do vencedor (pessoa ou coreografia)"
+                        aria-label={`Vencedor de ${aw.name}`}
+                        className="w-full px-3 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-[#ff0068]/50" />
+                      <input value={edit.estudio}
+                        onChange={(e) => setWinnerEdits((p) => ({ ...p, [aw.id]: { ...edit, estudio: e.target.value } }))}
+                        placeholder="Estúdio / grupo (opcional)"
+                        aria-label={`Estúdio do vencedor de ${aw.name}`}
+                        className="w-full px-3 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-[#ff0068]/50" />
+                    </div>
+                  ) : res && res.winners.length > 0 ? (
                     <div className="divide-y divide-slate-100 dark:divide-white/5">
                       {res.winners.map((w, idx) => (
                         <div key={idx} className="px-4 py-3 flex items-center gap-3">
@@ -386,8 +461,14 @@ const Deliberacoes: React.FC = () => {
               );
             })}
           </div>
+          {hasEditable && (
+            <p className="text-[11px] text-slate-500 mt-3">
+              Ouro/Prata/Bronze e Maior Nota saem das médias dos jurados. Nos demais (Melhor Bailarino/Coreógrafo, Voto Popular), digite o vencedor e clique em <b className="text-slate-600 dark:text-slate-400">Salvar vencedores</b> — o Telão revela a partir daqui.
+            </p>
+          )}
         </div>
-      )}
+        );
+      })()}
 
       {/* Gate de fase */}
       <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-3xl p-5">
