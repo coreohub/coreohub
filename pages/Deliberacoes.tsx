@@ -71,6 +71,8 @@ const Deliberacoes: React.FC = () => {
   const [winnerEdits, setWinnerEdits] = useState<Record<string, { nome: string; estudio: string }>>({});
   const [savingWinners, setSavingWinners] = useState(false);
   const [winnersSaved, setWinnersSaved] = useState(false);
+  const [pullingVoto, setPullingVoto] = useState<string | null>(null);
+  const [votoMsg, setVotoMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [advancing, setAdvancing] = useState(false);
@@ -307,6 +309,40 @@ const Deliberacoes: React.FC = () => {
     }
   };
 
+  /* ── Puxar vencedor do Voto Popular (mesma integração do Telão) ──
+     Preenche os campos do prêmio; o produtor confere e clica em Salvar. */
+  const votoReasonLabel: Record<string, string> = {
+    voting_not_closed: 'A votação do Voto Popular ainda está aberta — encerre no console do operador.',
+    tie: 'Empate no Voto Popular — escolha o vencedor na mão.',
+    no_votes: 'Nenhum voto registrado ainda no Voto Popular.',
+    festival_not_found: 'Este evento não está vinculado a um festival no Voto Popular.',
+    group_not_linked: 'A coreografia vencedora não está vinculada a essa inscrição no CoreoHub.',
+    registration_not_found: 'Inscrição vencedora não encontrada no CoreoHub.',
+    unauthorized: 'Sessão expirada — recarregue a página e tente de novo.',
+  };
+  const pullVotoPopular = async (awardId: string) => {
+    if (!event) return;
+    setVotoMsg(null);
+    setPullingVoto(awardId);
+    try {
+      const { data, error } = await supabase.functions.invoke('get-voto-popular-winner', { body: { event_id: event.id } });
+      if (!error && (data as any)?.ok) {
+        const w = data as { nome: string; estudio: string };
+        setWinnerEdits((p) => ({ ...p, [awardId]: { nome: w.nome ?? '', estudio: w.estudio ?? '' } }));
+        return;
+      }
+      let reason = (data as any)?.reason ?? (data as any)?.error as string | undefined;
+      if (!reason && error && typeof (error as any).context?.json === 'function') {
+        try { const body = await (error as any).context.json(); reason = body?.reason ?? body?.error; } catch { /* corpo não-JSON */ }
+      }
+      setVotoMsg(reason ? (votoReasonLabel[reason] ?? reason) : 'Resultado automático indisponível — digite o vencedor na mão.');
+    } catch {
+      setVotoMsg('Não foi possível buscar o resultado do Voto Popular — digite o vencedor na mão.');
+    } finally {
+      setPullingVoto(null);
+    }
+  };
+
   /* ── Renders ── */
   if (loading) {
     return (
@@ -426,6 +462,16 @@ const Deliberacoes: React.FC = () => {
 
                   {editable ? (
                     <div className="p-4 space-y-2">
+                      {rev.tipo === 'manual' && (
+                        <>
+                          <button onClick={() => pullVotoPopular(aw.id)} disabled={pullingVoto === aw.id}
+                            className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#1de7f2]/10 border border-[#1de7f2]/30 text-[#0891a0] dark:text-[#1de7f2] rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-[#1de7f2]/20 transition-all disabled:opacity-50">
+                            {pullingVoto === aw.id ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                            Puxar vencedor do Voto Popular
+                          </button>
+                          {votoMsg && <p role="alert" className="text-[10px] font-bold text-amber-600 dark:text-amber-400">{votoMsg}</p>}
+                        </>
+                      )}
                       <input value={edit.nome}
                         onChange={(e) => setWinnerEdits((p) => ({ ...p, [aw.id]: { ...edit, nome: e.target.value } }))}
                         placeholder="Nome do vencedor (pessoa ou coreografia)"
