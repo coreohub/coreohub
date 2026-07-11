@@ -550,18 +550,28 @@ const JudgesManagement = () => {
           ]);
         });
 
+        // Larguras FIXAS — sem isso o autoTable auto-dimensiona pela largura do
+        // texto de cada célula. Como o texto dos jurados é esvaziado no
+        // didParseCell (a gente redesenha o pill na mão), as colunas de jurado
+        // colapsavam pra ~0 e os nomes vazavam/sobrepunham. Com cellWidth
+        // explícito a largura não depende do conteúdo. A4 retrato usável =
+        // 182mm (210 - 14 - 14 de margem).
+        const judgeColW = Math.max(20, Math.floor((182 - 8 - 36 - 38 - 22) / maxCols));
         const columnStyles: Record<number, any> = {
           0: { cellWidth: 8, halign: 'center', fontStyle: 'bold' },
+          1: { cellWidth: 36 },
+          2: { cellWidth: 38 },
+          3: { cellWidth: 22 },
         };
-        for (let i = 0; i < maxCols; i++) columnStyles[4 + i] = { halign: 'center', fontSize: 7.5 };
+        for (let i = 0; i < maxCols; i++) columnStyles[4 + i] = { cellWidth: judgeColW, halign: 'center' };
 
         autoTable(doc, {
           head: [['Nº', 'Coreografia', 'Estúdio', 'Estilo', ...jurHead].map(h => h.toUpperCase())],
           body,
           startY: cursorY,
           theme: 'striped',
-          headStyles: { fillColor: [40, 40, 40], textColor: 255, fontSize: 7, fontStyle: 'bold' },
-          bodyStyles: { fontSize: 8, textColor: 40 },
+          headStyles: { fillColor: [40, 40, 40], textColor: 255, fontSize: 7, fontStyle: 'bold', halign: 'center' },
+          bodyStyles: { fontSize: 8, textColor: 40, valign: 'middle' },
           alternateRowStyles: { fillColor: [248, 248, 250] },
           columnStyles,
           margin: { left: 14, right: 14 },
@@ -577,19 +587,23 @@ const JudgesManagement = () => {
             if (data.section !== 'body' || data.column.index < 4) return;
             const raw = data.cell.raw;
             if (!raw || typeof raw !== 'object') return;
-            const { x, y, width, height } = data.cell;
-            const padX = 1.2, padY = 1.8;
-            const pillX = x + padX;
-            const pillY = y + padY;
-            const pillW = Math.max(width - padX * 2, 1);
-            const pillH = Math.max(height - padY * 2, 1);
+            const label = String(raw.content);
             const mudou = !!raw.mudou;
-            if (mudou) doc.setFillColor(255, 0, 104); else doc.setFillColor(241, 241, 244);
-            doc.roundedRect(pillX, pillY, pillW, pillH, 1.4, 1.4, 'F');
-            doc.setFontSize(7.5);
+            const { x, y, width, height } = data.cell;
+            // Pill abraça o texto (não preenche a célula toda) — igual ao chip
+            // do mockup: raio = metade da altura = pontas 100% arredondadas.
+            doc.setFontSize(7);
             doc.setFont('helvetica', mudou ? 'bold' : 'normal');
+            const textW = doc.getTextWidth(label);
+            const padX = 2;
+            const pillH = 5;
+            const pillW = Math.min(textW + padX * 2, width - 1.5);
+            const pillX = x + (width - pillW) / 2;
+            const pillY = y + (height - pillH) / 2;
+            if (mudou) doc.setFillColor(255, 0, 104); else doc.setFillColor(241, 241, 244);
+            doc.roundedRect(pillX, pillY, pillW, pillH, pillH / 2, pillH / 2, 'F');
             if (mudou) doc.setTextColor(255, 255, 255); else doc.setTextColor(51, 51, 51);
-            doc.text(String(raw.content), x + width / 2, y + height / 2, { align: 'center', baseline: 'middle' });
+            doc.text(label, x + width / 2, y + height / 2 + 0.2, { align: 'center', baseline: 'middle' });
             doc.setFont('helvetica', 'normal');
           },
         });
