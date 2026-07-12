@@ -464,13 +464,6 @@ const ResultsPanel = () => {
       doc.text(`Total avaliadas: ${allResults.length}`, 20, 65);
       doc.text(`Melhor média: ${bestScore > 0 ? bestScore.toFixed(2) : '—'}`, 20, 71);
       doc.text(`Modo de premiação: ${premiationSystem === 'RANKING' ? 'Por colocação (top 3 por categoria)' : 'Por nota mínima'}`, 20, 77);
-      if (outlierCount > 0) {
-        doc.setTextColor(200, 100, 0);
-        // "!" em vez de "⚠" — o Helvetica embutido do jsPDF (sem fonte custom)
-        // não tem esse glifo Unicode e renderizava como "&" no PDF gerado.
-        doc.text(`! ${outlierCount} ${outlierCount === 1 ? 'coreografia com outlier' : 'coreografias com outlier'} (divergência >= 2.0 entre jurados) — marcadas na coluna Outlier de cada tabela`, 20, 83);
-        doc.setTextColor(40, 40, 40);
-      }
 
       let cursorY = 95;
 
@@ -615,7 +608,17 @@ const ResultsPanel = () => {
         doc.setTextColor(130, 130, 130);
         doc.text('Ranking informativo — a Premiação oficial está nas páginas anteriores.', 20, cursorY);
         doc.setTextColor(40, 40, 40);
-        cursorY += 10;
+        cursorY += 6;
+        if (outlierCount > 0) {
+          doc.setFontSize(9);
+          doc.setTextColor(200, 100, 0);
+          // "!" em vez de "⚠" — o Helvetica embutido do jsPDF (sem fonte custom)
+          // não tem esse glifo Unicode e renderizava como "&" no PDF gerado.
+          doc.text(`! ${outlierCount} ${outlierCount === 1 ? 'coreografia com outlier' : 'coreografias com outlier'} (divergência >= 2.0 entre jurados) — marcadas na coluna Outlier de cada tabela abaixo`, 20, cursorY);
+          doc.setTextColor(40, 40, 40);
+          cursorY += 6;
+        }
+        cursorY += 4;
       }
       // "Pos." (1°/2°/3°) só faz sentido em modo RANKING, onde a colocação
       // decide a medalha. Em THRESHOLD (nota mínima) a ordem é só de leitura —
