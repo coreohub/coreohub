@@ -81,36 +81,57 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
           return;
         }
 
-        // Para cada inscrição, busca avaliações
-        const withEvals: MyRegistration[] = await Promise.all(
-          regs.map(async (reg) => {
-            const { data: evals } = await supabase
-              .from('evaluations')
-              .select('*, judges(name)')
-              .eq('registration_id', reg.id);
+        // Busca avaliações de todas as inscrições numa query só (evita N+1).
+        // Nota: evaluations.judge_id nunca teve FK pra judges.id no banco, então
+        // o embed `judges(name)` do PostgREST sempre falhava com PGRST200
+        // ("Could not find a relationship") — 2 queries em lote + merge
+        // client-side evita depender dessa relação.
+        const regIds = regs.map((reg) => reg.id);
+        const { data: allEvals, error: evalError } = await supabase
+          .from('evaluations')
+          .select('*')
+          .in('registration_id', regIds);
 
-            const evaluations = (evals || []).map((e: any) => ({
-              judge_name: e.judges?.name || 'Jurado',
-              scores: e.scores || {},
-              final: Number(e.final_weighted_average) || 0,
-              audio_url: e.audio_url,
-              feedback_text: e.feedback_text ?? null,
-            }));
+        if (evalError) console.error('Erro ao buscar avaliações:', evalError);
 
-            return {
-              id: reg.id,
-              nome_coreografia: reg.nome_coreografia || '—',
-              estudio: reg.estudio || '—',
-              estilo_danca: reg.estilo_danca || '—',
-              categoria: reg.categoria || '—',
-              status: reg.status_pagamento || '—',
-              media_final: reg.media_final,
-              classificacao_final: reg.classificacao_final,
-              resultado_publicado: reg.resultado_publicado,
-              evaluations,
-            };
-          })
-        );
+        const judgeIds = [...new Set((allEvals || []).map((e: any) => e.judge_id).filter(Boolean))];
+        let judgeNameById: Record<string, string> = {};
+        if (judgeIds.length > 0) {
+          const { data: judgesData, error: judgesError } = await supabase
+            .from('judges')
+            .select('id, name')
+            .in('id', judgeIds);
+          if (judgesError) console.error('Erro ao buscar nomes dos jurados:', judgesError);
+          judgeNameById = Object.fromEntries((judgesData || []).map((j: any) => [j.id, j.name]));
+        }
+
+        const evalsByRegId: Record<string, any[]> = {};
+        (allEvals || []).forEach((e: any) => {
+          (evalsByRegId[e.registration_id] ??= []).push(e);
+        });
+
+        const withEvals: MyRegistration[] = regs.map((reg) => {
+          const evaluations = (evalsByRegId[reg.id] || []).map((e: any) => ({
+            judge_name: judgeNameById[e.judge_id] || 'Jurado',
+            scores: e.scores || {},
+            final: Number(e.final_weighted_average) || 0,
+            audio_url: e.audio_url,
+            feedback_text: e.feedback_text ?? null,
+          }));
+
+          return {
+            id: reg.id,
+            nome_coreografia: reg.nome_coreografia || '—',
+            estudio: reg.estudio || '—',
+            estilo_danca: reg.estilo_danca || '—',
+            categoria: reg.categoria || '—',
+            status: reg.status_pagamento || '—',
+            media_final: reg.media_final,
+            classificacao_final: reg.classificacao_final,
+            resultado_publicado: reg.resultado_publicado,
+            evaluations,
+          };
+        });
 
         setRegistrations(withEvals);
       } catch (err: any) {
