@@ -2,21 +2,10 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { MonitorPlay, Copy, ExternalLink, RefreshCw, Check, Loader2, FlaskConical, Power, Radio, Trophy, X, Search, Hand } from 'lucide-react';
 import { supabase, resolveActiveEventId } from '../services/supabase';
 import PageHeader from '../components/PageHeader';
+import { classifyAward, type AwardReveal } from '../utils/awardClassification';
 
 interface Premio { id: string; nome: string; valor?: string; description?: string; winner_nome?: string; winner_estudio?: string; }
 interface Coreo { nome: string; estudio: string; }
-type Reveal = { tipo: 'faixa'; faixa: 'ouro' | 'prata' | 'bronze' } | { tipo: 'maior_nota' } | { tipo: 'premio' } | { tipo: 'manual' };
-
-// Classifica cada prêmio cadastrado pelo nome/descrição no jeito de revelar.
-const classify = (a: Premio): Reveal => {
-  const t = `${a.nome ?? ''} ${a.description ?? ''}`.toLowerCase();
-  if (/\bouro\b|gold/.test(t))         return { tipo: 'faixa', faixa: 'ouro' };
-  if (/\bprata\b|silver/.test(t))      return { tipo: 'faixa', faixa: 'prata' };
-  if (/\bbronze\b/.test(t))            return { tipo: 'faixa', faixa: 'bronze' };
-  if (/maior nota|grand.?prix/.test(t)) return { tipo: 'maior_nota' };
-  if (/voto popular|vote\./.test(t))   return { tipo: 'manual' };
-  return { tipo: 'premio' };
-};
 
 const revealLabel: Record<string, string> = {
   ouro: 'Faixa Ouro', prata: 'Faixa Prata', bronze: 'Faixa Bronze',
@@ -46,25 +35,32 @@ const TelaoControle: React.FC = () => {
   const [manualSearch, setManualSearch] = useState('');
   const [manualEstudio, setManualEstudio] = useState('');
   const [votoError, setVotoError] = useState<string | null>(null);
-  // Se a banca nunca rodou a Deliberação de Prêmios, prêmios classificados como
-  // 'premio' (ex: Melhor Bailarino/Coreógrafo) não têm vencedor automático —
-  // clicar neles abre direto o campo de digitar o vencedor na mão.
-  const [hasDeliberation, setHasDeliberation] = useState(false);
+  // Se a banca nunca deliberou UM prêmio específico ('premio', ex: Melhor
+  // Bailarino/Coreógrafo), não há vencedor automático pra ele — clicar abre
+  // direto o campo de digitar o vencedor na mão. Checagem é POR PRÊMIO (não
+  // pro evento inteiro) — um evento pode ter deliberação em 1 prêmio e não
+  // noutro, e tratar isso como "tudo deliberado" revelaria vazio no LED.
+  const [deliberatedAwardIds, setDeliberatedAwardIds] = useState<Set<string>>(new Set());
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const publicUrl = code ? `${origin}/telao/${code}` : '';
 
   // Carrega os prêmios especiais + coreografias (pra escolha manual do vencedor).
   const loadPremiacaoOptions = useCallback(async (id: string) => {
-    const [{ data: cfg }, { data: regs }, { count: delibCount }] = await Promise.all([
+    const [{ data: cfg, error: cfgErr }, { data: regs, error: regsErr }, { data: delib, error: delibErr }] = await Promise.all([
       supabase.from('configuracoes').select('premios_especiais').eq('event_id', id).maybeSingle(),
       supabase.from('registrations')
         .select('nome_coreografia, estudio, event_data')
         .eq('event_id', id)
         .or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO'),
-      supabase.from('deliberation_aggregate').select('id', { count: 'exact', head: true }).eq('event_id', id),
+      supabase.from('deliberation_aggregate').select('award_id').eq('event_id', id),
     ]);
-    setHasDeliberation((delibCount ?? 0) > 0);
+    // Coluna ausente (migration não aplicada) vira PGRST204 e `data` some
+    // silenciosamente igual a "não existe" — sempre logar o erro real.
+    if (cfgErr) console.error('loadPremiacaoOptions: premios_especiais', cfgErr);
+    if (regsErr) console.error('loadPremiacaoOptions: registrations', regsErr);
+    if (delibErr) console.error('loadPremiacaoOptions: deliberation_aggregate', delibErr);
+    setDeliberatedAwardIds(new Set((delib ?? []).map((d: any) => String(d.award_id))));
 
     const raw = (cfg as any)?.premios_especiais ?? [];
     setPremios((Array.isArray(raw) ? raw : [])
@@ -141,19 +137,33 @@ const TelaoControle: React.FC = () => {
     finally { setBusy(false); }
   };
 
-  // Grava o vencedor dentro do próprio prêmio em configuracoes.premios_especiais
-  // (fonte da verdade compartilhada com a tela de Premiação) — read-modify-write
-  // pra não perder os outros prêmios/flags. Não bloqueia a revelação no telão.
-  const persistAwardWinner = useCallback(async (awardId: string, nome: string, estudio: string) => {
+  // Grava um patch parcial no prêmio dentro de configuracoes.premios_especiais
+  // (fonte da verdade compartilhada com Premiação/PDF/vitrine) via RPC atômica
+  // — evita o antigo SELECT+UPDATE do client (2 round-trips com janela de
+  // corrida real: produtor usa Telão numa aba e Premiação noutra no mesmo
+  // evento ao vivo, a escrita que termina por último apagava a da outra aba).
+  const patchAward = useCallback(async (awardId: string, patch: Record<string, any>) => {
     if (!eventId) return;
-    try {
-      const { data } = await supabase.from('configuracoes').select('premios_especiais').eq('event_id', eventId).maybeSingle();
-      const arr = Array.isArray((data as any)?.premios_especiais) ? (data as any).premios_especiais : [];
-      const next = arr.map((a: any) => String(a?.id) === String(awardId) ? { ...a, winner_nome: nome, winner_estudio: estudio } : a);
-      await supabase.from('configuracoes').update({ premios_especiais: next }).eq('event_id', eventId);
-      setPremios((prev) => prev.map((p) => p.id === awardId ? { ...p, winner_nome: nome, winner_estudio: estudio } : p));
-    } catch (e) { console.error('persistAwardWinner', e); }
+    const { error } = await supabase.rpc('update_premios_winners', {
+      p_event_id: eventId,
+      p_patches: { [awardId]: patch },
+    });
+    if (error) { console.error('patchAward', error); return; }
+    setPremios((prev) => prev.map((p) => p.id === awardId ? { ...p, ...patch } : p));
   }, [eventId]);
+
+  // Vencedor digitado/escolhido na mão — zera winner_items (caso o prêmio
+  // tivesse sido faixa antes e mudou de classificação) e marca revelado.
+  const persistAwardWinner = useCallback((awardId: string, nome: string, estudio: string) =>
+    patchAward(awardId, { winner_nome: nome, winner_estudio: estudio, winner_items: null, winner_revealed: true }),
+    [patchAward]);
+
+  // Marca só a flag de revelado — usado quando o vencedor já vem de outro
+  // cálculo (faixa/maior nota calculados na hora, ou já salvo em Premiação) e
+  // só falta autorizar a vitrine pública a mostrar. Sem isso, a vitrine
+  // mostrava o resultado assim que alguém salvasse em Premiação, antes da
+  // revelação ao vivo no palco — quebrava a graça da cerimônia.
+  const markRevealed = useCallback((awardId: string) => patchAward(awardId, { winner_revealed: true }), [patchAward]);
 
   const fmtValor = (v?: string) =>
     v ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '';
@@ -173,15 +183,18 @@ const TelaoControle: React.FC = () => {
 
   const revelarAward = async (a: Premio) => {
     setVotoError(null);
-    const r = classify(a);
+    const r = classifyAward(a.nome, a.description);
     const valor = fmtValor(a.valor);
-    if (r.tipo === 'faixa')      return sendPremiacao({ tipo: 'faixa', faixa: r.faixa, titulo: a.nome, valor });
-    if (r.tipo === 'maior_nota') return sendPremiacao({ tipo: 'maior_nota', titulo: a.nome, valor });
-    // Vencedor já registrado (digitado aqui ou na tela de Premiação) = fonte da
-    // verdade: revela direto, sem recalcular nem re-perguntar.
-    if ((r.tipo === 'manual' || r.tipo === 'premio') && a.winner_nome) {
+    // Vencedor já registrado (digitado aqui, em Premiação, ou puxado do Voto
+    // Popular) = fonte da verdade pra QUALQUER tipo — revela direto, sem
+    // recalcular. Cobre também Ouro/Prata/Bronze/Maior Nota quando o produtor
+    // usou o ✋ pra substituir um cálculo automático vazio/errado.
+    if (a.winner_nome) {
+      await markRevealed(a.id);
       return sendPremiacao({ tipo: 'manual', titulo: a.nome, valor, nome: a.winner_nome, estudio: a.winner_estudio ?? '' });
     }
+    if (r.tipo === 'faixa')      { await markRevealed(a.id); return sendPremiacao({ tipo: 'faixa', faixa: r.faixa, titulo: a.nome, valor }); }
+    if (r.tipo === 'maior_nota') { await markRevealed(a.id); return sendPremiacao({ tipo: 'maior_nota', titulo: a.nome, valor }); }
     if (r.tipo === 'manual') {
       // Troféu Voto Popular: automático é a via principal (padrão de mercado —
       // reduz erro humano na hora da cerimônia). Busca digitada é só o fallback,
@@ -193,6 +206,7 @@ const TelaoControle: React.FC = () => {
         });
         if (!error && (data as any)?.ok) {
           const w = data as { nome: string; estudio: string };
+          await patchAward(a.id, { winner_nome: w.nome, winner_estudio: w.estudio, winner_items: null, winner_revealed: true });
           await sendPremiacao({ tipo: 'manual', titulo: a.nome, valor, nome: w.nome, estudio: w.estudio });
           return;
         }
@@ -218,15 +232,18 @@ const TelaoControle: React.FC = () => {
       setManualEstudio(a.winner_estudio ?? '');
       return;
     }
-    // 'premio' = vencedor por deliberação da banca. Se ninguém deliberou, não há
-    // fonte automática (ex: Melhor Bailarino/Coreógrafo do Usualdance) — abre o
-    // campo de digitar o vencedor na mão em vez de revelar uma tela vazia no LED.
-    if (!hasDeliberation) {
+    // 'premio' = vencedor por deliberação da banca. Se ninguém deliberou ESSE
+    // prêmio específico (checagem por award_id, não pro evento inteiro — um
+    // evento pode ter deliberação num prêmio e não noutro), não há fonte
+    // automática — abre o campo de digitar o vencedor na mão em vez de
+    // revelar uma tela vazia no LED.
+    if (!deliberatedAwardIds.has(a.id)) {
       setManualFor(a);
       setManualSearch(a.winner_nome ?? '');
       setManualEstudio(a.winner_estudio ?? '');
       return;
     }
+    await markRevealed(a.id);
     return sendPremiacao({ tipo: 'premio', award_id: a.id, titulo: a.nome, valor });
   };
 
@@ -248,7 +265,7 @@ const TelaoControle: React.FC = () => {
     setManualFor(null); setManualSearch(''); setManualEstudio('');
   };
 
-  const isActive = (a: Premio, r: Reveal) => {
+  const isActive = (a: Premio, r: AwardReveal) => {
     if (!premiacao) return false;
     if (premiacao.tipo === 'manual' && premiacao.titulo === a.nome) return true;
     if (r.tipo === 'faixa')      return premiacao.tipo === 'faixa' && premiacao.faixa === r.faixa && premiacao.titulo === a.nome;
@@ -437,7 +454,7 @@ const TelaoControle: React.FC = () => {
           ) : (
             <div className="space-y-2">
               {premios.map((a) => {
-                const r = classify(a);
+                const r = classifyAward(a.nome, a.description);
                 const active = isActive(a, r);
                 return (
                   <div key={a.id} className="flex items-center gap-2">
@@ -455,17 +472,16 @@ const TelaoControle: React.FC = () => {
                         {revealLabel[r.tipo === 'faixa' ? r.faixa : r.tipo]}
                       </span>
                     </button>
-                    {/* Faixa (Ouro/Prata/Bronze) e Maior Nota têm vencedor calculado das médias
-                        — Ouro/Prata podem ter várias coreografias, então um seletor de "1
-                        vencedor" não faz sentido pra esses tipos e só confundia (misturava
-                        a lista inteira de coreografias avaliadas com o prêmio errado). */}
-                    {r.tipo !== 'faixa' && r.tipo !== 'maior_nota' && (
-                      <button onClick={() => { setVotoError(null); setManualFor(a); setManualSearch(a.winner_nome ?? ''); setManualEstudio(a.winner_estudio ?? ''); }} disabled={busy}
-                        title="Escolher vencedor na mão" aria-label={`Escolher vencedor na mão para ${a.nome}`}
-                        className="shrink-0 p-3 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 transition-all">
-                        <Hand size={14} />
-                      </button>
-                    )}
+                    {/* ✋ disponível pra qualquer tipo — inclusive Ouro/Prata/Bronze/Maior
+                        Nota, como saída de emergência se o cálculo automático vier vazio
+                        (ex: thresholds mal configurados, categoria sem nota fechada). Uma
+                        vez que exista um vencedor digitado (a.winner_nome), ele sempre
+                        vence na revelação — ver revelarAward. */}
+                    <button onClick={() => { setVotoError(null); setManualFor(a); setManualSearch(a.winner_nome ?? ''); setManualEstudio(a.winner_estudio ?? ''); }} disabled={busy}
+                      title="Escolher vencedor na mão" aria-label={`Escolher vencedor na mão para ${a.nome}`}
+                      className="shrink-0 p-3 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 transition-all">
+                      <Hand size={14} />
+                    </button>
                   </div>
                 );
               })}
@@ -524,7 +540,7 @@ const TelaoControle: React.FC = () => {
             </div>
           )}
 
-          <p className="text-[11px] text-slate-500">Faixas (Ouro/Prata/Bronze) e Maior Nota saem da média dos jurados. Prêmios sem cálculo automático — como <b className="text-slate-600 dark:text-slate-400">Melhor Bailarino(a)</b> ou <b className="text-slate-600 dark:text-slate-400">Voto Popular</b> — abrem um campo pra você <b className="text-slate-600 dark:text-slate-400">digitar o vencedor</b> (também dá pelo ✋). Nada aparece na plateia até você revelar.</p>
+          <p className="text-[11px] text-slate-500">Faixas (Ouro/Prata/Bronze) e Maior Nota saem da média dos jurados. Prêmios sem cálculo automático — como <b className="text-slate-600 dark:text-slate-400">Melhor Bailarino(a)</b> ou <b className="text-slate-600 dark:text-slate-400">Voto Popular</b> — abrem um campo pra você digitar o vencedor. O <b className="text-slate-600 dark:text-slate-400">✋</b> funciona em qualquer prêmio (também serve de saída de emergência pra Ouro/Prata/Bronze/Maior Nota se o cálculo vier vazio). Nada aparece na plateia até você clicar em Revelar.</p>
         </div>
       )}
 

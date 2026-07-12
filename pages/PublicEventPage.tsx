@@ -1414,14 +1414,18 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 // Nome → Valor R$ (se > 0, destaque emerald) → Descrição (se preenchida)
                 // → badge formation (se != TODOS). Sem descrições padrão poluindo.
                 const valor = typeof award.valor === 'number' && award.valor > 0 ? award.valor : null;
-                // Vencedor só aparece quando o produtor já revelou/salvou (Premiação →
-                // Salvar vencedores) — antes disso o card segue como convite (regra do
-                // prêmio), não promete um resultado que ainda não existe. Ouro/Prata/
-                // Bronze podem ter várias coreografias na faixa (winner_items); os
-                // demais têm 1 vencedor só (winner_nome).
+                // Vencedor só aparece quando o produtor REVELOU de fato no Telão
+                // (winner_revealed) — salvar em Premiação só registra o resultado,
+                // não publica. Sem esse gate, clicar "Salvar vencedores" (uma ação
+                // interna, às vezes horas antes da cerimônia) já deixava o
+                // resultado público na vitrine, antes da revelação ao vivo no
+                // palco — quebrava a graça da cerimônia. Ouro/Prata/Bronze podem
+                // ter várias coreografias na faixa (winner_items); os demais têm
+                // 1 vencedor só (winner_nome).
+                const revealed = award.winner_revealed === true;
                 const winnerItems: { nome: string; estudio?: string }[] | undefined =
-                  Array.isArray(award.winner_items) && award.winner_items.length > 0 ? award.winner_items : undefined;
-                const winnerNome: string | undefined = !winnerItems ? award.winner_nome : undefined;
+                  revealed && Array.isArray(award.winner_items) && award.winner_items.length > 0 ? award.winner_items : undefined;
+                const winnerNome: string | undefined = revealed && !winnerItems ? award.winner_nome : undefined;
                 return (
                   <div key={award.id} className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-5">
                     <p className="font-black uppercase text-sm tracking-tight text-slate-900 dark:text-white">{award.name}</p>

@@ -19,6 +19,7 @@ import {
   Trophy, Loader2, RefreshCw, AlertCircle, CheckCircle2, Clock, Users,
   Star, Lock, Unlock, ChevronRight, Send,
 } from 'lucide-react';
+import { classifyAward } from '../utils/awardClassification';
 
 type DeliberationStatus = 'COLETANDO' | 'DELIBERACAO' | 'CONFERENCIA' | 'LIBERADO';
 
@@ -43,18 +44,18 @@ const STATUS_DESCRIPTION: Record<DeliberationStatus, string> = {
   LIBERADO:    'Resultados visíveis pro produtor e disponíveis pra publicação.',
 };
 
-/* ── Classificação do prêmio pelo nome/descrição — MESMA lógica do Telão de
- *  Palco (TelaoControle.tsx) e do PDF (ResultsPanel.tsx), pra as 3 telas
- *  concordarem sobre o que é faixa / maior nota / deliberação / manual. ── */
-type AwardReveal = { tipo: 'faixa'; faixa: 'ouro' | 'prata' | 'bronze' } | { tipo: 'maior_nota' } | { tipo: 'premio' } | { tipo: 'manual' };
-const classifyAward = (nome: string, description: string): AwardReveal => {
-  const t = `${nome ?? ''} ${description ?? ''}`.toLowerCase();
-  if (/\bouro\b|gold/.test(t))          return { tipo: 'faixa', faixa: 'ouro' };
-  if (/\bprata\b|silver/.test(t))       return { tipo: 'faixa', faixa: 'prata' };
-  if (/\bbronze\b/.test(t))             return { tipo: 'faixa', faixa: 'bronze' };
-  if (/maior nota|grand.?prix/.test(t)) return { tipo: 'maior_nota' };
-  if (/voto popular|vote\./.test(t))    return { tipo: 'manual' };
-  return { tipo: 'premio' };
+/* ── Um prêmio é "editável na mão" (pessoa/Voto Popular) quando não é
+ *  automático (faixa/maior_nota, calculado das médias) NEM já tem vencedor
+ *  por deliberação real da banca. Usado tanto na inicialização de
+ *  winnerEdits (fetchData) quanto no render — MESMA função nos dois lugares
+ *  pra nunca divergir (winnerEdits só existir pra prêmio automático já foi
+ *  a causa raiz de um bug real: o objeto vazio {nome:'',estudio:''}
+ *  sobrescrevia o recálculo de Ouro/Prata/Bronze/Maior Nota ao salvar). ── */
+const isEditableAward = (aw: any, hasRealDeliberation: boolean): boolean => {
+  const rev = classifyAward(aw.name ?? '', aw.description ?? '');
+  const auto = rev.tipo === 'faixa' || rev.tipo === 'maior_nota';
+  const hasDelibWinner = rev.tipo === 'premio' && hasRealDeliberation && !aw.winner_nome;
+  return !auto && !hasDelibWinner;
 };
 
 const Deliberacoes: React.FC = () => {
@@ -113,6 +114,13 @@ const Deliberacoes: React.FC = () => {
         supabase.from('configuracoes')
           .select('premios_especiais, medal_thresholds').eq('event_id', ev.id).maybeSingle(),
       ]);
+      // select() amplo sem checar error mascara coluna ausente como "vazio" —
+      // loga cada um mesmo mantendo o fallback de UX de array vazio.
+      if (aggRes.error)    console.error('fetchData: deliberation_aggregate', aggRes.error);
+      if (marcRes.error)   console.error('fetchData: marcacoes_juri', marcRes.error);
+      if (regsRes.error)   console.error('fetchData: registrations', regsRes.error);
+      if (judgesRes.error) console.error('fetchData: judges', judgesRes.error);
+      if (configRes.error) console.error('fetchData: configuracoes', configRes.error);
 
       setAggregate(aggRes.data ?? []);
       setMarcacoes(marcRes.data ?? []);
@@ -121,8 +129,18 @@ const Deliberacoes: React.FC = () => {
       const awardsRaw = (configRes.data as any)?.premios_especiais ?? [];
       const enabledAwards = Array.isArray(awardsRaw) ? awardsRaw.filter((a: any) => a?.enabled) : [];
       setAwards(enabledAwards);
+      // Só inicializa winnerEdits pros prêmios genuinamente editáveis — nunca
+      // pros automáticos (faixa/maior_nota). Usa a lista de award_ids com
+      // deliberação real vinda DIRETO do fetch (não do useMemo aggByAward,
+      // que só existe depois desse setState) pra decidir se um 'premio' já
+      // tem vencedor por deliberação ou ainda é editável na mão.
+      const deliberatedIds = new Set((aggRes.data ?? []).map((a: any) => String(a.award_id)));
       const initEdits: Record<string, { nome: string; estudio: string }> = {};
-      enabledAwards.forEach((a: any) => { if (a?.id != null) initEdits[String(a.id)] = { nome: a.winner_nome ?? '', estudio: a.winner_estudio ?? '' }; });
+      enabledAwards.forEach((a: any) => {
+        if (a?.id == null) return;
+        if (!isEditableAward(a, deliberatedIds.has(String(a.id)))) return;
+        initEdits[String(a.id)] = { nome: a.winner_nome ?? '', estudio: a.winner_estudio ?? '' };
+      });
       setWinnerEdits(initEdits);
       setWinnersSaved(false);
       const thr = (configRes.data as any)?.medal_thresholds;
@@ -251,6 +269,16 @@ const Deliberacoes: React.FC = () => {
     return m;
   }, [awards, thresholds, rankedByMedia, aggByAward, regsById]);
 
+  // Metadados de render por prêmio — memoizado (antes era um IIFE recalculado
+  // em toda tecla digitada em qualquer input da tela, inclusive de outros
+  // prêmios). Usa a MESMA isEditableAward do fetchData, então nunca diverge
+  // de quais prêmios entram em winnerEdits.
+  const awardMeta = useMemo(() => awards.map((aw: any) => ({
+    aw,
+    rev: classifyAward(aw.name ?? '', aw.description ?? ''),
+    editable: isEditableAward(aw, (aggByAward.get(aw.id)?.length ?? 0) > 0),
+  })), [awards, aggByAward]);
+
   /* ── Avançar fase do gate ── */
   const advancePhase = async () => {
     if (!event) return;
@@ -286,44 +314,44 @@ const Deliberacoes: React.FC = () => {
     }
   };
 
-  /* ── Salvar vencedores em premios_especiais (fonte da verdade pro Telão e
-     pra vitrine pública) ── Read-modify-write pra preservar os prêmios/flags.
+  /* ── Salvar vencedores em premios_especiais (fonte da verdade pro Telão,
+     pro PDF e — só depois de revelado no Telão — pra vitrine pública). RPC
+     atômica update_premios_winners aplica todos os patches num único UPDATE
+     no Postgres, fechando a corrida que existia com o SELECT+UPDATE do
+     client (Telão e Premiação escrevendo essa mesma coluna JSONB em abas
+     separadas no mesmo evento ao vivo podiam se sobrescrever).
      Prêmios editáveis (pessoa/Voto Popular) gravam o que foi digitado/puxado.
      Prêmios automáticos (faixa/maior nota) gravam o resultado RECALCULADO
-     agora — sobrescreve qualquer dado velho/errado (ex: de um ✋ manual usado
-     por engano num prêmio automático antes desse fluxo existir). */
+     agora — sobrescreve qualquer dado velho/errado. Nenhum patch toca
+     winner_revealed — salvar aqui NÃO revela pro público, só registra; a
+     vitrine só mostra depois que o produtor revela de fato no Telão. */
   const saveWinners = async () => {
     if (!event) return;
     setSavingWinners(true);
     try {
-      const { data, error } = await supabase.from('configuracoes')
-        .select('premios_especiais').eq('event_id', event.id).maybeSingle();
-      if (error) throw error;
-      const arr = Array.isArray((data as any)?.premios_especiais) ? (data as any).premios_especiais : [];
-      const next = arr.map((a: any) => {
-        if (a?.id == null) return a;
-        // Classifica PRIMEIRO — faixa/maior_nota sempre recalculam do zero,
-        // nunca usam winnerEdits (que é inicializado pra TODO prêmio no fetch,
-        // mesmo os automáticos, com {nome:'', estudio:''} quando nunca editado
-        // — usar `if (edit)` ali regravava esse objeto vazio/velho por cima do
-        // cálculo real e travava Maior Nota/Ouro/Prata/Bronze no valor antigo).
+      const patches: Record<string, any> = {};
+      awards.forEach((a: any) => {
+        if (a?.id == null) return;
         const rev = classifyAward(a.name ?? '', a.description ?? '');
         if (rev.tipo === 'faixa') {
           const res = winnersByAward.get(String(a.id));
-          return { ...a, winner_nome: null, winner_estudio: null, winner_items: (res?.winners ?? []).map(w => ({ nome: w.nome, estudio: w.estudio ?? '', media: w.media })) };
+          patches[String(a.id)] = { winner_nome: null, winner_estudio: null, winner_items: (res?.winners ?? []).map(w => ({ nome: w.nome, estudio: w.estudio ?? '', media: w.media })) };
+          return;
         }
         if (rev.tipo === 'maior_nota') {
           const res = winnersByAward.get(String(a.id));
           const top = res?.winners?.[0];
-          return { ...a, winner_nome: top?.nome ?? null, winner_estudio: top?.estudio ?? null, winner_items: null };
+          patches[String(a.id)] = { winner_nome: top?.nome ?? null, winner_estudio: top?.estudio ?? null, winner_items: null };
+          return;
         }
         const edit = winnerEdits[String(a.id)];
-        if (!edit) return a;
-        return { ...a, winner_nome: edit.nome.trim(), winner_estudio: edit.estudio.trim(), winner_items: null };
+        if (!edit) return;
+        patches[String(a.id)] = { winner_nome: edit.nome.trim(), winner_estudio: edit.estudio.trim(), winner_items: null };
       });
-      const { error: upErr } = await supabase.from('configuracoes')
-        .update({ premios_especiais: next }).eq('event_id', event.id);
-      if (upErr) throw upErr;
+      if (Object.keys(patches).length > 0) {
+        const { error } = await supabase.rpc('update_premios_winners', { p_event_id: event.id, p_patches: patches });
+        if (error) throw error;
+      }
       setWinnersSaved(true);
       setWinnersLocked(true);
       setTimeout(() => setWinnersSaved(false), 2500);
@@ -446,12 +474,6 @@ const Deliberacoes: React.FC = () => {
           prêmios de pessoa / Voto Popular são digitados e salvos aqui (mesma
           fonte que o Telão revela). */}
       {awards.length > 0 && (() => {
-        const awardMeta = awards.map((aw: any) => {
-          const rev = classifyAward(aw.name ?? '', aw.description ?? '');
-          const auto = rev.tipo === 'faixa' || rev.tipo === 'maior_nota';
-          const hasDelibWinner = rev.tipo === 'premio' && (aggByAward.get(aw.id)?.length ?? 0) > 0 && !aw.winner_nome;
-          return { aw, rev, editable: !auto && !hasDelibWinner };
-        });
         const hasEditable = awardMeta.some(m => m.editable);
         return (
         <div>

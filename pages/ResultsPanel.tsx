@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '../services/supabase';
 import { isStyleInList } from '../utils/styleMatch';
+import { classifyAward as classifyAwardShared } from '../utils/awardClassification';
 import {
   BarChart3, Download, RefreshCw, Loader2, Search,
   ChevronDown, ChevronUp, Trophy, CheckCircle2, AlertCircle,
@@ -94,16 +95,11 @@ interface SpecialAwardCfg {
   winner_estudio?: string;
   winner_items?: { nome: string; estudio?: string; media?: number }[];
 }
-type AwardReveal = { tipo: 'faixa'; faixa: 'ouro' | 'prata' | 'bronze' } | { tipo: 'maior_nota' } | { tipo: 'premio' } | { tipo: 'manual' };
-const classifyAward = (a: SpecialAwardCfg): AwardReveal => {
-  const t = `${a.nome ?? ''} ${a.description ?? ''}`.toLowerCase();
-  if (/\bouro\b|gold/.test(t))          return { tipo: 'faixa', faixa: 'ouro' };
-  if (/\bprata\b|silver/.test(t))       return { tipo: 'faixa', faixa: 'prata' };
-  if (/\bbronze\b/.test(t))             return { tipo: 'faixa', faixa: 'bronze' };
-  if (/maior nota|grand.?prix/.test(t)) return { tipo: 'maior_nota' };
-  if (/voto popular|vote\./.test(t))    return { tipo: 'manual' };
-  return { tipo: 'premio' };
-};
+// Wrapper local só pra manter os call sites existentes chamando classifyAward(a)
+// com o objeto inteiro, em vez de (nome, description) espalhado — a lógica de
+// classificação em si vive em utils/awardClassification.ts, compartilhada com
+// o Telão (TelaoControle.tsx) e a Premiação (Deliberacoes.tsx).
+const classifyAward = (a: SpecialAwardCfg) => classifyAwardShared(a.nome, a.description);
 
 /* ── Component ── */
 const ResultsPanel = () => {
