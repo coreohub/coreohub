@@ -6,7 +6,7 @@ import {
   Loader2, FileArchive, Users, ChevronDown, ChevronUp, Info,
   Volume2, Play, Pause, Radio, Square, AlertTriangle,
   Layers, X, Plus, Trash2, ArrowUp, ArrowDown, Edit3, SkipForward,
-  Search, Megaphone, FileText,
+  Search, Megaphone, FileText, Rewind, FastForward,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import PageHeader from '../components/PageHeader';
@@ -27,6 +27,12 @@ import { isStyleInList } from '../utils/styleMatch';
 
 type AudioSlot = { audio_url: string; duration_seconds: number; voice_id?: string };
 type AudioMap = Record<string, { entrada?: AudioSlot; saida?: AudioSlot }>;
+
+// Formata segundos como mm:ss — usado no rótulo da barra de progresso da
+// trilha, tanto no render normal (state) quanto na atualização via DOM
+// durante o arraste do seek bar (ref, sem re-render).
+const fmtTrilhaTime = (seconds: number): string =>
+  `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
 
 // ---------- types ----------
 interface Dancer {
@@ -239,6 +245,7 @@ interface SortableRowProps {
   trackDuration?: number;
   saidaAtiva: boolean;
   isLive: boolean;
+  isLastPlayed: boolean;
   isGenerating: boolean;
   batchInProgress: boolean;
   updatingLive: boolean;
@@ -256,7 +263,7 @@ interface SortableRowProps {
 
 const SortableRow: React.FC<SortableRowProps> = ({
   reg, index, conflicts, judgeNames,
-  audioSet, trackDuration, saidaAtiva, isLive, isGenerating, batchInProgress, updatingLive, currentVoice,
+  audioSet, trackDuration, saidaAtiva, isLive, isLastPlayed, isGenerating, batchInProgress, updatingLive, currentVoice,
   blocos, matchesSearch, recentlyMoved, onOpenBlocoPicker,
   onGenerateOne, onAnnounce, onPrepare, onMarkLiveOnly, onExclude,
 }) => {
@@ -293,7 +300,9 @@ const SortableRow: React.FC<SortableRowProps> = ({
           ? 'bg-[#ff0068]/5 border-[#ff0068]/40'
           : hasConflict
             ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-300 dark:border-rose-500/40'
-            : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/8'}
+            : isLastPlayed
+              ? 'bg-slate-100 dark:bg-white/[0.06] border-slate-300 dark:border-white/20'
+              : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/8'}
       `}
     >
       {/* drag handle */}
@@ -319,6 +328,16 @@ const SortableRow: React.FC<SortableRowProps> = ({
           <h4 className={`text-[11px] font-black uppercase tracking-tight truncate ${isLive ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>
             {reg.nome_coreografia}
           </h4>
+          {/* Última música que tocou (sobrevive ao Stop) — pedido real da
+              produção: sem isso, encerrar a transmissão fazia a linha perder
+              todo destaque e forçava procurar a mesma faixa numa lista longa. */}
+          {isLastPlayed && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-slate-200 dark:bg-white/10 border border-slate-300 dark:border-white/15 shrink-0">
+              <span className="text-[8px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">
+                Última tocada
+              </span>
+            </span>
+          )}
           {/* Badge discreto pra Avaliada — produtor identifica visualmente no
               cronograma e o jurado sabe que vai entrar em modo feedback. */}
           {(reg as any).tipo_apresentacao === 'Avaliada' && (
@@ -601,6 +620,11 @@ const Schedule = () => {
   /* Narração + player (absorvido da Mesa de Som — Etapa 1) */
   const [config, setConfig] = useState<any>(null);
   const [currentTrack, setCurrentTrack] = useState<Registration | null>(null);
+  // Última coreografia que tocou (sobrevive ao Stop). Sem isso, encerrar a
+  // transmissão zerava currentTrack e a linha perdia todo destaque — em
+  // cronograma de 100+ inscritos, a produção relatou ter que caçar de novo
+  // a mesma música na lista pra tocar de novo.
+  const [lastPlayedId, setLastPlayedId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [updatingLive, setUpdatingLive] = useState(false);
   const [audios, setAudios] = useState<AudioMap>({});
@@ -608,6 +632,11 @@ const Schedule = () => {
   const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
   const narrationAudioRef = useRef<HTMLAudioElement | null>(null);
   const trilhaAudioRef = useRef<HTMLAudioElement | null>(null);
+  // Preenchimento visual + rótulo mm:ss da barra de progresso — atualizados
+  // direto via DOM durante o arraste do seek bar, sem passar por setState
+  // (ver comentário no JSX da barra).
+  const trilhaFillRef = useRef<HTMLDivElement | null>(null);
+  const trilhaTimeLabelRef = useRef<HTMLSpanElement | null>(null);
   const sequenceTimerRef = useRef<number | null>(null);
   // Timeout de segurança do modo SISTEMA: se o evento 'ended' de um audio nao
   // disparar (arquivo com duracao mal-formada, engasgo de rede, etc.), força
@@ -763,6 +792,11 @@ const Schedule = () => {
       } else {
         setBlocos([]);
       }
+
+      // Zera "última tocada" ao trocar de evento — sem isso, o destaque de
+      // uma faixa tocada no evento anterior reaparecia (sessão vira contexto
+      // errado depois de trocar de evento e voltar).
+      setLastPlayedId(null);
 
       // Hidrata live + áudios pré-renderizados do evento
       if (eventId) {
@@ -1183,16 +1217,22 @@ const Schedule = () => {
   };
 
   const togglePlayPause = () => {
-    if (modoTrilha) {
+    // Trilha tocando agora (modo TRILHA sempre, ou modo SISTEMA na etapa 3) —
+    // pausa/retoma a MÚSICA. Sem esse check primeiro, apertar de novo caía
+    // direto na lógica de narração (narrationAudioRef vazio nessa fase, já
+    // que quem toca é trilhaAudioRef) e reiniciava a narração de entrada por
+    // cima da música ainda tocando — bug real, mais fácil de disparar agora
+    // que existe atalho de teclado (Espaço) além do botão.
+    if (playerSection === 'trilha' && trilhaAudioRef.current?.src) {
       const t = trilhaAudioRef.current;
-      if (t && t.src) {
-        if (t.paused) {
-          t.play().catch(e => console.warn('Falha ao retomar trilha:', e));
-        } else {
-          t.pause();
-        }
-        return;
+      if (t.paused) {
+        t.play().catch(e => console.warn('Falha ao retomar trilha:', e));
+      } else {
+        t.pause();
       }
+      return;
+    }
+    if (modoTrilha) {
       if (currentTrack) playTrilhaOnly(currentTrack);
       return;
     }
@@ -1207,6 +1247,52 @@ const Schedule = () => {
     }
     if (currentTrack) handleAnnounce(currentTrack);
   };
+
+  // Avança/retrocede N segundos na trilha tocando agora. Só a trilha tem
+  // seek (narração é curta, sem necessidade real) — pedido real da equipe
+  // de produção: "precisa ter opção completa de avançar/atrasar o progresso
+  // da música" pra corrigir corte errado sem reiniciar a faixa inteira.
+  const seekTrilha = (deltaSeconds: number) => {
+    const el = trilhaAudioRef.current;
+    if (!el || !Number.isFinite(el.duration) || el.duration <= 0) return;
+    el.currentTime = Math.min(Math.max(0, el.currentTime + deltaSeconds), el.duration);
+    setTrilhaProgress(el.currentTime);
+  };
+
+  // Seek absoluto (clique/arraste na barra de progresso). fraction em [0,1].
+  const seekTrilhaTo = (fraction: number) => {
+    const el = trilhaAudioRef.current;
+    if (!el || !Number.isFinite(el.duration) || el.duration <= 0) return;
+    el.currentTime = Math.max(0, Math.min(1, fraction)) * el.duration;
+    setTrilhaProgress(el.currentTime);
+  };
+
+  // Atalhos de teclado do player — padrão de qualquer software de DJ/mesa de
+  // som (espaço = play/pause, setas = seek ±10s). Ignora quando o foco está
+  // em qualquer elemento interativo (input/textarea/select/button/link) pra
+  // não roubar digitação nem a ativação por Espaço de um botão focado (ex:
+  // navegar com Tab até "Excluir" numa linha e apertar Espaço deveria clicar
+  // o botão, não pausar o player).
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || tag === 'A' || target?.isContentEditable) return;
+      if (!currentTrack) return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlayPause();
+      } else if (e.code === 'ArrowLeft' && playerSection === 'trilha') {
+        e.preventDefault();
+        seekTrilha(-10);
+      } else if (e.code === 'ArrowRight' && playerSection === 'trilha') {
+        e.preventDefault();
+        seekTrilha(10);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [currentTrack, playerSection, modoTrilha]);
 
   const setLiveRegistration = async (reg: Registration) => {
     if (!selectedEventId) return;
@@ -1227,6 +1313,7 @@ const Schedule = () => {
 
   const handlePrepare = async (reg: Registration) => {
     setCurrentTrack(reg);
+    setLastPlayedId(reg.id);
     setIsPlaying(false);
     if (modoSistema) {
       // Modo SISTEMA: dispara sequencia automatica entrada->wait->trilha->saida
@@ -1246,6 +1333,7 @@ const Schedule = () => {
   // narração — pra quando o anúncio é feito manualmente no microfone.
   const handleMarkLiveOnly = async (reg: Registration) => {
     setCurrentTrack(reg);
+    setLastPlayedId(reg.id);
     setIsPlaying(false);
     await setLiveRegistration(reg);
   };
@@ -2441,8 +2529,14 @@ const Schedule = () => {
 
       {/* ── Stage / Player ao vivo ── */}
       {/* Intentional dark card: padrão "now playing" de console DJ (Spotify/Apple Music
-          mantêm dark mesmo em light mode quando representa player ao vivo). */}
-      <div className="bg-slate-900 rounded-[2rem] p-6 border border-white/10 shadow-2xl relative overflow-hidden">
+          mantêm dark mesmo em light mode quando representa player ao vivo).
+          sticky: relato real da produção — em cronograma com muitos inscritos,
+          o player ficava fora da viewport ao rolar a lista pra escolher a
+          próxima música, obrigando a rolar de volta pro topo pra pausar/parar. */}
+      {/* z-[51]: linha em drag-and-drop sobe pra zIndex:50 (inline style,
+          ver SortableRow) — o player sticky precisa ficar acima dela, senão
+          uma linha arrastada perto do topo tampa os controles. */}
+      <div className="sticky top-0 z-[51] bg-slate-900 rounded-[2rem] p-6 border border-white/10 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-[#ff0068]/10 blur-[80px] rounded-full -mr-32 -mt-32" />
 
         <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
@@ -2484,13 +2578,64 @@ const Schedule = () => {
                 o modo Trilha (provavelmente o mais usado ao vivo) tocava a
                 música sem nunca mostrar progresso/duração pro sonoplasta. */}
             {((modoSistema || modoTrilha) && playerSection === 'trilha') && trilhaDuration > 0 && (
-              <div className="pt-2 space-y-0.5">
-                <div className="h-1 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-[#ff0068] transition-all" style={{ width: `${(trilhaProgress / trilhaDuration) * 100}%` }} />
+              <div className="pt-2 space-y-1">
+                {/* Barra de progresso arrastável/clicável — pedido real da equipe
+                    de produção: "precisa ter opção completa de avançar, atrasar
+                    o progresso da música". py-2/-my-2 alarga o alvo de toque
+                    sem engordar a barra visual.
+                    role=slider + tabIndex: fica na ordem de tabulação e é
+                    identificável por leitor de tela (as setas de teclado do
+                    player já funcionam quando o foco cai aqui, via listener
+                    global). Durante o arraste, atualiza o preenchimento
+                    direto no DOM (ref) em vez de chamar setTrilhaProgress a
+                    cada pointermove — evita re-renderizar a página inteira
+                    (incl. a lista de linhas, que pode ter 100+ inscritos) a
+                    cada tick do gesto. O seek de fato (currentTime + state)
+                    só é commitado 1x no pointerup. */}
+                <div
+                  className="py-2 -my-2 cursor-pointer touch-none rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                  role="slider"
+                  tabIndex={0}
+                  aria-label="Progresso da trilha"
+                  aria-valuemin={0}
+                  aria-valuemax={Math.round(trilhaDuration)}
+                  aria-valuenow={Math.round(trilhaProgress)}
+                  aria-valuetext={fmtTrilhaTime(trilhaProgress)}
+                  onPointerDown={(e) => {
+                    const bar = e.currentTarget;
+                    const fractionAt = (clientX: number) => {
+                      const rect = bar.getBoundingClientRect();
+                      return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+                    };
+                    // Fill + rótulo mm:ss atualizados juntos via DOM durante o
+                    // arraste — sem isso o texto ficava preso no valor antigo
+                    // até soltar, descompassado da barra que já se movia.
+                    const applyFraction = (fraction: number) => {
+                      if (trilhaFillRef.current) trilhaFillRef.current.style.width = `${fraction * 100}%`;
+                      if (trilhaTimeLabelRef.current) trilhaTimeLabelRef.current.textContent = fmtTrilhaTime(fraction * trilhaDuration);
+                    };
+                    let lastFraction = fractionAt(e.clientX);
+                    applyFraction(lastFraction);
+                    bar.setPointerCapture(e.pointerId);
+                    const onMove = (ev: PointerEvent) => {
+                      lastFraction = fractionAt(ev.clientX);
+                      applyFraction(lastFraction);
+                    };
+                    const onUp = () => {
+                      bar.removeEventListener('pointermove', onMove);
+                      seekTrilhaTo(lastFraction);
+                    };
+                    bar.addEventListener('pointermove', onMove);
+                    bar.addEventListener('pointerup', onUp, { once: true });
+                  }}
+                >
+                  <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                    <div ref={trilhaFillRef} className="h-full bg-[#ff0068] transition-all" style={{ width: `${(trilhaProgress / trilhaDuration) * 100}%` }} />
+                  </div>
                 </div>
                 <div className="flex justify-between text-[8px] font-bold text-slate-400 tabular-nums">
-                  <span>{Math.floor(trilhaProgress / 60)}:{String(Math.floor(trilhaProgress % 60)).padStart(2, '0')}</span>
-                  <span>{Math.floor(trilhaDuration / 60)}:{String(Math.floor(trilhaDuration % 60)).padStart(2, '0')}</span>
+                  <span ref={trilhaTimeLabelRef}>{fmtTrilhaTime(trilhaProgress)}</span>
+                  <span>{fmtTrilhaTime(trilhaDuration)}</span>
                 </div>
               </div>
             )}
@@ -2509,6 +2654,17 @@ const Schedule = () => {
                 <Volume2 size={24} className="group-hover:text-[#ff0068] transition-colors" />
               </button>
             )}
+            {/* Retroceder/avançar 10s — só faz sentido com trilha tocando (não narração). */}
+            {playerSection === 'trilha' && trilhaDuration > 0 && (
+              <button
+                onClick={() => seekTrilha(-10)}
+                aria-label="Voltar 10 segundos"
+                className="p-3 bg-white/5 text-white rounded-2xl hover:bg-white/10 transition-all"
+                title="Voltar 10s"
+              >
+                <Rewind size={20} />
+              </button>
+            )}
             <button
               onClick={togglePlayPause}
               disabled={!currentTrack}
@@ -2517,6 +2673,16 @@ const Schedule = () => {
             >
               {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" className="ml-1" />}
             </button>
+            {playerSection === 'trilha' && trilhaDuration > 0 && (
+              <button
+                onClick={() => seekTrilha(10)}
+                aria-label="Avançar 10 segundos"
+                className="p-3 bg-white/5 text-white rounded-2xl hover:bg-white/10 transition-all"
+                title="Avançar 10s"
+              >
+                <FastForward size={20} />
+              </button>
+            )}
             {/* Skip — so visivel em modo SISTEMA com sequencia rolando */}
             {modoSistema && playerSection !== 'idle' && (
               <button
@@ -2639,6 +2805,7 @@ const Schedule = () => {
                   trackDuration={trackDurations[reg.id]}
                   saidaAtiva={saidaAtiva}
                   isLive={currentTrack?.id === reg.id}
+                  isLastPlayed={!currentTrack && lastPlayedId === reg.id}
                   isGenerating={generatingId === reg.id}
                   batchInProgress={!!batchProgress}
                   updatingLive={updatingLive}

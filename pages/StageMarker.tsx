@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, CheckCircle2, RotateCcw, AlertTriangle, Clock, Users, Music, ChevronRight, Wifi, WifiOff, Settings2, Save, Loader2, Search, X, Radio } from 'lucide-react';
+import { Play, CheckCircle2, RotateCcw, AlertTriangle, Clock, Users, Music, ChevronRight, Wifi, WifiOff, Settings2, Save, Loader2, Search, X, Radio, RefreshCw, Layers } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
@@ -16,6 +16,13 @@ interface Presentation {
   elenco?: any[];
   ordem_apresentacao?: number;
   excluded_from_schedule?: boolean;
+  bloco_id?: string | null;
+}
+
+interface Bloco {
+  id: string;
+  name: string;
+  ordem: number;
 }
 
 const fmtTime = (seconds: number) => {
@@ -26,6 +33,8 @@ const fmtTime = (seconds: number) => {
 
 const StageMarker = () => {
   const [state, setState] = useState<TimerState>('WAITING');
+  const stateRef = useRef<TimerState>('WAITING');
+  useEffect(() => { stateRef.current = state; }, [state]);
   const [remaining, setRemaining] = useState(45);
   const [totalTime, setTotalTime] = useState(45);
   const [elapsed, setElapsed] = useState(0);
@@ -37,6 +46,7 @@ const StageMarker = () => {
   const [pendingSync, setPendingSync] = useState<any[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  useEffect(() => { showSettingsRef.current = showSettings; }, [showSettings]);
   const [savingSettings, setSavingSettings] = useState(false);
   // Multi-tenant: evento selecionado (mesmo padrão do Schedule.tsx). Sem isso
   // a query de apresentações misturava coreografias de todos os eventos do
@@ -50,6 +60,12 @@ const StageMarker = () => {
   const [marcarPalcoAtivo, setMarcarPalcoAtivo] = useState(true);
   const [gatilho, setGatilho] = useState<'MANUAL_MARCADOR' | 'MANUAL_COORDENADOR' | 'AUTO_SONOPLASTA'>('MANUAL_MARCADOR');
   const [tempoMarcacao, setTempoMarcacao] = useState(45);
+  // Blocos do Cronograma (Manhã/Tarde/etc) — mesma tabela que o Cronograma usa,
+  // pra essa tela deixar de ser uma lista plana desconectada da organização
+  // real do produtor.
+  const [blocos, setBlocos] = useState<Bloco[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const showSettingsRef = useRef(false);
   // Busca/lista de apresentacoes pra navegacao nao-sequencial
   const [showList, setShowList] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -104,62 +120,120 @@ const StageMarker = () => {
     })();
   }, []); // eslint-disable-line
 
-  /* ── load config + presentations do evento selecionado ── */
-  useEffect(() => {
-    if (!selectedEventId) return;
-    const fetchData = async (eventId: string) => {
-      setLoading(true);
-      try {
-        let regsQuery = supabase
-          .from('registrations')
-          .select('id,nome_coreografia,estudio,categoria,estilo_danca,elenco,ordem_apresentacao,excluded_from_schedule')
-          .eq('event_id', eventId)
-          .or(SCHEDULABLE_REGISTRATIONS_OR_FILTER)
-          .order('ordem_apresentacao', { ascending: true });
+  /* ── load config + presentations + blocos do evento selecionado.
+     Extraído pra useCallback (não mais só dentro do useEffect) pra poder
+     ser chamado de novo pelo botão "Atualizar" e pelo realtime de
+     configuracoes — antes era um snapshot único no mount, então editar o
+     Cronograma (ordem/blocos) ou o tempo/gatilho em Configurações depois de
+     abrir o Marcador nunca refletia aqui sem dar F5. ── */
+  const fetchData = useCallback(async (eventId: string, opts?: { keepCurrentId?: string }) => {
+    try {
+      let regsQuery = supabase
+        .from('registrations')
+        .select('id,nome_coreografia,estudio,categoria,estilo_danca,elenco,ordem_apresentacao,excluded_from_schedule,bloco_id')
+        .eq('event_id', eventId)
+        .or(SCHEDULABLE_REGISTRATIONS_OR_FILTER)
+        .order('ordem_apresentacao', { ascending: true });
 
-        // Lê o config da ROW DO EVENTO (multi-tenant), fallback legacy id='1'
-        // só se o evento não tiver row própria. Mesmo padrão do Cronograma
-        // (bug 2026-06-11: ler id='1' vazava config entre produtores).
-        let cfgQuery = supabase
+      // Lê o config da ROW DO EVENTO (multi-tenant), fallback legacy id='1'
+      // só se o evento não tiver row própria. Mesmo padrão do Cronograma
+      // (bug 2026-06-11: ler id='1' vazava config entre produtores).
+      let cfgQuery = supabase
+        .from('configuracoes')
+        .select('tempo_marcacao_palco,marcar_palco_ativo,gatilho_marcacao')
+        .eq('id', eventId)
+        .maybeSingle();
+
+      const [
+        { data: regs, error: regsError },
+        { data: cfgRow, error: cfgError },
+        { data: ev, error: evError },
+        { data: blocosData, error: blocosError },
+      ] = await Promise.all([
+        regsQuery,
+        cfgQuery,
+        supabase.from('events').select('live_registration_id').eq('id', eventId).maybeSingle(),
+        supabase.from('cronograma_blocos').select('id,name,ordem').eq('event_id', eventId).order('ordem', { ascending: true }),
+      ]);
+      // select() amplo sem checar error mascara coluna ausente como "não
+      // encontrado" (lição real: vitrine + Configurações quebradas em
+      // 2026-07-08 por migration commitada e nunca colada no SQL Editor).
+      // bloco_id/cronograma_blocos são novos aqui — logar cedo se sumirem.
+      if (regsError) console.error('[StageMarker] falha ao ler registrations:', regsError.message);
+      if (cfgError) console.error('[StageMarker] falha ao ler configuracoes:', cfgError.message);
+      if (evError) console.error('[StageMarker] falha ao ler events:', evError.message);
+      if (blocosError) console.error('[StageMarker] falha ao ler cronograma_blocos:', blocosError.message);
+
+      let cfg = cfgRow;
+      if (!cfg) {
+        const { data: legacy, error: legacyError } = await supabase
           .from('configuracoes')
           .select('tempo_marcacao_palco,marcar_palco_ativo,gatilho_marcacao')
-          .eq('id', eventId)
+          .eq('id', '1')
           .maybeSingle();
+        if (legacyError) console.error('[StageMarker] falha ao ler configuracoes legacy:', legacyError.message);
+        cfg = legacy;
+      }
 
-        const [{ data: regs }, { data: cfgRow }, { data: ev }] = await Promise.all([
-          regsQuery,
-          cfgQuery,
-          supabase.from('events').select('live_registration_id').eq('id', eventId).maybeSingle(),
-        ]);
+      const t = cfg?.tempo_marcacao_palco ?? 45;
+      const filtered = (regs || []).filter(r => !r.excluded_from_schedule);
+      setTempoMarcacao(t);
+      setMarcarPalcoAtivo(cfg?.marcar_palco_ativo ?? true);
+      setGatilho(cfg?.gatilho_marcacao ?? 'MANUAL_MARCADOR');
+      setPresentations(filtered);
+      setBlocos(blocosData || []);
+      setLiveRegistrationId(ev?.live_registration_id ?? null);
 
-        let cfg = cfgRow;
-        if (!cfg) {
-          const { data: legacy } = await supabase
-            .from('configuracoes')
-            .select('tempo_marcacao_palco,marcar_palco_ativo,gatilho_marcacao')
-            .eq('id', '1')
-            .maybeSingle();
-          cfg = legacy;
+      // totalTime/remaining sempre juntos (nunca um sem o outro — senão a
+      // porcentagem do anel de progresso desincroniza) e só mexem se o
+      // cronômetro não estiver rolando, mesma regra do realtime de config.
+      const marking = stateRef.current === 'MARKING';
+      if (opts?.keepCurrentId) {
+        // Refresh manual/realtime com contagem em andamento: relocaliza a
+        // apresentação pelo ID (não pelo índice numérico) — reordenar o
+        // Cronograma enquanto o Marcador está aberto não pode fazer o
+        // cronômetro continuar contando pra uma coreografia diferente.
+        const idx = filtered.findIndex(r => r.id === opts.keepCurrentId);
+        if (idx >= 0) {
+          setCurrentIndex(idx);
+          if (!marking) { setTotalTime(t); setRemaining(t); }
+        } else {
+          // A que estava sendo marcada sumiu da lista (removida/excluída) —
+          // não dá pra continuar contando pra algo que não existe mais.
+          setCurrentIndex(0);
+          setState('WAITING');
+          setTotalTime(t);
+          setRemaining(t);
         }
-
-        const t = cfg?.tempo_marcacao_palco ?? 45;
+      } else {
         setTotalTime(t);
         setRemaining(t);
-        setTempoMarcacao(t);
-        setMarcarPalcoAtivo(cfg?.marcar_palco_ativo ?? true);
-        setGatilho(cfg?.gatilho_marcacao ?? 'MANUAL_MARCADOR');
-        setPresentations((regs || []).filter(r => !r.excluded_from_schedule));
-        setLiveRegistrationId(ev?.live_registration_id ?? null);
         setCurrentIndex(0);
         setState('WAITING');
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!selectedEventId) return;
+    setLoading(true);
     fetchData(selectedEventId);
-  }, [selectedEventId]);
+  }, [selectedEventId, fetchData]);
+
+  const handleManualRefresh = async () => {
+    if (!selectedEventId || refreshing) return;
+    setRefreshing(true);
+    try {
+      const keepCurrentId = presentations[currentIndex]?.id;
+      await fetchData(selectedEventId, { keepCurrentId });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   /* ── realtime: acompanha o que a Mesa de Som/Cronograma marcou AO VIVO ── */
   useEffect(() => {
@@ -170,6 +244,37 @@ const StageMarker = () => {
         event: 'UPDATE', schema: 'public', table: 'events', filter: `id=eq.${selectedEventId}`,
       }, (payload: any) => {
         setLiveRegistrationId(payload.new?.live_registration_id ?? null);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [selectedEventId]);
+
+  /* ── realtime: tempo/gatilho de marcação mudam sozinhos quando o produtor
+     edita em Configurações (ou outro operador salva aqui) — antes a tela só
+     carregava a config 1x no mount e ficava presa nos valores antigos até
+     dar F5. Não mexe em totalTime/remaining se o cronômetro já está rolando
+     (MARKING), pra não bagunçar uma contagem em andamento; e não aplica se
+     o painel de Configurações está aberto, pra não sobrescrever edição em
+     andamento do próprio operador. ── */
+  useEffect(() => {
+    if (!selectedEventId) return;
+    const channel = supabase
+      .channel(`stage-marker-config-${selectedEventId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'configuracoes', filter: `id=eq.${selectedEventId}`,
+      }, (payload: any) => {
+        if (showSettingsRef.current) return;
+        const cfg = payload.new;
+        if (!cfg) return;
+        const t = cfg.tempo_marcacao_palco ?? 45;
+        setTempoMarcacao(t);
+        setMarcarPalcoAtivo(cfg.marcar_palco_ativo ?? true);
+        setGatilho(cfg.gatilho_marcacao ?? 'MANUAL_MARCADOR');
+        setTotalTime(prevTotal => {
+          if (stateRef.current === 'MARKING') return prevTotal;
+          setRemaining(t);
+          return t;
+        });
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -288,6 +393,10 @@ const StageMarker = () => {
     () => (liveRegistrationId ? presentations.find(p => p.id === liveRegistrationId) : null),
     [liveRegistrationId, presentations]
   );
+  // Mapa de blocos por id — evita um .find() (às vezes 2x na mesma linha)
+  // por apresentação renderizada; cronograma de 100+ inscritos faz essa
+  // conta rodar por linha da lista e do dropdown de busca.
+  const blocosById = React.useMemo(() => new Map(blocos.map(b => [b.id, b])), [blocos]);
 
   if (loading) {
     return (
@@ -326,6 +435,19 @@ const StageMarker = () => {
           <div className={`flex items-center gap-1 ${online ? 'text-emerald-400' : 'text-slate-500'}`}>
             {online ? <Wifi size={14} /> : <WifiOff size={14} />}
           </div>
+          {/* Fallback manual — o realtime já cobre live/config sozinho, mas
+              reordenação/blocos editados no Cronograma enquanto esta tela já
+              estava aberta não têm push automático. keepIndex preserva a
+              posição atual da marcação em andamento. */}
+          <button
+            onClick={handleManualRefresh}
+            disabled={refreshing}
+            aria-label="Atualizar lista e configurações"
+            className="p-2 rounded-xl bg-white/5 text-slate-400 hover:bg-white/10 transition-all disabled:opacity-50"
+            title="Atualizar lista e configurações"
+          >
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+          </button>
           <button
             onClick={() => setShowSettings(s => !s)}
             className={`p-2 rounded-xl transition-all ${showSettings ? 'bg-white/20 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
@@ -470,6 +592,7 @@ const StageMarker = () => {
                           {p.nome_coreografia}
                         </p>
                         <p className="text-[9px] text-slate-400 uppercase tracking-widest truncate">
+                          {p.bloco_id && blocosById.get(p.bloco_id) ? `${blocosById.get(p.bloco_id)!.name} · ` : ''}
                           {p.estudio} · {p.estilo_danca} · {p.categoria}
                         </p>
                       </div>
@@ -578,7 +701,21 @@ const StageMarker = () => {
       {/* Current card */}
       <div className="px-5 pb-4">
         <div className="bg-white/5 border border-white/10 rounded-3xl p-5 space-y-2">
-          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Preparar para</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Preparar para</p>
+            {/* Bloco do Cronograma (Manhã/Tarde/etc) — antes essa tela era uma
+                lista plana desconectada da organização real do produtor. */}
+            {current?.bloco_id && (() => {
+              const blocoAtual = blocosById.get(current.bloco_id);
+              if (!blocoAtual) return null;
+              return (
+                <span className="flex items-center gap-1 px-2 py-0.5 bg-white/10 rounded-full shrink-0">
+                  <Layers size={9} className="text-slate-400" aria-hidden="true" />
+                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-300">{blocoAtual.name}</span>
+                </span>
+              );
+            })()}
+          </div>
           <p className="text-xl font-black uppercase tracking-tight leading-tight text-white">
             {current?.nome_coreografia ?? '—'}
           </p>
