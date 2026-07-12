@@ -74,8 +74,13 @@ const ProducerAlerts: React.FC<Props> = ({ profile }) => {
 
       // 2) Configuracoes do EVENTO ATIVO (não do row legacy id=1).
       //    Multi-tenant: cada evento tem sua própria configuracoes com id=event_id.
-      //    Prioriza demo > evento mais recente > fallback id='1' pra casos legados.
-      const activeEvent = events.find(e => (e as any).is_demo) ?? events[0] ?? null;
+      //    Prioriza evento REAL mais recente > demo (só se não houver real) >
+      //    fallback id='1' pra casos legados. Antes priorizava demo por cima
+      //    de qualquer evento real — um produtor que criasse um evento demo
+      //    pra teste passava a ver alertas calculados em cima da config do
+      //    demo (prazo_inscricao/regras_avaliacao), não do evento real dele.
+      //    Mesma classe de bug do resolveActiveEventId() (services/supabase.ts).
+      const activeEvent = events.find(e => !(e as any).is_demo) ?? events[0] ?? null;
       const activeEventId = activeEvent?.id ?? '1';
 
       const cfgRes = await supabase

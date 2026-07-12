@@ -21,10 +21,17 @@ const DemoBanner: React.FC = () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
+        // Mesma resolução de "evento atual" do resolveActiveEventId()
+        // (services/supabase.ts) — evento REAL sempre vence um demo mais
+        // recente. Antes, essa query duplicada só olhava created_at e podia
+        // dizer "você está num evento demo" mesmo quando o resto da tela
+        // (AccountSettings etc.) já resolveu certo pro evento real, deixando
+        // banner e conteúdo contradizendo um ao outro (bug real 2026-07-12).
         const { data: ev } = await supabase
           .from('events')
           .select('id, name, is_demo')
           .eq('created_by', user.id)
+          .order('is_demo', { ascending: true })
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
