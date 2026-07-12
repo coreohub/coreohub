@@ -117,6 +117,11 @@ const ResultsPanel = () => {
   /** id da coreografia sendo limpa, ou 'all' — null = nada em andamento.
    *  Usado pro botão "Limpar avaliações de teste" (por linha + geral). */
   const [clearing, setClearing] = useState<string | null>(null);
+  // Premiação — MESMA fonte que o Telão de Palco e o PDF (winner_nome/
+  // winner_items salvos, com fallback pro cálculo ao vivo). Mostrada acima
+  // da lista por categoria, que é só ferramenta de auditoria.
+  const [awards, setAwards] = useState<SpecialAwardCfg[]>([]);
+  const [deliberationWinners, setDeliberationWinners] = useState<Record<string, { nome: string; estudio: string }>>({});
 
   /* ── Player de áudio único — evita 2 comentários tocando sobrepostos
      quando o produtor clica em "Ouvir Áudio" mais de uma vez (mesmo
@@ -155,11 +160,59 @@ const ResultsPanel = () => {
   const fetchResults = async () => {
     setLoading(true);
     try {
-      const { fetchActiveEventConfig } = await import('../services/supabase');
-      const cfg = await fetchActiveEventConfig('medal_thresholds, premiation_system, regras_avaliacao');
+      const { fetchActiveEventConfig, resolveActiveEventId } = await import('../services/supabase');
+      const cfg = await fetchActiveEventConfig('medal_thresholds, premiation_system, regras_avaliacao, premios_especiais');
       setThresholds(cfg?.medal_thresholds ?? DEFAULT_THRESHOLDS);
       setPremiationSystem(cfg?.premiation_system === 'RANKING' ? 'RANKING' : 'THRESHOLD');
       const regras: any = cfg?.regras_avaliacao ?? {};
+
+      // Premiação (mesma fonte que Telão/PDF) — lê os prêmios salvos +
+      // resolve o vencedor por deliberação da banca (tipo 'premio') igual o
+      // PDF faz, pra não duplicar essa conta com resultado divergente.
+      const rawAwards: any[] = Array.isArray(cfg?.premios_especiais) ? cfg.premios_especiais : [];
+      const enabledAwards: SpecialAwardCfg[] = rawAwards
+        .filter((a: any) => a && a.enabled !== false && a.id != null)
+        .map((a: any) => ({
+          id: String(a.id),
+          nome: (a.nome ?? a.name ?? 'Prêmio').trim(),
+          valor: a.valor ? String(a.valor) : undefined,
+          description: a.description ?? a.descricao ?? '',
+          winner_nome: a.winner_nome || undefined,
+          winner_estudio: a.winner_estudio || undefined,
+          winner_items: Array.isArray(a.winner_items) && a.winner_items.length > 0 ? a.winner_items : undefined,
+        }));
+      setAwards(enabledAwards);
+      const eventId = await resolveActiveEventId();
+      const premioAwardIds = enabledAwards.filter(a => classifyAward(a).tipo === 'premio').map(a => a.id);
+      if (eventId && premioAwardIds.length > 0) {
+        const { data: agg } = await supabase
+          .from('deliberation_aggregate')
+          .select('award_id, registration_id, judge_count')
+          .eq('event_id', eventId)
+          .in('award_id', premioAwardIds);
+        const byAward: Record<string, { registration_id: string; judge_count: number }> = {};
+        (agg ?? []).forEach((row: any) => {
+          const cur = byAward[row.award_id];
+          if (!cur || row.judge_count > cur.judge_count) byAward[row.award_id] = row;
+        });
+        const winnerRegIds = Object.values(byAward).map(w => w.registration_id);
+        const dw: Record<string, { nome: string; estudio: string }> = {};
+        if (winnerRegIds.length > 0) {
+          const { data: winnerRegs } = await supabase
+            .from('registrations')
+            .select('id, nome_coreografia, estudio, event_data')
+            .in('id', winnerRegIds);
+          const regById: Record<string, any> = {};
+          (winnerRegs ?? []).forEach((r: any) => { regById[r.id] = r; });
+          Object.entries(byAward).forEach(([awardId, w]) => {
+            const r = regById[w.registration_id];
+            if (r) dw[awardId] = { nome: r.nome_coreografia ?? '—', estudio: (r.estudio?.trim?.() || r.event_data?.estudio_nome || '—') };
+          });
+        }
+        setDeliberationWinners(dw);
+      } else {
+        setDeliberationWinners({});
+      }
       // ?? em vez de || pra default — convenção do projeto (evita zerar peso
       // legítimo). Number.isFinite cobre o caso de valor salvo não-numérico.
       const rawPesoTecnico   = Number(regras.pesoTecnico   ?? 50);
@@ -290,6 +343,42 @@ const ResultsPanel = () => {
   const competitiva = useMemo(() => allResults.filter(r => r.tipo_apresentacao !== 'Avaliada'), [allResults]);
   const avaliada    = useMemo(() => allResults.filter(r => r.tipo_apresentacao === 'Avaliada'),  [allResults]);
   const activeList  = activeTab === 'competitiva' ? competitiva : avaliada;
+
+  /* ── Vencedores por prêmio — MESMA lógica/precedência do PDF e do Telão:
+     winner_items/winner_nome salvos têm prioridade; sem isso, faixa/maior
+     nota recalculam ao vivo da média (festival inteiro, nunca por categoria);
+     'premio' usa a deliberação; 'manual' fica pra cerimônia. ── */
+  type AwardWinnerRow = { nome: string; estudio?: string; media?: number };
+  const awardWinners = useMemo(() => {
+    const m = new Map<string, { fonte: string; hint?: string; winners: AwardWinnerRow[] }>();
+    const avaliadas = competitiva.filter(x => x.evaluations_count > 0);
+    awards.forEach(a => {
+      const r = classifyAward(a);
+      if (a.winner_items && a.winner_items.length > 0) {
+        m.set(a.id, { fonte: 'Salvo em Premiação', winners: a.winner_items });
+        return;
+      }
+      if (a.winner_nome) {
+        m.set(a.id, { fonte: 'Salvo em Premiação', winners: [{ nome: a.winner_nome, estudio: a.winner_estudio }] });
+        return;
+      }
+      if (r.tipo === 'faixa') {
+        const lo = r.faixa === 'ouro' ? thresholds.gold : r.faixa === 'prata' ? thresholds.silver : thresholds.bronze;
+        const hi = r.faixa === 'ouro' ? null : r.faixa === 'prata' ? thresholds.gold : thresholds.silver;
+        const naFaixa = avaliadas.filter(x => x.average_score >= lo && (hi == null || x.average_score < hi)).sort((x, y) => y.average_score - x.average_score);
+        m.set(a.id, { fonte: `Faixa ${r.faixa} · média dos jurados`, hint: naFaixa.length === 0 ? 'Nenhuma coreografia nesta faixa' : undefined, winners: naFaixa.map(x => ({ nome: x.nome_coreografia, estudio: x.estudio, media: x.average_score })) });
+      } else if (r.tipo === 'maior_nota') {
+        const top = [...avaliadas].sort((x, y) => y.average_score - x.average_score)[0];
+        m.set(a.id, { fonte: 'Maior média do festival', hint: top ? undefined : 'Sem notas ainda', winners: top ? [{ nome: top.nome_coreografia, estudio: top.estudio, media: top.average_score }] : [] });
+      } else if (r.tipo === 'premio') {
+        const w = deliberationWinners[a.id];
+        m.set(a.id, { fonte: 'Deliberação da banca', hint: w ? undefined : 'Sem deliberação — revele em Resultados → Premiação', winners: w ? [w] : [] });
+      } else {
+        m.set(a.id, { fonte: 'Voto Popular / definido na cerimônia', hint: 'A revelar na cerimônia', winners: [] });
+      }
+    });
+    return m;
+  }, [awards, thresholds, competitiva, deliberationWinners]);
 
   const filtered = useMemo(() => {
     let res = activeList;
@@ -795,6 +884,58 @@ const ResultsPanel = () => {
           <p className="text-[10px] font-bold text-amber-700 dark:text-amber-400">
             <strong>{outlierCount} coreografia{outlierCount > 1 ? 's' : ''}</strong> com divergência alta entre jurados (≥ 2,0 pontos de diferença). Verifique antes de publicar — estão marcadas com <span className="italic">Outlier</span>.
           </p>
+        </div>
+      )}
+
+      {/* Premiação — faixa festival inteiro, MESMA fonte do Telão e do PDF.
+          Fica acima da lista por categoria abaixo, que é só ferramenta de
+          auditoria (nota por nota, grupo a grupo) — não é a premiação oficial. */}
+      {awards.length > 0 && (
+        <div>
+          <h2 className="text-base font-black uppercase tracking-tight text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+            <Trophy size={16} className="text-[#ff0068]" />
+            Premiação
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {awards.map(a => {
+              const res = awardWinners.get(a.id);
+              return (
+                <div key={a.id} className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden">
+                  <div className="px-4 py-3 bg-slate-50 dark:bg-white/[0.03] border-b border-slate-100 dark:border-white/10 flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white truncate">{a.nome}</h3>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] mt-0.5 truncate">{res?.fonte}</p>
+                    </div>
+                    {a.valor != null && Number(a.valor) > 0 && (
+                      <span className="shrink-0 text-[10px] font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
+                        R$ {Number(a.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                    )}
+                  </div>
+                  {res && res.winners.length > 0 ? (
+                    <div className="divide-y divide-slate-100 dark:divide-white/5">
+                      {res.winners.map((w, idx) => (
+                        <div key={idx} className="px-4 py-2.5 flex items-center gap-3">
+                          <Trophy size={13} className={`shrink-0 ${idx === 0 ? 'text-yellow-500' : 'text-slate-300 dark:text-slate-600'}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white truncate">{w.nome}</p>
+                            {w.estudio && <p className="text-[9px] text-slate-500 uppercase font-bold truncate">{w.estudio}</p>}
+                          </div>
+                          {w.media != null && (
+                            <span className="shrink-0 text-sm font-black italic tabular-nums text-slate-900 dark:text-white">{w.media.toFixed(2)}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-4 text-center">
+                      <p className="text-[10px] text-slate-400 italic">{res?.hint ?? 'A revelar na cerimônia'}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
