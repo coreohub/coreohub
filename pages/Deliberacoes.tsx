@@ -282,9 +282,12 @@ const Deliberacoes: React.FC = () => {
     }
   };
 
-  /* ── Salvar vencedores digitados na mão em premios_especiais ──
-     Read-modify-write pra preservar os prêmios/flags; só toca winner_nome/
-     winner_estudio dos prêmios editáveis. É a mesma fonte que o Telão lê. */
+  /* ── Salvar vencedores em premios_especiais (fonte da verdade pro Telão e
+     pra vitrine pública) ── Read-modify-write pra preservar os prêmios/flags.
+     Prêmios editáveis (pessoa/Voto Popular) gravam o que foi digitado/puxado.
+     Prêmios automáticos (faixa/maior nota) gravam o resultado RECALCULADO
+     agora — sobrescreve qualquer dado velho/errado (ex: de um ✋ manual usado
+     por engano num prêmio automático antes desse fluxo existir). */
   const saveWinners = async () => {
     if (!event) return;
     setSavingWinners(true);
@@ -294,9 +297,21 @@ const Deliberacoes: React.FC = () => {
       if (error) throw error;
       const arr = Array.isArray((data as any)?.premios_especiais) ? (data as any).premios_especiais : [];
       const next = arr.map((a: any) => {
-        const edit = winnerEdits[String(a?.id)];
-        if (!edit) return a;
-        return { ...a, winner_nome: edit.nome.trim(), winner_estudio: edit.estudio.trim() };
+        if (a?.id == null) return a;
+        const edit = winnerEdits[String(a.id)];
+        if (edit) {
+          return { ...a, winner_nome: edit.nome.trim(), winner_estudio: edit.estudio.trim(), winner_items: null };
+        }
+        const rev = classifyAward(a.name ?? '', a.description ?? '');
+        const res = winnersByAward.get(String(a.id));
+        if (rev.tipo === 'faixa') {
+          return { ...a, winner_nome: null, winner_estudio: null, winner_items: (res?.winners ?? []).map(w => ({ nome: w.nome, estudio: w.estudio ?? '', media: w.media })) };
+        }
+        if (rev.tipo === 'maior_nota') {
+          const top = res?.winners?.[0];
+          return { ...a, winner_nome: top?.nome ?? null, winner_estudio: top?.estudio ?? null, winner_items: null };
+        }
+        return a;
       });
       const { error: upErr } = await supabase.from('configuracoes')
         .update({ premios_especiais: next }).eq('event_id', event.id);
@@ -436,13 +451,13 @@ const Deliberacoes: React.FC = () => {
               <Trophy size={16} className="text-[#ff0068]" />
               Vencedores por prêmio
             </h2>
-            {hasEditable && (
-              <button onClick={saveWinners} disabled={savingWinners}
-                className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#d4005a] transition-all disabled:opacity-50">
-                {savingWinners ? <Loader2 size={12} className="animate-spin" /> : winnersSaved ? <CheckCircle2 size={12} /> : <Send size={12} />}
-                {winnersSaved ? 'Salvo' : 'Salvar vencedores'}
-              </button>
-            )}
+            {/* Salva também os automáticos (recalcula do zero, sobrescrevendo
+                qualquer dado antigo) — é isso que publica na vitrine pública. */}
+            <button onClick={saveWinners} disabled={savingWinners}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#d4005a] transition-all disabled:opacity-50">
+              {savingWinners ? <Loader2 size={12} className="animate-spin" /> : winnersSaved ? <CheckCircle2 size={12} /> : <Send size={12} />}
+              {winnersSaved ? 'Salvo' : 'Salvar vencedores'}
+            </button>
           </div>
           <div className="space-y-3">
             {awardMeta.map(({ aw, rev, editable }) => {
