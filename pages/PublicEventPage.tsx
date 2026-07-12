@@ -1414,6 +1414,10 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 // Nome → Valor R$ (se > 0, destaque emerald) → Descrição (se preenchida)
                 // → badge formation (se != TODOS). Sem descrições padrão poluindo.
                 const valor = typeof award.valor === 'number' && award.valor > 0 ? award.valor : null;
+                // Vencedor só aparece quando o produtor já revelou/salvou (winner_nome
+                // em premios_especiais) — antes disso o card segue como convite (regra
+                // do prêmio), não promete um resultado que ainda não existe.
+                const winnerNome: string | undefined = award.winner_nome;
                 return (
                   <div key={award.id} className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-5">
                     <p className="font-black uppercase text-sm tracking-tight text-slate-900 dark:text-white">{award.name}</p>
@@ -1429,6 +1433,15 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                       <span className="inline-block mt-2 px-2 py-1 rounded-full bg-[#ff0068]/10 text-[#ff0068] text-[9px] font-black uppercase tracking-widest">
                         {award.formation}
                       </span>
+                    )}
+                    {winnerNome && (
+                      <div className="mt-3 pt-3 border-t border-slate-200 dark:border-white/10">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Vencedor</p>
+                        <p className="text-sm font-black uppercase tracking-tight text-[#ff0068] mt-0.5">{winnerNome}</p>
+                        {award.winner_estudio && (
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">{award.winner_estudio}</p>
+                        )}
+                      </div>
                     )}
                   </div>
                 );

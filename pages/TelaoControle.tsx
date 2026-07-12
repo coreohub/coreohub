@@ -455,11 +455,17 @@ const TelaoControle: React.FC = () => {
                         {revealLabel[r.tipo === 'faixa' ? r.faixa : r.tipo]}
                       </span>
                     </button>
-                    <button onClick={() => { setVotoError(null); setManualFor(a); setManualSearch(a.winner_nome ?? ''); setManualEstudio(a.winner_estudio ?? ''); }} disabled={busy}
-                      title="Escolher vencedor na mão" aria-label={`Escolher vencedor na mão para ${a.nome}`}
-                      className="shrink-0 p-3 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 transition-all">
-                      <Hand size={14} />
-                    </button>
+                    {/* Faixa (Ouro/Prata/Bronze) e Maior Nota têm vencedor calculado das médias
+                        — Ouro/Prata podem ter várias coreografias, então um seletor de "1
+                        vencedor" não faz sentido pra esses tipos e só confundia (misturava
+                        a lista inteira de coreografias avaliadas com o prêmio errado). */}
+                    {r.tipo !== 'faixa' && r.tipo !== 'maior_nota' && (
+                      <button onClick={() => { setVotoError(null); setManualFor(a); setManualSearch(a.winner_nome ?? ''); setManualEstudio(a.winner_estudio ?? ''); }} disabled={busy}
+                        title="Escolher vencedor na mão" aria-label={`Escolher vencedor na mão para ${a.nome}`}
+                        className="shrink-0 p-3 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 transition-all">
+                        <Hand size={14} />
+                      </button>
+                    )}
                   </div>
                 );
               })}

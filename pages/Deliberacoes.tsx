@@ -73,6 +73,8 @@ const Deliberacoes: React.FC = () => {
   const [winnersSaved, setWinnersSaved] = useState(false);
   const [pullingVoto, setPullingVoto] = useState<string | null>(null);
   const [votoMsg, setVotoMsg] = useState<string | null>(null);
+  // Busca pra filtrar a lista de coreografias cadastradas no picker de cada prêmio editável.
+  const [pickerSearch, setPickerSearch] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [advancing, setAdvancing] = useState(false);
@@ -363,9 +365,12 @@ const Deliberacoes: React.FC = () => {
   const status = event?.deliberation_status as DeliberationStatus;
   const totalMarcacoes = marcacoes.length;
   const totalDeliberations = aggregate.reduce((s, a) => s + a.judge_count, 0);
-  // Só mostra os painéis de deliberação (⭐/indicações) quando a banca usou esse
-  // fluxo — senão viram "0% / Nenhuma indicação" confuso pra quem não delibera.
-  const showDeliberation = totalMarcacoes > 0 || totalDeliberations > 0;
+  // Só mostra o painel legado de deliberação (indicações/consenso) quando a
+  // banca de fato ATRIBUIU prêmios (não basta 1 ⭐ solta sem atribuição) — e só
+  // pros prêmios de deliberação ('premio'); Ouro/Prata/Bronze/Maior Nota/Voto
+  // Popular nunca são decididos assim, então nunca deveriam aparecer ali.
+  const premioAwards = awards.filter((aw: any) => classifyAward(aw.name ?? '', aw.description ?? '').tipo === 'premio');
+  const showDeliberation = totalDeliberations > 0;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20">
@@ -482,6 +487,41 @@ const Deliberacoes: React.FC = () => {
                         placeholder="Estúdio / grupo (opcional)"
                         aria-label={`Estúdio do vencedor de ${aw.name}`}
                         className="w-full px-3 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-[#ff0068]/50" />
+
+                      {/* Ou selecionar uma coreografia já cadastrada — cobre prêmios como
+                          Melhor Coreografia/Grupo, além do texto livre (pessoa fora da lista). */}
+                      {registrations.length > 0 && (() => {
+                        const q = (pickerSearch[aw.id] ?? '').toLowerCase();
+                        const opts = registrations
+                          .filter((r: any) => !q || `${r.nome_coreografia ?? ''} ${r.estudio ?? ''}`.toLowerCase().includes(q))
+                          .slice(0, 30);
+                        return (
+                          <div className="pt-1">
+                            <input value={pickerSearch[aw.id] ?? ''}
+                              onChange={(e) => setPickerSearch((p) => ({ ...p, [aw.id]: e.target.value }))}
+                              placeholder="Ou buscar coreografia cadastrada…"
+                              aria-label={`Buscar coreografia pra ${aw.name}`}
+                              className="w-full px-3 py-2 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-[#ff0068]/50" />
+                            {q && (
+                              <div className="max-h-40 overflow-y-auto mt-1.5 space-y-1">
+                                {opts.length === 0 ? (
+                                  <p className="text-[10px] text-slate-400 px-1 py-1">Nenhuma coreografia encontrada.</p>
+                                ) : opts.map((r: any) => (
+                                  <button key={r.id} type="button"
+                                    onClick={() => {
+                                      setWinnerEdits((p) => ({ ...p, [aw.id]: { nome: r.nome_coreografia ?? '', estudio: r.estudio ?? '' } }));
+                                      setPickerSearch((p) => ({ ...p, [aw.id]: '' }));
+                                    }}
+                                    className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left bg-white dark:bg-white/5 hover:bg-[#ff0068]/10 text-slate-700 dark:text-slate-200 text-xs font-bold uppercase tracking-wide transition-all">
+                                    <span className="truncate">{r.nome_coreografia}</span>
+                                    {r.estudio && <span className="shrink-0 text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[45%]">{r.estudio}</span>}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ) : res && res.winners.length > 0 ? (
                     <div className="divide-y divide-slate-100 dark:divide-white/5">
@@ -575,15 +615,15 @@ const Deliberacoes: React.FC = () => {
           Indicações por prêmio
         </h2>
 
-        {awards.length === 0 ? (
+        {premioAwards.length === 0 ? (
           <div className="p-8 bg-slate-50 dark:bg-slate-900/40 border border-dashed border-slate-300 dark:border-white/10 rounded-2xl text-center">
             <p className="text-[11px] font-bold text-slate-400">
-              Nenhum prêmio configurado em <strong>Configurações → Prêmios</strong>.
+              Nenhum prêmio de deliberação configurado em <strong>Configurações → Prêmios</strong>.
             </p>
           </div>
         ) : (
           <div className="space-y-3">
-            {awards.map((aw: any) => {
+            {premioAwards.map((aw: any) => {
               const entries = aggByAward.get(aw.id) ?? [];
               const topConsensus = entries.length > 0 ? entries[0].judge_count : 0;
               const consensusPct = totalJudges > 0
