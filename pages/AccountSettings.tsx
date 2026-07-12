@@ -1987,6 +1987,38 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         throw new Error('Crie um evento antes de salvar configurações.');
       }
 
+      // Preserva winner_nome/winner_estudio/winner_items/winner_revealed do
+      // banco por cima do state local de `awards` (carregado quando a tela
+      // abriu). Sem isso, editar um prêmio aqui (nome/valor/enabled) e salvar
+      // horas depois sobrescrevia o array inteiro com o snapshot antigo,
+      // revertendo silenciosamente uma revelação já feita ao vivo no Telão
+      // ou um vencedor já salvo em Premiação — essa tela nunca passou a usar
+      // a RPC update_premios_winners (que só existe pra patches pontuais;
+      // aqui o array inteiro é reescrito, então o jeito de não perder dado
+      // é buscar o estado mais recente e sobrepor os campos de vencedor).
+      let premiosToSave: any = awards;
+      if (awardsTouched) {
+        const { data: liveCfg } = await supabase
+          .from('configuracoes')
+          .select('premios_especiais')
+          .eq('event_id', myEvent.id)
+          .maybeSingle();
+        const liveById: Record<string, any> = {};
+        (Array.isArray((liveCfg as any)?.premios_especiais) ? (liveCfg as any).premios_especiais : [])
+          .forEach((a: any) => { if (a?.id != null) liveById[String(a.id)] = a; });
+        premiosToSave = awards.map((a: any) => {
+          const live = liveById[String(a.id)];
+          if (!live) return a;
+          return {
+            ...a,
+            winner_nome: live.winner_nome ?? null,
+            winner_estudio: live.winner_estudio ?? null,
+            winner_items: live.winner_items ?? null,
+            winner_revealed: live.winner_revealed ?? false,
+          };
+        });
+      }
+
       // Multi-tenant: salvamos em DUAS rows com mesmo conteúdo:
       // - id=event_id: row dedicada do evento (novo padrão, multi-tenant correto)
       // - id='1': row legacy (compat com 12 telas que ainda leem id=1)
@@ -2037,7 +2069,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         // se foi carregado do banco OU se o user tocou na lista. Sem isso, save
         // com state ainda nos defaults (race condition entre fetch e clique
         // de "Salvar") sobrescrevia o JSONB do banco com 5 templates desabilitados.
-        ...(awardsTouched ? { premios_especiais: awards } : {}),
+        ...(awardsTouched ? { premios_especiais: premiosToSave } : {}),
         atualizado_em:       new Date().toISOString(),
       };
 

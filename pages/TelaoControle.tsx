@@ -142,14 +142,20 @@ const TelaoControle: React.FC = () => {
   // — evita o antigo SELECT+UPDATE do client (2 round-trips com janela de
   // corrida real: produtor usa Telão numa aba e Premiação noutra no mesmo
   // evento ao vivo, a escrita que termina por último apagava a da outra aba).
-  const patchAward = useCallback(async (awardId: string, patch: Record<string, any>) => {
-    if (!eventId) return;
+  // Retorna sucesso/falha explícito — antes o erro só ia pro console.error e
+  // o caller seguia como se tivesse dado certo. Isso deixava o LED revelar um
+  // vencedor (sendPremiacao é independente, sempre funciona) enquanto o
+  // registro persistente (winner_revealed) silenciosamente falhava, e a
+  // vitrine pública nunca mostrava o que a plateia já viu no palco.
+  const patchAward = useCallback(async (awardId: string, patch: Record<string, any>): Promise<boolean> => {
+    if (!eventId) return false;
     const { error } = await supabase.rpc('update_premios_winners', {
       p_event_id: eventId,
       p_patches: { [awardId]: patch },
     });
-    if (error) { console.error('patchAward', error); return; }
+    if (error) { console.error('patchAward', error); return false; }
     setPremios((prev) => prev.map((p) => p.id === awardId ? { ...p, ...patch } : p));
+    return true;
   }, [eventId]);
 
   // Vencedor digitado/escolhido na mão — zera winner_items (caso o prêmio
@@ -189,12 +195,21 @@ const TelaoControle: React.FC = () => {
     // Popular) = fonte da verdade pra QUALQUER tipo — revela direto, sem
     // recalcular. Cobre também Ouro/Prata/Bronze/Maior Nota quando o produtor
     // usou o ✋ pra substituir um cálculo automático vazio/errado.
+    // Registra ANTES de revelar (winner_revealed vira a autorização da
+    // vitrine pública) — se o registro falhar, aborta sem revelar no LED,
+    // pra nunca deixar palco e vitrine dessincronizados.
     if (a.winner_nome) {
-      await markRevealed(a.id);
+      if (!await markRevealed(a.id)) { alert('Não foi possível registrar a revelação. Tente de novo.'); return; }
       return sendPremiacao({ tipo: 'manual', titulo: a.nome, valor, nome: a.winner_nome, estudio: a.winner_estudio ?? '' });
     }
-    if (r.tipo === 'faixa')      { await markRevealed(a.id); return sendPremiacao({ tipo: 'faixa', faixa: r.faixa, titulo: a.nome, valor }); }
-    if (r.tipo === 'maior_nota') { await markRevealed(a.id); return sendPremiacao({ tipo: 'maior_nota', titulo: a.nome, valor }); }
+    if (r.tipo === 'faixa') {
+      if (!await markRevealed(a.id)) { alert('Não foi possível registrar a revelação. Tente de novo.'); return; }
+      return sendPremiacao({ tipo: 'faixa', faixa: r.faixa, titulo: a.nome, valor });
+    }
+    if (r.tipo === 'maior_nota') {
+      if (!await markRevealed(a.id)) { alert('Não foi possível registrar a revelação. Tente de novo.'); return; }
+      return sendPremiacao({ tipo: 'maior_nota', titulo: a.nome, valor });
+    }
     if (r.tipo === 'manual') {
       // Troféu Voto Popular: automático é a via principal (padrão de mercado —
       // reduz erro humano na hora da cerimônia). Busca digitada é só o fallback,
@@ -206,7 +221,8 @@ const TelaoControle: React.FC = () => {
         });
         if (!error && (data as any)?.ok) {
           const w = data as { nome: string; estudio: string };
-          await patchAward(a.id, { winner_nome: w.nome, winner_estudio: w.estudio, winner_items: null, winner_revealed: true });
+          const ok = await patchAward(a.id, { winner_nome: w.nome, winner_estudio: w.estudio, winner_items: null, winner_revealed: true });
+          if (!ok) { setVotoError('Vencedor encontrado, mas não foi possível registrar. Tente de novo.'); return; }
           await sendPremiacao({ tipo: 'manual', titulo: a.nome, valor, nome: w.nome, estudio: w.estudio });
           return;
         }
@@ -243,26 +259,32 @@ const TelaoControle: React.FC = () => {
       setManualEstudio(a.winner_estudio ?? '');
       return;
     }
-    await markRevealed(a.id);
+    if (!await markRevealed(a.id)) { alert('Não foi possível registrar a revelação. Tente de novo.'); return; }
     return sendPremiacao({ tipo: 'premio', award_id: a.id, titulo: a.nome, valor });
   };
 
-  const revelarManual = (a: Premio, c: Coreo) => {
-    sendPremiacao({ tipo: 'manual', titulo: a.nome, valor: fmtValor(a.valor), nome: c.nome, estudio: c.estudio });
-    persistAwardWinner(a.id, c.nome, c.estudio ?? '');
+  // Registra o vencedor PRIMEIRO (persistAwardWinner, via RPC) e só revela no
+  // LED (sendPremiacao) depois de confirmar que gravou — antes era na ordem
+  // inversa e sem checar sucesso, deixando o palco mostrar um vencedor que a
+  // vitrine pública nunca chegava a exibir se a gravação falhasse.
+  const revelarManual = async (a: Premio, c: Coreo) => {
+    const ok = await persistAwardWinner(a.id, c.nome, c.estudio ?? '');
+    if (!ok) { alert('Não foi possível salvar o vencedor. Tente de novo.'); return; }
     setManualFor(null); setManualSearch(''); setManualEstudio('');
+    await sendPremiacao({ tipo: 'manual', titulo: a.nome, valor: fmtValor(a.valor), nome: c.nome, estudio: c.estudio });
   };
 
   // Vencedor digitado livre (pessoa/coreografia que não está na lista) — ex:
   // Melhor Bailarino(a). Nome obrigatório, estúdio/grupo opcional. Grava no
   // registro do prêmio (não some ao trocar de prêmio) além de revelar no telão.
-  const revelarManualLivre = (a: Premio) => {
+  const revelarManualLivre = async (a: Premio) => {
     const nome = manualSearch.trim();
     if (!nome) return;
     const estudio = manualEstudio.trim();
-    sendPremiacao({ tipo: 'manual', titulo: a.nome, valor: fmtValor(a.valor), nome, estudio });
-    persistAwardWinner(a.id, nome, estudio);
+    const ok = await persistAwardWinner(a.id, nome, estudio);
+    if (!ok) { alert('Não foi possível salvar o vencedor. Tente de novo.'); return; }
     setManualFor(null); setManualSearch(''); setManualEstudio('');
+    await sendPremiacao({ tipo: 'manual', titulo: a.nome, valor: fmtValor(a.valor), nome, estudio });
   };
 
   const isActive = (a: Premio, r: AwardReveal) => {
