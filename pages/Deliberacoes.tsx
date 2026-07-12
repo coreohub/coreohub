@@ -71,6 +71,10 @@ const Deliberacoes: React.FC = () => {
   const [winnerEdits, setWinnerEdits] = useState<Record<string, { nome: string; estudio: string }>>({});
   const [savingWinners, setSavingWinners] = useState(false);
   const [winnersSaved, setWinnersSaved] = useState(false);
+  // Depois de salvar, os campos de pessoa/manual travam (read-only) — o mesmo
+  // botão vira "Editar vencedores" pra reabrir, evita edição sem querer no
+  // meio da cerimônia.
+  const [winnersLocked, setWinnersLocked] = useState(false);
   const [pullingVoto, setPullingVoto] = useState<string | null>(null);
   const [votoMsg, setVotoMsg] = useState<string | null>(null);
   // Busca pra filtrar a lista de coreografias cadastradas no picker de cada prêmio editável.
@@ -298,25 +302,30 @@ const Deliberacoes: React.FC = () => {
       const arr = Array.isArray((data as any)?.premios_especiais) ? (data as any).premios_especiais : [];
       const next = arr.map((a: any) => {
         if (a?.id == null) return a;
-        const edit = winnerEdits[String(a.id)];
-        if (edit) {
-          return { ...a, winner_nome: edit.nome.trim(), winner_estudio: edit.estudio.trim(), winner_items: null };
-        }
+        // Classifica PRIMEIRO — faixa/maior_nota sempre recalculam do zero,
+        // nunca usam winnerEdits (que é inicializado pra TODO prêmio no fetch,
+        // mesmo os automáticos, com {nome:'', estudio:''} quando nunca editado
+        // — usar `if (edit)` ali regravava esse objeto vazio/velho por cima do
+        // cálculo real e travava Maior Nota/Ouro/Prata/Bronze no valor antigo).
         const rev = classifyAward(a.name ?? '', a.description ?? '');
-        const res = winnersByAward.get(String(a.id));
         if (rev.tipo === 'faixa') {
+          const res = winnersByAward.get(String(a.id));
           return { ...a, winner_nome: null, winner_estudio: null, winner_items: (res?.winners ?? []).map(w => ({ nome: w.nome, estudio: w.estudio ?? '', media: w.media })) };
         }
         if (rev.tipo === 'maior_nota') {
+          const res = winnersByAward.get(String(a.id));
           const top = res?.winners?.[0];
           return { ...a, winner_nome: top?.nome ?? null, winner_estudio: top?.estudio ?? null, winner_items: null };
         }
-        return a;
+        const edit = winnerEdits[String(a.id)];
+        if (!edit) return a;
+        return { ...a, winner_nome: edit.nome.trim(), winner_estudio: edit.estudio.trim(), winner_items: null };
       });
       const { error: upErr } = await supabase.from('configuracoes')
         .update({ premios_especiais: next }).eq('event_id', event.id);
       if (upErr) throw upErr;
       setWinnersSaved(true);
+      setWinnersLocked(true);
       setTimeout(() => setWinnersSaved(false), 2500);
       await fetchData();
     } catch (e: any) {
@@ -452,18 +461,28 @@ const Deliberacoes: React.FC = () => {
               Vencedores por prêmio
             </h2>
             {/* Salva também os automáticos (recalcula do zero, sobrescrevendo
-                qualquer dado antigo) — é isso que publica na vitrine pública. */}
-            <button onClick={saveWinners} disabled={savingWinners}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#d4005a] transition-all disabled:opacity-50">
-              {savingWinners ? <Loader2 size={12} className="animate-spin" /> : winnersSaved ? <CheckCircle2 size={12} /> : <Send size={12} />}
-              {winnersSaved ? 'Salvo' : 'Salvar vencedores'}
-            </button>
+                qualquer dado antigo) — é isso que publica na vitrine pública.
+                Depois de salvar, os campos travam e o mesmo botão vira
+                "Editar" pra reabrir — evita mexer sem querer na correria. */}
+            {winnersLocked ? (
+              <button onClick={() => setWinnersLocked(false)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-white/10 transition-all">
+                <Unlock size={12} /> Editar vencedores
+              </button>
+            ) : (
+              <button onClick={saveWinners} disabled={savingWinners}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#d4005a] transition-all disabled:opacity-50">
+                {savingWinners ? <Loader2 size={12} className="animate-spin" /> : winnersSaved ? <CheckCircle2 size={12} /> : <Send size={12} />}
+                {winnersSaved ? 'Salvo' : 'Salvar vencedores'}
+              </button>
+            )}
           </div>
           <div className="space-y-3">
-            {awardMeta.map(({ aw, rev, editable }) => {
+            {awardMeta.map(({ aw, rev, editable: editableType }) => {
               const res = winnersByAward.get(aw.id);
               const edit = winnerEdits[aw.id] ?? { nome: '', estudio: '' };
-              const fonte = editable
+              const editable = editableType && !winnersLocked;
+              const fonte = editableType
                 ? (rev.tipo === 'manual' ? 'Voto Popular / definido na cerimônia' : 'Prêmio da banca — digite o vencedor')
                 : res?.fonte;
               return (
@@ -538,6 +557,23 @@ const Deliberacoes: React.FC = () => {
                         );
                       })()}
                     </div>
+                  ) : editableType && winnersLocked ? (
+                    // Travado pós-salvar — mostra o valor salvo (edit reflete o
+                    // que veio do banco via fetchData), não o cálculo automático
+                    // (que ficaria vazio pra esses tipos).
+                    edit.nome ? (
+                      <div className="px-4 py-3 flex items-center gap-3">
+                        <Trophy size={14} className="shrink-0 text-yellow-500" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white truncate">{edit.nome}</p>
+                          {edit.estudio && <p className="text-[9px] text-slate-500 uppercase font-bold truncate">{edit.estudio}</p>}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="px-4 py-5 text-center">
+                        <p className="text-[10px] text-slate-400 italic">A revelar na cerimônia</p>
+                      </div>
+                    )
                   ) : res && res.winners.length > 0 ? (
                     <div className="divide-y divide-slate-100 dark:divide-white/5">
                       {res.winners.map((w, idx) => (

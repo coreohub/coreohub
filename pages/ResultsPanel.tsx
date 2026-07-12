@@ -84,7 +84,16 @@ const resolveMedal = (score: number, rank: number, system: PremiationSystem, t: 
  *  de Palco (pages/TelaoControle.tsx) — mantém as 2 telas consistentes sobre
  *  o que é "Ouro/Prata/Bronze" (faixa festival-wide), "Maior nota", prêmio
  *  por deliberação dos jurados ou escolha manual (ex: Voto Popular). ── */
-interface SpecialAwardCfg { id: string; nome: string; valor?: string; description?: string; }
+interface SpecialAwardCfg {
+  id: string; nome: string; valor?: string; description?: string;
+  /** Vencedor(es) já revelado/salvo em Resultados → Premiação (fonte da
+   *  verdade compartilhada com Telão e vitrine pública). Quando presente, o
+   *  PDF usa esse valor em vez de recalcular — garante que o PDF mostra
+   *  EXATAMENTE o que já foi confirmado/publicado, não uma 2ª conta paralela. */
+  winner_nome?: string;
+  winner_estudio?: string;
+  winner_items?: { nome: string; estudio?: string; media?: number }[];
+}
 type AwardReveal = { tipo: 'faixa'; faixa: 'ouro' | 'prata' | 'bronze' } | { tipo: 'maior_nota' } | { tipo: 'premio' } | { tipo: 'manual' };
 const classifyAward = (a: SpecialAwardCfg): AwardReveal => {
   const t = `${a.nome ?? ''} ${a.description ?? ''}`.toLowerCase();
@@ -551,6 +560,9 @@ const ResultsPanel = () => {
             nome: (a.nome ?? a.name ?? 'Prêmio').trim(),
             valor: a.valor ? String(a.valor) : undefined,
             description: a.description ?? a.descricao ?? '',
+            winner_nome: a.winner_nome || undefined,
+            winner_estudio: a.winner_estudio || undefined,
+            winner_items: Array.isArray(a.winner_items) && a.winner_items.length > 0 ? a.winner_items : undefined,
           }));
 
         if (awards.length > 0) {
@@ -603,7 +615,14 @@ const ResultsPanel = () => {
           const awardRows = awards.map(a => {
             const r = classifyAward(a);
             let vencedor = '—';
-            if (r.tipo === 'faixa') {
+            // Fonte primária: o que já foi salvo em Premiação (mesmo dado que o
+            // Telão revela e a vitrine pública mostra) — o PDF só recalcula se o
+            // produtor ainda não clicou "Salvar vencedores" pra esse prêmio.
+            if (a.winner_items && a.winner_items.length > 0) {
+              vencedor = a.winner_items.map(w => `${w.nome}${w.media != null ? ` (${w.media.toFixed(2)})` : ''}`).join('\n');
+            } else if (a.winner_nome) {
+              vencedor = a.winner_estudio ? `${a.winner_nome} · ${a.winner_estudio}` : a.winner_nome;
+            } else if (r.tipo === 'faixa') {
               const lo = r.faixa === 'ouro' ? thresholds.gold : r.faixa === 'prata' ? thresholds.silver : thresholds.bronze;
               const hi = r.faixa === 'ouro' ? null : r.faixa === 'prata' ? thresholds.gold : thresholds.silver;
               const naFaixa = competitiva
