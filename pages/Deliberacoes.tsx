@@ -143,6 +143,11 @@ const Deliberacoes: React.FC = () => {
       });
       setWinnerEdits(initEdits);
       setWinnersSaved(false);
+      // Trava se já existe pelo menos 1 vencedor editável salvo — sem isso, o
+      // "travado" era um estado só de memória (useState) que resetava pra
+      // "editável" toda vez que a tela recarregava (sair e voltar, F5), mesmo
+      // com os dados já salvos no banco.
+      setWinnersLocked(Object.values(initEdits).some((e) => e.nome.trim() !== ''));
       const thr = (configRes.data as any)?.medal_thresholds;
       setThresholds({
         gold:   Number(thr?.gold   ?? 9),

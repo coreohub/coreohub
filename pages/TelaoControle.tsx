@@ -1,11 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { MonitorPlay, Copy, ExternalLink, RefreshCw, Check, Loader2, FlaskConical, Power, Radio, Trophy, X, Search, Hand } from 'lucide-react';
+import { MonitorPlay, Copy, ExternalLink, RefreshCw, Check, Loader2, FlaskConical, Power, Radio, Trophy, X } from 'lucide-react';
 import { supabase, resolveActiveEventId } from '../services/supabase';
 import PageHeader from '../components/PageHeader';
 import { classifyAward, type AwardReveal } from '../utils/awardClassification';
 
 interface Premio { id: string; nome: string; valor?: string; description?: string; winner_nome?: string; winner_estudio?: string; }
-interface Coreo { nome: string; estudio: string; }
 
 const revealLabel: Record<string, string> = {
   ouro: 'Faixa Ouro', prata: 'Faixa Prata', bronze: 'Faixa Bronze',
@@ -30,11 +29,10 @@ const TelaoControle: React.FC = () => {
   const [modo, setModo] = useState<'ao_vivo' | 'premiacao'>('ao_vivo');
   const [premiacao, setPremiacao] = useState<any>(null);
   const [premios, setPremios] = useState<Premio[]>([]);
-  const [coreos, setCoreos] = useState<Coreo[]>([]);
-  const [manualFor, setManualFor] = useState<Premio | null>(null);
-  const [manualSearch, setManualSearch] = useState('');
-  const [manualEstudio, setManualEstudio] = useState('');
-  const [votoError, setVotoError] = useState<string | null>(null);
+  // Telão é só leitura — não edita vencedor. A edição (digitar/puxar do Voto
+  // Popular) fica exclusivamente em Resultados → Premiação; aqui só revela o
+  // que já está salvo lá (winner_nome) ou calculado (faixa/maior nota).
+  const [revealError, setRevealError] = useState<string | null>(null);
   // Se a banca nunca deliberou UM prêmio específico ('premio', ex: Melhor
   // Bailarino/Coreógrafo), não há vencedor automático pra ele — clicar abre
   // direto o campo de digitar o vencedor na mão. Checagem é POR PRÊMIO (não
@@ -45,20 +43,15 @@ const TelaoControle: React.FC = () => {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const publicUrl = code ? `${origin}/telao/${code}` : '';
 
-  // Carrega os prêmios especiais + coreografias (pra escolha manual do vencedor).
+  // Carrega os prêmios especiais + quais já têm deliberação real da banca.
   const loadPremiacaoOptions = useCallback(async (id: string) => {
-    const [{ data: cfg, error: cfgErr }, { data: regs, error: regsErr }, { data: delib, error: delibErr }] = await Promise.all([
+    const [{ data: cfg, error: cfgErr }, { data: delib, error: delibErr }] = await Promise.all([
       supabase.from('configuracoes').select('premios_especiais').eq('event_id', id).maybeSingle(),
-      supabase.from('registrations')
-        .select('nome_coreografia, estudio, event_data')
-        .eq('event_id', id)
-        .or('status.eq.APROVADA,status_pagamento.eq.APROVADO,status_pagamento.eq.CONFIRMADO'),
       supabase.from('deliberation_aggregate').select('award_id').eq('event_id', id),
     ]);
     // Coluna ausente (migration não aplicada) vira PGRST204 e `data` some
     // silenciosamente igual a "não existe" — sempre logar o erro real.
     if (cfgErr) console.error('loadPremiacaoOptions: premios_especiais', cfgErr);
-    if (regsErr) console.error('loadPremiacaoOptions: registrations', regsErr);
     if (delibErr) console.error('loadPremiacaoOptions: deliberation_aggregate', delibErr);
     setDeliberatedAwardIds(new Set((delib ?? []).map((d: any) => String(d.award_id))));
 
@@ -73,18 +66,6 @@ const TelaoControle: React.FC = () => {
         winner_nome: a.winner_nome ?? undefined,
         winner_estudio: a.winner_estudio ?? undefined,
       })));
-
-    const seen = new Set<string>();
-    const cs: Coreo[] = [];
-    (regs ?? []).forEach((r: any) => {
-      const nome = (r.nome_coreografia ?? '').trim();
-      const estudio = (r.estudio?.trim?.() || r.event_data?.estudio_nome || '').trim();
-      if (!nome || seen.has(nome)) return;
-      seen.add(nome);
-      cs.push({ nome, estudio });
-    });
-    cs.sort((a, b) => a.nome.localeCompare(b.nome));
-    setCoreos(cs);
   }, []);
 
   const load = useCallback(async () => {
@@ -158,12 +139,6 @@ const TelaoControle: React.FC = () => {
     return true;
   }, [eventId]);
 
-  // Vencedor digitado/escolhido na mão — zera winner_items (caso o prêmio
-  // tivesse sido faixa antes e mudou de classificação) e marca revelado.
-  const persistAwardWinner = useCallback((awardId: string, nome: string, estudio: string) =>
-    patchAward(awardId, { winner_nome: nome, winner_estudio: estudio, winner_items: null, winner_revealed: true }),
-    [patchAward]);
-
   // Marca só a flag de revelado — usado quando o vencedor já vem de outro
   // cálculo (faixa/maior nota calculados na hora, ou já salvo em Premiação) e
   // só falta autorizar a vitrine pública a mostrar. Sem isso, a vitrine
@@ -187,17 +162,19 @@ const TelaoControle: React.FC = () => {
     'integração do voto não configurada': 'Integração com o Voto Popular não está configurada (fala com o suporte).',
   };
 
+  // Telão só REVELA — nunca edita. Se um prêmio não tem vencedor pra revelar
+  // ainda (pessoa/deliberação sem fonte automática, Voto Popular sem
+  // integração disponível), a correção é sempre em Resultados → Premiação,
+  // nunca aqui. Registra ANTES de revelar (winner_revealed vira a autorização
+  // da vitrine pública) — se o registro falhar, aborta sem revelar no LED,
+  // pra nunca deixar palco e vitrine dessincronizados.
   const revelarAward = async (a: Premio) => {
-    setVotoError(null);
+    setRevealError(null);
     const r = classifyAward(a.nome, a.description);
     const valor = fmtValor(a.valor);
-    // Vencedor já registrado (digitado aqui, em Premiação, ou puxado do Voto
-    // Popular) = fonte da verdade pra QUALQUER tipo — revela direto, sem
-    // recalcular. Cobre também Ouro/Prata/Bronze/Maior Nota quando o produtor
-    // usou o ✋ pra substituir um cálculo automático vazio/errado.
-    // Registra ANTES de revelar (winner_revealed vira a autorização da
-    // vitrine pública) — se o registro falhar, aborta sem revelar no LED,
-    // pra nunca deixar palco e vitrine dessincronizados.
+    // Vencedor já salvo em Premiação = fonte da verdade pra QUALQUER tipo —
+    // revela direto, sem recalcular. Cobre também Ouro/Prata/Bronze/Maior
+    // Nota quando o produtor sobrescreveu lá um cálculo vazio/errado.
     if (a.winner_nome) {
       if (!await markRevealed(a.id)) { alert('Não foi possível registrar a revelação. Tente de novo.'); return; }
       return sendPremiacao({ tipo: 'manual', titulo: a.nome, valor, nome: a.winner_nome, estudio: a.winner_estudio ?? '' });
@@ -212,8 +189,7 @@ const TelaoControle: React.FC = () => {
     }
     if (r.tipo === 'manual') {
       // Troféu Voto Popular: automático é a via principal (padrão de mercado —
-      // reduz erro humano na hora da cerimônia). Busca digitada é só o fallback,
-      // caso a votação ainda esteja aberta, dê empate, ou a integração falhe.
+      // reduz erro humano na hora da cerimônia).
       setBusy(true);
       try {
         const { data, error } = await supabase.functions.invoke('get-voto-popular-winner', {
@@ -222,7 +198,7 @@ const TelaoControle: React.FC = () => {
         if (!error && (data as any)?.ok) {
           const w = data as { nome: string; estudio: string };
           const ok = await patchAward(a.id, { winner_nome: w.nome, winner_estudio: w.estudio, winner_items: null, winner_revealed: true });
-          if (!ok) { setVotoError('Vencedor encontrado, mas não foi possível registrar. Tente de novo.'); return; }
+          if (!ok) { setRevealError('Vencedor encontrado, mas não foi possível registrar. Tente de novo.'); return; }
           await sendPremiacao({ tipo: 'manual', titulo: a.nome, valor, nome: w.nome, estudio: w.estudio });
           return;
         }
@@ -237,54 +213,24 @@ const TelaoControle: React.FC = () => {
             reason = body?.reason ?? body?.error;
           } catch { /* corpo não era JSON — segue com reason undefined */ }
         }
-        setVotoError(reason ? (votoReasonLabel[reason] ?? reason) : 'Resultado automático indisponível.');
+        setRevealError((reason ? votoReasonLabel[reason] ?? reason : 'Resultado automático indisponível.') + ' Digite o vencedor em Resultados → Premiação.');
       } catch {
-        setVotoError('Não foi possível buscar o resultado automático do Voto Popular.');
+        setRevealError('Não foi possível buscar o resultado automático do Voto Popular. Digite o vencedor em Resultados → Premiação.');
       } finally {
         setBusy(false);
       }
-      setManualFor(a);
-      setManualSearch(a.winner_nome ?? '');
-      setManualEstudio(a.winner_estudio ?? '');
       return;
     }
     // 'premio' = vencedor por deliberação da banca. Se ninguém deliberou ESSE
     // prêmio específico (checagem por award_id, não pro evento inteiro — um
     // evento pode ter deliberação num prêmio e não noutro), não há fonte
-    // automática — abre o campo de digitar o vencedor na mão em vez de
-    // revelar uma tela vazia no LED.
+    // automática — pede pra resolver em Premiação em vez de abrir editor aqui.
     if (!deliberatedAwardIds.has(a.id)) {
-      setManualFor(a);
-      setManualSearch(a.winner_nome ?? '');
-      setManualEstudio(a.winner_estudio ?? '');
+      setRevealError(`"${a.nome}" ainda não tem vencedor. Vá em Resultados → Premiação, confirme o vencedor e clique em Salvar vencedores.`);
       return;
     }
     if (!await markRevealed(a.id)) { alert('Não foi possível registrar a revelação. Tente de novo.'); return; }
     return sendPremiacao({ tipo: 'premio', award_id: a.id, titulo: a.nome, valor });
-  };
-
-  // Registra o vencedor PRIMEIRO (persistAwardWinner, via RPC) e só revela no
-  // LED (sendPremiacao) depois de confirmar que gravou — antes era na ordem
-  // inversa e sem checar sucesso, deixando o palco mostrar um vencedor que a
-  // vitrine pública nunca chegava a exibir se a gravação falhasse.
-  const revelarManual = async (a: Premio, c: Coreo) => {
-    const ok = await persistAwardWinner(a.id, c.nome, c.estudio ?? '');
-    if (!ok) { alert('Não foi possível salvar o vencedor. Tente de novo.'); return; }
-    setManualFor(null); setManualSearch(''); setManualEstudio('');
-    await sendPremiacao({ tipo: 'manual', titulo: a.nome, valor: fmtValor(a.valor), nome: c.nome, estudio: c.estudio });
-  };
-
-  // Vencedor digitado livre (pessoa/coreografia que não está na lista) — ex:
-  // Melhor Bailarino(a). Nome obrigatório, estúdio/grupo opcional. Grava no
-  // registro do prêmio (não some ao trocar de prêmio) além de revelar no telão.
-  const revelarManualLivre = async (a: Premio) => {
-    const nome = manualSearch.trim();
-    if (!nome) return;
-    const estudio = manualEstudio.trim();
-    const ok = await persistAwardWinner(a.id, nome, estudio);
-    if (!ok) { alert('Não foi possível salvar o vencedor. Tente de novo.'); return; }
-    setManualFor(null); setManualSearch(''); setManualEstudio('');
-    await sendPremiacao({ tipo: 'manual', titulo: a.nome, valor: fmtValor(a.valor), nome, estudio });
   };
 
   const isActive = (a: Premio, r: AwardReveal) => {
@@ -479,90 +425,32 @@ const TelaoControle: React.FC = () => {
                 const r = classifyAward(a.nome, a.description);
                 const active = isActive(a, r);
                 return (
-                  <div key={a.id} className="flex items-center gap-2">
-                    <button onClick={() => revelarAward(a)} disabled={busy}
-                      className={`flex-1 min-w-0 flex items-center justify-between gap-2 px-4 py-3 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all text-left disabled:opacity-50 ${active ? 'bg-[#ff0068] text-white shadow-md' : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/10'}`}>
-                      <span className="min-w-0 flex flex-col gap-0.5">
-                        <span className="truncate">{a.nome}{a.valor && <span className="opacity-60"> · R$ {Number(a.valor).toLocaleString('pt-BR')}</span>}</span>
-                        {a.winner_nome && (
-                          <span className={`truncate text-[9px] font-bold normal-case tracking-normal ${active ? 'text-white/80' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                            Vencedor: {a.winner_nome}{a.winner_estudio ? ` · ${a.winner_estudio}` : ''}
-                          </span>
-                        )}
-                      </span>
-                      <span className={`shrink-0 text-[8px] px-2 py-0.5 rounded ${active ? 'bg-white/20 text-white' : 'bg-black/5 dark:bg-white/10 text-slate-500 dark:text-slate-400'}`}>
-                        {revealLabel[r.tipo === 'faixa' ? r.faixa : r.tipo]}
-                      </span>
-                    </button>
-                    {/* ✋ disponível pra qualquer tipo — inclusive Ouro/Prata/Bronze/Maior
-                        Nota, como saída de emergência se o cálculo automático vier vazio
-                        (ex: thresholds mal configurados, categoria sem nota fechada). Uma
-                        vez que exista um vencedor digitado (a.winner_nome), ele sempre
-                        vence na revelação — ver revelarAward. */}
-                    <button onClick={() => { setVotoError(null); setManualFor(a); setManualSearch(a.winner_nome ?? ''); setManualEstudio(a.winner_estudio ?? ''); }} disabled={busy}
-                      title="Escolher vencedor na mão" aria-label={`Escolher vencedor na mão para ${a.nome}`}
-                      className="shrink-0 p-3 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 transition-all">
-                      <Hand size={14} />
-                    </button>
-                  </div>
+                  <button key={a.id} onClick={() => revelarAward(a)} disabled={busy}
+                    className={`w-full min-w-0 flex items-center justify-between gap-2 px-4 py-3 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all text-left disabled:opacity-50 ${active ? 'bg-[#ff0068] text-white shadow-md' : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/10'}`}>
+                    <span className="min-w-0 flex flex-col gap-0.5">
+                      <span className="truncate">{a.nome}{a.valor && <span className="opacity-60"> · R$ {Number(a.valor).toLocaleString('pt-BR')}</span>}</span>
+                      {a.winner_nome && (
+                        <span className={`truncate text-[9px] font-bold normal-case tracking-normal ${active ? 'text-white/80' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                          Vencedor: {a.winner_nome}{a.winner_estudio ? ` · ${a.winner_estudio}` : ''}
+                        </span>
+                      )}
+                    </span>
+                    <span className={`shrink-0 text-[8px] px-2 py-0.5 rounded ${active ? 'bg-white/20 text-white' : 'bg-black/5 dark:bg-white/10 text-slate-500 dark:text-slate-400'}`}>
+                      {revealLabel[r.tipo === 'faixa' ? r.faixa : r.tipo]}
+                    </span>
+                  </button>
                 );
               })}
             </div>
           )}
 
-          {votoError && (
+          {revealError && (
             <p role="alert" className="text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl px-3 py-2">
-              {votoError}
+              {revealError}
             </p>
           )}
 
-          {/* Escolha manual do vencedor */}
-          {manualFor && (
-            <div className="bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-2xl p-4 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 truncate">Vencedor de "{manualFor.nome}"</p>
-                <button onClick={() => setManualFor(null)} aria-label="Fechar" className="shrink-0 text-slate-500 hover:text-slate-900 dark:hover:text-white"><X size={14} /></button>
-              </div>
-
-              {/* Digitar o vencedor na mão (pessoa ou coreografia que não está na
-                  lista) — ex: Melhor Bailarino(a). O mesmo campo filtra a lista abaixo. */}
-              <div className="space-y-2">
-                <input value={manualSearch}
-                  onChange={(e) => setManualSearch(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') revelarManualLivre(manualFor); }}
-                  placeholder="Nome do vencedor (pessoa ou coreografia)" autoFocus
-                  aria-label="Nome do vencedor"
-                  className="w-full px-3 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-[#ff0068]/50" />
-                <input value={manualEstudio}
-                  onChange={(e) => setManualEstudio(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') revelarManualLivre(manualFor); }}
-                  placeholder="Estúdio / grupo (opcional)"
-                  aria-label="Estúdio ou grupo"
-                  className="w-full px-3 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-[#ff0068]/50" />
-                <button onClick={() => revelarManualLivre(manualFor)} disabled={busy || !manualSearch.trim()}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-40 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all">
-                  <Trophy size={13} /> Revelar no telão
-                </button>
-              </div>
-
-              {coreos.length > 0 && (
-                <>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5 pt-1"><Search size={10} aria-hidden /> ou toque numa coreografia avaliada</p>
-                  <div className="max-h-48 overflow-y-auto space-y-1">
-                    {coreos.filter((c) => !manualSearch || `${c.nome} ${c.estudio}`.toLowerCase().includes(manualSearch.toLowerCase())).slice(0, 40).map((c, i) => (
-                      <button key={i} onClick={() => revelarManual(manualFor, c)} disabled={busy}
-                        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-left bg-white dark:bg-white/5 hover:bg-[#ff0068]/10 text-slate-700 dark:text-slate-200 text-xs font-bold uppercase tracking-wide transition-all">
-                        <span className="truncate">{c.nome}</span>
-                        {c.estudio && <span className="shrink-0 text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[45%]">{c.estudio}</span>}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          <p className="text-[11px] text-slate-500">Faixas (Ouro/Prata/Bronze) e Maior Nota saem da média dos jurados. Prêmios sem cálculo automático — como <b className="text-slate-600 dark:text-slate-400">Melhor Bailarino(a)</b> ou <b className="text-slate-600 dark:text-slate-400">Voto Popular</b> — abrem um campo pra você digitar o vencedor. O <b className="text-slate-600 dark:text-slate-400">✋</b> funciona em qualquer prêmio (também serve de saída de emergência pra Ouro/Prata/Bronze/Maior Nota se o cálculo vier vazio). Nada aparece na plateia até você clicar em Revelar.</p>
+          <p className="text-[11px] text-slate-500">Faixas (Ouro/Prata/Bronze) e Maior Nota saem da média dos jurados. Os demais prêmios (Melhor Bailarino/Coreógrafo, Voto Popular) precisam ter o vencedor salvo em <b className="text-slate-600 dark:text-slate-400">Resultados → Premiação</b> antes — o Telão só revela, não edita. Nada aparece na plateia até você clicar aqui.</p>
         </div>
       )}
 
