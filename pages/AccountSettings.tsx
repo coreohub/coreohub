@@ -1749,11 +1749,23 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         // está vazio — caso do demo seedado).
         let myEvent: any = null;
         if (user) {
+          // is_demo antes de created_at: evento REAL sempre vence um demo mais
+          // recente na mesma query — sem isso, criar um evento demo pra teste
+          // fazia essa tela trocar silenciosamente pra config do demo (quase
+          // vazia), parecendo que "todas as configurações sumiram" (bug real
+          // 2026-07-12). Mesmo fix aplicado no helper compartilhado
+          // resolveActiveEventId() em services/supabase.ts.
           const evRes = await supabase
             .from('events').select('id, slug, name, description, cover_url, location, city, state, instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, producer_ga4_id, producer_meta_pixel_id')
             .eq('created_by', user.id)
+            .order('is_demo', { ascending: true })
             .order('created_at', { ascending: false })
             .limit(1).maybeSingle();
+          // select() amplo sem checar error mascara coluna ausente como "não
+          // encontrado" (mesma classe do incidente real de 2026-07-08:
+          // migration commitada nunca colada no SQL Editor vira PGRST204
+          // silencioso, data vem null igual "não existe").
+          if (evRes.error) console.error('[AccountSettings] falha ao ler events:', evRes.error.message);
           myEvent = evRes.data;
           if (myEvent?.id) {
             const res = await supabase.from('configuracoes').select('*').eq('id', myEvent.id).maybeSingle();

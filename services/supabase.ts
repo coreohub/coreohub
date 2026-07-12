@@ -320,8 +320,16 @@ export const uploadRegulationPdf = async (eventId: string, file: File): Promise<
 /**
  * Resolve qual `event_id` usar pra buscar configuracoes.
  * - Se eventIdHint passado: usa ele
- * - Senão: evento mais recente criado pelo user logado (caso ORGANIZER)
+ * - Senão: evento REAL mais recente criado pelo user logado (caso ORGANIZER)
+ * - Senão (só tem evento demo): cai pro demo mais recente
  * - Senão: null (caller decide o que fazer — geralmente fallback id=1)
+ *
+ * `order('is_demo', ascending)` antes de `created_at`: `false` ordena antes
+ * de `true`, então um evento real sempre vence um demo mais recente na
+ * mesma query — sem isso, criar um evento demo pra teste (ex: seed-demo-event)
+ * fazia essa resolução "sem hint" (usada por 10+ telas) trocar silenciosamente
+ * o evento ativo do produtor pro demo, escondendo a config real dele. Bug
+ * real 2026-07-12: produtor viu "todas as configurações sumirem".
  */
 export const resolveActiveEventId = async (eventIdHint?: string | null): Promise<string | null> => {
   if (eventIdHint) return eventIdHint;
@@ -331,6 +339,7 @@ export const resolveActiveEventId = async (eventIdHint?: string | null): Promise
     .from('events')
     .select('id')
     .eq('created_by', user.id)
+    .order('is_demo', { ascending: true })
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
