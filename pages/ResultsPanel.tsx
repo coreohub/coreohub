@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { isStyleInList } from '../utils/styleMatch';
 import { classifyAward as classifyAwardShared } from '../utils/awardClassification';
 import {
   BarChart3, Download, RefreshCw, Loader2, Search,
-  ChevronDown, ChevronUp, Trophy, CheckCircle2, AlertCircle,
+  ChevronDown, ChevronUp, ChevronRight, Trophy, CheckCircle2, AlertCircle,
   Volume2, FileText, AlertTriangle, FileDown, Trash2,
 } from 'lucide-react';
 
@@ -103,6 +104,7 @@ const classifyAward = (a: SpecialAwardCfg) => classifyAwardShared(a.nome, a.desc
 
 /* ── Component ── */
 const ResultsPanel = () => {
+  const navigate = useNavigate();
   const [allResults, setAllResults] = useState<GroupedResult[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [search,     setSearch]     = useState('');
@@ -887,56 +889,26 @@ const ResultsPanel = () => {
         </div>
       )}
 
-      {/* Premiação — faixa festival inteiro, MESMA fonte do Telão e do PDF.
-          Fica acima da lista por categoria abaixo, que é só ferramenta de
-          auditoria (nota por nota, grupo a grupo) — não é a premiação oficial. */}
+      {/* Atalho pra Premiação — só um link, não duplica a tela. A lógica de
+          vencedor por prêmio (winnersByAward) já existe completa em
+          Deliberacoes.tsx; aqui só usa a mesma fonte pra contar quantos já
+          têm vencedor definido, sem reimplementar a tela inteira aqui dentro. */}
       {awards.length > 0 && (
-        <div>
-          <h2 className="text-base font-black uppercase tracking-tight text-slate-900 dark:text-white mb-3 flex items-center gap-2">
-            <Trophy size={16} className="text-[#ff0068]" />
-            Premiação
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {awards.map(a => {
-              const res = awardWinners.get(a.id);
-              return (
-                <div key={a.id} className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden">
-                  <div className="px-4 py-3 bg-slate-50 dark:bg-white/[0.03] border-b border-slate-100 dark:border-white/10 flex items-center justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white truncate">{a.nome}</h3>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] mt-0.5 truncate">{res?.fonte}</p>
-                    </div>
-                    {a.valor != null && Number(a.valor) > 0 && (
-                      <span className="shrink-0 text-[10px] font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
-                        R$ {Number(a.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </span>
-                    )}
-                  </div>
-                  {res && res.winners.length > 0 ? (
-                    <div className="divide-y divide-slate-100 dark:divide-white/5">
-                      {res.winners.map((w, idx) => (
-                        <div key={idx} className="px-4 py-2.5 flex items-center gap-3">
-                          <Trophy size={13} className={`shrink-0 ${idx === 0 ? 'text-yellow-500' : 'text-slate-300 dark:text-slate-600'}`} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white truncate">{w.nome}</p>
-                            {w.estudio && <p className="text-[9px] text-slate-500 uppercase font-bold truncate">{w.estudio}</p>}
-                          </div>
-                          {w.media != null && (
-                            <span className="shrink-0 text-sm font-black italic tabular-nums text-slate-900 dark:text-white">{w.media.toFixed(2)}</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="px-4 py-4 text-center">
-                      <p className="text-[10px] text-slate-400 italic">{res?.hint ?? 'A revelar na cerimônia'}</p>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+        <button onClick={() => navigate('/deliberacoes')}
+          className="w-full flex items-center justify-between gap-3 px-5 py-4 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl hover:bg-slate-50 dark:hover:bg-white/10 transition-all text-left">
+          <div className="flex items-center gap-3 min-w-0">
+            <Trophy size={18} className="text-[#ff0068] shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white">Premiação</p>
+              <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest truncate">
+                {awards.filter(a => (awardWinners.get(a.id)?.winners.length ?? 0) > 0).length} de {awards.length} prêmios com vencedor definido
+              </p>
+            </div>
           </div>
-        </div>
+          <span className="shrink-0 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#ff0068]">
+            Ver premiação completa <ChevronRight size={12} />
+          </span>
+        </button>
       )}
 
       {/* Tabs */}
