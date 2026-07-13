@@ -375,12 +375,19 @@ const JudgeTerminal = () => {
 
   /* ── Audio ── */
   const [isRecording,   setIsRecording]   = useState(false);
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [micAttempted,  setMicAttempted]  = useState(false);
   const audioContextRef    = useRef<AudioContext | null>(null);
   const analyserRef        = useRef<AnalyserNode | null>(null);
   const animationFrameRef  = useRef<number | undefined>(undefined);
   const waveformCanvasRef  = useRef<HTMLCanvasElement | null>(null);
+  // Guarda o MediaRecorder atual num ref (não state) pra stopRecording() nunca
+  // rodar com closure velha (ex: dentro do effect de live-sync, que não tem
+  // o recorder nas deps) — sem isso, navegar entre apresentações
+  // sem clicar Finalizar deixava o MediaRecorder velho rodando pra sempre,
+  // só o buffer de chunks era zerado. Como o header EBML/WebM só vem no 1º
+  // chunk de cada MediaRecorder, o áudio da apresentação seguinte saía sem
+  // container válido (bug real: 58% dos áudios do Usualdance corrompidos).
+  const mediaRecorderRef   = useRef<MediaRecorder | null>(null);
   // Buffer de gravação: chunks de 1s (timeslice) acumulados.
   // Phase 2B: passa de "rolling 90s" pra gravação completa, com cap de 30 min
   // (1800s) só pra evitar memory leak em jurado que esquece de parar.
@@ -526,7 +533,8 @@ const JudgeTerminal = () => {
     setIsSubmitted(false);
     setSubmittedAt(null);
     setStarredSet(new Set()); // limpa starred local; load do terminal-data popula novamente
-    rollingChunksRef.current = [];
+    stopRecording(); // encerra o MediaRecorder antigo — não só o buffer (ver mediaRecorderRef)
+    setMicAttempted(false);
     setTieWarning(null);
   }, [selectedJudge?.id]);
 
@@ -850,7 +858,7 @@ const JudgeTerminal = () => {
       if (liveIdx !== currentIndex) {
         setIsSubmitted(false);
         setSubmittedAt(null);
-        rollingChunksRef.current = [];
+        stopRecording(); // encerra o MediaRecorder antigo — não só o buffer (ver mediaRecorderRef)
         setMicAttempted(false);
         setTieWarning(null);
         setFeedbackText('');
@@ -865,7 +873,7 @@ const JudgeTerminal = () => {
     if (currentPerformance?.id === liveRegistrationId || liveIdx === currentIndex) return;
     setIsSubmitted(false);
     setSubmittedAt(null);
-    rollingChunksRef.current = [];
+    stopRecording(); // encerra o MediaRecorder antigo — não só o buffer (ver mediaRecorderRef)
     setMicAttempted(false);
     setTieWarning(null);
     setFeedbackText('');
@@ -978,27 +986,30 @@ const JudgeTerminal = () => {
         }
       };
       rec.start(1000); // timeslice de 1 segundo
-      setMediaRecorder(rec);
+      mediaRecorderRef.current = rec;
       setIsRecording(true);
     } catch (err) {
       console.error('[JudgeTerminal] microfone negado/indisponível:', err);
     }
   };
 
+  // Lê do ref (nunca stale), não do state — ver comentário em mediaRecorderRef.
   const stopRecording = () => {
-    if (mediaRecorder && isRecording) {
-      mediaRecorder.stop();
-      setIsRecording(false);
-        mediaRecorder.stream.getTracks().forEach(t => t.stop());
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-      if (analyserRef.current) { analyserRef.current.disconnect(); analyserRef.current = null; }
-      if (audioContextRef.current) audioContextRef.current.close();
-      // Limpa o canvas pra nao deixar a ultima frame congelada
-      const c = waveformCanvasRef.current;
-      if (c) {
-        const ctx = c.getContext('2d');
-        if (ctx) ctx.clearRect(0, 0, c.width, c.height);
-      }
+    const rec = mediaRecorderRef.current;
+    if (rec && rec.state !== 'inactive') {
+      rec.stop();
+      rec.stream.getTracks().forEach(t => t.stop());
+    }
+    mediaRecorderRef.current = null;
+    setIsRecording(false);
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    if (analyserRef.current) { analyserRef.current.disconnect(); analyserRef.current = null; }
+    if (audioContextRef.current) audioContextRef.current.close();
+    // Limpa o canvas pra nao deixar a ultima frame congelada
+    const c = waveformCanvasRef.current;
+    if (c) {
+      const ctx = c.getContext('2d');
+      if (ctx) ctx.clearRect(0, 0, c.width, c.height);
     }
   };
 
@@ -1369,7 +1380,7 @@ const JudgeTerminal = () => {
     setIsSubmitted(false);
     setSubmittedAt(null);
     // starredSet persiste — é global por jurado/evento
-    rollingChunksRef.current = [];
+    stopRecording(); // encerra o MediaRecorder antigo — não só o buffer (ver mediaRecorderRef)
     setMicAttempted(false);
     setTieWarning(null);
     setFeedbackText('');
@@ -1742,7 +1753,7 @@ const JudgeTerminal = () => {
             onClick={() => {
               setIsSubmitted(false);
               setSubmittedAt(null);
-              rollingChunksRef.current = [];
+              stopRecording(); // encerra o MediaRecorder antigo — não só o buffer (ver mediaRecorderRef)
               setMicAttempted(false);
               setTieWarning(null);
               setFeedbackText('');
