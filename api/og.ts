@@ -18,7 +18,16 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { isEventOver } from '../utils/eventStatus';
+
+// Duplicado de utils/eventStatus.ts em vez de importado: funções serverless
+// da Vercel em /api são empacotadas isoladamente e um import relativo pra
+// fora de /api quebrou o bundle em produção (FUNCTION_INVOCATION_FAILED).
+const isEventOver = (event: { start_date?: string | null; end_date?: string | null } | null | undefined): boolean => {
+  const dateStr = event?.end_date ?? event?.start_date ?? null;
+  if (!dateStr) return false;
+  const deadline = new Date(dateStr + 'T23:59:59');
+  return deadline.getTime() < Date.now();
+};
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL ||
