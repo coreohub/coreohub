@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 
 type TemplateType = 'mostra' | 'workshop';
+type PresetId = 'classico' | 'workshop' | 'ouro' | 'moderno' | 'prestigio' | 'custom';
 
 interface CertTemplate {
   id?: string;
@@ -29,10 +30,15 @@ interface CertTemplate {
   template_type: TemplateType;
   name: string;
   /** Compat: aceita os nomes legados (mostra-classico, mostra-premium,
-   * workshop-minimalista) mas no save sempre normaliza pra 'classico',
-   * 'workshop' ou 'ouro'. */
-  preset_template: 'classico' | 'workshop' | 'ouro' | 'mostra-classico' | 'workshop-minimalista' | 'mostra-premium' | 'custom';
+   * workshop-minimalista) mas no save sempre normaliza pra um dos IDs
+   * ativos. 'ouro' aposentado do seletor em 2026-07-09 (substituído por
+   * moderno/prestigio) — quem já tinha salvo continua renderizando. */
+  preset_template: 'classico' | 'workshop' | 'ouro' | 'moderno' | 'prestigio' | 'mostra-classico' | 'workshop-minimalista' | 'mostra-premium' | 'custom';
   background_url: string | null;
+  /** Logo do evento — só desenhado nos presets moderno/prestigio (única URL
+   * colada, mesmo padrão simples do background_url — sem upload dedicado
+   * nesta v1). */
+  logo_url: string | null;
   layout_json: any[];
   font_family_default: string;
   primary_color: string;
@@ -46,23 +52,39 @@ interface EventOption { id: string; name: string }
 
 interface BatchResult { total: number; created: number; skipped: number }
 
-// 3 templates ativos. Os legados (mostra-classico, mostra-premium,
-// workshop-minimalista) caem em 'classico' ou 'workshop' no save.
-const PRESETS = [
-  { id: 'classico', label: 'Clássico', desc: 'Borda dupla rosa, fundo creme, texto centralizado. Padrão pra mostras competitivas.', for: 'mostra'   as TemplateType },
-  { id: 'ouro',     label: 'Ouro Real', desc: 'Moldura dourada ornamentada, tipografia clássica, selo com fita — certificado com cara de diploma de peso.', for: 'mostra' as TemplateType },
-  { id: 'workshop', label: 'Workshop', desc: 'Linhas finas, tipografia clean, foco no nome do aluno.',                              for: 'workshop' as TemplateType },
-  { id: 'ouro',     label: 'Ouro Real', desc: 'Mesma moldura dourada ornamentada, adaptada pro certificado de workshop.', for: 'workshop' as TemplateType },
+// Aposentado do seletor em 2026-07-09: 'classico' (mostra) e 'ouro' (mostra
+// + workshop), substituídos por Moderno/Prestígio — aprovados via mockup
+// (2 direções visuais, ver artifact). Quem já tinha 'classico'/'ouro'
+// salvo continua renderizando normal (edge function não mudou o
+// normalizeVisualPreset desses valores) — só não aparecem mais como opção
+// nova. 'Workshop' (minimalista) segue como está, sem mudança.
+const PRESETS: Array<{ id: PresetId; label: string; desc: string; for: TemplateType }> = [
+  { id: 'moderno',   label: 'Moderno',   desc: 'Blocos diagonais azul-marinho + dourado, nome em fonte script, rosetão com fita — "prêmio corporativo".', for: 'mostra' as TemplateType },
+  { id: 'prestigio', label: 'Prestígio', desc: 'Cunha preta + dourado, cabeçalho alinhado à esquerda, selo "Top Festival" — visual de luxo.', for: 'mostra' as TemplateType },
+  { id: 'workshop',  label: 'Workshop',  desc: 'Linhas finas, tipografia clean, foco no nome do aluno.', for: 'workshop' as TemplateType },
+  { id: 'moderno',   label: 'Moderno',   desc: 'Mesmos blocos diagonais azul-marinho + dourado, adaptados pro certificado de workshop.', for: 'workshop' as TemplateType },
+  { id: 'prestigio', label: 'Prestígio', desc: 'Mesma cunha preta + dourado, adaptada pro certificado de workshop.', for: 'workshop' as TemplateType },
 ];
 
-// Cores default do preset 'ouro' — aplicadas só ao trocar pra esse preset
-// num template ainda não salvo (não sobrescreve customização já feita).
+// Cores default por preset — aplicadas só ao trocar de preset num template
+// ainda não salvo (não sobrescreve customização já feita).
 const OURO_DEFAULT_ACCENT = '#a97e2e';
 const OURO_DEFAULT_PRIMARY = '#241c10';
+const MODERNO_DEFAULT_ACCENT = '#1c4f72';
+const MODERNO_DEFAULT_PRIMARY = '#1f2937';
+const PRESTIGIO_DEFAULT_ACCENT = '#caa23a';
+const PRESTIGIO_DEFAULT_PRIMARY = '#171310';
+const PRESET_DEFAULT_COLORS: Partial<Record<PresetId, { accent: string; primary: string }>> = {
+  ouro:      { accent: OURO_DEFAULT_ACCENT,      primary: OURO_DEFAULT_PRIMARY },
+  moderno:   { accent: MODERNO_DEFAULT_ACCENT,   primary: MODERNO_DEFAULT_PRIMARY },
+  prestigio: { accent: PRESTIGIO_DEFAULT_ACCENT, primary: PRESTIGIO_DEFAULT_PRIMARY },
+};
 
 /** Normaliza preset legado pro novo nome. */
-const normalizePreset = (p?: string | null): 'classico' | 'workshop' | 'ouro' | 'custom' => {
+const normalizePreset = (p?: string | null): PresetId => {
   if (p === 'ouro') return 'ouro';
+  if (p === 'moderno') return 'moderno';
+  if (p === 'prestigio') return 'prestigio';
   if (p === 'mostra-classico' || p === 'mostra-premium' || p === 'classico') return 'classico';
   if (p === 'workshop-minimalista' || p === 'workshop') return 'workshop';
   return 'custom';
@@ -78,8 +100,9 @@ const Certificates: React.FC = () => {
 
   // Form state (controlled)
   const [formName, setFormName]     = useState('');
-  const [formPreset, setFormPreset] = useState<'classico' | 'workshop' | 'ouro' | 'custom'>('classico');
+  const [formPreset, setFormPreset] = useState<PresetId>('moderno');
   const [formBgUrl, setFormBgUrl]   = useState('');
+  const [formLogoUrl, setFormLogoUrl] = useState('');
   const [formAccent, setFormAccent] = useState('#ff0068');
   const [formPrimary, setFormPrimary] = useState('#0b0b0f');
   const [formSigs, setFormSigs]     = useState<string[]>([]);
@@ -117,6 +140,7 @@ const Certificates: React.FC = () => {
       setFormName(tpl.name ?? '');
       setFormPreset(normalizePreset(tpl.preset_template));
       setFormBgUrl(tpl.background_url ?? '');
+      setFormLogoUrl(tpl.logo_url ?? '');
       setFormAccent(tpl.accent_color ?? '#ff0068');
       setFormPrimary(tpl.primary_color ?? '#0b0b0f');
       const names = Array.isArray(tpl.signature_names) ? tpl.signature_names : [];
@@ -128,10 +152,11 @@ const Certificates: React.FC = () => {
       setTemplate(null);
       // Defaults
       setFormName(`Modelo padrão ${activeType === 'workshop' ? 'Workshop' : 'Mostra'}`);
-      setFormPreset(activeType === 'workshop' ? 'workshop' : 'classico');
+      setFormPreset(activeType === 'workshop' ? 'workshop' : 'moderno');
       setFormBgUrl('');
-      setFormAccent('#ff0068');
-      setFormPrimary('#0b0b0f');
+      setFormLogoUrl('');
+      setFormAccent(activeType === 'workshop' ? '#ff0068' : MODERNO_DEFAULT_ACCENT);
+      setFormPrimary(activeType === 'workshop' ? '#0b0b0f' : MODERNO_DEFAULT_PRIMARY);
       setFormSigs([]);
       setFormTitles([]);
     }
@@ -173,14 +198,15 @@ const Certificates: React.FC = () => {
     return () => clearTimeout(t);
   }, [feedback]);
 
-  // Troca de preset: 'ouro' tem paleta própria (dourado + tinta escura) —
-  // só aplica os defaults se o template ainda não foi salvo, pra não
-  // sobrescrever cor que o produtor já customizou.
-  const selectPreset = (id: 'classico' | 'workshop' | 'ouro') => {
+  // Troca de preset: cada preset com paleta própria só aplica os defaults
+  // se o template ainda não foi salvo, pra não sobrescrever cor que o
+  // produtor já customizou.
+  const selectPreset = (id: 'classico' | 'workshop' | 'ouro' | 'moderno' | 'prestigio') => {
     setFormPreset(id);
-    if (id === 'ouro' && !template?.id) {
-      setFormAccent(OURO_DEFAULT_ACCENT);
-      setFormPrimary(OURO_DEFAULT_PRIMARY);
+    const defaults = PRESET_DEFAULT_COLORS[id];
+    if (defaults && !template?.id) {
+      setFormAccent(defaults.accent);
+      setFormPrimary(defaults.primary);
     }
   };
 
@@ -230,6 +256,7 @@ const Certificates: React.FC = () => {
       name: formName.trim() || null as any,
       preset_template: formPreset,
       background_url: formBgUrl.trim() || null,
+      logo_url: formLogoUrl.trim() || null,
       accent_color: formAccent,
       primary_color: formPrimary,
       signature_names:  validSigs.map(s => s.name),
@@ -320,7 +347,7 @@ const Certificates: React.FC = () => {
                   {visiblePresets.map(p => (
                     <button
                       key={p.id}
-                      onClick={() => selectPreset(p.id as 'classico' | 'workshop' | 'ouro')}
+                      onClick={() => selectPreset(p.id as 'classico' | 'workshop' | 'ouro' | 'moderno' | 'prestigio')}
                       className={`text-left rounded-xl border p-3 transition ${formPreset === p.id ? 'border-[#ff0068] bg-[#ff0068]/5' : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'}`}
                     >
                       <div className="aspect-[297/210] rounded-md bg-gradient-to-br from-amber-50 to-rose-50 dark:from-slate-700 dark:to-slate-800 mb-2 flex items-center justify-center">
@@ -351,6 +378,11 @@ const Certificates: React.FC = () => {
                 {formPreset === 'custom' && (
                   <Field label="URL da imagem de fundo (A4 landscape)">
                     <input value={formBgUrl} onChange={e => setFormBgUrl(e.target.value)} className={inputCls} placeholder="https://..." />
+                  </Field>
+                )}
+                {(formPreset === 'moderno' || formPreset === 'prestigio') && (
+                  <Field label="URL do logo do evento (opcional)">
+                    <input value={formLogoUrl} onChange={e => setFormLogoUrl(e.target.value)} className={inputCls} placeholder="https://..." />
                   </Field>
                 )}
                 <div className="grid grid-cols-2 gap-3">

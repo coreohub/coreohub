@@ -17,6 +17,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib'
+import fontkit from '@pdf-lib/fontkit'
 import QRCode from 'qrcode'
 import { buildCorsHeaders } from '../_shared/cors.ts'
 
@@ -31,16 +32,28 @@ type LayoutTag = {
   weight?: 'normal' | 'bold'
   italic?: boolean
   // 'times' ativa a família serifada inteira (Roman/Bold/Italic/BoldItalic) —
-  // usado pelo preset 'ouro'. Ausente/'helvetica' preserva o comportamento
-  // legado (italic sempre vira Times-Italic, nunca bold+italic junto).
-  fontFamily?: 'helvetica' | 'times'
+  // usado pelo preset 'ouro'. 'script' usa a fonte cursiva embutida em
+  // runtime (moderno/prestigio, só no NOME_PARTICIPANTE) — cai pra
+  // Times-BoldItalic se o fetch da fonte falhar. Ausente/'helvetica'
+  // preserva o comportamento legado (italic sempre vira Times-Italic,
+  // nunca bold+italic junto).
+  fontFamily?: 'helvetica' | 'times' | 'script'
+  // Ativa quebra de linha (word-wrap) pra tags de corpo longo alinhadas à
+  // esquerda (ex: 'prestigio', que não centraliza e por isso tem menos
+  // largura livre até a borda). Ausente preserva o comportamento legado
+  // (1 linha só, sem quebra — como classico/ouro/moderno já usam).
+  max_width_pct?: number
 }
 
 /** Normaliza preset_template salvo no banco pro discriminador visual usado
  * aqui. Mantém os valores legados (ver migration 20260520) caindo em
- * 'classico'/'workshop' — só 'ouro' é tratado como skin nova. */
-function normalizeVisualPreset(p?: string | null): 'classico' | 'workshop' | 'ouro' {
+ * 'classico'/'workshop' — 'ouro' segue rendendo pra quem já tinha salvo
+ * (aposentado do seletor em 2026-07-09, mas o código não foi removido).
+ * 'moderno'/'prestigio' são os presets ativos desde então. */
+function normalizeVisualPreset(p?: string | null): 'classico' | 'workshop' | 'ouro' | 'moderno' | 'prestigio' {
   if (p === 'ouro') return 'ouro'
+  if (p === 'moderno') return 'moderno'
+  if (p === 'prestigio') return 'prestigio'
   if (p === 'workshop-minimalista' || p === 'workshop') return 'workshop'
   return 'classico'
 }
@@ -90,6 +103,82 @@ const DEFAULT_LAYOUT_OURO_WORKSHOP: LayoutTag[] = [
   { tag: 'WORKSHOP_NOME',   x_pct: 50, y_pct: 60, font_size: 18, align: 'center', weight: 'bold', color: OURO_BURGUNDY, fontFamily: 'times' },
   { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 66, font_size: 11, align: 'center', color: OURO_MUTED, fontFamily: 'times' },
 ]
+
+// Preset 'moderno' — diagonal azul-marinho + dourado, "prêmio corporativo".
+// accent_color = navy (destaque/EVENTO/subtítulo), primary_color = tinta
+// escura (título/nome). Dourado é fixo do preset (MODERNO_GOLD), como o
+// burgundy do 'ouro' — não configurável na v1.
+const MODERNO_GOLD = '#eaa93a'
+const MODERNO_MUTED = '#6b7280'
+const MODERNO_DEFAULT_ACCENT = '#1c4f72'
+const MODERNO_DEFAULT_PRIMARY = '#1f2937'
+const DEFAULT_LAYOUT_MODERNO_MOSTRA: LayoutTag[] = [
+  { tag: 'TITULO',          x_pct: 48, y_pct: 18, font_size: 34, align: 'center', weight: 'bold', color: MODERNO_DEFAULT_PRIMARY, fontFamily: 'times' },
+  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 26, font_size: 12, align: 'center', color: MODERNO_DEFAULT_ACCENT, fontFamily: 'times' },
+  { tag: 'INTRO',           x_pct: 50, y_pct: 35, font_size: 15, align: 'center', italic: true, color: MODERNO_MUTED, fontFamily: 'times' },
+  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 45, font_size: 34, align: 'center', color: MODERNO_DEFAULT_PRIMARY, fontFamily: 'script' },
+  { tag: 'CORPO',           x_pct: 50, y_pct: 53, font_size: 12.5, align: 'center', color: MODERNO_MUTED, fontFamily: 'times' },
+  { tag: 'EVENTO',          x_pct: 50, y_pct: 60, font_size: 18, align: 'center', weight: 'bold', color: MODERNO_DEFAULT_ACCENT, fontFamily: 'times' },
+  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 66, font_size: 11, align: 'center', color: MODERNO_MUTED, fontFamily: 'times' },
+]
+const DEFAULT_LAYOUT_MODERNO_WORKSHOP: LayoutTag[] = [
+  { tag: 'TITULO',          x_pct: 48, y_pct: 18, font_size: 34, align: 'center', weight: 'bold', color: MODERNO_DEFAULT_PRIMARY, fontFamily: 'times' },
+  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 26, font_size: 12, align: 'center', color: MODERNO_DEFAULT_ACCENT, fontFamily: 'times' },
+  { tag: 'INTRO',           x_pct: 50, y_pct: 35, font_size: 15, align: 'center', italic: true, color: MODERNO_MUTED, fontFamily: 'times' },
+  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 45, font_size: 34, align: 'center', color: MODERNO_DEFAULT_PRIMARY, fontFamily: 'script' },
+  { tag: 'CORPO',           x_pct: 50, y_pct: 53, font_size: 12.5, align: 'center', color: MODERNO_MUTED, fontFamily: 'times' },
+  { tag: 'WORKSHOP_NOME',   x_pct: 50, y_pct: 60, font_size: 18, align: 'center', weight: 'bold', color: MODERNO_DEFAULT_ACCENT, fontFamily: 'times' },
+  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 66, font_size: 11, align: 'center', color: MODERNO_MUTED, fontFamily: 'times' },
+]
+
+// Preset 'prestigio' — cunha preta + dourado, cabeçalho alinhado à esquerda
+// (único preset que não centraliza — replica a referência aprovada).
+// accent_color = dourado (destaque/EVENTO/eyebrow), primary_color = tinta
+// (nome/subtítulo). TITULO/SUBTITULO trocam de papel visual em relação aos
+// outros presets: TITULO ("CERTIFICADO") vira o eyebrow pequeno, SUBTITULO
+// ("DE PARTICIPAÇÃO") vira o título grande — evita tocar em resolveTag().
+const PRESTIGIO_MUTED = '#8a7f68'
+const PRESTIGIO_DEFAULT_ACCENT = '#caa23a'
+const PRESTIGIO_DEFAULT_PRIMARY = '#171310'
+const DEFAULT_LAYOUT_PRESTIGIO_MOSTRA: LayoutTag[] = [
+  { tag: 'TITULO',          x_pct: 36, y_pct: 19, font_size: 8,  align: 'left', weight: 'bold', color: PRESTIGIO_DEFAULT_ACCENT },
+  { tag: 'SUBTITULO',       x_pct: 36, y_pct: 27, font_size: 28, align: 'left', weight: 'bold', color: PRESTIGIO_DEFAULT_PRIMARY, fontFamily: 'times' },
+  { tag: 'INTRO',           x_pct: 36, y_pct: 40, font_size: 10, align: 'left', italic: true, color: PRESTIGIO_MUTED, fontFamily: 'times' },
+  { tag: 'NOME_PARTICIPANTE', x_pct: 36, y_pct: 49, font_size: 34, align: 'left', color: PRESTIGIO_DEFAULT_PRIMARY, fontFamily: 'script' },
+  { tag: 'CORPO',           x_pct: 36, y_pct: 58, font_size: 11, align: 'left', color: PRESTIGIO_MUTED, max_width_pct: 58 },
+  { tag: 'EVENTO',          x_pct: 36, y_pct: 70, font_size: 14, align: 'left', weight: 'bold', color: PRESTIGIO_DEFAULT_ACCENT, fontFamily: 'times' },
+  { tag: 'DATA_LOCAL',      x_pct: 36, y_pct: 78, font_size: 9,  align: 'left', color: PRESTIGIO_MUTED },
+]
+const DEFAULT_LAYOUT_PRESTIGIO_WORKSHOP: LayoutTag[] = [
+  { tag: 'TITULO',          x_pct: 36, y_pct: 19, font_size: 8,  align: 'left', weight: 'bold', color: PRESTIGIO_DEFAULT_ACCENT },
+  { tag: 'SUBTITULO',       x_pct: 36, y_pct: 27, font_size: 28, align: 'left', weight: 'bold', color: PRESTIGIO_DEFAULT_PRIMARY, fontFamily: 'times' },
+  { tag: 'INTRO',           x_pct: 36, y_pct: 40, font_size: 10, align: 'left', italic: true, color: PRESTIGIO_MUTED, fontFamily: 'times' },
+  { tag: 'NOME_PARTICIPANTE', x_pct: 36, y_pct: 49, font_size: 34, align: 'left', color: PRESTIGIO_DEFAULT_PRIMARY, fontFamily: 'script' },
+  { tag: 'CORPO',           x_pct: 36, y_pct: 58, font_size: 11, align: 'left', color: PRESTIGIO_MUTED, max_width_pct: 58 },
+  { tag: 'WORKSHOP_NOME',   x_pct: 36, y_pct: 70, font_size: 14, align: 'left', weight: 'bold', color: PRESTIGIO_DEFAULT_ACCENT, fontFamily: 'times' },
+  { tag: 'DATA_LOCAL',      x_pct: 36, y_pct: 78, font_size: 9,  align: 'left', color: PRESTIGIO_MUTED },
+]
+
+/** Quebra de linha greedy simples pra tags com max_width_pct (só usado por
+ * 'prestigio' hoje — corpo alinhado à esquerda tem menos largura livre até
+ * a borda que os presets centralizados, então precisa de wrap de verdade
+ * pra frases longas não vazarem da página). */
+function wrapText(text: string, font: any, size: number, maxWidth: number): string[] {
+  const words = text.split(' ')
+  const lines: string[] = []
+  let current = ''
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word
+    if (current && font.widthOfTextAtSize(candidate, size) > maxWidth) {
+      lines.push(current)
+      current = word
+    } else {
+      current = candidate
+    }
+  }
+  if (current) lines.push(current)
+  return lines
+}
 
 // Hex → rgb
 function hexToRgb(hex: string): [number, number, number] {
@@ -145,10 +234,11 @@ function resolveTag(tag: string, ctx: any): string {
   return tags[tag] ?? ''
 }
 
-/** Busca background_url e embute como imagem de fundo full-bleed. Retorna
- * null (silencioso) se a URL falhar ou o formato não for png/jpg — o
- * chamador cai pro fundo sólido do preset nesse caso. */
-async function embedBackgroundImage(pdfDoc: PDFDocument, url: string) {
+/** Busca uma URL de imagem (background_url OU logo_url) e embute no PDF.
+ * Retorna null (silencioso) se a URL falhar ou o formato não for png/jpg —
+ * o chamador cai pro fundo sólido do preset (ou simplesmente omite o logo)
+ * nesse caso. */
+async function embedImageFromUrl(pdfDoc: PDFDocument, url: string) {
   try {
     const res = await fetch(url)
     if (!res.ok) return null
@@ -159,9 +249,59 @@ async function embedBackgroundImage(pdfDoc: PDFDocument, url: string) {
     }
     return await pdfDoc.embedJpg(bytes)
   } catch (e) {
-    console.warn('[get-certificate-pdf] falha ao embutir background_url:', e instanceof Error ? e.message : String(e))
+    console.warn('[get-certificate-pdf] falha ao embutir imagem:', e instanceof Error ? e.message : String(e))
     return null
   }
+}
+
+/** Busca a fonte cursiva (Dancing Script, OFL) direto do repo google/fonts
+ * — URL binária estável, sem depender de UA-sniffing do CSS do Google Fonts
+ * (que serve woff2/woff conforme o User-Agent, e fontkit não decodifica
+ * woff2). Só chamada pros presets moderno/prestigio. Retorna null
+ * (silencioso) se o fetch falhar — o chamador cai pro Times-BoldItalic. */
+async function embedScriptFont(pdfDoc: PDFDocument) {
+  try {
+    const res = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/dancingscript/DancingScript%5Bwght%5D.ttf')
+    if (!res.ok) return null
+    const bytes = new Uint8Array(await res.arrayBuffer())
+    return await pdfDoc.embedFont(bytes)
+  } catch (e) {
+    console.warn('[get-certificate-pdf] falha ao embutir fonte script:', e instanceof Error ? e.message : String(e))
+    return null
+  }
+}
+
+/** Converte um quadrilátero/polígono definido em % do cartão (estilo
+ * clip-path CSS, relativo à própria bounding box do bloco) numa string de
+ * path SVG em coordenadas LOCAIS top-down (drawSvgPath já inverte o eixo Y
+ * sozinho — ver nota em drawPolygonPct). */
+function polygonPctToSvgPath(
+  shape: { topPct: number; leftPct: number; wPct: number; hPct: number },
+  points: Array<[number, number]>,
+  W: number, H: number,
+): string {
+  const abs = points.map(([px, py]) => {
+    const xPct = shape.leftPct + (px / 100) * shape.wPct
+    const yPct = shape.topPct + (py / 100) * shape.hPct
+    return { x: (xPct / 100) * W, y: (yPct / 100) * H }
+  })
+  return `M ${abs[0].x} ${abs[0].y} ` + abs.slice(1).map(p => `L ${p.x} ${p.y}`).join(' ') + ' Z'
+}
+
+/** Desenha o polígono. IMPORTANTE: page.drawSvgPath faz translate(x,y) e
+ * DEPOIS scale(1,-1) — ou seja, o path deve ser autorado em coordenadas
+ * LOCAIS top-down (y cresce pra baixo, como CSS) e (x:0, y:H) ancora a
+ * origem local no topo-esquerda da página. Verificado com teste isolado
+ * (Playwright + PDF renderizado) antes de usar aqui — sem essa âncora o
+ * polígono cai fora da página e não aparece. */
+function drawPolygonPct(
+  page: any, W: number, H: number,
+  shape: { topPct: number; leftPct: number; wPct: number; hPct: number },
+  points: Array<[number, number]>,
+  color: any,
+) {
+  const d = polygonPctToSvgPath(shape, points, W, H)
+  page.drawSvgPath(d, { x: 0, y: H, color })
 }
 
 async function generatePdf(ctx: {
@@ -174,14 +314,23 @@ async function generatePdf(ctx: {
 }): Promise<Uint8Array> {
   const preset = normalizeVisualPreset(ctx.template?.preset_template)
   const isOuro = preset === 'ouro'
+  const isModerno = preset === 'moderno'
+  const isPrestigio = preset === 'prestigio'
+  const isWorkshop = ctx.template_type === 'workshop'
 
   const layout: LayoutTag[] = (ctx.template?.layout_json && Array.isArray(ctx.template.layout_json) && ctx.template.layout_json.length > 0)
     ? ctx.template.layout_json
     : isOuro
-      ? (ctx.template_type === 'workshop' ? DEFAULT_LAYOUT_OURO_WORKSHOP : DEFAULT_LAYOUT_OURO_MOSTRA)
-      : (ctx.template_type === 'workshop' ? DEFAULT_LAYOUT_WORKSHOP : DEFAULT_LAYOUT_MOSTRA)
+      ? (isWorkshop ? DEFAULT_LAYOUT_OURO_WORKSHOP : DEFAULT_LAYOUT_OURO_MOSTRA)
+      : isModerno
+        ? (isWorkshop ? DEFAULT_LAYOUT_MODERNO_WORKSHOP : DEFAULT_LAYOUT_MODERNO_MOSTRA)
+        : isPrestigio
+          ? (isWorkshop ? DEFAULT_LAYOUT_PRESTIGIO_WORKSHOP : DEFAULT_LAYOUT_PRESTIGIO_MOSTRA)
+          : (isWorkshop ? DEFAULT_LAYOUT_WORKSHOP : DEFAULT_LAYOUT_MOSTRA)
 
-  const accent = ctx.template?.accent_color ?? (isOuro ? '#a97e2e' : '#ff0068')
+  const accent = ctx.template?.accent_color ?? (
+    isOuro ? '#a97e2e' : isModerno ? MODERNO_DEFAULT_ACCENT : isPrestigio ? PRESTIGIO_DEFAULT_ACCENT : '#ff0068'
+  )
 
   // QR code
   const qrDataUrl = await QRCode.toDataURL(ctx.validation_url, {
@@ -199,17 +348,24 @@ async function generatePdf(ctx: {
   const page = pdfDoc.addPage([842, 595])
   const W = 842, H = 595
 
+  pdfDoc.registerFontkit(fontkit)
+
   const helvetica       = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const helveticaBold   = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
   const timesItalic     = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic)
   const timesRoman      = await pdfDoc.embedFont(StandardFonts.TimesRoman)
   const timesBold       = await pdfDoc.embedFont(StandardFonts.TimesRomanBold)
   const timesBoldItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanBoldItalic)
+  // Fonte cursiva só é buscada pros 2 presets que a usam (nome do premiado).
+  // Cai pra Times-BoldItalic (mesmo efeito visual do 'ouro') se o fetch falhar.
+  const scriptFont = (isModerno || isPrestigio) ? await embedScriptFont(pdfDoc) : null
 
   /** Escolhe a fonte pro tag: fontFamily:'times' ativa a família serifada
-   * inteira (com bold+italic combinados); ausente preserva o comportamento
-   * legado (italic sempre vira Times-Italic, nunca bold+italic junto). */
+   * inteira (com bold+italic combinados); 'script' usa a cursiva embutida
+   * (fallback Times-BoldItalic); ausente preserva o comportamento legado
+   * (italic sempre vira Times-Italic, nunca bold+italic junto). */
   function pickFont(t: LayoutTag) {
+    if (t.fontFamily === 'script') return scriptFont ?? timesBoldItalic
     if (t.fontFamily === 'times') {
       if (t.weight === 'bold' && t.italic) return timesBoldItalic
       if (t.weight === 'bold') return timesBold
@@ -223,10 +379,12 @@ async function generatePdf(ctx: {
   const ACCENT = rgb(aR, aG, aB)
   const [brR, brG, brB] = hexToRgb(OURO_BURGUNDY)
   const BURGUNDY = rgb(brR, brG, brB)
+  const MODERNO_GOLD_RGB = rgb(...hexToRgb(MODERNO_GOLD))
+  const PRESTIGIO_INK_RGB = rgb(...hexToRgb(PRESTIGIO_DEFAULT_PRIMARY))
 
   // Fundo: imagem custom do produtor (se configurada) OU cor sólida do preset.
   const bgImage = ctx.template?.background_url
-    ? await embedBackgroundImage(pdfDoc, ctx.template.background_url)
+    ? await embedImageFromUrl(pdfDoc, ctx.template.background_url)
     : null
   if (bgImage) {
     page.drawImage(bgImage, { x: 0, y: 0, width: W, height: H })
@@ -234,7 +392,7 @@ async function generatePdf(ctx: {
     // o produtor tenha subido (foto escura, estampa carregada, etc).
     page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: rgb(1, 1, 1), opacity: 0.55 })
   } else {
-    const bg = isOuro ? rgb(0.984, 0.965, 0.925) : rgb(0.99, 0.985, 0.97)
+    const bg = isOuro || isPrestigio ? rgb(0.984, 0.965, 0.925) : rgb(0.99, 0.985, 0.97)
     page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: bg })
   }
 
@@ -259,9 +417,57 @@ async function generatePdf(ctx: {
     page.drawLine({ start: { x: W / 2 - ruleW / 2, y: ruleY }, end: { x: W / 2 - 6, y: ruleY }, thickness: 0.8, color: ACCENT })
     page.drawLine({ start: { x: W / 2 + 6, y: ruleY }, end: { x: W / 2 + ruleW / 2, y: ruleY }, thickness: 0.8, color: ACCENT })
     page.drawRectangle({ x: W / 2 - 4, y: ruleY - 4, width: 8, height: 8, rotate: degrees(45), color: ACCENT })
+  } else if (isModerno) {
+    // Blocos diagonais azul-marinho (ACCENT) + dourado (fixo) nos cantos
+    // superior-direito e inferior-esquerdo — geometria replicada do mockup
+    // aprovado (top/left/right/bottom/width/height % → shape bbox).
+    drawPolygonPct(page, W, H, { topPct: -6, leftPct: 58, wPct: 46, hPct: 36 }, [[30, 0], [100, 0], [100, 70], [0, 100]], ACCENT)
+    drawPolygonPct(page, W, H, { topPct: 2,  leftPct: 78, wPct: 16, hPct: 25 }, [[40, 0], [100, 0], [60, 100], [0, 100]], MODERNO_GOLD_RGB)
+    drawPolygonPct(page, W, H, { topPct: 70, leftPct: -6, wPct: 22, hPct: 38 }, [[0, 0], [100, 30], [40, 100], [0, 100]], ACCENT)
+    drawPolygonPct(page, W, H, { topPct: 78, leftPct: 2,  wPct: 8,  hPct: 24 }, [[0, 0], [100, 0], [60, 100], [0, 100]], MODERNO_GOLD_RGB)
+    // Moldura fina cinza (neutra — não compete com os blocos coloridos)
+    const grayBorder = rgb(0.847, 0.855, 0.871) // #d8dade
+    const outerX = 0.034 * W, outerY = 0.034 * H
+    const innerX = 0.044 * W, innerY = 0.044 * H
+    page.drawRectangle({ x: outerX, y: outerY, width: W - 2 * outerX, height: H - 2 * outerY, borderColor: grayBorder, borderWidth: 1.6, color: undefined })
+    page.drawRectangle({ x: innerX, y: innerY, width: W - 2 * innerX, height: H - 2 * innerY, borderColor: grayBorder, borderWidth: 0.6, color: undefined })
+    // 3 losangos como divisor entre subtítulo e "Certificamos que"
+    const diaY = H - 0.295 * H
+    for (const dx of [-14, 0, 14]) {
+      page.drawRectangle({ x: W / 2 + dx - 3, y: diaY - 3, width: 6, height: 6, rotate: degrees(45), color: MODERNO_GOLD_RGB })
+    }
+  } else if (isPrestigio) {
+    // Cunha preta diagonal + faixa dourada (ACCENT) saindo do canto
+    // superior-esquerdo — geometria replicada do mockup aprovado.
+    const wedgePts: Array<[number, number]> = [[0, 0], [100, 0], [40, 100], [0, 100]]
+    drawPolygonPct(page, W, H, { topPct: -4, leftPct: -4, wPct: 32, hPct: 58 }, wedgePts, PRESTIGIO_INK_RGB)
+    drawPolygonPct(page, W, H, { topPct: -4, leftPct: 20, wPct: 7,  hPct: 58 }, wedgePts, ACCENT)
+    // Moldura única fina
+    const insetX = 0.032 * W, insetY = 0.032 * H
+    page.drawRectangle({ x: insetX, y: insetY, width: W - 2 * insetX, height: H - 2 * insetY, borderColor: PRESTIGIO_INK_RGB, borderWidth: 1.2, borderOpacity: 0.18, color: undefined })
   } else {
     page.drawRectangle({ x: 24, y: 24, width: W - 48, height: H - 48, borderColor: ACCENT, borderWidth: 2, color: undefined })
     page.drawRectangle({ x: 30, y: 30, width: W - 60, height: H - 60, borderColor: ACCENT, borderWidth: 0.5, color: undefined })
+  }
+
+  // Logo do evento (opcional) — só desenha se o produtor configurou logo_url.
+  // Moderno: caixa centralizada no topo. Prestígio: caixa alinhada à
+  // esquerda, acompanhando o cabeçalho left-aligned do preset.
+  if ((isModerno || isPrestigio) && ctx.template?.logo_url) {
+    const logoImage = await embedImageFromUrl(pdfDoc, ctx.template.logo_url)
+    if (logoImage) {
+      const boxSize = ((isModerno ? 6 : 5.5) / 100) * W
+      const boxCenterX = isModerno ? W / 2 : (0.36 * W) + boxSize / 2
+      const boxTopY = H - ((isModerno ? 9.5 : 7) / 100) * H
+      const iw = logoImage.width, ih = logoImage.height
+      const scale = Math.min(boxSize / iw, boxSize / ih)
+      const drawW = iw * scale, drawH = ih * scale
+      page.drawImage(logoImage, {
+        x: boxCenterX - drawW / 2,
+        y: boxTopY - boxSize + (boxSize - drawH) / 2,
+        width: drawW, height: drawH,
+      })
+    }
   }
 
   // Renderiza tags do layout
@@ -271,23 +477,31 @@ async function generatePdf(ctx: {
     const font = pickFont(t)
     const size = t.font_size
     const [cR, cG, cB] = hexToRgb(t.color ?? '#0b0b0f')
-    const w = font.widthOfTextAtSize(text, size)
+    const color = rgb(cR, cG, cB)
 
     // Coordenadas: pdf-lib y é bottom-up. y_pct medido do topo.
     const xCenter = (t.x_pct / 100) * W
-    const y = H - (t.y_pct / 100) * H - size / 2
-    let x: number
-    if (t.align === 'right') x = xCenter - w
-    else if (t.align === 'left') x = xCenter
-    else x = xCenter - w / 2  // center default
+    const yTop = H - (t.y_pct / 100) * H - size / 2
 
-    page.drawText(text, { x, y, size, font, color: rgb(cR, cG, cB) })
+    const lines = t.max_width_pct
+      ? wrapText(text, font, size, (t.max_width_pct / 100) * W)
+      : [text]
+    const lineHeight = size * 1.35
+    lines.forEach((line, i) => {
+      const w = font.widthOfTextAtSize(line, size)
+      let x: number
+      if (t.align === 'right') x = xCenter - w
+      else if (t.align === 'left') x = xCenter
+      else x = xCenter - w / 2  // center default
+      page.drawText(line, { x, y: yTop - i * lineHeight, size, font, color })
+    })
   }
 
-  // Selo ornamentado + fita — só preset ouro. Ancorado centralizado, numa
-  // faixa vertical livre entre DATA_LOCAL e a linha de assinatura, pra nunca
-  // colidir com o bloco de assinaturas (que pode ter até 3 colunas de
-  // largura variável) nem com o QR (canto inferior direito).
+  // Selo ornamentado + fita — ouro (triângulo+diamante+fita bordô) e
+  // moderno (círculo navy+dourado+2 fitas pequenas) usam a mesma faixa
+  // vertical livre entre DATA_LOCAL e a linha de assinatura, pra nunca
+  // colidir com o bloco de assinaturas (até 3 colunas de largura variável)
+  // nem com o QR (canto inferior direito).
   if (isOuro) {
     const sealCx = W / 2, sealCy = 155, sealR = 18
     page.drawEllipse({ x: sealCx, y: sealCy, xScale: sealR, yScale: sealR, borderColor: ACCENT, borderWidth: 1.6, color: undefined })
@@ -295,15 +509,33 @@ async function generatePdf(ctx: {
     const ribbonW = 7, ribbonH = 24, ribbonTopY = sealCy - sealR + 2
     page.drawRectangle({ x: sealCx - 9, y: ribbonTopY - ribbonH, width: ribbonW, height: ribbonH, color: BURGUNDY, rotate: degrees(-14) })
     page.drawRectangle({ x: sealCx + 2, y: ribbonTopY - ribbonH, width: ribbonW, height: ribbonH, color: BURGUNDY, rotate: degrees(14) })
+  } else if (isModerno) {
+    const sealCx = W / 2, sealCy = 155, sealR = 20
+    page.drawEllipse({ x: sealCx, y: sealCy, xScale: sealR, yScale: sealR, borderColor: MODERNO_GOLD_RGB, borderWidth: 2.4, color: ACCENT })
+    page.drawText('*', { x: sealCx - 4, y: sealCy - 7, size: 16, font: helveticaBold, color: MODERNO_GOLD_RGB })
+    const ribbonW = 6, ribbonH = 16, ribbonTopY = sealCy - sealR + 2
+    page.drawRectangle({ x: sealCx - 8, y: ribbonTopY - ribbonH, width: ribbonW, height: ribbonH, color: MODERNO_GOLD_RGB, rotate: degrees(-12) })
+    page.drawRectangle({ x: sealCx + 2, y: ribbonTopY - ribbonH, width: ribbonW, height: ribbonH, color: MODERNO_GOLD_RGB, rotate: degrees(12) })
+  } else if (isPrestigio) {
+    // Selo "TOP FESTIVAL" no canto superior-direito (badge + fita).
+    const badgeR = 34
+    const badgeCx = W - 0.08 * W - badgeR, badgeCy = H - 0.07 * H - badgeR
+    page.drawEllipse({ x: badgeCx, y: badgeCy, xScale: badgeR, yScale: badgeR, borderColor: ACCENT, borderWidth: 2.4, color: PRESTIGIO_INK_RGB })
+    page.drawText('*', { x: badgeCx - 4, y: badgeCy - 4, size: 16, font: helveticaBold, color: ACCENT })
+    const ribbonW = 100, ribbonH = 24
+    page.drawRectangle({ x: badgeCx - ribbonW / 2, y: badgeCy - badgeR - ribbonH * 0.3, width: ribbonW, height: ribbonH, color: ACCENT })
+    const label = 'TOP FESTIVAL'
+    const labelW = helveticaBold.widthOfTextAtSize(label, 9)
+    page.drawText(label, { x: badgeCx - labelW / 2, y: badgeCy - badgeR - ribbonH * 0.3 + 8, size: 9, font: helveticaBold, color: PRESTIGIO_INK_RGB })
   }
 
   // QR + texto de validação (canto inferior direito)
   const qrImage = await pdfDoc.embedPng(qrBytes)
   const qrSize = 80
-  const bodyFont = isOuro ? timesRoman : helvetica
-  const boldFont = isOuro ? timesBold : helveticaBold
-  const mutedColor = isOuro ? rgb(...hexToRgb(OURO_MUTED)) : rgb(0.4, 0.4, 0.45)
-  const inkColor = isOuro ? rgb(...hexToRgb(OURO_INK)) : rgb(0.04, 0.04, 0.06)
+  const bodyFont = isOuro || isPrestigio ? timesRoman : helvetica
+  const boldFont = isOuro || isPrestigio ? timesBold : helveticaBold
+  const mutedColor = isOuro ? rgb(...hexToRgb(OURO_MUTED)) : isModerno ? rgb(...hexToRgb(MODERNO_MUTED)) : isPrestigio ? rgb(...hexToRgb(PRESTIGIO_MUTED)) : rgb(0.4, 0.4, 0.45)
+  const inkColor = isOuro ? rgb(...hexToRgb(OURO_INK)) : isModerno ? rgb(...hexToRgb(MODERNO_DEFAULT_PRIMARY)) : isPrestigio ? PRESTIGIO_INK_RGB : rgb(0.04, 0.04, 0.06)
   page.drawImage(qrImage, { x: W - qrSize - 60, y: 60, width: qrSize, height: qrSize })
   page.drawText('Verifique a autenticidade:', { x: W - qrSize - 60, y: 50, size: 7, font: bodyFont, color: mutedColor })
   page.drawText(`Código: ${ctx.hash.slice(0, 8).toUpperCase()}`, { x: W - qrSize - 60, y: 38, size: 7, font: boldFont, color: inkColor })
