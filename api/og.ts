@@ -18,6 +18,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { isEventOver } from '../utils/eventStatus';
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL ||
@@ -75,7 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // UUID vs slug — bota filter correto. PublicEventPage usa mesma lógica.
     const filterCol = UUID_REGEX.test(slug) ? 'id' : 'slug';
-    const restUrl = `${SUPABASE_URL}/rest/v1/events?select=id,name,slug,description,cover_url,start_date,city,state,location&${filterCol}=eq.${encodeURIComponent(slug)}&limit=1`;
+    const restUrl = `${SUPABASE_URL}/rest/v1/events?select=id,name,slug,description,cover_url,start_date,end_date,city,state,location&${filterCol}=eq.${encodeURIComponent(slug)}&limit=1`;
 
     const fetchRes = await fetch(restUrl, {
       headers: {
@@ -98,6 +99,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       description: string | null;
       cover_url: string | null;
       start_date: string | null;
+      end_date: string | null;
       city: string | null;
       state: string | null;
       location: string | null;
@@ -112,10 +114,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    const title = `${ev.name} — Inscrições abertas | CoreoHub`;
+    // Mesma fonte de prazo que PublicEventPage.tsx: configuracoes.id = event_id,
+    // com fallback pra row legada id='1' quando o evento não tem config própria.
+    let prazoInscricao: string | null = null;
+    try {
+      const cfgUrl = `${SUPABASE_URL}/rest/v1/configuracoes?select=prazo_inscricao&id=eq.${encodeURIComponent(ev.id)}&limit=1`;
+      const cfgRes = await fetch(cfgUrl, {
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+      });
+      const cfgRows = cfgRes.ok ? ((await cfgRes.json()) as Array<{ prazo_inscricao: string | null }>) : [];
+      prazoInscricao = cfgRows[0]?.prazo_inscricao ?? null;
+    } catch (cfgErr) {
+      console.error('[api/og] configuracoes fetch failed:', cfgErr);
+    }
+
+    const eventOver = isEventOver(ev);
+    const isRegistrationOpen = eventOver
+      ? false
+      : !prazoInscricao ||
+        Date.now() <= new Date(prazoInscricao.includes('T') ? prazoInscricao : `${prazoInscricao}T23:59:59`).getTime();
+    const statusLabel = isRegistrationOpen
+      ? 'Inscrições abertas'
+      : eventOver
+        ? 'Confira o resultado'
+        : 'Inscrições encerradas';
+
+    const title = `${ev.name} — ${statusLabel} | CoreoHub`;
     const description =
       (ev.description ?? '').replace(/\s+/g, ' ').trim().slice(0, 160) ||
-      `Inscrições abertas para ${ev.name} — festival de dança no CoreoHub.`;
+      `${statusLabel} — ${ev.name}, festival de dança no CoreoHub.`;
     const image = ev.cover_url || DEFAULT_IMAGE;
     const canonicalSlug = ev.slug ?? ev.id;
     const url = `${SITE_URL}/evento/${canonicalSlug}`;

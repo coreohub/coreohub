@@ -524,13 +524,18 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   // Funciona pra Googlebot (executa JS no indexing). Bots de preview do WhatsApp/
   // Telegram/Insta NÃO executam JS — preview neles continua genérico até Subfase 3.2
   // (prerender server-side via Vercel Edge Middleware).
+  const seoStatusLabel = isRegistrationOpen
+    ? 'Inscrições abertas'
+    : eventOver
+      ? 'Confira o resultado'
+      : 'Inscrições encerradas';
   const seoDescription = (event.description ?? '')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 160) || `Inscrições abertas para ${event.name} — festival de dança no CoreoHub.`;
+    .slice(0, 160) || `${seoStatusLabel} — ${event.name}, festival de dança no CoreoHub.`;
   const seoImage = event.cover_url || 'https://app.coreohub.com/coreohub-avatar.png';
   const seoUrl = typeof window !== 'undefined' ? window.location.href : `https://app.coreohub.com/evento/${event.slug ?? event.id}`;
-  const seoTitle = `${event.name} — Inscrições abertas | CoreoHub`;
+  const seoTitle = `${event.name} — ${seoStatusLabel} | CoreoHub`;
 
   // Schema.org BreadcrumbList — sinaliza hierarquia "Festivais › Usualdance"
   // pro Google montar rich snippet de navegação nos resultados. URL canônica
