@@ -21,6 +21,20 @@
  *   - 90% pagamento CONFIRMADO, 10% PENDENTE
  *   - ~150 bailarinos com nomes BR realistas no elenco
  *   - 3 jurados (PINs 1111, 2222, 3333) com judges_pin
+ *   - Telão de Palco ativo (código gerado via regenerate_telao_code, modo ao_vivo)
+ *   - 2 Avisos do produtor (event_announcements)
+ *   - Prêmios especiais com os campos winner_* (registra-primeiro-revela-
+ *     depois, 2026-07-11/12) — Voto Popular já revelado, deliberação ainda
+ *     não registrada (produtor testa o fluxo em /deliberacoes)
+ *   - 1 Workshop Pass cobrindo 2 dos 4 workshops demo
+ *   - Documentos extras + link de destaque na vitrine
+ *
+ *   FORA do escopo, por decisão consciente (não seedado):
+ *   - Certificados: certificate_templates é por PRODUTOR (não por evento,
+ *     UNIQUE(producer_id, template_type)) — sobrescreveria/colidiria com o
+ *     modelo real do produtor. Ver CLAUDE.md 2026-07-15.
+ *   - Seletiva multi-jurado fica solo no demo de propósito.
+ *   - Integração real com Voto Popular (infra isolada, outro projeto Supabase).
  *
  * Auth: produtor logado via JWT (Authorization Bearer)
  */
@@ -374,13 +388,32 @@ const JURADOS = [
   },
 ]
 
+// Campos winner_* (registra-primeiro-revela-depois, 2026-07-11/12): Ouro/Prata/
+// Bronze/Maior Nota são calculados na hora a partir das notas reais — não
+// fixamos winner_items pra eles aqui. Só prêmios de deliberação (premio) e
+// manuais (Voto Popular) guardam vencedor fixo. Deliberação nasce SEM
+// vencedor registrado — o produtor testa o fluxo de registrar em
+// /deliberacoes. Voto Popular nasce JÁ revelado (preenchido depois que as
+// registrations existem, ver passo 5e) pra mostrar como fica pós-revelação.
 const PREMIOS_ESPECIAIS = [
-  { id: 'tpl_bailarino',        name: 'Melhor Bailarino(a)',   enabled: true, isTemplate: true,  formation: 'Solo',  genre: 'TODOS', description: '', valor: 500 },
-  { id: 'tpl_revelacao',        name: 'Prêmio Revelação',      enabled: true, isTemplate: true,  formation: 'TODOS', genre: 'TODOS', description: '' },
-  { id: 'tpl_coreografo',       name: 'Melhor Coreografia',    enabled: true, isTemplate: true,  formation: 'TODOS', genre: 'TODOS', description: '', valor: 1000 },
-  { id: 'tpl_coreografo_pessoa',name: 'Melhor Coreógrafo(a)',  enabled: true, isTemplate: true,  formation: 'TODOS', genre: 'TODOS', description: '' },
-  { id: 'tpl_grupo',            name: 'Melhor Grupo da Noite', enabled: true, isTemplate: true,  formation: 'Grupo', genre: 'TODOS', description: '', valor: 2000 },
-  { id: 'tpl_figurino',         name: 'Melhor Figurino',       enabled: true, isTemplate: false, formation: 'TODOS', genre: 'TODOS', description: '' },
+  { id: 'tpl_bailarino',        name: 'Melhor Bailarino(a)',   enabled: true, isTemplate: true,  formation: 'Solo',  genre: 'TODOS', description: '', valor: 500,
+    winner_nome: null, winner_estudio: null, winner_items: null, winner_revealed: false },
+  { id: 'tpl_revelacao',        name: 'Prêmio Revelação',      enabled: true, isTemplate: true,  formation: 'TODOS', genre: 'TODOS', description: '',
+    winner_nome: null, winner_estudio: null, winner_items: null, winner_revealed: false },
+  { id: 'tpl_coreografo',       name: 'Melhor Coreografia',    enabled: true, isTemplate: true,  formation: 'TODOS', genre: 'TODOS', description: '', valor: 1000,
+    winner_nome: null, winner_estudio: null, winner_items: null, winner_revealed: false },
+  { id: 'tpl_coreografo_pessoa',name: 'Melhor Coreógrafo(a)',  enabled: true, isTemplate: true,  formation: 'TODOS', genre: 'TODOS', description: '',
+    winner_nome: null, winner_estudio: null, winner_items: null, winner_revealed: false },
+  { id: 'tpl_grupo',            name: 'Melhor Grupo da Noite', enabled: true, isTemplate: true,  formation: 'Grupo', genre: 'TODOS', description: '', valor: 2000,
+    winner_nome: null, winner_estudio: null, winner_items: null, winner_revealed: false },
+  { id: 'tpl_figurino',         name: 'Melhor Figurino',       enabled: true, isTemplate: false, formation: 'TODOS', genre: 'TODOS', description: '',
+    winner_nome: null, winner_estudio: null, winner_items: null, winner_revealed: false },
+  // Voto Popular (tipo manual, classifyAward por regex "voto popular") —
+  // winner_nome/winner_estudio ficam null aqui e são preenchidos no passo 5e,
+  // depois que as registrations existem de verdade.
+  { id: 'tpl_voto_popular',     name: 'Voto Popular',          enabled: true, isTemplate: true,  formation: 'TODOS', genre: 'TODOS',
+    description: 'Escolhido pelo público durante a transmissão ao vivo.',
+    winner_nome: null, winner_estudio: null, winner_items: null, winner_revealed: false },
 ]
 
 const CRITERIOS_PADRAO = [
@@ -512,9 +545,12 @@ Deno.serve(async (req) => {
       .eq('is_demo', true)
     const ids = (demoEvents ?? []).map((e: { id: string }) => e.id)
     if (ids.length === 0) {
-      // Mesmo sem evento, pode haver workshop standalone + templates do produtor.
+      // Mesmo sem evento, pode haver workshop standalone do produtor.
       // Deleta órfãos pra regerar limpo.
-      await supa.from('certificate_templates').delete().eq('producer_id', userId)
+      // certificate_templates NÃO é limpo aqui de propósito — é por
+      // PRODUTOR (não por evento, sem coluna event_id), deletar por
+      // producer_id apagaria o certificado REAL do produtor junto. Ver
+      // nota grande na seção 11 mais abaixo (incidente real 2026-07-15).
       // BUG CRÍTICO 2026-06-17: faltava o filtro .is('event_id', null) — sem
       // ele, isso deletava TODOS os workshops do produtor, incluindo os de
       // eventos REAIS (não só os standalone órfãos do demo). Causou perda de
@@ -555,11 +591,13 @@ Deno.serve(async (req) => {
     //    deletava TAMBÉM os workshops de eventos REAIS do mesmo produtor.
     //    workshop_lots e workshop_registrations têm CASCADE em workshops.id.
     await supa.from('workshops').delete().eq('created_by', userId).is('event_id', null)
-    // ── Certificados Etapa 2: certificate_templates é por producer_id (1 por type),
-    //    certificates_issued tem CASCADE em registrations / workshop_registrations.
-    //    Deletar templates e certificates_issued explicitamente garante limpeza.
-    await supa.from('certificates_issued').delete().eq('producer_id', userId)
-    await supa.from('certificate_templates').delete().eq('producer_id', userId)
+    // ── Certificados: certificates_issued tem event_id — limpa só o que é
+    //    do(s) evento(s) demo. NUNCA filtrar certificate_templates/
+    //    certificates_issued por producer_id sozinho — apagaria os
+    //    certificados REAIS do produtor (incidente real 2026-07-15, ver
+    //    nota grande na seção 11 mais abaixo). certificate_templates não é
+    //    tocado aqui — não é seedado por este arquivo.
+    await supa.from('certificates_issued').delete().in('event_id', ids)
     // ── Cupons: têm event_id FK. Deletar pelos eventos demo.
     await supa.from('coupons').delete().in('event_id', ids)
     // ── Demo team: 3 staff fakes criados via auth.admin. Identificados por
@@ -696,10 +734,46 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       video_submission_deadline: new Date(startDate.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(),
       video_evaluators_count: 1, // produtor solo (multi-jurado v1.1)
       video_evaluation_rule: 'majority',
+      // Documentos extras + link de destaque na vitrine (migration 20260709).
+      // O link de destaque usa texto genérico de propósito — não finge uma
+      // integração real com o Voto Popular (infra isolada em outro projeto
+      // Supabase, o seed não tem como replicar dados de lá).
+      documentos_extras: [
+        { nome: 'Ficha Técnica de Palco', url: DEMO_REGULATION_PDF },
+        { nome: 'Mapa de Acesso ao Teatro', url: DEMO_REGULATION_PDF },
+      ],
+      destaque_link_url: `${Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'}/evento/demo-${user.id.slice(0, 8)}`,
+      destaque_link_label: 'Confira a programação completa',
     }]).select('id').single()
 
     if (evErr || !ev) return json({ error: 'db_error', detail: evErr?.message ?? 'event' }, 500)
     const eventId = ev.id as string
+
+    // 2b) Telão de Palco — reusa a RPC já existente (regenerate_telao_code
+    // gera código + já marca telao_ativo=true) via o client autenticado do
+    // próprio produtor (a RPC exige auth.uid() = events.created_by). Como já
+    // marcamos uma coreografia como "ao vivo" mais abaixo (passo 5d),
+    // telao_modo fica no default 'ao_vivo' — o Telão nasce mostrando algo
+    // real, não a tela "aguardando". Best-effort: falha aqui não derruba o
+    // resto do seed.
+    try {
+      const { error: telaoErr } = await userClient.rpc('regenerate_telao_code', { p_event_id: eventId })
+      if (telaoErr) console.warn('Falha ao gerar código do Telão:', telaoErr.message)
+    } catch (e: any) {
+      console.warn('Falha ao gerar código do Telão:', e?.message ?? e)
+    }
+
+    // 2c) Avisos do produtor (event_announcements) — 2 exemplos pra testar
+    // o card "Início" do inscrito sem precisar cadastrar na mão.
+    try {
+      const { error: avisosErr } = await supa.from('event_announcements').insert([
+        { event_id: eventId, title: 'Bem-vindos ao CoreoHub Open!', body: 'Confiram o cronograma antes de chegar — a ordem de apresentação pode mudar em tempo real no dia.', active: true },
+        { event_id: eventId, title: 'Backstage', body: 'Espaço reservado pros estúdios entre o Bloco 1 e o Bloco 2 — aproveitem pra trocar figurino com calma.', active: true },
+      ])
+      if (avisosErr) console.warn('Falha ao inserir avisos:', avisosErr.message)
+    } catch (e: any) {
+      console.warn('Falha ao inserir avisos:', e?.message ?? e)
+    }
 
     // 3) configuracoes — critérios, prêmios, etc
     // Schema real: usa nomes 'estilos', 'formatos', 'categorias' (sem _config).
@@ -966,7 +1040,7 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
     const { data: insertedRegs, error: regErr } = await supa
       .from('registrations')
       .insert(registrationsToInsert)
-      .select('id, nome_coreografia, status, tipo_apresentacao, formato_participacao')
+      .select('id, nome_coreografia, estudio, status, tipo_apresentacao, formato_participacao')
     if (regErr) {
       // Rollback: deleta evento (CASCADE limpa o resto)
       await supa.from('events').delete().eq('id', eventId)
@@ -1116,6 +1190,29 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
         .eq('id', eventId)
     } catch (e: any) {
       console.warn('Falha no seed de deliberation:', e?.message ?? e)
+    }
+
+    // 5f) Voto Popular — preenche o vencedor (fake, sem conexão real com o
+    // produto isolado Voto Popular) só pra mostrar como fica um prêmio
+    // manual JÁ revelado. Precisa de uma registration real pra referenciar
+    // nome/estúdio, por isso só dá pra fazer aqui (depois de 5)).
+    try {
+      const aprovadas = (insertedRegs ?? []).filter((r: any) => r.status === 'APROVADA')
+      if (aprovadas.length > 0) {
+        const votoWinner = pick(aprovadas) as any
+        const premiosComVoto = PREMIOS_ESPECIAIS.map(p =>
+          p.id === 'tpl_voto_popular'
+            ? { ...p, winner_nome: votoWinner.nome_coreografia, winner_estudio: votoWinner.estudio || null, winner_revealed: true }
+            : p
+        )
+        const { error: votoErr } = await supa
+          .from('configuracoes')
+          .update({ premios_especiais: premiosComVoto })
+          .eq('id', eventId)
+        if (votoErr) console.warn('Falha ao definir vencedor do Voto Popular:', votoErr.message)
+      }
+    } catch (e: any) {
+      console.warn('Falha ao definir vencedor do Voto Popular:', e?.message ?? e)
     }
 
     // 6) Seletiva de Vídeo: 20 inscrições PENDENTES com vídeo submitted
@@ -1379,6 +1476,43 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       else workshopRegsOk = workshopRegsToInsert.length
     }
 
+    // ─── 8b) Workshop Pass — combo cobrindo os 2 primeiros workshops
+    //     vinculados ao evento (índices 0/1 de DEMO_WORKSHOPS, ambos com
+    //     event_id preenchido — o 4º workshop é standalone e não entra).
+    if (insertedWorkshops && insertedWorkshops.length >= 2) {
+      try {
+        const { data: pass, error: passErr } = await supa
+          .from('workshop_passes')
+          .insert([{
+            event_id: eventId,
+            created_by: user.id,
+            name: 'Day Pass — Sábado',
+            description: 'Acesso aos 2 workshops do dia com desconto pra quem leva os dois.',
+            preco: 130,
+            preco_inscritos_mostra: 90,
+            auto_detect_combo: true,
+            pass_commission_percent: 10,
+            pass_fee_mode: 'repassar',
+            pass_max_per_cpf: 1,
+            pass_reservation_minutes: 10,
+            is_published: true,
+          }])
+          .select('id')
+          .single()
+        if (passErr || !pass) {
+          console.warn('Falha ao criar workshop_pass:', passErr?.message)
+        } else {
+          const { error: itemsErr } = await supa.from('workshop_pass_items').insert([
+            { pass_id: pass.id, workshop_id: insertedWorkshops[0].id },
+            { pass_id: pass.id, workshop_id: insertedWorkshops[1].id },
+          ])
+          if (itemsErr) console.warn('Falha ao inserir workshop_pass_items:', itemsErr.message)
+        }
+      } catch (e: any) {
+        console.warn('Falha no seed de workshop_pass:', e?.message ?? e)
+      }
+    }
+
     // ─── 9) Cupons (Tier 2 plateia + Workshops) ─────────────────────────────
     let couponsOk = 0
     const couponsToInsert = DEMO_COUPONS.map(c => ({
@@ -1441,127 +1575,14 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
     if (atErr) console.warn('Falha audience_tickets:', atErr.message)
     else audienceTicketsOk = audienceTicketsToInsert.length
 
-    // ─── 11) Certificate templates (Etapa 2) ───────────────────────────────
-    // 1 template por type — produtor pode editar depois pelo /certificados
-    let certTemplatesOk = 0
-    const certTemplatesToInsert = [
-      {
-        producer_id: user.id,
-        template_type: 'mostra',
-        name: 'Modelo padrão Mostra (DEMO)',
-        preset_template: 'mostra-classico',
-        background_url: null,
-        layout_json: [],
-        accent_color: '#ff0068',
-        primary_color: '#0b0b0f',
-        signature_names: ['Coordenação Artística', 'Direção do Festival'],
-        signature_urls: [],
-      },
-      {
-        producer_id: user.id,
-        template_type: 'workshop',
-        name: 'Modelo padrão Workshop (DEMO)',
-        preset_template: 'workshop-minimalista',
-        background_url: null,
-        layout_json: [],
-        accent_color: '#ff0068',
-        primary_color: '#0b0b0f',
-        signature_names: ['Coordenação Pedagógica'],
-        signature_urls: [],
-      },
-    ]
-    const { data: certTemplates, error: ctErr } = await supa
-      .from('certificate_templates')
-      .insert(certTemplatesToInsert)
-      .select('id, template_type')
-    if (ctErr) console.warn('Falha certificate_templates:', ctErr.message)
-    else certTemplatesOk = (certTemplates ?? []).length
-
-    // ─── 12) Certificates_issued (lazy: pdf_url=NULL) ──────────────────────
-    // Mostra: emite pra todas registrations APROVADAS (45 do batch acima)
-    // Workshop: emite pros workshop_registrations attended=true
-    let certsIssuedOk = 0
-    if ((certTemplates ?? []).length > 0) {
-      const tplMostra   = (certTemplates ?? []).find((t: any) => t.template_type === 'mostra')
-      const tplWorkshop = (certTemplates ?? []).find((t: any) => t.template_type === 'workshop')
-
-      const issuedToInsert: any[] = []
-
-      // Mostra: pega registrations APROVADAS do batch já criado
-      const aprovadas = (insertedRegs ?? []).filter((r: any) => r.status === 'APROVADA')
-      if (tplMostra && aprovadas.length > 0) {
-        // Recarrega com dados completos pra montar certificate_data
-        const { data: regsCompletas } = await supa
-          .from('registrations')
-          .select('id, nome_coreografia, formato_participacao, categoria, estilo_danca, estudio, classificacao_final, bailarinos_detalhes')
-          .in('id', aprovadas.map((r: any) => r.id))
-        for (const r of regsCompletas ?? []) {
-          const formato = String(r.formato_participacao ?? '').toLowerCase()
-          const isGrupo = formato.includes('grupo') || formato.includes('conjunto')
-          const bailarinos = Array.isArray(r.bailarinos_detalhes) ? r.bailarinos_detalhes : []
-          const nomes = bailarinos.map((b: any) => b?.full_name).filter(Boolean)
-          const recipient = isGrupo ? r.nome_coreografia : (nomes.length > 0 ? nomes.join(' & ') : r.nome_coreografia)
-          issuedToInsert.push({
-            template_id: tplMostra.id,
-            template_type: 'mostra',
-            registration_id: r.id,
-            workshop_registration_id: null,
-            event_id: eventId,
-            producer_id: user.id,
-            recipient_name: recipient,
-            certificate_data: {
-              evento_nome: eventName,
-              evento_data: eventDateStr,
-              evento_local: 'Teatro Municipal — São Paulo',
-              coreografia: r.nome_coreografia,
-              formato: r.formato_participacao,
-              categoria: r.categoria,
-              modalidade: r.estilo_danca,
-              estudio: r.estudio,
-              classificacao: r.classificacao_final,
-            },
-          })
-        }
-      }
-
-      // Workshop: pega workshop_registrations attended=true do batch
-      if (tplWorkshop) {
-        const { data: wsRegsAttended } = await supa
-          .from('workshop_registrations')
-          .select('id, workshop_id, buyer_name, workshops!inner(name, professor_name, modalidade, duracao_minutos, data_inicio, event_id)')
-          .eq('attended', true)
-          .eq('workshops.created_by', user.id)
-        for (const wr of (wsRegsAttended ?? []) as any[]) {
-          // Só emite cert pra workshop atrelado ao evento demo (não pra standalone — esses ficam órfãos de evento)
-          if (wr.workshops?.event_id !== eventId) continue
-          issuedToInsert.push({
-            template_id: tplWorkshop.id,
-            template_type: 'workshop',
-            registration_id: null,
-            workshop_registration_id: wr.id,
-            event_id: eventId,
-            producer_id: user.id,
-            recipient_name: wr.buyer_name,
-            certificate_data: {
-              evento_nome: eventName,
-              evento_data: eventDateStr,
-              evento_local: 'Teatro Municipal — São Paulo',
-              workshop_nome: wr.workshops?.name,
-              professor_nome: wr.workshops?.professor_name,
-              modalidade: wr.workshops?.modalidade,
-              duracao_minutos: wr.workshops?.duracao_minutos,
-              workshop_data: wr.workshops?.data_inicio,
-            },
-          })
-        }
-      }
-
-      if (issuedToInsert.length > 0) {
-        const { error: ciErr } = await supa.from('certificates_issued').insert(issuedToInsert)
-        if (ciErr) console.warn('Falha certificates_issued:', ciErr.message)
-        else certsIssuedOk = issuedToInsert.length
-      }
-    }
+    // ─── 11) Certificate templates — REMOVIDO DE PROPÓSITO (2026-07-15) ────
+    // certificate_templates é por PRODUTOR, não por evento (UNIQUE(producer_id,
+    // template_type), sem coluna event_id). O código que existia aqui deletava
+    // + recriava os templates do produtor a cada regeneração do demo — isso
+    // sobrescreveu de verdade o certificado "Ouro Real" que o Hemer configurou
+    // pro Usualdance Festival (incidente real, descoberto rodando o smoke test
+    // desta mudança). certificates_issued (que dependia do template criado
+    // aqui) foi removido junto. Ver CLAUDE.md.
 
     // ─── 12) Demo team — 3 staff fakes pra popular /minha-equipe ───────────
     // Cria 3 auth.users via admin API com metadata flag pra cleanup. Email
@@ -1683,8 +1704,6 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
         workshop_registrations: workshopRegsOk,
         coupons: couponsOk,
         audience_tickets: audienceTicketsOk,
-        cert_templates: certTemplatesOk,
-        certificates_issued: certsIssuedOk,
       },
     })
   }

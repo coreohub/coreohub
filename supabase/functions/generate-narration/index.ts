@@ -221,6 +221,18 @@ Deno.serve(async (req) => {
       // Duracao do audio = bytes / (sampleRate * channels * bytesPerSample)
       const durationSeconds = pcmBytes.length / (SAMPLE_RATE * CHANNELS * (BITS_PER_SAMPLE / 8))
 
+      // Guarda o audio_url ANTIGO antes de subir o novo — precisamos do path
+      // pra apagar depois. NUNCA apagamos antes de confirmar que o novo já
+      // subiu (upload + insert OK); senão uma falha no meio do caminho deixa
+      // a coreografia sem narração nenhuma.
+      const { data: oldRow } = await supa
+        .from('narration_audios')
+        .select('audio_url')
+        .eq('event_id', event_id)
+        .eq('registration_id', registration_id)
+        .eq('kind', kind)
+        .maybeSingle()
+
       const fileName = `${event_id}/${registration_id}_${kind}_${Date.now()}.wav`
       const { error: upErr } = await supa.storage
         .from('narrations')
@@ -250,6 +262,20 @@ Deno.serve(async (req) => {
       }])
 
       if (insErr) return { ok: false, error: `db: ${insErr.message}` }
+
+      // Novo áudio confirmado — agora sim apaga o WAV antigo do Storage.
+      // Best-effort: falha aqui não desfaz a narração nova, só deixa um
+      // órfão pro cleanup semanal recolher depois.
+      if (oldRow?.audio_url) {
+        try {
+          const oldPath = oldRow.audio_url.split('/narrations/')[1]
+          if (oldPath && oldPath !== fileName) {
+            await supa.storage.from('narrations').remove([oldPath])
+          }
+        } catch (e) {
+          console.warn('Falha ao apagar narração antiga:', e)
+        }
+      }
 
       return { ok: true, audio_url, duration_seconds: durationSeconds, kind }
     } catch (e: any) {
