@@ -13,12 +13,13 @@
  * legados pra retrocompat (mostra-premium → classico no save).
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import imageCompression from 'browser-image-compression';
 import { supabase, supabaseUrl } from '../services/supabase';
 import PageHeader from '../components/PageHeader';
 import {
   Award, GraduationCap, Loader2, Save, Send, AlertCircle, CheckCircle, Trash2,
-  Type, Palette, Image as ImageIcon, FileSignature, Sparkles, X, Eye,
+  Type, Palette, Image as ImageIcon, FileSignature, Sparkles, X, Eye, Upload,
 } from 'lucide-react';
 
 type TemplateType = 'mostra' | 'workshop';
@@ -107,6 +108,20 @@ const Certificates: React.FC = () => {
   const [formPrimary, setFormPrimary] = useState('#0b0b0f');
   const [formSigs, setFormSigs]     = useState<string[]>([]);
   const [formTitles, setFormTitles] = useState<string[]>([]);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  // Snapshot do que está salvo de fato (só atualiza no load/save) — usado
+  // pra avisar quando o produtor tem mudança não salva antes de clicar
+  // "Pré-visualizar PDF" (o preview busca o template pelo ID no banco, não
+  // reflete o form ainda não salvo).
+  const [savedSnapshot, setSavedSnapshot] = useState<{ preset: PresetId; bg: string; logo: string; accent: string; primary: string } | null>(null);
+  const isDirty = !savedSnapshot
+    || formPreset !== savedSnapshot.preset
+    || formBgUrl !== savedSnapshot.bg
+    || formLogoUrl !== savedSnapshot.logo
+    || formAccent !== savedSnapshot.accent
+    || formPrimary !== savedSnapshot.primary;
 
   // Pré-visualização em PDF (dados fictícios, não toca certificates_issued)
   const [previewing, setPreviewing] = useState(false);
@@ -119,6 +134,11 @@ const Certificates: React.FC = () => {
 
   // Lista resumida de certificados emitidos por evento (pra mostrar status)
   const [emittedSummary, setEmittedSummary] = useState<Record<string, { total: number; downloaded: number }>>({});
+
+  // Nome real do evento selecionado pro "Preview ao vivo" — antes mostrava
+  // sempre "Festival CoreoHub Demo" fixo, mesmo com um evento real
+  // escolhido no dropdown de emissão.
+  const previewEventName = events.find(e => e.id === selectedEvent)?.name ?? 'Festival CoreoHub Demo';
 
   // ── Carrega user + template do tipo ativo ──────────────────────────────
   const loadTemplate = useCallback(async () => {
@@ -137,12 +157,18 @@ const Certificates: React.FC = () => {
 
     if (tpl) {
       setTemplate(tpl as CertTemplate);
+      const preset = normalizePreset(tpl.preset_template);
+      const bg = tpl.background_url ?? '';
+      const logo = tpl.logo_url ?? '';
+      const accent = tpl.accent_color ?? '#ff0068';
+      const primary = tpl.primary_color ?? '#0b0b0f';
       setFormName(tpl.name ?? '');
-      setFormPreset(normalizePreset(tpl.preset_template));
-      setFormBgUrl(tpl.background_url ?? '');
-      setFormLogoUrl(tpl.logo_url ?? '');
-      setFormAccent(tpl.accent_color ?? '#ff0068');
-      setFormPrimary(tpl.primary_color ?? '#0b0b0f');
+      setFormPreset(preset);
+      setFormBgUrl(bg);
+      setFormLogoUrl(logo);
+      setFormAccent(accent);
+      setFormPrimary(primary);
+      setSavedSnapshot({ preset, bg, logo, accent, primary });
       const names = Array.isArray(tpl.signature_names) ? tpl.signature_names : [];
       const titles = Array.isArray(tpl.signature_titles) ? tpl.signature_titles : [];
       setFormSigs(names);
@@ -157,6 +183,7 @@ const Certificates: React.FC = () => {
       setFormLogoUrl('');
       setFormAccent(activeType === 'workshop' ? '#ff0068' : MODERNO_DEFAULT_ACCENT);
       setFormPrimary(activeType === 'workshop' ? '#0b0b0f' : MODERNO_DEFAULT_PRIMARY);
+      setSavedSnapshot(null);
       setFormSigs([]);
       setFormTitles([]);
     }
@@ -198,13 +225,43 @@ const Certificates: React.FC = () => {
     return () => clearTimeout(t);
   }, [feedback]);
 
-  // Troca de preset: cada preset com paleta própria só aplica os defaults
-  // se o template ainda não foi salvo, pra não sobrescrever cor que o
-  // produtor já customizou.
+  // Upload do logo do evento — comprime e salva como base64 inline (mesmo
+  // padrão de foto/capa em WorkshopsManagement/JudgesManagement, sem
+  // depender de bucket novo). fileType PNG (não webp) de propósito: o
+  // pdf-lib só embute png/jpg, não decodifica webp.
+  const handleLogoUpload = async (file: File) => {
+    setLogoUploading(true);
+    try {
+      const compressed = await imageCompression(file, {
+        maxSizeMB: 0.15,
+        maxWidthOrHeight: 300,
+        useWebWorker: true,
+        fileType: 'image/png',
+      });
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(compressed);
+      });
+      setFormLogoUrl(base64);
+    } catch (e) {
+      console.warn('Falha ao processar logo do evento:', e);
+      setFeedback({ kind: 'err', msg: 'Não consegui processar essa imagem. Tente outro arquivo.' });
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
+  // Troca de preset: sempre aplica a paleta própria do preset escolhido —
+  // clicar num card é uma troca explícita de linguagem visual, então a cor
+  // default do preset novo deve substituir a do preset anterior (mesmo se
+  // o template já estava salvo com outra cor). Se o produtor quiser uma
+  // cor diferente, edita os campos de cor manualmente depois de escolher.
   const selectPreset = (id: 'classico' | 'workshop' | 'ouro' | 'moderno' | 'prestigio') => {
     setFormPreset(id);
     const defaults = PRESET_DEFAULT_COLORS[id];
-    if (defaults && !template?.id) {
+    if (defaults) {
       setFormAccent(defaults.accent);
       setFormPrimary(defaults.primary);
     }
@@ -381,8 +438,42 @@ const Certificates: React.FC = () => {
                   </Field>
                 )}
                 {(formPreset === 'moderno' || formPreset === 'prestigio') && (
-                  <Field label="URL do logo do evento (opcional)">
-                    <input value={formLogoUrl} onChange={e => setFormLogoUrl(e.target.value)} className={inputCls} placeholder="https://..." />
+                  <Field label="Logo do evento (opcional)">
+                    <div className="flex items-center gap-3">
+                      {formLogoUrl ? (
+                        <img src={formLogoUrl} alt="" className="w-14 h-14 rounded-lg object-contain bg-white border border-slate-200 dark:border-white/10" />
+                      ) : (
+                        <div className="w-14 h-14 rounded-lg border-2 border-dashed border-slate-300 dark:border-white/10 flex items-center justify-center">
+                          <ImageIcon size={18} className="text-slate-400" />
+                        </div>
+                      )}
+                      <input
+                        ref={logoInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={e => { if (e.target.files?.[0]) handleLogoUpload(e.target.files[0]); }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => logoInputRef.current?.click()}
+                        disabled={logoUploading}
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-white/10 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-50"
+                      >
+                        {logoUploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                        {formLogoUrl ? 'Trocar' : 'Enviar logo'}
+                      </button>
+                      {formLogoUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setFormLogoUrl('')}
+                          aria-label="Remover logo"
+                          className="p-2 rounded-lg border border-rose-200 dark:border-rose-500/30 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
                   </Field>
                 )}
                 <div className="grid grid-cols-2 gap-3">
@@ -497,8 +588,8 @@ const Certificates: React.FC = () => {
                     </p>
                     <p className="text-[6px] mt-1 text-slate-500">
                       {activeType === 'workshop'
-                        ? 'no Festival CoreoHub Demo · 06 de junho de 2026'
-                        : 'no Festival CoreoHub Demo · Solo · Ballet Clássico · Juvenil'}
+                        ? `no ${previewEventName} · 06 de junho de 2026`
+                        : `no ${previewEventName} · Solo · Ballet Clássico · Juvenil`}
                     </p>
 
                     {/* Assinaturas — pareadas com cargo se houver */}
@@ -534,6 +625,9 @@ const Certificates: React.FC = () => {
                 </button>
                 {!template?.id && (
                   <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 italic">Salve o template pra pré-visualizar o PDF real</p>
+                )}
+                {template?.id && isDirty && (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 italic">Você tem alterações não salvas — a pré-visualização vai mostrar a última versão salva, não o que está na tela agora. Salve pra atualizar.</p>
                 )}
               </Card>
 
