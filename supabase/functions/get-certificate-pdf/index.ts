@@ -254,21 +254,31 @@ async function embedImageFromUrl(pdfDoc: PDFDocument, url: string) {
   }
 }
 
+/** Bytes da fonte cursiva cacheados a nível de módulo — sobrevivem entre
+ * invocações que reaproveitam a mesma instância "quente" do Deno, evitando
+ * refazer o fetch do GitHub a cada certificado gerado (o arquivo nunca
+ * muda). `undefined` = ainda não tentou; `null` = tentou e falhou (não
+ * refaz o fetch pro resto da vida da instância — mesmo comportamento de
+ * fallback silencioso, só que decidido 1x). */
+let cachedScriptFontBytes: Uint8Array | null | undefined
+
 /** Busca a fonte cursiva (Dancing Script, OFL) direto do repo google/fonts
  * — URL binária estável, sem depender de UA-sniffing do CSS do Google Fonts
  * (que serve woff2/woff conforme o User-Agent, e fontkit não decodifica
  * woff2). Só chamada pros presets moderno/prestigio. Retorna null
  * (silencioso) se o fetch falhar — o chamador cai pro Times-BoldItalic. */
 async function embedScriptFont(pdfDoc: PDFDocument) {
-  try {
-    const res = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/dancingscript/DancingScript%5Bwght%5D.ttf')
-    if (!res.ok) return null
-    const bytes = new Uint8Array(await res.arrayBuffer())
-    return await pdfDoc.embedFont(bytes)
-  } catch (e) {
-    console.warn('[get-certificate-pdf] falha ao embutir fonte script:', e instanceof Error ? e.message : String(e))
-    return null
+  if (cachedScriptFontBytes === undefined) {
+    try {
+      const res = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/dancingscript/DancingScript%5Bwght%5D.ttf')
+      cachedScriptFontBytes = res.ok ? new Uint8Array(await res.arrayBuffer()) : null
+    } catch (e) {
+      console.warn('[get-certificate-pdf] falha ao embutir fonte script:', e instanceof Error ? e.message : String(e))
+      cachedScriptFontBytes = null
+    }
   }
+  if (!cachedScriptFontBytes) return null
+  return await pdfDoc.embedFont(cachedScriptFontBytes)
 }
 
 /** Converte um quadrilátero/polígono definido em % do cartão (estilo
