@@ -441,7 +441,7 @@ const Certificates: React.FC = () => {
                   <Field label="Logo do evento (opcional)">
                     <div className="flex items-center gap-3">
                       {formLogoUrl ? (
-                        <img src={formLogoUrl} alt="" className="w-14 h-14 rounded-lg object-contain bg-white border border-slate-200 dark:border-white/10" />
+                        <img src={formLogoUrl} alt="Logo do evento enviado" className="w-14 h-14 rounded-lg object-contain bg-white border border-slate-200 dark:border-white/10" />
                       ) : (
                         <div className="w-14 h-14 rounded-lg border-2 border-dashed border-slate-300 dark:border-white/10 flex items-center justify-center">
                           <ImageIcon size={18} className="text-slate-400" />
