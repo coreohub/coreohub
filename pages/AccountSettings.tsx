@@ -1991,6 +1991,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         .from('events')
         .select('id')
         .eq('created_by', user.id)
+        .order('is_demo', { ascending: true })
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -2719,6 +2720,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         const { data: ev } = await supabase
                           .from('events').select('id')
                           .eq('created_by', user.id)
+                          .order('is_demo', { ascending: true })
                           .order('created_at', { ascending: false })
                           .limit(1).maybeSingle();
                         if (!ev?.id) throw new Error('Crie um evento primeiro.');
@@ -2795,6 +2797,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         const { data: ev } = await supabase
                           .from('events').select('id')
                           .eq('created_by', user.id)
+                          .order('is_demo', { ascending: true })
                           .order('created_at', { ascending: false })
                           .limit(1).maybeSingle();
                         if (!ev?.id) throw new Error('Crie um evento primeiro.');

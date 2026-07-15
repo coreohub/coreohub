@@ -683,14 +683,16 @@ const Schedule = () => {
       const query = supabase
         .from('events')
         .select('id,name,edition_year,start_date,created_at,is_demo')
+        // Evento real sempre vence um evento DEMO mais recente (evita o
+        // DEMO sombrear o Cronograma real — mesmo bug de resolveActiveEventId,
+        // ver CLAUDE.md 2026-07-12). Dentro do mesmo grupo, o mais recente vence.
+        .order('is_demo', { ascending: true })
         .order('created_at', { ascending: false });
       const { data } = profile?.team_event_id
         ? await query.or(`created_by.eq.${user.id},id.eq.${profile.team_event_id}`)
         : await query.eq('created_by', user.id);
       if (data && data.length > 0) {
         setAllEvents(data);
-        // Default = mais recente criado (consistente com MesaDeSom).
-        // Evita pegar evento futuro vazio em vez do demo recem-criado
         setSelectedEventId(prev => prev ?? data[0].id);
       } else {
         fetchData(null);
