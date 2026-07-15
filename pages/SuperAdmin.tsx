@@ -9,7 +9,8 @@ import {
 import {
   Crown, DollarSign, Users, Calendar, TrendingUp, Loader2,
   AlertCircle, Mail, Copy, Trash2, Plus, X, Check, Lock, Unlock,
-  ExternalLink, BarChart3, Download, Eye,
+  ExternalLink, BarChart3, Download, Eye, Ticket, GraduationCap,
+  Video, ShieldCheck, ShieldAlert, ShieldQuestion, Search,
 } from 'lucide-react';
 import { startImpersonate } from '../services/impersonateService';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -21,6 +22,8 @@ interface ProducerRow {
   email: string | null;
   is_blocked: boolean;
   asaas_subconta_id: string | null;
+  asaas_kyc_status: string | null;
+  asaas_onboarding_url: string | null;
   events_count: number;
   total_gross: number;
   total_commission: number;
@@ -35,6 +38,7 @@ interface CommissionRow {
   commission_amount: number;
   net_amount: number;
   created_at: string;
+  kind?: 'registration' | 'audience' | 'workshop' | 'video_selection' | null;
 }
 
 interface EventRow {
@@ -49,7 +53,17 @@ interface EventRow {
   commission_fixed: number | null;
   fee_mode: 'repassar' | 'absorver' | null;
   is_public: boolean | null;
+  is_demo: boolean | null;
 }
+
+/* Rótulos/ícones do discriminador platform_commissions.kind (migration 20260604).
+   'registration' é o default legado (inscrição cheia da mostra). */
+const KIND_META: Record<string, { label: string; icon: any }> = {
+  registration:    { label: 'Inscrições',        icon: Users },
+  audience:        { label: 'Ingressos',         icon: Ticket },
+  workshop:        { label: 'Workshops',         icon: GraduationCap },
+  video_selection: { label: 'Seletiva de Vídeo', icon: Video },
+};
 
 const SuperAdmin = () => {
   const navigate = useNavigate();
@@ -64,7 +78,9 @@ const SuperAdmin = () => {
   const [invites, setInvites]           = useState<ProducerInvite[]>([]);
   const [eventSearch, setEventSearch]   = useState('');
   const [eventFilter, setEventFilter]   = useState<'all' | 'private' | 'government' | 'free'>('all');
+  const [showDemoEvents, setShowDemoEvents] = useState(false);
   const [eventEdit, setEventEdit]       = useState<EventRow | null>(null);
+  const [producerSearch, setProducerSearch] = useState('');
   // Bloco 1 (2026-05-28): leads sem atribuição. Acompanha aquisição global —
   // signups que NÃO vieram da vitrine de um evento específico. Padrão
   // Sympla/Eventbrite: plataforma é dona desses leads.
@@ -134,9 +150,9 @@ const SuperAdmin = () => {
             .select('*')
             .order('created_at', { ascending: false }),
           supabase.from('profiles')
-            .select('id, full_name, email, is_blocked, asaas_subconta_id, default_commission_percent'),
+            .select('id, full_name, email, is_blocked, asaas_subconta_id, default_commission_percent, asaas_kyc_status, asaas_onboarding_url'),
           supabase.from('events')
-            .select('id, name, slug, created_by, start_date, event_type, commission_type, commission_percent, commission_fixed, fee_mode, is_public')
+            .select('id, name, slug, created_by, start_date, event_type, commission_type, commission_percent, commission_fixed, fee_mode, is_public, is_demo')
             .order('start_date', { ascending: false }),
           listInvites(),
           // Bloco 1: leads sem atribuição. Filtros: role != COREOHUB_ADMIN
@@ -197,6 +213,8 @@ const SuperAdmin = () => {
             email:             p.email,
             is_blocked:        Boolean(p.is_blocked),
             asaas_subconta_id: p.asaas_subconta_id,
+            asaas_kyc_status:     p.asaas_kyc_status ?? null,
+            asaas_onboarding_url: p.asaas_onboarding_url ?? null,
             events_count:      eventsByProducer.get(p.id) ?? 0,
             total_gross:       grossByProducer.get(p.id) ?? 0,
             total_commission:  commissionByProducer.get(p.id) ?? 0,
@@ -266,22 +284,32 @@ const SuperAdmin = () => {
     };
   }, [commissions, producers]);
 
-  /* KYC pendente — produtores que têm subconta Asaas mas KYC não está APPROVED.
-     Hoje a coluna asaas_kyc_status pode não existir em produção (feature #42 do
-     backlog). Usamos heurística: tem subconta mas events_count=0 ou total_gross=0
-     pode indicar gargalo de onboarding. */
+  /* KYC pendente — produtores com subconta Asaas cujo KYC não está APPROVED.
+     Desde a migration 20260523, profiles.asaas_kyc_status guarda o status real
+     (NOT_SENT/PENDING/APPROVED/REJECTED). Produtores antigos que nunca rodaram
+     "Verificar agora" (AccountSettings) ficam com status NULL — pra esses,
+     mantemos a heurística legada (subconta sem nenhum faturamento) como fallback. */
   const kycAttention = useMemo(() => {
-    return producers.filter(p =>
-      p.asaas_subconta_id && p.total_gross === 0 && !p.is_blocked
-    ).length;
+    return producers.filter(p => {
+      if (!p.asaas_subconta_id || p.is_blocked) return false;
+      if (p.asaas_kyc_status) return p.asaas_kyc_status !== 'APPROVED';
+      return p.total_gross === 0;
+    }).length;
   }, [producers]);
+
+  /* Eventos demo poluem contagem/KPIs se não forem excluídos — achado real em
+     2026-07-12 (evento demo sombreando dado de produtor real em outras telas).
+     Por padrão, escondidos de tudo (KPI, próximos eventos, top eventos, tabela);
+     toggle "Mostrar demo" na seção Eventos revela quando precisar depurar. */
+  const demoEventsCount = useMemo(() => eventsList.filter(e => e.is_demo).length, [eventsList]);
+  const nonDemoEventsList = useMemo(() => eventsList.filter(e => !e.is_demo), [eventsList]);
 
   /* Próximos eventos — start_date entre hoje e +30d, públicos */
   const upcomingEvents = useMemo(() => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     const cutoff = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-    return eventsList
+    return nonDemoEventsList
       .filter(ev => {
         if (!ev.start_date) return false;
         const d = new Date(ev.start_date + 'T12:00:00');
@@ -289,7 +317,7 @@ const SuperAdmin = () => {
       })
       .sort((a, b) => (a.start_date ?? '').localeCompare(b.start_date ?? ''))
       .slice(0, 8);
-  }, [eventsList]);
+  }, [nonDemoEventsList]);
 
   /* Gráfico mensal */
   const monthly = useMemo(() => {
@@ -307,18 +335,44 @@ const SuperAdmin = () => {
     return Array.from(buckets.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
   }, [commissions]);
 
-  /* Top eventos */
+  /* Top eventos (exclui eventos demo — evento de teste não deveria aparecer
+     como "top receita" mesmo que nunca gere comissão real de fato). */
+  const demoEventIds = useMemo(() =>
+    new Set(eventsList.filter(e => e.is_demo).map(e => e.id)),
+    [eventsList]
+  );
+
   const topEvents = useMemo(() => {
     const byEvent = new Map<string, number>();
     for (const c of commissions) {
-      if ((c as any).refunded_at || !c.event_id) continue;
+      if ((c as any).refunded_at || !c.event_id || demoEventIds.has(c.event_id)) continue;
       byEvent.set(c.event_id, (byEvent.get(c.event_id) ?? 0) + Number(c.commission_amount ?? 0));
     }
     return Array.from(byEvent.entries())
       .map(([eventId, commission]) => ({ eventId, name: eventsByName.get(eventId) ?? '—', commission }))
       .sort((a, b) => b.commission - a.commission)
       .slice(0, 5);
-  }, [commissions, eventsByName]);
+  }, [commissions, eventsByName, demoEventIds]);
+
+  /* Receita por fonte de produto — platform_commissions.kind (migration 20260604)
+     discrimina inscrição/plateia/workshop/seletiva. Sem duplicação: Modelo 3 da
+     Seletiva gera 2 rows pro mesmo registration_id, cada uma com kind diferente
+     (registration + video_selection), então somar por kind é seguro. */
+  const revenueByKind = useMemo(() => {
+    const map = new Map<string, { gross: number; commission: number; count: number }>();
+    for (const c of commissions) {
+      if ((c as any).refunded_at) continue;
+      const kind = c.kind ?? 'registration';
+      const cur = map.get(kind) ?? { gross: 0, commission: 0, count: 0 };
+      cur.gross      += Number(c.gross_amount      ?? 0);
+      cur.commission += Number(c.commission_amount ?? 0);
+      cur.count      += 1;
+      map.set(kind, cur);
+    }
+    return Array.from(map.entries())
+      .map(([kind, v]) => ({ kind, ...v }))
+      .sort((a, b) => b.commission - a.commission);
+  }, [commissions]);
 
   /* Ações */
   const handleToggleBlock = async (p: ProducerRow) => {
@@ -531,8 +585,8 @@ const SuperAdmin = () => {
             <MetricCard
               icon={Calendar}
               label="Eventos"
-              value={eventsByName.size}
-              sub={`${upcomingEvents.length} nos próximos 30 dias`}
+              value={nonDemoEventsList.length}
+              sub={`${upcomingEvents.length} nos próximos 30 dias${demoEventsCount > 0 ? ` · ${demoEventsCount} demo oculto${demoEventsCount !== 1 ? 's' : ''}` : ''}`}
             />
             <MetricCard
               icon={AlertCircle}
@@ -678,6 +732,29 @@ const SuperAdmin = () => {
             )}
           </Section>
 
+          {/* Receita por fonte de produto — kind discrimina inscrição/plateia/workshop/seletiva
+              desde a migration 20260604. Sem isso, o admin não sabia qual produto puxa receita. */}
+          {revenueByKind.length > 0 && (
+            <Section icon={BarChart3} title="Receita por Fonte" sub="Comissão da CoreoHub por tipo de produto — all-time">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {revenueByKind.map(({ kind, gross, commission, count }) => {
+                  const meta = KIND_META[kind] ?? { label: kind, icon: DollarSign };
+                  const Icon = meta.icon;
+                  return (
+                    <div key={kind} className="bg-slate-50 dark:bg-white/5 p-4 rounded-2xl border border-slate-200 dark:border-white/5">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Icon size={13} className="text-[#ff0068]" />
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">{meta.label}</p>
+                      </div>
+                      <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">R$ {commission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{count} transaç{count === 1 ? 'ão' : 'ões'} · GMV R$ {gross.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </Section>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Top eventos */}
             <Section icon={TrendingUp} title="Top 5 Eventos" sub="Maior receita para a CoreoHub" className="lg:col-span-1">
@@ -756,26 +833,46 @@ const SuperAdmin = () => {
                 className="flex-1 min-w-[180px] bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
               />
               <div className="flex gap-2">
-                {(['all','private','government','free'] as const).map(f => (
-                  <button
-                    key={f}
-                    onClick={() => setEventFilter(f)}
-                    className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                      eventFilter === f
-                        ? 'bg-[#ff0068] text-white'
-                        : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    {f === 'all' ? 'Todos' : f === 'private' ? 'Privados' : f === 'government' ? 'Governo' : 'Gratuitos'}
-                  </button>
-                ))}
+                {(['all','private','government','free'] as const).map(f => {
+                  const base = eventsList.filter(ev => showDemoEvents || !ev.is_demo);
+                  const count = f === 'all' ? base.length
+                    : f === 'private' ? base.filter(ev => ev.event_type !== 'government').length
+                    : f === 'government' ? base.filter(ev => ev.event_type === 'government').length
+                    : base.filter(ev => Number(ev.commission_percent ?? 0) === 0 && Number(ev.commission_fixed ?? 0) === 0).length;
+                  return (
+                    <button
+                      key={f}
+                      onClick={() => setEventFilter(f)}
+                      className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                        eventFilter === f
+                          ? 'bg-[#ff0068] text-white'
+                          : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      {f === 'all' ? 'Todos' : f === 'private' ? 'Privados' : f === 'government' ? 'Governo' : 'Gratuitos'} · {count}
+                    </button>
+                  );
+                })}
               </div>
+              {demoEventsCount > 0 && (
+                <button
+                  onClick={() => setShowDemoEvents(v => !v)}
+                  className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
+                    showDemoEvents
+                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                      : 'bg-slate-50 dark:bg-white/5 text-slate-400 border-slate-200 dark:border-white/10 hover:text-slate-700 dark:hover:text-white'
+                  }`}
+                >
+                  {showDemoEvents ? `Ocultar demo (${demoEventsCount})` : `Mostrar demo (${demoEventsCount})`}
+                </button>
+              )}
             </div>
 
             {(() => {
               const producerById = new Map(producers.map(p => [p.id, p.full_name ?? p.email ?? '—']));
               const term = eventSearch.toLowerCase();
               const filtered = eventsList.filter(ev => {
+                if (!showDemoEvents && ev.is_demo) return false;
                 if (term && !ev.name?.toLowerCase().includes(term)) return false;
                 if (eventFilter === 'private'    && ev.event_type !== 'private')    return false;
                 if (eventFilter === 'government' && ev.event_type !== 'government') return false;
@@ -807,7 +904,12 @@ const SuperAdmin = () => {
                         return (
                           <tr key={ev.id} className="hover:bg-slate-50 dark:hover:bg-white/5">
                             <td className="px-4 py-3">
-                              <p className="text-xs font-black text-slate-900 dark:text-white">{ev.name}</p>
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-xs font-black text-slate-900 dark:text-white">{ev.name}</p>
+                                {ev.is_demo && (
+                                  <span className="text-[8px] font-black uppercase text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-full shrink-0">Demo</span>
+                                )}
+                              </div>
                               {ev.slug && <p className="text-[9px] text-slate-400">/{ev.slug}</p>}
                             </td>
                             <td className="px-4 py-3 text-xs text-slate-700 dark:text-slate-300 truncate max-w-[180px]">
@@ -897,6 +999,17 @@ const SuperAdmin = () => {
             {producers.length === 0 ? (
               <p className="text-center py-6 text-[10px] text-slate-400 uppercase font-black">Nenhum produtor ainda</p>
             ) : (
+              <>
+              <div className="relative mb-4 max-w-sm">
+                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={producerSearch}
+                  onChange={e => setProducerSearch(e.target.value)}
+                  placeholder="Buscar por nome ou e-mail..."
+                  className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                />
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
@@ -907,12 +1020,19 @@ const SuperAdmin = () => {
                       <th className="px-4 py-3">Comissão</th>
                       <th className="px-4 py-3 text-center" title="Comissão padrão aplicada aos eventos deste produtor">% Padrão</th>
                       <th className="px-4 py-3">Asaas</th>
+                      <th className="px-4 py-3">KYC</th>
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3 text-right" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                    {producers.map(p => (
+                    {producers
+                      .filter(p => {
+                        if (!producerSearch.trim()) return true;
+                        const term = producerSearch.toLowerCase();
+                        return (p.full_name ?? '').toLowerCase().includes(term) || (p.email ?? '').toLowerCase().includes(term);
+                      })
+                      .map(p => (
                       <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-white/5">
                         <td className="px-4 py-3">
                           <p className="text-xs font-black text-slate-900 dark:text-white">{p.full_name ?? '—'}</p>
@@ -960,6 +1080,9 @@ const SuperAdmin = () => {
                           }
                         </td>
                         <td className="px-4 py-3">
+                          <KycBadge status={p.asaas_kyc_status} onboardingUrl={p.asaas_onboarding_url} hasSubconta={Boolean(p.asaas_subconta_id)} />
+                        </td>
+                        <td className="px-4 py-3">
                           {p.is_blocked
                             ? <span className="text-[9px] font-black uppercase text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded-full">Bloqueado</span>
                             : <span className="text-[9px] font-black uppercase text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">Ativo</span>
@@ -989,6 +1112,7 @@ const SuperAdmin = () => {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </Section>
         </>
@@ -1081,6 +1205,34 @@ const MetricCard: React.FC<{ icon: any; label: string; value: any; sub: string; 
       <p className="text-[9px] text-slate-500 font-medium">{sub}</p>
     </div>
   );
+};
+
+/* Badge de status KYC real (profiles.asaas_kyc_status, migration 20260523).
+   Sem subconta = produtor nunca iniciou onboarding Asaas, nada a mostrar. */
+const KycBadge: React.FC<{ status: string | null; onboardingUrl: string | null; hasSubconta: boolean }> = ({ status, onboardingUrl, hasSubconta }) => {
+  if (!hasSubconta) {
+    return <span className="text-[9px] font-black uppercase text-slate-400 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-full">—</span>;
+  }
+  const cfg = {
+    APPROVED: { label: 'Aprovado',  cls: 'text-emerald-500 bg-emerald-500/10', icon: ShieldCheck },
+    PENDING:  { label: 'Pendente',  cls: 'text-amber-500 bg-amber-500/10',     icon: ShieldAlert },
+    REJECTED: { label: 'Rejeitado', cls: 'text-rose-500 bg-rose-500/10',       icon: ShieldAlert },
+    NOT_SENT: { label: 'Não enviado', cls: 'text-slate-400 bg-slate-100 dark:bg-white/5', icon: ShieldQuestion },
+  }[status ?? ''] ?? { label: 'Desconhecido', cls: 'text-slate-400 bg-slate-100 dark:bg-white/5', icon: ShieldQuestion };
+  const Icon = cfg.icon;
+  const badge = (
+    <span className={`inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${cfg.cls}`}>
+      <Icon size={10} /> {cfg.label}
+    </span>
+  );
+  if (onboardingUrl && status !== 'APPROVED') {
+    return (
+      <a href={onboardingUrl} target="_blank" rel="noopener noreferrer" title="Abrir onboarding Asaas" className="hover:ring-1 hover:ring-current rounded-full">
+        {badge}
+      </a>
+    );
+  }
+  return badge;
 };
 
 const Section: React.FC<{ icon: any; title: string; sub?: string; className?: string; children: React.ReactNode }> = ({ icon: Icon, title, sub, className = '', children }) => (
