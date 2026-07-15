@@ -925,6 +925,18 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
     const judgeIdByPin: Record<string, string> = {}
     ;(insertedJudges ?? []).forEach((j: any) => { judgeIdByPin[j.pin] = j.id })
 
+    // Vincula os 3 jurados demo ao evento demo via event_judges (migration
+    // 20260715). O trigger auto_assign_judges_to_new_event PULA eventos
+    // is_demo=true de propósito (senão jurados REAIS do produtor voltariam a
+    // vazar pro evento demo) — então esse vínculo precisa ser feito na mão,
+    // só com os 3 jurados que acabamos de criar.
+    if (insertedJudges && insertedJudges.length > 0) {
+      const { error: ejErr } = await supa.from('event_judges').insert(
+        insertedJudges.map((j: any) => ({ event_id: eventId, judge_id: j.id }))
+      )
+      if (ejErr) console.warn('Falha ao vincular jurados demo ao evento:', ejErr.message)
+    }
+
     // 5) Distribuir 50 coreografias (status + pagamento aleatórios conforme spec)
     // Schema real corrigido:
     //   - formato_participacao (nao formacao)

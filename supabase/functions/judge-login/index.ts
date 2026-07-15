@@ -176,11 +176,39 @@ Deno.serve(async (req) => {
   }
 
   // ─── action: list ────────────────────────────────────────────────────────
+  // Exige event_id desde 2026-07-15 (migration event_judges) — sem isso,
+  // jurado de QUALQUER evento do produtor aparecia junto (bug real: jurado
+  // fictício de evento demo listado ao lado dos jurados reais do
+  // Usualdance Festival). 2 passos (sem embedded join) — mesmo padrão do
+  // resto do arquivo.
   if (action === 'list') {
+    const { event_id } = body ?? {}
+    if (!event_id) return json({ ok: false, reason: 'missing_fields' }, 400)
+
+    const { data: event, error: evErr } = await supa
+      .from('events')
+      .select('id')
+      .eq('id', event_id)
+      .eq('created_by', producer.id)
+      .maybeSingle()
+    if (evErr) return json({ error: 'db_error', detail: evErr.message }, 500)
+    if (!event) return json({ ok: false, reason: 'event_not_found' }, 404)
+
+    const { data: links, error: linksErr } = await supa
+      .from('event_judges')
+      .select('judge_id')
+      .eq('event_id', event_id)
+    if (linksErr) return json({ error: 'db_error', detail: linksErr.message }, 500)
+
+    const judgeIds = (links ?? []).map(l => l.judge_id)
+    if (judgeIds.length === 0) {
+      return json({ ok: true, producer_name: producer.full_name, judges: [] })
+    }
+
     const { data: judges, error } = await supa
       .from('judges')
       .select('*')
-      .eq('created_by', producer.id)
+      .in('id', judgeIds)
       .order('name')
 
     if (error) return json({ error: 'db_error', detail: error.message }, 500)
@@ -202,7 +230,7 @@ Deno.serve(async (req) => {
   // PIN tem so 10k combinacoes; sem isso, brute-force trivializa o login.
   if (action === 'validate') {
     const { judge_id, pin, event_id } = body ?? {}
-    if (!judge_id || !pin) return json({ ok: false, reason: 'missing_fields' }, 400)
+    if (!judge_id || !pin || !event_id) return json({ ok: false, reason: 'missing_fields' }, 400)
 
     const { data: judge, error } = await supa
       .from('judges')
@@ -213,6 +241,18 @@ Deno.serve(async (req) => {
 
     if (error) return json({ error: 'db_error', detail: error.message }, 500)
     if (!judge || judge.is_active === false) return json({ ok: false, reason: 'judge_not_found' }, 404)
+
+    // Confirma que esse jurado está vinculado a ESSE evento (event_judges) —
+    // sem isso, um jurado de outro evento do mesmo produtor conseguia logar
+    // com o código de um evento ao qual nunca foi vinculado.
+    const { data: link, error: linkErr } = await supa
+      .from('event_judges')
+      .select('judge_id')
+      .eq('event_id', event_id)
+      .eq('judge_id', judge_id)
+      .maybeSingle()
+    if (linkErr) return json({ error: 'db_error', detail: linkErr.message }, 500)
+    if (!link) return json({ ok: false, reason: 'judge_not_found' }, 404)
 
     // Verifica lockout antes de comparar PIN
     const { data: attempts } = await supa
@@ -280,12 +320,19 @@ Deno.serve(async (req) => {
     const event = await resolveEvent(event_id)
     if (!event) return json({ ok: false, reason: 'event_not_found' }, 404)
 
-    // Lista todos os jurados do produtor (pra cards/filtros que mostram outros)
+    // Lista os jurados VINCULADOS a este evento (pra cards/filtros que
+    // mostram outros) — event_judges, não mais "todos os jurados do
+    // produtor" (era o que vazava jurado de outro evento/demo aqui).
+    const { data: eventJudgeLinks } = await supa
+      .from('event_judges')
+      .select('judge_id')
+      .eq('event_id', event.id)
+    const eventJudgeIds = (eventJudgeLinks ?? []).map(l => l.judge_id)
+
     const [{ data: allJudges }, { data: configByEvent }, { data: configLegacy }, { data: registrations }, { data: eventStyles }, { data: marcacoes }] = await Promise.all([
-      supa.from('judges')
-        .select('*')
-        .eq('created_by', producer.id)
-        .order('name'),
+      eventJudgeIds.length > 0
+        ? supa.from('judges').select('*').in('id', eventJudgeIds).order('name')
+        : Promise.resolve({ data: [] } as any),
       event?.id
         ? supa.from('configuracoes')
             .select('regras_avaliacao, escala_notas, premios_especiais, pin_inactivity_minutes')

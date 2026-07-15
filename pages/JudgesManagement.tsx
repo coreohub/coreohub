@@ -116,6 +116,13 @@ const JudgesManagement = () => {
   // (não-demo) — só cai pra demo se for o único evento existente.
   const [events, setEvents] = useState<EventOption[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  // Jurado atua num evento só se explicitamente vinculado (event_judges,
+  // migration 20260715) — antes disso, todo jurado do produtor aparecia em
+  // qualquer evento, inclusive jurado fictício de demo vazando pro evento
+  // real. Novo evento já nasce com os jurados ativos vinculados (trigger no
+  // banco) — produtor desmarca quem não participa desta edição.
+  const [assignedJudgeIds, setAssignedJudgeIds] = useState<Set<string>>(new Set());
+  const [togglingAssignment, setTogglingAssignment] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -184,6 +191,42 @@ const JudgesManagement = () => {
   useEffect(() => {
     setShortCode(null);
   }, [selectedEventId]);
+
+  // Carrega quais jurados estão vinculados ao evento selecionado.
+  useEffect(() => {
+    if (!selectedEventId) { setAssignedJudgeIds(new Set()); return; }
+    (async () => {
+      const { data, error } = await supabase.rpc('get_event_judge_ids', { p_event_id: selectedEventId });
+      if (error) { console.error('get_event_judge_ids:', error.message); return; }
+      setAssignedJudgeIds(new Set((data ?? []) as string[]));
+    })();
+  }, [selectedEventId]);
+
+  const toggleEventJudge = async (judgeId: string, assigned: boolean) => {
+    if (!selectedEventId) return;
+    setTogglingAssignment(judgeId);
+    // Otimista — reverte se a RPC falhar.
+    setAssignedJudgeIds(prev => {
+      const next = new Set(prev);
+      if (assigned) next.add(judgeId); else next.delete(judgeId);
+      return next;
+    });
+    try {
+      const { error } = await supabase.rpc('set_event_judge', {
+        p_event_id: selectedEventId, p_judge_id: judgeId, p_assigned: assigned,
+      });
+      if (error) throw error;
+    } catch (e: any) {
+      setAssignedJudgeIds(prev => {
+        const next = new Set(prev);
+        if (assigned) next.delete(judgeId); else next.add(judgeId);
+        return next;
+      });
+      alert(e.message || 'Erro ao atualizar vínculo do jurado com o evento.');
+    } finally {
+      setTogglingAssignment(null);
+    }
+  };
 
   const copyShortCode = async () => {
     if (!shortCode) return;
@@ -332,14 +375,15 @@ const JudgesManagement = () => {
         .order('ordem_apresentacao', { ascending: true });
       const schedule = (regs ?? []).filter((r: any) => !r.excluded_from_schedule);
 
-      const activeJudges = judges.filter(j => j.is_active !== false);
-      if (activeJudges.length === 0) { alert('Nenhum jurado ativo pra gerar a súmula.'); return; }
+      // Filtra por vínculo real com o evento (event_judges, migration
+      // 20260715) — antes disso, qualquer jurado ativo do produtor entrava
+      // aqui, inclusive de outra edição/evento demo.
+      const activeJudges = judges.filter(j => j.is_active !== false && assignedJudgeIds.has(j.id));
+      if (activeJudges.length === 0) { alert('Nenhum jurado vinculado a este evento — vincule em "Vinculado a este evento" no card do jurado.'); return; }
 
-      // `judges` não tem event_id (é uma entidade do produtor, reusada entre
-      // edições) — sem isso, jurado de uma edição anterior ainda marcado
-      // ativo, cujos gêneros configurados não batem com NENHUMA coreografia
-      // do evento atual, ganhava uma folha inteira em branco pra imprimir à
-      // toa. Pula quem não teria nada pra avaliar neste evento.
+      // Dentro dos jurados vinculados, ainda pula quem não teria nada pra
+      // avaliar nesta edição específica (gêneros configurados não batem com
+      // nenhuma coreografia do cronograma) — evita folha em branco à toa.
       const judgesWithQueue = activeJudges
         .map(judge => {
           const genresOf = judge.competencias_generos ?? [];
@@ -469,8 +513,10 @@ const JudgesManagement = () => {
       const blocosList = blocosData ?? [];
       const blocosById = new Map(blocosList.map((b: any) => [b.id, b]));
 
-      const activeJudges = judges.filter(j => j.is_active !== false);
-      if (activeJudges.length === 0) { alert('Nenhum jurado ativo pra montar a banca.'); return; }
+      // Filtra por vínculo real com o evento (event_judges) — mesma razão
+      // da Súmula acima.
+      const activeJudges = judges.filter(j => j.is_active !== false && assignedJudgeIds.has(j.id));
+      if (activeJudges.length === 0) { alert('Nenhum jurado vinculado a este evento — vincule em "Vinculado a este evento" no card do jurado.'); return; }
 
       const getBanca = (estilo: string | null): string[] => {
         if (!estilo) return [];
@@ -1130,6 +1176,31 @@ const JudgesManagement = () => {
                         {f}
                       </span>
                     ))}
+                  </div>
+                )}
+
+                {/* Vínculo com o evento selecionado (event_judges, migration
+                    20260715) — jurado só entra na Súmula/Cronograma/terminal
+                    desse evento se estiver marcado aqui. */}
+                {selectedEventId && (
+                  <div className="px-5 pb-3">
+                    <button
+                      type="button"
+                      onClick={() => toggleEventJudge(judge.id, !assignedJudgeIds.has(judge.id))}
+                      disabled={togglingAssignment === judge.id}
+                      className={`w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-50 ${
+                        assignedJudgeIds.has(judge.id)
+                          ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                          : 'bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400'
+                      }`}
+                    >
+                      {togglingAssignment === judge.id ? (
+                        <Loader2 size={11} className="animate-spin" />
+                      ) : (
+                        <CheckCircle2 size={11} />
+                      )}
+                      {assignedJudgeIds.has(judge.id) ? 'Vinculado a este evento' : 'Vincular a este evento'}
+                    </button>
                   </div>
                 )}
 

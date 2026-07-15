@@ -774,14 +774,25 @@ const Schedule = () => {
       setRegistrations(list);
       setOrderChanged(false);
 
-      // Jurados do produtor (RLS já escopa pra created_by) — usados só pra
-      // calcular a banca que avalia cada coreografia (chip visual + critério
-      // opcional de "minimizar troca de jurados" no Gerar Ordem Inteligente).
-      const { data: judgesData } = await supabase
-        .from('judges')
-        .select('id, name, competencias_generos, is_active')
-        .order('name');
-      setJudges((judgesData || []).filter((j: Judge) => j.is_active !== false));
+      // Jurados vinculados a ESTE evento (event_judges, migration
+      // 20260715) — usados só pra calcular a banca que avalia cada
+      // coreografia (chip visual + critério opcional de "minimizar troca de
+      // jurados" no Gerar Ordem Inteligente). Antes filtrava só por
+      // created_by, então jurado de outro evento/demo entrava na conta.
+      let judgesData: Judge[] = [];
+      if (eventId) {
+        const { data: links } = await supabase.from('event_judges').select('judge_id').eq('event_id', eventId);
+        const linkedIds = (links ?? []).map((l: any) => l.judge_id);
+        if (linkedIds.length > 0) {
+          const { data } = await supabase
+            .from('judges')
+            .select('id, name, competencias_generos, is_active')
+            .in('id', linkedIds)
+            .order('name');
+          judgesData = data || [];
+        }
+      }
+      setJudges(judgesData.filter((j: Judge) => j.is_active !== false));
 
       // Etapa 2: blocos do cronograma
       if (eventId) {

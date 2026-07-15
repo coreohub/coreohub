@@ -151,8 +151,21 @@ const SuporteJuri = () => {
         .order('ordem_apresentacao', { ascending: true });
       if (evId) scheduleQuery = scheduleQuery.eq('event_id', evId);
 
+      // Jurado só entra no board "quem está online" se vinculado a ESTE
+      // evento (event_judges, migration 20260715) — antes disso, jurado de
+      // qualquer evento do produtor (inclusive demo) aparecia aqui.
+      let judgesQuery = supabase
+        .from('judges')
+        .select('id,name,avatar_url,is_active,competencias_generos,competencias_formatos,pin')
+        .order('name');
+      if (evId) {
+        const { data: links } = await supabase.from('event_judges').select('judge_id').eq('event_id', evId);
+        const linkedIds = (links ?? []).map(l => l.judge_id);
+        judgesQuery = judgesQuery.in('id', linkedIds.length > 0 ? linkedIds : ['00000000-0000-0000-0000-000000000000']);
+      }
+
       const [{ data: judgesData }, { data: scheduleData }] = await Promise.all([
-        supabase.from('judges').select('id,name,avatar_url,is_active,competencias_generos,competencias_formatos,pin').order('name'),
+        judgesQuery,
         scheduleQuery,
       ]);
 

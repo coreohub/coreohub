@@ -89,6 +89,15 @@ const Credenciais: React.FC = () => {
     (async () => {
       setLoading(true);
       try {
+        // Crachá de jurado só sai pra quem está vinculado a ESTE evento
+        // (event_judges, migration 20260715) — antes disso imprimia crachá
+        // de jurado de qualquer evento do produtor, inclusive demo.
+        const { data: judgeLinks } = await supabase
+          .from('event_judges')
+          .select('judge_id')
+          .eq('event_id', selectedEventId);
+        const linkedJudgeIds = (judgeLinks ?? []).map(l => l.judge_id);
+
         const [regsRes, wsRes, judgesRes] = await Promise.all([
           supabase
             .from('registrations')
@@ -100,10 +109,13 @@ const Credenciais: React.FC = () => {
             .from('workshops')
             .select('id,name')
             .eq('event_id', selectedEventId),
-          supabase
-            .from('judges')
-            .select('id,name,competencias_formatos,is_active')
-            .order('name'),
+          linkedJudgeIds.length > 0
+            ? supabase
+                .from('judges')
+                .select('id,name,competencias_formatos,is_active')
+                .in('id', linkedJudgeIds)
+                .order('name')
+            : Promise.resolve({ data: [] } as any),
         ]);
 
         const inscritosList: CredentialItem[] = (regsRes.data || []).map((r: any) => ({

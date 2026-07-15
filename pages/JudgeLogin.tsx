@@ -156,7 +156,7 @@ const JudgeLogin: React.FC = () => {
       return;
     }
     (async () => {
-      const { status, data } = await callJudgeLogin({ action: 'list', token: paramToken });
+      const { status, data } = await callJudgeLogin({ action: 'list', token: paramToken, event_id: paramEventId });
       if (status === 404 || data?.reason === 'invalid_token') {
         setTokenInvalid(true);
       } else if (status === 200 && data?.ok) {
