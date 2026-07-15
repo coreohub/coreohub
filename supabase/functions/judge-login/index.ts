@@ -7,18 +7,35 @@
  * Actions (todas POST com JSON body):
  *
  *   { action: "list", token } — Phase 1: lista jurados do produtor
- *   { action: "validate", token, judge_id, pin } — Phase 1: valida PIN
- *   { action: "get-terminal-data", token, judge_id } — Phase 2A: dados do terminal
+ *   { action: "validate", token, judge_id, pin, event_id } — Phase 1: valida PIN
+ *   { action: "get-terminal-data", token, judge_id, event_id } — Phase 2A: dados do terminal
  *   { action: "submit-evaluation", token, judge_id, payload } — Phase 2A: salva avaliação
  *   { action: "get-previous-evaluations", token, judge_id } — Phase 2A: notas já dadas
  *
  *   Phase 3 — Deliberação de prêmios especiais:
  *   { action: "submit-star", token, judge_id, registration_id } — toggle estrela na apresentação
- *   { action: "get-starred", token, judge_id } — lista marcações do jurado pra /deliberacao
- *   { action: "remove-marcacao", token, judge_id, registration_id } — apaga marcação órfã
+ *   { action: "get-starred", token, judge_id, event_id } — lista marcações do jurado pra /deliberacao
+ *   { action: "remove-marcacao", token, judge_id, registration_id, event_id } — apaga marcação órfã
  *     (registration já deletada — submit-star não serve pra isso pois exige a registration existir)
- *   { action: "submit-deliberation", token, judge_id, attributions: [{ registration_id, award_id, award_name }] }
- *   { action: "get-conferencia", token, judge_id } — atribuições do jurado + agregado anônimo do evento
+ *   { action: "submit-deliberation", token, judge_id, event_id, attributions: [{ registration_id, award_id, award_name }] }
+ *   { action: "get-conferencia", token, judge_id, event_id } — atribuições do jurado + agregado anônimo do evento
+ *
+ *   Multi-jurado seletiva de vídeo:
+ *   { action: "get-video-queue", token, judge_id, event_id }
+ *
+ * Escopo por evento (2026-07-15):
+ *   - `token` continua identificando o PRODUTOR (profiles.judge_access_token,
+ *     compartilhado entre todos os eventos dele — judges também é entidade
+ *     do produtor, reusada entre edições).
+ *   - `event_id` identifica QUAL evento a leitura/escrita se refere. Vem do
+ *     código curto por evento (events.judge_short_code, resolvido por
+ *     resolve_judge_short_code()) propagado pela URL/sessão do jurado.
+ *   - Toda action que opera sobre dados de um evento específico EXIGE
+ *     event_id e valida ownership via resolveEvent() — nunca mais "o mais
+ *     recente do produtor" (ambíguo com 2+ eventos, já causou bug real de
+ *     sombreamento de dados). Ações que resolvem o evento a partir de uma
+ *     registration_id (submit-evaluation, submit-star, submit-video-evaluation,
+ *     upload-audio) não precisam de event_id — já são inequívocas.
  *
  * Segurança:
  *   - Token é o profiles.judge_access_token (revogável pelo produtor)
@@ -130,6 +147,34 @@ Deno.serve(async (req) => {
   if (profErr) return json({ error: 'db_error', detail: profErr.message }, 500)
   if (!producer) return json({ ok: false, reason: 'invalid_token' }, 404)
 
+  // ─── Helpers compartilhados por todas as actions abaixo ──────────────────
+
+  // Verifica que judge_id pertence ao produtor do token. Retorna o jurado ou null.
+  const verifyJudge = async (judge_id: string) => {
+    const { data } = await supa
+      .from('judges')
+      .select('*')
+      .eq('id', judge_id)
+      .eq('created_by', producer.id)
+      .maybeSingle()
+    return data
+  }
+
+  // Resolve um evento ESPECÍFICO (não "o mais recente") + valida que
+  // pertence ao produtor do token. Sem isso, produtor com 2+ eventos tinha
+  // o terminal resolvendo ambiguamente pelo `created_at` mais recente — já
+  // causou sombreamento real de dados (evento demo criado depois do real).
+  const resolveEvent = async (eventId: string) => {
+    const { data, error } = await supa
+      .from('events')
+      .select('id, name, slug, state, deliberation_status, conferencia_started_at, conferencia_duration_seconds, live_registration_id, live_started_at, video_selection_enabled, video_evaluators_count, video_evaluation_rule')
+      .eq('id', eventId)
+      .eq('created_by', producer.id)
+      .maybeSingle()
+    if (error) console.error('resolveEvent error:', error.message)
+    return data
+  }
+
   // ─── action: list ────────────────────────────────────────────────────────
   if (action === 'list') {
     const { data: judges, error } = await supa
@@ -156,7 +201,7 @@ Deno.serve(async (req) => {
   // Rate limit: 5 tentativas falhas consecutivas -> bloqueio de 5 min.
   // PIN tem so 10k combinacoes; sem isso, brute-force trivializa o login.
   if (action === 'validate') {
-    const { judge_id, pin } = body ?? {}
+    const { judge_id, pin, event_id } = body ?? {}
     if (!judge_id || !pin) return json({ ok: false, reason: 'missing_fields' }, 400)
 
     const { data: judge, error } = await supa
@@ -202,17 +247,13 @@ Deno.serve(async (req) => {
     await supa.from('judge_login_attempts').delete().eq('judge_id', judge_id)
 
     // Multi-jurado v1.1: sinaliza se há seletiva de vídeo com banca (>=2) ativa
-    // no evento atual do produtor E este jurado pode avaliar vídeo. Frontend usa
-    // pra oferecer "Seletiva de Vídeo" vs "Terminal de Palco" pós-PIN.
+    // no evento escolhido E este jurado pode avaliar vídeo. Frontend usa pra
+    // oferecer "Seletiva de Vídeo" vs "Terminal de Palco" pós-PIN. Sem
+    // event_id (sessão antiga pré-escopo-por-evento), simplesmente não
+    // oferece a escolha — corte seco, sem tentar adivinhar o evento.
     let videoSelectionAvailable = false
-    if (judge.can_evaluate_video !== false) {
-      const { data: ev } = await supa
-        .from('events')
-        .select('video_selection_enabled, video_evaluators_count')
-        .eq('created_by', producer.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+    if (judge.can_evaluate_video !== false && event_id) {
+      const ev = await resolveEvent(event_id)
       videoSelectionAvailable = !!ev?.video_selection_enabled && (ev?.video_evaluators_count ?? 1) >= 2
     }
 
@@ -228,45 +269,16 @@ Deno.serve(async (req) => {
     })
   }
 
-  // ─── Helpers compartilhados pelas actions abaixo ─────────────────────────
-
-  // Verifica que judge_id pertence ao produtor do token. Retorna o jurado ou null.
-  const verifyJudge = async (judge_id: string) => {
-    const { data } = await supa
-      .from('judges')
-      .select('*')
-      .eq('id', judge_id)
-      .eq('created_by', producer.id)
-      .maybeSingle()
-    return data
-  }
-
-  // Resolve evento ativo do produtor (mais recente por created_at)
-  const resolveActiveEvent = async () => {
-    // Coluna real é "state", não "status" (events.status não existe). Antes
-    // disso, a query inteira falhava (PostgREST 400) e o catch silencioso de
-    // { data } sem checar error fazia resolveActiveEvent() retornar sempre
-    // null — terminal nunca recebia event nem registrations, em produção.
-    const { data, error } = await supa
-      .from('events')
-      .select('id, name, slug, state, deliberation_status, conferencia_started_at, conferencia_duration_seconds, live_registration_id, live_started_at')
-      .eq('created_by', producer.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    if (error) console.error('resolveActiveEvent error:', error.message)
-    return data
-  }
-
   // ─── action: get-terminal-data ───────────────────────────────────────────
   if (action === 'get-terminal-data') {
-    const { judge_id } = body ?? {}
-    if (!judge_id) return json({ ok: false, reason: 'missing_fields' }, 400)
+    const { judge_id, event_id } = body ?? {}
+    if (!judge_id || !event_id) return json({ ok: false, reason: 'missing_fields' }, 400)
 
     const judge = await verifyJudge(judge_id)
     if (!judge) return json({ ok: false, reason: 'judge_not_found' }, 404)
 
-    const event = await resolveActiveEvent()
+    const event = await resolveEvent(event_id)
+    if (!event) return json({ ok: false, reason: 'event_not_found' }, 404)
 
     // Lista todos os jurados do produtor (pra cards/filtros que mostram outros)
     const [{ data: allJudges }, { data: configByEvent }, { data: configLegacy }, { data: registrations }, { data: eventStyles }, { data: marcacoes }] = await Promise.all([
@@ -496,16 +508,14 @@ Deno.serve(async (req) => {
 
   // ─── action: get-starred (lista marcações + atribuições atuais) ──────────
   if (action === 'get-starred') {
-    const { judge_id } = body ?? {}
-    if (!judge_id) return json({ ok: false, reason: 'missing_fields' }, 400)
+    const { judge_id, event_id } = body ?? {}
+    if (!judge_id || !event_id) return json({ ok: false, reason: 'missing_fields' }, 400)
 
     const judge = await verifyJudge(judge_id)
     if (!judge) return json({ ok: false, reason: 'judge_not_found' }, 404)
 
-    const event = await resolveActiveEvent()
-    if (!event?.id) {
-      return json({ ok: true, event: null, marcacoes: [], deliberations: [], registrations: [], awards: [] })
-    }
+    const event = await resolveEvent(event_id)
+    if (!event) return json({ ok: false, reason: 'event_not_found' }, 404)
 
     const [{ data: marcacoes }, { data: dels }, { data: configByEvent }, { data: configLegacy }] = await Promise.all([
       supa.from('marcacoes_juri')
@@ -572,14 +582,14 @@ Deno.serve(async (req) => {
 
   // ─── action: remove-marcacao (apaga marcação órfã — registration já deletada) ──
   if (action === 'remove-marcacao') {
-    const { judge_id, registration_id } = body ?? {}
-    if (!judge_id || !registration_id) return json({ ok: false, reason: 'missing_fields' }, 400)
+    const { judge_id, registration_id, event_id } = body ?? {}
+    if (!judge_id || !registration_id || !event_id) return json({ ok: false, reason: 'missing_fields' }, 400)
 
     const judge = await verifyJudge(judge_id)
     if (!judge) return json({ ok: false, reason: 'judge_not_found' }, 404)
 
-    const event = await resolveActiveEvent()
-    if (!event?.id) return json({ ok: false, reason: 'no_event' }, 400)
+    const event = await resolveEvent(event_id)
+    if (!event) return json({ ok: false, reason: 'event_not_found' }, 404)
 
     // Mesma trava do submit-deliberation — sem isso, o botão "Remover
     // marcação" (desabilitado só no client via `locked`) ainda apagava
@@ -603,16 +613,16 @@ Deno.serve(async (req) => {
 
   // ─── action: submit-deliberation (jurado atribui prêmios às marcações) ──
   if (action === 'submit-deliberation') {
-    const { judge_id, attributions } = body ?? {}
-    if (!judge_id || !Array.isArray(attributions)) {
+    const { judge_id, attributions, event_id } = body ?? {}
+    if (!judge_id || !Array.isArray(attributions) || !event_id) {
       return json({ ok: false, reason: 'missing_fields' }, 400)
     }
 
     const judge = await verifyJudge(judge_id)
     if (!judge) return json({ ok: false, reason: 'judge_not_found' }, 404)
 
-    const event = await resolveActiveEvent()
-    if (!event?.id) return json({ ok: false, reason: 'no_event' }, 400)
+    const event = await resolveEvent(event_id)
+    if (!event) return json({ ok: false, reason: 'event_not_found' }, 404)
 
     // Trava real: o banner do /deliberacao promete "resultados já liberados,
     // não podem mais ser alteradas" — mas até aqui isso só existia como texto
@@ -653,14 +663,14 @@ Deno.serve(async (req) => {
 
   // ─── action: get-conferencia (atribuições do jurado + agregado anônimo) ─
   if (action === 'get-conferencia') {
-    const { judge_id } = body ?? {}
-    if (!judge_id) return json({ ok: false, reason: 'missing_fields' }, 400)
+    const { judge_id, event_id } = body ?? {}
+    if (!judge_id || !event_id) return json({ ok: false, reason: 'missing_fields' }, 400)
 
     const judge = await verifyJudge(judge_id)
     if (!judge) return json({ ok: false, reason: 'judge_not_found' }, 404)
 
-    const event = await resolveActiveEvent()
-    if (!event?.id) return json({ ok: true, event: null, mine: [], aggregate: [] })
+    const event = await resolveEvent(event_id)
+    if (!event) return json({ ok: false, reason: 'event_not_found' }, 404)
 
     const [{ data: mine }, { data: aggregate }, { data: regs }] = await Promise.all([
       supa.from('deliberations')
@@ -690,8 +700,8 @@ Deno.serve(async (req) => {
   // ainda não avaliou. Modo blind — esconde estúdio/coreógrafo/inscrito (só
   // nº de ordem + modalidade/categoria/estilo + vídeo). Anti-viés.
   if (action === 'get-video-queue') {
-    const { judge_id } = body ?? {}
-    if (!judge_id) return json({ ok: false, reason: 'missing_fields' }, 400)
+    const { judge_id, event_id } = body ?? {}
+    if (!judge_id || !event_id) return json({ ok: false, reason: 'missing_fields' }, 400)
 
     const judge = await verifyJudge(judge_id)
     if (!judge) return json({ ok: false, reason: 'judge_not_found' }, 404)
@@ -700,16 +710,11 @@ Deno.serve(async (req) => {
       return json({ ok: false, reason: 'not_allowed_to_evaluate_video' }, 403)
     }
 
-    // Evento ativo + config de seletiva
-    const { data: event } = await supa
-      .from('events')
-      .select('id, name, slug, video_selection_enabled, video_evaluators_count, video_evaluation_rule')
-      .eq('created_by', producer.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    // Evento escolhido + config de seletiva
+    const event = await resolveEvent(event_id)
+    if (!event) return json({ ok: false, reason: 'event_not_found' }, 404)
 
-    if (!event?.id || !event.video_selection_enabled) {
+    if (!event.video_selection_enabled) {
       return json({ ok: true, event: event ?? null, queue: [], my_votes: [], evaluators_count: 1, rule: 'majority' })
     }
 

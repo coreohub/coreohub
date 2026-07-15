@@ -277,11 +277,13 @@ const JudgeTerminal = () => {
       ? 'Sair do terminal? Sua nota em andamento será descartada e você precisará digitar o PIN novamente pra voltar.'
       : 'Sair do terminal? Você precisará digitar o PIN novamente pra voltar.';
     if (!confirm(msg)) return;
-    // Rota é /judge-login/:token (token = producer_token) — sem ele, cai na
-    // tela "Link inválido ou expirado" em vez de voltar pro PIN do produtor.
+    // Rota é /judge-login/:token?event=<id> — sem os dois, cai na tela "Link
+    // inválido ou expirado" em vez de voltar pro PIN do produtor (código é
+    // por evento desde 2026-07-15, token sozinho não basta mais).
     const token = judgeSession?.producer_token;
+    const eventId = judgeSession?.event_id;
     clearJudgeSession();
-    navigate(token ? `/judge-login/${token}` : '/judge-login', { replace: true });
+    navigate(token && eventId ? `/judge-login/${token}?event=${eventId}` : '/judge-login', { replace: true });
   };
 
   /* ── i18n ──

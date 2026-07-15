@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Award, Loader2, Lock, ArrowLeft, ShieldCheck, AlertCircle, Video, Gavel } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../services/supabase';
@@ -8,7 +8,13 @@ import InstallPWAButton from '../components/InstallPWAButton';
 /**
  * Página pública de seleção e login de jurado.
  *
- * URL: /judge-login/:token (token é o profiles.judge_access_token do produtor)
+ * URL: /judge-login/:token?event=<uuid>
+ *   - token é o profiles.judge_access_token do produtor (vale pra todos os
+ *     eventos dele — judges também são entidade do produtor, não do evento).
+ *   - event=<uuid> é o evento escolhido (código curto é por evento desde
+ *     2026-07-15). Sem ele, o terminal não sabe de qual evento mostrar dados
+ *     — corte seco, sem tentar adivinhar "o mais recente" (ambíguo com 2+
+ *     eventos, já causou bug real de sombreamento de dados).
  *
  * Fluxo:
  * 1. Página pública — não exige nenhum login. Funciona no celular do jurado.
@@ -35,6 +41,7 @@ const LOCKOUT_MS = 5 * 60 * 1000; // 5 min
 // Modo Terminal (tablet do evento configurado pra abrir direto na seleção
 // de jurado quando o ícone do PWA é clicado).
 const TABLET_TOKEN_KEY = 'coreohub_tablet_judge_token';
+const TABLET_EVENT_KEY = 'coreohub_tablet_judge_event';
 const TABLET_KIOSK_KEY = 'coreohub_tablet_kiosk_mode';
 
 export const isTabletKioskMode = (): boolean => {
@@ -48,11 +55,19 @@ export const getTabletToken = (): string | null => {
   try { return localStorage.getItem(TABLET_TOKEN_KEY); } catch { return null; }
 };
 
+export const getTabletEventId = (): string | null => {
+  try { return localStorage.getItem(TABLET_EVENT_KEY); } catch { return null; }
+};
+
 export interface JudgeSession {
   judge_id: string;
   judge_name: string;
   language: string;
   producer_token: string;
+  /** Evento ao qual essa sessão pertence (código curto é por evento desde
+   *  2026-07-15). Sessões antigas (pré-refactor) podem não ter isso — o
+   *  terminal trata como sessão inválida e força relogin. */
+  event_id: string;
   expires_at: number;
 }
 
@@ -62,6 +77,13 @@ export const readJudgeSession = (): JudgeSession | null => {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as JudgeSession;
     if (parsed.expires_at < Date.now()) {
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    // Corte seco (2026-07-15): sessão salva antes do escopo-por-evento não
+    // tem event_id — trata como inválida em vez de adivinhar "o mais
+    // recente" (ambíguo com 2+ eventos). Jurado força relogin pelo QR/código.
+    if (!parsed.event_id) {
       localStorage.removeItem(SESSION_KEY);
       return null;
     }
@@ -91,6 +113,8 @@ const callJudgeLogin = async (body: Record<string, unknown>) => {
 const JudgeLogin: React.FC = () => {
   const navigate = useNavigate();
   const { token: paramToken } = useParams<{ token: string }>();
+  const [searchParams] = useSearchParams();
+  const paramEventId = searchParams.get('event');
   const [judges, setJudges] = useState<Judge[]>([]);
   const [producerName, setProducerName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -111,20 +135,23 @@ const JudgeLogin: React.FC = () => {
     j.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(j.name)}`;
 
   useEffect(() => {
-    if (!paramToken) {
+    if (!paramToken || !paramEventId) {
       setTokenInvalid(true);
       setLoading(false);
       return;
     }
-    // Auto-substituição: sempre que esta página carrega com um token válido,
-    // ela vira o token "amarrado" do tablet (substituindo um anterior).
-    try { localStorage.setItem(TABLET_TOKEN_KEY, paramToken); } catch {}
+    // Auto-substituição: sempre que esta página carrega com um token+evento
+    // válidos, eles viram o par "amarrado" do tablet (substituindo o anterior).
+    try {
+      localStorage.setItem(TABLET_TOKEN_KEY, paramToken);
+      localStorage.setItem(TABLET_EVENT_KEY, paramEventId);
+    } catch {}
     // Lê estado do modo Terminal pra controlar visibilidade dos botões.
     try { setKioskMode(localStorage.getItem(TABLET_KIOSK_KEY) === 'true'); } catch {}
 
-    // Sessão válida e do mesmo produtor → manda direto pro terminal
+    // Sessão válida do mesmo produtor+evento → manda direto pro terminal
     const session = readJudgeSession();
-    if (session && session.producer_token === paramToken) {
+    if (session && session.producer_token === paramToken && session.event_id === paramEventId) {
       navigate('/judge-terminal', { replace: true });
       return;
     }
@@ -140,7 +167,7 @@ const JudgeLogin: React.FC = () => {
       }
       setLoading(false);
     })();
-  }, [paramToken, navigate]);
+  }, [paramToken, paramEventId, navigate]);
 
   const enableKioskMode = () => {
     try { localStorage.setItem(TABLET_KIOSK_KEY, 'true'); } catch {}
@@ -160,18 +187,22 @@ const JudgeLogin: React.FC = () => {
   const handleSwitchEvent = () => {
     const raw = switchInput.trim();
     if (!raw) return;
-    // Aceita link completo OU só o token (UUID)
-    const tokenMatch = raw.match(/judge-login\/([0-9a-f-]{36})/i) || raw.match(/^([0-9a-f-]{36})$/i);
-    if (!tokenMatch) {
-      alert('Link ou token inválido. Cole o link completo ou só o UUID.');
+    // Código é por evento desde 2026-07-15 — precisa do link completo com
+    // ?event=, não só o token. Link cru sem evento não identifica pra qual
+    // evento trocar.
+    const tokenMatch = raw.match(/judge-login\/([0-9a-f-]{36})/i);
+    const eventMatch = raw.match(/[?&]event=([0-9a-f-]{36})/i);
+    if (!tokenMatch || !eventMatch) {
+      alert('Link inválido. Cole o link completo recebido do produtor (com o evento incluso), não só o código/token.');
       return;
     }
     const newToken = tokenMatch[1];
+    const newEventId = eventMatch[1];
     setShowSwitchPrompt(false);
     setSwitchInput('');
     // Limpa sessão de jurado anterior antes de trocar
     try { localStorage.removeItem(SESSION_KEY); } catch {}
-    navigate(`/judge-login/${newToken}`, { replace: true });
+    navigate(`/judge-login/${newToken}?event=${newEventId}`, { replace: true });
   };
 
   const lockoutSecondsLeft = useMemo(() => {
@@ -238,7 +269,7 @@ const JudgeLogin: React.FC = () => {
   }, [selectedJudge, validating]);
 
   useEffect(() => {
-    if (pinInput.length !== 4 || !selectedJudge || validating || !paramToken) return;
+    if (pinInput.length !== 4 || !selectedJudge || validating || !paramToken || !paramEventId) return;
     setValidating(true);
     (async () => {
       const { status, data } = await callJudgeLogin({
@@ -246,6 +277,7 @@ const JudgeLogin: React.FC = () => {
         token: paramToken,
         judge_id: selectedJudge.id,
         pin: pinInput,
+        event_id: paramEventId,
       });
 
       if (status === 200 && data?.ok) {
@@ -254,6 +286,7 @@ const JudgeLogin: React.FC = () => {
           judge_name: data.judge.name,
           language: data.judge.language ?? 'pt-BR',
           producer_token: paramToken,
+          event_id: paramEventId,
           expires_at: Date.now() + SESSION_TTL_MS,
         };
         localStorage.setItem(SESSION_KEY, JSON.stringify(session));
@@ -303,7 +336,7 @@ const JudgeLogin: React.FC = () => {
       }
       setValidating(false);
     })();
-  }, [pinInput, selectedJudge, attemptsLeft, navigate, paramToken, validating]);
+  }, [pinInput, selectedJudge, attemptsLeft, navigate, paramToken, paramEventId, validating]);
 
   if (loading) {
     return (

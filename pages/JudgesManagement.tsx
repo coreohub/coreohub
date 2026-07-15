@@ -17,6 +17,7 @@ import { normalizeStyleName, isStyleInList } from '../utils/styleMatch';
 import { resolveEstudio, toTitleCase } from '../utils/formatters';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
 import { EventStyle } from '../types';
+import EventPickerSheet from '../components/EventPickerSheet';
 
 /* ────────────────────────────────────────────────────────── */
 /* Types                                                       */
@@ -102,10 +103,19 @@ const TagToggle = ({
 /* Main Page                                                   */
 /* ────────────────────────────────────────────────────────── */
 
+interface EventOption { id: string; name: string; is_demo?: boolean | null; edition_year?: number | null; start_date?: string | null; }
+
 const JudgesManagement = () => {
   const [judges, setJudges] = useState<Judge[]>([]);
   const [genres, setGenres] = useState<EventStyle[]>([]);
   const [loading, setLoading] = useState(true);
+  // Código/QR de acesso do jurado é por EVENTO desde 2026-07-15 (não mais por
+  // produtor) — produtor com 2+ eventos escolhe explicitamente de qual é o
+  // código, em vez do sistema adivinhar "o mais recente" (ambíguo, já causou
+  // sombreamento real de dados). Default prioriza o evento real mais recente
+  // (não-demo) — só cai pra demo se for o único evento existente.
+  const [events, setEvents] = useState<EventOption[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -146,20 +156,20 @@ const JudgesManagement = () => {
   const [inviteLoading, setInviteLoading] = useState(false);
 
   const fetchShortCode = async (): Promise<string> => {
+    if (!selectedEventId) return '';
     if (shortCode !== null) return shortCode;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return '';
-    const { data: profile } = await supabase
-      .from('profiles').select('judge_short_code').eq('id', user.id).maybeSingle();
-    const code = profile?.judge_short_code ?? '';
+    const { data: event } = await supabase
+      .from('events').select('judge_short_code').eq('id', selectedEventId).maybeSingle();
+    const code = event?.judge_short_code ?? '';
     setShortCode(code);
     return code;
   };
 
   const generateShortCode = async () => {
+    if (!selectedEventId) return;
     setShortCodeLoading(true);
     try {
-      const { data, error } = await supabase.rpc('regenerate_judge_short_code');
+      const { data, error } = await supabase.rpc('regenerate_judge_short_code', { p_event_id: selectedEventId });
       if (error) throw error;
       setShortCode(data as string);
     } catch (e: any) {
@@ -168,6 +178,12 @@ const JudgesManagement = () => {
       setShortCodeLoading(false);
     }
   };
+
+  // Troca de evento invalida o código em cache — sem isso, o painel mostraria
+  // o código do evento anterior colado à URL/QR do evento novo.
+  useEffect(() => {
+    setShortCode(null);
+  }, [selectedEventId]);
 
   const copyShortCode = async () => {
     if (!shortCode) return;
@@ -189,11 +205,12 @@ const JudgesManagement = () => {
   /* Convite pronto pra WhatsApp — 1 link + 1 código, sem o link cru assinado
      por token que só confundia (2 "links" fazendo a mesma coisa). */
   const copyInviteMessage = async () => {
+    if (!selectedEventId) return;
     setInviteLoading(true);
     try {
       let code = await fetchShortCode();
       if (!code) {
-        const { data, error } = await supabase.rpc('regenerate_judge_short_code');
+        const { data, error } = await supabase.rpc('regenerate_judge_short_code', { p_event_id: selectedEventId });
         if (error) throw error;
         code = data as string;
         setShortCode(code);
@@ -211,6 +228,27 @@ const JudgesManagement = () => {
     }
   };
 
+  /* ── eventos do produtor — pro seletor do painel de código + Súmula/PDF ── */
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from('events')
+        .select('id, name, is_demo, edition_year, start_date')
+        .eq('created_by', user.id)
+        .order('created_at', { ascending: false });
+      if (data && data.length > 0) {
+        setEvents(data);
+        // Prioriza o evento real (não-demo) mais recente — só cai pra demo
+        // se for o único evento existente. É o fix direto do bug de
+        // sombreamento (demo criado depois do real virando "o ativo" à toa).
+        const nonDemo = data.find(e => !e.is_demo);
+        setSelectedEventId(prev => prev ?? (nonDemo?.id ?? data[0].id));
+      }
+    })();
+  }, []);
+
   /* ── fetch ── */
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -218,12 +256,10 @@ const JudgesManagement = () => {
       // getAllGenres() sem eventId traz os gêneros de TODOS os eventos do
       // produtor (+ catálogo global) — produtor com 2+ eventos via o mesmo
       // gênero duplicado na lista (ex: "DANÇA CLÁSSICA" 2x). Escopa pro
-      // evento ativo, igual a tela de Configurações → Gêneros já faz.
-      const { resolveActiveEventId } = await import('../services/supabase');
-      const activeEventId = await resolveActiveEventId();
+      // evento selecionado no painel, igual a tela de Configurações → Gêneros.
       const [{ data: judgesData }, genresData] = await Promise.all([
         supabase.from('judges').select('*').order('name'),
-        getAllGenres({ eventId: activeEventId }),
+        getAllGenres({ eventId: selectedEventId }),
       ]);
       setJudges((judgesData || []).map(normalizeJudge));
       setGenres(genresData);
@@ -232,7 +268,7 @@ const JudgesManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedEventId]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -266,9 +302,9 @@ const JudgesManagement = () => {
   const exportSumulaPDF = async () => {
     setExportingSumula(true);
     try {
-      const { resolveActiveEventId, fetchActiveEventConfig } = await import('../services/supabase');
-      const eventId = await resolveActiveEventId();
-      if (!eventId) { alert('Nenhum evento ativo encontrado.'); return; }
+      const { fetchActiveEventConfig } = await import('../services/supabase');
+      const eventId = selectedEventId;
+      if (!eventId) { alert('Selecione um evento primeiro.'); return; }
 
       let eventName = 'Evento';
       let editionYear = new Date().getFullYear();
@@ -278,7 +314,7 @@ const JudgesManagement = () => {
         editionYear = ev.edition_year ?? (ev.start_date ? new Date(ev.start_date).getFullYear() : editionYear);
       }
 
-      const cfg = await fetchActiveEventConfig('regras_avaliacao, escala_notas');
+      const cfg = await fetchActiveEventConfig('regras_avaliacao, escala_notas', eventId);
       const DEFAULT_CRITERIOS = [
         { name: 'Performance', peso: 2 }, { name: 'Criatividade', peso: 2 },
         { name: 'Musicalidade', peso: 2 }, { name: 'Técnica', peso: 2 }, { name: 'Figurino', peso: 2 },
@@ -410,9 +446,8 @@ const JudgesManagement = () => {
   const exportJudgeSchedulePDF = async () => {
     setExportingJudgeSchedule(true);
     try {
-      const { resolveActiveEventId } = await import('../services/supabase');
-      const eventId = await resolveActiveEventId();
-      if (!eventId) { alert('Nenhum evento ativo encontrado.'); return; }
+      const eventId = selectedEventId;
+      if (!eventId) { alert('Selecione um evento primeiro.'); return; }
 
       let eventName = 'Evento';
       const { data: ev } = await supabase.from('events').select('name').eq('id', eventId).maybeSingle();
@@ -865,13 +900,20 @@ const JudgesManagement = () => {
             Banca técnica · competências · terminais de avaliação
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {events.length > 0 && (
+            <EventPickerSheet
+              events={events}
+              selectedEventId={selectedEventId}
+              onSelect={setSelectedEventId}
+            />
+          )}
           <button onClick={fetchAll} className="p-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-400 hover:text-[#ff0068] transition-all">
             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
           </button>
           <button
             onClick={copyInviteMessage}
-            disabled={judges.length === 0 || inviteLoading}
+            disabled={judges.length === 0 || inviteLoading || !selectedEventId}
             className="px-4 py-3 bg-[#ff0068]/10 border border-[#ff0068]/30 rounded-2xl text-[10px] font-black uppercase tracking-widest text-[#ff0068] hover:bg-[#ff0068]/20 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Copia link + código + lembrete de instalar o app numa mensagem só, pronta pra colar no WhatsApp"
           >
@@ -880,7 +922,7 @@ const JudgesManagement = () => {
           </button>
           <button
             onClick={toggleInvitePanel}
-            disabled={judges.length === 0}
+            disabled={judges.length === 0 || !selectedEventId}
             aria-expanded={invitePanelOpen}
             aria-controls="invite-panel"
             className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -890,7 +932,7 @@ const JudgesManagement = () => {
           </button>
           <button
             onClick={exportSumulaPDF}
-            disabled={exportingSumula || judges.length === 0}
+            disabled={exportingSumula || judges.length === 0 || !selectedEventId}
             className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Baixa 1 folha em branco por jurado — contingência de papel se o terminal falhar no dia"
           >
@@ -898,7 +940,7 @@ const JudgesManagement = () => {
           </button>
           <button
             onClick={exportJudgeSchedulePDF}
-            disabled={exportingJudgeSchedule || judges.length === 0}
+            disabled={exportingJudgeSchedule || judges.length === 0 || !selectedEventId}
             className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             title="PDF de uso do Coordenador do Júri — mostra quando a banca de jurados muda ao longo da sequência de apresentação"
           >
@@ -923,6 +965,12 @@ const JudgesManagement = () => {
           <div className="flex-1">
             <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white">
               Acesso do jurado
+            </p>
+            {/* Código é por evento desde 2026-07-15 — deixa explícito de qual
+                evento é esse código, pra não confundir com outro evento do
+                produtor. */}
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#ff0068] mt-0.5">
+              Válido só pra: {events.find(e => e.id === selectedEventId)?.name ?? '—'}
             </p>
             <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
               Peça pro jurado abrir <span className="font-bold">app.coreohub.com/entrar-juri</span> e digitar o código — ou escanear o QR, que abre o mesmo link com o código já preenchido.

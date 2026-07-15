@@ -471,7 +471,10 @@ const App: React.FC = () => {
     try {
       const isKiosk = localStorage.getItem('coreohub_tablet_kiosk_mode') === 'true';
       const token = localStorage.getItem('coreohub_tablet_judge_token');
-      if (isKiosk && token) return <Navigate to={`/judge-login/${token}`} replace />;
+      // Código de acesso é por evento desde 2026-07-15 — o tablet também
+      // amarra o event_id, não só o token do produtor.
+      const eventId = localStorage.getItem('coreohub_tablet_judge_event');
+      if (isKiosk && token && eventId) return <Navigate to={`/judge-login/${token}?event=${eventId}`} replace />;
     } catch {}
     return <Navigate to="/login" replace />;
   };

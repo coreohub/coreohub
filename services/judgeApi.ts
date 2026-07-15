@@ -24,11 +24,11 @@ const callJudgeFn = async (body: Record<string, unknown>) => {
   return { status: res.status, data };
 };
 
-/** Garante que a sessão de jurado existe e retorna { token, judge_id }. */
+/** Garante que a sessão de jurado existe e retorna { token, judge_id, event_id }. */
 const requireJudgeSession = () => {
   const s = readJudgeSession();
   if (!s) throw new Error('judge_session_required');
-  return { token: s.producer_token, judge_id: s.judge_id };
+  return { token: s.producer_token, judge_id: s.judge_id, event_id: s.event_id };
 };
 
 export type DeliberationStatus = 'COLETANDO' | 'DELIBERACAO' | 'CONFERENCIA' | 'LIBERADO';
@@ -68,8 +68,8 @@ export interface TerminalData {
 }
 
 export const fetchTerminalData = async (): Promise<TerminalData> => {
-  const { token, judge_id } = requireJudgeSession();
-  const { data, status } = await callJudgeFn({ action: 'get-terminal-data', token, judge_id });
+  const { token, judge_id, event_id } = requireJudgeSession();
+  const { data, status } = await callJudgeFn({ action: 'get-terminal-data', token, judge_id, event_id });
   if (status !== 200 || !data?.ok) {
     throw new Error(data?.detail ?? data?.reason ?? 'failed_to_load');
   }
@@ -233,12 +233,13 @@ export const toggleStar = async (registration_id: string): Promise<boolean> => {
 /** Apaga uma marcação órfã (registration já deletada) — diferente de toggleStar,
  *  não exige que a inscrição ainda exista. */
 export const removeMarcacao = async (registration_id: string): Promise<void> => {
-  const { token, judge_id } = requireJudgeSession();
+  const { token, judge_id, event_id } = requireJudgeSession();
   const { data, status } = await callJudgeFn({
     action: 'remove-marcacao',
     token,
     judge_id,
     registration_id,
+    event_id,
   });
   if (status !== 200 || !data?.ok) {
     throw new Error(data?.detail ?? data?.reason ?? 'failed_to_remove_marcacao');
@@ -247,8 +248,8 @@ export const removeMarcacao = async (registration_id: string): Promise<void> => 
 
 /** Lista marcações + deliberações já feitas pelo jurado (pra tela /deliberacao). */
 export const fetchStarred = async (): Promise<StarredData> => {
-  const { token, judge_id } = requireJudgeSession();
-  const { data, status } = await callJudgeFn({ action: 'get-starred', token, judge_id });
+  const { token, judge_id, event_id } = requireJudgeSession();
+  const { data, status } = await callJudgeFn({ action: 'get-starred', token, judge_id, event_id });
   if (status !== 200 || !data?.ok) {
     throw new Error(data?.detail ?? data?.reason ?? 'failed_to_load');
   }
@@ -257,11 +258,12 @@ export const fetchStarred = async (): Promise<StarredData> => {
 
 /** Submete o conjunto completo de atribuições jurado→prêmio (substitui anterior). */
 export const submitDeliberation = async (attributions: DeliberationAttribution[]) => {
-  const { token, judge_id } = requireJudgeSession();
+  const { token, judge_id, event_id } = requireJudgeSession();
   const { data, status } = await callJudgeFn({
     action: 'submit-deliberation',
     token,
     judge_id,
+    event_id,
     attributions,
   });
   if (status !== 200 || !data?.ok) {
@@ -272,8 +274,8 @@ export const submitDeliberation = async (attributions: DeliberationAttribution[]
 
 /** Atribuições do jurado + agregado anônimo do evento (pra tela /conferencia). */
 export const fetchConferencia = async (): Promise<ConferenciaData> => {
-  const { token, judge_id } = requireJudgeSession();
-  const { data, status } = await callJudgeFn({ action: 'get-conferencia', token, judge_id });
+  const { token, judge_id, event_id } = requireJudgeSession();
+  const { data, status } = await callJudgeFn({ action: 'get-conferencia', token, judge_id, event_id });
   if (status !== 200 || !data?.ok) {
     throw new Error(data?.detail ?? data?.reason ?? 'failed_to_load');
   }
@@ -313,8 +315,8 @@ export interface VideoQueueData {
 
 /** Fila de seletiva de vídeo do jurado (modo blind, só vídeos não votados). */
 export const fetchVideoQueue = async (): Promise<VideoQueueData> => {
-  const { token, judge_id } = requireJudgeSession();
-  const { data, status } = await callJudgeFn({ action: 'get-video-queue', token, judge_id });
+  const { token, judge_id, event_id } = requireJudgeSession();
+  const { data, status } = await callJudgeFn({ action: 'get-video-queue', token, judge_id, event_id });
   if (status !== 200 || !data?.ok) {
     throw new Error(data?.detail ?? data?.reason ?? 'failed_to_load');
   }

@@ -32,14 +32,18 @@ const EntrarJuri: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
+      // resolve_judge_short_code agora devolve linha(s) com token do produtor
+      // + o event_id do evento dono desse código (código é por evento desde
+      // 2026-07-15, não mais por produtor — evita ambiguidade com 2+ eventos).
       const { data, error: rpcError } = await supabase.rpc('resolve_judge_short_code', { p_code: trimmed });
       if (rpcError) throw rpcError;
-      if (!data) {
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.judge_access_token || !row?.event_id) {
         setError('Código não encontrado. Confira com o produtor e tente de novo.');
         setLoading(false);
         return;
       }
-      navigate(`/judge-login/${data}`, { replace: true });
+      navigate(`/judge-login/${row.judge_access_token}?event=${row.event_id}`, { replace: true });
     } catch (err) {
       console.error('[EntrarJuri] resolve_judge_short_code', err);
       setError('Não foi possível verificar o código agora. Tente de novo.');
