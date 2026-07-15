@@ -37,14 +37,16 @@ const fmtCurrency = (v: number) =>
 /**
  * Calcula o valor de uma coreografia tentando várias fontes em ordem:
  * 1. coreo.mod_fee (explícito)
- * 2. events.formacoes_config casando pelo nome da formação
+ * 2. events.formacoes_config (do evento REAL da coreografia) casando pelo nome da formação
  * 3. Primeira formação ativa do evento (fallback)
  */
 const calcularValor = (
   coreo: Coreografia,
-  modalidades: EventFormacao[]
+  modalidadesByEvent: Record<string, EventFormacao[]>
 ): number => {
   if (coreo.mod_fee && coreo.mod_fee > 0) return coreo.mod_fee;
+
+  const modalidades = (coreo.event_id && modalidadesByEvent[coreo.event_id]) || [];
 
   const nome = (coreo.tipo_apresentacao ?? coreo.formacao ?? '').toLowerCase();
   if (nome) {
@@ -61,7 +63,7 @@ const calcularValor = (
 const PagamentoInscrito = () => {
   const navigate = useNavigate();
   const [coreografias, setCoreografias]   = useState<Coreografia[]>([]);
-  const [modalidades, setModalidades]     = useState<EventFormacao[]>([]);
+  const [modalidadesByEvent, setModalidadesByEvent] = useState<Record<string, EventFormacao[]>>({});
   const [loading, setLoading]             = useState(true);
   const [error, setError]                 = useState<string | null>(null);
   const [paying, setPaying]               = useState<string | null>(null); // id da coreo clicada
@@ -75,31 +77,38 @@ const PagamentoInscrito = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { navigate('/login'); return; }
 
-      const [coreoRes, eventRes] = await Promise.all([
-        supabase
-          .from('registrations')
-          .select('*, nome:nome_coreografia, formacao:formato_participacao, categoria_nome:categoria, estilo_nome:estilo_danca')
-          .eq('user_id', user.id)
-          .order('criado_em', { ascending: false }),
-        supabase.from('events').select('id, formacoes_config').order('created_at').limit(1).single(),
-      ]);
+      const coreoRes = await supabase
+        .from('registrations')
+        .select('*, nome:nome_coreografia, formacao:formato_participacao, categoria_nome:categoria, estilo_nome:estilo_danca')
+        .eq('user_id', user.id)
+        .order('criado_em', { ascending: false });
 
       if (coreoRes.error) throw coreoRes.error;
 
-      const firstEventId = eventRes.data?.id ?? null;
-      const eventFormacoes: EventFormacao[] = (eventRes.data as any)?.formacoes_config ?? [];
-      setModalidades(eventFormacoes);
+      // Busca formacoes_config só dos eventos REAIS das inscrições do user
+      // (nunca "o evento mais antigo da plataforma" — bug corrigido 2026-07-15,
+      // mostrava valor errado pra quem tem inscrição em mais de 1 evento).
+      const eventIds = Array.from(
+        new Set((coreoRes.data ?? []).map(c => c.event_id).filter(Boolean))
+      ) as string[];
 
-      const enriched = (coreoRes.data || []).map(c => ({
-        ...c,
-        event_id: c.event_id ?? firstEventId,
-      }));
+      const byEvent: Record<string, EventFormacao[]> = {};
+      if (eventIds.length > 0) {
+        const { data: events } = await supabase
+          .from('events')
+          .select('id, formacoes_config')
+          .in('id', eventIds);
+        (events ?? []).forEach(ev => {
+          byEvent[ev.id] = (ev as any).formacoes_config ?? [];
+        });
+      }
+      setModalidadesByEvent(byEvent);
 
       setCoreografias(
         // Inscrições aguardando checkout. Fonte única: status_pagamento.
         // status_pagamento PENDENTE = falta pagar. (APROVADO já foi pago;
         // VENCIDO/ESTORNADO não dá pra pagar; AGUARDANDO_VIDEO espera análise.)
-        enriched.filter(c => c.status_pagamento === 'PENDENTE')
+        (coreoRes.data || []).filter(c => c.status_pagamento === 'PENDENTE')
       );
     } catch (e: any) {
       setError(e.message);
@@ -193,8 +202,8 @@ const PagamentoInscrito = () => {
 
   // Total e contagem para exibir no header
   const totalPendente = useMemo(
-    () => coreografias.reduce((sum, c) => sum + calcularValor(c, modalidades), 0),
-    [coreografias, modalidades]
+    () => coreografias.reduce((sum, c) => sum + calcularValor(c, modalidadesByEvent), 0),
+    [coreografias, modalidadesByEvent]
   );
 
   return (
@@ -268,7 +277,7 @@ const PagamentoInscrito = () => {
       ) : (
         <div className="space-y-3">
           {coreografias.map(coreo => {
-            const fee = calcularValor(coreo, modalidades);
+            const fee = calcularValor(coreo, modalidadesByEvent);
             const isPaying   = paying === coreo.id;
             const isApproved = justApproved === coreo.id;
             const rowError   = payError?.id === coreo.id ? payError.message : null;
