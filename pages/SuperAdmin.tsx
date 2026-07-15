@@ -304,6 +304,19 @@ const SuperAdmin = () => {
   const demoEventsCount = useMemo(() => eventsList.filter(e => e.is_demo).length, [eventsList]);
   const nonDemoEventsList = useMemo(() => eventsList.filter(e => !e.is_demo), [eventsList]);
 
+  /* Contadores dos botões de filtro de evento (Todos/Privados/Governo/Gratuitos).
+     Calculado 1x aqui em vez de refiltrar eventsList inteiro dentro do .map de
+     cada botão a cada render. */
+  const eventFilterCounts = useMemo(() => {
+    const base = showDemoEvents ? eventsList : nonDemoEventsList;
+    return {
+      all:        base.length,
+      private:    base.filter(ev => ev.event_type !== 'government').length,
+      government: base.filter(ev => ev.event_type === 'government').length,
+      free:       base.filter(ev => Number(ev.commission_percent ?? 0) === 0 && Number(ev.commission_fixed ?? 0) === 0).length,
+    };
+  }, [eventsList, nonDemoEventsList, showDemoEvents]);
+
   /* Próximos eventos — start_date entre hoje e +30d, públicos */
   const upcomingEvents = useMemo(() => {
     const now = new Date();
@@ -743,7 +756,7 @@ const SuperAdmin = () => {
                   return (
                     <div key={kind} className="bg-slate-50 dark:bg-white/5 p-4 rounded-2xl border border-slate-200 dark:border-white/5">
                       <div className="flex items-center gap-2 mb-2">
-                        <Icon size={13} className="text-[#ff0068]" />
+                        <Icon size={13} aria-hidden="true" className="text-[#ff0068]" />
                         <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">{meta.label}</p>
                       </div>
                       <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">R$ {commission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
@@ -825,38 +838,37 @@ const SuperAdmin = () => {
           {/* Tabela de eventos */}
           <Section icon={Calendar} title="Eventos da Plataforma" sub="Gerencie comissão, tipo e visibilidade na vitrine">
             <div className="flex flex-wrap items-center gap-3 mb-4">
-              <input
-                type="text"
-                value={eventSearch}
-                onChange={e => setEventSearch(e.target.value)}
-                placeholder="Buscar por nome..."
-                className="flex-1 min-w-[180px] bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
-              />
+              <div className="relative flex-1 min-w-[180px]">
+                <Search size={14} aria-hidden="true" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={eventSearch}
+                  onChange={e => setEventSearch(e.target.value)}
+                  placeholder="Buscar por nome..."
+                  aria-label="Buscar evento por nome"
+                  className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl pl-11 pr-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                />
+              </div>
               <div className="flex gap-2">
-                {(['all','private','government','free'] as const).map(f => {
-                  const base = eventsList.filter(ev => showDemoEvents || !ev.is_demo);
-                  const count = f === 'all' ? base.length
-                    : f === 'private' ? base.filter(ev => ev.event_type !== 'government').length
-                    : f === 'government' ? base.filter(ev => ev.event_type === 'government').length
-                    : base.filter(ev => Number(ev.commission_percent ?? 0) === 0 && Number(ev.commission_fixed ?? 0) === 0).length;
-                  return (
-                    <button
-                      key={f}
-                      onClick={() => setEventFilter(f)}
-                      className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                        eventFilter === f
-                          ? 'bg-[#ff0068] text-white'
-                          : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                    >
-                      {f === 'all' ? 'Todos' : f === 'private' ? 'Privados' : f === 'government' ? 'Governo' : 'Gratuitos'} · {count}
-                    </button>
-                  );
-                })}
+                {(['all','private','government','free'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setEventFilter(f)}
+                    aria-pressed={eventFilter === f}
+                    className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                      eventFilter === f
+                        ? 'bg-[#ff0068] text-white'
+                        : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    {f === 'all' ? 'Todos' : f === 'private' ? 'Privados' : f === 'government' ? 'Governo' : 'Gratuitos'} · {eventFilterCounts[f]}
+                  </button>
+                ))}
               </div>
               {demoEventsCount > 0 && (
                 <button
                   onClick={() => setShowDemoEvents(v => !v)}
+                  aria-pressed={showDemoEvents}
                   className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
                     showDemoEvents
                       ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
@@ -1001,13 +1013,14 @@ const SuperAdmin = () => {
             ) : (
               <>
               <div className="relative mb-4 max-w-sm">
-                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Search size={14} aria-hidden="true" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
                   value={producerSearch}
                   onChange={e => setProducerSearch(e.target.value)}
                   placeholder="Buscar por nome ou e-mail..."
-                  className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
+                  aria-label="Buscar produtor por nome ou e-mail"
+                  className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl pl-11 pr-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068]/50"
                 />
               </div>
               <div className="overflow-x-auto">
@@ -1222,7 +1235,7 @@ const KycBadge: React.FC<{ status: string | null; onboardingUrl: string | null; 
   const Icon = cfg.icon;
   const badge = (
     <span className={`inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${cfg.cls}`}>
-      <Icon size={10} /> {cfg.label}
+      <Icon size={10} aria-hidden="true" /> {cfg.label}
     </span>
   );
   if (onboardingUrl && status !== 'APPROVED') {
