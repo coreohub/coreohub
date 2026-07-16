@@ -1636,7 +1636,13 @@ const JudgeTerminal = () => {
     tablet:  'w-[1024px] h-[768px] mx-auto shadow-2xl',
     desktop: 'h-full',
   };
-  const activeDeviceClass = (isDemoMode && previewDevice) ? deviceClasses[previewDevice] : 'h-full';
+  // lg:h-[calc(100%-3rem)] compensa o lg:my-6 (24px em cima + embaixo) do
+  // card abaixo — sem isso, h-full = 100% do h-screen do wrapper + a margem
+  // por cima fica 48px mais alto que o espaço disponível, e o wrapper
+  // externo (overflow-hidden, sem scroll) corta esse excesso sem aviso.
+  // Bug pré-existente ao reposicionamento do comentário, só ficou visível
+  // porque o campo maior empurra conteúdo pra mais perto do corte.
+  const activeDeviceClass = (isDemoMode && previewDevice) ? deviceClasses[previewDevice] : 'h-full lg:h-[calc(100%-3rem)]';
   const showDeviceWrapper  = isDemoMode && previewDevice && previewDevice !== 'desktop';
 
   const terminalNode = (
@@ -2344,7 +2350,16 @@ const JudgeTerminal = () => {
           <div className="flex flex-col-reverse landscape:flex-row h-full min-h-0 overflow-hidden">
 
             {/* ══ CRITERIA PANEL — expanded, left on tablet ══ */}
-            <section className="w-full landscape:w-[44%] lg:w-[42%] flex flex-col border-t landscape:border-t-0 landscape:border-r border-slate-100 dark:border-slate-800 bg-white dark:bg-transparent overflow-y-auto">
+            {/* min-h-0 é obrigatório aqui: sem ele, um flex item por padrão
+                recusa encolher abaixo do tamanho do próprio conteúdo (min-
+                height:auto do spec) — a section crescia pra caber quesitos+
+                comentário sempre-visível+destaque inteiros, ignorando a
+                altura que o flex-stretch do pai tentava dar, e o card externo
+                (overflow-hidden) só cortava o excesso sem scroll nenhum. Com
+                min-h-0, a section respeita a altura do pai de verdade,
+                overflow-y-auto passa a rolar internamente e sticky (header
+                + Marcar Destaque) funciona como esperado. */}
+            <section className="w-full landscape:w-[44%] lg:w-[42%] flex flex-col min-h-0 border-t landscape:border-t-0 landscape:border-r border-slate-100 dark:border-slate-800 bg-white dark:bg-transparent overflow-y-auto">
 
               {/* Sticky header: genre + weighted avg */}
               <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2.5 bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800">
@@ -2465,11 +2480,17 @@ const JudgeTerminal = () => {
                 </div>
               )}
 
-              {/* Phase 3: ⭐ Marcar destaque (em todas as resoluções). */}
+              {/* Phase 3: ⭐ Marcar destaque (em todas as resoluções).
+                  sticky bottom-0 — em notebook o campo de comentário sempre-
+                  visível (rows=8) empurra este botão pra fora da área
+                  visível em janelas mais baixas (não maximizadas, telas
+                  1366x768 etc.); grudado no fundo da coluna scrollável,
+                  mesmo padrão do header "QUESITOS" (sticky top-0) logo
+                  acima, garante que ele nunca precisa de scroll pra achar. */}
               {currentPerformance && (() => {
                 const starred = starredSet.has(currentPerformance.id);
                 return (
-                  <div className="px-2 py-2 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950">
+                  <div className="sticky bottom-0 z-10 px-2 py-2 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950">
                     <button
                       onClick={toggleStarCurrent}
                       disabled={isSubmitted || starringInFlight}
