@@ -125,6 +125,7 @@ const judgeEs: Record<JudgeDictKey, string> = {
   'comment.hide': 'Ocultar comentario',
   'comment.placeholder': 'Escribe un comentario para el inscrito (opcional)...',
   'comment.filled': 'Comentario escrito',
+  'comment.done': 'Listo',
 
   // Submitted state
   'submitted.title': 'Nota Enviada',

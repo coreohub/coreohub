@@ -127,6 +127,7 @@ const judgePt = {
   'comment.hide': 'Ocultar comentário',
   'comment.placeholder': 'Escreva um comentário para o inscrito (opcional)...',
   'comment.filled': 'Comentário escrito',
+  'comment.done': 'Concluir',
 
   // Submitted state
   'submitted.title': 'Nota Enviada',

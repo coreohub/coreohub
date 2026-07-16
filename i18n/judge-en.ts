@@ -125,6 +125,7 @@ const judgeEn: Record<JudgeDictKey, string> = {
   'comment.hide': 'Hide comment',
   'comment.placeholder': 'Write a comment for the entrant (optional)...',
   'comment.filled': 'Written comment',
+  'comment.done': 'Done',
 
   // Submitted state
   'submitted.title': 'Score Submitted',

@@ -451,7 +451,9 @@ const JudgeTerminal = () => {
   /* ── Feedback text — Avaliada usa como canal principal; modo competitivo
         usa como comentário escrito opcional (complementa o áudio). ── */
   const [feedbackText, setFeedbackText] = useState('');
-  const [showComment, setShowComment] = useState(false);
+  // Tablet/mobile (<lg): abre modal full-screen pra escrever. Em notebook
+  // (lg+) o campo já fica sempre visível inline, esse state não é usado.
+  const [showCommentModal, setShowCommentModal] = useState(false);
   const [prevGenreScores,  setPrevGenreScores]   = useState<number[]>([]);
 
   /* ── helpers ── */
@@ -864,7 +866,7 @@ const JudgeTerminal = () => {
         setMicAttempted(false);
         setTieWarning(null);
         setFeedbackText('');
-        setShowComment(false);
+        setShowCommentModal(false);
         setCurrentIndex(liveIdx);
       }
       setShowQueueScreen(false);
@@ -879,7 +881,7 @@ const JudgeTerminal = () => {
     setMicAttempted(false);
     setTieWarning(null);
     setFeedbackText('');
-    setShowComment(false);
+    setShowCommentModal(false);
     setCurrentIndex(liveIdx);
   }, [liveRegistrationId, isSubmitted, showQueueScreen, filteredSchedule, currentPerformance?.id, currentIndex]);
 
@@ -1386,7 +1388,7 @@ const JudgeTerminal = () => {
     setMicAttempted(false);
     setTieWarning(null);
     setFeedbackText('');
-    setShowComment(false);
+    setShowCommentModal(false);
     setCurrentIndex(idx);
     setShowOverflowMenu(false);
     setPendingNavIdx(null);
@@ -2310,7 +2312,7 @@ const JudgeTerminal = () => {
                 lang="pt-BR"
                 autoCapitalize="sentences"
                 autoCorrect="on"
-                className={`w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-violet-400/30 resize-none transition-all ${
+                className={`w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl text-base text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-violet-400/30 resize-none transition-all ${
                   isSubmitted ? 'opacity-60 cursor-not-allowed' : ''
                 }`}
               />
@@ -2412,9 +2414,58 @@ const JudgeTerminal = () => {
                   })}
               </div>
 
-              {/* Phase 3: ⭐ Marcar destaque (em todas as resoluções).
-                  Aqui embaixo do painel de critérios pra ergonomia (perto
-                  dos quesitos sendo avaliados em vez de no header de status). */}
+              {/* Comentário escrito (opcional) — logo após os quesitos (mais
+                  perto do último critério, não mais escondido embaixo de
+                  Marcar destaque). Em notebook (lg+, sobra espaço na coluna)
+                  fica sempre visível e maior — sem toggle, sem clique extra.
+                  Em tablet/mobile (<lg) o botão compacto abre um modal
+                  full-screen pra escrever: evita que o campo fique parcial-
+                  mente coberto pelo teclado virtual quando ele sobe (mesmo
+                  padrão do overlay de PIN mais abaixo). */}
+              {!isAvaliada && (
+                <div className="px-2 pt-2 pb-1 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950">
+                  {/* Notebook/desktop — sempre aberto */}
+                  <div className="hidden lg:block space-y-1.5">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <MessageSquare size={11} /> {t('comment.toggle')}
+                    </span>
+                    <textarea
+                      value={feedbackText}
+                      onChange={e => { setFeedbackText(e.target.value); handleActivity(); }}
+                      disabled={isSubmitted}
+                      placeholder={t('comment.placeholder')}
+                      rows={8}
+                      spellCheck
+                      lang="pt-BR"
+                      autoCapitalize="sentences"
+                      autoCorrect="on"
+                      className={`w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-base text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-[#ff0068]/20 resize-none transition-all ${
+                        isSubmitted ? 'opacity-60 cursor-not-allowed' : ''
+                      }`}
+                    />
+                  </div>
+
+                  {/* Tablet/mobile — botão compacto abre o modal */}
+                  <button
+                    onClick={() => { if (!isSubmitted) { setShowCommentModal(true); handleActivity(); } }}
+                    disabled={isSubmitted}
+                    className={`lg:hidden w-full min-h-11 flex items-center justify-center gap-2 py-2 rounded-xl border border-dashed font-black uppercase tracking-widest text-[9px] transition-all
+                      ${isSubmitted
+                        ? 'border-slate-200 dark:border-slate-700 text-slate-400 opacity-60 cursor-not-allowed'
+                        : feedbackText.trim()
+                          ? 'border-emerald-300 dark:border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-500/5'
+                          : 'border-slate-300 dark:border-white/20 text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-white/40 active:scale-[0.98]'
+                      }`}
+                  >
+                    {feedbackText.trim()
+                      ? <><Check size={12} /> {t('comment.filled')}</>
+                      : <><MessageSquare size={12} /> {t('comment.toggle')}</>
+                    }
+                  </button>
+                </div>
+              )}
+
+              {/* Phase 3: ⭐ Marcar destaque (em todas as resoluções). */}
               {currentPerformance && (() => {
                 const starred = starredSet.has(currentPerformance.id);
                 return (
@@ -2422,7 +2473,7 @@ const JudgeTerminal = () => {
                     <button
                       onClick={toggleStarCurrent}
                       disabled={isSubmitted || starringInFlight}
-                      className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 font-black uppercase tracking-widest text-[10px] transition-all
+                      className={`w-full min-h-11 flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 font-black uppercase tracking-widest text-[10px] transition-all
                         ${isSubmitted
                           ? 'bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-400 opacity-60 cursor-not-allowed'
                           : starred
@@ -2436,60 +2487,6 @@ const JudgeTerminal = () => {
                   </div>
                 );
               })()}
-
-              {/* Comentário escrito (opcional) — colapsado por padrão pra não
-                  ocupar altura no layout compacto. Complementa o áudio, não o
-                  substitui. Expande inline; a section é overflow-y-auto. */}
-              {!isAvaliada && (
-                <div className="px-2 pb-2 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950">
-                  {!showComment ? (
-                    <button
-                      onClick={() => { if (!isSubmitted) { setShowComment(true); handleActivity(); } }}
-                      disabled={isSubmitted}
-                      className={`w-full flex items-center justify-center gap-2 py-2 mt-2 rounded-xl border border-dashed font-black uppercase tracking-widest text-[9px] transition-all
-                        ${isSubmitted
-                          ? 'border-slate-200 dark:border-slate-700 text-slate-400 opacity-60 cursor-not-allowed'
-                          : feedbackText.trim()
-                            ? 'border-emerald-300 dark:border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-500/5'
-                            : 'border-slate-300 dark:border-white/20 text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-white/40 active:scale-[0.98]'
-                        }`}
-                    >
-                      {feedbackText.trim()
-                        ? <><Check size={12} /> {t('comment.filled')}</>
-                        : <><MessageSquare size={12} /> {t('comment.toggle')}</>
-                      }
-                    </button>
-                  ) : (
-                    <div className="mt-2 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                          <MessageSquare size={11} /> {t('comment.toggle')}
-                        </span>
-                        <button
-                          onClick={() => setShowComment(false)}
-                          className="text-[8px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
-                        >
-                          {t('comment.hide')}
-                        </button>
-                      </div>
-                      <textarea
-                        value={feedbackText}
-                        onChange={e => { setFeedbackText(e.target.value); handleActivity(); }}
-                        disabled={isSubmitted}
-                        placeholder={t('comment.placeholder')}
-                        rows={3}
-                        spellCheck
-                        lang="pt-BR"
-                        autoCapitalize="sentences"
-                        autoCorrect="on"
-                        className={`w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-[#ff0068]/20 resize-none transition-all ${
-                          isSubmitted ? 'opacity-60 cursor-not-allowed' : ''
-                        }`}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
             </section>
 
             {/* ══ NUMPAD PANEL — compact, right on tablet ══ */}
@@ -2674,6 +2671,61 @@ const JudgeTerminal = () => {
           </div>
         )}
       </main>
+
+      {/* Modal de comentário escrito — tablet/mobile (<lg). Full-screen pra
+          nunca ficar coberto pelo teclado virtual (o campo inline sempre-
+          visível fica só em notebook, dentro da coluna de critérios). */}
+      {showCommentModal && !isAvaliada && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="lg:hidden fixed inset-0 z-[65] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShowCommentModal(false)}
+        >
+          <div
+            className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-2xl flex flex-col max-h-[90dvh]"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+              <span className="text-xs font-black uppercase tracking-widest text-slate-900 dark:text-white flex items-center gap-2">
+                <MessageSquare size={14} className="text-[#ff0068]" /> {t('comment.toggle')}
+              </span>
+              <button
+                onClick={() => setShowCommentModal(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 transition-colors"
+                aria-label={t('comment.done')}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 flex-1 overflow-y-auto">
+              <textarea
+                autoFocus
+                value={feedbackText}
+                onChange={e => { setFeedbackText(e.target.value); handleActivity(); }}
+                disabled={isSubmitted}
+                placeholder={t('comment.placeholder')}
+                rows={10}
+                spellCheck
+                lang="pt-BR"
+                autoCapitalize="sentences"
+                autoCorrect="on"
+                className={`w-full min-h-[220px] px-4 py-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-base text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-[#ff0068]/20 resize-none transition-all ${
+                  isSubmitted ? 'opacity-60 cursor-not-allowed' : ''
+                }`}
+              />
+            </div>
+            <div className="px-5 pb-5 shrink-0">
+              <button
+                onClick={() => setShowCommentModal(false)}
+                className="w-full min-h-11 py-3 bg-[#ff0068] hover:bg-[#d4005a] active:scale-95 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all"
+              >
+                {t('comment.done')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Submit error — flutuante no rodape sem ocupar barra fixa */}
       {submitError && (
