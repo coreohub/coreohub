@@ -67,6 +67,18 @@ export interface SocialLinksExtract {
   email:     string | null
 }
 
+/** Config de Seletiva por Vídeo extraída do regulamento (achado #3, 2026-07-16).
+ *  Espelha events.video_selection_* — feature "chave" do produto que o parser
+ *  nunca cobriu, mesmo regulamentos descrevendo os 3 modelos explicitamente. */
+export interface VideoSelectionExtract {
+  enabled: boolean | null
+  fee: number | null
+  /** true = Modelo 2/3 (bloqueia pagamento até aprovação do vídeo). false/null = Modelo 1 (vídeo opcional/metadata). */
+  fee_required: boolean | null
+  refund_policy: 'no_refund' | 'full_refund' | 'partial_refund' | null
+  partial_refund_percent: number | null
+}
+
 /** Resultado completo da extração de regulamento via IA */
 export interface RegulationExtract {
   event_name: string | null
@@ -77,10 +89,10 @@ export interface RegulationExtract {
   video_submission_deadline: string | null
   event_format: 'RANKING' | 'PEDAGOGICAL' | 'GRADUATED' | null
   score_scale: number | null
-  inactivity_block_enabled: boolean | null
   age_reference: 'EVENT_DAY' | 'YEAR_END' | 'FIXED_DATE' | null
   age_tolerance_mode: 'PERCENT' | 'FIXED_COUNT' | null
   age_tolerance_value: number | null
+  video_selection: VideoSelectionExtract | null
   stage_entry_time_seconds: number | null
   stage_marking_time_seconds: number | null
   registration_lots: RegistrationLot[]
@@ -148,8 +160,9 @@ function buildEmptyExtract(): RegulationExtract {
     event_name: null, address: null, start_date: null,
     registration_deadline: null, track_submission_deadline: null,
     video_submission_deadline: null, event_format: null, score_scale: null,
-    inactivity_block_enabled: null, age_reference: null,
+    age_reference: null,
     age_tolerance_mode: null, age_tolerance_value: null,
+    video_selection: null,
     stage_entry_time_seconds: null, stage_marking_time_seconds: null,
     tiebreaker_rules: null, registration_lots: [],
     categories: [], formacoes: [], criteria: [], prizes: [],
@@ -177,10 +190,10 @@ function parseRawExtract(raw: any): RegulationExtract {
     video_submission_deadline:  raw.video_submission_deadline  ?? null,
     event_format:               raw.event_format               ?? null,
     score_scale:                raw.score_scale                ?? null,
-    inactivity_block_enabled:   raw.inactivity_block_enabled   ?? null,
     age_reference:              raw.age_reference              ?? null,
     age_tolerance_mode:         raw.age_tolerance_mode         ?? null,
     age_tolerance_value:        raw.age_tolerance_value        ?? null,
+    video_selection:            raw.video_selection            ?? null,
     stage_entry_time_seconds:   raw.stage_entry_time_seconds   ?? null,
     stage_marking_time_seconds: raw.stage_marking_time_seconds ?? null,
     tiebreaker_rules:           raw.tiebreaker_rules           ?? null,

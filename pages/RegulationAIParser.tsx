@@ -4,7 +4,7 @@ import {
   Sparkles, FileText, CheckCircle2, AlertTriangle, RefreshCw,
   FileSearch, Upload, X, ChevronRight, Save, RotateCcw,
   Calendar, Clock, DollarSign, Scale, Trophy, Users,
-  Layers, Star, Info, FileUp, Settings, ArrowRight,
+  Layers, Star, Info, FileUp, Settings, ArrowRight, Video,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { extractRegulationData, extractRegulationFromPdf, RegulationExtract } from '../services/geminiService';
@@ -168,35 +168,155 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
     if (!edited) return;
     setSaving(true);
     try {
+      // ── Resolve user + evento UMA VEZ (antes eram 3 chamadas separadas:
+      // aqui, dentro do bloco de prêmios, e de novo pro bloco de events). ──
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Não autenticado.');
+      const { data: ev } = await supabase
+        .from('events')
+        .select('id')
+        .eq('created_by', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const eventId = ev?.id;
+      if (!eventId) throw new Error('Nenhum evento encontrado para aplicar o regulamento.');
+
+      // ── Estado atual do evento — buscado UMA VEZ e usado pra MERGE em vez
+      // de sobrescrever (achado #2, 2026-07-16). Reimportar o regulamento
+      // (o próprio botão "Importar outro regulamento" incentiva isso) não
+      // pode apagar customização manual que o produtor já fez depois da 1ª
+      // importação — mesma lição já aplicada a premios_especiais em
+      // 2026-05-17, agora replicada pros outros campos que tinham o mesmo
+      // padrão de overwrite bruto. ──
+      const [
+        { data: existingConfig },
+        { data: existingWorkshops },
+        { data: existingStyles },
+        { data: existingCategories },
+      ] = await Promise.all([
+        supabase.from('configuracoes')
+          .select('premios_especiais, regras_avaliacao, tolerancia, registration_lots, categories_config, formacoes_config')
+          .eq('id', eventId).maybeSingle(),
+        supabase.from('workshops').select('name').eq('event_id', eventId),
+        supabase.from('event_styles').select('name').eq('event_id', eventId),
+        supabase.from('categories').select('name').eq('event_id', eventId),
+      ]);
+
+      const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
+      /** Merge add-only por chave (nome/label) — nunca sobrescreve item existente, só anexa os novos. */
+      const mergeByKey = <T,>(existing: T[], incoming: T[], keyFn: (x: T) => string): T[] => {
+        const existingKeys = new Set(existing.map(x => norm(keyFn(x))));
+        const additions = incoming.filter(x => keyFn(x) && !existingKeys.has(norm(keyFn(x))));
+        return additions.length > 0 ? [...existing, ...additions] : existing;
+      };
+
       const updates: Record<string, any> = {};
       if (edited.event_name)                updates.nome_evento                 = edited.event_name;
       if (edited.address)                   updates.address                     = edited.address;
       if (edited.start_date)                updates.data_evento                 = edited.start_date;
       if (edited.registration_deadline)     updates.registration_deadline       = edited.registration_deadline;
-      if (edited.track_submission_deadline) updates.track_submission_deadline   = edited.track_submission_deadline;
-      if (edited.video_submission_deadline) updates.video_submission_deadline   = edited.video_submission_deadline;
-      if (edited.score_scale)               updates.score_scale                 = edited.score_scale;
-      if (edited.inactivity_block_enabled !== null) updates.inactivity_block_enabled = edited.inactivity_block_enabled;
+      // FIX 2026-07-16 (achado #1): track_submission_deadline nunca foi lido
+      // em lugar nenhum do app — o campo real que trava upload de trilha
+      // (GuiaDeInscricao, CentralDeMidia, send-trilha-reminders) é `prazo_trilhas`.
+      if (edited.track_submission_deadline) updates.prazo_trilhas               = edited.track_submission_deadline;
+      // FIX 2026-07-16 (achado #1): score_scale (número solto) nunca foi lido
+      // por nada além do wizard de criação — o motor de avaliação real usa
+      // `escala_notas` ('BASE_10'|'BASE_100', ver AccountSettings.tsx). Heurística:
+      // regulamentos em base 100/97 usam escala centesimal, o resto é decimal 0-10.
+      if (edited.score_scale)               updates.escala_notas                = edited.score_scale > 20 ? 'BASE_100' : 'BASE_10';
       if (edited.age_reference)             updates.age_reference               = edited.age_reference;
-      if (edited.age_tolerance_mode)        updates.age_tolerance_mode          = edited.age_tolerance_mode;
-      if (edited.age_tolerance_value)       updates.age_tolerance_value         = edited.age_tolerance_value;
-      if (edited.stage_entry_time_seconds)  updates.stage_entry_time_seconds    = edited.stage_entry_time_seconds;
-      if (edited.stage_marking_time_seconds) updates.stage_marking_time_seconds  = edited.stage_marking_time_seconds;
-      if (edited.registration_lots?.length)  updates.registration_lots           = edited.registration_lots;
-      if (edited.categories?.length)         updates.categories_config           = edited.categories;
+      // FIX 2026-07-16 (achado #1): age_tolerance_mode/value nunca foram lidos —
+      // o campo real é `tolerancia: { mode: 'PERCENT'|'COUNT', value, enforcement }`.
+      // Preserva `enforcement` já configurado (a IA não extrai esse campo).
+      if (edited.age_tolerance_mode || edited.age_tolerance_value) {
+        const existingTol: any = existingConfig?.tolerancia ?? {};
+        updates.tolerancia = {
+          ...existingTol,
+          mode: edited.age_tolerance_mode === 'FIXED_COUNT' ? 'COUNT' : 'PERCENT',
+          value: edited.age_tolerance_value ?? existingTol.value ?? 0,
+        };
+      }
+      // FIX 2026-07-16 (achado #1): stage_entry/marking_time_seconds nunca
+      // foram lidos — os campos reais usados pelo Cronograma/Marcador de
+      // Palco são `tempo_entrada` e `tempo_marcacao_palco`.
+      if (edited.stage_entry_time_seconds)   updates.tempo_entrada        = edited.stage_entry_time_seconds;
+      if (edited.stage_marking_time_seconds) updates.tempo_marcacao_palco = edited.stage_marking_time_seconds;
+
+      // FIX 2026-07-16 (achado #2): antes sobrescrevia o array inteiro — se o
+      // produtor já tinha editado lotes/categorias/formações manualmente
+      // (inclusive por uma importação anterior), reimportar apagava a edição.
+      if (edited.registration_lots?.length) {
+        const merged = mergeByKey(
+          Array.isArray(existingConfig?.registration_lots) ? existingConfig.registration_lots : [],
+          edited.registration_lots,
+          (l: any) => l.label,
+        );
+        if (merged.length) updates.registration_lots = merged;
+      }
+      if (edited.categories?.length) {
+        const merged = mergeByKey(
+          Array.isArray(existingConfig?.categories_config) ? existingConfig.categories_config : [],
+          edited.categories,
+          (c: any) => c.name,
+        );
+        if (merged.length) updates.categories_config = merged;
+      }
       // Fix 2026-07-02: a IA extrai min_performers/max_performers (ex: "Grupo
       // de 4 a 15 bailarinos"), mas o resto do sistema (InscricaoWizard,
       // AccountSettings) lê min_members/max_members dessa mesma config. Sem
       // esse mapeamento os limites extraídos do regulamento eram salvos mas
       // nunca aplicados na validação de elenco do Wizard.
       if (edited.formacoes?.length) {
-        updates.formacoes_config = edited.formacoes.map(f => ({
+        const mapped = edited.formacoes.map(f => ({
           ...f,
           min_members: f.min_performers ?? (f as any).min_members,
           max_members: f.max_performers ?? (f as any).max_members,
         }));
+        const merged = mergeByKey(
+          Array.isArray(existingConfig?.formacoes_config) ? existingConfig.formacoes_config : [],
+          mapped,
+          (f: any) => f.name,
+        );
+        if (merged.length) updates.formacoes_config = merged;
       }
-      if (edited.criteria?.length)           updates.criteria_config             = edited.criteria;
+      // FIX 2026-07-16 (achado #1): criteria (quesitos/pesos) ia pra
+      // `criteria_config`, campo que o motor de avaliação real (JudgeTerminal/
+      // ResultsPanel/judge-login) NUNCA lê — ele usa
+      // `regras_avaliacao.globalRules.criterios` (ver AccountSettings.tsx:2080).
+      // O parser mostrava "Quesitos e Pesos" preenchido e o produtor achava
+      // que tinha configurado a avaliação, mas nada mudava no júri de verdade.
+      if (edited.criteria?.length) {
+        const buildTiebreaker = (names: string[]) => ['maior_media', ...names.map(n => `criterio_${n}`)];
+        const newCriterios = edited.criteria
+          .filter(c => c.name?.trim())
+          .map(c => ({ name: c.name.trim(), peso: c.weight > 0 ? c.weight : 1 }));
+        const existingRA: any = existingConfig?.regras_avaliacao;
+
+        if (existingRA?.globalRules?.criterios?.length) {
+          // Evento já tem critérios configurados (produtor abriu Avaliação, ou
+          // uma importação anterior já aplicou) — não mexe nos pesos
+          // existentes, só acrescenta quesitos novos que a IA achou.
+          const existingNames = new Set(existingRA.globalRules.criterios.map((c: any) => norm(c.name)));
+          const additions = newCriterios.filter(c => !existingNames.has(norm(c.name)));
+          if (additions.length > 0) {
+            const criterios = [...existingRA.globalRules.criterios, ...additions];
+            updates.regras_avaliacao = {
+              ...existingRA,
+              globalRules: { ...existingRA.globalRules, criterios, desempate: buildTiebreaker(criterios.map((c: any) => c.name)) },
+            };
+          }
+        } else if (newCriterios.length > 0) {
+          // Evento nunca teve critérios configurados — a extração da IA vira
+          // a config inicial de avaliação.
+          updates.regras_avaliacao = {
+            globalRules: { criterios: newCriterios, desempate: buildTiebreaker(newCriterios.map(c => c.name)) },
+            overrides: {},
+            pesoTecnico: 50,
+            pesoArtistico: 50,
+          };
+        }
+      }
       if (edited.tiebreaker_rules)           updates.tiebreaker_rules            = edited.tiebreaker_rules;
 
       // Item #34: 5 blocos novos extraídos pelo parser ───────────────────────
@@ -212,10 +332,6 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       if (edited.audience_tickets?.length) {
         updates.ingressos_audiencia = edited.audience_tickets; // legacy em configuracoes
       }
-
-      // Auditoria 2026-05-17: política de reembolso textual (gap #3 da
-      // auditoria IA do regulamento). Vai pra events.video_fee_refund_policy.
-      // Tratado mais abaixo no bloco de evUpdates (vive em events, não config).
 
       // Auditoria 2026-05-12: 14 campos antes não capturados pela IA ─────────
       // a) Campos que vivem em configuracoes
@@ -246,31 +362,14 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
           .normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), '')
           .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
 
-        // Busca o que já existe no banco pra não perder.
-        // Resolve event_id ativo do produtor (mesmo padrão do save abaixo).
-        const { data: { user: parserUser } } = await supabase.auth.getUser();
-        const { data: parserEv } = parserUser
-          ? await supabase.from('events').select('id').eq('created_by', parserUser.id)
-              .order('created_at', { ascending: false }).limit(1).maybeSingle()
-          : { data: null };
-        const parserEventId = parserEv?.id;
-
-        const { data: existingConfig } = parserEventId
-          ? await supabase
-              .from('configuracoes')
-              .select('premios_especiais')
-              .eq('id', parserEventId)
-              .maybeSingle()
-          : { data: null };
         const existing: any[] = Array.isArray(existingConfig?.premios_especiais)
           ? existingConfig.premios_especiais
           : [];
-
-        const existingNames = new Set(existing.map(p => (p.name ?? '').trim().toLowerCase()));
+        const existingNames = new Set(existing.map(p => norm(p.name)));
 
         const newOnes = edited.prizes
           .filter(p => p.name && p.name.trim().length > 0)
-          .filter(p => !existingNames.has(p.name.trim().toLowerCase()))
+          .filter(p => !existingNames.has(norm(p.name)))
           .map((p, i) => ({
             id:          `ai-${slug(p.name)}-${i}-${Date.now()}`,
             name:        p.name.trim(),
@@ -296,183 +395,201 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
 
       // ── Atualiza events.ingressos_config (campo principal canônico) ──────
       // ingressos_config vive em events, não em configuracoes. Precisa update direto.
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: ev } = await supabase
+      if (edited.audience_tickets?.length) {
+        await supabase
           .from('events')
-          .select('id')
-          .eq('created_by', user.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        const eventId = ev?.id;
+          .update({ ingressos_config: edited.audience_tickets, audience_sales_enabled: true })
+          .eq('id', eventId);
+      }
 
-        if (eventId && edited.audience_tickets?.length) {
-          await supabase
-            .from('events')
-            .update({ ingressos_config: edited.audience_tickets, audience_sales_enabled: true })
-            .eq('id', eventId);
+      // Auditoria 2026-05-12: campos novos que vivem em `events`
+      {
+        const evUpdates: Record<string, any> = {};
+        if (edited.city)               evUpdates.city               = edited.city;
+        if (edited.state)              evUpdates.state              = edited.state;
+        if (edited.event_time)         evUpdates.event_time         = edited.event_time;
+        if (edited.politica_ingressos) evUpdates.politica_ingressos = edited.politica_ingressos;
+        if (edited.url_ingressos)      evUpdates.url_ingressos      = edited.url_ingressos;
+        if (edited.cover_url_hint)     evUpdates.cover_url          = edited.cover_url_hint;
+        // Summary da IA vira description do evento (alimenta a vitrine pública).
+        // Só sobrescreve se ainda não há description ou se produtor optou por
+        // re-importar. Não trunca — vitrine sabe lidar com texto longo.
+        if (edited.summary && edited.summary.trim().length > 20) {
+          evUpdates.description = edited.summary;
+        }
+        if (edited.social_links) {
+          if (edited.social_links.instagram) evUpdates.instagram_event = edited.social_links.instagram;
+          if (edited.social_links.tiktok)    evUpdates.tiktok_event    = edited.social_links.tiktok;
+          if (edited.social_links.youtube)   evUpdates.youtube_event   = edited.social_links.youtube;
+          if (edited.social_links.whatsapp)  evUpdates.whatsapp_event  = edited.social_links.whatsapp;
+          if (edited.social_links.website)   evUpdates.website_event   = edited.social_links.website;
+          if (edited.social_links.email)     evUpdates.email_event     = edited.social_links.email;
+        }
+        // FIX 2026-07-16 (achado #1): video_submission_deadline é coluna de
+        // `events` (lida por VideoSelection.tsx), não de `configuracoes` —
+        // antes ia pra updateActiveEventConfig() e nunca era lido em lugar
+        // nenhum.
+        if (edited.video_submission_deadline) evUpdates.video_submission_deadline = edited.video_submission_deadline;
+
+        // Achado #3 (2026-07-16): Seletiva por Vídeo — feature chave do
+        // produto (3 modelos, ver VideoSelection.tsx) que o parser nunca
+        // cobria. Só escreve os campos que a IA de fato extraiu.
+        if (edited.video_selection) {
+          const vs = edited.video_selection;
+          if (vs.enabled !== null && vs.enabled !== undefined)             evUpdates.video_selection_enabled = vs.enabled;
+          if (typeof vs.fee === 'number')                                  evUpdates.video_selection_fee = vs.fee;
+          if (vs.fee_required !== null && vs.fee_required !== undefined)   evUpdates.video_selection_fee_required = vs.fee_required;
+          if (vs.refund_policy)                                            evUpdates.video_fee_refund_policy = vs.refund_policy;
+          if (typeof vs.partial_refund_percent === 'number')               evUpdates.video_fee_partial_refund_percent = vs.partial_refund_percent;
+        }
+        // NOTA: edited.refund_policy (texto livre genérico) deliberadamente
+        // NÃO vai mais pra events.video_fee_refund_policy — essa coluna é um
+        // enum de 3 valores fixos ('no_refund'|'full_refund'|'partial_refund',
+        // ver VideoSelection.tsx) e gravar prosa lá quebrava a comparação
+        // `config.video_fee_refund_policy === opt.v` (nenhum botão ficava
+        // marcado). Quem popula esse campo agora é video_selection.refund_policy.
+
+        if (Object.keys(evUpdates).length > 0) {
+          await supabase.from('events').update(evUpdates).eq('id', eventId);
         }
 
-        // Auditoria 2026-05-12: campos novos que vivem em `events`
-        if (eventId) {
-          const evUpdates: Record<string, any> = {};
-          if (edited.city)               evUpdates.city               = edited.city;
-          if (edited.state)              evUpdates.state              = edited.state;
-          if (edited.event_time)         evUpdates.event_time         = edited.event_time;
-          if (edited.politica_ingressos) evUpdates.politica_ingressos = edited.politica_ingressos;
-          if (edited.url_ingressos)      evUpdates.url_ingressos      = edited.url_ingressos;
-          if (edited.cover_url_hint)     evUpdates.cover_url          = edited.cover_url_hint;
-          // Summary da IA vira description do evento (alimenta a vitrine pública).
-          // Só sobrescreve se ainda não há description ou se produtor optou por
-          // re-importar. Não trunca — vitrine sabe lidar com texto longo.
-          if (edited.summary && edited.summary.trim().length > 20) {
-            evUpdates.description = edited.summary;
-          }
-          if (edited.social_links) {
-            if (edited.social_links.instagram) evUpdates.instagram_event = edited.social_links.instagram;
-            if (edited.social_links.tiktok)    evUpdates.tiktok_event    = edited.social_links.tiktok;
-            if (edited.social_links.youtube)   evUpdates.youtube_event   = edited.social_links.youtube;
-            if (edited.social_links.whatsapp)  evUpdates.whatsapp_event  = edited.social_links.whatsapp;
-            if (edited.social_links.website)   evUpdates.website_event   = edited.social_links.website;
-            if (edited.social_links.email)     evUpdates.email_event     = edited.social_links.email;
-          }
-          // Auditoria 2026-05-17 (Gap 3): política de reembolso textual.
-          // Coluna events.video_fee_refund_policy já existe — só popular.
-          if (edited.refund_policy && edited.refund_policy.trim().length > 10) {
-            evUpdates.video_fee_refund_policy = edited.refund_policy;
-          }
-          if (Object.keys(evUpdates).length > 0) {
-            await supabase.from('events').update(evUpdates).eq('id', eventId);
-          }
-
-          // Auditoria 2026-05-17 (Gap 1): popular tabela event_styles com
-          // gêneros + sub_types estruturados. Insert ignorando duplicatas
-          // (mesmo nome no mesmo event_id). RLS: produtor escreve nos
-          // próprios styles via policy producer_inserts_own_styles.
-          if (eventId && edited.event_styles_structured?.length) {
-            const stylesRows = edited.event_styles_structured
-              .filter(s => s?.name && s.name.trim().length > 0)
-              .map(s => ({
-                event_id:    eventId,
-                created_by:  user.id,
-                name:        s.name.trim(),
-                sub_types:   Array.isArray(s.sub_types)
-                  ? s.sub_types
-                      .filter(st => st?.name && st.name.trim().length > 0)
-                      .map(st => ({ name: st.name.trim() }))
-                  : [],
-                is_active:   true,
-                requires_subcategory: false,
-              }));
-            if (stylesRows.length > 0) {
-              const { error: stylesErr } = await supabase
-                .from('event_styles')
-                .insert(stylesRows);
-              if (stylesErr) {
-                // Erro silencioso — fallback é o `genres` legacy em
-                // configuracoes.estilos que já foi salvo. Não interrompe.
-                console.warn('[RegulationAIParser] falha inserir event_styles:', stylesErr.message);
-              }
-            }
-          }
-
-          // Auditoria 2026-05-17 (Gap 2): popular tabela subcategories quando
-          // o regulamento detalha subdivisões etárias dentro de uma categoria.
-          // Estratégia: pra cada categoria que tem sub_categories, primeiro
-          // INSERT na tabela categories (se ainda não existir) pra obter o ID,
-          // depois INSERT nas subcategories ligadas. Best-effort — falha aqui
-          // não bloqueia o save geral.
-          if (edited.categories?.length) {
-            const catsComSub = edited.categories.filter(c => Array.isArray((c as any).sub_categories) && (c as any).sub_categories.length > 0);
-            for (const cat of catsComSub) {
-              try {
-                const { data: catRow, error: catErr } = await supabase
-                  .from('categories')
-                  .insert({
-                    event_id:   eventId,
-                    created_by: user.id,
-                    name:       cat.name,
-                    min_age:    cat.min_age,
-                    max_age:    cat.max_age,
-                  })
-                  .select('id')
-                  .single();
-                if (catErr || !catRow) {
-                  console.warn(`[RegulationAIParser] falha inserir categoria "${cat.name}":`, catErr?.message);
-                  continue;
-                }
-                const subRows = (cat as any).sub_categories
-                  .filter((s: any) => s?.name && typeof s.min_age === 'number' && typeof s.max_age === 'number')
-                  .map((s: any) => ({
-                    category_id: catRow.id,
-                    created_by:  user.id,
-                    name:        s.name,
-                    min_age:     s.min_age,
-                    max_age:     s.max_age,
-                  }));
-                if (subRows.length > 0) {
-                  const { error: subErr } = await supabase
-                    .from('subcategories')
-                    .insert(subRows);
-                  if (subErr) console.warn(`[RegulationAIParser] falha inserir subcategorias de "${cat.name}":`, subErr.message);
-                }
-              } catch (e: any) {
-                console.warn(`[RegulationAIParser] exception salvando categoria "${cat.name}":`, e?.message);
-              }
+        // Auditoria 2026-05-17 (Gap 1): popular tabela event_styles com
+        // gêneros + sub_types estruturados. FIX 2026-07-16 (achado #2):
+        // dedup por nome contra o que já existe — reimportar não duplicava
+        // premios_especiais desde 2026-05-17, mas continuava duplicando
+        // event_styles a cada regulamento reimportado (sem UNIQUE no banco).
+        if (edited.event_styles_structured?.length) {
+          const existingStyleNames = new Set((existingStyles ?? []).map((s: any) => norm(s.name)));
+          const stylesRows = edited.event_styles_structured
+            .filter(s => s?.name && s.name.trim().length > 0 && !existingStyleNames.has(norm(s.name)))
+            .map(s => ({
+              event_id:    eventId,
+              created_by:  user.id,
+              name:        s.name.trim(),
+              sub_types:   Array.isArray(s.sub_types)
+                ? s.sub_types
+                    .filter(st => st?.name && st.name.trim().length > 0)
+                    .map(st => ({ name: st.name.trim() }))
+                : [],
+              is_active:   true,
+              requires_subcategory: false,
+            }));
+          if (stylesRows.length > 0) {
+            const { error: stylesErr } = await supabase
+              .from('event_styles')
+              .insert(stylesRows);
+            if (stylesErr) {
+              // Erro silencioso — fallback é o `genres` legacy em
+              // configuracoes.estilos que já foi salvo. Não interrompe.
+              console.warn('[RegulationAIParser] falha inserir event_styles:', stylesErr.message);
             }
           }
         }
 
-        // ── Workshops: cria 1 row por workshop extraído ───────────────────
-        // Defaults razoáveis pros campos não capturados pela IA. Produtor pode
-        // editar/publicar depois em /workshops-do-evento.
-        if (eventId && edited.workshops?.length) {
-          const eventStart = edited.start_date ? new Date(edited.start_date + 'T09:00:00') : new Date(Date.now() + 30 * 86400000);
-          const slugSuffix = Date.now().toString(36).slice(-5);
-          const wsRows = edited.workshops.map((w, i) => {
-            // Audit T1.5: âncora explícita em -03:00 (BR) pra new Date() não usar
-            // fuso do servidor JS. Quando salvar como ISO, fica determinístico.
-            const dataInicio = w.data_inicio
-              ? new Date(w.data_inicio.includes('T')
-                  ? (w.data_inicio.match(/[+-]\d{2}:?\d{2}|Z$/) ? w.data_inicio : w.data_inicio + '-03:00')
-                  : w.data_inicio + 'T09:00:00-03:00')
-              : new Date(eventStart.getTime() + i * 4 * 3600000);
-            const slugBase = (w.nome ?? 'workshop').toLowerCase()
-              .normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), '')
-              .replace(/[^a-z0-9\s-]/g, '').trim()
-              .replace(/\s+/g, '-').slice(0, 40);
-            return {
-              event_id: eventId,
-              created_by: user.id,
-              name: w.nome,
-              slug: `${slugBase}-${slugSuffix}-${i}`,
-              description: null,
-              cover_url: null,
-              professor_name: w.professor_nome ?? '—',
-              professor_bio: null,
-              professor_bio_short: null,
-              professor_photo_url: null,
-              professor_instagram: null,
-              professor_is_public: true,
-              modalidade: w.modalidade,
-              nivel: w.nivel ?? 'todos',
-              data_inicio: dataInicio.toISOString(),
-              data_fim: null,
-              duracao_minutos: w.duracao_minutos,
-              local: w.local,
-              capacidade_max: w.capacidade_max,
-              preco_padrao: w.preco_padrao ?? 0,
-              preco_inscritos_mostra: null,
-              gratis_para_inscritos: false,
-              auto_detect_combo: true,
-              workshop_commission_percent: 10,
-              workshop_fee_mode: 'repassar',
-              workshop_max_per_cpf: 4,
-              workshop_reservation_minutes: 10,
-              is_published: false,  // produtor revisa antes de publicar
-            };
-          });
+        // Auditoria 2026-05-17 (Gap 2): popular tabela subcategories quando
+        // o regulamento detalha subdivisões etárias dentro de uma categoria.
+        // FIX 2026-07-16 (achado #2): pula categoria cujo nome já existe no
+        // evento — antes reimportar duplicava a categoria (e suas subcategorias)
+        // a cada regulamento reimportado.
+        if (edited.categories?.length) {
+          const existingCatNames = new Set((existingCategories ?? []).map((c: any) => norm(c.name)));
+          const catsComSub = edited.categories.filter(c =>
+            !existingCatNames.has(norm(c.name)) &&
+            Array.isArray((c as any).sub_categories) && (c as any).sub_categories.length > 0
+          );
+          for (const cat of catsComSub) {
+            try {
+              const { data: catRow, error: catErr } = await supabase
+                .from('categories')
+                .insert({
+                  event_id:   eventId,
+                  created_by: user.id,
+                  name:       cat.name,
+                  min_age:    cat.min_age,
+                  max_age:    cat.max_age,
+                })
+                .select('id')
+                .single();
+              if (catErr || !catRow) {
+                console.warn(`[RegulationAIParser] falha inserir categoria "${cat.name}":`, catErr?.message);
+                continue;
+              }
+              const subRows = (cat as any).sub_categories
+                .filter((s: any) => s?.name && typeof s.min_age === 'number' && typeof s.max_age === 'number')
+                .map((s: any) => ({
+                  category_id: catRow.id,
+                  created_by:  user.id,
+                  name:        s.name,
+                  min_age:     s.min_age,
+                  max_age:     s.max_age,
+                }));
+              if (subRows.length > 0) {
+                const { error: subErr } = await supabase
+                  .from('subcategories')
+                  .insert(subRows);
+                if (subErr) console.warn(`[RegulationAIParser] falha inserir subcategorias de "${cat.name}":`, subErr.message);
+              }
+            } catch (e: any) {
+              console.warn(`[RegulationAIParser] exception salvando categoria "${cat.name}":`, e?.message);
+            }
+          }
+        }
+      }
+
+      // ── Workshops: cria 1 row por workshop extraído ───────────────────
+      // Defaults razoáveis pros campos não capturados pela IA. Produtor pode
+      // editar/publicar depois em /workshops-do-evento.
+      // FIX 2026-07-16 (achado #2): pula workshop cujo nome já existe no
+      // evento — antes reimportar o regulamento duplicava todos os workshops.
+      if (edited.workshops?.length) {
+        const existingWsNames = new Set((existingWorkshops ?? []).map((w: any) => norm(w.name)));
+        const newWorkshops = edited.workshops.filter(w => w.nome && !existingWsNames.has(norm(w.nome)));
+        const eventStart = edited.start_date ? new Date(edited.start_date + 'T09:00:00') : new Date(Date.now() + 30 * 86400000);
+        const slugSuffix = Date.now().toString(36).slice(-5);
+        const wsRows = newWorkshops.map((w, i) => {
+          // Audit T1.5: âncora explícita em -03:00 (BR) pra new Date() não usar
+          // fuso do servidor JS. Quando salvar como ISO, fica determinístico.
+          const dataInicio = w.data_inicio
+            ? new Date(w.data_inicio.includes('T')
+                ? (w.data_inicio.match(/[+-]\d{2}:?\d{2}|Z$/) ? w.data_inicio : w.data_inicio + '-03:00')
+                : w.data_inicio + 'T09:00:00-03:00')
+            : new Date(eventStart.getTime() + i * 4 * 3600000);
+          const slugBase = (w.nome ?? 'workshop').toLowerCase()
+            .normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), '')
+            .replace(/[^a-z0-9\s-]/g, '').trim()
+            .replace(/\s+/g, '-').slice(0, 40);
+          return {
+            event_id: eventId,
+            created_by: user.id,
+            name: w.nome,
+            slug: `${slugBase}-${slugSuffix}-${i}`,
+            description: null,
+            cover_url: null,
+            professor_name: w.professor_nome ?? '—',
+            professor_bio: null,
+            professor_bio_short: null,
+            professor_photo_url: null,
+            professor_instagram: null,
+            professor_is_public: true,
+            modalidade: w.modalidade,
+            nivel: w.nivel ?? 'todos',
+            data_inicio: dataInicio.toISOString(),
+            data_fim: null,
+            duracao_minutos: w.duracao_minutos,
+            local: w.local,
+            capacidade_max: w.capacidade_max,
+            preco_padrao: w.preco_padrao ?? 0,
+            preco_inscritos_mostra: null,
+            gratis_para_inscritos: false,
+            auto_detect_combo: true,
+            workshop_commission_percent: 10,
+            workshop_fee_mode: 'repassar',
+            workshop_max_per_cpf: 4,
+            workshop_reservation_minutes: 10,
+            is_published: false,  // produtor revisa antes de publicar
+          };
+        });
+        if (wsRows.length > 0) {
           const { error: wsErr } = await supabase.from('workshops').insert(wsRows);
           if (wsErr) console.warn('[RegulationAIParser] falha inserir workshops:', wsErr.message);
         }
@@ -948,6 +1065,70 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
                   <strong className="text-amber-600 dark:text-amber-400">Política de meia detectada:</strong> {edited.meia_entrada_policy}
                 </p>
               )}
+            </section>
+          )}
+
+          {/* ── Seletiva de Vídeo (achado #3, 2026-07-16) ── */}
+          {edited.video_selection && (edited.video_selection.enabled || (edited.video_selection.fee ?? 0) > 0) && (
+            <section className="space-y-4">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2 border-b border-slate-100 dark:border-white/5 pb-3">
+                <Video size={12} /> Seletiva de Vídeo
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Seletiva Habilitada" value={edited.video_selection.enabled}>
+                  <select
+                    className={inputCls}
+                    value={edited.video_selection.enabled ? 'true' : 'false'}
+                    onChange={e => setField('video_selection', { ...edited.video_selection!, enabled: e.target.value === 'true' })}
+                  >
+                    <option value="true" className={selectOptionCls}>Sim</option>
+                    <option value="false" className={selectOptionCls}>Não</option>
+                  </select>
+                </Field>
+                <Field label="Vídeo Obrigatório Antes do Pagamento" value={edited.video_selection.fee_required}>
+                  <select
+                    className={inputCls}
+                    value={edited.video_selection.fee_required ? 'true' : 'false'}
+                    onChange={e => setField('video_selection', { ...edited.video_selection!, fee_required: e.target.value === 'true' })}
+                  >
+                    <option value="false" className={selectOptionCls}>Não (Modelo 1 — vídeo opcional)</option>
+                    <option value="true" className={selectOptionCls}>Sim (Modelo 2/3 — bloqueia pagamento)</option>
+                  </select>
+                </Field>
+                <Field label="Taxa de Seletiva (R$)" value={edited.video_selection.fee}>
+                  <input
+                    type="number" step="0.01" min={0}
+                    className={inputCls}
+                    value={edited.video_selection.fee ?? ''}
+                    onChange={e => setField('video_selection', { ...edited.video_selection!, fee: parseFloat(e.target.value) || 0 })}
+                    placeholder="0,00 = grátis"
+                  />
+                </Field>
+                <Field label="Política de Reembolso (Reprovação)" value={edited.video_selection.refund_policy}>
+                  <select
+                    className={inputCls}
+                    value={edited.video_selection.refund_policy ?? ''}
+                    onChange={e => setField('video_selection', { ...edited.video_selection!, refund_policy: (e.target.value || null) as any })}
+                  >
+                    <option value="" className={selectOptionCls}>Selecionar...</option>
+                    <option value="no_refund" className={selectOptionCls}>Sem Reembolso</option>
+                    <option value="partial_refund" className={selectOptionCls}>Parcial</option>
+                    <option value="full_refund" className={selectOptionCls}>Reembolso Total</option>
+                  </select>
+                </Field>
+                {edited.video_selection.refund_policy === 'partial_refund' && (
+                  <Field label="% Reembolso Parcial" value={edited.video_selection.partial_refund_percent}>
+                    <input
+                      type="number" min={0} max={100}
+                      className={inputCls}
+                      value={edited.video_selection.partial_refund_percent ?? ''}
+                      onChange={e => setField('video_selection', { ...edited.video_selection!, partial_refund_percent: parseInt(e.target.value) || 0 })}
+                      placeholder="Ex: 50"
+                    />
+                  </Field>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-500 italic">Confira em <strong>Bilheteria → Seletiva de Vídeo</strong> depois de aplicar.</p>
             </section>
           )}
 

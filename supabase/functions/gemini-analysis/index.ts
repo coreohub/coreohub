@@ -15,10 +15,21 @@ const schema = {
       video_submission_deadline:  { type: 'string' },
       event_format:               { type: 'string', enum: ['RANKING', 'PEDAGOGICAL', 'GRADUATED'] },
       score_scale:                { type: 'number' },
-      inactivity_block_enabled:   { type: 'boolean' },
       age_reference:              { type: 'string', enum: ['EVENT_DAY', 'YEAR_END', 'FIXED_DATE'] },
       age_tolerance_mode:         { type: 'string', enum: ['PERCENT', 'FIXED_COUNT'] },
       age_tolerance_value:        { type: 'number' },
+      // Seletiva por Vídeo (achado #3, 2026-07-16) — feature chave do produto
+      // que o schema nunca cobriu. Espelha events.video_selection_*.
+      video_selection: {
+        type: 'object',
+        properties: {
+          enabled:                 { type: 'boolean' },
+          fee:                     { type: 'number' },
+          fee_required:            { type: 'boolean' },
+          refund_policy:           { type: 'string', enum: ['no_refund', 'full_refund', 'partial_refund'] },
+          partial_refund_percent:  { type: 'number' },
+        },
+      },
       stage_entry_time_seconds:   { type: 'number' },
       stage_marking_time_seconds: { type: 'number' },
       tiebreaker_rules:           { type: 'string' },
@@ -282,9 +293,45 @@ Deno.serve(async (req) => {
     })
   }
 
+  // Achado #5 (auditoria 2026-07-16): endpoint não tinha nenhuma proteção de
+  // custo — o cliente só valida 20MB no navegador, uma chamada direta à
+  // function (bypassando o frontend) podia mandar payload arbitrário. Client
+  // service-role separado só pra log/rate-limit (tabela sem policy pra
+  // authenticated, ver migration 20260716_ai_usage_log.sql).
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+  const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL') ?? '', serviceRoleKey)
+
+  const DAILY_LIMIT = 15
+  const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString()
+  const { count: usedToday } = await supabaseAdmin
+    .from('ai_usage_log')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .eq('feature', 'gemini-analysis')
+    .gte('created_at', since)
+
+  if ((usedToday ?? 0) >= DAILY_LIMIT) {
+    return new Response(JSON.stringify({ error: `Limite de ${DAILY_LIMIT} análises de regulamento por dia atingido. Tente novamente amanhã.` }), {
+      status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+
   try {
     const { text, pdf_base64 } = await req.json()
     if (!text && !pdf_base64) throw new Error('text ou pdf_base64 é obrigatório')
+
+    // Cap server-side — o cliente já limita a 20MB binário, mas nada impedia
+    // uma chamada direta ao endpoint com payload maior. ~28M chars base64 ≈ 21MB decodificado.
+    if (pdf_base64 && pdf_base64.length > 28_000_000) {
+      return new Response(JSON.stringify({ error: 'Arquivo muito grande (máximo ~20MB).' }), {
+        status: 413, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+    if (text && text.length > 500_000) {
+      return new Response(JSON.stringify({ error: 'Texto muito longo (máximo ~500 mil caracteres).' }), {
+        status: 413, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     const apiKey = Deno.env.get('GEMINI_API_KEY') ?? ''
     if (!apiKey) throw new Error('GEMINI_API_KEY não configurado no servidor')
@@ -317,6 +364,11 @@ EXTRAIA TAMBÉM (campos novos):
 • medal_thresholds: { gold, silver, bronze } com nota mínima de cada medalha (escala 0-10 OU 0-100, mesma do score_scale). Só preencha se premiation_system="THRESHOLD".
 • politica_ingressos: se festival cobra ingresso pra plateia? GRATUITO (entrada franca), INTERNO (CoreoHub vende), EXTERNO (link Sympla/Eventbrite externo), NAO_DEFINIDO.
 • url_ingressos: link da venda externa de ingressos se politica_ingressos="EXTERNO".
+• video_selection: config de Seletiva por Vídeo, quando o regulamento exige envio de vídeo do ensaio/coreografia ANTES ou EM VEZ da apresentação ao vivo (comum em editais e festivais com etapa classificatória remota). Existem 3 modelos de mercado — identifique qual descreve o regulamento:
+  - Modelo 1 (vídeo opcional/metadata): festival pede vídeo só como material de apoio, não bloqueia nada. → enabled=true, fee_required=false.
+  - Modelo 2 (vídeo grátis libera inscrição): inscrito envia vídeo, produtor/banca avalia e aprova, só depois libera o pagamento da inscrição. Vídeo é obrigatório mas sem taxa própria. → enabled=true, fee_required=true, fee=0 (ou omitido).
+  - Modelo 3 (taxa de seletiva paga primeiro): inscrito paga uma taxa de análise/seleção ANTES de enviar o vídeo; só após aprovação libera a taxa de inscrição. → enabled=true, fee_required=true, fee=valor da taxa de análise em R$.
+  Se o regulamento não menciona nenhuma etapa de vídeo/seleção prévia (festival presencial tradicional, inscrição direta), deixe video_selection omitido ou enabled=false. refund_policy/partial_refund_percent: só preencha se o regulamento descrever o que acontece com a taxa de seletiva em caso de reprovação (no_refund = não devolve, full_refund = devolve 100%, partial_refund = devolve um percentual — preencha partial_refund_percent nesse caso).
 ═══ GLOSSÁRIO E DESAMBIGUAÇÃO (CRÍTICO) ═══════════════════════════════════
 O mercado BR de festivais de dança NÃO tem consenso de nomenclatura. Cada regulamento usa termos diferentes pros mesmos conceitos. Use o conteúdo (não o nome) pra mapear corretamente:
 
@@ -405,6 +457,11 @@ EXTRAIA TAMBÉM (campos novos):
 • medal_thresholds: { gold, silver, bronze } com nota mínima de cada medalha (escala 0-10 OU 0-100, mesma do score_scale). Só preencha se premiation_system="THRESHOLD".
 • politica_ingressos: se festival cobra ingresso pra plateia? GRATUITO (entrada franca), INTERNO (CoreoHub vende), EXTERNO (link Sympla/Eventbrite externo), NAO_DEFINIDO.
 • url_ingressos: link da venda externa de ingressos se politica_ingressos="EXTERNO".
+• video_selection: config de Seletiva por Vídeo, quando o regulamento exige envio de vídeo do ensaio/coreografia ANTES ou EM VEZ da apresentação ao vivo (comum em editais e festivais com etapa classificatória remota). Existem 3 modelos de mercado — identifique qual descreve o regulamento:
+  - Modelo 1 (vídeo opcional/metadata): festival pede vídeo só como material de apoio, não bloqueia nada. → enabled=true, fee_required=false.
+  - Modelo 2 (vídeo grátis libera inscrição): inscrito envia vídeo, produtor/banca avalia e aprova, só depois libera o pagamento da inscrição. Vídeo é obrigatório mas sem taxa própria. → enabled=true, fee_required=true, fee=0 (ou omitido).
+  - Modelo 3 (taxa de seletiva paga primeiro): inscrito paga uma taxa de análise/seleção ANTES de enviar o vídeo; só após aprovação libera a taxa de inscrição. → enabled=true, fee_required=true, fee=valor da taxa de análise em R$.
+  Se o regulamento não menciona nenhuma etapa de vídeo/seleção prévia (festival presencial tradicional, inscrição direta), deixe video_selection omitido ou enabled=false. refund_policy/partial_refund_percent: só preencha se o regulamento descrever o que acontece com a taxa de seletiva em caso de reprovação (no_refund = não devolve, full_refund = devolve 100%, partial_refund = devolve um percentual — preencha partial_refund_percent nesse caso).
 ═══ GLOSSÁRIO E DESAMBIGUAÇÃO (CRÍTICO) ═══════════════════════════════════
 O mercado BR de festivais de dança NÃO tem consenso de nomenclatura. Cada regulamento usa termos diferentes pros mesmos conceitos. Use o conteúdo (não o nome) pra mapear corretamente:
 
@@ -476,6 +533,10 @@ ${text}`,
 
     const result = JSON.parse(response.text ?? '{}')
     console.log(`[gemini-analysis] ok user=${user.id} formacoes=${result.formacoes?.length ?? 0}`)
+
+    // Best-effort — falha no log não deve derrubar a resposta já pronta.
+    supabaseAdmin.from('ai_usage_log').insert({ user_id: user.id, feature: 'gemini-analysis' })
+      .then(({ error }) => { if (error) console.warn('[gemini-analysis] falha ao logar uso:', error.message) })
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
