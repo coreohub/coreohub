@@ -2672,15 +2672,36 @@ const JudgeTerminal = () => {
         )}
       </main>
 
-      {/* Modal de comentário escrito — tablet/mobile (<lg). Full-screen pra
-          nunca ficar coberto pelo teclado virtual (o campo inline sempre-
-          visível fica só em notebook, dentro da coluna de critérios). */}
+      {/* Modal de comentário escrito — tablet/mobile (<lg). `absolute` (não
+          `fixed`) pra ficar consistente com os outros 2 overlays do arquivo
+          (guard de navegação + tutorial demo) e continuar contido dentro do
+          card do preview de dispositivo do modo demo (deviceClasses não usa
+          transform, então um `fixed` escaparia do card e cobriria a janela
+          inteira). Foco preso dentro do modal (Tab/Shift+Tab cicla entre X,
+          textarea e Concluir) — sem isso, teclado físico pareado (cenário já
+          suportado neste arquivo) conseguia sair do modal via Shift+Tab e
+          clicar em botão de quesito/numpad escondido atrás do backdrop. */}
       {showCommentModal && !isAvaliada && (
         <div
           role="dialog"
           aria-modal="true"
-          className="lg:hidden fixed inset-0 z-[65] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          className="lg:hidden absolute inset-0 z-[65] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
           onClick={() => setShowCommentModal(false)}
+          onKeyDown={e => {
+            if (e.key === 'Escape') { setShowCommentModal(false); return; }
+            if (e.key !== 'Tab') return;
+            const focusables = (e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>(
+              'button, textarea, [href], input, select, [tabindex]:not([tabindex="-1"])'
+            );
+            if (focusables.length === 0) return;
+            const first = focusables[0];
+            const last = focusables[focusables.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+              e.preventDefault(); last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+              e.preventDefault(); first.focus();
+            }
+          }}
         >
           <div
             className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-2xl flex flex-col max-h-[90dvh]"
@@ -2693,7 +2714,7 @@ const JudgeTerminal = () => {
               <button
                 onClick={() => setShowCommentModal(false)}
                 className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 transition-colors"
-                aria-label={t('comment.done')}
+                aria-label={t('comment.close')}
               >
                 <X size={18} />
               </button>

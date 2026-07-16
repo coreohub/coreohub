@@ -124,10 +124,10 @@ const judgePt = {
 
   // Comentário escrito (modo competitivo — opcional, complementa o áudio)
   'comment.toggle': 'Comentário escrito (opcional)',
-  'comment.hide': 'Ocultar comentário',
   'comment.placeholder': 'Escreva um comentário para o inscrito (opcional)...',
   'comment.filled': 'Comentário escrito',
   'comment.done': 'Concluir',
+  'comment.close': 'Fechar',
 
   // Submitted state
   'submitted.title': 'Nota Enviada',

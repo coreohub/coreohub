@@ -122,10 +122,10 @@ const judgeEn: Record<JudgeDictKey, string> = {
 
   // Written comment (competitive mode — optional, complements audio)
   'comment.toggle': 'Written comment (optional)',
-  'comment.hide': 'Hide comment',
   'comment.placeholder': 'Write a comment for the entrant (optional)...',
   'comment.filled': 'Written comment',
   'comment.done': 'Done',
+  'comment.close': 'Close',
 
   // Submitted state
   'submitted.title': 'Score Submitted',

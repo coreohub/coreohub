@@ -122,10 +122,10 @@ const judgeEs: Record<JudgeDictKey, string> = {
 
   // Comentario escrito (modo competitivo — opcional, complementa el audio)
   'comment.toggle': 'Comentario escrito (opcional)',
-  'comment.hide': 'Ocultar comentario',
   'comment.placeholder': 'Escribe un comentario para el inscrito (opcional)...',
   'comment.filled': 'Comentario escrito',
   'comment.done': 'Listo',
+  'comment.close': 'Cerrar',
 
   // Submitted state
   'submitted.title': 'Nota Enviada',
