@@ -398,7 +398,12 @@ const InscricaoWizard: React.FC = () => {
       const path = `${userId}/${event?.id ?? 'evento'}_${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from('trilhas')
-        .upload(path, file, { cacheControl: '3600', upsert: false });
+        // cacheControl 1 ano: o path já é único por timestamp (nunca sobrescreve
+        // em uso real — upsert:false), então o conteúdo nunca muda depois de
+        // salvo. Cache curto (era 1h) fazia o navegador rebaixar o arquivo
+        // inteiro de novo a cada replay depois de 1h — achado real de egress
+        // estourado no Supabase (801% da cota do plano Free).
+        .upload(path, file, { cacheControl: '31536000', upsert: false });
       if (upErr) throw upErr;
 
       setData(d => ({

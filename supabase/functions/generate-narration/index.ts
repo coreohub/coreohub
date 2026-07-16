@@ -236,7 +236,11 @@ Deno.serve(async (req) => {
       const fileName = `${event_id}/${registration_id}_${kind}_${Date.now()}.wav`
       const { error: upErr } = await supa.storage
         .from('narrations')
-        .upload(fileName, wavBytes, { contentType: 'audio/wav', upsert: true })
+        // cacheControl 1 ano: fileName é único por timestamp, conteúdo nunca
+        // muda depois de salvo. Cache default (1h) fazia o navegador rebaixar
+        // o WAV inteiro de novo a cada replay depois de 1h — achado real de
+        // egress estourado no Supabase (801% da cota do plano Free).
+        .upload(fileName, wavBytes, { contentType: 'audio/wav', upsert: true, cacheControl: '31536000' })
 
       if (upErr) return { ok: false, error: `storage: ${upErr.message}` }
 

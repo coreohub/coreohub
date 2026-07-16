@@ -258,7 +258,11 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
     try {
       const { error: upErr } = await supabase.storage
         .from('trilhas')
-        .upload(path, file, { upsert: true, contentType: file.type });
+        // cacheControl 1 ano: path é único por timestamp (comentário acima),
+        // conteúdo nunca muda depois de salvo. Cache default (1h) fazia o
+        // navegador rebaixar o arquivo inteiro de novo a cada replay depois
+        // de 1h — achado real de egress estourado no Supabase (801% da cota).
+        .upload(path, file, { upsert: true, contentType: file.type, cacheControl: '31536000' });
 
       if (upErr) throw upErr;
       setProgress(70);
