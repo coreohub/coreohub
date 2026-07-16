@@ -29,6 +29,7 @@ const judgeEn: Record<JudgeDictKey, string> = {
   'micCheck.startTest': 'Test microphone',
   'micCheck.requesting': 'Requesting microphone access...',
   'micCheck.retest': 'Test again',
+  'micCheck.retestConfirm': 'There is an ongoing recording for this performance. Reopening the check discards the audio already recorded. Continue?',
   'micCheck.deviceFallbackLabel': 'Microphone',
   'micCheck.speakPrompt': 'Say something near the microphone...',
   'micCheck.soundDetected': 'Sound detected — all good!',

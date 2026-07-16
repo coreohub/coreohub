@@ -1693,6 +1693,11 @@ const JudgeTerminal = () => {
             skipped: true,
             checkedAt: Date.now(),
           });
+          // Sem isso, reabrir a checagem (Testar de novo) depois de já ter
+          // confirmado um device e dessa vez pular deixava o state ainda
+          // apontando pro device antigo — a próxima gravação real ignorava
+          // a escolha de pular e continuava mirando o device anterior.
+          setMicCheckDeviceId(null);
           setShowMicCheck(false);
         }}
       />
@@ -2111,10 +2116,14 @@ const JudgeTerminal = () => {
                     (device errado) rodando escondido atrás da tela de
                     checagem, e ele nunca reinicia com o device novo depois
                     (o efeito de auto-start só dispara quando micAttempted
-                    ainda é false). */}
+                    ainda é false). Confirmação obrigatória quando já está
+                    gravando: startRecording() zera o buffer rolante (áudio
+                    já capturado da apresentação atual) sem aviso nenhum —
+                    mesma trava de segurança de handleSwitchJudge acima. */}
                 {judgeSession && (
                   <button
                     onClick={() => {
+                      if (isRecording && !confirm(t('micCheck.retestConfirm'))) return;
                       setShowOverflowMenu(false);
                       stopRecording();
                       setMicAttempted(false);

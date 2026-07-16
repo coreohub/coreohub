@@ -152,7 +152,14 @@ const JudgeMicCheck: React.FC<JudgeMicCheckProps> = ({ judgeName, onPassed, onSk
   };
 
   return (
-    <div className="h-full flex flex-col items-center justify-center bg-slate-950 rounded-3xl select-none gap-5 p-6 text-center overflow-y-auto">
+    // overflow-y-auto no container de fora + m-auto no de dentro (em vez de
+    // justify-center no de fora) — "unsafe centering" com justify-center
+    // corta o conteúdo que passa da viewport em vez de deixar rolar até
+    // ele (mesma classe de bug corrigida no Marcar Destaque do terminal).
+    // Crítico aqui porque "Continuar sem áudio" é a garantia de nunca
+    // travar o evento — não pode ficar inalcançável numa janela baixa.
+    <div className="h-full flex flex-col bg-slate-950 rounded-3xl select-none overflow-y-auto">
+      <div className="m-auto flex flex-col items-center gap-5 p-6 text-center w-full">
       <div className="w-20 h-20 shrink-0 rounded-full bg-[#ff0068]/10 border-2 border-[#ff0068]/30 flex items-center justify-center">
         <Mic size={32} className="text-[#ff0068]" />
       </div>
@@ -250,6 +257,7 @@ const JudgeMicCheck: React.FC<JudgeMicCheckProps> = ({ judgeName, onPassed, onSk
           {t('micCheck.skipBtn')}
         </button>
         <p className="text-[8px] text-slate-600 max-w-xs mx-auto">{t('micCheck.skipHint')}</p>
+      </div>
       </div>
     </div>
   );

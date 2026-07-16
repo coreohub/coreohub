@@ -29,6 +29,7 @@ const judgeEs: Record<JudgeDictKey, string> = {
   'micCheck.startTest': 'Probar micrófono',
   'micCheck.requesting': 'Solicitando acceso al micrófono...',
   'micCheck.retest': 'Probar de nuevo',
+  'micCheck.retestConfirm': 'Ya hay una grabación en curso para esta presentación. Reabrir el chequeo descarta el audio ya grabado. ¿Continuar?',
   'micCheck.deviceFallbackLabel': 'Micrófono',
   'micCheck.speakPrompt': 'Habla algo cerca del micrófono...',
   'micCheck.soundDetected': 'Sonido detectado — ¡todo listo!',

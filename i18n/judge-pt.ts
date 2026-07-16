@@ -31,6 +31,7 @@ const judgePt = {
   'micCheck.startTest': 'Testar microfone',
   'micCheck.requesting': 'Solicitando acesso ao microfone...',
   'micCheck.retest': 'Testar de novo',
+  'micCheck.retestConfirm': 'Já existe gravação em andamento pra esta apresentação. Reabrir a checagem descarta o áudio já gravado. Continuar?',
   'micCheck.deviceFallbackLabel': 'Microfone',
   'micCheck.speakPrompt': 'Fale algo perto do microfone...',
   'micCheck.soundDetected': 'Som detectado — tudo certo!',
