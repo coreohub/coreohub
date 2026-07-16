@@ -14,10 +14,11 @@ import { supabase } from '../services/supabase';
 import { isStyleInList } from '../utils/styleMatch';
 import { useT, useLocale, setLocale } from '../hooks/useT';
 import type { JudgeDictKey } from '../i18n/judge-pt';
-import { readJudgeSession, clearJudgeSession } from './JudgeLogin';
+import { readJudgeSession, clearJudgeSession, needsMicCheck, readMicCheckState, writeMicCheckState } from './JudgeLogin';
 import { fetchTerminalData, fetchPreviousEvaluations, submitEvaluation as submitEvaluationViaApi, uploadAudio as uploadAudioViaApi } from '../services/judgeApi';
 import { enqueueEvaluation, fetchTerminalDataSWR, fetchPreviousEvaluationsSWR } from '../services/judgeApiOffline';
 import OfflineStatusBadge from '../components/OfflineStatusBadge';
+import JudgeMicCheck from '../components/JudgeMicCheck';
 
 /** Maps the canonical PT criterion name (used as score key in DB) to a dict key. */
 const DEFAULT_CRITERION_KEYS: Record<string, JudgeDictKey> = {
@@ -264,6 +265,25 @@ const JudgeTerminal = () => {
   // Sessão de jurado (PIN-based, via /judge-login). Quando existe, o terminal
   // pula o seletor "qual jurado é você?" e fixa o jurado da sessão.
   const judgeSession = useMemo(() => readJudgeSession(), []);
+
+  // Checagem de áudio pré-entrada (2026-07-16) — gate antes da fila, 1x por
+  // sessão de PIN. Só se aplica a sessão real de jurado (kiosk); o fluxo de
+  // preview do produtor (sem judgeSession) e o modo demo pulam direto.
+  const [showMicCheck, setShowMicCheck] = useState(
+    () => !!judgeSession && needsMicCheck(judgeSession.judge_id, judgeSession.event_id)
+  );
+  // Dispositivo escolhido/confirmado na checagem — propagado pro getUserMedia
+  // real em startRecording(); sem isso o teste seria só decoração. Lazy init
+  // recupera o device de uma checagem anterior nesta mesma sessão (ex.: PWA
+  // recarregou sem limpar localStorage) — sem isso a gravação real voltaria
+  // a usar o device padrão do SO mesmo já tendo testado outro.
+  const [micCheckDeviceId, setMicCheckDeviceId] = useState<string | null>(() => {
+    if (!judgeSession) return null;
+    const s = readMicCheckState();
+    return (s && s.judge_id === judgeSession.judge_id && s.event_id === judgeSession.event_id)
+      ? s.deviceId
+      : null;
+  });
 
   // Ref espelhando o state `scores` (declarado abaixo) — usado em handleSwitchJudge
   // pra checar rascunho sem expor scores em closure (state nao existe ainda nessa linha).
@@ -898,18 +918,38 @@ const JudgeTerminal = () => {
     return () => { if (inactivityRef.current) clearTimeout(inactivityRef.current); };
   }, [resetInactivityTimer]);
 
-  /* ── auto-start mic ── */
+  /* ── auto-start mic ──
+     showMicCheck no guard é obrigatório: hooks rodam sempre, independente
+     de qual JSX o componente retorna nesse render (o early-return da tela
+     de checagem não pausa efeitos). Sem essa checagem, a gravação REAL
+     começa em paralelo enquanto a equipe ainda está testando o mic —
+     com o device padrão do SO, não o confirmado no teste — e como
+     micAttempted vira true nesse primeiro disparo indevido, a gravação
+     nunca reinicia depois com o device certo. */
   useEffect(() => {
-    if (currentPerformance && !isRecording && !micAttempted && !isSubmitted) {
+    if (currentPerformance && !isRecording && !micAttempted && !isSubmitted && !showMicCheck) {
       setMicAttempted(true);
       startRecording();
     }
-  }, [currentPerformance, isRecording, micAttempted, isSubmitted]);
+  }, [currentPerformance, isRecording, micAttempted, isSubmitted, showMicCheck]);
 
   /* ── Audio ── */
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Usa o mesmo dispositivo confirmado na checagem pré-entrada (Judge
+      // MicCheck) quando disponível — sem isso o teste de mic seria só
+      // decoração, gravando de fato no device padrão do SO em vez do
+      // escolhido. `exact` pode falhar se o device sumiu entre a checagem
+      // e agora (tablet trocado de mic); nesse caso cai pro default.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: micCheckDeviceId ? { deviceId: { exact: micCheckDeviceId } } : true,
+      }).catch(async (err) => {
+        if (micCheckDeviceId) {
+          console.warn('[JudgeTerminal] device do mic check indisponível, usando padrão:', err);
+          return navigator.mediaDevices.getUserMedia({ audio: true });
+        }
+        throw err;
+      });
       const rec = new MediaRecorder(stream);
       const ac  = new (window.AudioContext || (window as any).webkitAudioContext)();
       if (ac.state === 'suspended') await ac.resume();
@@ -1630,6 +1670,35 @@ const JudgeTerminal = () => {
     );
   }
 
+  if (showMicCheck && judgeSession && !isDemoMode) {
+    return (
+      <JudgeMicCheck
+        judgeName={judgeSession.judge_name}
+        onPassed={(deviceId) => {
+          writeMicCheckState({
+            judge_id: judgeSession.judge_id,
+            event_id: judgeSession.event_id,
+            deviceId,
+            skipped: false,
+            checkedAt: Date.now(),
+          });
+          setMicCheckDeviceId(deviceId);
+          setShowMicCheck(false);
+        }}
+        onSkip={() => {
+          writeMicCheckState({
+            judge_id: judgeSession.judge_id,
+            event_id: judgeSession.event_id,
+            deviceId: null,
+            skipped: true,
+            checkedAt: Date.now(),
+          });
+          setShowMicCheck(false);
+        }}
+      />
+    );
+  }
+
   /* ════════════════════════════════ MAIN RENDER ════════════════════════════════ */
   const deviceClasses: Record<string, string> = {
     mobile:  'w-[390px] h-[844px] mx-auto shadow-2xl',
@@ -2030,6 +2099,30 @@ const JudgeTerminal = () => {
                     className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#ff0068]/10 hover:bg-[#ff0068]/20 border border-[#ff0068]/30 rounded-xl text-[10px] font-black uppercase tracking-widest text-[#ff0068] transition-all"
                   >
                     <Star size={12} className="fill-current" /> {t('nav.deliberation')}
+                  </button>
+                )}
+
+                {/* Atalho pra equipe do evento reabrir a checagem de áudio
+                    sem esperar o próximo login por PIN (ex.: trocou de
+                    tablet/fone no meio do evento). Só faz sentido em sessão
+                    real de jurado. stopRecording() + reset de micAttempted
+                    são obrigatórios aqui: sem isso, reabrir a checagem no
+                    meio de uma avaliação deixa o MediaRecorder antigo
+                    (device errado) rodando escondido atrás da tela de
+                    checagem, e ele nunca reinicia com o device novo depois
+                    (o efeito de auto-start só dispara quando micAttempted
+                    ainda é false). */}
+                {judgeSession && (
+                  <button
+                    onClick={() => {
+                      setShowOverflowMenu(false);
+                      stopRecording();
+                      setMicAttempted(false);
+                      setShowMicCheck(true);
+                    }}
+                    className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 transition-all"
+                  >
+                    <Mic size={12} /> {t('micCheck.retest')}
                   </button>
                 )}
               </div>

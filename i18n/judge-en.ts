@@ -22,6 +22,23 @@ const judgeEn: Record<JudgeDictKey, string> = {
   'pin.subtitle.setupConfirm': 'Enter the PIN again to confirm',
   'pin.hint': 'Default PIN: 1234 · Change it in the header once unlocked',
 
+  // Pre-entry audio check (operated by event staff, not the judge)
+  'micCheck.title': 'Audio Check',
+  'micCheck.subtitle': 'Before handing over the tablet, confirm the microphone is working.',
+  'micCheck.forJudge': 'Setting up for {name}',
+  'micCheck.startTest': 'Test microphone',
+  'micCheck.requesting': 'Requesting microphone access...',
+  'micCheck.retest': 'Test again',
+  'micCheck.deviceFallbackLabel': 'Microphone',
+  'micCheck.speakPrompt': 'Say something near the microphone...',
+  'micCheck.soundDetected': 'Sound detected — all good!',
+  'micCheck.continueBtn': 'Continue',
+  'micCheck.skipBtn': 'Continue without audio',
+  'micCheck.skipHint': 'The judge can still evaluate normally, just without audio recording this session.',
+  'micCheck.errorDenied': 'Microphone permission denied. Check browser/tablet settings and try again.',
+  'micCheck.errorNoDevice': 'No microphone found on this device.',
+  'micCheck.errorGeneric': 'Could not access the microphone. Try another device or continue without audio.',
+
   // Tutorial modal
   'tutorial.title': 'How to use the terminal',
   'tutorial.subtitle': 'Demo Mode — fake data',

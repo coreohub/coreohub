@@ -24,6 +24,23 @@ const judgePt = {
   'pin.subtitle.setupConfirm': 'Digite o PIN novamente para confirmar',
   'pin.hint': 'PIN padrão: 1234 · Altere no cabeçalho quando desbloqueado',
 
+  // Checagem de áudio pré-entrada (opera a equipe do evento, não o jurado)
+  'micCheck.title': 'Checagem de Áudio',
+  'micCheck.subtitle': 'Antes de entregar o tablet, confirme que o microfone está funcionando.',
+  'micCheck.forJudge': 'Configurando para {name}',
+  'micCheck.startTest': 'Testar microfone',
+  'micCheck.requesting': 'Solicitando acesso ao microfone...',
+  'micCheck.retest': 'Testar de novo',
+  'micCheck.deviceFallbackLabel': 'Microfone',
+  'micCheck.speakPrompt': 'Fale algo perto do microfone...',
+  'micCheck.soundDetected': 'Som detectado — tudo certo!',
+  'micCheck.continueBtn': 'Continuar',
+  'micCheck.skipBtn': 'Continuar sem áudio',
+  'micCheck.skipHint': 'O jurado avalia normalmente, só sem gravação de áudio nesta sessão.',
+  'micCheck.errorDenied': 'Permissão de microfone negada. Verifique as configurações do navegador/tablet e tente de novo.',
+  'micCheck.errorNoDevice': 'Nenhum microfone encontrado neste dispositivo.',
+  'micCheck.errorGeneric': 'Não foi possível acessar o microfone. Tente outro dispositivo ou continue sem áudio.',
+
   // Tutorial modal
   'tutorial.title': 'Como usar o terminal',
   'tutorial.subtitle': 'Modo Demo — dados fictícios',

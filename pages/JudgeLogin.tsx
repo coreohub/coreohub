@@ -97,6 +97,40 @@ export const clearJudgeSession = () => {
   localStorage.removeItem(SESSION_KEY);
 };
 
+// ─── Checagem de áudio pré-entrada (2026-07-16) ────────────────────────────
+// Roda 1x por sessão de PIN (não por apresentação) — quem opera é a equipe
+// do evento no setup do tablet, não o jurado. Guardado num marker próprio,
+// NUNCA dentro de JudgeSession (aquele objeto já tem contrato server-side
+// via judge-login; misturar concerns quebraria validação de sessão antiga).
+const MIC_CHECK_KEY = 'coreohub_judge_mic_check';
+
+export interface MicCheckState {
+  judge_id: string;
+  event_id: string;
+  deviceId: string | null;
+  skipped: boolean;
+  checkedAt: number;
+}
+
+export const readMicCheckState = (): MicCheckState | null => {
+  try {
+    const raw = localStorage.getItem(MIC_CHECK_KEY);
+    return raw ? (JSON.parse(raw) as MicCheckState) : null;
+  } catch { return null; }
+};
+
+export const writeMicCheckState = (state: MicCheckState) => {
+  try { localStorage.setItem(MIC_CHECK_KEY, JSON.stringify(state)); } catch {}
+};
+
+// Verdadeiro quando a sessão atual (judge_id+event_id) já passou pela
+// checagem (ou pulou deliberadamente) — refaz o teste se qualquer um dos
+// dois mudar (jurado diferente logado, ou evento diferente).
+export const needsMicCheck = (judgeId: string, eventId: string): boolean => {
+  const s = readMicCheckState();
+  return !s || s.judge_id !== judgeId || s.event_id !== eventId;
+};
+
 const callJudgeLogin = async (body: Record<string, unknown>) => {
   const res = await fetch(`${supabaseUrl}/functions/v1/judge-login`, {
     method: 'POST',

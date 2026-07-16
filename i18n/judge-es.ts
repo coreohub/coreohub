@@ -22,6 +22,23 @@ const judgeEs: Record<JudgeDictKey, string> = {
   'pin.subtitle.setupConfirm': 'Ingresa el PIN nuevamente para confirmar',
   'pin.hint': 'PIN por defecto: 1234 · Cámbialo en el encabezado al desbloquear',
 
+  // Chequeo de audio previo (lo opera el equipo del evento, no el jurado)
+  'micCheck.title': 'Chequeo de Audio',
+  'micCheck.subtitle': 'Antes de entregar la tablet, confirma que el micrófono funciona.',
+  'micCheck.forJudge': 'Configurando para {name}',
+  'micCheck.startTest': 'Probar micrófono',
+  'micCheck.requesting': 'Solicitando acceso al micrófono...',
+  'micCheck.retest': 'Probar de nuevo',
+  'micCheck.deviceFallbackLabel': 'Micrófono',
+  'micCheck.speakPrompt': 'Habla algo cerca del micrófono...',
+  'micCheck.soundDetected': 'Sonido detectado — ¡todo listo!',
+  'micCheck.continueBtn': 'Continuar',
+  'micCheck.skipBtn': 'Continuar sin audio',
+  'micCheck.skipHint': 'El jurado evalúa normalmente, solo sin grabación de audio en esta sesión.',
+  'micCheck.errorDenied': 'Permiso de micrófono denegado. Verifica la configuración del navegador/tablet e intenta de nuevo.',
+  'micCheck.errorNoDevice': 'No se encontró ningún micrófono en este dispositivo.',
+  'micCheck.errorGeneric': 'No se pudo acceder al micrófono. Prueba otro dispositivo o continúa sin audio.',
+
   // Tutorial modal
   'tutorial.title': 'Cómo usar el terminal',
   'tutorial.subtitle': 'Modo Demo — datos ficticios',
