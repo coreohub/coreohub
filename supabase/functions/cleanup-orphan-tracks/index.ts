@@ -56,7 +56,17 @@ Deno.serve(async (req) => {
       serviceKey,
     )
 
-    // 1) Lista paths em uso (registrations.trilha_url que NÃO começam com http)
+    // 1) Lista paths em uso (registrations.trilha_url).
+    //
+    // BUG REAL 2026-07-15: essa checagem excluía qualquer trilha_url em
+    // formato de URL completa (`!u.startsWith('http')`) — mas 100% das
+    // trilha_url salvas no banco são URLs completas (getPublicUrl), não
+    // paths relativos. Ou seja, essa checagem NUNCA reconheceu nenhuma
+    // trilha como "em uso", pra nenhum evento, desde que essa function
+    // existe. Rodada manual em produção apagou 36 trilhas reais do
+    // Usualdance Festival (coreografias com status_trilha='ENVIADA' de
+    // verdade) antes de alguém notar. Fix: extrai o path de dentro da URL
+    // completa em vez de descartá-la.
     const { data: regs, error: regErr } = await supabase
       .from('registrations')
       .select('trilha_url')
@@ -66,7 +76,9 @@ Deno.serve(async (req) => {
     const inUse = new Set<string>(
       (regs ?? [])
         .map(r => r.trilha_url)
-        .filter((u: string | null): u is string => !!u && !u.startsWith('http'))
+        .filter((u: string | null): u is string => !!u)
+        .map(u => (u.startsWith('http') ? (u.split('/trilhas/')[1] ?? '') : u))
+        .filter(p => p.length > 0)
     )
 
     // 2) Lista todas as "pastas" (cada pasta = userId) do bucket
