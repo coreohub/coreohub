@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { isRegistrationPaid } from '../utils/registrationStatus';
 import { toTitleCase, resolveTrilhaUrl } from '../utils/formatters';
-import { supabase } from '../services/supabase';
+import { supabase, supabaseUrl } from '../services/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { refundRegistration } from '../services/refundService';
 import EventPickerSheet from '../components/EventPickerSheet';
@@ -97,6 +97,7 @@ const Registrations = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkActionFeedback, setBulkActionFeedback] = useState<string | null>(null);
   const [refundModal, setRefundModal] = useState<any>(null);
+  const [deletingRegId, setDeletingRegId] = useState<string | null>(null);
   const [refundAmount, setRefundAmount] = useState<string>('');
   const [refundReason, setRefundReason] = useState('');
   const [refunding, setRefunding] = useState(false);
@@ -292,6 +293,42 @@ const Registrations = () => {
       setEditError(e.message ?? 'Erro ao salvar.');
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  // Exclusão de inscrição (2026-07-17) — o botão de lixeira sempre existiu
+  // desabilitado ("Remover (em breve)"), nunca foi implementado. Virou beco
+  // sem saída junto com o achado #4 (excluir evento): produtor cria
+  // inscrição de teste, não consegue apagar nem ela nem o evento (que agora
+  // bloqueia exclusão com qualquer inscrição). Edge function revalida tudo
+  // (dono/equipe + zero pagamento/avaliação/comissão/certificado) — nunca
+  // confia só nesta checagem client-side.
+  const handleDeleteRegistration = async (reg: any) => {
+    if (reg.status_pagamento && reg.status_pagamento !== 'PENDENTE') {
+      alert('Só é possível excluir inscrições com pagamento PENDENTE (sem cobrança gerada).');
+      return;
+    }
+    const nome = reg.nome_coreografia || 'esta inscrição';
+    if (!window.confirm(`Excluir "${nome}" definitivamente? Não tem como desfazer.`)) return;
+
+    setDeletingRegId(reg.id);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${supabaseUrl}/functions/v1/delete-registration`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ registration_id: reg.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? `Falha ao excluir (${res.status})`);
+      await fetchData();
+    } catch (e: any) {
+      alert(e.message ?? String(e));
+    } finally {
+      setDeletingRegId(null);
     }
   };
 
@@ -1810,11 +1847,13 @@ const Registrations = () => {
                           ><Undo2 size={16} /></button>
                         )}
                         <button
-                          onClick={e => e.stopPropagation()}
-                          className="p-2 text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-all opacity-50 cursor-not-allowed"
-                          title="Remover (em breve)"
-                          disabled
-                        ><Trash2 size={16} /></button>
+                          onClick={e => { e.stopPropagation(); handleDeleteRegistration(reg); }}
+                          disabled={deletingRegId === reg.id || (!!reg.status_pagamento && reg.status_pagamento !== 'PENDENTE')}
+                          className="p-2 text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-500"
+                          title={reg.status_pagamento && reg.status_pagamento !== 'PENDENTE' ? 'Só inscrições pendentes (sem pagamento) podem ser excluídas' : 'Excluir inscrição'}
+                        >
+                          {deletingRegId === reg.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                        </button>
                       </div>
                     </td>
                   </tr>

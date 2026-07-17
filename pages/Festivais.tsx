@@ -39,7 +39,16 @@ const Festivais = () => {
           .eq('is_public', true)
           .order('start_date', { ascending: false });
         if (error) throw error;
-        setEvents((data ?? []) as Event[]);
+        // Achado do produtor (2026-07-17): todo evento nasce is_public=true
+        // desde o 1º passo do wizard — um evento abandonado no meio da
+        // criação (sem capa/descrição) aparecia na vitrine pública quebrado
+        // e sem graça. Completude mínima: só entra na vitrine quem já tem
+        // capa E descrição preenchidas (produtor terminou pelo menos o
+        // básico da aba Geral). Não mexe em is_public em si — evento
+        // completa depois e aparece sozinho, sem produtor precisar
+        // "republicar" nada.
+        const complete = (data ?? []).filter((e: any) => e.cover_url && e.description?.trim());
+        setEvents(complete as Event[]);
       } catch (err) {
         console.error('[Festivais] erro ao buscar eventos:', err);
       } finally {
