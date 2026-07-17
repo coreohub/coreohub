@@ -17,6 +17,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import imageCompression from 'browser-image-compression';
 import { supabase, supabaseUrl } from '../services/supabase';
 import PageHeader from '../components/PageHeader';
+import EventPickerSheet, { EventPickerOption } from '../components/EventPickerSheet';
 import {
   Award, GraduationCap, Loader2, Save, Send, AlertCircle, CheckCircle, Trash2,
   Type, Palette, Image as ImageIcon, FileSignature, Sparkles, X, Eye, Upload,
@@ -49,7 +50,7 @@ interface CertTemplate {
   signature_urls: string[];
 }
 
-interface EventOption { id: string; name: string }
+type EventOption = EventPickerOption;
 
 interface BatchResult { total: number; created: number; skipped: number }
 
@@ -188,11 +189,15 @@ const Certificates: React.FC = () => {
       setFormTitles([]);
     }
 
-    // Eventos do produtor (pra emitir batch)
+    // Eventos do produtor (pra emitir batch) — achado #5 (2026-07-17):
+    // já era um <select> explícito (nunca teve o bug de auto-resolver
+    // silenciosamente), só trocando pro EventPickerSheet padrão do resto do
+    // app (melhor em mobile, mostra badge DEMO).
     const { data: evs } = await supabase
       .from('events')
-      .select('id, name')
+      .select('id, name, edition_year, is_demo, start_date')
       .eq('created_by', user.id)
+      .order('is_demo', { ascending: true })
       .order('created_at', { ascending: false });
     if (evs) setEvents(evs);
 
@@ -637,14 +642,18 @@ const Certificates: React.FC = () => {
                   Cria 1 certificado por inscrito {activeType === 'mostra' ? 'aprovado' : 'com presença confirmada'}. Idempotente — pode rodar múltiplas vezes.
                 </p>
                 <Field label="Evento">
-                  <select value={selectedEvent} onChange={e => setSelectedEvent(e.target.value)} className={inputCls}>
-                    <option value="">— Selecione um evento —</option>
-                    {events.map(ev => {
-                      const s = emittedSummary[ev.id];
-                      const tag = s ? ` (${s.total} emitido${s.total === 1 ? '' : 's'})` : '';
-                      return <option key={ev.id} value={ev.id}>{ev.name}{tag}</option>;
-                    })}
-                  </select>
+                  <EventPickerSheet
+                    events={events}
+                    selectedEventId={selectedEvent || null}
+                    onSelect={setSelectedEvent}
+                    emptyLabel="— Selecione um evento —"
+                    className="w-full"
+                  />
+                  {selectedEvent && emittedSummary[selectedEvent] && (
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5">
+                      {emittedSummary[selectedEvent].total} certificado{emittedSummary[selectedEvent].total === 1 ? '' : 's'} já emitido{emittedSummary[selectedEvent].total === 1 ? '' : 's'}.
+                    </p>
+                  )}
                 </Field>
                 <button
                   onClick={emitBatch}

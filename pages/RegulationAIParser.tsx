@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Sparkles, FileText, CheckCircle2, AlertTriangle, RefreshCw,
@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { extractRegulationData, extractRegulationFromPdf, RegulationExtract } from '../services/geminiService';
 import PageHeader from '../components/PageHeader';
 import { uploadRegulationPdf, supabase } from '../services/supabase';
+import EventPickerSheet, { EventPickerOption } from '../components/EventPickerSheet';
 
 type Step = 'upload' | 'processing' | 'review' | 'done';
 
@@ -66,6 +67,28 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
   // permanecem extraídos pela IA e gravados no save mesmo se ocultos.
   const [showAdvanced, setShowAdvanced] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Picker de evento (achado #5, 2026-07-17) — antes handleSave resolvia
+  // "o evento mais recente" sozinho; produtor com 2+ eventos não tinha como
+  // escolher em qual aplicar o regulamento importado.
+  const [pickerEvents,   setPickerEvents]   = useState<EventPickerOption[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from('events')
+        .select('id, name, edition_year, is_demo, start_date')
+        .eq('created_by', user.id)
+        .order('is_demo', { ascending: true })
+        .order('created_at', { ascending: false });
+      if (data && data.length > 0) {
+        setPickerEvents(data);
+        setSelectedEventId(prev => prev ?? data[0].id);
+      }
+    })();
+  }, []);
 
   // ── File selection & drag ──
 
@@ -119,24 +142,17 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
         setProgress('Enviando ao Gemini...');
         extracted = await extractRegulationFromPdf(base64);
 
-        // Upload to Supabase storage and link no evento ativo (não-bloqueante)
+        // Upload to Supabase storage and link no evento selecionado (não-bloqueante)
         try {
           setProgress('Salvando regulamento...');
           const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            // Tenta linkar ao evento mais recente do produtor pra ficar disponível
-            // pra download na vitrine pública.
-            const { data: ev } = await supabase
-              .from('events')
-              .select('id')
-              .eq('created_by', user.id)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            const eventId = ev?.id ?? user.id;
-            const url = await uploadRegulationPdf(eventId, selectedFile);
-            if (ev?.id && url) {
-              await supabase.from('events').update({ regulation_pdf_url: url }).eq('id', ev.id);
+          // FIX 2026-07-17 (achado #5): linkava sempre ao evento mais
+          // recente, ignorando o picker — regulamento aparecia na vitrine do
+          // evento errado quando produtor tinha 2+ eventos.
+          if (user && selectedEventId) {
+            const url = await uploadRegulationPdf(selectedEventId, selectedFile);
+            if (url) {
+              await supabase.from('events').update({ regulation_pdf_url: url }).eq('id', selectedEventId);
             }
           }
         } catch (_) { /* storage failure is non-critical */ }
@@ -168,16 +184,19 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
     if (!edited) return;
     setSaving(true);
     try {
-      // ── Resolve user + evento UMA VEZ (antes eram 3 chamadas separadas:
-      // aqui, dentro do bloco de prêmios, e de novo pro bloco de events). ──
+      // ── Resolve user UMA VEZ (antes eram 3 chamadas separadas: aqui,
+      // dentro do bloco de prêmios, e de novo pro bloco de events). ──
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Não autenticado.');
+      // FIX 2026-07-17 (achado #5): antes resolvia "o evento mais recente"
+      // sozinho, ignorando qual evento o produtor escolheu no picker do
+      // topo — com 2+ eventos reais, o regulamento sempre era aplicado no
+      // evento errado (o mais novo).
+      if (!selectedEventId) throw new Error('Selecione um evento antes de aplicar o regulamento.');
       const { data: ev } = await supabase
         .from('events')
         .select('id, formacoes_config')
-        .eq('created_by', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
+        .eq('id', selectedEventId)
         .maybeSingle();
       const eventId = ev?.id;
       if (!eventId) throw new Error('Nenhum evento encontrado para aplicar o regulamento.');
@@ -722,6 +741,19 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
           </button>
         )}
       />
+
+      {/* Picker de evento (achado #5, 2026-07-17) — só aparece com 2+
+          eventos reais. */}
+      {pickerEvents.length > 1 && (
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 shrink-0">Aplicar em</span>
+          <EventPickerSheet
+            events={pickerEvents}
+            selectedEventId={selectedEventId}
+            onSelect={setSelectedEventId}
+          />
+        </div>
+      )}
 
       {/* Step indicator */}
       <div className="flex items-center gap-3">

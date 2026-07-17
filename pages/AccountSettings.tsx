@@ -14,6 +14,7 @@ import { maskCpfCnpj, unmaskCpfCnpj, maskMoeda, parseMoeda, maskData, parseDataI
 import { humanizeSupabaseError } from '../utils/supabaseErrors';
 import AsaasBadge from '../components/AsaasBadge';
 import PageHeader from '../components/PageHeader';
+import EventPickerSheet, { EventPickerOption } from '../components/EventPickerSheet';
 import DemoSettingsTab from '../components/DemoSettingsTab';
 import {
   Settings, Clock, Save, Plus, Pencil, Trash2, Check, Info,
@@ -1188,6 +1189,15 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   // do campo "Site oficial"
   const [activeEventSlug, setActiveEventSlug] = useState<string | null>(null);
   const [activeEventId,   setActiveEventId]   = useState<string | null>(null);
+  // Picker de evento (achado #5, 2026-07-17) — antes esta tela sempre
+  // resolvia "o evento mais recente" sozinha, sem escolha. Produtor com 2+
+  // eventos reais não tinha como configurar o mais antigo depois de criar um
+  // novo. `pickerEvents` alimenta o EventPickerSheet; `selectedEventId` é a
+  // fonte única de verdade de qual evento esta tela edita — `activeEventId`
+  // continua existindo (usado em ~15 lugares na tela) e passa a ser
+  // resolvido A PARTIR de `selectedEventId`, não mais de forma independente.
+  const [pickerEvents,   setPickerEvents]     = useState<EventPickerOption[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   // Edição de slug (Fase 2 — Slug Hardening). Draft separado pra validação live
   // sem mexer no slug ativo até user clicar "Salvar link".
   const [slugDraft, setSlugDraft]         = useState<string>('');
@@ -1737,10 +1747,33 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     fetchGenres();
   }, [fetchGenres]);
 
+  // ── Picker de evento (achado #5, 2026-07-17) ──────────────────────────
+  // Lista TODOS os eventos do produtor uma vez no mount + resolve o default
+  // (mesmo tiebreak que já existia: evento real vence demo, mais recente
+  // primeiro). A partir daqui `selectedEventId` é a única fonte de verdade —
+  // trocar no picker dispara o `fetchConfig` de novo (efeito abaixo).
   useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from('events')
+        .select('id, name, edition_year, is_demo, start_date')
+        .eq('created_by', user.id)
+        .order('is_demo', { ascending: true })
+        .order('created_at', { ascending: false });
+      if (data && data.length > 0) {
+        setPickerEvents(data);
+        setSelectedEventId(prev => prev ?? data[0].id);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedEventId) return;
     const fetchConfig = async () => {
       try {
-        // Multi-tenant: tenta ler da row do evento atual do produtor.
+        // Multi-tenant: tenta ler da row do evento selecionado no picker.
         // Fallback: row legacy id='1' (compat com outras 12 telas ainda não refatoradas).
         const { data: { user } } = await supabase.auth.getUser();
         let data: any = null;
@@ -1749,18 +1782,10 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         // está vazio — caso do demo seedado).
         let myEvent: any = null;
         if (user) {
-          // is_demo antes de created_at: evento REAL sempre vence um demo mais
-          // recente na mesma query — sem isso, criar um evento demo pra teste
-          // fazia essa tela trocar silenciosamente pra config do demo (quase
-          // vazia), parecendo que "todas as configurações sumiram" (bug real
-          // 2026-07-12). Mesmo fix aplicado no helper compartilhado
-          // resolveActiveEventId() em services/supabase.ts.
           const evRes = await supabase
             .from('events').select('id, slug, name, description, cover_url, location, city, state, instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, producer_ga4_id, producer_meta_pixel_id')
-            .eq('created_by', user.id)
-            .order('is_demo', { ascending: true })
-            .order('created_at', { ascending: false })
-            .limit(1).maybeSingle();
+            .eq('id', selectedEventId)
+            .maybeSingle();
           // select() amplo sem checar error mascara coluna ausente como "não
           // encontrado" (mesma classe do incidente real de 2026-07-08:
           // migration commitada nunca colada no SQL Editor vira PGRST204
@@ -1958,7 +1983,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       }
     };
     fetchConfig();
-  }, []);
+  }, [selectedEventId]);
 
   // Auto-expande o "Avançado" de cada plataforma quando já existe token salvo,
   // pra o produtor enxergar/trocar o que configurou sem precisar caçar o toggle.
@@ -1985,20 +2010,15 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Usuário não autenticado.');
 
-      // RLS de configuracoes exige event_id apontando pra evento do user.
-      // Sem isso, o upsert falha mesmo na criação inicial.
-      const { data: myEvent } = await supabase
-        .from('events')
-        .select('id')
-        .eq('created_by', user.id)
-        .order('is_demo', { ascending: true })
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (!myEvent?.id) {
-        throw new Error('Crie um evento antes de salvar configurações.');
+      // FIX 2026-07-17 (achado #5): antes re-resolvia "o evento mais recente"
+      // aqui, ignorando qual evento o produtor tinha escolhido no picker do
+      // topo da página — com 2+ eventos reais, Salvar sempre ia pro evento
+      // errado (o mais novo), mesmo com o picker mostrando outro selecionado.
+      // Usa `activeEventId`, que agora É o evento do picker (ver fetchConfig).
+      if (!activeEventId) {
+        throw new Error('Nenhum evento selecionado. Escolha um evento no topo da página.');
       }
+      const myEvent = { id: activeEventId };
 
       // Preserva winner_nome/winner_estudio/winner_items/winner_revealed do
       // banco por cima do state local de `awards` (carregado quando a tela
@@ -2507,7 +2527,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       type="text"
                       value={slugDraft}
                       onChange={e => setSlugDraft(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                      placeholder="usualdance-festival-2026"
+                      placeholder="seu-festival-2026"
                       className={input + ' flex-1'}
                       maxLength={60}
                     />
@@ -2558,7 +2578,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       type="text"
                       value={shortCodeDraft}
                       onChange={e => setShortCodeDraft(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                      placeholder="usualdance"
+                      placeholder="seu-festival"
                       className={input + ' flex-1'}
                       maxLength={30}
                     />
@@ -2715,17 +2735,13 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       }
                       setIdentityUploading(true);
                       try {
-                        const { data: { user } } = await supabase.auth.getUser();
-                        if (!user) throw new Error('Usuário não autenticado.');
-                        const { data: ev } = await supabase
-                          .from('events').select('id')
-                          .eq('created_by', user.id)
-                          .order('is_demo', { ascending: true })
-                          .order('created_at', { ascending: false })
-                          .limit(1).maybeSingle();
-                        if (!ev?.id) throw new Error('Crie um evento primeiro.');
+                        // FIX 2026-07-17 (achado #5): re-resolvia evento mais
+                        // recente ignorando o picker — upload ia pro evento
+                        // errado quando produtor tinha 2+ eventos. Usa o
+                        // evento selecionado no topo da página.
+                        if (!activeEventId) throw new Error('Nenhum evento selecionado.');
                         const { uploadEventRules } = await import('../services/supabase');
-                        const url = await uploadEventRules(ev.id, file);
+                        const url = await uploadEventRules(activeEventId, file);
                         setIdentity({ ...identity, regulation_pdf_url: url });
                       } catch (err: any) {
                         alert(`Erro ao enviar PDF: ${err?.message ?? err}`);
@@ -2792,17 +2808,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       }
                       setIdentityUploading(true);
                       try {
-                        const { data: { user } } = await supabase.auth.getUser();
-                        if (!user) throw new Error('Usuário não autenticado.');
-                        const { data: ev } = await supabase
-                          .from('events').select('id')
-                          .eq('created_by', user.id)
-                          .order('is_demo', { ascending: true })
-                          .order('created_at', { ascending: false })
-                          .limit(1).maybeSingle();
-                        if (!ev?.id) throw new Error('Crie um evento primeiro.');
+                        // FIX 2026-07-17 (achado #5): mesmo fix do upload de
+                        // regulamento acima — usa o evento do picker.
+                        if (!activeEventId) throw new Error('Nenhum evento selecionado.');
                         const { uploadEventDocument } = await import('../services/supabase');
-                        const url = await uploadEventDocument(ev.id, file);
+                        const url = await uploadEventDocument(activeEventId, file);
                         setIdentity(prev => ({ ...prev, documentos_extras: [...prev.documentos_extras, { nome, url }] }));
                         setNovoDocNome('');
                         e.target.value = '';
@@ -6582,6 +6592,19 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
       {/* Header customizado quando rota dedicada (ex: /narracao-ia) */}
       {pageLabel && <PageHeader title={pageLabel} />}
+
+      {/* Picker de evento (achado #5, 2026-07-17) — só aparece com 2+
+          eventos reais; produtor com 1 evento só não precisa escolher nada. */}
+      {pickerEvents.length > 1 && (
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 shrink-0">Configurando</span>
+          <EventPickerSheet
+            events={pickerEvents}
+            selectedEventId={selectedEventId}
+            onSelect={setSelectedEventId}
+          />
+        </div>
+      )}
 
       {/* Tab bar — escondida em rotas dedicadas (forcedTab fixo) */}
       {!forcedTab && (
