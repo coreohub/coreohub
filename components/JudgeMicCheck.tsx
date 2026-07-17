@@ -215,8 +215,12 @@ const JudgeMicCheck: React.FC<JudgeMicCheckProps> = ({ judgeName, onPassed, onSk
                 onChange={e => handleDeviceChange(e.target.value)}
                 className="w-full appearance-none px-4 py-3 min-h-11 bg-white/5 border border-white/10 rounded-2xl text-white text-[11px] font-bold outline-none focus:ring-2 focus:ring-[#ff0068]/30 [color-scheme:dark]"
               >
+                {/* [color-scheme:dark] no <select> não é suficiente em todo
+                    browser/SO pra colorir a lista de opções aberta (Chrome
+                    Windows ignora pro popup nativo) — estiliza cada <option>
+                    explicitamente pra não ficar texto escuro em fundo claro. */}
                 {devices.map(d => (
-                  <option key={d.deviceId} value={d.deviceId}>{d.label || t('micCheck.deviceFallbackLabel')}</option>
+                  <option key={d.deviceId} value={d.deviceId} style={{ backgroundColor: '#18181f', color: '#fff' }}>{d.label || t('micCheck.deviceFallbackLabel')}</option>
                 ))}
               </select>
               <ChevronDown size={14} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
