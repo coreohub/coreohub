@@ -174,7 +174,7 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       if (!user) throw new Error('Não autenticado.');
       const { data: ev } = await supabase
         .from('events')
-        .select('id')
+        .select('id, formacoes_config')
         .eq('created_by', user.id)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -190,18 +190,26 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       // 2026-05-17, agora replicada pros outros campos que tinham o mesmo
       // padrão de overwrite bruto. ──
       const [
-        { data: existingConfig },
-        { data: existingWorkshops },
-        { data: existingStyles },
-        { data: existingCategories },
+        { data: existingConfig, error: existingConfigErr },
+        { data: existingWorkshops, error: existingWsErr },
+        { data: existingStyles, error: existingStylesErr },
+        { data: existingCategories, error: existingCatsErr },
       ] = await Promise.all([
         supabase.from('configuracoes')
-          .select('premios_especiais, regras_avaliacao, tolerancia, registration_lots, categories_config, formacoes_config')
+          .select('premios_especiais, regras_avaliacao, tolerancia, categorias')
           .eq('id', eventId).maybeSingle(),
         supabase.from('workshops').select('name').eq('event_id', eventId),
         supabase.from('event_styles').select('name').eq('event_id', eventId),
         supabase.from('categories').select('name').eq('event_id', eventId),
       ]);
+      // Achado de revisão (2026-07-16): select() sem checar error mascara
+      // falha de rede/RLS como "nada existe ainda" — que faria o dedup
+      // abaixo regredir pro bug que o achado #2 corrigia (duplicar tudo de
+      // novo). Loga alto pra aparecer nos logs da function/console.
+      if (existingConfigErr || existingWsErr || existingStylesErr || existingCatsErr) {
+        console.error('[RegulationAIParser] falha ao buscar estado existente pro merge — dedup pode duplicar itens nesta importação:',
+          existingConfigErr?.message, existingWsErr?.message, existingStylesErr?.message, existingCatsErr?.message);
+      }
 
       const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
       /** Merge add-only por chave (nome/label) — nunca sobrescreve item existente, só anexa os novos. */
@@ -213,9 +221,18 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
 
       const updates: Record<string, any> = {};
       if (edited.event_name)                updates.nome_evento                 = edited.event_name;
-      if (edited.address)                   updates.address                     = edited.address;
       if (edited.start_date)                updates.data_evento                 = edited.start_date;
-      if (edited.registration_deadline)     updates.registration_deadline       = edited.registration_deadline;
+      // FIX 2026-07-16 (achado de revisão): `address`/`registration_deadline`
+      // NÃO SÃO colunas reais de `configuracoes` — writes com QUALQUER chave
+      // inexistente fazem o `.update()` INTEIRO falhar (é atômico), derrubando
+      // silenciosamente até os campos corretos da mesma chamada (bug
+      // pré-existente, não introduzido nesta sessão, mas que anulava esta
+      // correção inteira). Confirmado contra o schema real via `supabase db
+      // query`. Real: `address` é `events.location` (ver comentário idêntico
+      // em AccountSettings.tsx:2200); `registration_deadline` é
+      // `configuracoes.prazo_inscricao` (ver AccountSettings.tsx:2045 e
+      // InscricaoWizard.tsx:507). `address` vai pro bloco de evUpdates abaixo.
+      if (edited.registration_deadline)     updates.prazo_inscricao             = edited.registration_deadline;
       // FIX 2026-07-16 (achado #1): track_submission_deadline nunca foi lido
       // em lugar nenhum do app — o campo real que trava upload de trilha
       // (GuiaDeInscricao, CentralDeMidia, send-trilha-reminders) é `prazo_trilhas`.
@@ -229,7 +246,10 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       // FIX 2026-07-16 (achado #1): age_tolerance_mode/value nunca foram lidos —
       // o campo real é `tolerancia: { mode: 'PERCENT'|'COUNT', value, enforcement }`.
       // Preserva `enforcement` já configurado (a IA não extrai esse campo).
-      if (edited.age_tolerance_mode || edited.age_tolerance_value) {
+      // Achado de revisão (2026-07-16): `||`/truthy check descartava
+      // tolerância 0 ("idade exata, sem margem") — viola a convenção do
+      // projeto de usar `!= null` em vez de truthy quando 0 é valor válido.
+      if (edited.age_tolerance_mode != null || edited.age_tolerance_value != null) {
         const existingTol: any = existingConfig?.tolerancia ?? {};
         updates.tolerancia = {
           ...existingTol,
@@ -240,46 +260,52 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       // FIX 2026-07-16 (achado #1): stage_entry/marking_time_seconds nunca
       // foram lidos — os campos reais usados pelo Cronograma/Marcador de
       // Palco são `tempo_entrada` e `tempo_marcacao_palco`.
-      if (edited.stage_entry_time_seconds)   updates.tempo_entrada        = edited.stage_entry_time_seconds;
-      if (edited.stage_marking_time_seconds) updates.tempo_marcacao_palco = edited.stage_marking_time_seconds;
+      // Achado de revisão: truthy check descartava valor 0 (entrada imediata).
+      if (edited.stage_entry_time_seconds != null)   updates.tempo_entrada        = edited.stage_entry_time_seconds;
+      if (edited.stage_marking_time_seconds != null) updates.tempo_marcacao_palco = edited.stage_marking_time_seconds;
 
-      // FIX 2026-07-16 (achado #2): antes sobrescrevia o array inteiro — se o
-      // produtor já tinha editado lotes/categorias/formações manualmente
-      // (inclusive por uma importação anterior), reimportar apagava a edição.
-      if (edited.registration_lots?.length) {
-        const merged = mergeByKey(
-          Array.isArray(existingConfig?.registration_lots) ? existingConfig.registration_lots : [],
-          edited.registration_lots,
-          (l: any) => l.label,
-        );
-        if (merged.length) updates.registration_lots = merged;
-      }
+      // FIX 2026-07-16 (achado de revisão): `registration_lots` NÃO existe
+      // como coluna em lugar nenhum (checado em `events` e `configuracoes`).
+      // No schema real, preço/lote vive DENTRO de cada formação
+      // (`configuracoes.formatos[].lotes`), não como lista global — um
+      // regulamento com "1º lote R$X até dia D, 2º lote R$Y" não tem como
+      // virar dado sem inventar preço por modalidade que a IA não extraiu
+      // (RegulationExtract só tem 1 preço plano por formação). Escrever essa
+      // chave inexistente derrubava o `.update()` inteiro (mesmo bug do
+      // parágrafo acima). GAP CONHECIDO: a seção "Lotes de Inscrição" da
+      // revisão fica só informativa por enquanto — não persiste sozinha.
+      // Resolver exigiria estender o schema da IA pra capturar preço por
+      // lote×formação, fora do escopo desta correção.
+
+      // FIX 2026-07-16 (achado de revisão): `categories_config` também não é
+      // coluna real — o campo que InscricaoWizard/produtor usam de fato pra
+      // validar idade é `configuracoes.categorias` (shape {id,name,min,max},
+      // ver DEFAULT_CATEGORIES em AccountSettings.tsx), não {name,min_age,max_age}.
       if (edited.categories?.length) {
-        const merged = mergeByKey(
-          Array.isArray(existingConfig?.categories_config) ? existingConfig.categories_config : [],
-          edited.categories,
-          (c: any) => c.name,
-        );
-        if (merged.length) updates.categories_config = merged;
+        const existingCats: any[] = Array.isArray(existingConfig?.categorias) ? existingConfig.categorias : [];
+        let nextId = existingCats.reduce((max, c) => Math.max(max, Number(c.id) || 0), 0) + 1;
+        const mapped = edited.categories
+          .filter(c => c.name)
+          .map(c => ({ id: nextId++, name: c.name, min: c.min_age, max: c.max_age }));
+        const merged = mergeByKey(existingCats, mapped, (c: any) => c.name);
+        if (merged.length) updates.categorias = merged;
       }
-      // Fix 2026-07-02: a IA extrai min_performers/max_performers (ex: "Grupo
-      // de 4 a 15 bailarinos"), mas o resto do sistema (InscricaoWizard,
-      // AccountSettings) lê min_members/max_members dessa mesma config. Sem
-      // esse mapeamento os limites extraídos do regulamento eram salvos mas
-      // nunca aplicados na validação de elenco do Wizard.
-      if (edited.formacoes?.length) {
-        const mapped = edited.formacoes.map(f => ({
-          ...f,
-          min_members: f.min_performers ?? (f as any).min_members,
-          max_members: f.max_performers ?? (f as any).max_members,
-        }));
-        const merged = mergeByKey(
-          Array.isArray(existingConfig?.formacoes_config) ? existingConfig.formacoes_config : [],
-          mapped,
-          (f: any) => f.name,
-        );
-        if (merged.length) updates.formacoes_config = merged;
-      }
+      // FIX 2026-07-16 (achado de revisão): `formacoes_config` é coluna real,
+      // mas em `events`, não `configuracoes` — estava indo pra tabela errada
+      // (confirmado via schema; ver comentário idêntico em
+      // AccountSettings.tsx:2199 "Removidos: ... categories_config ... não
+      // existem na tabela"). É a fonte que InscricaoWizard lê de verdade pra
+      // validar elenco/preço (`event.formacoes_config`, ver types.ts:149).
+      // Movido pro bloco de evUpdates (events) mais abaixo — mantém aqui só a
+      // normalização de shape que já existia (Fix 2026-07-02: min_performers/
+      // max_performers → min_members/max_members).
+      const formacoesMapped = edited.formacoes?.length
+        ? edited.formacoes.map(f => ({
+            ...f,
+            min_members: f.min_performers ?? (f as any).min_members,
+            max_members: f.max_performers ?? (f as any).max_members,
+          }))
+        : [];
       // FIX 2026-07-16 (achado #1): criteria (quesitos/pesos) ia pra
       // `criteria_config`, campo que o motor de avaliação real (JudgeTerminal/
       // ResultsPanel/judge-login) NUNCA lê — ele usa
@@ -293,17 +319,33 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
           .map(c => ({ name: c.name.trim(), peso: c.weight > 0 ? c.weight : 1 }));
         const existingRA: any = existingConfig?.regras_avaliacao;
 
-        if (existingRA?.globalRules?.criterios?.length) {
+        // Achado de revisão: checar `.criterios?.length` (não `globalRules`
+        // em si) fazia um evento com array de critérios momentaneamente vazio
+        // parecer "nunca configurado", sobrescrevendo pesoTecnico/overrides
+        // já customizados. `globalRules` presente = já passou pela tela de
+        // Avaliação, tratar como configurado independente do array estar vazio.
+        if (existingRA?.globalRules) {
           // Evento já tem critérios configurados (produtor abriu Avaliação, ou
           // uma importação anterior já aplicou) — não mexe nos pesos
           // existentes, só acrescenta quesitos novos que a IA achou.
-          const existingNames = new Set(existingRA.globalRules.criterios.map((c: any) => norm(c.name)));
+          const existingCriterios = existingRA.globalRules.criterios ?? [];
+          const existingNames = new Set(existingCriterios.map((c: any) => norm(c.name)));
           const additions = newCriterios.filter(c => !existingNames.has(norm(c.name)));
           if (additions.length > 0) {
-            const criterios = [...existingRA.globalRules.criterios, ...additions];
+            const criterios = [...existingCriterios, ...additions];
+            // Achado de revisão (ironia do achado #2): reconstruir `desempate`
+            // do zero a cada merge apagava reordenação manual que o produtor
+            // fez em Avaliação → Critérios. Preserva a ordem existente e só
+            // ANEXA as chaves dos quesitos novos no final — mesmo espírito do
+            // `reconcileTiebreaker` de AccountSettings.tsx ("Add: anexa novo
+            // critério no final da cascata").
+            const existingDesempate: string[] = Array.isArray(existingRA.globalRules.desempate) ? existingRA.globalRules.desempate : [];
+            const desempate = existingDesempate.length
+              ? [...existingDesempate, ...additions.map(c => `criterio_${c.name}`)]
+              : buildTiebreaker(criterios.map((c: any) => c.name));
             updates.regras_avaliacao = {
               ...existingRA,
-              globalRules: { ...existingRA.globalRules, criterios, desempate: buildTiebreaker(criterios.map((c: any) => c.name)) },
+              globalRules: { ...existingRA.globalRules, criterios, desempate },
             };
           }
         } else if (newCriterios.length > 0) {
@@ -317,16 +359,28 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
           };
         }
       }
-      if (edited.tiebreaker_rules)           updates.tiebreaker_rules            = edited.tiebreaker_rules;
+      // FIX 2026-07-16 (achado de revisão): `tiebreaker_rules` (texto livre)
+      // não existe em `events` nem `configuracoes` — nunca teve destino real.
+      // A regra ESTRUTURADA de desempate (a que de fato decide empate na
+      // Apuração) já é coberta corretamente por `regras_avaliacao.globalRules
+      // .desempate` acima; esse texto livre era só descritivo e não tinha
+      // pra onde ir. Removido em vez de continuar derrubando o update inteiro.
 
-      // Item #34: 5 blocos novos extraídos pelo parser ───────────────────────
-      // programacao + sponsors + (cópia) ingressos pra plateia em configuracoes
+      // Item #34: blocos novos extraídos pelo parser ───────────────────────
+      // FIX 2026-07-16 (achado de revisão): `programacao_config` é coluna
+      // real, mas em `events` — é o que a vitrine pública (PublicEventPage)
+      // de fato lê pra mostrar a Programação do Dia. Movido pro bloco de
+      // evUpdates abaixo. `patrocinadores_config` também é de `events`, mas
+      // o shape que a vitrine espera exige `logo_url` (filtro
+      // `s.logo_url` em PublicEventPage.tsx:1549) — a IA só extrai
+      // nome/tipo, sem logo, então nunca apareceria mesmo indo pra tabela
+      // certa. Mantido só o sync legacy em configuracoes.patrocinadores;
+      // patrocinadores_config real fica como gap conhecido (precisaria de
+      // upload de logo manual do produtor de qualquer forma).
       if (edited.programacao?.length)  {
-        updates.programacao_config = edited.programacao;
         updates.programacao        = edited.programacao;  // sync legacy
       }
       if (edited.sponsors?.length) {
-        updates.patrocinadores_config = edited.sponsors;
         updates.patrocinadores        = edited.sponsors;  // sync legacy
       }
       if (edited.audience_tickets?.length) {
@@ -405,12 +459,34 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       // Auditoria 2026-05-12: campos novos que vivem em `events`
       {
         const evUpdates: Record<string, any> = {};
+        // FIX 2026-07-16 (achado de revisão): `address` é `events.location`
+        // (não existe coluna `address`), confirmado pelo mesmo comentário em
+        // AccountSettings.tsx:2200 ("'address' renomeado pra 'location'").
+        if (edited.address)            evUpdates.location           = edited.address;
         if (edited.city)               evUpdates.city               = edited.city;
         if (edited.state)              evUpdates.state              = edited.state;
         if (edited.event_time)         evUpdates.event_time         = edited.event_time;
         if (edited.politica_ingressos) evUpdates.politica_ingressos = edited.politica_ingressos;
-        if (edited.url_ingressos)      evUpdates.url_ingressos      = edited.url_ingressos;
+        // NOTA: url_ingressos só existe em `configuracoes` (já setado acima em
+        // `updates`), não em `events` — incluir aqui derrubava o evUpdates inteiro.
         if (edited.cover_url_hint)     evUpdates.cover_url          = edited.cover_url_hint;
+        // FIX 2026-07-16 (achado de revisão): formacoes_config é a fonte real
+        // que InscricaoWizard lê pra validar elenco/preço (events, não
+        // configuracoes — ver types.ts:149). Merge add-only por nome, mesmo
+        // padrão do resto do achado #2.
+        if (formacoesMapped.length) {
+          const merged = mergeByKey(
+            Array.isArray((ev as any)?.formacoes_config) ? (ev as any).formacoes_config : [],
+            formacoesMapped,
+            (f: any) => f.name,
+          );
+          if (merged.length) evUpdates.formacoes_config = merged;
+        }
+        // FIX 2026-07-16 (achado de revisão): programacao_config é o que a
+        // vitrine pública (PublicEventPage) lê de fato pra mostrar a
+        // Programação do Dia — configuracoes.programacao (acima) é só sync
+        // legacy, nada público lê de lá.
+        if (edited.programacao?.length) evUpdates.programacao_config = edited.programacao;
         // Summary da IA vira description do evento (alimenta a vitrine pública).
         // Só sobrescreve se ainda não há description ou se produtor optou por
         // re-importar. Não trunca — vitrine sabe lidar com texto longo.
@@ -436,7 +512,15 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
         // cobria. Só escreve os campos que a IA de fato extraiu.
         if (edited.video_selection) {
           const vs = edited.video_selection;
-          if (vs.enabled !== null && vs.enabled !== undefined)             evUpdates.video_selection_enabled = vs.enabled;
+          // Achado de revisão: se a IA extrai fee/fee_required mas omite
+          // `enabled` (schema não exige os dois juntos), o resto da config
+          // era escrito mas video_selection_enabled nunca era tocado — em
+          // evento novo (default false) a Seletiva ficava com taxa
+          // configurada só invisível, pois VideoSelection.tsx só mostra o
+          // painel quando enabled===true. Infere true quando há qualquer
+          // sinal de que a seletiva existe.
+          const inferredEnabled = vs.enabled ?? ((vs.fee_required === true || (typeof vs.fee === 'number' && vs.fee > 0)) ? true : null);
+          if (inferredEnabled !== null)                                    evUpdates.video_selection_enabled = inferredEnabled;
           if (typeof vs.fee === 'number')                                  evUpdates.video_selection_fee = vs.fee;
           if (vs.fee_required !== null && vs.fee_required !== undefined)   evUpdates.video_selection_fee_required = vs.fee_required;
           if (vs.refund_policy)                                            evUpdates.video_fee_refund_policy = vs.refund_policy;

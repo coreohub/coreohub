@@ -383,11 +383,17 @@ export const updateActiveEventConfig = async (
 ): Promise<void> => {
   const eventId = await resolveActiveEventId(eventIdHint);
   if (eventId) {
-    await supabase.from('configuracoes')
+    const { error } = await supabase.from('configuracoes')
       .update(updates)
       .eq('event_id', eventId);
+    // Achado de revisão (2026-07-16): antes o error era descartado — um
+    // UPDATE é atômico, então UMA chave em `updates` que não bate com coluna
+    // real (PGRST204) faz a instrução INTEIRA falhar sem nenhum sinal, e o
+    // chamador segue achando que salvou. Único caller hoje é
+    // RegulationAIParser.tsx, que precisa saber quando isso acontece.
+    if (error) throw error;
   }
-  // Sync na row legacy
+  // Sync na row legacy — best-effort (nem todo evento tem row id='1').
   await supabase.from('configuracoes')
     .update(updates)
     .eq('id', '1');

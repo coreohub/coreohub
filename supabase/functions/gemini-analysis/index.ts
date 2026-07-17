@@ -303,14 +303,24 @@ Deno.serve(async (req) => {
 
   const DAILY_LIMIT = 15
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString()
-  const { count: usedToday } = await supabaseAdmin
+  const { count: usedToday, error: usageErr } = await supabaseAdmin
     .from('ai_usage_log')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)
     .eq('feature', 'gemini-analysis')
     .gte('created_at', since)
 
-  if ((usedToday ?? 0) >= DAILY_LIMIT) {
+  // Achado de revisão (2026-07-16): se a query de contagem falhar (tabela
+  // ausente, service role key errada/rotacionada), `count` vem `null` e o
+  // limite nunca bloqueia ninguém — fica fail-open silencioso. Decisão
+  // deliberada: continuar fail-open (bloquear a feature inteira pra todo
+  // produtor por causa de uma falha na proteção de custo seria pior que o
+  // risco de custo em si), mas loga alto pra aparecer nos logs da function.
+  if (usageErr) {
+    console.error('[gemini-analysis] falha ao checar rate-limit — seguindo fail-open:', usageErr.message)
+  }
+
+  if (!usageErr && (usedToday ?? 0) >= DAILY_LIMIT) {
     return new Response(JSON.stringify({ error: `Limite de ${DAILY_LIMIT} análises de regulamento por dia atingido. Tente novamente amanhã.` }), {
       status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
