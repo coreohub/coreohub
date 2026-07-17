@@ -122,8 +122,16 @@ export const EventAnchorNav: React.FC<EventAnchorNavProps> = ({
           : 'bg-[#0b0b0f]/40 border-white/5'
       }`}>
         <div className="max-w-5xl mx-auto w-full px-4 flex items-center gap-4">
-          {/* Lista horizontal de itens (scroll lateral em mobile) */}
-          <div className="flex-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none] -mx-4 px-4">
+          {/* Lista horizontal de itens (scroll lateral em mobile).
+              Fade nas bordas via mask-image sinaliza que rola pros lados
+              (padrão Apple/Stripe) — some sozinho quando não há overflow. */}
+          <div
+            className="flex-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none] -mx-4 px-4"
+            style={{
+              maskImage: 'linear-gradient(to right, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)',
+              WebkitMaskImage: 'linear-gradient(to right, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)',
+            }}
+          >
             <ul className="flex items-center gap-1 min-w-max">
               {sections.map(s => {
                 const isActive = activeId === s.id;

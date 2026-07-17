@@ -776,7 +776,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 à conta, usuários do Usualdance relataram não achar onde entrar. */}
             <Link
               to={isLoggedIn ? '/dashboard' : `/login?redirectTo=${encodeURIComponent(`/evento/${idOrSlug}`)}`}
-              className="inline-flex items-center px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/20 text-white hover:border-[#ff0068] hover:text-[#ff0068] transition-colors whitespace-nowrap"
+              className="inline-flex items-center px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/30 text-white hover:border-[#ff0068] hover:text-[#ff0068] transition-colors whitespace-nowrap"
             >
               {isLoggedIn ? 'Minha conta' : 'Entrar'}
             </Link>
