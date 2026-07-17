@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { supabase, uploadEventCover, supabaseUrl } from '../services/supabase';
 import { validateSlugInput, isSlugAvailable } from '../services/eventSlug';
@@ -1198,6 +1199,85 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   // resolvido A PARTIR de `selectedEventId`, não mais de forma independente.
   const [pickerEvents,   setPickerEvents]     = useState<EventPickerOption[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+
+  // Zona de perigo — excluir evento (achado #4, 2026-07-17). Botão só fica
+  // habilitado quando uma checagem rápida (client-side, não é a fonte de
+  // verdade — a edge function revalida tudo de novo com o mesmo critério,
+  // via service role) mostra zero movimento real pro evento ativo. Achado
+  // de revisão: a 1ª versão só checava `registrations` — evento com
+  // ingresso de plateia ou inscrição de workshop vendidos (e zero
+  // `registrations`) mostrava o botão habilitado, só falhando depois de
+  // abrir o modal e digitar o nome. Agora espelha os mesmos 3 sinais mais
+  // prováveis que a edge function checa (a function ainda cobre
+  // payments/platform_commissions/coreografias como rede de segurança
+  // final, sem equivalente aqui — ok, o botão só precisa ser um sinal
+  // otimista, não a fonte de verdade).
+  const [deleteBlockedByRegs, setDeleteBlockedByRegs] = useState(true);
+  const [deleteModalOpen,     setDeleteModalOpen]     = useState(false);
+  const [deleteConfirmText,   setDeleteConfirmText]   = useState('');
+  const [deleting,            setDeleting]            = useState(false);
+  const [deleteError,         setDeleteError]         = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!activeEventId) { setDeleteBlockedByRegs(true); return; }
+    // Sem guard de resposta antiga, trocar de evento rápido no picker antes
+    // da checagem anterior resolver podia deixar o botão refletindo o
+    // evento errado (resposta de A chegando depois de já ter trocado pra
+    // B). `cancelled` descarta a resposta se o evento ativo já mudou de novo.
+    let cancelled = false;
+    (async () => {
+      const [{ count: regCount }, { count: ticketCount }, { data: wsIds }] = await Promise.all([
+        supabase.from('registrations').select('id', { count: 'exact', head: true }).eq('event_id', activeEventId),
+        supabase.from('audience_tickets').select('id', { count: 'exact', head: true }).eq('event_id', activeEventId),
+        supabase.from('workshops').select('id').eq('event_id', activeEventId),
+      ]);
+      let wsRegCount = 0;
+      const ids = (wsIds ?? []).map(w => w.id);
+      if (ids.length > 0) {
+        const { count } = await supabase.from('workshop_registrations').select('id', { count: 'exact', head: true }).in('workshop_id', ids);
+        wsRegCount = count ?? 0;
+      }
+      if (!cancelled) setDeleteBlockedByRegs((regCount ?? 0) > 0 || (ticketCount ?? 0) > 0 || wsRegCount > 0);
+    })();
+    return () => { cancelled = true; };
+  }, [activeEventId]);
+
+  const activeEventName = pickerEvents.find(e => e.id === activeEventId)?.name ?? '';
+
+  const handleDeleteEvent = async () => {
+    if (!activeEventId) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${supabaseUrl}/functions/v1/delete-event`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ event_id: activeEventId, confirm_name: deleteConfirmText }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? `Falha ao excluir (${res.status})`);
+
+      // Evento não existe mais — tira do picker, limpa os ids ativos (evita
+      // qualquer effect ainda montado tentar reconsultar um evento já
+      // apagado na janela entre este ponto e o unmount pelo navigate) e
+      // navega pro painel geral, que resolve outro evento (ou tela vazia de
+      // onboarding se era o único).
+      setPickerEvents(prev => prev.filter(e => e.id !== activeEventId));
+      setActiveEventId(null);
+      setSelectedEventId(null);
+      setDeleteModalOpen(false);
+      setDeleteConfirmText('');
+      navigate('/qg-organizador');
+    } catch (e: any) {
+      setDeleteError(e.message ?? String(e));
+    } finally {
+      setDeleting(false);
+    }
+  };
   // Edição de slug (Fase 2 — Slug Hardening). Draft separado pra validação live
   // sem mexer no slug ativo até user clicar "Salvar link".
   const [slugDraft, setSlugDraft]         = useState<string>('');
@@ -3849,6 +3929,43 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 </div>
               </div>
             </div>
+
+            {/* Zona de perigo — excluir evento (achado #4, 2026-07-17).
+                Só habilitado quando o evento não tem nenhuma inscrição (a
+                checagem de verdade é server-side, na edge function — este
+                toggle é só pra não mostrar um botão que sempre vai falhar
+                no caso mais comum de bloqueio). */}
+            {activeEventId && (
+              <div className="bg-rose-500/5 border border-rose-500/20 p-6 rounded-3xl">
+                <div className="flex items-start gap-4">
+                  <div className="p-2.5 bg-rose-500/10 rounded-xl text-rose-500 shrink-0">
+                    <Trash2 size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-black uppercase tracking-tight text-rose-500">Zona de perigo</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-3">
+                      Excluir <strong>{activeEventName ? activeEventName : 'este evento'}</strong> apaga o evento e todas as configurações
+                      associadas. Só é permitido quando o evento não tem nenhuma inscrição, pagamento ou venda real —
+                      irreversível.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => { setDeleteConfirmText(''); setDeleteError(null); setDeleteModalOpen(true); }}
+                      disabled={deleteBlockedByRegs}
+                      title={deleteBlockedByRegs ? 'Este evento já tem inscrições, ingressos ou workshops vendidos — não pode ser excluído.' : undefined}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-rose-500/40 text-rose-500 text-[10px] font-black uppercase tracking-widest hover:bg-rose-500/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Trash2 size={13} /> Excluir evento
+                    </button>
+                    {deleteBlockedByRegs && (
+                      <p className="text-[10px] text-slate-400 mt-2">
+                        Este evento já tem inscrições, ingressos ou workshops vendidos — não pode ser excluído por aqui.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
           </div>
         );
@@ -6859,6 +6976,69 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Modal de confirmação — excluir evento (achado #4, 2026-07-17).
+          createPortal pra escapar do stacking context de <main z-10> do
+          PrivateLayout — lição documentada após bug real em 2026-05-26. */}
+      {deleteModalOpen && createPortal(
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirmar exclusão de evento"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+          onClick={() => { if (!deleting) setDeleteModalOpen(false); }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="w-full max-w-md bg-white dark:bg-slate-900 border border-rose-500/30 rounded-3xl p-6 shadow-2xl"
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-rose-500/10 rounded-xl text-rose-500 shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+              <h3 className="font-black uppercase tracking-tight text-rose-500 text-lg">Excluir evento</h3>
+            </div>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+              Isso apaga <strong>{activeEventName}</strong> e todas as configurações associadas — não tem como desfazer.
+              Pra confirmar, digite o nome do evento exatamente como aparece abaixo:
+            </p>
+            <p className="text-xs font-mono bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 mb-3 break-words">
+              {activeEventName}
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={e => setDeleteConfirmText(e.target.value)}
+              placeholder="Digite o nome do evento"
+              autoFocus
+              className="w-full px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-rose-500/50 transition-all"
+            />
+            {deleteError && (
+              <p className="text-xs text-rose-500 mt-3">{deleteError}</p>
+            )}
+            <div className="flex gap-3 mt-5">
+              <button
+                type="button"
+                onClick={() => setDeleteModalOpen(false)}
+                disabled={deleting}
+                className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 dark:hover:bg-white/5 transition-all disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteEvent}
+                disabled={deleting || !activeEventName || deleteConfirmText.trim() !== activeEventName.trim()}
+                className="flex-1 py-3 rounded-2xl bg-rose-500 text-white text-[10px] font-black uppercase tracking-widest hover:bg-rose-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={13} />}
+                {deleting ? 'Excluindo...' : 'Excluir definitivamente'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };
