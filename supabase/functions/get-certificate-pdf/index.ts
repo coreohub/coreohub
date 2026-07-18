@@ -98,14 +98,20 @@ const DEFAULT_LAYOUT_OFICIAL_MOSTRA: LayoutTag[] = [
   { tag: 'EVENTO',          x_pct: 50, y_pct: 53, font_size: 18, align: 'center', weight: 'bold', color: OFICIAL_ACCENT, fontFamily: 'times' },
   { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 59, font_size: 11, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
 ]
+// Layout baseado em rule-of-thirds (pesquisa de mercado, não estimativa às
+// cegas — ver mockup aprovado 2026-07-18): terço superior (0-33%) pro
+// título/eyebrow, terço central (33-67%) pro conteúdo principal (nome +
+// corpo, maior peso visual), terço inferior (67-100%) pra assinatura + QR.
+// A linha de assinatura (sigLineY=196, calculada mais abaixo) cai em
+// ~67,1% da altura — quase exatamente no limite do terço final.
 const DEFAULT_LAYOUT_OFICIAL_WORKSHOP: LayoutTag[] = [
-  { tag: 'TITULO',          x_pct: 50, y_pct: 8,  font_size: 34, align: 'center', weight: 'bold', color: OFICIAL_INK, fontFamily: 'times' },
-  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 15, font_size: 12, align: 'center', color: OFICIAL_ACCENT, fontFamily: 'times' },
-  { tag: 'INTRO',           x_pct: 50, y_pct: 22, font_size: 15, align: 'center', italic: true, color: OFICIAL_MUTED, fontFamily: 'times' },
-  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 29, font_size: 34, align: 'center', weight: 'bold', italic: true, color: OFICIAL_INK, fontFamily: 'times' },
-  { tag: 'CORPO',           x_pct: 50, y_pct: 37, font_size: 12.5, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
-  { tag: 'WORKSHOP_NOME',   x_pct: 50, y_pct: 44, font_size: 18, align: 'center', weight: 'bold', color: OFICIAL_ACCENT, fontFamily: 'times' },
-  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 50, font_size: 11, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'TITULO',          x_pct: 50, y_pct: 12, font_size: 34, align: 'center', weight: 'bold', color: OFICIAL_INK, fontFamily: 'times' },
+  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 19, font_size: 12, align: 'center', color: OFICIAL_ACCENT, fontFamily: 'times' },
+  { tag: 'INTRO',           x_pct: 50, y_pct: 26, font_size: 15, align: 'center', italic: true, color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 35, font_size: 34, align: 'center', weight: 'bold', italic: true, color: OFICIAL_INK, fontFamily: 'times' },
+  { tag: 'CORPO',           x_pct: 50, y_pct: 44, font_size: 12.5, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'WORKSHOP_NOME',   x_pct: 50, y_pct: 52, font_size: 18, align: 'center', weight: 'bold', color: OFICIAL_ACCENT, fontFamily: 'times' },
+  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 60, font_size: 11, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
 ]
 
 // Layout default usado quando produtor não customizou (template_layout vazio)
@@ -681,7 +687,7 @@ async function generatePdf(ctx: {
   if (sigCount > 0) {
     const sigGap = 220
     const startX = (W - sigGap * sigCount) / 2 + sigGap / 2 - 100
-    const sigLineY = isOficialWorkshop ? 270 : isOficial ? 215 : 110
+    const sigLineY = isOficialWorkshop ? 196 : isOficial ? 215 : 110
     for (let i = 0; i < sigCount; i++) {
       const cx = startX + i * sigGap
       page.drawLine({ start: { x: cx, y: sigLineY }, end: { x: cx + 200, y: sigLineY }, thickness: 0.8, color: inkColor })
