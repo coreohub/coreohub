@@ -61,39 +61,41 @@ function normalizeVisualPreset(p?: string | null): 'classico' | 'workshop' | 'ou
 }
 
 // Preset 'oficial-dourado' — moldura pronta fornecida pelo CoreoHub (não é
-// código desenhando forma nenhuma, é uma imagem full-bleed: moldura
-// biselada dourada, faixa navy diagonal cruzada, selo dourado). Produtor
-// não escolhe cor — a arte já vem pronta pra todo mundo, hospedada como
-// asset estático do próprio app (mesmo domínio de sempre, sem depender de
-// bucket novo). O QR de validação NÃO depende de a arte reservar espaço —
+// código desenhando forma nenhuma, é uma imagem full-bleed). v2 (2026-07-18,
+// substitui a v1 de 2026-07-17): moldura dourada concentrada nas bordas e
+// cantos (florão ornamental em cada canto) em vez de blocos grandes, faixa
+// navy só na base ocupando ~12% da altura (a v1 tinha ~25-30%, espremendo
+// o texto lá em cima — pedido explícito do produtor foi mais respiro no
+// centro). Selo dourado liso, sem texto/símbolo dentro de propósito — IA de
+// imagem não renderiza texto legível, então o conteúdo real (se algum dia
+// fizer sentido, ex: posição/medalha) é estampado por código, não pela
+// arte. Produtor não escolhe cor — paleta fixa. Coordenadas medidas direto
+// no arquivo (crop + inspeção visual): selo começa em ~74% da altura,
+// faixa em ~88%. O QR de validação NÃO depende de a arte reservar espaço —
 // o próprio código desenha um cartão branco atrás dele (ver bloco do QR
 // mais abaixo), então funciona em qualquer imagem nova, mesmo sem caixa
-// reservada. Coordenadas do selo/faixa desta arte específica foram medidas
-// direto no arquivo (crop + inspeção visual, não estimadas de olho): o selo
-// começa em ~69% da altura (bem mais alto do que presets desenhados por
-// código sugeririam), por isso o layout de texto e a linha de assinatura
-// aqui são mais compactos que os outros presets.
-const OFICIAL_DOURADO_BG_URL = 'https://app.coreohub.com/certificate-frames/prestigio-oficial.jpg'
+// reservada.
+const OFICIAL_DOURADO_BG_URL = 'https://app.coreohub.com/certificate-frames/oficial-dourado.jpg'
 const OFICIAL_INK = '#241c10'
 const OFICIAL_MUTED = '#6b5d45'
 const OFICIAL_ACCENT = '#a97e2e'
 const DEFAULT_LAYOUT_OFICIAL_MOSTRA: LayoutTag[] = [
-  { tag: 'TITULO',          x_pct: 50, y_pct: 15, font_size: 32, align: 'center', weight: 'bold', color: OFICIAL_INK, fontFamily: 'times' },
-  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 22, font_size: 12, align: 'center', color: OFICIAL_ACCENT, fontFamily: 'times' },
-  { tag: 'INTRO',           x_pct: 50, y_pct: 30, font_size: 14, align: 'center', italic: true, color: OFICIAL_MUTED, fontFamily: 'times' },
-  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 38, font_size: 30, align: 'center', weight: 'bold', italic: true, color: OFICIAL_INK, fontFamily: 'times' },
-  { tag: 'CORPO',           x_pct: 50, y_pct: 45, font_size: 12, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
-  { tag: 'EVENTO',          x_pct: 50, y_pct: 52, font_size: 17, align: 'center', weight: 'bold', color: OFICIAL_ACCENT, fontFamily: 'times' },
-  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 58, font_size: 11, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'TITULO',          x_pct: 50, y_pct: 14, font_size: 34, align: 'center', weight: 'bold', color: OFICIAL_INK, fontFamily: 'times' },
+  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 21, font_size: 12, align: 'center', color: OFICIAL_ACCENT, fontFamily: 'times' },
+  { tag: 'INTRO',           x_pct: 50, y_pct: 29, font_size: 15, align: 'center', italic: true, color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 38, font_size: 34, align: 'center', weight: 'bold', italic: true, color: OFICIAL_INK, fontFamily: 'times' },
+  { tag: 'CORPO',           x_pct: 50, y_pct: 46, font_size: 12.5, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'EVENTO',          x_pct: 50, y_pct: 53, font_size: 18, align: 'center', weight: 'bold', color: OFICIAL_ACCENT, fontFamily: 'times' },
+  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 59, font_size: 11, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
 ]
 const DEFAULT_LAYOUT_OFICIAL_WORKSHOP: LayoutTag[] = [
-  { tag: 'TITULO',          x_pct: 50, y_pct: 15, font_size: 32, align: 'center', weight: 'bold', color: OFICIAL_INK, fontFamily: 'times' },
-  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 22, font_size: 12, align: 'center', color: OFICIAL_ACCENT, fontFamily: 'times' },
-  { tag: 'INTRO',           x_pct: 50, y_pct: 30, font_size: 14, align: 'center', italic: true, color: OFICIAL_MUTED, fontFamily: 'times' },
-  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 38, font_size: 30, align: 'center', weight: 'bold', italic: true, color: OFICIAL_INK, fontFamily: 'times' },
-  { tag: 'CORPO',           x_pct: 50, y_pct: 45, font_size: 12, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
-  { tag: 'WORKSHOP_NOME',   x_pct: 50, y_pct: 52, font_size: 17, align: 'center', weight: 'bold', color: OFICIAL_ACCENT, fontFamily: 'times' },
-  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 58, font_size: 11, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'TITULO',          x_pct: 50, y_pct: 14, font_size: 34, align: 'center', weight: 'bold', color: OFICIAL_INK, fontFamily: 'times' },
+  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 21, font_size: 12, align: 'center', color: OFICIAL_ACCENT, fontFamily: 'times' },
+  { tag: 'INTRO',           x_pct: 50, y_pct: 29, font_size: 15, align: 'center', italic: true, color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 38, font_size: 34, align: 'center', weight: 'bold', italic: true, color: OFICIAL_INK, fontFamily: 'times' },
+  { tag: 'CORPO',           x_pct: 50, y_pct: 46, font_size: 12.5, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'WORKSHOP_NOME',   x_pct: 50, y_pct: 53, font_size: 18, align: 'center', weight: 'bold', color: OFICIAL_ACCENT, fontFamily: 'times' },
+  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 59, font_size: 11, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
 ]
 
 // Layout default usado quando produtor não customizou (template_layout vazio)
@@ -362,6 +364,7 @@ async function generatePdf(ctx: {
   data: any
   hash: string
   validation_url: string
+  is_preview?: boolean
 }): Promise<Uint8Array> {
   const preset = normalizeVisualPreset(ctx.template?.preset_template)
   const isOuro = preset === 'ouro'
@@ -630,13 +633,14 @@ async function generatePdf(ctx: {
   // QR + texto de validação. 'oficial-dourado' NÃO depende da arte reservar
   // espaço nenhum — o código desenha o próprio cartão branco atrás do QR
   // (funciona em qualquer imagem nova, mesmo sem caixa desenhada por quem
-  // fez a arte). Card no canto inferior direito, dimensão fixa calibrada
-  // pra caber sem invadir a faixa navy (medida real: faixa começa a ~69%
-  // da altura, então o card fica bem abaixo disso, dentro da margem segura).
+  // fez a arte). Card no canto inferior direito, o mais próximo possível do
+  // canto sem invadir nem a faixa navy (medida real: começa a ~88% da
+  // altura, ~71px de baixo pra cima) nem o florão ornamental do canto
+  // (~90-97% da largura) — fica na faixa livre entre os dois.
   const qrImage = await pdfDoc.embedPng(qrBytes)
   const qrSize = isOficial ? 68 : 80
-  const qrX = isOficial ? 693 : W - qrSize - 60
-  const qrY = isOficial ? 78 : 60
+  const qrX = isOficial ? 655 : W - qrSize - 60
+  const qrY = isOficial ? 100 : 60
   const bodyFont = isOuro || isPrestigio || isOficial ? timesRoman : helvetica
   const boldFont = isOuro || isPrestigio || isOficial ? timesBold : helveticaBold
   const mutedColor = isOuro ? rgb(...hexToRgb(OURO_MUTED)) : isModerno ? rgb(...hexToRgb(MODERNO_MUTED)) : isPrestigio ? rgb(...hexToRgb(PRESTIGIO_MUTED)) : isOficial ? rgb(...hexToRgb(OFICIAL_MUTED)) : rgb(0.4, 0.4, 0.45)
@@ -654,16 +658,15 @@ async function generatePdf(ctx: {
 
   // Assinaturas: linha + nome em negro + função/cargo em itálico colorido
   // (nova estrutura pareada signature_names + signature_titles, 2026-05-07).
-  // 'oficial-dourado' sobe a linha bastante — o selo dessa arte começa a
-  // ~69% da altura (medido direto no arquivo, crop + inspeção visual), bem
-  // mais alto do que os presets desenhados por código sugeririam.
+  // 'oficial-dourado' sobe a linha — o selo dessa arte começa a ~74% da
+  // altura (medido direto no arquivo, crop + inspeção visual).
   const sigNames: string[]  = Array.isArray(ctx.template?.signature_names)  ? ctx.template.signature_names  : []
   const sigTitles: string[] = Array.isArray(ctx.template?.signature_titles) ? ctx.template.signature_titles : []
   const sigCount = Math.min(sigNames.length, 3)
   if (sigCount > 0) {
     const sigGap = 220
     const startX = (W - sigGap * sigCount) / 2 + sigGap / 2 - 100
-    const sigLineY = isOficial ? 230 : 110
+    const sigLineY = isOficial ? 215 : 110
     for (let i = 0; i < sigCount; i++) {
       const cx = startX + i * sigGap
       page.drawLine({ start: { x: cx, y: sigLineY }, end: { x: cx + 200, y: sigLineY }, thickness: 0.8, color: inkColor })
@@ -683,6 +686,20 @@ async function generatePdf(ctx: {
   const footer = 'Emitido por CoreoHub — Gestão Inteligente para Festivais de Dança'
   const fW = bodyFont.widthOfTextAtSize(footer, 8)
   page.drawText(footer, { x: (W - fW) / 2, y: 50, size: 8, font: bodyFont, color: mutedColor })
+
+  // Marca d'água diagonal só no preview — o QR desse PDF aponta pra um hash
+  // fictício que nunca é gravado em certificates_issued, então escaneá-lo
+  // sempre dá "não encontrado". Sem isso, quem testa o QR de um preview
+  // acha que é bug/certificado falso em vez de amostra.
+  if (ctx.is_preview) {
+    const wmText = 'AMOSTRA — NÃO É UM CERTIFICADO OFICIAL'
+    const wmSize = 26
+    const wmW = helveticaBold.widthOfTextAtSize(wmText, wmSize)
+    page.drawText(wmText, {
+      x: W / 2 - wmW / 2, y: H / 2 - wmSize / 2, size: wmSize, font: helveticaBold,
+      color: rgb(0.85, 0.1, 0.35), opacity: 0.28, rotate: degrees(28),
+    })
+  }
 
   return pdfDoc.save()
 }
@@ -746,6 +763,7 @@ Deno.serve(async (req) => {
         data: previewData,
         hash: previewHash,
         validation_url: `${frontUrl}/validar-certificado/${previewHash}`,
+        is_preview: true,
       })
 
       const previewBuf = new ArrayBuffer(pdfBytes.byteLength)

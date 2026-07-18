@@ -9,12 +9,18 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import {
   CheckCircle, AlertCircle, Loader2, Calendar, Award, GraduationCap, Music2,
-  ShieldCheck,
+  ShieldCheck, Search,
 } from 'lucide-react';
+
+// QR aponta pro UUID completo (validation_hash). O PDF também imprime só os
+// 8 primeiros chars como "Código: XXXXXXXX" (pra quem recebe impresso, sem
+// QR) — esse formato curto precisa da RPC de busca por prefixo, não a de
+// match exato.
+const isFullUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
 interface ValidationResult {
   found: boolean;
@@ -42,17 +48,23 @@ const fmtDateTime = (iso: string | null) => {
 
 const ValidarCertificado: React.FC = () => {
   const { hash } = useParams<{ hash: string }>();
+  const navigate = useNavigate();
   const [result, setResult]   = useState<ValidationResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [codeInput, setCodeInput] = useState('');
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     if (!hash) {
       setLoading(false);
-      setResult({ found: false } as ValidationResult);
+      setResult(null);
       return;
     }
     (async () => {
-      const { data, error } = await supabase.rpc('validate_certificate', { p_hash: hash });
+      setLoading(true);
+      const { data, error } = isFullUuid(hash)
+        ? await supabase.rpc('validate_certificate', { p_hash: hash })
+        : await supabase.rpc('validate_certificate_by_code', { p_code: hash });
       if (error) {
         console.error(error);
         setResult({ found: false } as ValidationResult);
@@ -63,6 +75,16 @@ const ValidarCertificado: React.FC = () => {
       setLoading(false);
     })();
   }, [hash]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const code = codeInput.trim();
+    if (!code) return;
+    setSearching(true);
+    navigate(`/validar-certificado/${code}`);
+  };
+
+  useEffect(() => { setSearching(false); }, [hash]);
 
   if (loading) {
     return (
@@ -90,7 +112,34 @@ const ValidarCertificado: React.FC = () => {
           </p>
         </div>
 
-        {valid ? (
+        {/* Busca manual pelo código impresso no PDF ("Código: XXXXXXXX") —
+            cobre quem recebeu o certificado sem QR escaneável (impresso,
+            PDF sem câmera à mão). Sempre visível, não só no estado vazio. */}
+        <form onSubmit={handleSearch} className="mb-6 flex gap-2">
+          <input
+            value={codeInput}
+            onChange={e => setCodeInput(e.target.value)}
+            placeholder="Digite o código do certificado (ex: A1B2C3D4)"
+            aria-label="Código do certificado"
+            className="flex-1 min-w-0 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-4 py-2.5 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff0068]"
+          />
+          <button
+            type="submit"
+            disabled={searching || !codeInput.trim()}
+            className="inline-flex items-center gap-2 rounded-xl bg-[#ff0068] hover:bg-[#e0005c] px-4 py-2.5 text-sm font-black text-white disabled:opacity-50 transition"
+          >
+            {searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
+            Validar
+          </button>
+        </form>
+
+        {!hash ? (
+          <div className="rounded-3xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 shadow-xl p-6 text-center">
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              Digite acima o código impresso no certificado, ou escaneie o QR code do documento.
+            </p>
+          </div>
+        ) : valid ? (
           <div className="rounded-3xl bg-white dark:bg-white/5 border border-emerald-200 dark:border-emerald-500/30 shadow-xl overflow-hidden">
             {/* Header verde */}
             <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 px-6 py-8 text-white">

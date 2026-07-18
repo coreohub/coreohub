@@ -88,7 +88,7 @@ const PRESET_DEFAULT_COLORS: Partial<Record<PresetId, { accent: string; primary:
 };
 
 // Thumbnail real da moldura oficial (mesmo asset que a edge function busca).
-const OFICIAL_DOURADO_THUMB = '/certificate-frames/prestigio-oficial.jpg';
+const OFICIAL_DOURADO_THUMB = '/certificate-frames/oficial-dourado.jpg';
 
 // Presets com arte pronta (imagem cobre a página inteira) — nesses, editar
 // cor de destaque/texto quebraria a harmonia com a arte, então o seletor de
@@ -145,7 +145,6 @@ const Certificates: React.FC = () => {
 
   // Pré-visualização em PDF (dados fictícios, não toca certificates_issued)
   const [previewing, setPreviewing] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   // Emit batch state
   const [events, setEvents]                 = useState<EventOption[]>([]);
@@ -244,16 +243,6 @@ const Certificates: React.FC = () => {
 
   useEffect(() => { loadTemplate(); }, [loadTemplate]);
 
-  // Preview antigo fica enganoso ao trocar de aba (Mostra↔Workshop) ou
-  // salvar de novo — o card volta pro mock genérico até gerar um preview
-  // novo do estado atual.
-  useEffect(() => {
-    setPreviewUrl(prev => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
-  }, [activeType, template?.id]);
-
   useEffect(() => {
     if (!feedback) return;
     const t = setTimeout(() => setFeedback(null), 4500);
@@ -334,10 +323,13 @@ const Certificates: React.FC = () => {
   };
 
   // ── Pré-visualizar PDF (dados fictícios) ───────────────────────────────
-  // Antes abria só numa aba nova (window.open) — o produtor pedia que o
-  // certificado selecionado aparecesse direto no card "Preview ao vivo".
-  // Guarda o objectURL num state e troca o mock CSS por um <iframe> real
-  // com o PDF gerado de fato (WYSIWYG de verdade, não aproximação).
+  // Volta a abrir numa aba nova (window.open) — a tentativa de embutir o PDF
+  // dentro do card pequeno "Preview ao vivo" piorou a experiência (PDF real
+  // é maior/mais detalhado que a caixa quadrada permite mostrar). O que o
+  // produtor queria de fato já está coberto: a thumbnail do modelo
+  // selecionado aparece sozinha no card ao trocar de preset (ver
+  // `formPreset === 'oficial-dourado'` no JSX abaixo), sem precisar gerar
+  // PDF nenhum pra isso.
   const previewPdf = async () => {
     if (!template?.id) return;
     setPreviewing(true);
@@ -357,10 +349,8 @@ const Certificates: React.FC = () => {
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      setPreviewUrl(prev => {
-        if (prev) URL.revokeObjectURL(prev);
-        return url;
-      });
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e: any) {
       setFeedback({ kind: 'err', msg: e.message ?? String(e) });
     } finally {
@@ -679,11 +669,6 @@ const Certificates: React.FC = () => {
               {/* Preview WYSIWYG com dados de exemplo (padrão Sympla/Even3).
                   Renderização CSS — PDF final tem QR + assinatura digital. */}
               <Card title="Preview ao vivo">
-                {previewUrl ? (
-                  <div className="aspect-[297/210] rounded-md border border-slate-200 dark:border-white/10 overflow-hidden">
-                    <iframe src={previewUrl} title="Pré-visualização do certificado" className="w-full h-full" />
-                  </div>
-                ) : (
                 <div
                   className="aspect-[297/210] rounded-md border-2 relative overflow-hidden flex items-center justify-center"
                   style={{
@@ -741,11 +726,8 @@ const Certificates: React.FC = () => {
                     )}
                   </div>
                 </div>
-                )}
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 italic mt-2">
-                  {previewUrl
-                    ? 'PDF real gerado com dados de exemplo. Clique de novo em "Pré-visualizar PDF" após mudar algo.'
-                    : 'Preview com dados de exemplo. PDF final terá nome real do inscrito + QR de validação no rodapé.'}
+                  Preview com dados de exemplo. PDF final terá nome real do inscrito + QR de validação no rodapé.
                 </p>
                 <button
                   onClick={previewPdf}

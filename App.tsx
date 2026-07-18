@@ -578,6 +578,7 @@ const App: React.FC = () => {
         <Route path="/checkout-workshop-pass/:id" element={<Suspense fallback={<PageLoader />}><CheckoutWorkshopPass /></Suspense>} />
         <Route path="/meu-workshop/:token" element={<Suspense fallback={<PageLoader />}><MeuWorkshop /></Suspense>} />
         {/* Etapa 2 Certificados — pública (validação por hash) e privada (lista do inscrito) */}
+        <Route path="/validar-certificado" element={<Suspense fallback={<PageLoader />}><ValidarCertificado /></Suspense>} />
         <Route path="/validar-certificado/:hash" element={<Suspense fallback={<PageLoader />}><ValidarCertificado /></Suspense>} />
         <Route path="/meus-certificados" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><MeusCertificados /></Suspense></PrivateRoute>} />
         <Route path="/vendas"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><VendasOverview /></Suspense></PrivateRoute>} />
