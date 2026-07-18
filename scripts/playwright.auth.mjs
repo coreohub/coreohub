@@ -30,7 +30,7 @@ config({ path: resolve(__dirname, '..', '.env.local') });
 // Parse --as=role do CLI. Default = produtor (uso mais comum, sem bypass de RLS).
 const asArg = process.argv.find(a => a.startsWith('--as='));
 const role = (asArg ? asArg.slice(5) : 'produtor').toLowerCase();
-const validRoles = ['admin', 'produtor', 'inscrito'];
+const validRoles = ['admin', 'produtor', 'inscrito', 'equipe'];
 if (!validRoles.includes(role)) {
   console.error(`❌ Role "${role}" inválido. Use: --as=${validRoles.join(' | --as=')}`);
   process.exit(1);

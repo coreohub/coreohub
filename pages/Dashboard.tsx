@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Trophy, Music2, Plus, CreditCard, ChevronRight,
   MapPin, Calendar, Clock, Clapperboard, AlertTriangle,
-  CheckCircle2, Upload,
+  CheckCircle2, Upload, Users,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Profile as UserProfile, UserRole } from '../types';
@@ -22,6 +22,7 @@ import {
   isRegistrationPending,
   registrationDisplayKey,
 } from '../utils/registrationStatus';
+import { isEquipeOperacional, resolveFirstEquipeRoute } from '../utils/permMenu';
 
 const INSCRITO_ROLES = new Set([
   UserRole.STUDIO_DIRECTOR,
@@ -63,6 +64,13 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
   // RLS `inscrito_own_elenco` (user_id = auth.uid) cobre — sem migration extra.
   const [elencoById, setElencoById] = useState<ElencoById>({});
   const isInscrito = INSCRITO_ROLES.has(activeRole);
+  // Cargo operacional puro (COORDENADOR/MESARIO/SONOPLASTA/...) sem nenhuma
+  // coreografia própria — não é "mais um inscrito sem inscrição", é equipe.
+  // Sem essa distinção, a tela caía no mesmo empty state genérico de
+  // inscrito ("Inscrever Coreografia"), confundindo quem só está aqui pra
+  // operar o evento (2026-07-18).
+  const isTeamOnly = isEquipeOperacional(activeRole);
+  const equipeRoute = isTeamOnly ? resolveFirstEquipeRoute(profile.permissoes_custom) : null;
 
   useEffect(() => {
     const fetchCoreografias = async () => {
@@ -349,6 +357,28 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
                 <div className="h-5 w-16 bg-slate-200 dark:bg-white/10 rounded-full" />
               </div>
             ))}
+          </div>
+        ) : coreografias.length === 0 && isTeamOnly ? (
+          <div className="p-12 flex flex-col items-center gap-4 text-center">
+            <div className="w-14 h-14 rounded-full bg-[#ff0068]/10 flex items-center justify-center">
+              <Users size={22} className="text-[#ff0068]" />
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Você é da equipe deste evento</p>
+              <p className="text-[9px] font-bold text-slate-400 mt-1">
+                {equipeRoute
+                  ? 'Use o menu lateral pra acessar suas ferramentas de trabalho'
+                  : 'Seu acesso ainda não foi configurado — fale com o produtor'}
+              </p>
+            </div>
+            {equipeRoute && (
+              <button
+                onClick={() => navigate(equipeRoute)}
+                className="mt-1 px-5 py-2.5 bg-[#ff0068] text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-md shadow-[#ff0068]/20 hover:scale-105 transition-all"
+              >
+                Ir pro meu painel
+              </button>
+            )}
           </div>
         ) : coreografias.length === 0 ? (
           <div className="p-12 flex flex-col items-center gap-4 text-center">

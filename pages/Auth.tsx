@@ -7,6 +7,7 @@ import { OtpBoxes } from '../components/OtpBoxes';
 import AsaasBadge from '../components/AsaasBadge';
 import { suggestEmail } from '../utils/mailcheck';
 import { isInAppBrowser } from '../utils/inAppBrowser';
+import { resolveFirstEquipeRoute } from '../utils/permMenu';
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -229,18 +230,24 @@ const Auth = () => {
   };
 
   // Decide a tela inicial pós-login com base no role do user. Produtor
-  // (ORGANIZER) cai direto no /qg-organizador. Demais roles vão pro
-  // /dashboard padrão. Lookup feito FORA do callback de onAuthStateChange
-  // pra não deadlockar o lock interno do auth-js.
+  // (ORGANIZER) cai direto no /qg-organizador. Membro de equipe (role=USER
+  // com permissoes_custom, convidado via /minha-equipe) vai pra primeira
+  // rota que ele de fato tem permissão de ver — sem isso ele caía em
+  // /dashboard, a tela de inscrito comum, sem nenhum caminho óbvio pra
+  // achar sua própria área (2026-07-14). Demais roles (inscrito real,
+  // espectador) seguem pro /dashboard padrão. Lookup feito FORA do
+  // callback de onAuthStateChange pra não deadlockar o lock interno do auth-js.
   const resolveLandingPath = async (userId: string): Promise<string> => {
     if (redirectTo) return redirectTo;
     try {
       const { data } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role, permissoes_custom')
         .eq('id', userId)
         .maybeSingle();
-      return data?.role === 'ORGANIZER' ? '/qg-organizador' : '/dashboard';
+      if (data?.role === 'ORGANIZER') return '/qg-organizador';
+      const equipeRoute = resolveFirstEquipeRoute(data?.permissoes_custom);
+      return equipeRoute ?? '/dashboard';
     } catch {
       return '/dashboard';
     }

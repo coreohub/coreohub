@@ -6,6 +6,7 @@ import {
   getTeamInviteByToken,
   type TeamInvite,
 } from '../services/teamInviteService';
+import { resolveFirstEquipeRoute } from '../utils/permMenu';
 import {
   Users, Loader2, AlertCircle, CheckCircle, ArrowRight, Mail, User as UserIcon,
 } from 'lucide-react';
@@ -115,8 +116,15 @@ const TeamInviteLanding = () => {
       setStep('name');
       return;
     }
-    navigate('/dashboard?welcome=team');
+    navigate(landingPathAfterInvite());
   };
+
+  // Mesma lógica do redirect de login (Auth.tsx) — manda o novo membro pra
+  // primeira rota que a permissão dele já libera, em vez de /dashboard (tela
+  // de inscrito). Usa invite.permissoes_custom em vez de reler o profile:
+  // applyInvite() acabou de gravar exatamente esse valor via service_role.
+  const landingPathAfterInvite = () =>
+    (invite && resolveFirstEquipeRoute(invite.permissoes_custom)) ?? '/dashboard?welcome=team';
 
   const handleVerifyOtp = async (code?: string) => {
     if (!invite) return;
@@ -150,7 +158,7 @@ const TeamInviteLanding = () => {
         .update({ full_name: fullName.trim() })
         .eq('id', user.id);
       if (updateError) throw updateError;
-      navigate('/dashboard?welcome=team');
+      navigate(landingPathAfterInvite());
     } catch (e: any) {
       setFormError(e.message);
     } finally {

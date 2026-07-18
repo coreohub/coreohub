@@ -8,10 +8,11 @@ import {
   BarChart2, UserCheck,
   ClipboardList, ShieldCheck, Mic2, Settings,
   Clapperboard, Music2,
-  PersonStanding, Headphones, Filter, CreditCard,
+  PersonStanding, Headphones,
   Video, FileSearch, Tag, GraduationCap, MonitorPlay, Megaphone,
 } from 'lucide-react';
-import { UserRole, Profile as UserProfile, PermissoesCustom } from '../types';
+import { UserRole, Profile as UserProfile } from '../types';
+import { PERM_MENU, EQUIPE_OPERACIONAL_ROLES } from '../utils/permMenu';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -56,12 +57,9 @@ const ALL_ORGANIZER = [UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN];
 const ALL_JUDGE     = [UserRole.JUDGE, UserRole.COREOHUB_ADMIN];
 const ALL_USER      = [UserRole.USER, UserRole.STUDIO_DIRECTOR, UserRole.CHOREOGRAPHER, UserRole.INDEPENDENT, UserRole.TEAM, UserRole.SPECTATOR, UserRole.COREOHUB_ADMIN];
 
-// Equipe operacional — todos os sub-roles + organizer + admin
-const ALL_EQUIPE = [
-  UserRole.COORDENADOR, UserRole.MESARIO, UserRole.SONOPLASTA,
-  UserRole.RECEPCAO, UserRole.PALCO, UserRole.APOIO_WORKSHOP,
-  UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN,
-];
+// Equipe operacional — todos os sub-roles (fonte única em utils/permMenu.ts,
+// reusada pelo Dashboard) + organizer + admin.
+const ALL_EQUIPE = [...EQUIPE_OPERACIONAL_ROLES, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN];
 
 // "Ser equipe" e "ser inscrito/coreógrafo" não são exclusivos (padrão
 // Eventbrite/Meetup: staff também pode ter as próprias inscrições). Sem
@@ -69,35 +67,6 @@ const ALL_EQUIPE = [
 // pra se inscrever numa outra mostra, mesmo podendo fazer isso normalmente
 // (o Wizard de inscrição não checa role nenhuma).
 const ALL_USER_OR_EQUIPE = [...ALL_USER, ...ALL_EQUIPE];
-
-// Mapeamento permissão → item de menu (usado para membros com permissoes_custom)
-type PermKey = keyof PermissoesCustom;
-const PERM_MENU: { perm: PermKey; path: string; label: string; icon: React.ElementType }[] = [
-  { perm: 'cronograma_leitura', path: '/manage-schedule', label: 'Cronograma',          icon: Calendar        },
-  // Qualquer escopo de checkin_* já libera o menu — CheckIn.tsx restringe
-  // por dentro pra só oferecer os tipos de QR que o membro de fato tem.
-  { perm: 'checkin_inscritos',  path: '/check-in',        label: 'Credenciamento',      icon: QrCode          },
-  { perm: 'checkin_ingressos',  path: '/check-in',        label: 'Credenciamento',      icon: QrCode          },
-  { perm: 'checkin_workshops',  path: '/check-in',        label: 'Credenciamento',      icon: QrCode          },
-  { perm: 'checkin_equipe',     path: '/check-in',        label: 'Credenciamento',      icon: QrCode          },
-  { perm: 'checkin_jurados',    path: '/check-in',        label: 'Credenciamento',      icon: QrCode          },
-  // Credenciais.tsx não filtra por tipo — imprime todo o roster do evento.
-  // Só quem tem checkin_inscritos (escopo amplo) ganha esse item de menu.
-  { perm: 'checkin_inscritos',  path: '/credenciais',     label: 'Credenciais',         icon: QrCode          },
-  { perm: 'marcacao_palco',     path: '/marcacao-palco',  label: 'Marcação de Palco',   icon: PersonStanding  },
-  { perm: 'suporte_juri',       path: '/suporte-juri',    label: 'Coordenador do Júri', icon: Headphones      },
-  { perm: 'controle_telao',     path: '/telao-palco',     label: 'Telão de Palco',      icon: MonitorPlay     },
-  { perm: 'gerenciar_avisos',   path: '/avisos',          label: 'Avisos',              icon: Megaphone       },
-  { perm: 'inscricoes_leitura', path: '/registrations',   label: 'Inscrições',          icon: ClipboardList   },
-  { perm: 'triagem',            path: '/registrations',   label: 'Triagem',             icon: Filter          },
-  { perm: 'seletiva_video',     path: '/seletiva-video',  label: 'Seletiva de Vídeo',   icon: Video           },
-  { perm: 'gerenciar_workshops', path: '/workshops-do-evento', label: 'Workshops',       icon: GraduationCap   },
-  { perm: 'vendas_ingressos',   path: '/vendas-ingressos', label: 'Vendas de Ingressos', icon: Ticket          },
-  { perm: 'gerenciar_cupons',   path: '/cupons',          label: 'Cupons',              icon: Tag             },
-  { perm: 'resultados_leitura', path: '/apuracao',        label: 'Apuração',            icon: BarChart2       },
-  { perm: 'emitir_certificados', path: '/certificados',   label: 'Certificados',        icon: Award           },
-  { perm: 'financeiro',         path: '/qg-organizador',  label: 'Financeiro',          icon: CreditCard      },
-];
 
 // Menu do produtor agrupado por fase do ciclo de vida do evento (Setup →
 // Operação → Bilheteria → Resultados → Sistema). Padrão research-backed
