@@ -640,8 +640,14 @@ async function generatePdf(ctx: {
     })
   }
   page.drawImage(qrImage, { x: qrX, y: qrY, width: qrSize, height: qrSize })
-  page.drawText('Verifique a autenticidade:', { x: qrX, y: qrY - 12, size: isOficial ? 6 : 7, font: bodyFont, color: mutedColor })
-  page.drawText(`Código: ${ctx.hash.slice(0, 8).toUpperCase()}`, { x: qrX, y: qrY - 22, size: isOficial ? 6 : 7, font: boldFont, color: inkColor })
+  const qrCaptionSize = isOficial ? 6 : 7
+  const verifyLabel = 'Verifique a autenticidade:'
+  const codeLabel = `Código: ${ctx.hash.slice(0, 8).toUpperCase()}`
+  const verifyW = bodyFont.widthOfTextAtSize(verifyLabel, qrCaptionSize)
+  const codeW = boldFont.widthOfTextAtSize(codeLabel, qrCaptionSize)
+  const captionCenterX = qrX + verifyW / 2
+  page.drawText(verifyLabel, { x: qrX, y: qrY - 12, size: qrCaptionSize, font: bodyFont, color: mutedColor })
+  page.drawText(codeLabel, { x: captionCenterX - codeW / 2, y: qrY - 22, size: qrCaptionSize, font: boldFont, color: inkColor })
 
   // Assinaturas: linha + nome em negro + função/cargo em itálico colorido
   // (nova estrutura pareada signature_names + signature_titles, 2026-05-07).
@@ -669,10 +675,15 @@ async function generatePdf(ctx: {
     }
   }
 
-  // Footer
+  // Footer. 'oficial-dourado' sobe bastante — a faixa navy cobre a base
+  // inteira da página (y=50 caía dentro dela, texto escuro em cima de fundo
+  // navy ficava ilegível); aqui fica no vão entre o topo do selo (~156px) e
+  // a linha de assinatura (sigLineY), único trecho de papel livre por perto.
   const footer = 'Emitido por CoreoHub — Gestão Inteligente para Festivais de Dança'
-  const fW = bodyFont.widthOfTextAtSize(footer, 8)
-  page.drawText(footer, { x: (W - fW) / 2, y: 50, size: 8, font: bodyFont, color: mutedColor })
+  const footerSize = isOficial ? 7 : 8
+  const footerY = isOficial ? 163 : 50
+  const fW = bodyFont.widthOfTextAtSize(footer, footerSize)
+  page.drawText(footer, { x: (W - fW) / 2, y: footerY, size: footerSize, font: bodyFont, color: mutedColor })
 
   // Marca d'água diagonal só no preview — o QR desse PDF aponta pra um hash
   // fictício que nunca é gravado em certificates_issued, então escaneá-lo
