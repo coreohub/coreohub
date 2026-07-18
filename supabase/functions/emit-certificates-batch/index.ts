@@ -89,6 +89,16 @@ Deno.serve(async (req) => {
         .eq('id', event_id)
         .single()
       if (!data || evErr) throw new Error('Evento não encontrado')
+      // events.event_date costuma vir NULL — produtor preenche a data em
+      // Configurações, que grava em configuracoes.data_evento (coluna
+      // separada, mesmo padrão legado documentado no resto do projeto).
+      // Confirmado em produção: Usualdance Festival tinha event_date NULL
+      // e data_evento='2026-07-11' — sem esse fallback, certificado saía
+      // sem data nenhuma (resolveTag omite quando evento_data é null).
+      if (!data.event_date) {
+        const { data: cfg } = await supabase.from('configuracoes').select('data_evento').eq('id', event_id).maybeSingle()
+        if (cfg?.data_evento) data.event_date = cfg.data_evento
+      }
       ev = data
     }
 
