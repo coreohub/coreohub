@@ -690,14 +690,17 @@ async function generatePdf(ctx: {
   // Marca d'água diagonal só no preview — o QR desse PDF aponta pra um hash
   // fictício que nunca é gravado em certificates_issued, então escaneá-lo
   // sempre dá "não encontrado". Sem isso, quem testa o QR de um preview
-  // acha que é bug/certificado falso em vez de amostra.
+  // acha que é bug/certificado falso em vez de amostra. Opacidade/tamanho
+  // reduzidos (28%→10%, 26pt→17pt) — a v1 cortava direto por cima do nome
+  // do participante e atrapalhava conferir o design de verdade (achado do
+  // produtor usando o preview pra revisar a moldura nesta mesma sessão).
   if (ctx.is_preview) {
     const wmText = 'AMOSTRA — NÃO É UM CERTIFICADO OFICIAL'
-    const wmSize = 26
+    const wmSize = 17
     const wmW = helveticaBold.widthOfTextAtSize(wmText, wmSize)
     page.drawText(wmText, {
       x: W / 2 - wmW / 2, y: H / 2 - wmSize / 2, size: wmSize, font: helveticaBold,
-      color: rgb(0.85, 0.1, 0.35), opacity: 0.28, rotate: degrees(28),
+      color: rgb(0.85, 0.1, 0.35), opacity: 0.1, rotate: degrees(28),
     })
   }
 
