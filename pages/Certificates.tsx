@@ -20,7 +20,7 @@ import PageHeader from '../components/PageHeader';
 import EventPickerSheet, { EventPickerOption } from '../components/EventPickerSheet';
 import {
   Award, GraduationCap, Loader2, Save, Send, AlertCircle, CheckCircle, Trash2,
-  Type, Palette, Image as ImageIcon, FileSignature, Sparkles, X, Eye, Upload,
+  Type, Palette, Image as ImageIcon, FileSignature, Sparkles, X, Upload, Download,
 } from 'lucide-react';
 
 type TemplateType = 'mostra' | 'workshop';
@@ -355,15 +355,25 @@ const Certificates: React.FC = () => {
     return URL.createObjectURL(file);
   }, [activeType, selectedEvent]);
 
-  // Botão "Pré-visualizar PDF" — mesmo PDF que já aparece no card "Preview
-  // ao vivo" (ver useEffect abaixo), só que abre em tela cheia numa aba
-  // nova. Útil pra conferir detalhe fino que o card pequeno não mostra bem.
+  // Botão "Baixar PDF" — mesmo PDF que já aparece no card "Preview ao vivo"
+  // (ver useEffect abaixo), só que em tela cheia. Usa <a download> (mesmo
+  // padrão de MeusCertificados.tsx) em vez de window.open: testado em
+  // produção e confirmado que o botão de salvar DENTRO do visualizador de
+  // PDF do Chrome ignora completamente o nome do File object — só olha a
+  // URL, então blob: URL sempre vira UUID feio lá, não importa o que a
+  // gente tente do lado do JS. `<a download="nome.pdf">` é o único
+  // mecanismo que o navegador realmente respeita pra nomear o arquivo.
   const previewPdf = async () => {
     if (!template?.id) return;
     setPreviewing(true);
     try {
       const url = await fetchPreviewFileUrl(template.id);
-      window.open(url, '_blank');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `certificado-preview-${activeType}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e: any) {
       setFeedback({ kind: 'err', msg: e.message ?? String(e) });
@@ -733,8 +743,8 @@ const Certificates: React.FC = () => {
                   disabled={previewing || !template?.id}
                   className="w-full mt-3 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-white/10 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-50 transition"
                 >
-                  {previewing ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />}
-                  Abrir em tela cheia
+                  {previewing ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                  Baixar PDF de exemplo
                 </button>
                 {template?.id && isDirty && (
                   <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 italic">Você tem alterações não salvas — o preview mostra a última versão salva, não o que está na tela agora. Salve pra atualizar.</p>
