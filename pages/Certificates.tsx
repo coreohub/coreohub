@@ -757,7 +757,7 @@ const Certificates: React.FC = () => {
               {/* Emitir batch */}
               <Card title="Emitir certificados">
                 <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-                  Cria 1 certificado por inscrito {activeType === 'mostra' ? 'aprovado' : 'com presença confirmada'}. Idempotente — pode rodar múltiplas vezes.
+                  Cria 1 certificado por inscrito {activeType === 'mostra' ? 'aprovado — Grupo/Conjunto gera 1 por bailarino' : 'com presença confirmada'}. Idempotente — pode rodar múltiplas vezes.
                 </p>
                 <Field label="Evento">
                   <EventPickerSheet

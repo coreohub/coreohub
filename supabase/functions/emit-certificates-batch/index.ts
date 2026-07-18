@@ -3,9 +3,18 @@
  *
  * Etapa 2 — Certificados (modelo lazy-cache).
  *
- * Producer chama → varre inscrições elegíveis e cria 1 row em certificates_issued
- * por inscrito (com pdf_url=NULL). NÃO gera os PDFs aqui — geração acontece
- * sob demanda quando inscrito clica "Baixar" em get-certificate-pdf.
+ * Producer chama → varre inscrições elegíveis e cria rows em certificates_issued
+ * (com pdf_url=NULL). NÃO gera os PDFs aqui — geração acontece sob demanda
+ * quando inscrito clica "Baixar" em get-certificate-pdf.
+ *
+ * Mostra: 1 certificado por inscrito, endereçado ao(s) nome(s) real(is) —
+ * Solo/Duo/Trio pega do(s) bailarino(s); Grupo/Conjunto (2026-07-18) passa a
+ * gerar 1 certificado POR BAILARINO (não mais 1 só endereçado à coreografia),
+ * cada um com elenco_id preenchido — mesmo padrão que DanceComp Genie/
+ * CompetitionSuite usam pra formações grandes, cada dançarino leva o próprio
+ * certificado com o próprio nome. Fallback pra Grupo sem bailarinos_detalhes
+ * cadastrado: 1 certificado à coreografia (elenco_id null), nunca trava a
+ * emissão por dado incompleto.
  *
  * verify_jwt=true: producer autenticado. Cross-checka template e ownership.
  *
@@ -19,7 +28,7 @@
  *
  * Resposta 200:
  * {
- *   total:    número de inscrições elegíveis
+ *   total:    número de certificados elegíveis (Grupo conta 1 por bailarino)
  *   created:  novos certificates_issued criados
  *   skipped:  já existiam (idempotente)
  * }
@@ -162,42 +171,67 @@ Deno.serve(async (req) => {
         .in('status_pagamento', ['APROVADO', 'CONFIRMADO'])
 
       if (regsErr) throw new Error(`Erro carregando inscrições: ${regsErr.message}`)
-      total = (regs ?? []).length
 
-      // Idempotência: busca certificates_issued já existentes
-      const existingIds = new Set<string>()
+      // Alvo de certificados: Grupo/Conjunto gera 1 por bailarino (elenco_id
+      // preenchido) — cada um recebe o próprio nome, não o nome da coreografia.
+      // Solo/Duo/Trio continuam com 1 certificado só (elenco_id null), com o(s)
+      // nome(s) do(s) bailarino(s) já resolvido(s) desde o fix anterior.
+      // Fallback: Grupo sem bailarinos_detalhes preenchido (dado legado
+      // incompleto) cai pro comportamento antigo — 1 certificado endereçado à
+      // coreografia — pra nunca travar a emissão por falta de cadastro.
+      type Target = { registrationId: string; elencoId: string | null; recipientName: string }
+      const targets: Target[] = []
+      for (const r of regs ?? []) {
+        const formato = String(r.formato_participacao ?? '').toLowerCase()
+        const isGrupo = formato.includes('grupo') || formato.includes('conjunto')
+        const bailarinos = Array.isArray(r.bailarinos_detalhes) ? r.bailarinos_detalhes : []
+
+        if (isGrupo && bailarinos.length > 0) {
+          for (const b of bailarinos) {
+            if (!b?.id || !b?.nome) continue
+            targets.push({ registrationId: r.id, elencoId: b.id, recipientName: b.nome })
+          }
+        } else if (isGrupo) {
+          targets.push({ registrationId: r.id, elencoId: null, recipientName: r.nome_coreografia })
+        } else {
+          const nomes = bailarinos.map((b: any) => b?.nome).filter(Boolean)
+          const recipient = nomes.length > 0 ? nomes.join(' & ') : r.nome_coreografia
+          targets.push({ registrationId: r.id, elencoId: null, recipientName: recipient })
+        }
+      }
+      total = targets.length
+
+      // Idempotência: busca certificates_issued já existentes por
+      // (registration_id, elenco_id) — precisa incluir elenco_id pra saber
+      // quais bailarinos específicos de um Grupo já têm certificado, não só
+      // se a inscrição como um todo já foi processada.
+      const existingKeys = new Set<string>()
       if (total > 0) {
         const { data: existing } = await supabase
           .from('certificates_issued')
-          .select('registration_id')
+          .select('registration_id, elenco_id')
           .eq('template_type', 'mostra')
-          .in('registration_id', (regs ?? []).map(r => r.id))
+          .in('registration_id', targets.map(t => t.registrationId))
         for (const e of existing ?? []) {
-          if (e.registration_id) existingIds.add(e.registration_id)
+          if (e.registration_id) existingKeys.add(`${e.registration_id}::${e.elenco_id ?? ''}`)
         }
       }
 
-      const rows = (regs ?? [])
-        .filter(r => !existingIds.has(r.id))
+      const regById = new Map((regs ?? []).map(r => [r.id, r]))
+      const rows = targets
+        .filter(t => !existingKeys.has(`${t.registrationId}::${t.elencoId ?? ''}`))
         .slice(0, BATCH_CAP)  // Audit T3: cap por chamada (idempotência permite repetir)
-        .map(r => {
-          // recipient_name: usa nome dos bailarinos (Solo/Duo) ou nome_coreografia (Grupo)
-          const formato = String(r.formato_participacao ?? '').toLowerCase()
-          const isGrupo = formato.includes('grupo') || formato.includes('conjunto')
-          const bailarinos = Array.isArray(r.bailarinos_detalhes) ? r.bailarinos_detalhes : []
-          const nomes = bailarinos.map((b: any) => b?.nome).filter(Boolean)
-          const recipient = isGrupo
-            ? r.nome_coreografia
-            : nomes.length > 0 ? nomes.join(' & ') : r.nome_coreografia
-
+        .map(t => {
+          const r = regById.get(t.registrationId)!
           return {
             template_id: tpl.id,
             template_type: 'mostra' as const,
-            registration_id: r.id,
+            registration_id: t.registrationId,
             workshop_registration_id: null,
+            elenco_id: t.elencoId,
             event_id: eventIdSafe,
             producer_id: ownerId,
-            recipient_name: recipient,
+            recipient_name: t.recipientName,
             certificate_data: {
               evento_nome: eventName,
               evento_data: eventDate,
