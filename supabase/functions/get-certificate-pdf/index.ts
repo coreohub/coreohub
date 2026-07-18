@@ -645,8 +645,10 @@ async function generatePdf(ctx: {
   const codeLabel = `Código: ${ctx.hash.slice(0, 8).toUpperCase()}`
   const verifyW = bodyFont.widthOfTextAtSize(verifyLabel, qrCaptionSize)
   const codeW = boldFont.widthOfTextAtSize(codeLabel, qrCaptionSize)
-  const captionCenterX = qrX + verifyW / 2
-  page.drawText(verifyLabel, { x: qrX, y: qrY - 12, size: qrCaptionSize, font: bodyFont, color: mutedColor })
+  // Centralizado em relação ao QR (não ao texto mais longo) — as 2 linhas
+  // ficam sob o meio do QR de verdade, não só alinhadas entre si.
+  const captionCenterX = qrX + qrSize / 2
+  page.drawText(verifyLabel, { x: captionCenterX - verifyW / 2, y: qrY - 12, size: qrCaptionSize, font: bodyFont, color: mutedColor })
   page.drawText(codeLabel, { x: captionCenterX - codeW / 2, y: qrY - 22, size: qrCaptionSize, font: boldFont, color: inkColor })
 
   // Assinaturas: linha + nome em negro + função/cargo em itálico colorido
@@ -753,14 +755,20 @@ Deno.serve(async (req) => {
       // coreografia continuam de exemplo, não há inscrito específico aqui.
       // Ownership checado (created_by = producer_id do template) pra nunca
       // vazar nome de evento de outro produtor via preview.
+      // events.event_date costuma vir NULL (produtor preenche a data em
+      // Configurações, que grava em configuracoes.data_evento — coluna
+      // separada, mesmo padrão legado documentado no resto do projeto).
+      // events.location, por outro lado, vem preenchido certo — só a data
+      // precisa do fallback pra configuracoes.
       let realEvent: { name: string; event_date: string | null; location: string | null } | null = null
       if (previewEventId) {
-        const { data: ev } = await supabase
-          .from('events')
-          .select('name, event_date, location, created_by')
-          .eq('id', previewEventId)
-          .maybeSingle()
-        if (ev && ev.created_by === tpl.producer_id) realEvent = ev
+        const [{ data: ev }, { data: cfg }] = await Promise.all([
+          supabase.from('events').select('name, event_date, location, created_by').eq('id', previewEventId).maybeSingle(),
+          supabase.from('configuracoes').select('data_evento').eq('id', previewEventId).maybeSingle(),
+        ])
+        if (ev && ev.created_by === tpl.producer_id) {
+          realEvent = { ...ev, event_date: ev.event_date ?? cfg?.data_evento ?? null }
+        }
       }
       const eventoNome = realEvent?.name ?? 'Festival CoreoHub Demo'
       const eventoData = realEvent?.event_date ?? new Date().toISOString().slice(0, 10)
