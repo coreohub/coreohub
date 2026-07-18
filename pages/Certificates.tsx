@@ -59,16 +59,17 @@ interface BatchResult { total: number; created: number; skipped: number }
 // (2 direções visuais, ver artifact). Quem já tinha 'classico'/'ouro'
 // salvo continua renderizando normal (edge function não mudou o
 // normalizeVisualPreset desses valores) — só não aparecem mais como opção
-// nova. 'Workshop' (minimalista) segue como está, sem mudança.
 // Moderno/Prestígio aposentados do seletor em 2026-07-18 (mesmo padrão do
 // 'classico'/'ouro' antes deles) — decisão do produtor após comparar com
-// molduras de design de verdade (Oficial Dourado). Código não removido:
-// quem já tinha salvo continua renderizando igual (normalizeVisualPreset
-// na edge function não mudou pra esses valores).
+// molduras de design de verdade (Oficial Dourado). 'workshop' (preset
+// minimalista antigo) aposentado no mesmo dia, mesmo motivo — Workshop
+// ganhou sua própria moldura pronta (asset diferente da Mostra: decoração
+// só nos cantos, não faixa+selo na base). Código não removido em nenhum
+// dos casos: quem já tinha salvo continua renderizando igual
+// (normalizeVisualPreset na edge function não mudou pra esses valores).
 const PRESETS: Array<{ id: PresetId; label: string; desc: string; for: TemplateType }> = [
   { id: 'oficial-dourado', label: 'Oficial Dourado', desc: 'Moldura pronta CoreoHub — bisel dourado, faixa navy, selo. Sem upload, sem customização de cor.', for: 'mostra' as TemplateType },
-  { id: 'workshop',  label: 'Workshop',  desc: 'Linhas finas, tipografia clean, foco no nome do aluno.', for: 'workshop' as TemplateType },
-  { id: 'oficial-dourado', label: 'Oficial Dourado', desc: 'Mesma moldura pronta CoreoHub, adaptada pro certificado de workshop.', for: 'workshop' as TemplateType },
+  { id: 'oficial-dourado', label: 'Oficial Dourado', desc: 'Moldura pronta CoreoHub — selo e detalhes dourados nos cantos. Sem upload, sem customização de cor.', for: 'workshop' as TemplateType },
 ];
 
 // Cores default por preset — aplicadas só ao trocar de preset num template
@@ -87,8 +88,10 @@ const PRESET_DEFAULT_COLORS: Partial<Record<PresetId, { accent: string; primary:
   prestigio: { accent: PRESTIGIO_DEFAULT_ACCENT, primary: PRESTIGIO_DEFAULT_PRIMARY },
 };
 
-// Thumbnail real da moldura oficial (mesmo asset que a edge function busca).
+// Thumbnails reais das molduras oficiais (mesmos assets que a edge function
+// busca) — Mostra e Workshop usam artes diferentes desde 2026-07-18.
 const OFICIAL_DOURADO_THUMB = '/certificate-frames/oficial-dourado.jpg';
+const OFICIAL_WORKSHOP_THUMB = '/certificate-frames/oficial-workshop.jpg';
 
 // Presets com arte pronta (imagem cobre a página inteira) — nesses, editar
 // cor de destaque/texto quebraria a harmonia com a arte, então o seletor de
@@ -515,7 +518,7 @@ const Certificates: React.FC = () => {
                     >
                       {p.id === 'oficial-dourado' ? (
                         <div className="aspect-[297/210] rounded-md mb-2 overflow-hidden border border-slate-200 dark:border-white/10">
-                          <img src={OFICIAL_DOURADO_THUMB} alt="" className="w-full h-full object-cover" />
+                          <img src={p.for === 'workshop' ? OFICIAL_WORKSHOP_THUMB : OFICIAL_DOURADO_THUMB} alt="" className="w-full h-full object-cover" />
                         </div>
                       ) : (
                         <div className="aspect-[297/210] rounded-md bg-gradient-to-br from-amber-50 to-rose-50 dark:from-slate-700 dark:to-slate-800 mb-2 flex items-center justify-center">

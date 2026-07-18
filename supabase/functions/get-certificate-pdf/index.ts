@@ -76,6 +76,16 @@ function normalizeVisualPreset(p?: string | null): 'classico' | 'workshop' | 'ou
 // mais abaixo), então funciona em qualquer imagem nova, mesmo sem caixa
 // reservada.
 const OFICIAL_DOURADO_BG_URL = 'https://app.coreohub.com/certificate-frames/oficial-dourado.jpg'
+// Asset separado do Workshop (2026-07-18) — decoração só nos 2 cantos
+// opostos (selo no canto superior-direito, sobre bloco azul, com fitas
+// pendentes; bloco espelhado no canto inferior-esquerdo), miolo inteiro
+// livre pro texto (nada de faixa cruzando a base como na Mostra). Medido
+// direto no arquivo: selo centrado em x≈88%/y≈14%, raio≈6% da largura,
+// fitas descem até y≈31%. Como a decoração fica só nos cantos e o texto é
+// centralizado (x_pct 50), o layout pode ser bem mais espaçoso — só
+// assinatura/QR/rodapé precisam ficar abaixo de ~35% de altura (onde o
+// bloco espelhado do canto inferior-esquerdo começa) com margem.
+const OFICIAL_WORKSHOP_BG_URL = 'https://app.coreohub.com/certificate-frames/oficial-workshop.jpg'
 const OFICIAL_INK = '#241c10'
 const OFICIAL_MUTED = '#6b5d45'
 const OFICIAL_ACCENT = '#a97e2e'
@@ -89,13 +99,13 @@ const DEFAULT_LAYOUT_OFICIAL_MOSTRA: LayoutTag[] = [
   { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 59, font_size: 11, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
 ]
 const DEFAULT_LAYOUT_OFICIAL_WORKSHOP: LayoutTag[] = [
-  { tag: 'TITULO',          x_pct: 50, y_pct: 14, font_size: 34, align: 'center', weight: 'bold', color: OFICIAL_INK, fontFamily: 'times' },
-  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 21, font_size: 12, align: 'center', color: OFICIAL_ACCENT, fontFamily: 'times' },
-  { tag: 'INTRO',           x_pct: 50, y_pct: 29, font_size: 15, align: 'center', italic: true, color: OFICIAL_MUTED, fontFamily: 'times' },
-  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 38, font_size: 34, align: 'center', weight: 'bold', italic: true, color: OFICIAL_INK, fontFamily: 'times' },
-  { tag: 'CORPO',           x_pct: 50, y_pct: 46, font_size: 12.5, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
-  { tag: 'WORKSHOP_NOME',   x_pct: 50, y_pct: 53, font_size: 18, align: 'center', weight: 'bold', color: OFICIAL_ACCENT, fontFamily: 'times' },
-  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 59, font_size: 11, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'TITULO',          x_pct: 50, y_pct: 10, font_size: 34, align: 'center', weight: 'bold', color: OFICIAL_INK, fontFamily: 'times' },
+  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 17, font_size: 12, align: 'center', color: OFICIAL_ACCENT, fontFamily: 'times' },
+  { tag: 'INTRO',           x_pct: 50, y_pct: 24, font_size: 15, align: 'center', italic: true, color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 32, font_size: 34, align: 'center', weight: 'bold', italic: true, color: OFICIAL_INK, fontFamily: 'times' },
+  { tag: 'CORPO',           x_pct: 50, y_pct: 40, font_size: 12.5, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'WORKSHOP_NOME',   x_pct: 50, y_pct: 47, font_size: 18, align: 'center', weight: 'bold', color: OFICIAL_ACCENT, fontFamily: 'times' },
+  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 53, font_size: 11, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
 ]
 
 // Layout default usado quando produtor não customizou (template_layout vazio)
@@ -373,6 +383,12 @@ async function generatePdf(ctx: {
   const isCustom = preset === 'custom'
   const isOficial = preset === 'oficial-dourado'
   const isWorkshop = ctx.template_type === 'workshop'
+  // 'oficial-dourado' usa asset e geometria diferentes por template_type —
+  // Mostra tem faixa+selo na base (menos espaço vertical livre), Workshop
+  // tem decoração só nos 2 cantos opostos (bem mais espaço livre no
+  // centro). QR/assinatura/rodapé são calibrados por essas 2 variantes.
+  const isOficialMostra = isOficial && !isWorkshop
+  const isOficialWorkshop = isOficial && isWorkshop
 
   const layout: LayoutTag[] = (ctx.template?.layout_json && Array.isArray(ctx.template.layout_json) && ctx.template.layout_json.length > 0)
     ? ctx.template.layout_json
@@ -452,7 +468,7 @@ async function generatePdf(ctx: {
   // Qualquer outro preset com background_url é tratado como imagem "solta"
   // (foto/estampa do produtor) e continua recebendo o overlay de proteção,
   // igual sempre foi.
-  const bgUrl = isOficial ? OFICIAL_DOURADO_BG_URL : ctx.template?.background_url
+  const bgUrl = isOficialWorkshop ? OFICIAL_WORKSHOP_BG_URL : isOficial ? OFICIAL_DOURADO_BG_URL : ctx.template?.background_url
   const bgImage = bgUrl ? await embedImageFromUrl(pdfDoc, bgUrl) : null
   const hasBakedInFrame = (isCustom || isOficial) && !!bgImage
   if (bgImage) {
@@ -620,14 +636,15 @@ async function generatePdf(ctx: {
   // QR + texto de validação. 'oficial-dourado' NÃO depende da arte reservar
   // espaço nenhum — o código desenha o próprio cartão branco atrás do QR
   // (funciona em qualquer imagem nova, mesmo sem caixa desenhada por quem
-  // fez a arte). Card no canto inferior direito, o mais próximo possível do
-  // canto sem invadir nem a faixa navy (medida real: começa a ~88% da
-  // altura, ~71px de baixo pra cima) nem o florão ornamental do canto
-  // (~90-97% da largura) — fica na faixa livre entre os dois.
+  // fez a arte). Mostra: canto inferior direito, sem invadir a faixa navy
+  // (~88% da altura) nem o florão do canto (~90-97% da largura). Workshop:
+  // decoração só nos cantos opostos (topo-direita/base-esquerda), então o
+  // canto inferior-direito fica totalmente livre — QR pode ficar bem mais
+  // perto da quina de verdade.
   const qrImage = await pdfDoc.embedPng(qrBytes)
-  const qrSize = isOficial ? 68 : 80
-  const qrX = isOficial ? 655 : W - qrSize - 60
-  const qrY = isOficial ? 100 : 60
+  const qrSize = isOficialWorkshop ? 72 : isOficial ? 68 : 80
+  const qrX = isOficialWorkshop ? 715 : isOficial ? 655 : W - qrSize - 60
+  const qrY = isOficialWorkshop ? 45 : isOficial ? 100 : 60
   const bodyFont = isOuro || isPrestigio || isOficial ? timesRoman : helvetica
   const boldFont = isOuro || isPrestigio || isOficial ? timesBold : helveticaBold
   const mutedColor = isOuro ? rgb(...hexToRgb(OURO_MUTED)) : isModerno ? rgb(...hexToRgb(MODERNO_MUTED)) : isPrestigio ? rgb(...hexToRgb(PRESTIGIO_MUTED)) : isOficial ? rgb(...hexToRgb(OFICIAL_MUTED)) : rgb(0.4, 0.4, 0.45)
@@ -653,15 +670,18 @@ async function generatePdf(ctx: {
 
   // Assinaturas: linha + nome em negro + função/cargo em itálico colorido
   // (nova estrutura pareada signature_names + signature_titles, 2026-05-07).
-  // 'oficial-dourado' sobe a linha — o selo dessa arte começa a ~74% da
-  // altura (medido direto no arquivo, crop + inspeção visual).
+  // Mostra: sobe pra não colidir com o selo (~74% da altura). Workshop: só
+  // precisa ficar acima de onde o bloco espelhado do canto inferior-
+  // esquerdo começa (~65% da altura ≈ 208px de baixo pra cima), a coluna
+  // de assinatura (x 25%-75%) cruza esse range em x então a margem é toda
+  // vertical.
   const sigNames: string[]  = Array.isArray(ctx.template?.signature_names)  ? ctx.template.signature_names  : []
   const sigTitles: string[] = Array.isArray(ctx.template?.signature_titles) ? ctx.template.signature_titles : []
   const sigCount = Math.min(sigNames.length, 3)
   if (sigCount > 0) {
     const sigGap = 220
     const startX = (W - sigGap * sigCount) / 2 + sigGap / 2 - 100
-    const sigLineY = isOficial ? 215 : 110
+    const sigLineY = isOficialWorkshop ? 250 : isOficial ? 215 : 110
     for (let i = 0; i < sigCount; i++) {
       const cx = startX + i * sigGap
       page.drawLine({ start: { x: cx, y: sigLineY }, end: { x: cx + 200, y: sigLineY }, thickness: 0.8, color: inkColor })
@@ -691,7 +711,7 @@ async function generatePdf(ctx: {
     ? 'Emitido por CoreoHub · Documento de amostra, não é certificado oficial'
     : 'Emitido por CoreoHub — Gestão Inteligente para Festivais de Dança'
   const footerSize = isOficial ? 7 : 8
-  const footerY = isOficial ? 163 : 50
+  const footerY = isOficialWorkshop ? 32 : isOficial ? 163 : 50
   const fW = bodyFont.widthOfTextAtSize(footer, footerSize)
   page.drawText(footer, { x: (W - fW) / 2, y: footerY, size: footerSize, font: bodyFont, color: mutedColor })
 
