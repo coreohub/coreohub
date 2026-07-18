@@ -117,6 +117,17 @@ export const toTitleCase = (value?: string | null): string => {
     .join(' ');
 };
 
+/** Nome de arquivo seguro (sem acento, sem espaço, sem maiúscula) pra
+ * `a.download` — nomes com "João"/"Conceição" viram %-encoded ou somem
+ * silenciosamente em alguns SO/navegador quando usados crus no atributo. */
+export const slugifyFilename = (value: string): string =>
+  value
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'certificado';
+
 export const getInitials = (name?: string) => {
   if (!name || typeof name !== 'string' || name.trim() === '') return 'U';
   const filteredParts = name.trim().split(/\s+/).filter(p => p.length > 0);

@@ -11,6 +11,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import { slugifyFilename } from '../utils/formatters';
 import {
   Award, GraduationCap, Loader2, Download, ExternalLink, AlertCircle, CheckCircle, Calendar,
 } from 'lucide-react';
@@ -104,7 +105,7 @@ const MeusCertificados: React.FC = () => {
       // Trigger download
       const a = document.createElement('a');
       a.href = data.signed_url;
-      a.download = `certificado-${cert.recipient_name.replace(/\s+/g, '-').toLowerCase()}.pdf`;
+      a.download = `certificado-${slugifyFilename(cert.recipient_name)}.pdf`;
       a.target = '_blank';
       a.rel = 'noopener';
       document.body.appendChild(a);

@@ -62,35 +62,38 @@ function normalizeVisualPreset(p?: string | null): 'classico' | 'workshop' | 'ou
 
 // Preset 'oficial-dourado' — moldura pronta fornecida pelo CoreoHub (não é
 // código desenhando forma nenhuma, é uma imagem full-bleed: moldura
-// biselada dourada, faixa navy diagonal cruzada, selo dourado já
-// centralizado na base). Produtor NÃO faz upload nem escolhe cor — a arte
-// já vem pronta pra todo mundo, hospedada como asset estático do próprio
-// app (mesmo domínio de sempre, sem depender de bucket novo). QR de
-// validação encaixa na caixa em branco que a arte já reserva no canto
-// inferior direito; assinaturas sobem pra não colidir com o selo/faixa
-// (que ocupa uns 25-30% da base da imagem, bem mais que os presets
-// desenhados por código).
+// biselada dourada, faixa navy diagonal cruzada, selo dourado). Produtor
+// não escolhe cor — a arte já vem pronta pra todo mundo, hospedada como
+// asset estático do próprio app (mesmo domínio de sempre, sem depender de
+// bucket novo). O QR de validação NÃO depende de a arte reservar espaço —
+// o próprio código desenha um cartão branco atrás dele (ver bloco do QR
+// mais abaixo), então funciona em qualquer imagem nova, mesmo sem caixa
+// reservada. Coordenadas do selo/faixa desta arte específica foram medidas
+// direto no arquivo (crop + inspeção visual, não estimadas de olho): o selo
+// começa em ~69% da altura (bem mais alto do que presets desenhados por
+// código sugeririam), por isso o layout de texto e a linha de assinatura
+// aqui são mais compactos que os outros presets.
 const OFICIAL_DOURADO_BG_URL = 'https://app.coreohub.com/certificate-frames/prestigio-oficial.jpg'
 const OFICIAL_INK = '#241c10'
 const OFICIAL_MUTED = '#6b5d45'
 const OFICIAL_ACCENT = '#a97e2e'
 const DEFAULT_LAYOUT_OFICIAL_MOSTRA: LayoutTag[] = [
-  { tag: 'TITULO',          x_pct: 50, y_pct: 16, font_size: 34, align: 'center', weight: 'bold', color: OFICIAL_INK, fontFamily: 'times' },
-  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 24, font_size: 12, align: 'center', color: OFICIAL_ACCENT, fontFamily: 'times' },
-  { tag: 'INTRO',           x_pct: 50, y_pct: 33, font_size: 15, align: 'center', italic: true, color: OFICIAL_MUTED, fontFamily: 'times' },
-  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 43, font_size: 34, align: 'center', weight: 'bold', italic: true, color: OFICIAL_INK, fontFamily: 'times' },
-  { tag: 'CORPO',           x_pct: 50, y_pct: 51, font_size: 12.5, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
-  { tag: 'EVENTO',          x_pct: 50, y_pct: 58, font_size: 18, align: 'center', weight: 'bold', color: OFICIAL_ACCENT, fontFamily: 'times' },
-  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 64, font_size: 11, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'TITULO',          x_pct: 50, y_pct: 15, font_size: 32, align: 'center', weight: 'bold', color: OFICIAL_INK, fontFamily: 'times' },
+  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 22, font_size: 12, align: 'center', color: OFICIAL_ACCENT, fontFamily: 'times' },
+  { tag: 'INTRO',           x_pct: 50, y_pct: 30, font_size: 14, align: 'center', italic: true, color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 38, font_size: 30, align: 'center', weight: 'bold', italic: true, color: OFICIAL_INK, fontFamily: 'times' },
+  { tag: 'CORPO',           x_pct: 50, y_pct: 45, font_size: 12, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'EVENTO',          x_pct: 50, y_pct: 52, font_size: 17, align: 'center', weight: 'bold', color: OFICIAL_ACCENT, fontFamily: 'times' },
+  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 58, font_size: 11, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
 ]
 const DEFAULT_LAYOUT_OFICIAL_WORKSHOP: LayoutTag[] = [
-  { tag: 'TITULO',          x_pct: 50, y_pct: 16, font_size: 34, align: 'center', weight: 'bold', color: OFICIAL_INK, fontFamily: 'times' },
-  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 24, font_size: 12, align: 'center', color: OFICIAL_ACCENT, fontFamily: 'times' },
-  { tag: 'INTRO',           x_pct: 50, y_pct: 33, font_size: 15, align: 'center', italic: true, color: OFICIAL_MUTED, fontFamily: 'times' },
-  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 43, font_size: 34, align: 'center', weight: 'bold', italic: true, color: OFICIAL_INK, fontFamily: 'times' },
-  { tag: 'CORPO',           x_pct: 50, y_pct: 51, font_size: 12.5, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
-  { tag: 'WORKSHOP_NOME',   x_pct: 50, y_pct: 58, font_size: 18, align: 'center', weight: 'bold', color: OFICIAL_ACCENT, fontFamily: 'times' },
-  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 64, font_size: 11, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'TITULO',          x_pct: 50, y_pct: 15, font_size: 32, align: 'center', weight: 'bold', color: OFICIAL_INK, fontFamily: 'times' },
+  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 22, font_size: 12, align: 'center', color: OFICIAL_ACCENT, fontFamily: 'times' },
+  { tag: 'INTRO',           x_pct: 50, y_pct: 30, font_size: 14, align: 'center', italic: true, color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 38, font_size: 30, align: 'center', weight: 'bold', italic: true, color: OFICIAL_INK, fontFamily: 'times' },
+  { tag: 'CORPO',           x_pct: 50, y_pct: 45, font_size: 12, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'WORKSHOP_NOME',   x_pct: 50, y_pct: 52, font_size: 17, align: 'center', weight: 'bold', color: OFICIAL_ACCENT, fontFamily: 'times' },
+  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 58, font_size: 11, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
 ]
 
 // Layout default usado quando produtor não customizou (template_layout vazio)
@@ -546,6 +549,27 @@ async function generatePdf(ctx: {
     }
   }
 
+  // 'oficial-dourado' põe o logo no canto superior direito (não no topo
+  // central — ali já é onde TITULO/SUBTITULO ficam, e nessa arte o miolo de
+  // cima é mais estreito por causa da moldura biselada). Fica pareado
+  // visualmente com o QR do canto inferior direito.
+  if (isOficial && ctx.template?.logo_url) {
+    const logoImage = await embedImageFromUrl(pdfDoc, ctx.template.logo_url)
+    if (logoImage) {
+      const boxSize = 52
+      const boxRight = W - 55
+      const boxTopY = H - 40
+      const iw = logoImage.width, ih = logoImage.height
+      const scale = Math.min(boxSize / iw, boxSize / ih)
+      const drawW = iw * scale, drawH = ih * scale
+      page.drawImage(logoImage, {
+        x: boxRight - drawW,
+        y: boxTopY - boxSize + (boxSize - drawH) / 2,
+        width: drawW, height: drawH,
+      })
+    }
+  }
+
   // Renderiza tags do layout
   for (const t of layout) {
     const text = resolveTag(t.tag, ctx)
@@ -603,33 +627,43 @@ async function generatePdf(ctx: {
     page.drawRectangle({ x: sealCx + 2, y: ribbonTopY - ribbonH, width: ribbonW, height: ribbonH, color: PRESTIGIO_INK_RGB, rotate: degrees(14) })
   }
 
-  // QR + texto de validação. 'oficial-dourado' tem uma caixa branca reservada
-  // pela própria arte no canto inferior direito (menor e mais alta que o
-  // canto "livre" que os outros presets usam) — QR menor + legenda embaixo,
-  // calibrado pra caber dentro dela sem invadir a faixa navy.
+  // QR + texto de validação. 'oficial-dourado' NÃO depende da arte reservar
+  // espaço nenhum — o código desenha o próprio cartão branco atrás do QR
+  // (funciona em qualquer imagem nova, mesmo sem caixa desenhada por quem
+  // fez a arte). Card no canto inferior direito, dimensão fixa calibrada
+  // pra caber sem invadir a faixa navy (medida real: faixa começa a ~69%
+  // da altura, então o card fica bem abaixo disso, dentro da margem segura).
   const qrImage = await pdfDoc.embedPng(qrBytes)
-  const qrSize = isOficial ? 58 : 80
-  const qrX = isOficial ? 705 : W - qrSize - 60
-  const qrY = isOficial ? 108 : 60
+  const qrSize = isOficial ? 68 : 80
+  const qrX = isOficial ? 693 : W - qrSize - 60
+  const qrY = isOficial ? 78 : 60
   const bodyFont = isOuro || isPrestigio || isOficial ? timesRoman : helvetica
   const boldFont = isOuro || isPrestigio || isOficial ? timesBold : helveticaBold
   const mutedColor = isOuro ? rgb(...hexToRgb(OURO_MUTED)) : isModerno ? rgb(...hexToRgb(MODERNO_MUTED)) : isPrestigio ? rgb(...hexToRgb(PRESTIGIO_MUTED)) : isOficial ? rgb(...hexToRgb(OFICIAL_MUTED)) : rgb(0.4, 0.4, 0.45)
   const inkColor = isOuro ? rgb(...hexToRgb(OURO_INK)) : isModerno ? rgb(...hexToRgb(MODERNO_DEFAULT_PRIMARY)) : isPrestigio ? PRESTIGIO_INK_RGB : isOficial ? rgb(...hexToRgb(OFICIAL_INK)) : rgb(0.04, 0.04, 0.06)
+  if (isOficial) {
+    const cardPad = 12
+    page.drawRectangle({
+      x: qrX - cardPad, y: qrY - 26, width: qrSize + cardPad * 2, height: qrSize + cardPad + 26,
+      color: rgb(0.996, 0.992, 0.984), borderColor: rgb(...hexToRgb(OFICIAL_ACCENT)), borderWidth: 1.2,
+    })
+  }
   page.drawImage(qrImage, { x: qrX, y: qrY, width: qrSize, height: qrSize })
   page.drawText('Verifique a autenticidade:', { x: qrX, y: qrY - 12, size: isOficial ? 6 : 7, font: bodyFont, color: mutedColor })
   page.drawText(`Código: ${ctx.hash.slice(0, 8).toUpperCase()}`, { x: qrX, y: qrY - 22, size: isOficial ? 6 : 7, font: boldFont, color: inkColor })
 
   // Assinaturas: linha + nome em negro + função/cargo em itálico colorido
   // (nova estrutura pareada signature_names + signature_titles, 2026-05-07).
-  // 'oficial-dourado' sobe a linha porque o selo+faixa da imagem ocupam bem
-  // mais espaço na base do que os presets desenhados por código.
+  // 'oficial-dourado' sobe a linha bastante — o selo dessa arte começa a
+  // ~69% da altura (medido direto no arquivo, crop + inspeção visual), bem
+  // mais alto do que os presets desenhados por código sugeririam.
   const sigNames: string[]  = Array.isArray(ctx.template?.signature_names)  ? ctx.template.signature_names  : []
   const sigTitles: string[] = Array.isArray(ctx.template?.signature_titles) ? ctx.template.signature_titles : []
   const sigCount = Math.min(sigNames.length, 3)
   if (sigCount > 0) {
     const sigGap = 220
     const startX = (W - sigGap * sigCount) / 2 + sigGap / 2 - 100
-    const sigLineY = isOficial ? 178 : 110
+    const sigLineY = isOficial ? 230 : 110
     for (let i = 0; i < sigCount; i++) {
       const cx = startX + i * sigGap
       page.drawLine({ start: { x: cx, y: sigLineY }, end: { x: cx + 200, y: sigLineY }, thickness: 0.8, color: inkColor })

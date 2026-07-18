@@ -60,14 +60,15 @@ interface BatchResult { total: number; created: number; skipped: number }
 // salvo continua renderizando normal (edge function não mudou o
 // normalizeVisualPreset desses valores) — só não aparecem mais como opção
 // nova. 'Workshop' (minimalista) segue como está, sem mudança.
+// Moderno/Prestígio aposentados do seletor em 2026-07-18 (mesmo padrão do
+// 'classico'/'ouro' antes deles) — decisão do produtor após comparar com
+// molduras de design de verdade (Oficial Dourado). Código não removido:
+// quem já tinha salvo continua renderizando igual (normalizeVisualPreset
+// na edge function não mudou pra esses valores).
 const PRESETS: Array<{ id: PresetId; label: string; desc: string; for: TemplateType }> = [
   { id: 'oficial-dourado', label: 'Oficial Dourado', desc: 'Moldura pronta CoreoHub — bisel dourado, faixa navy, selo. Sem upload, sem customização de cor.', for: 'mostra' as TemplateType },
-  { id: 'moderno',   label: 'Moderno',   desc: 'Blocos diagonais azul-marinho + dourado, nome em fonte script, rosetão com fita — "prêmio corporativo".', for: 'mostra' as TemplateType },
-  { id: 'prestigio', label: 'Prestígio', desc: 'Moldura dupla dourada, layout centralizado, faixa preta + dourada no rodapé — clássico e elegante.', for: 'mostra' as TemplateType },
   { id: 'workshop',  label: 'Workshop',  desc: 'Linhas finas, tipografia clean, foco no nome do aluno.', for: 'workshop' as TemplateType },
   { id: 'oficial-dourado', label: 'Oficial Dourado', desc: 'Mesma moldura pronta CoreoHub, adaptada pro certificado de workshop.', for: 'workshop' as TemplateType },
-  { id: 'moderno',   label: 'Moderno',   desc: 'Mesmos blocos diagonais azul-marinho + dourado, adaptados pro certificado de workshop.', for: 'workshop' as TemplateType },
-  { id: 'prestigio', label: 'Prestígio', desc: 'Mesma moldura dourada centralizada, adaptada pro certificado de workshop.', for: 'workshop' as TemplateType },
 ];
 
 // Cores default por preset — aplicadas só ao trocar de preset num template
@@ -144,6 +145,7 @@ const Certificates: React.FC = () => {
 
   // Pré-visualização em PDF (dados fictícios, não toca certificates_issued)
   const [previewing, setPreviewing] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   // Emit batch state
   const [events, setEvents]                 = useState<EventOption[]>([]);
@@ -242,6 +244,16 @@ const Certificates: React.FC = () => {
 
   useEffect(() => { loadTemplate(); }, [loadTemplate]);
 
+  // Preview antigo fica enganoso ao trocar de aba (Mostra↔Workshop) ou
+  // salvar de novo — o card volta pro mock genérico até gerar um preview
+  // novo do estado atual.
+  useEffect(() => {
+    setPreviewUrl(prev => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  }, [activeType, template?.id]);
+
   useEffect(() => {
     if (!feedback) return;
     const t = setTimeout(() => setFeedback(null), 4500);
@@ -322,6 +334,10 @@ const Certificates: React.FC = () => {
   };
 
   // ── Pré-visualizar PDF (dados fictícios) ───────────────────────────────
+  // Antes abria só numa aba nova (window.open) — o produtor pedia que o
+  // certificado selecionado aparecesse direto no card "Preview ao vivo".
+  // Guarda o objectURL num state e troca o mock CSS por um <iframe> real
+  // com o PDF gerado de fato (WYSIWYG de verdade, não aproximação).
   const previewPdf = async () => {
     if (!template?.id) return;
     setPreviewing(true);
@@ -341,8 +357,10 @@ const Certificates: React.FC = () => {
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setPreviewUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev);
+        return url;
+      });
     } catch (e: any) {
       setFeedback({ kind: 'err', msg: e.message ?? String(e) });
     } finally {
@@ -534,7 +552,7 @@ const Certificates: React.FC = () => {
                     </div>
                   </Field>
                 )}
-                {(formPreset === 'moderno' || formPreset === 'prestigio') && (
+                {(formPreset === 'moderno' || formPreset === 'prestigio' || formPreset === 'oficial-dourado') && (
                   <Field label="Logo do evento (opcional)">
                     <div className="flex items-center gap-3">
                       {formLogoUrl ? (
@@ -661,6 +679,11 @@ const Certificates: React.FC = () => {
               {/* Preview WYSIWYG com dados de exemplo (padrão Sympla/Even3).
                   Renderização CSS — PDF final tem QR + assinatura digital. */}
               <Card title="Preview ao vivo">
+                {previewUrl ? (
+                  <div className="aspect-[297/210] rounded-md border border-slate-200 dark:border-white/10 overflow-hidden">
+                    <iframe src={previewUrl} title="Pré-visualização do certificado" className="w-full h-full" />
+                  </div>
+                ) : (
                 <div
                   className="aspect-[297/210] rounded-md border-2 relative overflow-hidden flex items-center justify-center"
                   style={{
@@ -668,6 +691,9 @@ const Certificates: React.FC = () => {
                     borderColor: formAccent,
                   }}
                 >
+                  {formPreset === 'oficial-dourado' && (
+                    <img src={OFICIAL_DOURADO_THUMB} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                  )}
                   {formBgUrl && formPreset === 'custom' && (
                     <img src={formBgUrl} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" />
                   )}
@@ -715,8 +741,11 @@ const Certificates: React.FC = () => {
                     )}
                   </div>
                 </div>
+                )}
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 italic mt-2">
-                  Preview com dados de exemplo. PDF final terá nome real do inscrito + QR de validação no rodapé.
+                  {previewUrl
+                    ? 'PDF real gerado com dados de exemplo. Clique de novo em "Pré-visualizar PDF" após mudar algo.'
+                    : 'Preview com dados de exemplo. PDF final terá nome real do inscrito + QR de validação no rodapé.'}
                 </p>
                 <button
                   onClick={previewPdf}
