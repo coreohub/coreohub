@@ -114,24 +114,30 @@ const ValidarCertificado: React.FC = () => {
 
         {/* Busca manual pelo código impresso no PDF ("Código: XXXXXXXX") —
             cobre quem recebeu o certificado sem QR escaneável (impresso,
-            PDF sem câmera à mão). Sempre visível, não só no estado vazio. */}
-        <form onSubmit={handleSearch} className="mb-6 flex gap-2">
-          <input
-            value={codeInput}
-            onChange={e => setCodeInput(e.target.value)}
-            placeholder="Digite o código do certificado (ex: A1B2C3D4)"
-            aria-label="Código do certificado"
-            className="flex-1 min-w-0 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-4 py-2.5 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff0068]"
-          />
-          <button
-            type="submit"
-            disabled={searching || !codeInput.trim()}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#ff0068] hover:bg-[#e0005c] px-4 py-2.5 text-sm font-black text-white disabled:opacity-50 transition"
-          >
-            {searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
-            Validar
-          </button>
-        </form>
+            PDF sem câmera à mão). Escondida quando o QR já resolveu um
+            resultado válido sozinho — antes aparecia sempre, mesmo com o
+            certificado já validado embaixo, dando a impressão de que
+            faltava digitar algo (achado real: quem escaneou o QR ficou em
+            dúvida se precisava preencher o campo). */}
+        {!valid && (
+          <form onSubmit={handleSearch} className="mb-6 flex gap-2">
+            <input
+              value={codeInput}
+              onChange={e => setCodeInput(e.target.value)}
+              placeholder="Digite o código do certificado (ex: A1B2C3D4)"
+              aria-label="Código do certificado"
+              className="flex-1 min-w-0 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-4 py-2.5 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff0068]"
+            />
+            <button
+              type="submit"
+              disabled={searching || !codeInput.trim()}
+              className="inline-flex items-center gap-2 rounded-xl bg-[#ff0068] hover:bg-[#e0005c] px-4 py-2.5 text-sm font-black text-white disabled:opacity-50 transition"
+            >
+              {searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
+              Validar
+            </button>
+          </form>
+        )}
 
         {!hash ? (
           <div className="rounded-3xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 shadow-xl p-6 text-center">
@@ -194,6 +200,9 @@ const ValidarCertificado: React.FC = () => {
                   Este certificado foi emitido pela plataforma CoreoHub a partir da inscrição confirmada do participante. O código único acima só existe se o documento for autêntico. Para confirmar a emissão, contate o produtor do evento.
                 </p>
               </div>
+            </div>
+            <div className="border-t border-slate-200 dark:border-white/10 px-6 py-3 text-center">
+              <Link to="/validar-certificado" className="text-xs font-bold text-[#ff0068] hover:underline">Verificar outro certificado</Link>
             </div>
           </div>
         ) : (
