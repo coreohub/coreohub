@@ -99,13 +99,13 @@ const DEFAULT_LAYOUT_OFICIAL_MOSTRA: LayoutTag[] = [
   { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 59, font_size: 11, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
 ]
 const DEFAULT_LAYOUT_OFICIAL_WORKSHOP: LayoutTag[] = [
-  { tag: 'TITULO',          x_pct: 50, y_pct: 10, font_size: 34, align: 'center', weight: 'bold', color: OFICIAL_INK, fontFamily: 'times' },
-  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 17, font_size: 12, align: 'center', color: OFICIAL_ACCENT, fontFamily: 'times' },
-  { tag: 'INTRO',           x_pct: 50, y_pct: 24, font_size: 15, align: 'center', italic: true, color: OFICIAL_MUTED, fontFamily: 'times' },
-  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 32, font_size: 34, align: 'center', weight: 'bold', italic: true, color: OFICIAL_INK, fontFamily: 'times' },
-  { tag: 'CORPO',           x_pct: 50, y_pct: 40, font_size: 12.5, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
-  { tag: 'WORKSHOP_NOME',   x_pct: 50, y_pct: 47, font_size: 18, align: 'center', weight: 'bold', color: OFICIAL_ACCENT, fontFamily: 'times' },
-  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 53, font_size: 11, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'TITULO',          x_pct: 50, y_pct: 16, font_size: 34, align: 'center', weight: 'bold', color: OFICIAL_INK, fontFamily: 'times' },
+  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 23, font_size: 12, align: 'center', color: OFICIAL_ACCENT, fontFamily: 'times' },
+  { tag: 'INTRO',           x_pct: 50, y_pct: 30, font_size: 15, align: 'center', italic: true, color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 39, font_size: 34, align: 'center', weight: 'bold', italic: true, color: OFICIAL_INK, fontFamily: 'times' },
+  { tag: 'CORPO',           x_pct: 50, y_pct: 47, font_size: 12.5, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'WORKSHOP_NOME',   x_pct: 50, y_pct: 54, font_size: 18, align: 'center', weight: 'bold', color: OFICIAL_ACCENT, fontFamily: 'times' },
+  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 60, font_size: 11, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
 ]
 
 // Layout default usado quando produtor não customizou (template_layout vazio)
