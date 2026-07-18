@@ -25,7 +25,10 @@
  * }
  *
  * Critérios de elegibilidade:
- *   • mostra:    registrations.status = 'APROVADA' E status_pagamento IN ('APROVADO','CONFIRMADO')
+ *   • mostra:    registrations.status_pagamento IN ('APROVADO','CONFIRMADO')
+ *                (NUNCA checar registrations.status — coluna aposentada em
+ *                2026-06-30, só setada por aprovação manual que o produtor
+ *                não usa; exigi-la aqui excluía ~93% dos pagos de verdade)
  *   • workshop:  workshop_registrations.attended = TRUE
  */
 
@@ -156,7 +159,6 @@ Deno.serve(async (req) => {
           tipo_apresentacao, estudio, classificacao_final, valor_pago, bailarinos_detalhes
         `)
         .eq('event_id', eventIdSafe)
-        .eq('status', 'APROVADA')
         .in('status_pagamento', ['APROVADO', 'CONFIRMADO'])
 
       if (regsErr) throw new Error(`Erro carregando inscrições: ${regsErr.message}`)
@@ -183,7 +185,7 @@ Deno.serve(async (req) => {
           const formato = String(r.formato_participacao ?? '').toLowerCase()
           const isGrupo = formato.includes('grupo') || formato.includes('conjunto')
           const bailarinos = Array.isArray(r.bailarinos_detalhes) ? r.bailarinos_detalhes : []
-          const nomes = bailarinos.map((b: any) => b?.full_name).filter(Boolean)
+          const nomes = bailarinos.map((b: any) => b?.nome).filter(Boolean)
           const recipient = isGrupo
             ? r.nome_coreografia
             : nomes.length > 0 ? nomes.join(' & ') : r.nome_coreografia
