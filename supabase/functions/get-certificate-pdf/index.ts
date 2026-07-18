@@ -552,26 +552,13 @@ async function generatePdf(ctx: {
     }
   }
 
-  // 'oficial-dourado' põe o logo no canto superior direito (não no topo
-  // central — ali já é onde TITULO/SUBTITULO ficam, e nessa arte o miolo de
-  // cima é mais estreito por causa da moldura biselada). Fica pareado
-  // visualmente com o QR do canto inferior direito.
-  if (isOficial && ctx.template?.logo_url) {
-    const logoImage = await embedImageFromUrl(pdfDoc, ctx.template.logo_url)
-    if (logoImage) {
-      const boxSize = 52
-      const boxRight = W - 55
-      const boxTopY = H - 40
-      const iw = logoImage.width, ih = logoImage.height
-      const scale = Math.min(boxSize / iw, boxSize / ih)
-      const drawW = iw * scale, drawH = ih * scale
-      page.drawImage(logoImage, {
-        x: boxRight - drawW,
-        y: boxTopY - boxSize + (boxSize - drawH) / 2,
-        width: drawW, height: drawH,
-      })
-    }
-  }
+  // 'oficial-dourado' propositalmente NÃO tem slot de logo — testado em
+  // 2026-07-18 e quebrava a simetria dos 4 cantos ornamentados (só 1 canto
+  // com sticker, os outros 3 vazios) + produtor não costuma ter logo
+  // quadrado formatado pra combinar com a paleta dourado/navy. Decisão:
+  // "moldura pronta" fica 100% sem configuração nenhuma (nem cor, nem
+  // logo) — só o Customizado (upload próprio) suporta logo, porque ali é
+  // o designer do produtor quem já pensa no espaço certo.
 
   // Renderiza tags do layout
   for (const t of layout) {

@@ -348,7 +348,11 @@ const Certificates: React.FC = () => {
         throw new Error(err.error ?? 'Erro ao gerar preview');
       }
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      // Blob puro não carrega nome nenhum — Chrome sugere o UUID do blob:
+      // URL como nome no "Salvar como". Envelopar num File com .name real
+      // é o jeito que o navegador realmente respeita pra isso.
+      const file = new File([blob], `certificado-preview-${activeType}.pdf`, { type: 'application/pdf' });
+      const url = URL.createObjectURL(file);
       window.open(url, '_blank');
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e: any) {
@@ -542,7 +546,7 @@ const Certificates: React.FC = () => {
                     </div>
                   </Field>
                 )}
-                {(formPreset === 'moderno' || formPreset === 'prestigio' || formPreset === 'oficial-dourado') && (
+                {(formPreset === 'moderno' || formPreset === 'prestigio') && (
                   <Field label="Logo do evento (opcional)">
                     <div className="flex items-center gap-3">
                       {formLogoUrl ? (
