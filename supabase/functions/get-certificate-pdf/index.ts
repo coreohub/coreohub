@@ -681,28 +681,19 @@ async function generatePdf(ctx: {
   // inteira da página (y=50 caía dentro dela, texto escuro em cima de fundo
   // navy ficava ilegível); aqui fica no vão entre o topo do selo (~156px) e
   // a linha de assinatura (sigLineY), único trecho de papel livre por perto.
-  const footer = 'Emitido por CoreoHub — Gestão Inteligente para Festivais de Dança'
+  // 'is_preview' anexa uma nota pequena (não overlay diagonal — atrapalhava
+  // conferir o design de verdade, achado do produtor usando o preview pra
+  // revisar a moldura nesta mesma sessão) explicando por que o QR desse PDF
+  // não valida (aponta pra hash fictício, nunca gravado em
+  // certificates_issued). Só acontece no ramo preview — certificado real
+  // que o inscrito baixa nunca passa por aqui.
+  const footer = ctx.is_preview
+    ? 'Emitido por CoreoHub · Documento de amostra, não é certificado oficial'
+    : 'Emitido por CoreoHub — Gestão Inteligente para Festivais de Dança'
   const footerSize = isOficial ? 7 : 8
   const footerY = isOficial ? 163 : 50
   const fW = bodyFont.widthOfTextAtSize(footer, footerSize)
   page.drawText(footer, { x: (W - fW) / 2, y: footerY, size: footerSize, font: bodyFont, color: mutedColor })
-
-  // Marca d'água diagonal só no preview — o QR desse PDF aponta pra um hash
-  // fictício que nunca é gravado em certificates_issued, então escaneá-lo
-  // sempre dá "não encontrado". Sem isso, quem testa o QR de um preview
-  // acha que é bug/certificado falso em vez de amostra. Opacidade/tamanho
-  // reduzidos (28%→10%, 26pt→17pt) — a v1 cortava direto por cima do nome
-  // do participante e atrapalhava conferir o design de verdade (achado do
-  // produtor usando o preview pra revisar a moldura nesta mesma sessão).
-  if (ctx.is_preview) {
-    const wmText = 'AMOSTRA — NÃO É UM CERTIFICADO OFICIAL'
-    const wmSize = 17
-    const wmW = helveticaBold.widthOfTextAtSize(wmText, wmSize)
-    page.drawText(wmText, {
-      x: W / 2 - wmW / 2, y: H / 2 - wmSize / 2, size: wmSize, font: helveticaBold,
-      color: rgb(0.85, 0.1, 0.35), opacity: 0.1, rotate: degrees(28),
-    })
-  }
 
   return pdfDoc.save()
 }
