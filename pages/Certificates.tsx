@@ -111,6 +111,8 @@ const Certificates: React.FC = () => {
   const [formTitles, setFormTitles] = useState<string[]>([]);
   const [logoUploading, setLogoUploading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const [bgUploading, setBgUploading] = useState(false);
+  const bgInputRef = useRef<HTMLInputElement>(null);
 
   // Snapshot do que está salvo de fato (só atualiza no load/save) — usado
   // pra avisar quando o produtor tem mudança não salva antes de clicar
@@ -255,6 +257,37 @@ const Certificates: React.FC = () => {
       setFeedback({ kind: 'err', msg: 'Não consegui processar essa imagem. Tente outro arquivo.' });
     } finally {
       setLogoUploading(false);
+    }
+  };
+
+  // Upload da moldura completa (preset Customizado) — mesmo padrão inline
+  // base64 do logo, mas resolução bem maior porque cobre a página inteira
+  // (A4 paisagem), não é um ícone pequeno. Quando isCustomFullDesign roda na
+  // edge function (preset='custom' + background_url preenchido), essa
+  // imagem substitui a moldura inteira: sem overlay claro por cima, sem
+  // moldura dupla desenhada — a arte do designer já É o resultado final,
+  // só o texto dinâmico (nome, coreografia, evento etc) é escrito por cima.
+  const handleBackgroundUpload = async (file: File) => {
+    setBgUploading(true);
+    try {
+      const compressed = await imageCompression(file, {
+        maxSizeMB: 0.9,
+        maxWidthOrHeight: 1800,
+        useWebWorker: true,
+        fileType: 'image/png',
+      });
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(compressed);
+      });
+      setFormBgUrl(base64);
+    } catch (e) {
+      console.warn('Falha ao processar imagem de fundo:', e);
+      setFeedback({ kind: 'err', msg: 'Não consegui processar essa imagem. Tente outro arquivo.' });
+    } finally {
+      setBgUploading(false);
     }
   };
 
@@ -438,8 +471,45 @@ const Certificates: React.FC = () => {
                   <input value={formName} onChange={e => setFormName(e.target.value)} className={inputCls} placeholder="Ex: Mostra Cia X 2026" />
                 </Field>
                 {formPreset === 'custom' && (
-                  <Field label="URL da imagem de fundo (A4 landscape)">
-                    <input value={formBgUrl} onChange={e => setFormBgUrl(e.target.value)} className={inputCls} placeholder="https://..." />
+                  <Field label="Moldura completa (A4 paisagem, 842×595pt)">
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2">
+                      Suba a arte pronta do seu designer (moldura, cores, textura — tudo incluso). O CoreoHub escreve por cima só o texto dinâmico (nome, coreografia, evento, assinaturas, QR), sem aplicar nenhum filtro/overlay na sua imagem.
+                    </p>
+                    <div className="flex items-center gap-3">
+                      {formBgUrl ? (
+                        <img src={formBgUrl} alt="Moldura de fundo enviada" className="w-20 h-14 rounded-lg object-cover bg-white border border-slate-200 dark:border-white/10" />
+                      ) : (
+                        <div className="w-20 h-14 rounded-lg border-2 border-dashed border-slate-300 dark:border-white/10 flex items-center justify-center">
+                          <ImageIcon size={18} className="text-slate-400" />
+                        </div>
+                      )}
+                      <input
+                        ref={bgInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={e => { if (e.target.files?.[0]) handleBackgroundUpload(e.target.files[0]); }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => bgInputRef.current?.click()}
+                        disabled={bgUploading}
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-white/10 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-50"
+                      >
+                        {bgUploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                        {formBgUrl ? 'Trocar' : 'Enviar moldura'}
+                      </button>
+                      {formBgUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setFormBgUrl('')}
+                          aria-label="Remover moldura"
+                          className="p-2 rounded-lg border border-rose-200 dark:border-rose-500/30 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
                   </Field>
                 )}
                 {(formPreset === 'moderno' || formPreset === 'prestigio') && (

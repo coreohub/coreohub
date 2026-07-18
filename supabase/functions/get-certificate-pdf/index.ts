@@ -50,10 +50,11 @@ type LayoutTag = {
  * 'classico'/'workshop' — 'ouro' segue rendendo pra quem já tinha salvo
  * (aposentado do seletor em 2026-07-09, mas o código não foi removido).
  * 'moderno'/'prestigio' são os presets ativos desde então. */
-function normalizeVisualPreset(p?: string | null): 'classico' | 'workshop' | 'ouro' | 'moderno' | 'prestigio' {
+function normalizeVisualPreset(p?: string | null): 'classico' | 'workshop' | 'ouro' | 'moderno' | 'prestigio' | 'custom' {
   if (p === 'ouro') return 'ouro'
   if (p === 'moderno') return 'moderno'
   if (p === 'prestigio') return 'prestigio'
+  if (p === 'custom') return 'custom'
   if (p === 'workshop-minimalista' || p === 'workshop') return 'workshop'
   return 'classico'
 }
@@ -329,6 +330,7 @@ async function generatePdf(ctx: {
   const isOuro = preset === 'ouro'
   const isModerno = preset === 'moderno'
   const isPrestigio = preset === 'prestigio'
+  const isCustom = preset === 'custom'
   const isWorkshop = ctx.template_type === 'workshop'
 
   const layout: LayoutTag[] = (ctx.template?.layout_json && Array.isArray(ctx.template.layout_json) && ctx.template.layout_json.length > 0)
@@ -396,21 +398,33 @@ async function generatePdf(ctx: {
   const PRESTIGIO_INK_RGB = rgb(...hexToRgb(PRESTIGIO_DEFAULT_PRIMARY))
 
   // Fundo: imagem custom do produtor (se configurada) OU cor sólida do preset.
+  // Preset 'custom' com imagem enviada = "moldura pronta" (designer entregou
+  // a peça inteira, texto vai só por cima) — NUNCA aplica o overlay claro
+  // nem desenha moldura própria (isCustomFullDesign abaixo cobre os dois).
+  // Qualquer outro preset com background_url é tratado como imagem "solta"
+  // (foto/estampa do produtor) e continua recebendo o overlay de proteção,
+  // igual sempre foi.
   const bgImage = ctx.template?.background_url
     ? await embedImageFromUrl(pdfDoc, ctx.template.background_url)
     : null
+  const isCustomFullDesign = isCustom && !!bgImage
   if (bgImage) {
     page.drawImage(bgImage, { x: 0, y: 0, width: W, height: H })
-    // Overlay claro por cima — mantém o texto legível independente do que
-    // o produtor tenha subido (foto escura, estampa carregada, etc).
-    page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: rgb(1, 1, 1), opacity: 0.55 })
+    if (!isCustomFullDesign) {
+      // Overlay claro por cima — mantém o texto legível independente do que
+      // o produtor tenha subido (foto escura, estampa carregada, etc).
+      page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: rgb(1, 1, 1), opacity: 0.55 })
+    }
   } else {
     const bg = isOuro || isPrestigio ? rgb(0.984, 0.965, 0.925) : rgb(0.99, 0.985, 0.97)
     page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: bg })
   }
 
-  // Moldura: dupla simples (classico/workshop) ou dupla + cantos ornamentados (ouro)
-  if (isOuro) {
+  // Moldura: dupla simples (classico/workshop) ou dupla + cantos ornamentados (ouro).
+  // 'custom' com moldura pronta pula essa etapa inteira — a imagem já É a moldura.
+  if (isCustomFullDesign) {
+    // nada a desenhar — a imagem de fundo já traz a moldura completa.
+  } else if (isOuro) {
     page.drawRectangle({ x: 20, y: 20, width: W - 40, height: H - 40, borderColor: ACCENT, borderWidth: 2.2, color: undefined })
     page.drawRectangle({ x: 28, y: 28, width: W - 56, height: H - 56, borderColor: ACCENT, borderWidth: 0.6, color: undefined })
     const cornerLen = 26, inset = 28
