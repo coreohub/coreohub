@@ -50,14 +50,48 @@ type LayoutTag = {
  * 'classico'/'workshop' — 'ouro' segue rendendo pra quem já tinha salvo
  * (aposentado do seletor em 2026-07-09, mas o código não foi removido).
  * 'moderno'/'prestigio' são os presets ativos desde então. */
-function normalizeVisualPreset(p?: string | null): 'classico' | 'workshop' | 'ouro' | 'moderno' | 'prestigio' | 'custom' {
+function normalizeVisualPreset(p?: string | null): 'classico' | 'workshop' | 'ouro' | 'moderno' | 'prestigio' | 'custom' | 'oficial-dourado' {
   if (p === 'ouro') return 'ouro'
   if (p === 'moderno') return 'moderno'
   if (p === 'prestigio') return 'prestigio'
   if (p === 'custom') return 'custom'
+  if (p === 'oficial-dourado') return 'oficial-dourado'
   if (p === 'workshop-minimalista' || p === 'workshop') return 'workshop'
   return 'classico'
 }
+
+// Preset 'oficial-dourado' — moldura pronta fornecida pelo CoreoHub (não é
+// código desenhando forma nenhuma, é uma imagem full-bleed: moldura
+// biselada dourada, faixa navy diagonal cruzada, selo dourado já
+// centralizado na base). Produtor NÃO faz upload nem escolhe cor — a arte
+// já vem pronta pra todo mundo, hospedada como asset estático do próprio
+// app (mesmo domínio de sempre, sem depender de bucket novo). QR de
+// validação encaixa na caixa em branco que a arte já reserva no canto
+// inferior direito; assinaturas sobem pra não colidir com o selo/faixa
+// (que ocupa uns 25-30% da base da imagem, bem mais que os presets
+// desenhados por código).
+const OFICIAL_DOURADO_BG_URL = 'https://app.coreohub.com/certificate-frames/prestigio-oficial.jpg'
+const OFICIAL_INK = '#241c10'
+const OFICIAL_MUTED = '#6b5d45'
+const OFICIAL_ACCENT = '#a97e2e'
+const DEFAULT_LAYOUT_OFICIAL_MOSTRA: LayoutTag[] = [
+  { tag: 'TITULO',          x_pct: 50, y_pct: 16, font_size: 34, align: 'center', weight: 'bold', color: OFICIAL_INK, fontFamily: 'times' },
+  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 24, font_size: 12, align: 'center', color: OFICIAL_ACCENT, fontFamily: 'times' },
+  { tag: 'INTRO',           x_pct: 50, y_pct: 33, font_size: 15, align: 'center', italic: true, color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 43, font_size: 34, align: 'center', weight: 'bold', italic: true, color: OFICIAL_INK, fontFamily: 'times' },
+  { tag: 'CORPO',           x_pct: 50, y_pct: 51, font_size: 12.5, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'EVENTO',          x_pct: 50, y_pct: 58, font_size: 18, align: 'center', weight: 'bold', color: OFICIAL_ACCENT, fontFamily: 'times' },
+  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 64, font_size: 11, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
+]
+const DEFAULT_LAYOUT_OFICIAL_WORKSHOP: LayoutTag[] = [
+  { tag: 'TITULO',          x_pct: 50, y_pct: 16, font_size: 34, align: 'center', weight: 'bold', color: OFICIAL_INK, fontFamily: 'times' },
+  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 24, font_size: 12, align: 'center', color: OFICIAL_ACCENT, fontFamily: 'times' },
+  { tag: 'INTRO',           x_pct: 50, y_pct: 33, font_size: 15, align: 'center', italic: true, color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 43, font_size: 34, align: 'center', weight: 'bold', italic: true, color: OFICIAL_INK, fontFamily: 'times' },
+  { tag: 'CORPO',           x_pct: 50, y_pct: 51, font_size: 12.5, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
+  { tag: 'WORKSHOP_NOME',   x_pct: 50, y_pct: 58, font_size: 18, align: 'center', weight: 'bold', color: OFICIAL_ACCENT, fontFamily: 'times' },
+  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 64, font_size: 11, align: 'center', color: OFICIAL_MUTED, fontFamily: 'times' },
+]
 
 // Layout default usado quando produtor não customizou (template_layout vazio)
 const DEFAULT_LAYOUT_MOSTRA: LayoutTag[] = [
@@ -331,19 +365,24 @@ async function generatePdf(ctx: {
   const isModerno = preset === 'moderno'
   const isPrestigio = preset === 'prestigio'
   const isCustom = preset === 'custom'
+  const isOficial = preset === 'oficial-dourado'
   const isWorkshop = ctx.template_type === 'workshop'
 
   const layout: LayoutTag[] = (ctx.template?.layout_json && Array.isArray(ctx.template.layout_json) && ctx.template.layout_json.length > 0)
     ? ctx.template.layout_json
-    : isOuro
-      ? (isWorkshop ? DEFAULT_LAYOUT_OURO_WORKSHOP : DEFAULT_LAYOUT_OURO_MOSTRA)
-      : isModerno
-        ? (isWorkshop ? DEFAULT_LAYOUT_MODERNO_WORKSHOP : DEFAULT_LAYOUT_MODERNO_MOSTRA)
-        : isPrestigio
-          ? (isWorkshop ? DEFAULT_LAYOUT_PRESTIGIO_WORKSHOP : DEFAULT_LAYOUT_PRESTIGIO_MOSTRA)
-          : (isWorkshop ? DEFAULT_LAYOUT_WORKSHOP : DEFAULT_LAYOUT_MOSTRA)
+    : isOficial
+      ? (isWorkshop ? DEFAULT_LAYOUT_OFICIAL_WORKSHOP : DEFAULT_LAYOUT_OFICIAL_MOSTRA)
+      : isOuro
+        ? (isWorkshop ? DEFAULT_LAYOUT_OURO_WORKSHOP : DEFAULT_LAYOUT_OURO_MOSTRA)
+        : isModerno
+          ? (isWorkshop ? DEFAULT_LAYOUT_MODERNO_WORKSHOP : DEFAULT_LAYOUT_MODERNO_MOSTRA)
+          : isPrestigio
+            ? (isWorkshop ? DEFAULT_LAYOUT_PRESTIGIO_WORKSHOP : DEFAULT_LAYOUT_PRESTIGIO_MOSTRA)
+            : (isWorkshop ? DEFAULT_LAYOUT_WORKSHOP : DEFAULT_LAYOUT_MOSTRA)
 
-  const accent = ctx.template?.accent_color ?? (
+  // 'oficial-dourado' força a própria paleta (ignora accent_color salvo) —
+  // é moldura pronta, cor customizada quebraria a harmonia com a imagem.
+  const accent = isOficial ? OFICIAL_ACCENT : ctx.template?.accent_color ?? (
     isOuro ? '#a97e2e' : isModerno ? MODERNO_DEFAULT_ACCENT : isPrestigio ? PRESTIGIO_DEFAULT_ACCENT : '#ff0068'
   )
 
@@ -397,32 +436,38 @@ async function generatePdf(ctx: {
   const MODERNO_GOLD_RGB = rgb(...hexToRgb(MODERNO_GOLD))
   const PRESTIGIO_INK_RGB = rgb(...hexToRgb(PRESTIGIO_DEFAULT_PRIMARY))
 
-  // Fundo: imagem custom do produtor (se configurada) OU cor sólida do preset.
-  // Preset 'custom' com imagem enviada = "moldura pronta" (designer entregou
-  // a peça inteira, texto vai só por cima) — NUNCA aplica o overlay claro
-  // nem desenha moldura própria (isCustomFullDesign abaixo cobre os dois).
+  // Fundo: imagem custom do produtor, OU a moldura oficial do CoreoHub
+  // (fixa, hospedada como asset estático — 'oficial-dourado' ignora
+  // qualquer background_url salvo, a arte é sempre a mesma pra todo mundo),
+  // OU cor sólida do preset. Preset 'custom' com imagem enviada = "moldura
+  // pronta" (designer entregou a peça inteira, texto vai só por cima) —
+  // NUNCA aplica o overlay claro nem desenha moldura própria
+  // (hasBakedInFrame abaixo cobre os dois casos, custom e oficial-dourado).
   // Qualquer outro preset com background_url é tratado como imagem "solta"
   // (foto/estampa do produtor) e continua recebendo o overlay de proteção,
   // igual sempre foi.
-  const bgImage = ctx.template?.background_url
-    ? await embedImageFromUrl(pdfDoc, ctx.template.background_url)
-    : null
-  const isCustomFullDesign = isCustom && !!bgImage
+  const bgUrl = isOficial ? OFICIAL_DOURADO_BG_URL : ctx.template?.background_url
+  const bgImage = bgUrl ? await embedImageFromUrl(pdfDoc, bgUrl) : null
+  const hasBakedInFrame = (isCustom || isOficial) && !!bgImage
   if (bgImage) {
     page.drawImage(bgImage, { x: 0, y: 0, width: W, height: H })
-    if (!isCustomFullDesign) {
+    if (!hasBakedInFrame) {
       // Overlay claro por cima — mantém o texto legível independente do que
       // o produtor tenha subido (foto escura, estampa carregada, etc).
       page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: rgb(1, 1, 1), opacity: 0.55 })
     }
   } else {
+    // Fallback de segurança: se 'oficial-dourado' não conseguiu buscar a
+    // imagem (asset ainda não publicado, rede fora), nunca renderiza
+    // certificado vazio — cai pro visual classico (frame + fundo sólido).
     const bg = isOuro || isPrestigio ? rgb(0.984, 0.965, 0.925) : rgb(0.99, 0.985, 0.97)
     page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: bg })
   }
 
   // Moldura: dupla simples (classico/workshop) ou dupla + cantos ornamentados (ouro).
-  // 'custom' com moldura pronta pula essa etapa inteira — a imagem já É a moldura.
-  if (isCustomFullDesign) {
+  // 'custom'/'oficial-dourado' com moldura pronta pulam essa etapa inteira —
+  // a imagem já É a moldura.
+  if (hasBakedInFrame) {
     // nada a desenhar — a imagem de fundo já traz a moldura completa.
   } else if (isOuro) {
     page.drawRectangle({ x: 20, y: 20, width: W - 40, height: H - 40, borderColor: ACCENT, borderWidth: 2.2, color: undefined })
@@ -558,35 +603,44 @@ async function generatePdf(ctx: {
     page.drawRectangle({ x: sealCx + 2, y: ribbonTopY - ribbonH, width: ribbonW, height: ribbonH, color: PRESTIGIO_INK_RGB, rotate: degrees(14) })
   }
 
-  // QR + texto de validação (canto inferior direito)
+  // QR + texto de validação. 'oficial-dourado' tem uma caixa branca reservada
+  // pela própria arte no canto inferior direito (menor e mais alta que o
+  // canto "livre" que os outros presets usam) — QR menor + legenda embaixo,
+  // calibrado pra caber dentro dela sem invadir a faixa navy.
   const qrImage = await pdfDoc.embedPng(qrBytes)
-  const qrSize = 80
-  const bodyFont = isOuro || isPrestigio ? timesRoman : helvetica
-  const boldFont = isOuro || isPrestigio ? timesBold : helveticaBold
-  const mutedColor = isOuro ? rgb(...hexToRgb(OURO_MUTED)) : isModerno ? rgb(...hexToRgb(MODERNO_MUTED)) : isPrestigio ? rgb(...hexToRgb(PRESTIGIO_MUTED)) : rgb(0.4, 0.4, 0.45)
-  const inkColor = isOuro ? rgb(...hexToRgb(OURO_INK)) : isModerno ? rgb(...hexToRgb(MODERNO_DEFAULT_PRIMARY)) : isPrestigio ? PRESTIGIO_INK_RGB : rgb(0.04, 0.04, 0.06)
-  page.drawImage(qrImage, { x: W - qrSize - 60, y: 60, width: qrSize, height: qrSize })
-  page.drawText('Verifique a autenticidade:', { x: W - qrSize - 60, y: 50, size: 7, font: bodyFont, color: mutedColor })
-  page.drawText(`Código: ${ctx.hash.slice(0, 8).toUpperCase()}`, { x: W - qrSize - 60, y: 38, size: 7, font: boldFont, color: inkColor })
+  const qrSize = isOficial ? 58 : 80
+  const qrX = isOficial ? 705 : W - qrSize - 60
+  const qrY = isOficial ? 108 : 60
+  const bodyFont = isOuro || isPrestigio || isOficial ? timesRoman : helvetica
+  const boldFont = isOuro || isPrestigio || isOficial ? timesBold : helveticaBold
+  const mutedColor = isOuro ? rgb(...hexToRgb(OURO_MUTED)) : isModerno ? rgb(...hexToRgb(MODERNO_MUTED)) : isPrestigio ? rgb(...hexToRgb(PRESTIGIO_MUTED)) : isOficial ? rgb(...hexToRgb(OFICIAL_MUTED)) : rgb(0.4, 0.4, 0.45)
+  const inkColor = isOuro ? rgb(...hexToRgb(OURO_INK)) : isModerno ? rgb(...hexToRgb(MODERNO_DEFAULT_PRIMARY)) : isPrestigio ? PRESTIGIO_INK_RGB : isOficial ? rgb(...hexToRgb(OFICIAL_INK)) : rgb(0.04, 0.04, 0.06)
+  page.drawImage(qrImage, { x: qrX, y: qrY, width: qrSize, height: qrSize })
+  page.drawText('Verifique a autenticidade:', { x: qrX, y: qrY - 12, size: isOficial ? 6 : 7, font: bodyFont, color: mutedColor })
+  page.drawText(`Código: ${ctx.hash.slice(0, 8).toUpperCase()}`, { x: qrX, y: qrY - 22, size: isOficial ? 6 : 7, font: boldFont, color: inkColor })
 
   // Assinaturas: linha + nome em negro + função/cargo em itálico colorido
   // (nova estrutura pareada signature_names + signature_titles, 2026-05-07).
+  // 'oficial-dourado' sobe a linha porque o selo+faixa da imagem ocupam bem
+  // mais espaço na base do que os presets desenhados por código.
   const sigNames: string[]  = Array.isArray(ctx.template?.signature_names)  ? ctx.template.signature_names  : []
   const sigTitles: string[] = Array.isArray(ctx.template?.signature_titles) ? ctx.template.signature_titles : []
   const sigCount = Math.min(sigNames.length, 3)
   if (sigCount > 0) {
     const sigGap = 220
     const startX = (W - sigGap * sigCount) / 2 + sigGap / 2 - 100
+    const sigLineY = isOficial ? 178 : 110
     for (let i = 0; i < sigCount; i++) {
       const cx = startX + i * sigGap
-      page.drawLine({ start: { x: cx, y: 110 }, end: { x: cx + 200, y: 110 }, thickness: 0.8, color: inkColor })
+      page.drawLine({ start: { x: cx, y: sigLineY }, end: { x: cx + 200, y: sigLineY }, thickness: 0.8, color: inkColor })
       const name  = sigNames[i] ?? ''
       const title = sigTitles[i] ?? ''
       const nameW = boldFont.widthOfTextAtSize(name, 10)
-      page.drawText(name, { x: cx + (200 - nameW) / 2, y: 95, size: 10, font: boldFont, color: inkColor })
+      page.drawText(name, { x: cx + (200 - nameW) / 2, y: sigLineY - 15, size: 10, font: boldFont, color: inkColor })
       if (title) {
-        const titleW = (isOuro ? timesItalic : helvetica).widthOfTextAtSize(title, 8)
-        page.drawText(title, { x: cx + (200 - titleW) / 2, y: 82, size: 8, font: isOuro ? timesItalic : helvetica, color: mutedColor })
+        const titleFont = (isOuro || isOficial) ? timesItalic : helvetica
+        const titleW = titleFont.widthOfTextAtSize(title, 8)
+        page.drawText(title, { x: cx + (200 - titleW) / 2, y: sigLineY - 28, size: 8, font: titleFont, color: mutedColor })
       }
     }
   }

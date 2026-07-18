@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 
 type TemplateType = 'mostra' | 'workshop';
-type PresetId = 'classico' | 'workshop' | 'ouro' | 'moderno' | 'prestigio' | 'custom';
+type PresetId = 'classico' | 'workshop' | 'ouro' | 'moderno' | 'prestigio' | 'custom' | 'oficial-dourado';
 
 interface CertTemplate {
   id?: string;
@@ -35,7 +35,7 @@ interface CertTemplate {
    * workshop-minimalista) mas no save sempre normaliza pra um dos IDs
    * ativos. 'ouro' aposentado do seletor em 2026-07-09 (substituído por
    * moderno/prestigio) — quem já tinha salvo continua renderizando. */
-  preset_template: 'classico' | 'workshop' | 'ouro' | 'moderno' | 'prestigio' | 'mostra-classico' | 'workshop-minimalista' | 'mostra-premium' | 'custom';
+  preset_template: 'classico' | 'workshop' | 'ouro' | 'moderno' | 'prestigio' | 'mostra-classico' | 'workshop-minimalista' | 'mostra-premium' | 'custom' | 'oficial-dourado';
   background_url: string | null;
   /** Logo do evento — só desenhado nos presets moderno/prestigio (única URL
    * colada, mesmo padrão simples do background_url — sem upload dedicado
@@ -61,15 +61,19 @@ interface BatchResult { total: number; created: number; skipped: number }
 // normalizeVisualPreset desses valores) — só não aparecem mais como opção
 // nova. 'Workshop' (minimalista) segue como está, sem mudança.
 const PRESETS: Array<{ id: PresetId; label: string; desc: string; for: TemplateType }> = [
+  { id: 'oficial-dourado', label: 'Oficial Dourado', desc: 'Moldura pronta CoreoHub — bisel dourado, faixa navy, selo. Sem upload, sem customização de cor.', for: 'mostra' as TemplateType },
   { id: 'moderno',   label: 'Moderno',   desc: 'Blocos diagonais azul-marinho + dourado, nome em fonte script, rosetão com fita — "prêmio corporativo".', for: 'mostra' as TemplateType },
   { id: 'prestigio', label: 'Prestígio', desc: 'Moldura dupla dourada, layout centralizado, faixa preta + dourada no rodapé — clássico e elegante.', for: 'mostra' as TemplateType },
   { id: 'workshop',  label: 'Workshop',  desc: 'Linhas finas, tipografia clean, foco no nome do aluno.', for: 'workshop' as TemplateType },
+  { id: 'oficial-dourado', label: 'Oficial Dourado', desc: 'Mesma moldura pronta CoreoHub, adaptada pro certificado de workshop.', for: 'workshop' as TemplateType },
   { id: 'moderno',   label: 'Moderno',   desc: 'Mesmos blocos diagonais azul-marinho + dourado, adaptados pro certificado de workshop.', for: 'workshop' as TemplateType },
   { id: 'prestigio', label: 'Prestígio', desc: 'Mesma moldura dourada centralizada, adaptada pro certificado de workshop.', for: 'workshop' as TemplateType },
 ];
 
 // Cores default por preset — aplicadas só ao trocar de preset num template
-// ainda não salvo (não sobrescreve customização já feita).
+// ainda não salvo (não sobrescreve customização já feita). 'oficial-dourado'
+// não entra aqui de propósito: a paleta é fixa na edge function, o produtor
+// nunca vê/edita cor pra esse preset (ver PRESETS_LOCKED_COLOR abaixo).
 const OURO_DEFAULT_ACCENT = '#a97e2e';
 const OURO_DEFAULT_PRIMARY = '#241c10';
 const MODERNO_DEFAULT_ACCENT = '#1c4f72';
@@ -82,11 +86,23 @@ const PRESET_DEFAULT_COLORS: Partial<Record<PresetId, { accent: string; primary:
   prestigio: { accent: PRESTIGIO_DEFAULT_ACCENT, primary: PRESTIGIO_DEFAULT_PRIMARY },
 };
 
+// Thumbnail real da moldura oficial (mesmo asset que a edge function busca).
+const OFICIAL_DOURADO_THUMB = '/certificate-frames/prestigio-oficial.jpg';
+
+// Presets com arte pronta (imagem cobre a página inteira) — nesses, editar
+// cor de destaque/texto quebraria a harmonia com a arte, então o seletor de
+// cor fica escondido. 'custom' entra só depois que o produtor já subiu uma
+// imagem (antes disso ele pode estar usando o preset "vazio", sem fundo
+// nenhum ainda, aí faz sentido deixar a cor visível como fallback).
+const isColorLocked = (preset: PresetId, hasCustomBg: boolean) =>
+  preset === 'oficial-dourado' || (preset === 'custom' && hasCustomBg);
+
 /** Normaliza preset legado pro novo nome. */
 const normalizePreset = (p?: string | null): PresetId => {
   if (p === 'ouro') return 'ouro';
   if (p === 'moderno') return 'moderno';
   if (p === 'prestigio') return 'prestigio';
+  if (p === 'oficial-dourado') return 'oficial-dourado';
   if (p === 'mostra-classico' || p === 'mostra-premium' || p === 'classico') return 'classico';
   if (p === 'workshop-minimalista' || p === 'workshop') return 'workshop';
   return 'custom';
@@ -181,7 +197,7 @@ const Certificates: React.FC = () => {
       setTemplate(null);
       // Defaults
       setFormName(`Modelo padrão ${activeType === 'workshop' ? 'Workshop' : 'Mostra'}`);
-      setFormPreset(activeType === 'workshop' ? 'workshop' : 'moderno');
+      setFormPreset('oficial-dourado');
       setFormBgUrl('');
       setFormLogoUrl('');
       setFormAccent(activeType === 'workshop' ? '#ff0068' : MODERNO_DEFAULT_ACCENT);
@@ -296,7 +312,7 @@ const Certificates: React.FC = () => {
   // default do preset novo deve substituir a do preset anterior (mesmo se
   // o template já estava salvo com outra cor). Se o produtor quiser uma
   // cor diferente, edita os campos de cor manualmente depois de escolher.
-  const selectPreset = (id: 'classico' | 'workshop' | 'ouro' | 'moderno' | 'prestigio') => {
+  const selectPreset = (id: 'classico' | 'workshop' | 'ouro' | 'moderno' | 'prestigio' | 'oficial-dourado') => {
     setFormPreset(id);
     const defaults = PRESET_DEFAULT_COLORS[id];
     if (defaults) {
@@ -442,12 +458,18 @@ const Certificates: React.FC = () => {
                   {visiblePresets.map(p => (
                     <button
                       key={p.id}
-                      onClick={() => selectPreset(p.id as 'classico' | 'workshop' | 'ouro' | 'moderno' | 'prestigio')}
+                      onClick={() => selectPreset(p.id as 'classico' | 'workshop' | 'ouro' | 'moderno' | 'prestigio' | 'oficial-dourado')}
                       className={`text-left rounded-xl border p-3 transition ${formPreset === p.id ? 'border-[#ff0068] bg-[#ff0068]/5' : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'}`}
                     >
-                      <div className="aspect-[297/210] rounded-md bg-gradient-to-br from-amber-50 to-rose-50 dark:from-slate-700 dark:to-slate-800 mb-2 flex items-center justify-center">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{p.label}</span>
-                      </div>
+                      {p.id === 'oficial-dourado' ? (
+                        <div className="aspect-[297/210] rounded-md mb-2 overflow-hidden border border-slate-200 dark:border-white/10">
+                          <img src={OFICIAL_DOURADO_THUMB} alt="" className="w-full h-full object-cover" />
+                        </div>
+                      ) : (
+                        <div className="aspect-[297/210] rounded-md bg-gradient-to-br from-amber-50 to-rose-50 dark:from-slate-700 dark:to-slate-800 mb-2 flex items-center justify-center">
+                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{p.label}</span>
+                        </div>
+                      )}
                       <p className="text-xs font-black text-slate-900 dark:text-white">{p.label}</p>
                       <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{p.desc}</p>
                     </button>
@@ -551,20 +573,26 @@ const Certificates: React.FC = () => {
                     </div>
                   </Field>
                 )}
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Cor de destaque (rosa CoreoHub default)">
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={formAccent} onChange={e => setFormAccent(e.target.value)} className="w-12 h-10 rounded-lg cursor-pointer" />
-                      <input value={formAccent} onChange={e => setFormAccent(e.target.value)} className={inputCls} />
-                    </div>
-                  </Field>
-                  <Field label="Cor do texto principal">
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={formPrimary} onChange={e => setFormPrimary(e.target.value)} className="w-12 h-10 rounded-lg cursor-pointer" />
-                      <input value={formPrimary} onChange={e => setFormPrimary(e.target.value)} className={inputCls} />
-                    </div>
-                  </Field>
-                </div>
+                {isColorLocked(formPreset, !!formBgUrl) ? (
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 rounded-lg border border-dashed border-slate-200 dark:border-white/10 px-3 py-2">
+                    Esse modelo já vem com paleta própria (moldura pronta) — cor de destaque/texto fica travada pra não quebrar a harmonia visual.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Cor de destaque (rosa CoreoHub default)">
+                      <div className="flex items-center gap-2">
+                        <input type="color" value={formAccent} onChange={e => setFormAccent(e.target.value)} className="w-12 h-10 rounded-lg cursor-pointer" />
+                        <input value={formAccent} onChange={e => setFormAccent(e.target.value)} className={inputCls} />
+                      </div>
+                    </Field>
+                    <Field label="Cor do texto principal">
+                      <div className="flex items-center gap-2">
+                        <input type="color" value={formPrimary} onChange={e => setFormPrimary(e.target.value)} className="w-12 h-10 rounded-lg cursor-pointer" />
+                        <input value={formPrimary} onChange={e => setFormPrimary(e.target.value)} className={inputCls} />
+                      </div>
+                    </Field>
+                  </div>
+                )}
               </Card>
 
               {/* Assinaturas */}
