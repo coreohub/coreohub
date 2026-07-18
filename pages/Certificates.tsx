@@ -62,10 +62,10 @@ interface BatchResult { total: number; created: number; skipped: number }
 // nova. 'Workshop' (minimalista) segue como está, sem mudança.
 const PRESETS: Array<{ id: PresetId; label: string; desc: string; for: TemplateType }> = [
   { id: 'moderno',   label: 'Moderno',   desc: 'Blocos diagonais azul-marinho + dourado, nome em fonte script, rosetão com fita — "prêmio corporativo".', for: 'mostra' as TemplateType },
-  { id: 'prestigio', label: 'Prestígio', desc: 'Cunha preta + dourado, cabeçalho alinhado à esquerda, selo "Top Festival" — visual de luxo.', for: 'mostra' as TemplateType },
+  { id: 'prestigio', label: 'Prestígio', desc: 'Moldura dupla dourada, layout centralizado, faixa preta + dourada no rodapé — clássico e elegante.', for: 'mostra' as TemplateType },
   { id: 'workshop',  label: 'Workshop',  desc: 'Linhas finas, tipografia clean, foco no nome do aluno.', for: 'workshop' as TemplateType },
   { id: 'moderno',   label: 'Moderno',   desc: 'Mesmos blocos diagonais azul-marinho + dourado, adaptados pro certificado de workshop.', for: 'workshop' as TemplateType },
-  { id: 'prestigio', label: 'Prestígio', desc: 'Mesma cunha preta + dourado, adaptada pro certificado de workshop.', for: 'workshop' as TemplateType },
+  { id: 'prestigio', label: 'Prestígio', desc: 'Mesma moldura dourada centralizada, adaptada pro certificado de workshop.', for: 'workshop' as TemplateType },
 ];
 
 // Cores default por preset — aplicadas só ao trocar de preset num template

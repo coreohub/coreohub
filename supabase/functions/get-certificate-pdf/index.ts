@@ -131,32 +131,35 @@ const DEFAULT_LAYOUT_MODERNO_WORKSHOP: LayoutTag[] = [
   { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 66, font_size: 11, align: 'center', color: MODERNO_MUTED, fontFamily: 'times' },
 ]
 
-// Preset 'prestigio' — cunha preta + dourado, cabeçalho alinhado à esquerda
-// (único preset que não centraliza — replica a referência aprovada).
-// accent_color = dourado (destaque/EVENTO/eyebrow), primary_color = tinta
-// (nome/subtítulo). TITULO/SUBTITULO trocam de papel visual em relação aos
-// outros presets: TITULO ("CERTIFICADO") vira o eyebrow pequeno, SUBTITULO
-// ("DE PARTICIPAÇÃO") vira o título grande — evita tocar em resolveTag().
+// Preset 'prestigio' — preto + dourado, layout CENTRALIZADO com moldura
+// dupla dourada envolvendo a página inteira e faixa decorativa só no
+// rodapé (revisado 2026-07-17 — a v1 tinha cabeçalho left-aligned + cunha
+// diagonal só no canto esquerdo, fora do padrão de mercado de certificado/
+// diploma; referência de mercado pediu simetria). accent_color = dourado
+// (destaque/EVENTO/eyebrow), primary_color = tinta (nome/subtítulo).
+// TITULO/SUBTITULO trocam de papel visual em relação aos outros presets:
+// TITULO ("CERTIFICADO") vira o eyebrow pequeno, SUBTITULO ("DE
+// PARTICIPAÇÃO") vira o título grande — evita tocar em resolveTag().
 const PRESTIGIO_MUTED = '#8a7f68'
 const PRESTIGIO_DEFAULT_ACCENT = '#caa23a'
 const PRESTIGIO_DEFAULT_PRIMARY = '#171310'
 const DEFAULT_LAYOUT_PRESTIGIO_MOSTRA: LayoutTag[] = [
-  { tag: 'TITULO',          x_pct: 36, y_pct: 19, font_size: 8,  align: 'left', weight: 'bold', color: PRESTIGIO_DEFAULT_ACCENT },
-  { tag: 'SUBTITULO',       x_pct: 36, y_pct: 27, font_size: 28, align: 'left', weight: 'bold', color: PRESTIGIO_DEFAULT_PRIMARY, fontFamily: 'times' },
-  { tag: 'INTRO',           x_pct: 36, y_pct: 40, font_size: 10, align: 'left', italic: true, color: PRESTIGIO_MUTED, fontFamily: 'times' },
-  { tag: 'NOME_PARTICIPANTE', x_pct: 36, y_pct: 49, font_size: 34, align: 'left', color: PRESTIGIO_DEFAULT_PRIMARY, fontFamily: 'script' },
-  { tag: 'CORPO',           x_pct: 36, y_pct: 58, font_size: 11, align: 'left', color: PRESTIGIO_MUTED, max_width_pct: 58 },
-  { tag: 'EVENTO',          x_pct: 36, y_pct: 70, font_size: 14, align: 'left', weight: 'bold', color: PRESTIGIO_DEFAULT_ACCENT, fontFamily: 'times' },
-  { tag: 'DATA_LOCAL',      x_pct: 36, y_pct: 78, font_size: 9,  align: 'left', color: PRESTIGIO_MUTED },
+  { tag: 'TITULO',          x_pct: 50, y_pct: 16, font_size: 9,  align: 'center', weight: 'bold', color: PRESTIGIO_DEFAULT_ACCENT },
+  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 24, font_size: 30, align: 'center', weight: 'bold', color: PRESTIGIO_DEFAULT_PRIMARY, fontFamily: 'times' },
+  { tag: 'INTRO',           x_pct: 50, y_pct: 34, font_size: 11, align: 'center', italic: true, color: PRESTIGIO_MUTED, fontFamily: 'times' },
+  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 44, font_size: 36, align: 'center', color: PRESTIGIO_DEFAULT_PRIMARY, fontFamily: 'script' },
+  { tag: 'CORPO',           x_pct: 50, y_pct: 53, font_size: 12, align: 'center', color: PRESTIGIO_MUTED },
+  { tag: 'EVENTO',          x_pct: 50, y_pct: 60, font_size: 18, align: 'center', weight: 'bold', color: PRESTIGIO_DEFAULT_ACCENT, fontFamily: 'times' },
+  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 66, font_size: 11, align: 'center', color: PRESTIGIO_MUTED },
 ]
 const DEFAULT_LAYOUT_PRESTIGIO_WORKSHOP: LayoutTag[] = [
-  { tag: 'TITULO',          x_pct: 36, y_pct: 19, font_size: 8,  align: 'left', weight: 'bold', color: PRESTIGIO_DEFAULT_ACCENT },
-  { tag: 'SUBTITULO',       x_pct: 36, y_pct: 27, font_size: 28, align: 'left', weight: 'bold', color: PRESTIGIO_DEFAULT_PRIMARY, fontFamily: 'times' },
-  { tag: 'INTRO',           x_pct: 36, y_pct: 40, font_size: 10, align: 'left', italic: true, color: PRESTIGIO_MUTED, fontFamily: 'times' },
-  { tag: 'NOME_PARTICIPANTE', x_pct: 36, y_pct: 49, font_size: 34, align: 'left', color: PRESTIGIO_DEFAULT_PRIMARY, fontFamily: 'script' },
-  { tag: 'CORPO',           x_pct: 36, y_pct: 58, font_size: 11, align: 'left', color: PRESTIGIO_MUTED, max_width_pct: 58 },
-  { tag: 'WORKSHOP_NOME',   x_pct: 36, y_pct: 70, font_size: 14, align: 'left', weight: 'bold', color: PRESTIGIO_DEFAULT_ACCENT, fontFamily: 'times' },
-  { tag: 'DATA_LOCAL',      x_pct: 36, y_pct: 78, font_size: 9,  align: 'left', color: PRESTIGIO_MUTED },
+  { tag: 'TITULO',          x_pct: 50, y_pct: 16, font_size: 9,  align: 'center', weight: 'bold', color: PRESTIGIO_DEFAULT_ACCENT },
+  { tag: 'SUBTITULO',       x_pct: 50, y_pct: 24, font_size: 30, align: 'center', weight: 'bold', color: PRESTIGIO_DEFAULT_PRIMARY, fontFamily: 'times' },
+  { tag: 'INTRO',           x_pct: 50, y_pct: 34, font_size: 11, align: 'center', italic: true, color: PRESTIGIO_MUTED, fontFamily: 'times' },
+  { tag: 'NOME_PARTICIPANTE', x_pct: 50, y_pct: 44, font_size: 36, align: 'center', color: PRESTIGIO_DEFAULT_PRIMARY, fontFamily: 'script' },
+  { tag: 'CORPO',           x_pct: 50, y_pct: 53, font_size: 12, align: 'center', color: PRESTIGIO_MUTED },
+  { tag: 'WORKSHOP_NOME',   x_pct: 50, y_pct: 60, font_size: 18, align: 'center', weight: 'bold', color: PRESTIGIO_DEFAULT_ACCENT, fontFamily: 'times' },
+  { tag: 'DATA_LOCAL',      x_pct: 50, y_pct: 66, font_size: 11, align: 'center', color: PRESTIGIO_MUTED },
 ]
 
 /** Quebra de linha greedy simples pra tags com max_width_pct (só usado por
@@ -447,28 +450,32 @@ async function generatePdf(ctx: {
       page.drawRectangle({ x: W / 2 + dx - 3, y: diaY - 3, width: 6, height: 6, rotate: degrees(45), color: MODERNO_GOLD_RGB })
     }
   } else if (isPrestigio) {
-    // Cunha preta diagonal + faixa dourada (ACCENT) saindo do canto
-    // superior-esquerdo — geometria replicada do mockup aprovado.
-    const wedgePts: Array<[number, number]> = [[0, 0], [100, 0], [40, 100], [0, 100]]
-    drawPolygonPct(page, W, H, { topPct: -4, leftPct: -4, wPct: 32, hPct: 58 }, wedgePts, PRESTIGIO_INK_RGB)
-    drawPolygonPct(page, W, H, { topPct: -4, leftPct: 20, wPct: 7,  hPct: 58 }, wedgePts, ACCENT)
-    // Moldura única fina
-    const insetX = 0.032 * W, insetY = 0.032 * H
-    page.drawRectangle({ x: insetX, y: insetY, width: W - 2 * insetX, height: H - 2 * insetY, borderColor: PRESTIGIO_INK_RGB, borderWidth: 1.2, borderOpacity: 0.18, color: undefined })
+    // Moldura dupla dourada envolvendo a página inteira (padrão diploma
+    // clássico), substitui a cunha diagonal assimétrica do canto esquerdo
+    // da v1. A faixa decorativa no rodapé (chevron+fita) planejada pra essa
+    // revisão foi removida por ora: a geometria calculada à mão via
+    // drawPolygonPct colidia com o próprio selo/assinatura/QR e a fita
+    // dourada acabava encobrindo o chevron preto por baixo (achado real de
+    // /code-review em 2026-07-17, nunca visível sem gerar o PDF de fato).
+    // Fica só a moldura — segura e já valida o pedido central (layout
+    // centralizado). Decoração de rodapé volta como pauta separada, dessa
+    // vez traduzindo caminho SVG já validado num mockup visual em vez de
+    // coordenadas de polígono calculadas às cegas.
+    page.drawRectangle({ x: 20, y: 20, width: W - 40, height: H - 40, borderColor: ACCENT, borderWidth: 2.2, color: undefined })
+    page.drawRectangle({ x: 28, y: 28, width: W - 56, height: H - 56, borderColor: ACCENT, borderWidth: 0.6, color: undefined })
   } else {
     page.drawRectangle({ x: 24, y: 24, width: W - 48, height: H - 48, borderColor: ACCENT, borderWidth: 2, color: undefined })
     page.drawRectangle({ x: 30, y: 30, width: W - 60, height: H - 60, borderColor: ACCENT, borderWidth: 0.5, color: undefined })
   }
 
   // Logo do evento (opcional) — só desenha se o produtor configurou logo_url.
-  // Moderno: caixa centralizada no topo. Prestígio: caixa alinhada à
-  // esquerda, acompanhando o cabeçalho left-aligned do preset.
+  // Moderno e Prestígio (ambos centralizados) usam a mesma caixa no topo.
   if ((isModerno || isPrestigio) && ctx.template?.logo_url) {
     const logoImage = await embedImageFromUrl(pdfDoc, ctx.template.logo_url)
     if (logoImage) {
-      const boxSize = ((isModerno ? 6 : 5.5) / 100) * W
-      const boxCenterX = isModerno ? W / 2 : (0.36 * W) + boxSize / 2
-      const boxTopY = H - ((isModerno ? 9.5 : 7) / 100) * H
+      const boxSize = (6 / 100) * W
+      const boxCenterX = W / 2
+      const boxTopY = H - (9.5 / 100) * H
       const iw = logoImage.width, ih = logoImage.height
       const scale = Math.min(boxSize / iw, boxSize / ih)
       const drawW = iw * scale, drawH = ih * scale
@@ -527,16 +534,14 @@ async function generatePdf(ctx: {
     page.drawRectangle({ x: sealCx - 8, y: ribbonTopY - ribbonH, width: ribbonW, height: ribbonH, color: MODERNO_GOLD_RGB, rotate: degrees(-12) })
     page.drawRectangle({ x: sealCx + 2, y: ribbonTopY - ribbonH, width: ribbonW, height: ribbonH, color: MODERNO_GOLD_RGB, rotate: degrees(12) })
   } else if (isPrestigio) {
-    // Selo "TOP FESTIVAL" no canto superior-direito (badge + fita).
-    const badgeR = 34
-    const badgeCx = W - 0.08 * W - badgeR, badgeCy = H - 0.07 * H - badgeR
-    page.drawEllipse({ x: badgeCx, y: badgeCy, xScale: badgeR, yScale: badgeR, borderColor: ACCENT, borderWidth: 2.4, color: PRESTIGIO_INK_RGB })
-    page.drawText('*', { x: badgeCx - 4, y: badgeCy - 4, size: 16, font: helveticaBold, color: ACCENT })
-    const ribbonW = 100, ribbonH = 24
-    page.drawRectangle({ x: badgeCx - ribbonW / 2, y: badgeCy - badgeR - ribbonH * 0.3, width: ribbonW, height: ribbonH, color: ACCENT })
-    const label = 'TOP FESTIVAL'
-    const labelW = helveticaBold.widthOfTextAtSize(label, 9)
-    page.drawText(label, { x: badgeCx - labelW / 2, y: badgeCy - badgeR - ribbonH * 0.3 + 8, size: 9, font: helveticaBold, color: PRESTIGIO_INK_RGB })
+    // Selo centralizado acima da assinatura — mesmo padrão de Ouro/Moderno
+    // (círculo + fitas), substitui o badge "TOP FESTIVAL" solto no canto.
+    const sealCx = W / 2, sealCy = 155, sealR = 18
+    page.drawEllipse({ x: sealCx, y: sealCy, xScale: sealR, yScale: sealR, borderColor: ACCENT, borderWidth: 1.6, color: PRESTIGIO_INK_RGB })
+    page.drawRectangle({ x: sealCx - 4, y: sealCy - 4, width: 8, height: 8, rotate: degrees(45), color: ACCENT })
+    const ribbonW = 7, ribbonH = 24, ribbonTopY = sealCy - sealR + 2
+    page.drawRectangle({ x: sealCx - 9, y: ribbonTopY - ribbonH, width: ribbonW, height: ribbonH, color: PRESTIGIO_INK_RGB, rotate: degrees(-14) })
+    page.drawRectangle({ x: sealCx + 2, y: ribbonTopY - ribbonH, width: ribbonW, height: ribbonH, color: PRESTIGIO_INK_RGB, rotate: degrees(14) })
   }
 
   // QR + texto de validação (canto inferior direito)

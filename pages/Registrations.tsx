@@ -15,7 +15,8 @@ import { supabase, supabaseUrl } from '../services/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { refundRegistration } from '../services/refundService';
 import EventPickerSheet from '../components/EventPickerSheet';
-import { maskCpfCnpj, unmaskCpfCnpj, validateCpf, maskData, parseDataISO, maskMoeda, parseMoeda } from '../utils/masks';
+import { maskCpfCnpj, unmaskCpfCnpj, validateCpf, maskData, parseDataISO, maskMoeda, parseMoeda, parseTempoSegundos } from '../utils/masks';
+import TrackDurationBadge from '../components/TrackDurationBadge';
 import BailarinosEditor from '../components/BailarinosEditor';
 import VendasTabs from '../components/VendasTabs';
 import {
@@ -395,6 +396,10 @@ const Registrations = () => {
   /* Evento ativo (nome + slug) — usado no CTA do empty state pra compor o
      link público do evento. Carregado junto do fetchData. */
   const [activeEventInfo, setActiveEventInfo] = useState<{ name?: string; slug?: string } | null>(null);
+  /* formacoes_config do evento ativo — usado só pra resolver o max_time da
+     modalidade e sinalizar "Tempo excedido" no detalhe da inscrição
+     (2026-07-17, ver backlog_penalidade_tempo_excedido). */
+  const [formacoesConfig, setFormacoesConfig] = useState<Array<{ name?: string; max_time?: string }>>([]);
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedDiscountLink, setCopiedDiscountLink] = useState(false);
 
@@ -494,11 +499,12 @@ const Registrations = () => {
       if (selectedEventId) {
         const { data: ev } = await supabase
           .from('events')
-          .select('video_selection_enabled, name, slug')
+          .select('video_selection_enabled, name, slug, formacoes_config')
           .eq('id', selectedEventId)
           .maybeSingle();
         activeEvent = ev;
         setActiveEventInfo(ev);
+        setFormacoesConfig(Array.isArray((ev as any)?.formacoes_config) ? (ev as any).formacoes_config : []);
       }
 
       const enriched = (data || []).map(r => ({
@@ -2315,7 +2321,40 @@ const Registrations = () => {
                       <DetailItem label="Estilo / Gênero" value={viewingReg.estilo_danca} />
                       <DetailItem label="Subgênero" value={viewingReg.subgenero} />
                       <DetailItem label="Coreógrafo(a)" value={viewingReg.coreografo_nome} />
-                      <DetailItem label="Duração" value={viewingReg.duracao_minutos ? `${viewingReg.duracao_minutos} min` : null} />
+                      {(() => {
+                        // duracao_minutos/duracao_segundos (duração DECLARADA da coreografia)
+                        // moram dentro de event_data JSONB, não são coluna direta — mesmo
+                        // padrão de estudio_nome/coreografo_nome já usado neste arquivo
+                        // (ver startEditing, linha ~125). duracao_trilha_segundos (duração
+                        // REAL do arquivo enviado) já é coluna direta.
+                        const eventData = (viewingReg as any).event_data ?? {};
+                        const rawMin = eventData.duracao_minutos;
+                        if (!rawMin) return null;
+                        // Duração real (trilha enviada) tem prioridade sobre a declarada
+                        // na inscrição — é a fonte de verdade uma vez que o arquivo existe.
+                        const realSec = (viewingReg as any).duracao_trilha_segundos
+                          ?? eventData.duracao_segundos
+                          ?? Math.round(Number(rawMin) * 60);
+                        // Normaliza igual todo outro lookup de formacoes_config no app
+                        // (ver InscricaoWizard.tsx) — sem isso, um formato_participacao
+                        // com caixa/espaço diferente do nome cadastrado no evento nunca
+                        // casa e o selo simplesmente não aparece, silenciosamente.
+                        const modConfig = formacoesConfig.find(
+                          f => f.name?.trim().toLowerCase() === viewingReg.formato_participacao?.trim().toLowerCase()
+                        );
+                        const maxSec = modConfig?.max_time ? parseTempoSegundos(modConfig.max_time) : undefined;
+                        return (
+                          <div>
+                            <dt className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Duração</dt>
+                            <dd className="text-slate-900 dark:text-white break-all font-bold">
+                              {rawMin} min
+                              <div className="mt-1 font-normal">
+                                <TrackDurationBadge durationSeconds={realSec} maxSeconds={maxSec} />
+                              </div>
+                            </dd>
+                          </div>
+                        );
+                      })()}
                     </dl>
                   )}
                   {editing && (

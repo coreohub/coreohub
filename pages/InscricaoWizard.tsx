@@ -25,6 +25,8 @@ import {
   AlertCircle, CheckCircle, Plus, Trash2, ArrowRight, Video,
 } from 'lucide-react';
 import { maskTempo, parseTempoSegundos, formatTempo, maskedChange } from '../utils/masks';
+import { readAudioDuration } from '../utils/audioDuration';
+import TrackDurationBadge from '../components/TrackDurationBadge';
 import { trackViewEvent } from '../services/producerAnalytics';
 import ProducerPixels from '../components/ProducerPixels';
 
@@ -72,30 +74,6 @@ const writeWizardDraft = (eventId: string, data: any): void => {
 const clearWizardDraft = (eventId: string): void => {
   try { localStorage.removeItem(WIZARD_DRAFT_PREFIX + eventId); } catch { /* ignore */ }
 };
-
-/** Lê a duração de um arquivo de áudio em segundos via HTML5 Audio API.
- *  Retorna 0 se não conseguir ler (formato inválido, arquivo corrompido).
- *  Tem timeout de 10s — alguns browsers não disparam 'error' em codecs raros
- *  (WebM Opus em Safari, etc.) e a Promise nunca resolveria. */
-const readAudioDuration = (file: File): Promise<number> =>
-  new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
-    const audio = new Audio(url);
-    let finished = false;
-    const done = (dur: number) => {
-      if (finished) return;
-      finished = true;
-      clearTimeout(timeoutId);
-      URL.revokeObjectURL(url);
-      resolve(dur);
-    };
-    const timeoutId = setTimeout(() => done(0), 10000);
-    audio.addEventListener('loadedmetadata', () => {
-      const dur = isFinite(audio.duration) ? Math.round(audio.duration) : 0;
-      done(dur);
-    });
-    audio.addEventListener('error', () => done(0));
-  });
 
 const inputCls = 'w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-2xl py-3 px-5 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 transition-all font-bold text-sm dark:[color-scheme:dark]';
 const labelCls = 'block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5 ml-1';
@@ -382,8 +360,9 @@ const InscricaoWizard: React.FC = () => {
     }
     setTrilhaUploading(true);
     try {
-      // Lê duração via HTML5 Audio API — pré-preenche o campo de duração
-      // da coreografia se ainda estiver vazio (user pode editar pra menor).
+      // Lê duração via HTML5 Audio API — sobrescreve SEMPRE o campo de
+      // duração da coreografia com o valor real (ver comentário completo
+      // no setData abaixo, 2026-07-17).
       const durationSec = await readAudioDuration(file);
 
       // Se já havia trilha enviada (path interno, não URL externa), deleta o
@@ -410,10 +389,14 @@ const InscricaoWizard: React.FC = () => {
         ...d,
         trilha_url: path,
         trilha_pendente: false,
-        // Auto-fill duração da coreografia com a da trilha quando vazia.
-        // Trilha e coreografia são conceitos distintos (trilha pode ter intro/outro),
-        // mas começar com o valor exato do arquivo evita erro de digitação.
-        duracao_minutos: d.duracao_minutos || (durationSec > 0 ? formatTempo(durationSec) : ''),
+        // Sobrescreve SEMPRE com a duração real do arquivo (2026-07-17) — antes
+        // só preenchia se o campo estivesse vazio, o que deixava passar um valor
+        // digitado errado (ou digitado de propósito, curto, pra escapar da
+        // validação) sem nunca ser corrigido pelo dado real. Trilha e coreografia
+        // continuam sendo conceitos distintos (trilha pode ter intro/outro), mas
+        // uma vez que o arquivo existe, ele é a fonte de verdade — o produtor
+        // ainda pode reeditar depois se quiser refinar.
+        duracao_minutos: durationSec > 0 ? formatTempo(durationSec) : d.duracao_minutos,
       }));
       setTrilhaFileName(file.name);
       setTrilhaDurationSeconds(durationSec > 0 ? durationSec : null);
@@ -724,13 +707,13 @@ const InscricaoWizard: React.FC = () => {
         if (sec <= 0)        return 'Duração inválida. Use o formato MM:SS (ex: 03:45).';
         if (sec < 30)        return 'Duração muito curta. Mínimo: 00:30.';
         if (sec > 30 * 60)   return 'Duração muito longa. Máximo: 30:00.';
-        // Item 1 auditoria 2026-05-17: valida contra max_time da modalidade.
-        // Regulamentos típicos: Solo/Duo/Trio 2-3min, Grupo 3-5min.
-        const maxTime = (formacao as any)?.max_time as string | undefined;
-        const maxSec = maxTime ? parseTempoSegundos(maxTime) : 0;
-        if (maxSec > 0 && sec > maxSec) {
-          return `Duração (${data.duracao_minutos}) excede o máximo da modalidade ${modalidade} (${maxTime}). Reduza a duração ou troque de modalidade.`;
-        }
+        // Item 1 auditoria 2026-05-17, revisado 2026-07-17: tempo acima do
+        // max_time da modalidade NÃO bloqueia mais o avanço — tempo
+        // excedido em festival de dança é regra de PENALIZAÇÃO de nota
+        // (aplicada na apuração, ver backlog_penalidade_tempo_excedido),
+        // não motivo pra impedir a inscrição de competir. O aviso segue
+        // visível inline (abaixo do campo) pra avisar o inscrito antes de
+        // seguir. Ver decisão em conversa 2026-07-17.
       }
       if (!data.coreografo_nome.trim())    return 'Informe o nome do coreógrafo.';
       // Tipo de mostra obrigatório quando há 2+ opções habilitadas pelo produtor.
@@ -1405,8 +1388,10 @@ const InscricaoWizard: React.FC = () => {
                   className={inputCls}
                 />
                 {/* Validação visual contra max_time da modalidade (item 1 da
-                    auditoria 2026-05-17). Mostra ✓ quando dentro do limite,
-                    ⚠️ quando excede. Submit fica bloqueado quando excede. */}
+                    auditoria 2026-05-17, revisado 2026-07-17). Mostra ✓
+                    quando dentro do limite, ⚠️ quando excede — NÃO bloqueia
+                    mais o avanço (tempo excedido é penalização de nota na
+                    apuração, não motivo pra travar a inscrição). */}
                 {(() => {
                   const sec = data.duracao_minutos ? parseTempoSegundos(data.duracao_minutos) : 0;
                   const maxStr = (formacao as any)?.max_time as string | undefined;
@@ -1420,8 +1405,8 @@ const InscricaoWizard: React.FC = () => {
                   }
                   if (maxSec > 0 && sec > maxSec) {
                     return (
-                      <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 font-bold">
-                        ⚠ Excede o máximo da modalidade {modalidade} ({maxStr}). Reduza a duração ou troque pra uma modalidade com tempo maior.
+                      <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 font-bold">
+                        ⚠ Acima do máximo da modalidade {modalidade} ({maxStr}). A inscrição pode seguir, mas fica sujeita à penalização prevista no regulamento.
                       </p>
                     );
                   }
@@ -1765,6 +1750,15 @@ const InscricaoWizard: React.FC = () => {
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug truncate">
                     {trilhaFileName ?? data.trilha_url.split('/').pop()}
                   </p>
+                  {/* Duração real do arquivo vs max_time da modalidade — nunca
+                      bloqueia, só sinaliza (tempo excedido é penalização de
+                      nota na apuração, não motivo pra travar o envio). */}
+                  <div className="mt-1.5">
+                    <TrackDurationBadge
+                      durationSeconds={trilhaDurationSeconds}
+                      maxSeconds={(formacao as any)?.max_time ? parseTempoSegundos((formacao as any).max_time) : undefined}
+                    />
+                  </div>
                 </div>
                 <button
                   onClick={handleTrilhaRemove}

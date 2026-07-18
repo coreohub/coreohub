@@ -7,9 +7,11 @@ import { getAllGenres } from '../services/genreService';
 import { parseTempoSegundos } from '../utils/masks';
 import { isRegistrationCancelled, isRegistrationPending, registrationDisplayKey } from '../utils/registrationStatus';
 import { resolveTrilhaUrl } from '../utils/formatters';
+import { readAudioDuration } from '../utils/audioDuration';
+import TrackDurationBadge from '../components/TrackDurationBadge';
 import { EventStyle } from '../types';
 import {
-  Music2, Upload, Play, Pause, CheckCircle2, Check,
+  Music2, Upload, Play, Pause, CheckCircle2,
   Loader2, Lock, Calendar, Clapperboard,
   AlertTriangle, RefreshCw, Headphones, Trash2,
   ShieldAlert, CreditCard, ArrowRight, Disc,
@@ -86,15 +88,9 @@ const fmtDate = (d?: string) => {
 /* ══════════════════════════════════════════════════════════════
    PRÉVIA DA MÚSICA (neutra e minimalista)
    Botão play/pause apagado (não verde) + nome do arquivo + duração,
-   com selo de limite da modalidade: ✓ dentro / ⚠ acima do máximo.
+   com selo de limite da modalidade (TrackDurationBadge, compartilhado
+   com InscricaoWizard.tsx): ✓ dentro / ⚠ acima do máximo.
 ══════════════════════════════════════════════════════════════ */
-const fmtDur = (s: number) => {
-  if (!s || !isFinite(s)) return '';
-  const m = Math.floor(s / 60);
-  const sec = Math.round(s % 60);
-  return `${m}:${sec.toString().padStart(2, '0')}`;
-};
-
 const TrackPreview: React.FC<{
   url: string;
   filename?: string | null;
@@ -117,10 +113,7 @@ const TrackPreview: React.FC<{
     setPlaying(!playing);
   };
 
-  const dur    = durationSeconds && durationSeconds > 0 ? durationSeconds : liveDur;
-  const hasMax = !!maxSeconds && maxSeconds > 0 && dur > 0;
-  const over   = hasMax && dur > (maxSeconds as number);
-  const within = hasMax && !over;
+  const dur = durationSeconds && durationSeconds > 0 ? durationSeconds : liveDur;
 
   return (
     <div className="flex items-center gap-3 p-2.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/8 rounded-xl">
@@ -139,16 +132,8 @@ const TrackPreview: React.FC<{
         <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 truncate">
           {filename || 'Música enviada'}
         </p>
-        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-          {dur > 0 && (
-            <span className="text-[10px] font-bold text-slate-400 tabular-nums">{fmtDur(dur)}</span>
-          )}
-          {within && <Check size={11} className="text-emerald-500 shrink-0" />}
-          {over && (
-            <span className="inline-flex items-center gap-0.5 text-[9px] font-black uppercase tracking-wide text-amber-600 dark:text-amber-400">
-              <AlertTriangle size={10} /> acima do limite (máx {fmtDur(maxSeconds as number)})
-            </span>
-          )}
+        <div className="mt-0.5">
+          <TrackDurationBadge durationSeconds={dur} maxSeconds={maxSeconds} />
         </div>
       </div>
 
@@ -205,19 +190,6 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
   const isDead     = isRegistrationCancelled(coreo.status_pagamento);
   const locked     = isDead || (deadlinePassed && !overrideOn);
   const editable   = !locked;
-
-  /** Reads the audio file duration in seconds using HTML5 Audio API */
-  const readAudioDuration = (file: File): Promise<number> =>
-    new Promise((resolve) => {
-      const url = URL.createObjectURL(file);
-      const audio = new Audio(url);
-      audio.addEventListener('loadedmetadata', () => {
-        const dur = isFinite(audio.duration) ? Math.round(audio.duration) : 0;
-        URL.revokeObjectURL(url);
-        resolve(dur);
-      });
-      audio.addEventListener('error', () => { URL.revokeObjectURL(url); resolve(0); });
-    });
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
