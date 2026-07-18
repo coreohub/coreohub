@@ -145,6 +145,12 @@ const Certificates: React.FC = () => {
 
   // Pré-visualização em PDF (dados fictícios, não toca certificates_issued)
   const [previewing, setPreviewing] = useState(false);
+  // Preview ao vivo com o PDF real (não mais mock CSS) — gerado sozinho
+  // sempre que o template salvo muda, pra "Preview ao vivo" mostrar
+  // exatamente o que sai de verdade (mock CSS divergia do PDF real: cor,
+  // posição do selo/QR, marca d'água etc — reportado pelo produtor).
+  const [livePreviewUrl, setLivePreviewUrl] = useState<string | null>(null);
+  const [livePreviewLoading, setLivePreviewLoading] = useState(false);
 
   // Emit batch state
   const [events, setEvents]                 = useState<EventOption[]>([]);
@@ -323,36 +329,40 @@ const Certificates: React.FC = () => {
   };
 
   // ── Pré-visualizar PDF (dados fictícios) ───────────────────────────────
-  // Volta a abrir numa aba nova (window.open) — a tentativa de embutir o PDF
-  // dentro do card pequeno "Preview ao vivo" piorou a experiência (PDF real
-  // é maior/mais detalhado que a caixa quadrada permite mostrar). O que o
-  // produtor queria de fato já está coberto: a thumbnail do modelo
-  // selecionado aparece sozinha no card ao trocar de preset (ver
-  // `formPreset === 'oficial-dourado'` no JSX abaixo), sem precisar gerar
-  // PDF nenhum pra isso.
+  // Busca o PDF de preview do template salvo e devolve um File object URL —
+  // File (não Blob puro) porque só assim o Chrome respeita um nome de
+  // arquivo decente no "Salvar como" em vez do UUID do blob. Manda o evento
+  // selecionado no dropdown "Emitir Certificados" (quando houver) pra
+  // edge function usar nome/data/local reais em vez do fictício "Festival
+  // CoreoHub Demo" — participante/coreografia continuam fictícios (não há
+  // inscrito específico escolhido, só o evento).
+  const fetchPreviewFileUrl = useCallback(async (templateId: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`${supabaseUrl}/functions/v1/get-certificate-pdf`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.access_token}`,
+      },
+      body: JSON.stringify({ preview: true, template_id: templateId, event_id: selectedEvent || undefined }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error ?? 'Erro ao gerar preview');
+    }
+    const blob = await res.blob();
+    const file = new File([blob], `certificado-preview-${activeType}.pdf`, { type: 'application/pdf' });
+    return URL.createObjectURL(file);
+  }, [activeType, selectedEvent]);
+
+  // Botão "Pré-visualizar PDF" — mesmo PDF que já aparece no card "Preview
+  // ao vivo" (ver useEffect abaixo), só que abre em tela cheia numa aba
+  // nova. Útil pra conferir detalhe fino que o card pequeno não mostra bem.
   const previewPdf = async () => {
     if (!template?.id) return;
     setPreviewing(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${supabaseUrl}/functions/v1/get-certificate-pdf`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({ preview: true, template_id: template.id }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? 'Erro ao gerar preview');
-      }
-      const blob = await res.blob();
-      // Blob puro não carrega nome nenhum — Chrome sugere o UUID do blob:
-      // URL como nome no "Salvar como". Envelopar num File com .name real
-      // é o jeito que o navegador realmente respeita pra isso.
-      const file = new File([blob], `certificado-preview-${activeType}.pdf`, { type: 'application/pdf' });
-      const url = URL.createObjectURL(file);
+      const url = await fetchPreviewFileUrl(template.id);
       window.open(url, '_blank');
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e: any) {
@@ -361,6 +371,26 @@ const Certificates: React.FC = () => {
       setPreviewing(false);
     }
   };
+
+  // Preview ao vivo (card pequeno) — gera o PDF real sozinho toda vez que o
+  // template salvo muda, em vez de um mock CSS que sempre divergia do PDF
+  // de verdade (posição do selo/QR, marca d'água, fonte real etc).
+  useEffect(() => {
+    if (!template?.id) {
+      setLivePreviewUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
+      return;
+    }
+    let cancelled = false;
+    setLivePreviewLoading(true);
+    fetchPreviewFileUrl(template.id)
+      .then(url => {
+        if (cancelled) { URL.revokeObjectURL(url); return; }
+        setLivePreviewUrl(prev => { if (prev) URL.revokeObjectURL(prev); return url; });
+      })
+      .catch(() => { /* silencioso — card cai pro fallback "sem preview ainda" */ })
+      .finally(() => { if (!cancelled) setLivePreviewLoading(false); });
+    return () => { cancelled = true; };
+  }, [template?.id, fetchPreviewFileUrl]);
 
   // ── Save template ──────────────────────────────────────────────────────
   const saveTemplate = async () => {
@@ -670,68 +700,33 @@ const Certificates: React.FC = () => {
 
             {/* Coluna 3: Preview + Emitir */}
             <div className="space-y-6">
-              {/* Preview WYSIWYG com dados de exemplo (padrão Sympla/Even3).
-                  Renderização CSS — PDF final tem QR + assinatura digital. */}
+              {/* PDF real (não mais mock CSS — mock sempre divergia do PDF de
+                  verdade: posição do selo/QR, marca d'água, fonte real).
+                  Gerado sozinho pelo useEffect de livePreviewUrl sempre que
+                  o template salvo (ou o evento escolhido) muda. */}
               <Card title="Preview ao vivo">
-                <div
-                  className="aspect-[297/210] rounded-md border-2 relative overflow-hidden flex items-center justify-center"
-                  style={{
-                    background: '#fefdf6',
-                    borderColor: formAccent,
-                  }}
-                >
-                  {formPreset === 'oficial-dourado' && (
-                    <img src={OFICIAL_DOURADO_THUMB} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                  )}
-                  {formBgUrl && formPreset === 'custom' && (
-                    <img src={formBgUrl} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" />
-                  )}
-                  <div className="absolute inset-2 border" style={{ borderColor: formAccent, borderWidth: 0.5 }} />
-                  <div className="relative text-center px-3 sm:px-4 w-full">
-                    <p className="font-black tracking-tighter" style={{ color: formPrimary, fontSize: 'clamp(10px, 3vw, 22px)' }}>CERTIFICADO</p>
-                    <p className="text-[7px] font-bold uppercase tracking-widest mt-1" style={{ color: formAccent }}>
-                      {activeType === 'workshop' ? 'DE PARTICIPAÇÃO EM WORKSHOP' : 'DE PARTICIPAÇÃO'}
-                    </p>
-                    <p className="italic text-[8px] mt-2 text-slate-500">Certificamos que</p>
-                    <p className="font-black tracking-tight mt-0.5" style={{ color: formPrimary, fontSize: 'clamp(8px, 2.5vw, 16px)' }}>
-                      Maria Silva Oliveira
-                    </p>
-                    <p className="text-[7px] mt-1.5 text-slate-500">
-                      {activeType === 'workshop'
-                        ? 'participou do workshop'
-                        : 'participou da coreografia'}
-                    </p>
-                    <p className="font-black" style={{ color: formAccent, fontSize: 'clamp(7px, 1.8vw, 11px)' }}>
-                      {activeType === 'workshop' ? '"Hip-hop Fundamentos"' : '"Renascer"'}
-                    </p>
-                    <p className="text-[6px] mt-1 text-slate-500">
-                      {activeType === 'workshop'
-                        ? `no ${previewEventName} · 06 de junho de 2026`
-                        : `no ${previewEventName} · Solo · Ballet Clássico · Juvenil`}
-                    </p>
-
-                    {/* Assinaturas — pareadas com cargo se houver */}
-                    {formSigs.filter(Boolean).length > 0 && (
-                      <div className="mt-3 sm:mt-4 flex justify-center gap-3 sm:gap-6">
-                        {formSigs.map((nome, i) => nome && (
-                          <div key={i} className="text-center">
-                            <div className="border-t mx-auto" style={{ borderColor: formPrimary, width: 'clamp(40px, 12vw, 80px)' }} />
-                            <p className="font-bold mt-0.5" style={{ color: formPrimary, fontSize: 'clamp(6px, 1.5vw, 9px)' }}>
-                              {nome}
-                            </p>
-                            {formTitles[i] && (
-                              <p className="italic" style={{ color: formAccent, fontSize: 'clamp(5px, 1.2vw, 7px)' }}>
-                                {formTitles[i]}
-                              </p>
-                            )}
-                          </div>
-                        ))}
+                {livePreviewUrl ? (
+                  <div className="relative rounded-md border border-slate-200 dark:border-white/10 overflow-hidden bg-slate-100 dark:bg-black/30" style={{ minHeight: 420 }}>
+                    <iframe src={livePreviewUrl} title="Preview do certificado" className="w-full h-full" style={{ minHeight: 420 }} />
+                    {livePreviewLoading && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <Loader2 size={20} className="animate-spin text-white" />
                       </div>
                     )}
                   </div>
-                </div>
+                ) : livePreviewLoading ? (
+                  <div className="aspect-[297/210] rounded-md border border-slate-200 dark:border-white/10 flex items-center justify-center">
+                    <Loader2 size={24} className="animate-spin text-[#ff0068]" />
+                  </div>
+                ) : (
+                  <div className="aspect-[297/210] rounded-md border-2 border-dashed border-slate-300 dark:border-white/15 flex items-center justify-center px-4 text-center">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Salve o template pra ver o preview real aqui</p>
+                  </div>
+                )}
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 italic mt-2">
-                  Preview com dados de exemplo. PDF final terá nome real do inscrito + QR de validação no rodapé.
+                  {selectedEvent
+                    ? `PDF real com dados de exemplo, usando o evento "${previewEventName}". Nome/coreografia continuam fictícios.`
+                    : 'PDF real com dados de exemplo (evento fictício — selecione um evento em "Emitir Certificados" abaixo pra usar o nome real).'}
                 </p>
                 <button
                   onClick={previewPdf}
@@ -739,13 +734,10 @@ const Certificates: React.FC = () => {
                   className="w-full mt-3 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-white/10 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-50 transition"
                 >
                   {previewing ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />}
-                  Pré-visualizar PDF
+                  Abrir em tela cheia
                 </button>
-                {!template?.id && (
-                  <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 italic">Salve o template pra pré-visualizar o PDF real</p>
-                )}
                 {template?.id && isDirty && (
-                  <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 italic">Você tem alterações não salvas — a pré-visualização vai mostrar a última versão salva, não o que está na tela agora. Salve pra atualizar.</p>
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 italic">Você tem alterações não salvas — o preview mostra a última versão salva, não o que está na tela agora. Salve pra atualizar.</p>
                 )}
               </Card>
 

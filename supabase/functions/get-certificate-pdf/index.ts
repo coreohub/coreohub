@@ -731,7 +731,7 @@ Deno.serve(async (req) => {
     // ── Modo preview: gera um PDF de exemplo com dados fictícios pro produtor
     // conferir o template ANTES de emitir em lote pros inscritos reais. Não
     // toca certificates_issued nem o bucket — devolve o PDF direto na resposta.
-    const { preview, template_id: previewTemplateId } = body as { preview?: boolean; template_id?: string }
+    const { preview, template_id: previewTemplateId, event_id: previewEventId } = body as { preview?: boolean; template_id?: string; event_id?: string }
     if (preview) {
       if (!user) throw new Error('Não autenticado')
       if (!previewTemplateId) throw new Error('template_id obrigatório pra preview')
@@ -748,9 +748,26 @@ Deno.serve(async (req) => {
       }
 
       const isWorkshop = tpl.template_type === 'workshop'
+      // Evento real (quando o produtor já escolheu um no dropdown "Emitir
+      // Certificados") substitui nome/data/local fictícios — participante/
+      // coreografia continuam de exemplo, não há inscrito específico aqui.
+      // Ownership checado (created_by = producer_id do template) pra nunca
+      // vazar nome de evento de outro produtor via preview.
+      let realEvent: { name: string; event_date: string | null; location: string | null } | null = null
+      if (previewEventId) {
+        const { data: ev } = await supabase
+          .from('events')
+          .select('name, event_date, location, created_by')
+          .eq('id', previewEventId)
+          .maybeSingle()
+        if (ev && ev.created_by === tpl.producer_id) realEvent = ev
+      }
+      const eventoNome = realEvent?.name ?? 'Festival CoreoHub Demo'
+      const eventoData = realEvent?.event_date ?? new Date().toISOString().slice(0, 10)
+      const eventoLocal = realEvent?.location ?? 'Votuporanga, SP'
       const previewData = isWorkshop
-        ? { workshop_nome: 'Hip-hop Fundamentos', professor_nome: 'Jonathan Lupe', duracao_minutos: 90, evento_nome: 'Festival CoreoHub Demo', evento_data: new Date().toISOString().slice(0, 10), evento_local: 'Votuporanga, SP' }
-        : { coreografia: 'Renascer', modalidade: 'Solo · Ballet Clássico · Juvenil', classificacao: 'Medalha de Ouro', tipo_apresentacao: 'competitiva', evento_nome: 'Festival CoreoHub Demo', evento_data: new Date().toISOString().slice(0, 10), evento_local: 'Votuporanga, SP' }
+        ? { workshop_nome: 'Hip-hop Fundamentos', professor_nome: 'Jonathan Lupe', duracao_minutos: 90, evento_nome: eventoNome, evento_data: eventoData, evento_local: eventoLocal }
+        : { coreografia: 'Renascer', modalidade: 'Solo · Ballet Clássico · Juvenil', classificacao: 'Medalha de Ouro', tipo_apresentacao: 'competitiva', evento_nome: eventoNome, evento_data: eventoData, evento_local: eventoLocal }
 
       const previewHash = crypto.randomUUID()
       const frontUrl = Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'
