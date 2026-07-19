@@ -19,6 +19,30 @@ export function isEquipeOperacional(role: UserRole | null | undefined): boolean 
   return !!role && EQUIPE_OPERACIONAL_ROLES.includes(role);
 }
 
+/** Rótulo humano por cargo operacional — fonte única (antes duplicado e
+ *  incompleto em TeamInvite.tsx, faltando APOIO_WORKSHOP/STAFF). Usado no
+ *  convite (ROLE_LABEL) e no fallback do badge do Header. */
+export const CARGO_LABEL: Partial<Record<UserRole, string>> = {
+  [UserRole.COORDENADOR]:    'Coordenador',
+  [UserRole.MESARIO]:        'Coordenador do Júri',
+  [UserRole.SONOPLASTA]:     'Sonoplasta',
+  [UserRole.RECEPCAO]:       'Recepção / Palco',
+  [UserRole.PALCO]:          'Marcador de Palco',
+  [UserRole.APOIO_WORKSHOP]: 'Apoio de Workshop',
+  [UserRole.STAFF]:          'Equipe',
+};
+
+/** "Ser equipe" e "ser inscrito" não são exclusivos (Sidebar já assume isso
+ *  desde ALL_USER_OR_EQUIPE) — mas antes da home adaptativa, nada no
+ *  Dashboard sabia detectar o caso híbrido: cargo operacional cobre quem foi
+ *  convidado via /minha-equipe, e o segundo braço cobre o caso legado/teste
+ *  onde `permissoes_custom` está populado mas o role ainda é de inscrito
+ *  (ex: conta promovida na mão via SQL, sem passar pelo convite). */
+export function isEquipeAtiva(role: UserRole | null | undefined, perms: PermissoesCustom | null | undefined): boolean {
+  if (isEquipeOperacional(role)) return true;
+  return !!perms && Object.values(perms).some(v => v === true);
+}
+
 /** Mapeamento permissão → item de menu, compartilhado entre Sidebar (monta o
  *  menu da Equipe) e Auth (calcula pra onde mandar o membro após o login).
  *  Ordem reflete prioridade de fluxo de trabalho (Cronograma/Credenciamento
@@ -59,4 +83,22 @@ export function resolveFirstEquipeRoute(perms: PermissoesCustom | null | undefin
   if (!perms) return null;
   const match = PERM_MENU.find(item => perms[item.perm]);
   return match?.path ?? null;
+}
+
+/** Itens de menu (dedupe por rota) pras permissões ativas — usado no card de
+ *  resumo de equipe da home adaptativa (Dashboard) e reaproveitável em
+ *  qualquer outro lugar que precise listar "o que essa pessoa pode fazer"
+ *  sem duplicar Cronograma/Credenciamento pra cada checkin_* ligado. */
+export function resolveEquipeMenuItems(
+  perms: PermissoesCustom | null | undefined
+): { path: string; label: string; icon: React.ElementType }[] {
+  if (!perms) return [];
+  const seen = new Set<string>();
+  const items: { path: string; label: string; icon: React.ElementType }[] = [];
+  for (const item of PERM_MENU) {
+    if (!perms[item.perm] || seen.has(item.path)) continue;
+    seen.add(item.path);
+    items.push({ path: item.path, label: item.label, icon: item.icon });
+  }
+  return items;
 }
