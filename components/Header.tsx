@@ -6,6 +6,7 @@ import { getInitials } from '../utils/formatters';
 import BrandIcon from './BrandIcon';
 import NotificationBell from './NotificationBell';
 import { supabase } from '../services/supabase';
+import { EQUIPE_OPERACIONAL_ROLES } from '../utils/permMenu';
 
 interface HeaderProps {
   toggleSidebar: () => void;
@@ -16,6 +17,10 @@ interface HeaderProps {
   setActiveRole: (role: UserRole) => void;
 }
 
+// "Visão" (dropdown) só é oferecido pro super admin trocar de perfil — por
+// isso só lista os papéis "família" (admin/produtor/equipe genérica/jurado/
+// inscrito/espectador). Cargos operacionais reais (COORDENADOR/MESARIO/...)
+// nunca aparecem aqui de propósito.
 const ROLE_OPTIONS: { role: UserRole; label: string; color: string }[] = [
   { role: UserRole.COREOHUB_ADMIN, label: 'Super Admin', color: '#ff0068' },
   { role: UserRole.ORGANIZER,        label: 'Produtor',    color: '#8b5cf6' },
@@ -24,6 +29,25 @@ const ROLE_OPTIONS: { role: UserRole; label: string; color: string }[] = [
   { role: UserRole.USER,             label: 'Inscrito',    color: '#10b981' },
   { role: UserRole.SPECTATOR,        label: 'Espectador',  color: '#64748b' },
 ];
+const EQUIPE_COLOR = '#0ea5e9';
+const FALLBACK_OPTION = { label: 'Usuário', color: '#64748b' };
+
+// Resolve o label/cor do badge no header a partir do role REAL do profile —
+// nunca do índice 0 de ROLE_OPTIONS. Achado em auditoria 2026-07-19: um
+// cargo operacional (COORDENADOR/MESARIO/SONOPLASTA/...) não está em
+// ROLE_OPTIONS (que só cobre a "Visão" do super admin), então o antigo
+// `ROLE_OPTIONS.find(...) ?? ROLE_OPTIONS[0]` caía silenciosamente no
+// PRIMEIRO item da lista — que por acaso é "Super Admin". Resultado: um
+// membro de equipe via "SUPER ADMIN" escrito no próprio header, mesmo sem
+// ter esse acesso (confirmado em prod: role=COORDENADOR renderizando
+// "SUPER ADMIN"). Fix: cargo operacional cai no rótulo genérico "Equipe";
+// qualquer outro role sem entrada cai num fallback neutro, nunca em admin.
+function resolveRoleBadge(role: UserRole | null): { label: string; color: string } {
+  const known = ROLE_OPTIONS.find(o => o.role === role);
+  if (known) return known;
+  if (role && EQUIPE_OPERACIONAL_ROLES.includes(role)) return { label: 'Equipe', color: EQUIPE_COLOR };
+  return FALLBACK_OPTION;
+}
 
 const Header = ({ toggleSidebar, profile, theme, toggleTheme, activeRole, setActiveRole }: HeaderProps) => {
   const navigate = useNavigate();
@@ -33,7 +57,10 @@ const Header = ({ toggleSidebar, profile, theme, toggleTheme, activeRole, setAct
   const dropdownRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  const activeOption = ROLE_OPTIONS.find(o => o.role === activeRole) ?? ROLE_OPTIONS[0];
+  // Badge do menu de usuário (nome + cargo) usa resolveRoleBadge — cobre
+  // qualquer role. O dropdown "Visão" abaixo (só super admin) continua
+  // restrito a ROLE_OPTIONS de propósito (não é pra ficar gigante).
+  const activeOption = resolveRoleBadge(activeRole);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
