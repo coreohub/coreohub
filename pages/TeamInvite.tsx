@@ -6,18 +6,10 @@ import {
   getTeamInviteByToken,
   type TeamInvite,
 } from '../services/teamInviteService';
-import { resolveFirstEquipeRoute } from '../utils/permMenu';
+import { resolveFirstEquipeRoute, resolveEquipeMenuItems, CARGO_LABEL } from '../utils/permMenu';
 import {
   Users, Loader2, AlertCircle, CheckCircle, ArrowRight, Mail, User as UserIcon,
 } from 'lucide-react';
-
-const ROLE_LABEL: Record<string, string> = {
-  COORDENADOR: 'Coordenador',
-  MESARIO:     'Coordenador do Júri',
-  SONOPLASTA:  'Sonoplasta',
-  RECEPCAO:    'Recepção / Palco',
-  PALCO:       'Marcador de Palco',
-};
 
 // Convite de equipe via código por e-mail (OTP), sem senha — mesmo padrão
 // Slack/Notion/Linear: o código verificado JÁ é login + confirmação de
@@ -201,11 +193,33 @@ const TeamInviteLanding = () => {
           {invite && (
             <p className="text-xs text-slate-500 font-bold">
               Você foi convidado como{' '}
-              <span className="text-[#ff0068]">{ROLE_LABEL[invite.role] ?? invite.role}</span>
+              <span className="text-[#ff0068]">{CARGO_LABEL[invite.role] ?? invite.role}</span>
               {invite.cargo && <> — {invite.cargo}</>}
             </p>
           )}
         </div>
+
+        {/* Preview das permissões concedidas — RBAC best practice é mostrar
+            o que o convite libera ANTES de aceitar, não só depois de já
+            estar logado (achado em auditoria 2026-07-19: convidado só via
+            os itens de menu depois de aceitar, sem chance de conferir antes). */}
+        {invite && resolveEquipeMenuItems(invite.permissoes_custom).length > 0 && (
+          <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 rounded-2xl p-4">
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2.5">
+              Esse convite vai te dar acesso a
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {resolveEquipeMenuItems(invite.permissoes_custom).map(item => (
+                <span
+                  key={item.path}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-black uppercase tracking-widest"
+                >
+                  <item.icon size={12} /> {item.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 rounded-3xl p-6 space-y-5 shadow-sm">
           {step === 'otp-sent' && (

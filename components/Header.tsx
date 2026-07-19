@@ -6,7 +6,7 @@ import { getInitials } from '../utils/formatters';
 import BrandIcon from './BrandIcon';
 import NotificationBell from './NotificationBell';
 import { supabase } from '../services/supabase';
-import { EQUIPE_OPERACIONAL_ROLES } from '../utils/permMenu';
+import { EQUIPE_OPERACIONAL_ROLES, CARGO_LABEL } from '../utils/permMenu';
 
 interface HeaderProps {
   toggleSidebar: () => void;
@@ -40,12 +40,16 @@ const FALLBACK_OPTION = { label: 'Usuário', color: '#64748b' };
 // PRIMEIRO item da lista — que por acaso é "Super Admin". Resultado: um
 // membro de equipe via "SUPER ADMIN" escrito no próprio header, mesmo sem
 // ter esse acesso (confirmado em prod: role=COORDENADOR renderizando
-// "SUPER ADMIN"). Fix: cargo operacional cai no rótulo genérico "Equipe";
-// qualquer outro role sem entrada cai num fallback neutro, nunca em admin.
+// "SUPER ADMIN"). Fix: cargo operacional usa CARGO_LABEL (fonte única
+// compartilhada com o convite de equipe, TeamInvite.tsx) em vez do genérico
+// "Equipe"; qualquer outro role sem entrada cai num fallback neutro, nunca
+// em admin.
 function resolveRoleBadge(role: UserRole | null): { label: string; color: string } {
   const known = ROLE_OPTIONS.find(o => o.role === role);
   if (known) return known;
-  if (role && EQUIPE_OPERACIONAL_ROLES.includes(role)) return { label: 'Equipe', color: EQUIPE_COLOR };
+  if (role && EQUIPE_OPERACIONAL_ROLES.includes(role)) {
+    return { label: CARGO_LABEL[role] ?? 'Equipe', color: EQUIPE_COLOR };
+  }
   return FALLBACK_OPTION;
 }
 
