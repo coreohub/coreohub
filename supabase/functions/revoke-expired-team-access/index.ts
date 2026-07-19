@@ -51,10 +51,13 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceKey)
 
   try {
+    // .or() em vez de .eq('is_demo', false) — NULL != false em SQL, então
+    // um evento real com is_demo NULL (se algum dia existir) não pode ficar
+    // fora do escopo silenciosamente.
     const { data: events, error: evErr } = await supabase
       .from('events')
       .select('id, equipe_access_days_after')
-      .eq('is_demo', false)
+      .or('is_demo.eq.false,is_demo.is.null')
     if (evErr) return json({ status: 'error', reason: evErr.message }, 500)
     if (!events || events.length === 0) return json({ status: 'ok', revoked: 0, scanned_events: 0 })
 

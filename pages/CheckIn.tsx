@@ -262,12 +262,22 @@ const CheckIn = () => {
         return;
       }
       const now = new Date().toISOString();
-      const { error: upErr } = await supabase
+      // .select('id') detecta RLS bloqueando silenciosamente (0 rows
+      // afetadas, sem erro) — mesmo hardening já usado no caso WORKSHOP
+      // acima. Relevante aqui porque o UPDATE é cross-user (staff marcando
+      // OUTRO colega), coberto por policy escopada por evento desde
+      // 2026-07-19 (20260719b_equipe_checkin_scoped_policy.sql).
+      const { data: updated, error: upErr } = await supabase
         .from('profiles')
         .update({ last_checkin_at: now })
-        .eq('id', id);
+        .eq('id', id)
+        .select('id');
       if (upErr) {
         setScanResult({ type: 'error', message: `Falha ao marcar: ${upErr.message}`, name: profile.full_name, kind: 'EQUIPE' });
+        return;
+      }
+      if (!updated || updated.length === 0) {
+        setScanResult({ type: 'error', message: 'Sem permissão pra marcar essa pessoa. Acione o coordenador.', name: profile.full_name, kind: 'EQUIPE' });
         return;
       }
       const label = profile.cargo || (isCoord ? 'Coordenação' : 'Equipe');
