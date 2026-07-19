@@ -417,13 +417,46 @@ const EquipeProdutor = () => {
   };
 
   const commitRemove = async (member: Member) => {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ role: UserRole.USER, cargo: null, permissoes_custom: null })
-      .eq('id', member.id);
+    // Via edge function (service_role) — não mais UPDATE direto do client.
+    // profiles.role/cargo/permissoes_custom são colunas protegidas pelo
+    // trigger protect_profiles_privileged_columns; um produtor comum (não
+    // super admin) tinha esse UPDATE revertido silenciosamente pro role/
+    // permissoes_custom antigos, mesmo com a UI mostrando sucesso (achado
+    // em auditoria 2026-07-19).
+    const { error } = await supabase.functions.invoke('manage-team-member', {
+      body: { action: 'remove', member_id: member.id },
+    });
     if (error) { showToast('error', 'Erro: ' + error.message); return; }
     setMembers(prev => prev.filter(m => m.id !== member.id));
     showToast('success', `${member.full_name || 'Membro'} removido da equipe.`);
+  };
+
+  /* ── Encerrar acesso de TODA a equipe (revogação em lote) ──
+     Mesmo efeito de "Remover" individual, mas pra todo mundo listado de uma
+     vez — útil pós-evento sem esperar o grace period do cron automático. */
+  const handleRevokeAll = () => {
+    if (members.length === 0) return;
+    askConfirm(
+      `Encerrar o acesso de equipe de ${members.length} pessoa${members.length !== 1 ? 's' : ''} agora? Ninguém perde a própria conta — só o acesso de equipe a este evento.`,
+      () => void commitRevokeAll(),
+    );
+  };
+
+  const commitRevokeAll = async () => {
+    const targets = [...members];
+    let failed = 0;
+    for (const member of targets) {
+      const { error } = await supabase.functions.invoke('manage-team-member', {
+        body: { action: 'revoke', member_id: member.id },
+      });
+      if (error) failed++;
+    }
+    await fetchMembers();
+    if (failed === 0) {
+      showToast('success', `Acesso de equipe encerrado pra ${targets.length} pessoa${targets.length !== 1 ? 's' : ''}.`);
+    } else {
+      showToast('error', `${failed} de ${targets.length} falharam — tente de novo.`);
+    }
   };
 
   /* ── Edit permissions ── */
@@ -447,10 +480,12 @@ const EquipeProdutor = () => {
   const commitEditPerms = async () => {
     if (!editMember) return;
     setSavingEdit(true);
-    const { error } = await supabase
-      .from('profiles')
-      .update({ permissoes_custom: editPerms })
-      .eq('id', editMember.id);
+    // Via edge function — mesmo motivo do commitRemove: permissoes_custom é
+    // coluna protegida, UPDATE direto do client (produtor comum) era
+    // silenciosamente revertido desde a migration 20260718.
+    const { error } = await supabase.functions.invoke('manage-team-member', {
+      body: { action: 'update_permissions', member_id: editMember.id, permissoes_custom: editPerms },
+    });
     setSavingEdit(false);
     if (error) { showToast('error', 'Erro: ' + error.message); return; }
     setMembers(prev => prev.map(m => m.id === editMember.id ? { ...m, permissoes_custom: editPerms } : m));
@@ -649,16 +684,28 @@ const EquipeProdutor = () => {
             </div>
           ) : (
             <>
-              {/* Busca — nome, e-mail ou cargo */}
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                <input
-                  type="text"
-                  placeholder="Buscar por nome, e-mail ou cargo..."
-                  value={memberSearch}
-                  onChange={e => setMemberSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-[#ff0068]/50 transition-all"
-                />
+              {/* Busca — nome, e-mail ou cargo + revogação em lote */}
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                  <input
+                    type="text"
+                    placeholder="Buscar por nome, e-mail ou cargo..."
+                    value={memberSearch}
+                    onChange={e => setMemberSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-[#ff0068]/50 transition-all"
+                  />
+                </div>
+                {/* Pós-evento: encerra o acesso de TODA a equipe listada de
+                    uma vez, sem esperar o grace period do cron automático
+                    (events.equipe_access_days_after). Ninguém é excluído da
+                    conta — só perde o vínculo/permissão deste evento. */}
+                <button
+                  onClick={handleRevokeAll}
+                  className="shrink-0 px-4 py-3 bg-slate-100 dark:bg-white/5 hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 transition-all"
+                >
+                  Encerrar acesso de todos
+                </button>
               </div>
 
               {filteredMembers.length === 0 ? (
