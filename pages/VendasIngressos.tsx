@@ -12,11 +12,18 @@ import { createPortal } from 'react-dom';
 import { supabase, resolveActiveEventId } from '../services/supabase';
 import {
   Ticket, Loader2, Search, Download, ExternalLink, CheckCircle2, Clock, XCircle, RotateCcw,
-  Users, DollarSign, AlertCircle, Undo2, X,
+  Users, DollarSign, AlertCircle, Undo2, X, Store, Copy, QrCode, Printer,
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 import VendasTabs from '../components/VendasTabs';
 import { maskCpfCnpj, unmaskCpfCnpj } from '../utils/masks';
+
+interface TicketTypeConfig {
+  nome: string;
+  preco?: number;
+  kind?: string;
+  lotes?: Array<{ data_virada: string | null; preco: number }>;
+}
 
 interface Row {
   id: string;
@@ -75,6 +82,22 @@ const VendasIngressos: React.FC = () => {
   const [courtesyForm, setCourtesyForm] = useState({ name: '', email: '', cpf: '', phone: '' });
   const [courtesySaving, setCourtesySaving] = useState(false);
   const [courtesyError, setCourtesyError] = useState<string | null>(null);
+  // Venda no balcão (PDV) — PIX no balcão (comissão normal, auto-confirma via
+  // webhook) ou cartão via Asaas Tap (pagamento já feito fisicamente, sem API
+  // pra confirmar sozinho — comissão 0%, decisão de produto 2026-07-19).
+  const [ticketTypes, setTicketTypes] = useState<TicketTypeConfig[]>([]);
+  const [pdvOpen, setPdvOpen] = useState(false);
+  const [pdvForm, setPdvForm] = useState({ name: '', email: '', cpf: '', phone: '' });
+  const [pdvTypeIdx, setPdvTypeIdx] = useState(0);
+  const [pdvQuantity, setPdvQuantity] = useState(1);
+  const [pdvMethod, setPdvMethod] = useState<'pix' | 'cartao_tap'>('pix');
+  const [pdvSaving, setPdvSaving] = useState(false);
+  const [pdvError, setPdvError] = useState<string | null>(null);
+  const [pdvResult, setPdvResult] = useState<{
+    ticketId: string; accessToken: string; paymentMethod: 'pix' | 'cartao_tap';
+    status: string; pix?: { encodedImage: string | null; payload: string | null };
+  } | null>(null);
+  const [pdvCopied, setPdvCopied] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -83,8 +106,9 @@ const VendasIngressos: React.FC = () => {
       const eventId = await resolveActiveEventId();
       if (!eventId) { setErr('Nenhum evento ativo encontrado.'); setLoading(false); return; }
       setEventId(eventId);
-      const { data: ev } = await supabase.from('events').select('name').eq('id', eventId).maybeSingle();
+      const { data: ev } = await supabase.from('events').select('name, ingressos_config').eq('id', eventId).maybeSingle();
       setEventName(ev?.name ?? '');
+      setTicketTypes(Array.isArray(ev?.ingressos_config) ? (ev!.ingressos_config as TicketTypeConfig[]).filter(t => t?.nome) : []);
       const { data, error } = await supabase
         .from('audience_tickets')
         .select('*')
@@ -251,6 +275,82 @@ const VendasIngressos: React.FC = () => {
     }
   };
 
+  // ─── Venda no balcão (PDV) ────────────────────────────────────────────────
+  const resolveDisplayPreco = (t: TicketTypeConfig): number => {
+    const lotes = Array.isArray(t.lotes) ? t.lotes : [];
+    if (lotes.length > 0) {
+      const todayISO = new Date().toISOString().slice(0, 10);
+      const idx = lotes.findIndex(l => !l.data_virada || l.data_virada >= todayISO);
+      return Number((idx >= 0 ? lotes[idx] : lotes[lotes.length - 1])?.preco ?? 0);
+    }
+    return Number(t.preco ?? 0);
+  };
+
+  const handleSellPdv = async () => {
+    if (!eventId || pdvSaving) return;
+    setPdvError(null);
+    const cpf = unmaskCpfCnpj(pdvForm.cpf);
+    if (!pdvForm.name.trim() || !pdvForm.email.trim() || cpf.length !== 11) {
+      setPdvError('Preencha nome, e-mail e CPF válido.');
+      return;
+    }
+    setPdvSaving(true);
+    try {
+      const { data, error: invokeErr } = await supabase.functions.invoke('create-pdv-ticket', {
+        body: {
+          event_id: eventId,
+          ticket_type_idx: pdvTypeIdx,
+          quantity: pdvQuantity,
+          buyer: {
+            name: pdvForm.name.trim(),
+            email: pdvForm.email.trim(),
+            cpf,
+            phone: pdvForm.phone.trim() || undefined,
+          },
+          payment_method: pdvMethod,
+        },
+      });
+      if (invokeErr) {
+        let serverMsg: string | null = null;
+        try {
+          const resp = (invokeErr as any).context?.response;
+          if (resp && typeof resp.json === 'function') serverMsg = (await resp.json())?.error ?? null;
+        } catch { /* ignore */ }
+        throw new Error(serverMsg ?? invokeErr.message ?? 'Falha ao vender ingresso');
+      }
+      if (data?.error) throw new Error(data.error);
+      const ticket = data.tickets?.[0];
+      setPdvResult({
+        ticketId: ticket.id,
+        accessToken: ticket.access_token,
+        paymentMethod: data.payment_method,
+        status: data.status_pagamento,
+        pix: data.pix,
+      });
+      await load();
+    } catch (e: any) {
+      setPdvError(e.message ?? String(e));
+    } finally {
+      setPdvSaving(false);
+    }
+  };
+
+  const closePdvModal = () => {
+    setPdvOpen(false);
+    setPdvResult(null);
+    setPdvError(null);
+    setPdvForm({ name: '', email: '', cpf: '', phone: '' });
+    setPdvTypeIdx(0);
+    setPdvQuantity(1);
+    setPdvMethod('pix');
+  };
+
+  // Enquanto o PIX no balcão está PENDENTE, o realtime (assinatura já
+  // existente logo acima) atualiza `rows` sozinho quando o webhook confirma
+  // — aqui só refletimos isso dentro do modal aberto, sem polling extra.
+  const pdvLiveRow = pdvResult ? rows.find(r => r.id === pdvResult.ticketId) : undefined;
+  const pdvConfirmed = pdvResult?.paymentMethod === 'cartao_tap' || pdvLiveRow?.status_pagamento === 'APROVADO';
+
   // ─── Export CSV ───────────────────────────────────────────────────────────
   const exportCsv = () => {
     const header = [
@@ -315,6 +415,13 @@ const VendasIngressos: React.FC = () => {
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-violet-500/10 border border-violet-500/30 text-violet-600 dark:text-violet-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-500/20"
           >
             <Users size={12} /> Adicionar cortesia
+          </button>
+          <button
+            onClick={() => { setPdvError(null); setPdvOpen(true); }}
+            disabled={ticketTypes.length === 0}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500/20 disabled:opacity-30"
+          >
+            <Store size={12} /> Vender no balcão
           </button>
           <button
             onClick={exportCsv}
@@ -574,6 +681,225 @@ const VendasIngressos: React.FC = () => {
                 {courtesySaving ? 'Salvando...' : 'Adicionar cortesia'}
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal de venda no balcão (PDV) */}
+      {pdvOpen && createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" role="dialog" aria-modal="true" aria-labelledby="pdv-modal-title">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5 max-h-[92dvh] overflow-y-auto">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 id="pdv-modal-title" className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white italic">
+                  Vender no balcão
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  {pdvResult ? 'Ingresso gerado' : 'Recepção com o comprador na frente — sem passar pelo checkout online'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closePdvModal}
+                className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5"
+                disabled={pdvSaving}
+                aria-label="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {!pdvResult ? (
+              <>
+                <div className="space-y-3">
+                  <div>
+                    <label htmlFor="pdv-type" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Tipo de ingresso</label>
+                    <select
+                      id="pdv-type"
+                      value={pdvTypeIdx}
+                      onChange={e => setPdvTypeIdx(Number(e.target.value))}
+                      className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white dark:[color-scheme:dark] focus:outline-none focus:border-[#ff0068]/50"
+                    >
+                      {ticketTypes.map((t, idx) => (
+                        <option key={idx} value={idx}>{t.nome} — {formatBRL(resolveDisplayPreco(t))}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="pdv-qty" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Quantidade</label>
+                    <input
+                      id="pdv-qty"
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={pdvQuantity}
+                      onChange={e => setPdvQuantity(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+                      className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="pdv-name" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Nome do comprador</label>
+                    <input
+                      id="pdv-name"
+                      value={pdvForm.name}
+                      onChange={e => setPdvForm(f => ({ ...f, name: e.target.value }))}
+                      className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="pdv-email" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">E-mail</label>
+                    <input
+                      id="pdv-email"
+                      type="email"
+                      value={pdvForm.email}
+                      onChange={e => setPdvForm(f => ({ ...f, email: e.target.value }))}
+                      className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="pdv-cpf" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">CPF</label>
+                    <input
+                      id="pdv-cpf"
+                      value={pdvForm.cpf}
+                      onChange={e => setPdvForm(f => ({ ...f, cpf: maskCpfCnpj(e.target.value) }))}
+                      placeholder="000.000.000-00"
+                      className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="pdv-phone" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Telefone (opcional)</label>
+                    <input
+                      id="pdv-phone"
+                      value={pdvForm.phone}
+                      onChange={e => setPdvForm(f => ({ ...f, phone: e.target.value }))}
+                      className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Forma de pagamento</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPdvMethod('pix')}
+                        className={`py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest border ${
+                          pdvMethod === 'pix'
+                            ? 'bg-[#ff0068] border-[#ff0068] text-white'
+                            : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        Pix (QR na tela)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPdvMethod('cartao_tap')}
+                        className={`py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest border ${
+                          pdvMethod === 'cartao_tap'
+                            ? 'bg-[#ff0068] border-[#ff0068] text-white'
+                            : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        Cartão (Asaas Tap)
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1.5">
+                      {pdvMethod === 'pix'
+                        ? 'Gera um QR Pix pra mostrar na tela. Confirma sozinho quando o cliente pagar — comissão normal.'
+                        : 'Cobra fisicamente no app da Asaas (Tap) antes de confirmar aqui. Sem comissão CoreoHub — o pagamento não passa pelo split.'}
+                    </p>
+                  </div>
+                </div>
+
+                {pdvError && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm text-red-600 dark:text-red-300 flex items-start gap-2" aria-live="polite">
+                    <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                    <span>{pdvError}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={closePdvModal}
+                    disabled={pdvSaving}
+                    className="flex-1 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 rounded-xl text-[11px] font-black uppercase tracking-widest"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSellPdv}
+                    disabled={pdvSaving || ticketTypes.length === 0}
+                    className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-xl text-[11px] font-black uppercase tracking-widest inline-flex items-center justify-center gap-2"
+                  >
+                    {pdvSaving ? <Loader2 size={14} className="animate-spin" /> : <Store size={14} />}
+                    {pdvSaving ? 'Gerando...' : pdvMethod === 'pix' ? 'Gerar QR Pix' : 'Confirmar venda'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-4">
+                {pdvResult.paymentMethod === 'pix' && !pdvConfirmed && (
+                  <div className="text-center space-y-3">
+                    {pdvResult.pix?.encodedImage ? (
+                      <img
+                        src={`data:image/png;base64,${pdvResult.pix.encodedImage}`}
+                        alt="QR Code Pix"
+                        className="w-56 h-56 mx-auto rounded-xl border border-slate-200 dark:border-white/10"
+                      />
+                    ) : (
+                      <div className="w-56 h-56 mx-auto rounded-xl border border-dashed border-slate-300 dark:border-white/10 flex items-center justify-center">
+                        <QrCode size={40} className="text-slate-400" />
+                      </div>
+                    )}
+                    {pdvResult.pix?.payload && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(pdvResult.pix!.payload!);
+                          setPdvCopied(true);
+                          setTimeout(() => setPdvCopied(false), 2000);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-300"
+                      >
+                        <Copy size={12} /> {pdvCopied ? 'Copiado!' : 'Copiar código Pix'}
+                      </button>
+                    )}
+                    <p className="text-xs text-slate-500 flex items-center justify-center gap-1.5">
+                      <Loader2 size={12} className="animate-spin" /> Aguardando pagamento do cliente...
+                    </p>
+                  </div>
+                )}
+
+                {pdvConfirmed && (
+                  <div className="text-center space-y-3">
+                    <div className="w-14 h-14 mx-auto rounded-full bg-emerald-500/10 flex items-center justify-center">
+                      <CheckCircle2 size={28} className="text-emerald-500" />
+                    </div>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">
+                      {pdvResult.paymentMethod === 'cartao_tap' ? 'Venda confirmada!' : 'Pagamento recebido!'}
+                    </p>
+                    <a
+                      href={`/meu-ingresso/${pdvResult.accessToken}?print=1`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-[#ff0068] text-white rounded-xl text-[11px] font-black uppercase tracking-widest"
+                    >
+                      <Printer size={14} /> Abrir ingresso pra imprimir
+                    </a>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={closePdvModal}
+                  className="w-full py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 rounded-xl text-[11px] font-black uppercase tracking-widest"
+                >
+                  {pdvConfirmed ? 'Fechar' : 'Fechar (continua aguardando em segundo plano)'}
+                </button>
+              </div>
+            )}
           </div>
         </div>,
         document.body

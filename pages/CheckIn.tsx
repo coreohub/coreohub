@@ -182,19 +182,35 @@ const CheckIn = () => {
         return;
       }
       const now = new Date().toISOString();
+      const { data: { user } } = await supabase.auth.getUser();
+      // Compare-and-swap: WHERE check_in_status='PENDENTE' fecha a corrida de
+      // 2 tablets escaneando o mesmo QR quase junto — só o primeiro UPDATE
+      // que chegar bate na cláusula, o segundo já encontra 0 rows.
       const { data: updated, error: upErr } = await supabase
         .from('audience_tickets')
-        .update({ check_in_status: 'OK', check_in_at: now })
+        .update({ check_in_status: 'OK', check_in_at: now, check_in_by: user?.id ?? null })
         .eq('id', id)
+        .eq('check_in_status', 'PENDENTE')
         .select('id');
       if (upErr) {
         setScanResult({ type: 'error', message: `Falha ao marcar: ${upErr.message}`, name: ticket.buyer_name, kind: 'INGRESSO' });
         return;
       }
-      // RLS pode retornar 0 rows sem erro se a policy bloquear silently.
-      // .select('id') força PostgREST a devolver o que foi afetado.
+      // 0 rows pode ser: (a) outro operador escaneou o mesmo QR nesse
+      // intervalo (perdeu a corrida) ou (b) RLS bloqueou silenciosamente.
+      // Reconsulta pra diferenciar em vez de mostrar mensagem genérica.
       if (!updated || updated.length === 0) {
-        setScanResult({ type: 'error', message: 'Sem permissão pra marcar este ingresso. Acione o coordenador.', name: ticket.buyer_name, kind: 'INGRESSO' });
+        const { data: recheck } = await supabase
+          .from('audience_tickets')
+          .select('check_in_status, check_in_at')
+          .eq('id', id)
+          .maybeSingle();
+        if (recheck?.check_in_status === 'OK') {
+          const t = recheck.check_in_at ? formatTime(recheck.check_in_at) : '';
+          setScanResult({ type: 'duplicate', message: `Ingresso já usado${t ? ' às ' + t : ''} (outro operador escaneou primeiro).`, name: ticket.buyer_name, kind: 'INGRESSO' });
+        } else {
+          setScanResult({ type: 'error', message: 'Sem permissão pra marcar este ingresso. Acione o coordenador.', name: ticket.buyer_name, kind: 'INGRESSO' });
+        }
         return;
       }
       const meiaSuffix = ticket.ticket_type_kind === 'meia' ? ' (verificar documento de meia)' : '';

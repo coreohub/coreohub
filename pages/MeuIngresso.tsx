@@ -7,9 +7,9 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { QRCodeCanvas } from 'qrcode.react';
-import { ArrowLeft, Loader2, AlertCircle, Sun, Calendar, MapPin, ExternalLink, Download, Share2, ChevronLeft, ChevronRight, Users } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertCircle, Sun, Calendar, MapPin, ExternalLink, Download, Share2, ChevronLeft, ChevronRight, Users, Printer } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import InstallPWAButton from '../components/InstallPWAButton';
 import AsaasBadge from '../components/AsaasBadge';
@@ -48,6 +48,7 @@ interface Ticket {
 const MeuIngresso: React.FC = () => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +109,20 @@ const MeuIngresso: React.FC = () => {
     })();
     return () => { try { wakeLock?.release(); } catch { /* ignore */ } };
   }, []);
+
+  // ─── Impressão (venda presencial): ?print=1 é o link aberto pelo operador
+  // logo após confirmar uma venda no balcão (VendasIngressos.tsx). Dispara o
+  // diálogo de impressão do navegador 1x quando o ingresso confirma como pago
+  // — layout @media print abaixo esconde tudo que não serve pro papel.
+  const autoPrinted = React.useRef(false);
+  useEffect(() => {
+    if (searchParams.get('print') !== '1') return;
+    if (!ticket || ticket.status_pagamento !== 'APROVADO') return;
+    if (autoPrinted.current) return;
+    autoPrinted.current = true;
+    const t = setTimeout(() => window.print(), 400);
+    return () => clearTimeout(t);
+  }, [searchParams, ticket]);
 
   // ─── Salvar imagem do QR (canvas → png download) ──────────────────────────
   const handleSaveImage = () => {
@@ -181,9 +196,9 @@ const MeuIngresso: React.FC = () => {
   })();
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex flex-col">
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex flex-col print:min-h-0 print:bg-white">
       {/* Header */}
-      <div className="px-4 py-3 flex items-center justify-between">
+      <div className="px-4 py-3 flex items-center justify-between print:hidden">
         <a
           href={`/`}
           className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
@@ -197,8 +212,8 @@ const MeuIngresso: React.FC = () => {
         )}
       </div>
 
-      <div className="flex-1 flex items-center justify-center px-4 pb-6">
-        <div className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl overflow-hidden">
+      <div className="flex-1 flex items-center justify-center px-4 pb-6 print:block print:p-0">
+        <div className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl overflow-hidden print:max-w-full print:rounded-none print:shadow-none print:mx-auto">
           {/* Family ticket nav (Tier 2): aparece quando há múltiplos tickets na compra */}
           {siblings.length > 1 && (() => {
             const current = siblings.find(s => s.access_token === token);
@@ -207,7 +222,7 @@ const MeuIngresso: React.FC = () => {
             const prev = siblings[idx - 2];
             const next = siblings[idx];
             return (
-              <div className="bg-slate-900 text-white px-4 py-2 flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
+              <div className="bg-slate-900 text-white px-4 py-2 flex items-center justify-between text-[10px] font-black uppercase tracking-widest print:hidden">
                 <button
                   type="button"
                   onClick={() => prev && navigate(`/meu-ingresso/${prev.access_token}`)}
@@ -329,7 +344,7 @@ const MeuIngresso: React.FC = () => {
 
                 {/* Ações: salvar imagem + compartilhar (paridade com Credencial.tsx) */}
                 {!isCheckedIn && (
-                  <div className="mt-4 flex items-center gap-2 w-full">
+                  <div className="mt-4 flex items-center gap-2 w-full print:hidden">
                     <button
                       type="button"
                       onClick={handleSaveImage}
@@ -337,6 +352,14 @@ const MeuIngresso: React.FC = () => {
                       aria-label="Salvar imagem do QR"
                     >
                       <Download size={12} /> Salvar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => window.print()}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
+                      aria-label="Imprimir ingresso"
+                    >
+                      <Printer size={12} /> Imprimir
                     </button>
                     <button
                       type="button"
@@ -354,7 +377,7 @@ const MeuIngresso: React.FC = () => {
                     Strava/Sympla: oferece app no momento de maior engajamento
                     (logo após receber o ingresso). */}
                 {!isCheckedIn && (
-                  <div className="mt-3 pt-3 border-t border-slate-100 flex flex-col items-center gap-1.5">
+                  <div className="mt-3 pt-3 border-t border-slate-100 flex flex-col items-center gap-1.5 print:hidden">
                     <p className="text-[10px] text-slate-500 text-center">
                       Acesso rápido ao seu ingresso
                     </p>
@@ -426,8 +449,9 @@ const MeuIngresso: React.FC = () => {
 
           {/* Selo Asaas — exigência regulatória do BaaS. Comprovante de pagamento
               é ponto de contato obrigatório conforme Playbook Asaas.
-              theme='auto' acompanha toggle de dark mode da app. */}
-          <div className="px-6 py-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-white/10 flex flex-col items-center gap-2">
+              theme='auto' acompanha toggle de dark mode da app. Escondido na
+              impressão — não serve pra conferência na portaria. */}
+          <div className="px-6 py-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-white/10 flex flex-col items-center gap-2 print:hidden">
             <AsaasBadge variant="compact" />
             <p className="text-[9px] text-slate-400 dark:text-slate-500 text-center max-w-md leading-relaxed">
               Pagamento processado pelo ASAAS GESTÃO FINANCEIRA S.A., instituição de pagamento
