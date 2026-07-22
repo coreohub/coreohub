@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { UserRole } from '../types';
-import { Trophy, Star, Music, Loader2, Volume2, Award, ChevronDown, ChevronUp, Search, Download, FileText, MessageSquare } from 'lucide-react';
+import { Trophy, Star, Music, Loader2, Volume2, Award, ChevronDown, ChevronUp, Search, Download, FileText, MessageSquare, Share2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface MyResultsProps {
@@ -57,6 +57,7 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
   // UX#12: ref único pro Audio pra cleanup correto (antes vazava ao trocar de áudio rapidamente).
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [downloadingAudio, setDownloadingAudio] = useState<string | null>(null);
+  const [sharingAudio, setSharingAudio] = useState<string | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
 
   useEffect(() => {
@@ -195,6 +196,52 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
     } finally {
       setDownloadingAudio(null);
     }
+  };
+
+  /* Compartilha o áudio via Web Share API nativa (Android/iOS abrem o share
+     sheet do sistema, com WhatsApp na lista). Desktop não suporta compartilhar
+     arquivo por essa API — cai no download como fallback. */
+  const shareAudio = async (url: string, regName: string, judgeName: string) => {
+    setSharingAudio(url);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('fetch falhou');
+      const blob = await res.blob();
+      const ext = (url.split('.').pop() || 'webm').split('?')[0];
+      const fileName = `feedback-${slugify(regName)}-${slugify(judgeName)}.${ext}`;
+      const file = new File([blob], fileName, { type: blob.type || 'audio/webm' });
+
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `Comentário de ${judgeName}`,
+          text: `Comentário em áudio de ${judgeName} sobre "${regName}"`,
+        });
+      } else {
+        const objUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(objUrl);
+      }
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        console.error('Erro ao compartilhar áudio:', err);
+        setError('Falha ao compartilhar o áudio. Tente novamente.');
+      }
+    } finally {
+      setSharingAudio(null);
+    }
+  };
+
+  /* Compartilha o comentário escrito do jurado via link wa.me (funciona em
+     qualquer plataforma, abre o WhatsApp com o texto pré-preenchido). */
+  const shareFeedbackText = (regName: string, judgeName: string, text: string) => {
+    const message = `Comentário de ${judgeName} sobre "${regName}":\n\n"${text}"\n\n— via CoreoHub`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
   };
 
   /* Gera PDF do scoresheet (notas por quesito + comentário escrito) de uma
@@ -455,6 +502,18 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
                                           : <Download size={14} />
                                         }
                                       </button>
+                                      <button
+                                        onClick={() => shareAudio(ev.audio_url!, reg.nome_coreografia, ev.judge_name)}
+                                        disabled={sharingAudio === ev.audio_url}
+                                        aria-label="Compartilhar comentário em áudio do jurado"
+                                        title="Compartilhar"
+                                        className="p-2.5 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-[#ff0068] transition-all disabled:opacity-50"
+                                      >
+                                        {sharingAudio === ev.audio_url
+                                          ? <Loader2 size={14} className="animate-spin" />
+                                          : <Share2 size={14} />
+                                        }
+                                      </button>
                                     </>
                                   )}
                                   {isPublished && <ScoreBadge score={ev.final} />}
@@ -475,7 +534,15 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
                               {ev.feedback_text && ev.feedback_text.trim() && (
                                 <div className="flex gap-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-xl px-3 py-2.5">
                                   <MessageSquare size={13} className="text-[#ff0068] shrink-0 mt-0.5" />
-                                  <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{ev.feedback_text.trim()}</p>
+                                  <p className="flex-1 text-xs text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{ev.feedback_text.trim()}</p>
+                                  <button
+                                    onClick={() => shareFeedbackText(reg.nome_coreografia, ev.judge_name, ev.feedback_text!.trim())}
+                                    aria-label="Compartilhar comentário do jurado no WhatsApp"
+                                    title="Compartilhar"
+                                    className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-[#ff0068] transition-all"
+                                  >
+                                    <Share2 size={13} />
+                                  </button>
                                 </div>
                               )}
                             </div>
