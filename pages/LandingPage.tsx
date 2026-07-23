@@ -34,6 +34,8 @@ const LandingPage = () => {
           src="/hero-festival.png"
           alt=""
           aria-hidden="true"
+          fetchPriority="high"
+          decoding="async"
           className="absolute inset-0 w-full h-full object-cover object-center opacity-40"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-slate-950/85 via-slate-950/75 to-slate-950" />
