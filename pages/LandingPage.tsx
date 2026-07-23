@@ -29,46 +29,45 @@ const LandingPage = () => {
     <div className="min-h-screen bg-slate-950 text-white selection:bg-[#ff0068]/30 overflow-x-hidden">
 
       {/* ─── 1. HERO ──────────────────────────────────────────────── */}
-      <section className="relative min-h-screen flex flex-col px-6 pt-24 pb-12 overflow-hidden">
+      <section className="relative min-h-[90vh] flex flex-col overflow-hidden bg-black">
         <img
           src="/hero-festival.png"
           alt=""
           aria-hidden="true"
           fetchPriority="high"
           decoding="async"
-          className="absolute inset-0 w-full h-full object-cover object-center opacity-40"
+          className="absolute inset-0 w-full h-full object-cover object-[50%_35%]"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/85 via-slate-950/75 to-slate-950" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(255,0,104,0.22),transparent_60%)]" />
-        <div className="absolute -top-40 -left-40 w-[500px] h-[500px] bg-[#ff0068]/10 blur-[140px] rounded-full" />
-        <div className="absolute -bottom-40 -right-40 w-[500px] h-[500px] bg-purple-700/10 blur-[140px] rounded-full" />
+        <div className="absolute inset-0 bg-black/40" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.70)_0%,rgba(0,0,0,0.20)_40%,transparent_65%)]" />
 
-        <div className="relative z-10 flex-1 flex items-center justify-center">
+        {/* conteúdo ancorado no rodapé do hero */}
+        <div className="relative z-10 flex-1 flex flex-col justify-end px-6 pb-10 pt-28">
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="max-w-5xl text-center space-y-8"
+            className="max-w-3xl mx-auto w-full text-center space-y-6"
           >
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full backdrop-blur-xl">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 border border-white/15 rounded-full backdrop-blur-xl">
               <Sparkles size={12} className="text-[#ff0068]" />
-              <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300">
+              <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-200">
                 Configuração automática por IA
               </span>
             </div>
 
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tighter uppercase leading-[0.95]">
+            <h1 className="text-[1.6rem] sm:text-[2rem] lg:text-[2.5rem] font-black tracking-tighter uppercase leading-[1.05]">
               Plataforma de gestão<br />
               para festivais e mostras de dança:<br />
               <span className="text-[#ff0068]">do regulamento ao palco, sem planilha.</span>
             </h1>
 
-            <p className="text-slate-300 text-lg md:text-2xl font-medium max-w-3xl mx-auto leading-relaxed">
+            <p className="text-slate-200 text-base sm:text-lg font-medium mx-auto leading-relaxed">
               Inscrições, júri e cronograma numa única plataforma —
               sem mensalidade, sem surpresa no dia do evento.
             </p>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
               <button
                 onClick={() => navigate('/criar-evento')}
                 className="group relative px-8 py-5 bg-[#ff0068] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_20px_60px_rgba(255,0,104,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-transform"
@@ -81,33 +80,34 @@ const LandingPage = () => {
                 href="https://wa.me/5517997936169?text=Ol%C3%A1%2C%20Gostaria%20de%20Falar%20sobre%20a%20CoreoHub"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-slate-400 text-sm font-bold hover:text-white transition-colors"
+                className="text-slate-300 text-sm font-bold hover:text-white transition-colors self-center"
               >
                 ou fale no WhatsApp
               </a>
             </div>
 
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-400">
               Sem mensalidade · Você só paga quando vende
             </p>
           </motion.div>
         </div>
 
-        <div className="relative z-10 max-w-5xl mx-auto w-full grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-white/5 pt-8 mt-12">
+        {/* barra de stats */}
+        <div className="relative z-10 max-w-5xl mx-auto w-full grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-white/10 px-6 pt-6 pb-8">
           {[
             { val: '10%', label: 'só quando vende' },
             { val: 'R$ 0', label: 'de mensalidade' },
             { val: '30s', label: 'do PDF ao evento no ar' },
           ].map((s, i) => (
-            <div key={i} className="text-center">
+            <div key={i} className="text-center sm:text-left">
               <p className="text-2xl md:text-4xl font-black text-white tracking-tighter">{s.val}</p>
-              <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mt-1">{s.label}</p>
+              <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mt-1">{s.label}</p>
             </div>
           ))}
-          <div className="text-center flex flex-col items-center justify-center gap-1">
+          <div className="text-center sm:text-left flex flex-col items-center sm:items-start justify-center gap-1">
             <Wifi size={20} className="text-[#ff0068]" />
             <p className="text-xs md:text-sm font-black uppercase tracking-tight text-white">O Wi-Fi caiu?</p>
-            <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">Roda mesmo offline</p>
+            <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Roda mesmo offline</p>
           </div>
         </div>
       </section>
