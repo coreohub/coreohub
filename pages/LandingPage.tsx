@@ -64,7 +64,7 @@ const LandingPage = () => {
 
             <p className="text-slate-200 text-base sm:text-lg font-medium mx-auto leading-relaxed">
               Inscrições, júri e cronograma numa única plataforma —
-              sem mensalidade, sem surpresa no dia do evento.
+              sem surpresa no dia do evento.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
@@ -86,9 +86,6 @@ const LandingPage = () => {
               </a>
             </div>
 
-            <p className="text-xs text-slate-400">
-              Sem mensalidade · Você só paga quando vende
-            </p>
           </motion.div>
         </div>
 
@@ -104,10 +101,9 @@ const LandingPage = () => {
               <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mt-1">{s.label}</p>
             </div>
           ))}
-          <div className="text-center sm:text-left flex flex-col items-center sm:items-start justify-center gap-1">
-            <Wifi size={20} className="text-[#ff0068]" />
-            <p className="text-xs md:text-sm font-black uppercase tracking-tight text-white">O Wi-Fi caiu?</p>
-            <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Roda mesmo offline</p>
+          <div className="text-center sm:text-left">
+            <p className="text-2xl md:text-4xl font-black text-white tracking-tighter">100%</p>
+            <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mt-1">offline no dia do evento</p>
           </div>
         </div>
       </section>
@@ -127,7 +123,7 @@ const LandingPage = () => {
             <p>Resultado fica preso numa planilha que você ainda não terminou.</p>
             <p>Certificado por certificado, à mão.</p>
             <p className="text-white font-bold pt-2">
-              Cada hora apagando incêndio é uma hora longe do palco. E o palco é por que você começou.
+              Cada hora apagando incêndio é uma hora longe do palco. E é o palco que te trouxe aqui.
             </p>
           </div>
         </div>
@@ -165,19 +161,8 @@ const LandingPage = () => {
               <span className="text-[#ff0068]">operacional do seu festival.</span>
             </h2>
             <p className="text-slate-300 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
-              Cole o seu regulamento. A IA da CoreoHub configura tudo — categorias, preços, prêmios, critérios.
-              Publique seu festival. Os bailarinos se inscrevem, pagam e recebem confirmação sozinhos.
-              No dia, o júri avalia no tablet (mesmo sem Wi-Fi), o cronograma anda, o resultado sai na hora
-              e o certificado tem QR de validação.
-            </p>
-          </div>
-
-          {/* Destaque: página gratuita */}
-          <div className="max-w-3xl mx-auto mb-16 bg-[#ff0068]/10 border border-[#ff0068]/30 rounded-2xl p-6">
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-2">Incluso sem custo extra</p>
-            <p className="text-white text-base leading-relaxed">
-              <span className="font-bold">Seu festival ganha uma página oficial gratuita</span> — regulamento, inscrições
-              e programação num link pra colar na bio do Instagram. É o site do seu evento, sem você pagar designer nem contratar hospedagem.
+              Cole o regulamento, publique o festival e deixa a plataforma trabalhar.
+              Cada etapa — da inscrição ao certificado — roda sozinha enquanto você cuida do palco.
             </p>
           </div>
 
@@ -316,7 +301,6 @@ const LandingPage = () => {
         body="Esqueça a súmula de papel. O júri acessa com PIN de 4 dígitos — sem cadastro, sem senha para lembrar. Você acompanha cada nota em tempo real no painel, o Coordenador do Júri revisa antes de publicar, e os resultados ficam disponíveis no fim da apresentação. Sem Wi-Fi? Funciona do mesmo jeito."
         bullets={[
           'Login por PIN de 4 dígitos — sem cadastro, sem senha para lembrar',
-          'Funciona offline: avalia e salva mesmo sem internet',
           'Notas chegam em tempo real no painel do produtor',
           'Coordenador do Júri valida antes de publicar',
           'Modo Kiosk — tablet vira terminal dedicado sem distração',
@@ -419,7 +403,7 @@ const LandingPage = () => {
 
       {/* ─── 9. NARRAÇÃO IA ──────────────────────────────────────────────── */}
       <FeatureSection
-        kicker="Sem locutor cobrando cachê"
+        kicker="Narração profissional por IA"
         title={<>Voz <span className="text-[#ff0068]">profissional</span> anuncia<br />cada coreografia.</>}
         body="A IA gera a narração de abertura, transição e encerramento com voz natural em português. Geração em lote antes do evento, fallback automático se a internet cair. Acabou ficar refém de locutor cobrando cachê — e acabou microfone do produtor estourando ao vivo."
         bullets={[
@@ -513,7 +497,7 @@ const LandingPage = () => {
           <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Modelo transparente</p>
           <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase mb-6">
             Você só paga <span className="text-[#ff0068]">quando vende</span>.<br />
-            E o dinheiro é seu na hora.
+            E o dinheiro cai direto na sua conta.
           </h2>
           <p className="text-slate-300 text-lg max-w-2xl mx-auto leading-relaxed mb-12">
             10% por inscrição vendida. Zero mensalidade. Zero fidelidade.
