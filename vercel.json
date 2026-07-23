@@ -2,6 +2,7 @@
   "rewrites": [
     {
       "source": "/sitemap.xml",
+      "has": [{ "type": "host", "value": "app.coreohub.com" }],
       "destination": "https://ghpltzzijlvykiytwslu.supabase.co/functions/v1/sitemap-xml"
     },
     {

@@ -22,7 +22,7 @@ const LandingPage = () => {
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(n);
 
   useEffect(() => {
-    document.title = 'CoreoHub — Gestão inteligente para festivais de dança';
+    document.title = 'CoreoHub — Gestão inteligente para festivais e mostras de dança';
   }, []);
 
   return (
@@ -57,7 +57,7 @@ const LandingPage = () => {
 
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tighter uppercase leading-[0.95]">
               Plataforma de gestão<br />
-              para festivais de dança:<br />
+              para festivais e mostras de dança:<br />
               <span className="text-[#ff0068]">do regulamento ao palco, sem planilha.</span>
             </h1>
 
@@ -268,10 +268,62 @@ const LandingPage = () => {
           'Notificação automática pro inscrito (passou / não passou)',
         ]}
         mockup={
-          <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-slate-900">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-3 border-b border-white/10 bg-slate-950">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Seletiva de Vídeo · 14 pendentes</span>
+              <span className="text-[9px] font-black uppercase tracking-widest text-amber-400">Período aberto</span>
+            </div>
+            <div className="p-4 space-y-3">
+              {[
+                { name: 'Arabesque Neoclássico', who: 'Luiza Moraes · Solo · Infantil', color: 'bg-white/5 border-white/10', badge: null },
+                { name: 'Carmen Reinventada', who: 'Cia Étoile · Grupo · Juvenil', color: 'bg-emerald-500/10 border-emerald-500/30', badge: { label: 'Aprovado', cls: 'text-emerald-400' } },
+                { name: 'Bolero em 7/8', who: 'Pedro & Ana · Duo · Adulto', color: 'bg-rose-500/10 border-rose-500/30', badge: { label: 'Reprovado', cls: 'text-rose-400' } },
+              ].map((s, i) => (
+                <div key={i} className={`border rounded-xl p-3 ${s.color}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs font-bold text-white">{s.name}</p>
+                    {s.badge && <span className={`text-[9px] font-black uppercase tracking-wider ${s.badge.cls}`}>{s.badge.label}</span>}
+                  </div>
+                  <p className="text-[10px] text-slate-500">{s.who}</p>
+                  {i === 0 && (
+                    <div className="flex gap-2 mt-2">
+                      {['Aprovar', 'Cond.', 'Reprovar'].map((btn, j) => (
+                        <button key={j} className={`px-2 py-1 rounded text-[9px] font-black uppercase ${
+                          j === 0 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                          j === 2 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+                          'bg-white/5 text-slate-400 border border-white/10'
+                        }`}>{btn}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+              <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center justify-between">
+                <span className="text-[10px] text-slate-400">Notificações enviadas automaticamente</span>
+                <span className="text-[10px] font-black text-emerald-400">✓ 8 aprovados</span>
+              </div>
+            </div>
+          </div>
+        }
+      />
+
+      {/* ─── 6.5. JÚRI DIGITAL ──────────────────────────────────────────────── */}
+      <FeatureSection
+        kicker="Júri Digital"
+        title={<>Jurado avalia no tablet<br />ou notebook. <span className="text-[#ff0068]">Mesmo sem Wi-Fi.</span></>}
+        body="Esqueça a súmula de papel. O júri acessa com PIN de 4 dígitos — sem cadastro, sem senha para lembrar. Você acompanha cada nota em tempo real no painel, o Coordenador do Júri revisa antes de publicar, e os resultados ficam disponíveis no fim da apresentação. Sem Wi-Fi? Funciona do mesmo jeito."
+        bullets={[
+          'Login por PIN de 4 dígitos — sem cadastro, sem senha para lembrar',
+          'Funciona offline: avalia e salva mesmo sem internet',
+          'Notas chegam em tempo real no painel do produtor',
+          'Coordenador do Júri valida antes de publicar',
+          'Modo Kiosk — tablet vira terminal dedicado sem distração',
+        ]}
+        mockup={
+          <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-white/10">
             <img
-              src="/screenshots/seletiva-revisar.png"
-              alt="Tela de revisão de vídeo da seletiva no CoreoHub: player, dados do inscrito e botões de decisão (Aprovar, Condicional, Favoritar, Reprovar)"
+              src="/jurada-tablet.png"
+              alt="Jurada avaliando no tablet durante apresentação de dança no festival"
               className="w-full h-auto block"
               loading="lazy"
             />
@@ -428,41 +480,28 @@ const LandingPage = () => {
               <span className="text-[#ff0068]">aprova.</span>
             </h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              {
-                name: '[Nome do Jurado]',
-                role: 'Jurado · [Festival]',
-                text: '[Depoimento genérico de exemplo: avaliei pelo tablet direto no palco, mesmo com a internet caindo, e não perdi nenhuma nota. Muito mais tranquilo que papel.]',
-              },
-              {
-                name: '[Nome do Coreógrafo]',
-                role: 'Coreógrafo e produtor de eventos',
-                text: '[Depoimento genérico de exemplo: me inscrevi num festival pela CoreoHub e foi rápido demais. Como produtor, já quero usar no meu próximo evento.]',
-              },
-              {
-                name: '[Nome]',
-                role: '[Papel]',
-                text: '[Depoimento genérico de exemplo: organizei tudo num link só e economizei dias de trabalho manual.]',
-              },
-            ].map((t, i) => (
-              <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col gap-4">
-                <p className="text-slate-300 text-sm leading-relaxed flex-1">"{t.text}"</p>
-                <div className="flex items-center gap-3 border-t border-white/10 pt-4">
-                  <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center shrink-0">
-                    <span className="text-slate-500 text-xs font-black">?</span>
-                  </div>
-                  <div>
-                    <p className="text-white text-sm font-black">{t.name}</p>
-                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{t.role}</p>
-                  </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col gap-4">
+              <p className="text-slate-300 text-sm leading-relaxed flex-1">"Uma das plataformas de gestão de eventos mais completas que já utilizei. Além da praticidade, ela entrega praticamente TUDO em um formato prático e didático. Tive a honra de conhecer e utilizar na produção do Usualdance Festival, e com certeza daqui pra frente estará no Extreme Festival."</p>
+              <div className="flex items-center gap-3 border-t border-white/10 pt-4">
+                <img src="/will-nunes.webp" alt="Will Nunes" className="w-10 h-10 rounded-full object-cover object-top shrink-0" />
+                <div>
+                  <p className="text-white text-sm font-black">Will Nunes</p>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Produtor do Extreme Festival</p>
                 </div>
               </div>
-            ))}
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col gap-4">
+              <p className="text-slate-300 text-sm leading-relaxed flex-1">"Avaliar pela CoreoHub foi extremamente positivo — processo organizado, prático e eficiente. O sistema agiliza o trabalho do júri sem comprometer a qualidade técnica, entregando uma avaliação transparente e padronizada. Uma solução moderna que eleva o nível do festival. Nota 1000."</p>
+              <div className="flex items-center gap-3 border-t border-white/10 pt-4">
+                <img src="/jonathan-lupe.webp" alt="Jonathan Lupe" className="w-10 h-10 rounded-full object-cover object-center shrink-0" />
+                <div>
+                  <p className="text-white text-sm font-black">Jonathan Lupe</p>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Jurado · Usualdance Festival</p>
+                </div>
+              </div>
+            </div>
           </div>
-          <p className="text-center text-[10px] text-slate-600 mt-6 italic">
-            Conteúdo placeholder — substituir por depoimentos reais de jurados e produtores.
-          </p>
         </div>
       </section>
 
@@ -715,7 +754,7 @@ const LandingPage = () => {
                 <img src="/coreohub-avatar.png" alt="CoreoHub" className="w-10 h-10" />
                 <div>
                   <p className="text-base font-black uppercase tracking-tighter text-white">CoreoHub</p>
-                  <p className="text-[10px] text-slate-500">Gestão Inteligente para Festivais de Dança</p>
+                  <p className="text-[10px] text-slate-500">Gestão Inteligente para Festivais e Mostras de Dança</p>
                 </div>
               </div>
               <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
@@ -753,12 +792,27 @@ const LandingPage = () => {
               <p>Votuporanga/SP</p>
               <p className="mt-1">Pagamentos processados pela Asaas IP S.A. (CNPJ 19.540.550/0001-21), instituição de pagamento autorizada pelo Banco Central.</p>
             </div>
-            <p className="text-[10px] text-slate-600 shrink-0">
-              © {new Date().getFullYear()} CoreoHub. Todos os direitos reservados.
-            </p>
+            <div className="flex items-center gap-4 flex-wrap">
+              <Link to="/termos" className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors">Termos de Uso</Link>
+              <Link to="/privacidade" className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors">Privacidade</Link>
+              <p className="text-[10px] text-slate-600">© {new Date().getFullYear()} CoreoHub. Todos os direitos reservados.</p>
+            </div>
           </div>
         </div>
       </footer>
+
+      {/* ─── BOTÃO FLUTUANTE WHATSAPP ──────────────────────────────────────────────── */}
+      <a
+        href="https://wa.me/5517997936169?text=Ol%C3%A1%2C%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20a%20Coreohub"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Falar no WhatsApp"
+        className="fixed bottom-5 right-5 z-50 w-14 h-14 rounded-full bg-[#25D366] flex items-center justify-center shadow-[0_8px_24px_rgba(37,211,102,0.45)] hover:scale-105 active:scale-95 transition-transform"
+      >
+        <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 text-[#052e16]" aria-hidden="true">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.768.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/>
+        </svg>
+      </a>
     </div>
   );
 };

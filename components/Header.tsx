@@ -66,6 +66,14 @@ const Header = ({ toggleSidebar, profile, theme, toggleTheme, activeRole, setAct
   // restrito a ROLE_OPTIONS de propósito (não é pra ficar gigante).
   const activeOption = resolveRoleBadge(activeRole);
 
+  // Membro de equipe (convidado via /minha-equipe) tem role='USER' no banco
+  // — sem isso, o header mostrava "Inscrito" pra quem na verdade é
+  // Coordenador/Recepção/etc., reforçando a confusão de cair na tela errada
+  // pós-login (2026-07-14). `cargo` só existe pra quem foi convidado.
+  const staffColor = ROLE_OPTIONS.find(o => o.role === UserRole.STAFF)?.color ?? '#0ea5e9';
+  const displayLabel = profile?.cargo || activeOption.label;
+  const displayColor = profile?.cargo ? staffColor : activeOption.color;
+
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -175,10 +183,10 @@ const Header = ({ toggleSidebar, profile, theme, toggleTheme, activeRole, setAct
                 {profile?.full_name || 'Usuário'}
               </span>
               <span
-                className="text-[8px] font-black uppercase tracking-widest"
-                style={{ color: activeOption.color }}
+                className="text-[8px] font-black uppercase tracking-widest max-w-[140px] truncate"
+                style={{ color: displayColor }}
               >
-                {activeOption.label}
+                {displayLabel}
               </span>
             </div>
             <div className="w-9 h-9 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 p-0.5 shadow-lg overflow-hidden">
