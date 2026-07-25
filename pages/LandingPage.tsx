@@ -115,30 +115,29 @@ const LandingPage = () => {
           decoding="async"
           className="absolute inset-0 w-full h-full object-cover object-[50%_35%]"
         />
-        <div className="absolute inset-0 bg-black/20" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.75)_0%,rgba(0,0,0,0.20)_45%,transparent_70%)]" />
+        <div className="absolute inset-0 bg-black/40" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.7)_0%,rgba(0,0,0,0.20)_40%,transparent_65%)]" />
 
-        {/* conteúdo ancorado no rodapé do hero */}
-        <div className="relative z-10 flex-1 flex flex-col justify-end px-9 pb-10 pt-28">
+        {/* conteúdo ancorado no rodapé do hero — mesmo padrão de PageHero (usualdance) */}
+        <div className="relative z-10 flex-1 flex flex-col justify-end px-4 pb-10 pt-28 text-center sm:px-6 sm:text-left lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="w-full text-center space-y-5"
+            className="mx-auto max-w-xl px-5 sm:mx-0 sm:px-0"
           >
             <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#ff0068]">Chega de planilha.</p>
-            <h1 className="text-[2.2rem] sm:text-[3rem] lg:text-[3.6rem] font-black tracking-tighter uppercase leading-none">
-              Plataforma de gestão<br />
-              para festivais e mostras de dança:<br />
+            <h1 className="mt-2 sm:mt-3 text-[2.2rem] sm:text-[3.3rem] font-black tracking-normal uppercase leading-[1.06]">
+              Plataforma de gestão para festivais e mostras de dança:{' '}
               <span className="text-[#ff0068]">do regulamento ao palco, sem planilha.</span>
             </h1>
 
-            <p className="text-slate-200 text-sm font-medium leading-snug">
+            <p className="mt-3 sm:mt-4 text-slate-200 text-sm sm:text-base font-medium leading-snug">
               Inscrições, júri e cronograma numa única plataforma —
               sem surpresa no dia do evento.
             </p>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
+            <div className="mt-5 sm:mt-6 flex flex-col sm:flex-row items-center justify-center gap-4 sm:justify-start">
               <button
                 onClick={() => navigate('/criar-evento')}
                 className="group relative px-8 py-5 bg-[#ff0068] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_20px_60px_rgba(255,0,104,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-transform"
