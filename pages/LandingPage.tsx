@@ -33,6 +33,19 @@ const LandingPage = () => {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  // menu mobile: fecha no Escape e trava o scroll do fundo enquanto aberto
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false);
+    window.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [menuOpen]);
+
   return (
     <div className="min-h-screen bg-slate-950 text-white selection:bg-[#ff0068]/30 overflow-x-hidden">
 
@@ -40,7 +53,7 @@ const LandingPage = () => {
       <header className={`fixed top-0 left-0 right-0 z-50 px-6 py-4 transition-all duration-300 ${scrolled ? 'bg-slate-950/80 backdrop-blur-md border-b border-white/10' : ''}`}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5">
-            <img src="/coreohub-avatar.png" alt="CoreoHub" className="w-8 h-8" />
+            <img src="/coreohub-avatar.webp" alt="CoreoHub" width={32} height={32} className="w-8 h-8" />
             <span className="text-sm font-black uppercase tracking-tight text-white">CoreoHub</span>
           </Link>
           <nav className="hidden sm:flex items-center gap-6">
@@ -93,9 +106,11 @@ const LandingPage = () => {
       {/* ─── 1. HERO ──────────────────────────────────────────────── */}
       <section className="relative min-h-[90vh] flex flex-col overflow-hidden bg-black">
         <img
-          src="/hero-festival.png"
+          src="/hero-festival.webp"
           alt=""
           aria-hidden="true"
+          width={1920}
+          height={1072}
           fetchPriority="high"
           decoding="async"
           className="absolute inset-0 w-full h-full object-cover object-[50%_35%]"
@@ -111,7 +126,7 @@ const LandingPage = () => {
             transition={{ duration: 0.6 }}
             className="w-full text-center space-y-5"
           >
-            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#ff0068]">Para produtores de festivais e mostras de dança</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#ff0068]">Chega de planilha.</p>
             <h1 className="text-[2.2rem] sm:text-[3rem] lg:text-[3.6rem] font-black tracking-tighter uppercase leading-none">
               Plataforma de gestão<br />
               para festivais e mostras de dança:<br />
@@ -553,13 +568,16 @@ const LandingPage = () => {
             <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mb-6">Simule seu festival</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
               <div className="text-left">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                <label htmlFor="calc-inscricoes" className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                   Inscrições no festival: <span className="text-[#ff0068] font-mono">{calcInscricoes}</span>
                 </label>
                 <input
+                  id="calc-inscricoes"
                   type="range" min={20} max={1000} step={10}
                   value={calcInscricoes}
                   onChange={(e) => setCalcInscricoes(Number(e.target.value))}
+                  aria-label="Número de inscrições no festival"
+                  aria-valuetext={`${calcInscricoes} inscrições`}
                   className="w-full mt-2 accent-[#ff0068]"
                 />
                 <div className="flex justify-between text-[9px] text-slate-500 mt-1">
@@ -567,13 +585,16 @@ const LandingPage = () => {
                 </div>
               </div>
               <div className="text-left">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                <label htmlFor="calc-ticket" className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                   Ticket médio: <span className="text-[#ff0068] font-mono">{fmtBRL(calcTicket)}</span>
                 </label>
                 <input
+                  id="calc-ticket"
                   type="range" min={50} max={500} step={10}
                   value={calcTicket}
                   onChange={(e) => setCalcTicket(Number(e.target.value))}
+                  aria-label="Ticket médio por inscrição"
+                  aria-valuetext={fmtBRL(calcTicket)}
                   className="w-full mt-2 accent-[#ff0068]"
                 />
                 <div className="flex justify-between text-[9px] text-slate-500 mt-1">
@@ -736,13 +757,21 @@ const LandingPage = () => {
               >
                 <button
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                  aria-expanded={openFaq === i}
+                  aria-controls={`faq-panel-${i}`}
+                  id={`faq-trigger-${i}`}
                   className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-white/[0.03] transition-colors"
                 >
                   <span className="text-base font-black uppercase tracking-tight text-white">{item.q}</span>
                   <ChevronDown size={18} className={`shrink-0 text-slate-400 transition-transform ${openFaq === i ? 'rotate-180' : ''}`} />
                 </button>
                 {openFaq === i && (
-                  <div className="px-5 pb-5 -mt-1 text-sm text-slate-300 leading-relaxed">
+                  <div
+                    id={`faq-panel-${i}`}
+                    role="region"
+                    aria-labelledby={`faq-trigger-${i}`}
+                    className="px-5 pb-5 -mt-1 text-sm text-slate-300 leading-relaxed"
+                  >
                     {item.a}
                   </div>
                 )}
@@ -781,7 +810,7 @@ const LandingPage = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
             <div className="md:col-span-2">
               <div className="flex items-center gap-3 mb-4">
-                <img src="/coreohub-avatar.png" alt="CoreoHub" className="w-10 h-10" />
+                <img src="/coreohub-avatar.webp" alt="CoreoHub" width={40} height={40} className="w-10 h-10" />
                 <div>
                   <p className="text-base font-black uppercase tracking-tighter text-white">CoreoHub</p>
                   <p className="text-[10px] text-slate-500">Gestão Inteligente para Festivais e Mostras de Dança</p>

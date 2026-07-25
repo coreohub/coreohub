@@ -47,3 +47,9 @@ screenshots/*.report.json
 # Playwright auth storage (sessão local, contém token)
 scripts/.playwright-auth/
 .vercel
+
+# Playwright (relatorios e artefatos de execucao)
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

@@ -18,6 +18,11 @@
        caiam acidentalmente em re-navegacao indesejada. */
     overscroll-behavior-y: contain;
   }
+  html {
+    /* Compensa a navbar fixa da landing: sem isso, link de ancora para o
+       titulo da secao atras do header. 5rem ~= altura do header + folga. */
+    scroll-padding-top: 5rem;
+  }
   body {
     @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen transition-colors duration-300;
     font-family: theme('fontFamily.sans');
