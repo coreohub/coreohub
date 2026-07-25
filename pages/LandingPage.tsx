@@ -112,7 +112,7 @@ const LandingPage = () => {
             className="max-w-3xl mx-auto w-full text-center space-y-6"
           >
             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068]">Para produtores de festivais e mostras de dança</p>
-            <h1 className="text-[1.6rem] sm:text-[2rem] lg:text-[2.5rem] font-black tracking-tighter uppercase leading-[1.05]">
+            <h1 className="text-[2.2rem] sm:text-[3rem] lg:text-[3.6rem] font-black tracking-tighter uppercase leading-[1.05]">
               Plataforma de gestão<br />
               para festivais e mostras de dança:<br />
               <span className="text-[#ff0068]">do regulamento ao palco, sem planilha.</span>
