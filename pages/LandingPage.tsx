@@ -126,15 +126,14 @@ const LandingPage = () => {
             transition={{ duration: 0.6 }}
             className="mx-auto max-w-xl px-5 sm:mx-0 sm:px-0"
           >
-            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#ff0068]">Chega de planilha.</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-white">Chega de planilha.</p>
             <h1 className="mt-2 sm:mt-3 text-[2.2rem] sm:text-[3.3rem] font-black tracking-normal uppercase leading-[1.06]">
-              Plataforma de gestão para festivais e mostras de dança:{' '}
-              <span className="text-[#ff0068]">do regulamento ao palco, sem planilha.</span>
+              Plataforma de gestão para festivais e mostras de dança
             </h1>
 
             <p className="mt-3 sm:mt-4 text-slate-200 text-sm sm:text-base font-medium leading-snug">
-              Inscrições, júri e cronograma numa única plataforma —
-              sem surpresa no dia do evento.
+              Do regulamento ao palco: inscrições, júri e cronograma numa única
+              plataforma — sem surpresa no dia do evento.
             </p>
 
             <div className="mt-5 sm:mt-6 flex flex-col sm:flex-row items-center justify-center gap-4 sm:justify-start">
@@ -156,7 +155,7 @@ const LandingPage = () => {
           {[
             { val: '10%', label: 'só quando vende' },
             { val: 'R$ 0', label: 'de mensalidade' },
-            { val: '0 papel', label: 'de súmula de júri' },
+            { val: 'Sem súmula', label: 'de papel' },
           ].map((s, i) => (
             <div key={i} className="text-center">
               <p className="text-2xl md:text-4xl font-black text-white tracking-tighter">{s.val}</p>
