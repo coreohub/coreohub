@@ -352,9 +352,9 @@ const LandingPage = () => {
         mockup={
           <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-white/10">
             <img
-              src="/jurada-tablet.png"
-              alt="Jurada avaliando no tablet durante apresentação de dança no festival"
-              className="w-full h-auto block"
+              src="/jurada-tablet-nova.webp"
+              alt="Jurada com microfone avaliando no tablet durante apresentação de dança"
+              className="w-full h-auto block object-cover object-center"
               loading="lazy"
             />
           </div>
