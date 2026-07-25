@@ -104,21 +104,21 @@ const LandingPage = () => {
         <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.75)_0%,rgba(0,0,0,0.20)_45%,transparent_70%)]" />
 
         {/* conteúdo ancorado no rodapé do hero */}
-        <div className="relative z-10 flex-1 flex flex-col justify-end px-6 pb-10 pt-28">
+        <div className="relative z-10 flex-1 flex flex-col justify-end px-9 pb-10 pt-28">
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="max-w-3xl mx-auto w-full text-center space-y-6"
+            className="w-full text-center space-y-5"
           >
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068]">Para produtores de festivais e mostras de dança</p>
-            <h1 className="text-[2.2rem] sm:text-[3rem] lg:text-[3.6rem] font-black tracking-tighter uppercase leading-[1.05]">
+            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#ff0068]">Para produtores de festivais e mostras de dança</p>
+            <h1 className="text-[2.2rem] sm:text-[3rem] lg:text-[3.6rem] font-black tracking-tighter uppercase leading-none">
               Plataforma de gestão<br />
               para festivais e mostras de dança:<br />
               <span className="text-[#ff0068]">do regulamento ao palco, sem planilha.</span>
             </h1>
 
-            <p className="text-slate-200 text-base sm:text-lg font-medium mx-auto leading-relaxed">
+            <p className="text-slate-200 text-sm font-medium leading-snug">
               Inscrições, júri e cronograma numa única plataforma —
               sem surpresa no dia do evento.
             </p>
