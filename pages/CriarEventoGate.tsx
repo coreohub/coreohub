@@ -154,7 +154,7 @@ const CriarEventoGate: React.FC = () => {
             <span className="text-[9px] font-black text-[#e3ff0a] uppercase tracking-[0.3em]">Cadastro de Produtor</span>
           </div>
           <h1 className="text-3xl font-black tracking-tighter uppercase text-slate-900 dark:text-white">
-            Bem-vindo ao <span className="text-[#ff0068] italic">CoreoHub</span>
+            Bem-vindo à <span className="text-[#ff0068] italic">CoreoHub</span>
           </h1>
           <p className="text-xs text-slate-500 font-bold leading-relaxed">
             Crie sua conta de produtor para cadastrar seu festival.<br />

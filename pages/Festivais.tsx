@@ -312,7 +312,7 @@ const Festivais = () => {
                 Você produz festivais?
               </h3>
               <p className="text-slate-400 leading-relaxed">
-                Anuncie seu próximo festival na CoreoHub. Inscrições, pagamentos com split automático, jurados, lives e certificados — tudo num só lugar.
+                Configure seu festival em 30 segundos a partir do regulamento. Inscrições, júri, cronograma e certificados — tudo automatizado, sem mensalidade.
               </p>
             </div>
             <a

@@ -28,6 +28,40 @@ const LandingPage = () => {
   return (
     <div className="min-h-screen bg-slate-950 text-white selection:bg-[#ff0068]/30 overflow-x-hidden">
 
+      {/* ─── NAV ──────────────────────────────────────────────── */}
+      <header className="absolute top-0 left-0 right-0 z-20 px-6 py-4">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-2.5">
+            <img src="/coreohub-avatar.png" alt="CoreoHub" className="w-8 h-8" />
+            <span className="text-sm font-black uppercase tracking-tight text-white">CoreoHub</span>
+          </Link>
+          <nav className="hidden sm:flex items-center gap-6">
+            <Link to="/festivais" className="text-xs font-bold text-slate-300 hover:text-white transition-colors">
+              Festivais
+            </Link>
+            <a
+              href="https://app.coreohub.com/login"
+              className="text-xs font-bold text-slate-300 hover:text-white transition-colors"
+            >
+              Entrar
+            </a>
+            <button
+              onClick={() => navigate('/criar-evento')}
+              className="px-4 py-2 bg-[#ff0068] text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-transform"
+            >
+              Criar festival
+            </button>
+          </nav>
+          {/* mobile: só o CTA */}
+          <button
+            onClick={() => navigate('/criar-evento')}
+            className="sm:hidden px-4 py-2 bg-[#ff0068] text-white rounded-xl text-xs font-black uppercase tracking-widest"
+          >
+            Criar festival
+          </button>
+        </div>
+      </header>
+
       {/* ─── 1. HERO ──────────────────────────────────────────────── */}
       <section className="relative min-h-[90vh] flex flex-col overflow-hidden bg-black">
         <img
@@ -49,13 +83,6 @@ const LandingPage = () => {
             transition={{ duration: 0.6 }}
             className="max-w-3xl mx-auto w-full text-center space-y-6"
           >
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 border border-white/15 rounded-full backdrop-blur-xl">
-              <Sparkles size={12} className="text-[#ff0068]" />
-              <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-200">
-                Configuração automática por IA
-              </span>
-            </div>
-
             <h1 className="text-[1.6rem] sm:text-[2rem] lg:text-[2.5rem] font-black tracking-tighter uppercase leading-[1.05]">
               Plataforma de gestão<br />
               para festivais e mostras de dança:<br />
@@ -76,35 +103,23 @@ const LandingPage = () => {
                   Criar meu festival grátis <ChevronRight size={18} />
                 </span>
               </button>
-              <a
-                href="https://wa.me/5517997936169?text=Ol%C3%A1%2C%20Gostaria%20de%20Falar%20sobre%20a%20CoreoHub"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-slate-300 text-sm font-bold hover:text-white transition-colors self-center"
-              >
-                ou fale no WhatsApp
-              </a>
             </div>
 
           </motion.div>
         </div>
 
         {/* barra de stats */}
-        <div className="relative z-10 max-w-5xl mx-auto w-full grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-white/10 px-6 pt-6 pb-8">
+        <div className="relative z-10 max-w-5xl mx-auto w-full grid grid-cols-3 gap-4 border-t border-white/10 px-6 pt-6 pb-8">
           {[
             { val: '10%', label: 'só quando vende' },
             { val: 'R$ 0', label: 'de mensalidade' },
             { val: '30s', label: 'do PDF ao evento no ar' },
           ].map((s, i) => (
-            <div key={i} className="text-center sm:text-left">
+            <div key={i} className="text-center">
               <p className="text-2xl md:text-4xl font-black text-white tracking-tighter">{s.val}</p>
               <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mt-1">{s.label}</p>
             </div>
           ))}
-          <div className="text-center sm:text-left">
-            <p className="text-2xl md:text-4xl font-black text-white tracking-tighter">100%</p>
-            <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mt-1">offline no dia do evento</p>
-          </div>
         </div>
       </section>
 
@@ -537,7 +552,7 @@ const LandingPage = () => {
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3 text-left">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left">
               <div className="bg-white/5 border border-white/10 rounded-xl p-4">
                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Receita bruta</p>
                 <p className="text-xl md:text-2xl font-black tabular-nums text-white mt-1">{fmtBRL(calcReceita)}</p>
