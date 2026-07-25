@@ -156,7 +156,7 @@ const LandingPage = () => {
           {[
             { val: '10%', label: 'só quando vende' },
             { val: 'R$ 0', label: 'de mensalidade' },
-            { val: '30s', label: 'do PDF ao evento no ar' },
+            { val: '0 papel', label: 'de súmula de júri' },
           ].map((s, i) => (
             <div key={i} className="text-center">
               <p className="text-2xl md:text-4xl font-black text-white tracking-tighter">{s.val}</p>
@@ -219,7 +219,7 @@ const LandingPage = () => {
               <span className="text-[#ff0068]">operacional do seu festival.</span>
             </h2>
             <p className="text-slate-300 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
-              Cole o regulamento, publique o festival e deixa a plataforma trabalhar.
+              Cole o regulamento, publique o festival e deixe a plataforma trabalhar.
               Cada etapa — da inscrição ao certificado — roda sozinha enquanto você cuida do palco.
             </p>
           </div>
@@ -307,9 +307,8 @@ const LandingPage = () => {
         title={<>Seletiva por <span className="text-[#ff0068]">vídeo</span>.<br />Cronograma só com quem passou.</>}
         body="Bailarino envia o vídeo direto no formulário de inscrição. A banca avalia pelo tablet, antes do festival começar — sem precisar de dia extra de eliminatórias. No dia, o cronograma já vem filtrado só com os classificados: você economiza palco, banca e horário."
         bullets={[
-          'Vídeo enviado no cadastro (link YouTube ou upload direto)',
-          'Banca avalia pelo tablet, na semana antes do festival',
-          'Cronograma do dia já vem filtrado com os classificados',
+          'Vídeo enviado no cadastro (link YouTube)',
+          'Banca avalia remotamente, antes do festival',
           'Notificação automática pro inscrito (passou / não passou)',
         ]}
         mockup={
@@ -356,7 +355,7 @@ const LandingPage = () => {
       <FeatureSection
         kicker="Júri Digital"
         title={<>Jurado avalia no tablet<br />ou notebook. <span className="text-[#ff0068]">Mesmo sem Wi-Fi.</span></>}
-        body="Esqueça a súmula de papel. O júri acessa com PIN de 4 dígitos — sem cadastro, sem senha para lembrar. Você acompanha cada nota em tempo real no painel, o Coordenador do Júri revisa antes de publicar, e os resultados ficam disponíveis no fim da apresentação. Sem Wi-Fi? Funciona do mesmo jeito."
+        body="Esqueça a súmula de papel. O júri acessa com PIN de 4 dígitos — sem cadastro. Você acompanha cada nota em tempo real no painel, o Coordenador do Júri revisa antes de publicar, e os resultados ficam disponíveis no fim da apresentação. Sem Wi-Fi? Funciona do mesmo jeito."
         bullets={[
           'Login por PIN de 4 dígitos — sem cadastro, sem senha para lembrar',
           'Notas chegam em tempo real no painel do produtor',
@@ -379,11 +378,11 @@ const LandingPage = () => {
       <FeatureSection
         kicker="Conflito? Antes de acontecer."
         title={<>Bailarina em <span className="text-[#ff0068]">5 coreografias</span>?<br />O sistema calcula o intervalo.</>}
-        body="O cronograma identifica quando o mesmo bailarino aparece em apresentações próximas e respeita um intervalo mínimo pra troca de figurino. Se há conflito, ele alerta antes de você publicar — não na frente do público. Reordena com 1 toque, sem refazer planilha."
+        body="O cronograma identifica quando o mesmo bailarino aparece em apresentações próximas e respeita um intervalo mínimo pra troca de figurino. Se há conflito, ele alerta antes de você publicar. Reordena com 1 toque, sem refazer planilha."
         bullets={[
           'Detecta bailarinos em múltiplas coreografias (solo, duo, grupo)',
           'Calcula intervalo mínimo entre apresentações da mesma pessoa',
-          'Aviso visual antes de publicar — não no dia, no meio do festival',
+          'Aviso visual antes de publicar',
           'Drag-to-reorder respeitando blocos do regulamento',
         ]}
         mockup={
@@ -485,7 +484,7 @@ const LandingPage = () => {
       <FeatureSection
         kicker="Narração profissional por IA"
         title={<>Voz <span className="text-[#ff0068]">profissional</span> anuncia<br />cada coreografia.</>}
-        body="A IA gera a narração de abertura, transição e encerramento com voz natural em português. Geração em lote antes do evento, fallback automático se a internet cair. Acabou ficar refém de locutor cobrando cachê — e acabou microfone do produtor estourando ao vivo."
+        body="A IA gera a narração de abertura, transição e encerramento com voz natural em português. Geração em lote antes do evento, fallback automático se a internet cair. Não fique mais refém de locutor cobrando caro."
         bullets={[
           'Voz natural em português, ritmo de locutor profissional',
           'Lê nome do bailarino, coreografia, categoria e estúdio',
