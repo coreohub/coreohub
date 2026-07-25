@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import {
   ChevronRight, Sparkles, FileText, Wifi, Link as LinkIcon,
   Trophy, Shield, Award, GraduationCap, Mic2, Check, X, ChevronDown,
-  AlertTriangle, ArrowRight,
+  AlertTriangle, ArrowRight, Menu,
   CalendarClock, Globe, IdCard, QrCode,
   Smartphone, Share2, Mail,
 } from 'lucide-react';
@@ -14,6 +14,8 @@ const LandingPage = () => {
   const [calcInscricoes, setCalcInscricoes] = useState(200);
   const [calcTicket, setCalcTicket] = useState(150);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const calcReceita = calcInscricoes * calcTicket;
   const calcComissao = calcReceita * 0.10;
@@ -25,11 +27,17 @@ const LandingPage = () => {
     document.title = 'CoreoHub — Gestão inteligente para festivais e mostras de dança';
   }, []);
 
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-950 text-white selection:bg-[#ff0068]/30 overflow-x-hidden">
 
       {/* ─── NAV ──────────────────────────────────────────────── */}
-      <header className="absolute top-0 left-0 right-0 z-20 px-6 py-4">
+      <header className={`fixed top-0 left-0 right-0 z-50 px-6 py-4 transition-all duration-300 ${scrolled ? 'bg-slate-950/80 backdrop-blur-md border-b border-white/10' : ''}`}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5">
             <img src="/coreohub-avatar.png" alt="CoreoHub" className="w-8 h-8" />
@@ -49,17 +57,37 @@ const LandingPage = () => {
               onClick={() => navigate('/criar-evento')}
               className="px-4 py-2 bg-[#ff0068] text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-transform"
             >
-              Criar festival
+              Criar festival →
             </button>
           </nav>
-          {/* mobile: só o CTA */}
+          {/* mobile: hamburger */}
           <button
-            onClick={() => navigate('/criar-evento')}
-            className="sm:hidden px-4 py-2 bg-[#ff0068] text-white rounded-xl text-xs font-black uppercase tracking-widest"
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="sm:hidden p-2 text-white"
+            aria-label={menuOpen ? 'Fechar menu' : 'Abrir menu'}
           >
-            Criar festival
+            {menuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
+        {/* mobile menu */}
+        {menuOpen && (
+          <div className="sm:hidden bg-slate-950/95 backdrop-blur-md border-t border-white/10 px-6 py-4 space-y-1">
+            <Link to="/festivais" onClick={() => setMenuOpen(false)} className="block text-sm font-bold text-slate-300 hover:text-white transition-colors py-3 border-b border-white/5">
+              Festivais
+            </Link>
+            <a href="https://app.coreohub.com/login" className="block text-sm font-bold text-slate-300 hover:text-white transition-colors py-3 border-b border-white/5">
+              Entrar
+            </a>
+            <div className="pt-3">
+              <button
+                onClick={() => { navigate('/criar-evento'); setMenuOpen(false); }}
+                className="w-full px-4 py-3 bg-[#ff0068] text-white rounded-xl text-sm font-black uppercase tracking-widest"
+              >
+                Criar festival →
+              </button>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* ─── 1. HERO ──────────────────────────────────────────────── */}
@@ -72,8 +100,8 @@ const LandingPage = () => {
           decoding="async"
           className="absolute inset-0 w-full h-full object-cover object-[50%_35%]"
         />
-        <div className="absolute inset-0 bg-black/40" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.70)_0%,rgba(0,0,0,0.20)_40%,transparent_65%)]" />
+        <div className="absolute inset-0 bg-black/20" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.75)_0%,rgba(0,0,0,0.20)_45%,transparent_70%)]" />
 
         {/* conteúdo ancorado no rodapé do hero */}
         <div className="relative z-10 flex-1 flex flex-col justify-end px-6 pb-10 pt-28">
@@ -83,6 +111,7 @@ const LandingPage = () => {
             transition={{ duration: 0.6 }}
             className="max-w-3xl mx-auto w-full text-center space-y-6"
           >
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068]">Para produtores de festivais e mostras de dança</p>
             <h1 className="text-[1.6rem] sm:text-[2rem] lg:text-[2.5rem] font-black tracking-tighter uppercase leading-[1.05]">
               Plataforma de gestão<br />
               para festivais e mostras de dança:<br />
@@ -193,13 +222,13 @@ const LandingPage = () => {
               {
                 num: '02',
                 icon: LinkIcon,
-                title: 'O festival ganha uma página oficial',
+                title: 'Seu festival ganha uma página oficial.',
                 body: 'Compartilhe o link: inscrições, pagamentos e confirmações no automático.',
               },
               {
                 num: '03',
                 icon: Trophy,
-                title: 'Festival roda',
+                title: 'O festival roda. Você finalmente respira.',
                 body: 'Júri avalia (até offline), resultado calcula sozinho, certificado sai com QR. Você foca no palco.',
               },
             ].map((step, i) => {
@@ -220,7 +249,7 @@ const LandingPage = () => {
       {/* ─── 5. IA CONFIGURA ──────────────────────────────────────────────── */}
       <FeatureSection
         kicker="Setup em 30 segundos"
-        title={<>Cole o PDF do <span className="text-[#ff0068]">regulamento</span>.<br />Festival pronto pra publicar.</>}
+        title={<>Cole o PDF do <span className="text-[#ff0068]">regulamento</span>.<br />Seu festival, pronto para publicar.</>}
         body="Nossa IA lê o regulamento (ou edital público de governo) e extrai TUDO: categorias, formações, lotes de preço, prêmios, critérios, tolerâncias. Em 30 segundos você está revisando, não digitando."
         bullets={[
           'Reconhece editais públicos, regulamentos próprios e mostras municipais',
