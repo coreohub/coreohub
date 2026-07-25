@@ -445,17 +445,39 @@ const LandingPage = () => {
           'Cor automática por tipo (rosa, azul, dourado, roxo)',
         ]}
         mockup={
-          <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-slate-900">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-white/10 bg-slate-950">
               <IdCard size={14} className="text-[#ff0068]" />
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pré-visualização · 7 adesivos · Pimaco 6280</span>
             </div>
-            <img
-              src="/screenshots/credenciais-pdf.png"
-              alt="Pré-visualização do PDF gerado pelo CoreoHub: adesivos Pimaco 6280 com nome, estúdio, categoria e QR code"
-              className="w-full h-auto block"
-              loading="lazy"
-            />
+            <div className="p-4 grid grid-cols-2 gap-3">
+              {[
+                { name: 'Luiza Moraes',  studio: 'Cia Arte em Movimento', cat: 'Infantil · Solo',  type: 'Inscrita', color: 'border-[#ff0068]/40 bg-[#ff0068]/5',   badge: 'text-[#ff0068] bg-[#ff0068]/10' },
+                { name: 'Pedro Alves',   studio: 'Núcleo Dança Livre',    cat: 'Adulto · Duo',    type: 'Inscrito', color: 'border-[#ff0068]/40 bg-[#ff0068]/5',   badge: 'text-[#ff0068] bg-[#ff0068]/10' },
+                { name: 'Ana Beatriz',   studio: 'Oficina de Movimento',  cat: 'Workshop',         type: 'Workshop', color: 'border-blue-400/40 bg-blue-500/5',     badge: 'text-blue-400 bg-blue-500/10' },
+                { name: 'Carlos Lima',   studio: 'Coordenação Geral',     cat: 'Equipe',           type: 'Equipe',   color: 'border-yellow-400/40 bg-yellow-500/5', badge: 'text-yellow-400 bg-yellow-500/10' },
+              ].map((c, i) => (
+                <div key={i} className={`border rounded-xl p-3 flex flex-col gap-2 ${c.color}`}>
+                  <div className="flex items-start justify-between gap-1">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-black text-white leading-tight truncate">{c.name}</p>
+                      <p className="text-[9px] text-slate-400 mt-0.5 truncate">{c.studio}</p>
+                      <p className="text-[9px] text-slate-500 mt-0.5">{c.cat}</p>
+                    </div>
+                    <div className="w-8 h-8 flex-shrink-0 grid grid-cols-3 gap-px bg-white/5 rounded p-1">
+                      {[1,0,1,0,1,0,1,0,1].map((v, j) => (
+                        <div key={j} className={`rounded-[1px] ${v ? 'bg-white/60' : 'bg-white/15'}`} />
+                      ))}
+                    </div>
+                  </div>
+                  <span className={`text-[8px] font-black uppercase tracking-widest self-start px-1.5 py-0.5 rounded ${c.badge}`}>{c.type}</span>
+                </div>
+              ))}
+            </div>
+            <div className="px-4 pb-4 flex items-center justify-between">
+              <span className="text-[10px] text-slate-500">Modo Pimaco 6280 · A4</span>
+              <span className="text-[10px] font-black text-emerald-400">Pronto pra gráfica</span>
+            </div>
           </div>
         }
       />
