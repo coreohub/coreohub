@@ -60,6 +60,9 @@ const LandingPage = () => {
             <Link to="/festivais" className="text-xs font-bold text-slate-300 hover:text-white transition-colors">
               Festivais
             </Link>
+            <Link to="/governo" className="text-xs font-bold text-slate-300 hover:text-white transition-colors">
+              Setor público
+            </Link>
             <a
               href="https://app.coreohub.com/login"
               className="text-xs font-bold text-slate-300 hover:text-white transition-colors"
@@ -87,6 +90,9 @@ const LandingPage = () => {
           <div className="sm:hidden bg-slate-950/95 backdrop-blur-md border-t border-white/10 px-6 py-4 space-y-1">
             <Link to="/festivais" onClick={() => setMenuOpen(false)} className="block text-sm font-bold text-slate-300 hover:text-white transition-colors py-3 border-b border-white/5">
               Festivais
+            </Link>
+            <Link to="/governo" onClick={() => setMenuOpen(false)} className="block text-sm font-bold text-slate-300 hover:text-white transition-colors py-3 border-b border-white/5">
+              Setor público
             </Link>
             <a href="https://app.coreohub.com/login" className="block text-sm font-bold text-slate-300 hover:text-white transition-colors py-3 border-b border-white/5">
               Entrar
