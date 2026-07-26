@@ -155,7 +155,7 @@ const LandingPage = () => {
           {[
             { val: '10%', label: 'só quando vende' },
             { val: 'R$ 0', label: 'de mensalidade' },
-            { val: 'Sem súmula', label: 'de papel' },
+            { val: '100%', label: 'digital, sem papel' },
           ].map((s, i) => (
             <div key={i} className="text-center">
               <p className="text-2xl md:text-4xl font-black text-white tracking-tighter">{s.val}</p>

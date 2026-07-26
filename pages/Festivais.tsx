@@ -29,6 +29,31 @@ const Festivais = () => {
   const [monthFilter, setMonthFilter] = useState<number | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
+  // SEO próprio da página (SPA não muda o head estático sozinha)
+  useEffect(() => {
+    const prevTitle = document.title;
+    document.title = 'Festivais e mostras de dança abertos — CoreoHub';
+
+    const setMeta = (name: string, content: string) => {
+      let el = document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`);
+      const prev = el?.getAttribute('content') ?? null;
+      if (!el) { el = document.createElement('meta'); el.name = name; document.head.appendChild(el); }
+      el.setAttribute('content', content);
+      return prev;
+    };
+    const prevDesc = setMeta('description', 'Descubra festivais e mostras de dança com inscrições abertas em todo o Brasil. Filtre por estado e mês e inscreva sua coreografia.');
+
+    let canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical); }
+    canonical.href = 'https://www.coreohub.com/festivais';
+
+    return () => {
+      document.title = prevTitle;
+      if (prevDesc !== null) setMeta('description', prevDesc);
+      canonical!.href = 'https://www.coreohub.com/';
+    };
+  }, []);
+
   useEffect(() => {
     const fetchEvents = async () => {
       setLoading(true);

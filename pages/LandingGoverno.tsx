@@ -12,7 +12,7 @@
  *  - PDF técnico baixável pra anexar a edital
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight, Download, FileText, Shield, Scale, Users,
@@ -52,6 +52,31 @@ const LandingGoverno: React.FC = () => {
   });
   const upd = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
 
+  // SEO próprio da página (SPA não muda o head estático sozinha)
+  useEffect(() => {
+    const prevTitle = document.title;
+    document.title = 'Gestão de festivais e mostras de dança para o setor público — CoreoHub';
+
+    const setMeta = (name: string, content: string) => {
+      let el = document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`);
+      const prev = el?.getAttribute('content') ?? null;
+      if (!el) { el = document.createElement('meta'); el.name = name; document.head.appendChild(el); }
+      el.setAttribute('content', content);
+      return prev;
+    };
+    const prevDesc = setMeta('description', 'Gestão de festivais e mostras de dança para secretarias, institutos e editais públicos: conformidade LGPD e Lei 14.133/2021, operação offline e documentação pronta para licitação.');
+
+    let canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical); }
+    canonical.href = 'https://www.coreohub.com/governo';
+
+    return () => {
+      document.title = prevTitle;
+      if (prevDesc !== null) setMeta('description', prevDesc);
+      canonical!.href = 'https://www.coreohub.com/';
+    };
+  }, []);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     window.location.href = buildEmailMailto(form);
@@ -60,47 +85,62 @@ const LandingGoverno: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-950 text-white selection:bg-[#ff0068]/30 overflow-x-hidden">
 
-      {/* ─── 1. HERO ──────────────────────────────────────────────── */}
-      <section className="relative px-6 pt-24 pb-20 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(255,0,104,0.12),transparent_60%)]" />
-        <div className="relative max-w-5xl mx-auto text-center space-y-8">
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-4">
-              Para Secretarias de Cultura, Esportes, Institutos e Organizadores de Editais Públicos
-            </p>
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tighter uppercase leading-[0.95]">
-              Plataforma de gestão para<br />
-              festivais de dança:<br />
-              <span className="text-[#ff0068]">inscrições, júri e cronograma — do regulamento ao palco, sem planilha.</span>
-            </h1>
-            <p className="mt-8 text-white text-xl md:text-2xl font-bold max-w-3xl mx-auto">
-              Sua secretaria organiza o festival. A CoreoHub cuida do sistema.
-            </p>
-            <p className="mt-4 text-slate-300 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
-              Inscrições, banca de jurados e cronograma dos festivais e mostras culturais que a sua secretaria
-              organiza — com documentação de conformidade (LGPD e Lei 14.133/2021) pronta pra anexar ao processo.
-            </p>
-          </motion.div>
+      {/* ─── 1. HERO ── mesmo padrão vende-c/home (foto + coluna estreita) ── */}
+      <section className="relative min-h-[90vh] flex flex-col overflow-hidden bg-black">
+        <img
+          src="/hero-festival.webp"
+          alt=""
+          aria-hidden="true"
+          width={1920}
+          height={1072}
+          fetchPriority="high"
+          decoding="async"
+          className="absolute inset-0 w-full h-full object-cover object-[50%_35%]"
+        />
+        <div className="absolute inset-0 bg-black/40" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.7)_0%,rgba(0,0,0,0.20)_40%,transparent_65%)]" />
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
-            <a
-              href="#solicitar"
-              className="group px-8 py-5 bg-[#ff0068] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_20px_60px_rgba(255,0,104,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-transform"
-            >
-              <span className="inline-flex items-center gap-2">
-                Solicitar apresentação técnica <ChevronRight size={18} />
-              </span>
-            </a>
-            <Link
-              to="/governo/proposta"
-              className="px-8 py-5 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-white/10 transition-all inline-flex items-center gap-2"
-            >
-              <FileText size={16} /> Documento técnico (PDF)
-            </Link>
-          </div>
+        {/* conteúdo ancorado no rodapé do hero — mesmo padrão da home */}
+        <div className="relative z-10 flex-1 flex flex-col justify-end px-4 pb-10 pt-28 text-center sm:px-6 sm:text-left lg:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="mx-auto max-w-xl px-5 sm:mx-0 sm:px-0"
+          >
+            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-white">
+              Para Secretarias de Cultura, Esportes, Institutos e Editais Públicos
+            </p>
+            <h1 className="mt-2 sm:mt-3 text-[2.2rem] sm:text-[3.3rem] font-black tracking-normal uppercase leading-[1.06]">
+              Plataforma de gestão para festivais e mostras de dança
+            </h1>
+
+            <p className="mt-3 sm:mt-4 text-slate-200 text-sm sm:text-base font-medium leading-snug">
+              Sua secretaria organiza o festival, a CoreoHub cuida do sistema — com conformidade
+              LGPD e Lei 14.133/2021, pronta pra anexar ao processo.
+            </p>
+
+            <div className="mt-5 sm:mt-6 flex flex-col sm:flex-row items-center justify-center gap-4 sm:justify-start">
+              <a
+                href="#solicitar"
+                className="group px-8 py-5 bg-[#ff0068] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_20px_60px_rgba(255,0,104,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-transform"
+              >
+                <span className="inline-flex items-center gap-2">
+                  Solicitar apresentação técnica <ChevronRight size={18} />
+                </span>
+              </a>
+              <Link
+                to="/governo/proposta"
+                className="px-8 py-5 bg-white/10 border border-white/20 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-white/20 transition-all inline-flex items-center gap-2"
+              >
+                <FileText size={16} /> Documento técnico (PDF)
+              </Link>
+            </div>
+          </motion.div>
         </div>
 
-        <div className="relative max-w-5xl mx-auto w-full grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-white/5 pt-10 mt-12">
+        {/* barra de stats */}
+        <div className="relative z-10 max-w-5xl mx-auto w-full grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-white/10 px-6 pt-6 pb-8">
           {[
             { val: 'LGPD', label: 'Conformidade integral' },
             { val: '14.133', label: 'Compatível' },
@@ -108,8 +148,8 @@ const LandingGoverno: React.FC = () => {
             { val: '24/7', label: 'Funciona offline' },
           ].map((s, i) => (
             <div key={i} className="text-center">
-              <p className="text-2xl md:text-3xl font-black text-white tracking-tighter">{s.val}</p>
-              <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mt-1">{s.label}</p>
+              <p className="text-2xl md:text-4xl font-black text-white tracking-tighter">{s.val}</p>
+              <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mt-1">{s.label}</p>
             </div>
           ))}
         </div>
