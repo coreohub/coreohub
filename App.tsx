@@ -496,8 +496,7 @@ const App: React.FC = () => {
         {/* Setor público: landing dedicada + PDF técnico imprimível */}
         <Route path="/governo" element={<Suspense fallback={<PageLoader />}><LandingGoverno /></Suspense>} />
         <Route path="/governo/proposta" element={<Suspense fallback={<PageLoader />}><PropostaGoverno /></Suspense>} />
-        {/* Estúdios de dança: espetáculo / mostra / recital de fim de ano */}
-        <Route path="/estudios" element={<Suspense fallback={<PageLoader />}><LandingEstudios /></Suspense>} />
+        <Route path="/estudios" element={<Navigate to="/" replace />} />
         <Route path="/login" element={<Auth />} />
         <Route path="/register" element={<Auth />} />
         <Route path="/judge-login" element={<Suspense fallback={<PageLoader />}><JudgeLogin /></Suspense>} />

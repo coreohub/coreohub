@@ -463,7 +463,6 @@ const LandingGoverno: React.FC = () => {
             </div>
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
               <Link to="/lp" className="hover:text-[#ff0068]">Festivais competitivos</Link>
-              <Link to="/estudios" className="hover:text-[#ff0068]">Para estúdios</Link>
               <a href={`mailto:${EMAIL}`} className="hover:text-[#ff0068]">{EMAIL}</a>
               <a href={`https://wa.me/${WHATSAPP_NUMBER}`} target="_blank" rel="noopener noreferrer" className="hover:text-[#ff0068]">{WHATSAPP_DISPLAY}</a>
             </div>
