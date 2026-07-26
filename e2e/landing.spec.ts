@@ -22,7 +22,7 @@ test.describe('Hero', () => {
   });
 
   test('barra de stats mostra as 3 métricas', async ({ page }) => {
-    for (const metric of ['10%', 'R$ 0', '30s']) {
+    for (const metric of ['10%', 'R$ 0', '100%']) {
       await expect(page.getByText(metric, { exact: true }).first()).toBeVisible();
     }
   });
