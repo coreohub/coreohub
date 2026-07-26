@@ -1,0 +1,52 @@
+{
+  "version": "5",
+  "redirects": {
+    "https://esm.sh/@supabase/supabase-js@2": "https://esm.sh/@supabase/supabase-js@2.105.3"
+  },
+  "remote": {
+    "https://esm.sh/@supabase/supabase-js@2.105.3": "5a134c393ed588a62d398734c1af54ff1eab170090908bbaef624106b5201d41"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@dnd-kit/core@^6.3.1",
+        "npm:@dnd-kit/sortable@10",
+        "npm:@dnd-kit/utilities@^3.2.2",
+        "npm:@google/genai@^1.40.0",
+        "npm:@playwright/test@^1.60.0",
+        "npm:@supabase/auth-ui-react@~0.4.7",
+        "npm:@supabase/auth-ui-shared@~0.1.8",
+        "npm:@supabase/supabase-js@^2.99.3",
+        "npm:@tailwindcss/vite@^4.2.2",
+        "npm:@types/file-saver@^2.0.7",
+        "npm:@types/jszip@^3.4.0",
+        "npm:@types/node@^22.14.0",
+        "npm:@vercel/functions@^3.7.4",
+        "npm:@vercel/node@^5.8.2",
+        "npm:@vitejs/plugin-react@5",
+        "npm:browser-image-compression@^2.0.2",
+        "npm:dotenv@^17.4.2",
+        "npm:file-saver@^2.0.5",
+        "npm:framer-motion@^12.38.0",
+        "npm:html2canvas@^1.4.1",
+        "npm:idb@^8.0.3",
+        "npm:jspdf-autotable@^5.0.7",
+        "npm:jspdf@^4.2.1",
+        "npm:jszip@^3.10.1",
+        "npm:lucide-react@0.563",
+        "npm:motion@^12.38.0",
+        "npm:qrcode.react@^4.2.0",
+        "npm:react-dom@^19.2.4",
+        "npm:react-markdown@^10.1.0",
+        "npm:react-router-dom@^7.13.0",
+        "npm:react@^19.2.4",
+        "npm:recharts@^3.7.0",
+        "npm:tailwindcss@^4.2.2",
+        "npm:typescript@~5.8.2",
+        "npm:vite-plugin-pwa@~0.21.1",
+        "npm:vite@^6.2.0",
+        "npm:vitest@^2.1.9"
+      ]
+    }
+  }
+}
