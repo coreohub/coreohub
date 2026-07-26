@@ -50,7 +50,7 @@ const PropostaGoverno: React.FC = () => {
             <img src="/coreohub-avatar.png" alt="CoreoHub" className="w-14 h-14" />
             <div>
               <p className="text-2xl font-black tracking-tighter uppercase text-slate-900">CoreoHub</p>
-              <p className="text-[10px] text-slate-500 uppercase tracking-widest">Plataforma de Gestão para Festivais</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest">Plataforma de Gestão para Festivais e Mostras de Dança</p>
             </div>
           </div>
           <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Documento Técnico</p>
@@ -59,9 +59,9 @@ const PropostaGoverno: React.FC = () => {
             para Editais Públicos
           </h1>
           <p className="mt-6 text-sm text-slate-600 leading-relaxed">
-            Plataforma integrada para gestão de festivais, mostras culturais e jogos
-            educativos do setor público, com conformidade à Lei 13.709/2018 (LGPD) e
-            Lei 14.133/2021 (Licitações).
+            Plataforma integrada para gestão de festivais e mostras de dança do setor
+            público, com conformidade à Lei 13.709/2018 (LGPD) e Lei 14.133/2021
+            (Licitações).
           </p>
           <p className="mt-8 text-[10px] text-slate-500 italic">
             Versão {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
@@ -73,12 +73,12 @@ const PropostaGoverno: React.FC = () => {
           <table className="w-full text-sm">
             <tbody>
               <tr className="border-b border-slate-200">
-                <td className="py-2 pr-4 font-bold text-slate-700 w-1/3">Razão social</td>
-                <td className="py-2 text-slate-600">CoreoHub (Hemer Roger Dos Santos · MEI/ME — em adequação)</td>
+                <td className="py-2 pr-4 font-bold text-slate-700 w-1/3">Fornecedor</td>
+                <td className="py-2 text-slate-600">CoreoHub</td>
               </tr>
               <tr className="border-b border-slate-200">
                 <td className="py-2 pr-4 font-bold text-slate-700">CNPJ</td>
-                <td className="py-2 text-slate-600">[a confirmar conforme situação cadastral atual]</td>
+                <td className="py-2 text-slate-600">13.484.650/0001-00</td>
               </tr>
               <tr className="border-b border-slate-200">
                 <td className="py-2 pr-4 font-bold text-slate-700">E-mail comercial</td>
@@ -94,7 +94,7 @@ const PropostaGoverno: React.FC = () => {
               </tr>
               <tr className="border-b border-slate-200">
                 <td className="py-2 pr-4 font-bold text-slate-700">Encarregado de Dados (DPO)</td>
-                <td className="py-2 text-slate-600">Hemer Roger Dos Santos · contato@coreohub.com</td>
+                <td className="py-2 text-slate-600">Designado — contato@coreohub.com</td>
               </tr>
               <tr>
                 <td className="py-2 pr-4 font-bold text-slate-700">Sede</td>
@@ -107,9 +107,9 @@ const PropostaGoverno: React.FC = () => {
         {/* ─── 2. RESUMO EXECUTIVO ─── */}
         <Section number="2" title="Resumo Executivo">
           <p className="text-sm text-slate-700 leading-relaxed mb-3">
-            O CoreoHub é uma plataforma SaaS (Software as a Service) brasileira dedicada à
-            administração de festivais de dança, mostras culturais e jogos educativos. Atende
-            integralmente o ciclo do evento: configuração do edital, vitrine pública,
+            A CoreoHub é uma plataforma SaaS (Software as a Service) brasileira dedicada à
+            administração de festivais e mostras de dança. Atende integralmente o ciclo do
+            evento: configuração do edital, vitrine pública,
             inscrição de competidores, banca técnica, premiação, certificação oficial e
             relatório de prestação de contas.
           </p>
@@ -186,7 +186,7 @@ const PropostaGoverno: React.FC = () => {
             <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-700">
               <li>
                 <strong>Encarregado de Dados (DPO)</strong> nomeado em cumprimento ao
-                Art. 41: <strong>Hemer Roger Dos Santos</strong> (contato@coreohub.com)
+                Art. 41, com canal de contato em contato@coreohub.com
               </li>
               <li>
                 <strong>Política de Privacidade pública e atualizada</strong>, disponível em
@@ -270,7 +270,6 @@ const PropostaGoverno: React.FC = () => {
               title="Operação"
               items={[
                 'Hospedagem dedicada durante o período do edital',
-                'Domínio personalizado opcional (subdomínio gratuito ou domínio próprio)',
                 'Vitrine pública oficial com identidade da instituição',
                 'Painel de auditoria com histórico imutável de decisões',
                 'Backup diário com retenção de 30 dias',
@@ -280,8 +279,7 @@ const PropostaGoverno: React.FC = () => {
               title="Suporte"
               items={[
                 'Atendimento em horário comercial via e-mail e WhatsApp',
-                'Plantão remoto durante o dia do evento ao vivo',
-                'Suporte presencial em campo (opcional, conforme escopo contratado)',
+                'Plantão presencial e remoto no dia do evento ao vivo (conforme escopo contratado)',
                 'Resposta em até 4h em dias úteis; até 1h em horário de plantão',
                 'Acompanhamento dedicado em eventos com mais de 800 inscritos',
               ]}
@@ -305,8 +303,8 @@ const PropostaGoverno: React.FC = () => {
               <p className="font-bold uppercase tracking-wider text-xs text-slate-500 mb-1">Objeto</p>
               <p>
                 Contratação de plataforma SaaS para gestão integrada de festival/mostra
-                cultural/jogos educativos, contemplando configuração, vitrine pública,
-                inscrição, avaliação técnica, premiação, certificação e relatórios.
+                de dança, contemplando configuração, vitrine pública, inscrição,
+                avaliação técnica, premiação, certificação e relatórios.
               </p>
             </div>
             <div>
@@ -382,7 +380,7 @@ const PropostaGoverno: React.FC = () => {
 
           <div className="mt-8 pt-6 border-t-2 border-slate-200 text-center">
             <p className="text-[10px] uppercase tracking-widest text-slate-500">
-              CoreoHub · Plataforma de Gestão para Festivais e Mostras Culturais
+              CoreoHub · Plataforma de Gestão para Festivais e Mostras de Dança
             </p>
             <p className="text-[10px] text-slate-400 mt-1">
               contato@coreohub.com · +55 17 99793-6169 · coreohub.com

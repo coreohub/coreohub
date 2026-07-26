@@ -12,11 +12,11 @@
  *  - PDF técnico baixável pra anexar a edital
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight, Download, FileText, Shield, Scale, Users,
-  Building2, Award, ClipboardCheck, MessageCircle, Mail,
+  Building2, Award, MessageCircle, Mail,
   Check, ChevronRight,
 } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -25,33 +25,7 @@ const WHATSAPP_NUMBER = '5517997936169';
 const WHATSAPP_DISPLAY = '+55 17 99793-6169';
 const EMAIL = 'contato@coreohub.com';
 
-const buildEmailMailto = (form: Record<string, string>) => {
-  const subject = encodeURIComponent(`[Apresentação Técnica] ${form.instituicao || 'Solicitação'}`);
-  const body = encodeURIComponent(
-    `Solicitação de apresentação técnica do CoreoHub:\n\n` +
-    `Nome: ${form.nome}\n` +
-    `Cargo: ${form.cargo}\n` +
-    `Instituição: ${form.instituicao}\n` +
-    `E-mail institucional: ${form.email}\n` +
-    `Telefone: ${form.telefone}\n` +
-    `Tipo de evento: ${form.tipoEvento}\n` +
-    `Data prevista: ${form.dataEvento}\n` +
-    `Volume estimado de inscritos: ${form.volume}\n` +
-    `Modalidade do empenho: ${form.empenho}\n\n` +
-    `Comentário:\n${form.comentario}\n`,
-  );
-  return `mailto:${EMAIL}?subject=${subject}&body=${body}`;
-};
-
 const LandingGoverno: React.FC = () => {
-  const [form, setForm] = useState({
-    nome: '', cargo: '', instituicao: '', email: '', telefone: '',
-    tipoEvento: 'JOMI · Jogos da Melhor Idade',
-    dataEvento: '', volume: 'até 200 inscritos', empenho: 'Não sei',
-    comentario: '',
-  });
-  const upd = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
-
   // SEO próprio da página (SPA não muda o head estático sozinha)
   useEffect(() => {
     const prevTitle = document.title;
@@ -76,11 +50,6 @@ const LandingGoverno: React.FC = () => {
       canonical!.href = 'https://www.coreohub.com/';
     };
   }, []);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    window.location.href = buildEmailMailto(form);
-  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-white selection:bg-[#ff0068]/30 overflow-x-hidden">
@@ -169,7 +138,7 @@ const LandingGoverno: React.FC = () => {
             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Decisão técnica respaldada</p>
             <h2 className="text-3xl md:text-5xl font-black tracking-tighter uppercase leading-[0.95] max-w-3xl">
               Sua equipe analisa.<br />
-              <span className="text-[#ff0068]">Procuradoria aprova.</span>
+              <span className="text-[#ff0068]">A Procuradoria aprova.</span>
             </h2>
             <p className="text-slate-300 text-base md:text-lg max-w-2xl mt-4 leading-relaxed">
               Documentação técnica completa, conformidade auditável e termo de referência modelo —
@@ -196,8 +165,8 @@ const LandingGoverno: React.FC = () => {
                 icon: Users,
                 title: 'JOMI · Jogos da Melhor Idade',
                 body: 'Mostras culturais e modalidades de dança nas fases municipais, regionais e estaduais. Categorias por idade, classificação por município, relatório consolidado para a coordenadoria.',
-                image: 'https://i.imgur.com/KGtRNzX.jpg',
-                imageAlt: 'Idosos participando de mostra cultural pública',
+                image: null,
+                imageAlt: '',
               },
               {
                 icon: Building2,
@@ -242,7 +211,7 @@ const LandingGoverno: React.FC = () => {
           <div className="text-center mb-16">
             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Por que o poder público escolhe</p>
             <h2 className="text-3xl md:text-5xl font-black tracking-tighter uppercase">
-              Operação simples para servidor.<br />
+              Operação simples para o servidor.<br />
               <span className="text-[#ff0068]">Auditoria completa para quem fiscaliza.</span>
             </h2>
           </div>
@@ -263,7 +232,7 @@ const LandingGoverno: React.FC = () => {
               },
               {
                 title: 'Funciona offline durante o evento ao vivo',
-                body: 'Wi-Fi do ginásio cair não interrompe a banca. Notas dos jurados são salvas localmente e sincronizam quando a rede volta. Único do mercado brasileiro com essa capacidade.',
+                body: 'Queda de Wi-Fi no ginásio não interrompe a banca. Notas dos jurados são salvas localmente e sincronizam quando a rede volta. Único do mercado brasileiro com essa capacidade.',
               },
               {
                 title: 'Vitrine pública oficial',
@@ -308,7 +277,7 @@ const LandingGoverno: React.FC = () => {
               <ul className="space-y-2 text-sm text-slate-300">
                 <li className="flex items-start gap-2">
                   <Check size={14} className="text-[#ff0068] shrink-0 mt-1" />
-                  Encarregado de Dados (DPO) designado: Hemer Roger Dos Santos
+                  Encarregado de Dados (DPO) designado — contato@coreohub.com
                 </li>
                 <li className="flex items-start gap-2">
                   <Check size={14} className="text-[#ff0068] shrink-0 mt-1" />
@@ -388,11 +357,11 @@ const LandingGoverno: React.FC = () => {
               },
               {
                 title: 'Operação',
-                body: 'Hospedagem dedicada durante o período do edital, domínio personalizado, vitrine pública oficial e painel de auditoria.',
+                body: 'Hospedagem dedicada durante o período do edital, vitrine pública oficial com identidade da instituição e painel de auditoria.',
               },
               {
                 title: 'Suporte',
-                body: 'Atendimento em horário comercial, plantão remoto no dia do evento ao vivo, suporte presencial em campo (opcional, conforme escopo).',
+                body: 'Atendimento em horário comercial e plantão presencial e remoto no dia do evento ao vivo (conforme escopo contratado).',
               },
             ].map((c, i) => (
               <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-6 text-left">
@@ -409,51 +378,6 @@ const LandingGoverno: React.FC = () => {
         </div>
       </section>
 
-      {/* ─── 6. CASOS DE SUCESSO (placeholder) ──────────────────────────────────────────────── */}
-      <section className="px-6 py-24 lg:py-32 border-t border-white/5">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-12">
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Referências</p>
-            <h2 className="text-3xl md:text-5xl font-black tracking-tighter uppercase">
-              Confiado por instituições<br />
-              <span className="text-[#ff0068]">com controle interno.</span>
-            </h2>
-            <p className="text-[10px] text-amber-400 font-black uppercase tracking-widest mt-4 italic">
-              ⚠ Placeholders · trocar por cases reais antes de publicar
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              {
-                quote: 'O sistema reduziu em 80% o trabalho manual da equipe na fase municipal. Conseguimos consolidar resultados de 12 escolas em uma tarde.',
-                name: 'Coordenadoria de Cultura — Município X',
-                role: 'JOMI 2026 (placeholder)',
-              },
-              {
-                quote: 'A documentação técnica foi anexada diretamente à inexigibilidade. Procuradoria aprovou sem ressalvas.',
-                name: 'Secretaria Municipal de Cultura — Cidade Y',
-                role: 'Mostra Municipal (placeholder)',
-              },
-              {
-                quote: 'Funcionou perfeitamente mesmo com queda de internet no segundo dia do evento. Ninguém na plateia percebeu.',
-                name: 'Departamento de Esportes — Estado Z',
-                role: 'Festival Estadual (placeholder)',
-              },
-            ].map((t, i) => (
-              <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-6">
-                <ClipboardCheck size={18} className="text-[#ff0068] mb-3" />
-                <p className="text-sm text-slate-200 leading-relaxed mb-6 italic">"{t.quote}"</p>
-                <div className="pt-4 border-t border-white/10">
-                  <p className="text-sm font-black text-white">{t.name}</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">{t.role}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ─── 7. DOCUMENTO TÉCNICO ──────────────────────────────────────────────── */}
       <section className="px-6 py-24 lg:py-32 border-t border-white/5">
         <div className="max-w-4xl mx-auto text-center bg-gradient-to-br from-[#ff0068]/15 via-white/5 to-purple-700/10 border border-[#ff0068]/20 rounded-3xl p-10 lg:p-14">
@@ -463,7 +387,7 @@ const LandingGoverno: React.FC = () => {
             Tudo o que a sua área jurídica<br />precisa, num PDF.
           </h2>
           <p className="text-slate-300 text-base md:text-lg max-w-2xl mx-auto mb-8 leading-relaxed">
-            Documento técnico de 6 páginas com identificação completa do CoreoHub (CNPJ, endereço, contatos),
+            Documento técnico de 6 páginas com identificação completa da CoreoHub (CNPJ, endereço, contatos),
             especificação técnica, certificações de conformidade, modelo de termo de referência e estrutura
             de orçamento.
           </p>
@@ -491,94 +415,30 @@ const LandingGoverno: React.FC = () => {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField label="Nome completo *" required>
-                <input type="text" required value={form.nome} onChange={e => upd('nome', e.target.value)} className={inputCls} />
-              </FormField>
-              <FormField label="Cargo / função *" required>
-                <input type="text" required value={form.cargo} onChange={e => upd('cargo', e.target.value)} className={inputCls} placeholder="Ex: Coordenadora de Cultura" />
-              </FormField>
-            </div>
-            <FormField label="Instituição *" required>
-              <input type="text" required value={form.instituicao} onChange={e => upd('instituicao', e.target.value)} className={inputCls} placeholder="Secretaria, Instituto, Prefeitura" />
-            </FormField>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField label="E-mail institucional *" required>
-                <input type="email" required value={form.email} onChange={e => upd('email', e.target.value)} className={inputCls} />
-              </FormField>
-              <FormField label="Telefone com DDD *" required>
-                <input type="tel" required value={form.telefone} onChange={e => upd('telefone', e.target.value)} className={inputCls} />
-              </FormField>
-            </div>
-            <FormField label="Tipo de evento de interesse">
-              <select value={form.tipoEvento} onChange={e => upd('tipoEvento', e.target.value)} className={inputCls}>
-                <option>JOMI · Jogos da Melhor Idade</option>
-                <option>Mostra Municipal de Dança</option>
-                <option>Mostra Estadual</option>
-                <option>Festival cultural</option>
-                <option>Outro</option>
-              </select>
-            </FormField>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField label="Volume estimado de inscritos">
-                <select value={form.volume} onChange={e => upd('volume', e.target.value)} className={inputCls}>
-                  <option>até 200 inscritos</option>
-                  <option>200 a 600 inscritos</option>
-                  <option>600 a 1.500 inscritos</option>
-                  <option>acima de 1.500</option>
-                </select>
-              </FormField>
-              <FormField label="Modalidade do empenho">
-                <select value={form.empenho} onChange={e => upd('empenho', e.target.value)} className={inputCls}>
-                  <option>Não sei</option>
-                  <option>Inexigibilidade</option>
-                  <option>Dispensa de licitação</option>
-                  <option>Pregão eletrônico</option>
-                  <option>Concorrência</option>
-                </select>
-              </FormField>
-            </div>
-            <FormField label="Data prevista do evento">
-              <input type="date" value={form.dataEvento} onChange={e => upd('dataEvento', e.target.value)} className={inputCls} />
-            </FormField>
-            <FormField label="Comentário (opcional)">
-              <textarea rows={3} value={form.comentario} onChange={e => upd('comentario', e.target.value)} className={inputCls} placeholder="Características específicas do edital, prazos, requisitos especiais" />
-            </FormField>
-
-            <div className="pt-4 border-t border-white/10">
-              <button
-                type="submit"
-                className="w-full inline-flex items-center justify-center gap-2 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-[#e0005c] transition-colors"
+          <div className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8 text-center">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <a
+                href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Olá, tenho interesse em saber mais sobre a CoreoHub para meu edital público.')}`}
+                target="_blank" rel="noopener noreferrer"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-emerald-500 text-emerald-950 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-emerald-400 active:scale-95 transition-all"
               >
-                Encaminhar solicitação <ChevronRight size={18} />
-              </button>
-              <p className="text-[10px] text-slate-500 text-center mt-3">
-                Resposta em até 1 dia útil. Você também pode falar diretamente:
-              </p>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-3">
-                <a
-                  href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Olá, tenho interesse em saber mais sobre o CoreoHub para meu edital público.')}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500/20"
-                >
-                  <MessageCircle size={14} /> WhatsApp {WHATSAPP_DISPLAY}
-                </a>
-                <a
-                  href={`mailto:${EMAIL}`}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10"
-                >
-                  <Mail size={14} /> {EMAIL}
-                </a>
-              </div>
+                <MessageCircle size={18} /> Falar no WhatsApp
+              </a>
+              <a
+                href={`mailto:${EMAIL}?subject=${encodeURIComponent('Apresentação técnica CoreoHub — setor público')}`}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-white/10 transition-all"
+              >
+                <Mail size={18} /> {EMAIL}
+              </a>
             </div>
-          </form>
+            <p className="text-[10px] text-slate-500 mt-4">Resposta em até 1 dia útil.</p>
+          </div>
 
           {/* Disclaimer LGPD */}
           <div className="mt-8 p-5 bg-white/5 border border-white/10 rounded-2xl">
             <p className="text-xs text-slate-400 leading-relaxed">
-              <strong className="text-slate-300">Sobre proteção de dados:</strong> o CoreoHub opera em
-              conformidade com a LGPD. Encarregado de Dados (DPO): <strong>Hemer Roger Dos Santos</strong> · {EMAIL} ·
+              <strong className="text-slate-300">Sobre proteção de dados:</strong> a CoreoHub opera em
+              conformidade com a LGPD. Encarregado de Dados (DPO) designado — {EMAIL} ·
               WhatsApp {WHATSAPP_DISPLAY}. Política de privacidade e termos de uso em{' '}
               <a href="https://www.coreohub.com/politica-de-privacidade" target="_blank" rel="noopener noreferrer" className="text-[#ff0068] hover:underline">
                 coreohub.com/politica-de-privacidade
@@ -600,7 +460,7 @@ const LandingGoverno: React.FC = () => {
               <img src="/coreohub-avatar.png" alt="CoreoHub" className="w-10 h-10" />
               <div>
                 <p className="text-base font-black uppercase tracking-tighter text-white">CoreoHub</p>
-                <p className="text-[10px] text-slate-500">Plataforma de Gestão para Festivais e Mostras Culturais</p>
+                <p className="text-[10px] text-slate-500">Plataforma de Gestão para Festivais e Mostras de Dança</p>
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -618,14 +478,5 @@ const LandingGoverno: React.FC = () => {
     </div>
   );
 };
-
-const inputCls = 'w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#ff0068]/50 transition-colors';
-
-const FormField: React.FC<{ label: string; children: React.ReactNode; required?: boolean }> = ({ label, children }) => (
-  <div>
-    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">{label}</label>
-    {children}
-  </div>
-);
 
 export default LandingGoverno;
