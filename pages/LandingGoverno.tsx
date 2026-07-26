@@ -127,7 +127,7 @@ const LandingGoverno: React.FC = () => {
       {/* ─── 1.5 FOTO INSTITUCIONAL ──────────────────────────────────────────────── */}
       <section className="relative w-full h-[55vh] md:h-[65vh] min-h-[400px] max-h-[600px] overflow-hidden border-t border-white/5">
         <img
-          src="https://i.imgur.com/kpBd1Iw.jpg"
+          src="/gov-equipe.webp"
           alt="Equipe de gestão pública analisando dados de mostra cultural"
           className="absolute inset-0 w-full h-full object-cover"
           loading="lazy"
@@ -165,8 +165,8 @@ const LandingGoverno: React.FC = () => {
                 icon: Users,
                 title: 'JOMI · Jogos da Melhor Idade',
                 body: 'Mostras culturais e modalidades de dança nas fases municipais, regionais e estaduais. Categorias por idade, classificação por município, relatório consolidado para a coordenadoria.',
-                image: null,
-                imageAlt: '',
+                image: '/gov-jomi.webp',
+                imageAlt: 'Apresentação de dança nos Jogos da Melhor Idade',
               },
               {
                 icon: Building2,
