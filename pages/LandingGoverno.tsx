@@ -292,14 +292,12 @@ const LandingGoverno: React.FC = () => {
                   Operador (CoreoHub) e Controlador (Secretaria) bem definidos via contrato
                 </li>
               </ul>
-              <a
-                href="https://www.coreohub.com/politica-de-privacidade"
-                target="_blank"
-                rel="noopener noreferrer"
+              <Link
+                to="/privacidade"
                 className="inline-flex items-center gap-1.5 mt-4 text-[10px] font-black uppercase tracking-widest text-[#ff0068] hover:underline"
               >
                 Política de privacidade <ArrowRight size={12} />
-              </a>
+              </Link>
             </div>
 
             <div className="bg-white/5 border border-white/10 rounded-3xl p-6">
@@ -440,13 +438,13 @@ const LandingGoverno: React.FC = () => {
               <strong className="text-slate-300">Sobre proteção de dados:</strong> a CoreoHub opera em
               conformidade com a LGPD. Encarregado de Dados (DPO) designado — {EMAIL} ·
               WhatsApp {WHATSAPP_DISPLAY}. Política de privacidade e termos de uso em{' '}
-              <a href="https://www.coreohub.com/politica-de-privacidade" target="_blank" rel="noopener noreferrer" className="text-[#ff0068] hover:underline">
-                coreohub.com/politica-de-privacidade
-              </a>{' '}
+              <Link to="/privacidade" className="text-[#ff0068] hover:underline">
+                coreohub.com/privacidade
+              </Link>{' '}
               e{' '}
-              <a href="https://www.coreohub.com/termos-de-uso" target="_blank" rel="noopener noreferrer" className="text-[#ff0068] hover:underline">
-                coreohub.com/termos-de-uso
-              </a>.
+              <Link to="/termos" className="text-[#ff0068] hover:underline">
+                coreohub.com/termos
+              </Link>.
             </p>
           </div>
         </div>
