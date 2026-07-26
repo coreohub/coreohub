@@ -57,14 +57,14 @@ const LandingGoverno: React.FC = () => {
       {/* ─── 1. HERO ── mesmo padrão vende-c/home (foto + coluna estreita) ── */}
       <section className="relative min-h-[90vh] flex flex-col overflow-hidden bg-black">
         <img
-          src="/hero-festival.webp"
+          src="/hero-governo.webp"
           alt=""
           aria-hidden="true"
           width={1920}
           height={1072}
           fetchPriority="high"
           decoding="async"
-          className="absolute inset-0 w-full h-full object-cover object-[50%_35%]"
+          className="absolute inset-0 w-full h-full object-cover object-[75%_35%] sm:object-[50%_35%]"
         />
         <div className="absolute inset-0 bg-black/40" />
         <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.7)_0%,rgba(0,0,0,0.20)_40%,transparent_65%)]" />
