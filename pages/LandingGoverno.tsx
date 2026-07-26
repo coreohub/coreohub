@@ -112,7 +112,7 @@ const LandingGoverno: React.FC = () => {
         <div className="relative z-10 max-w-5xl mx-auto w-full grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-white/10 px-6 pt-6 pb-8">
           {[
             { val: 'LGPD', label: 'Conformidade integral' },
-            { val: '14.133', label: 'Compatível' },
+            { val: '14.133', label: 'Lei de Licitações' },
             { val: '100%', label: 'Operação remota' },
             { val: '24/7', label: 'Funciona offline' },
           ].map((s, i) => (
@@ -429,7 +429,7 @@ const LandingGoverno: React.FC = () => {
                 <Mail size={18} /> {EMAIL}
               </a>
             </div>
-            <p className="text-[10px] text-slate-500 mt-4">Resposta em até 1 dia útil.</p>
+            <p className="text-[10px] text-slate-500 mt-4">Demonstração gratuita, sem compromisso.</p>
           </div>
 
           {/* Disclaimer LGPD */}
