@@ -10,6 +10,7 @@ import {
   Clapperboard, Music2,
   PersonStanding, Headphones,
   Video, FileSearch, Tag, GraduationCap, MonitorPlay, Megaphone,
+  Calculator,
 } from 'lucide-react';
 import { UserRole, Profile as UserProfile } from '../types';
 import { PERM_MENU, EQUIPE_OPERACIONAL_ROLES } from '../utils/permMenu';
@@ -181,6 +182,7 @@ const menuSections: MenuSection[] = [
     roles: [UserRole.COREOHUB_ADMIN],
     items: [
       { path: '/super-admin',        label: 'Painel Admin',  icon: ShieldCheck },
+      { path: '/cotacoes-terminal-juri', label: 'Cotações Terminal Júri', icon: Calculator },
       { path: '/trilhas',            label: 'Trilhas Sonoras', icon: Music      },
       { path: '/certificados',       label: 'Certificados',  icon: Mic2        },
     ],
