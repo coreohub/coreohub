@@ -388,7 +388,13 @@ const Cotacoes: React.FC = () => {
     y += 6;
     const escopoLines = [
       `Responsável: ${form.nome_responsavel || '—'}`,
-      `Apresentações/coreografias: ${form.qtd_apresentacoes || '—'}`,
+      `Apresentações informadas: ${form.qtd_apresentacoes || '—'}`,
+      // Mostra a FAIXA contratada (o que ele efetivamente está comprando —
+      // uma licença "até N apresentações"), não só o número cru que ele
+      // informou. Evita confusão tipo "informei 40, mas paguei por 50" —
+      // o produtor precisa entender que a licença cobre uma faixa, não uma
+      // contagem exata cravada no dia do evento.
+      `Faixa contratada (Terminal de Júri): ${suggestion.terminalRow?.label ?? '—'}`,
       `Jurados: ${form.qtd_jurados || '—'}`,
       `Dias de competição: ${form.qtd_dias_competicao || '—'}`,
       `Suporte técnico: ${form.operador_modalidade === 'nenhum' ? 'Não incluído' : form.operador_modalidade === 'remoto' ? 'Remoto' : 'Presencial'}${form.operador_modalidade !== 'nenhum' ? ` (${form.operador_dias || 1} dia(s))` : ''}`,
