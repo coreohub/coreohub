@@ -562,7 +562,7 @@ const Cotacoes: React.FC = () => {
                             value={q.status}
                             onChange={e => handleStatusChange(q.id, e.target.value as QuoteRow['status'])}
                             aria-label="Status da cotação"
-                            className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-xl border-0 ${STATUS_META[q.status].color}`}
+                            className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-xl border-0 dark:[color-scheme:dark] ${STATUS_META[q.status].color}`}
                           >
                             {Object.entries(STATUS_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                           </select>
@@ -621,7 +621,7 @@ const Cotacoes: React.FC = () => {
   );
 };
 
-const inputCls = 'w-full px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]';
+const inputCls = 'w-full px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068] dark:[color-scheme:dark]';
 
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <label className="block space-y-1">
