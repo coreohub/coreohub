@@ -4,6 +4,7 @@ import { supabase } from '../services/supabase';
 import PageHeader from '../components/PageHeader';
 import SuperAdminMfaGate from '../components/SuperAdminMfaGate';
 import { maskMoeda, parseMoeda } from '../utils/masks';
+import { formatEventWhatsApp } from '../utils/formatters';
 import {
   Calculator, Settings, FileText, Plus, Trash2, Pencil, Save, Download,
   Loader2, X, Check, DollarSign, Users, Calendar, Wifi, ClipboardList,
@@ -195,9 +196,12 @@ const Cotacoes: React.FC = () => {
   const valorTerminalFinal = parseMoeda(valorTerminalText);
   const valorSetupFinal = parseMoeda(valorSetupText);
   const valorOperadorFinal = parseMoeda(valorOperadorText);
-  const valorTotalFinal = valorTerminalFinal + valorSetupFinal + valorOperadorFinal;
+  // Arredonda a soma pra 2 casas — evita resíduo de ponto flutuante
+  // (ex: 0.1 + 0.2) aparecendo no total exibido/salvo/impresso no PDF.
+  const valorTotalFinal = Math.round((valorTerminalFinal + valorSetupFinal + valorOperadorFinal) * 100) / 100;
 
   const resetForm = () => {
+    if (!confirm('Limpar o formulário? Os dados preenchidos serão perdidos.')) return;
     setForm(emptyQuoteForm);
     setValorTerminalText('');
     setValorSetupText('');
@@ -207,6 +211,10 @@ const Cotacoes: React.FC = () => {
   };
 
   const handleSaveQuote = async () => {
+    if (!form.nome_evento.trim()) {
+      setSaveError('Preencha o nome do evento antes de salvar.');
+      return;
+    }
     setSaving(true);
     setSaveError(null);
     setSavedOk(false);
@@ -427,16 +435,23 @@ const Cotacoes: React.FC = () => {
                 <h2 className="text-[11px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2"><Users size={13} /> Identificação</h2>
                 <div className="grid sm:grid-cols-2 gap-3">
                   <Field label="Nome do responsável">
-                    <input value={form.nome_responsavel} onChange={e => setForm(f => ({ ...f, nome_responsavel: e.target.value }))} className={inputCls} />
+                    <input value={form.nome_responsavel} maxLength={100} onChange={e => setForm(f => ({ ...f, nome_responsavel: e.target.value }))} className={inputCls} />
                   </Field>
                   <Field label="Nome do evento/festival">
-                    <input value={form.nome_evento} onChange={e => setForm(f => ({ ...f, nome_evento: e.target.value }))} className={inputCls} />
+                    <input value={form.nome_evento} maxLength={100} onChange={e => setForm(f => ({ ...f, nome_evento: e.target.value }))} className={inputCls} />
                   </Field>
                   <Field label="E-mail">
-                    <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className={inputCls} />
+                    <input type="email" value={form.email} maxLength={120} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className={inputCls} />
                   </Field>
                   <Field label="WhatsApp">
-                    <input value={form.whatsapp} onChange={e => setForm(f => ({ ...f, whatsapp: e.target.value }))} className={inputCls} />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={formatEventWhatsApp(form.whatsapp)}
+                      onChange={e => setForm(f => ({ ...f, whatsapp: e.target.value.replace(/\D/g, '').slice(0, 13) }))}
+                      placeholder="(47) 99999-8888"
+                      className={inputCls}
+                    />
                   </Field>
                 </div>
               </section>
@@ -444,18 +459,23 @@ const Cotacoes: React.FC = () => {
               <section className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-5 space-y-4">
                 <h2 className="text-[11px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2"><Calendar size={13} /> Local e logística (informativo — sem custo de deslocamento)</h2>
                 <div className="grid sm:grid-cols-3 gap-3">
-                  <Field label="Cidade"><input value={form.cidade} onChange={e => setForm(f => ({ ...f, cidade: e.target.value }))} className={inputCls} /></Field>
-                  <Field label="Estado"><input value={form.estado} onChange={e => setForm(f => ({ ...f, estado: e.target.value }))} className={inputCls} maxLength={2} /></Field>
-                  <Field label="Datas do evento"><input value={form.datas_evento} onChange={e => setForm(f => ({ ...f, datas_evento: e.target.value }))} placeholder="ex: 12 a 14/09/2026" className={inputCls} /></Field>
+                  <Field label="Cidade"><input value={form.cidade} maxLength={80} onChange={e => setForm(f => ({ ...f, cidade: e.target.value }))} className={inputCls} /></Field>
+                  <Field label="Estado">
+                    <select value={form.estado} onChange={e => setForm(f => ({ ...f, estado: e.target.value }))} className={inputCls}>
+                      <option value="">—</option>
+                      {UFS.map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Datas do evento"><input value={form.datas_evento} maxLength={30} onChange={e => setForm(f => ({ ...f, datas_evento: e.target.value }))} placeholder="ex: 12 a 14/09/2026" className={inputCls} /></Field>
                 </div>
               </section>
 
               <section className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-5 space-y-4">
                 <h2 className="text-[11px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2"><ClipboardList size={13} /> Escopo do evento</h2>
                 <div className="grid sm:grid-cols-3 gap-3">
-                  <Field label="Nº de apresentações"><input type="text" inputMode="numeric" value={form.qtd_apresentacoes} onChange={e => setForm(f => ({ ...f, qtd_apresentacoes: e.target.value.replace(/\D/g, '') }))} className={inputCls} /></Field>
-                  <Field label="Nº de jurados"><input type="text" inputMode="numeric" value={form.qtd_jurados} onChange={e => setForm(f => ({ ...f, qtd_jurados: e.target.value.replace(/\D/g, '') }))} className={inputCls} /></Field>
-                  <Field label="Dias de competição"><input type="text" inputMode="numeric" value={form.qtd_dias_competicao} onChange={e => setForm(f => ({ ...f, qtd_dias_competicao: e.target.value.replace(/\D/g, '') }))} className={inputCls} /></Field>
+                  <Field label="Nº de apresentações"><input type="text" inputMode="numeric" maxLength={4} placeholder="ex: 120" value={form.qtd_apresentacoes} onChange={e => setForm(f => ({ ...f, qtd_apresentacoes: e.target.value.replace(/\D/g, '') }))} className={inputCls} /></Field>
+                  <Field label="Nº de jurados"><input type="text" inputMode="numeric" maxLength={2} placeholder="ex: 4" value={form.qtd_jurados} onChange={e => setForm(f => ({ ...f, qtd_jurados: e.target.value.replace(/\D/g, '') }))} className={inputCls} /></Field>
+                  <Field label="Dias de competição"><input type="text" inputMode="numeric" maxLength={2} placeholder="ex: 3" value={form.qtd_dias_competicao} onChange={e => setForm(f => ({ ...f, qtd_dias_competicao: e.target.value.replace(/\D/g, '') }))} className={inputCls} /></Field>
                 </div>
               </section>
 
@@ -469,8 +489,12 @@ const Cotacoes: React.FC = () => {
                       <option value="nenhum">Não incluído</option>
                     </select>
                   </Field>
-                  <Field label="Dias de suporte"><input type="text" inputMode="numeric" value={form.operador_dias} onChange={e => setForm(f => ({ ...f, operador_dias: e.target.value.replace(/\D/g, '') }))} className={inputCls} /></Field>
-                  <Field label="Tablets do produtor"><input type="text" inputMode="numeric" value={form.qtd_tablets_produtor} onChange={e => setForm(f => ({ ...f, qtd_tablets_produtor: e.target.value.replace(/\D/g, '') }))} className={inputCls} /></Field>
+                  <Field label="Dias de suporte" hint="Nº de dias, não uma data">
+                    <input type="text" inputMode="numeric" maxLength={2} placeholder="ex: 2" value={form.operador_dias} onChange={e => setForm(f => ({ ...f, operador_dias: e.target.value.replace(/\D/g, '') }))} className={inputCls} />
+                  </Field>
+                  <Field label="Tablets disponíveis no evento" hint="0 se não tiver nenhum — cada jurado precisa de 1">
+                    <input type="text" inputMode="numeric" maxLength={2} placeholder="ex: 4" value={form.qtd_tablets_produtor} onChange={e => setForm(f => ({ ...f, qtd_tablets_produtor: e.target.value.replace(/\D/g, '') }))} className={inputCls} />
+                  </Field>
                 </div>
                 <div className="flex flex-wrap gap-4 pt-1">
                   <Checkbox checked={form.tem_internet_local} onChange={v => setForm(f => ({ ...f, tem_internet_local: v }))} label="Tem internet no local" />
@@ -623,10 +647,16 @@ const Cotacoes: React.FC = () => {
 
 const inputCls = 'w-full px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068] dark:[color-scheme:dark]';
 
-const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+const UFS = [
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
+  'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
+];
+
+const Field: React.FC<{ label: string; hint?: string; children: React.ReactNode }> = ({ label, hint, children }) => (
   <label className="block space-y-1">
     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</span>
     {children}
+    {hint && <span className="block text-[10px] text-slate-400">{hint}</span>}
   </label>
 );
 
@@ -664,7 +694,13 @@ const ConfigRowEditor: React.FC<{
   const [maxText, setMaxText] = useState(maskMoeda(String(Math.round(row.valor_max * 100))));
 
   const handleSaveClick = () => {
-    const updated: PricingConfigRow = { ...row, valor_min: parseMoeda(minText), valor_max: parseMoeda(maxText) };
+    const valorMin = parseMoeda(minText);
+    const valorMax = parseMoeda(maxText);
+    if (valorMin > valorMax) {
+      alert('Valor mínimo não pode ser maior que o valor máximo.');
+      return;
+    }
+    const updated: PricingConfigRow = { ...row, valor_min: valorMin, valor_max: valorMax };
     onSave(updated);
     setDirty(false);
   };
