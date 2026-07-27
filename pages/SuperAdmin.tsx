@@ -549,6 +549,12 @@ const SuperAdmin = () => {
           actions={
             <>
               <button
+                onClick={() => navigate('/cotacoes-terminal-juri')}
+                className="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white hover:border-[#ff0068]/40 hover:text-[#ff0068] transition-all"
+              >
+                <BarChart3 size={12} /> Cotações Terminal Júri
+              </button>
+              <button
                 onClick={handleExportCSV}
                 disabled={commissions.length === 0}
                 className="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white hover:border-[#ff0068]/40 hover:text-[#ff0068] transition-all disabled:opacity-40"
