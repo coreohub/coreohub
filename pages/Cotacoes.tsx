@@ -112,6 +112,22 @@ const Cotacoes: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedOk, setSavedOk] = useState(false);
+  const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null);
+  const [loadingQuoteEdit, setLoadingQuoteEdit] = useState(false);
+
+  // [color-scheme:dark] no <select> não pinta o popup nativo de <option> no
+  // Chrome/Windows (mesmo achado do JudgeMicCheck.tsx) — precisa estilizar
+  // cada <option> na mão. Diferente do terminal do jurado (sempre escuro),
+  // esta página segue o tema do app, então precisa saber em tempo real se
+  // está em dark mode (observa a classe `dark` no <html>, que o toggle do
+  // Header liga/desliga).
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
+  useEffect(() => {
+    const observer = new MutationObserver(() => setIsDark(document.documentElement.classList.contains('dark')));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  const optionStyle = isDark ? { backgroundColor: '#0f172a', color: '#fff' } : undefined;
 
   /* ── acesso ── */
   useEffect(() => {
@@ -206,8 +222,53 @@ const Cotacoes: React.FC = () => {
     setValorTerminalText('');
     setValorSetupText('');
     setValorOperadorText('');
+    setEditingQuoteId(null);
     setSaveError(null);
     setSavedOk(false);
+  };
+
+  // Reabre uma cotação salva no formulário de Nova Cotação pra editar.
+  // Busca a linha completa sob demanda (a lista só carrega colunas
+  // resumidas, ver loadQuotes) em vez de manter tudo em memória à toa.
+  const openQuoteForEdit = async (id: string) => {
+    setLoadingQuoteEdit(true);
+    setSaveError(null);
+    setSavedOk(false);
+    try {
+      const { data, error } = await supabase.from('standalone_quotes').select('*').eq('id', id).single();
+      if (error) throw error;
+      const q = data as any;
+      setForm({
+        nome_responsavel: q.nome_responsavel ?? '',
+        nome_evento: q.nome_evento ?? '',
+        email: q.email ?? '',
+        whatsapp: q.whatsapp ?? '',
+        cidade: q.cidade ?? '',
+        estado: q.estado ?? '',
+        datas_evento: q.datas_evento ?? '',
+        qtd_apresentacoes: q.qtd_apresentacoes ?? '',
+        qtd_jurados: q.qtd_jurados ?? '',
+        qtd_dias_competicao: q.qtd_dias_competicao ?? '',
+        operador_modalidade: q.operador_modalidade ?? 'presencial',
+        operador_dias: q.operador_dias ?? '',
+        qtd_tablets_produtor: q.qtd_tablets_produtor ?? '',
+        tem_internet_local: Boolean(q.tem_internet_local),
+        tem_planilha_pronta: Boolean(q.tem_planilha_pronta),
+        tem_regulamento: Boolean(q.tem_regulamento),
+        lista_jurados_texto: q.lista_jurados_texto ?? '',
+        pretende_migrar: Boolean(q.pretende_migrar),
+        observacoes: q.observacoes ?? '',
+      });
+      setValorTerminalText(q.valor_terminal ? maskMoeda(String(Math.round(q.valor_terminal * 100))) : '');
+      setValorSetupText(q.valor_setup ? maskMoeda(String(Math.round(q.valor_setup * 100))) : '');
+      setValorOperadorText(q.valor_operador ? maskMoeda(String(Math.round(q.valor_operador * 100))) : '');
+      setEditingQuoteId(id);
+      setTab('nova');
+    } catch (e: any) {
+      alert('Falha ao abrir a cotação: ' + (e?.message ?? 'erro desconhecido'));
+    } finally {
+      setLoadingQuoteEdit(false);
+    }
   };
 
   const handleSaveQuote = async () => {
@@ -220,9 +281,7 @@ const Cotacoes: React.FC = () => {
     setSavedOk(false);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const payload = {
-        quote_type: 'terminal_operador',
-        status: 'rascunho',
+      const basePayload = {
         nome_responsavel: form.nome_responsavel || null,
         nome_evento: form.nome_evento || null,
         email: form.email || null,
@@ -246,10 +305,22 @@ const Cotacoes: React.FC = () => {
         valor_operador: valorOperadorFinal || null,
         valor_total: valorTotalFinal || null,
         observacoes: form.observacoes || null,
-        created_by: user?.id ?? null,
       };
-      const { error } = await supabase.from('standalone_quotes').insert(payload);
-      if (error) throw error;
+
+      if (editingQuoteId) {
+        // Update não mexe em status/quote_type — quem controla status é o
+        // select da lista, editar o formulário não deve resetar o funil.
+        const { error } = await supabase.from('standalone_quotes').update(basePayload).eq('id', editingQuoteId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('standalone_quotes').insert({
+          ...basePayload,
+          quote_type: 'terminal_operador',
+          status: 'rascunho',
+          created_by: user?.id ?? null,
+        });
+        if (error) throw error;
+      }
       setSavedOk(true);
       await loadQuotes();
     } catch (e: any) {
@@ -407,7 +478,7 @@ const Cotacoes: React.FC = () => {
           subtitle="Venda avulsa fora do modelo de comissão — ferramenta interna"
         />
 
-        <nav aria-label="Cotações" className="flex gap-2 border-b border-slate-200 dark:border-white/10 pb-px">
+        <nav aria-label="Cotações" className="flex gap-2 overflow-x-auto border-b border-slate-200 dark:border-white/10 pb-px">
           {([
             { id: 'nova', label: 'Nova Cotação', icon: Sparkles },
             { id: 'lista', label: 'Cotações', icon: ListChecks },
@@ -417,7 +488,7 @@ const Cotacoes: React.FC = () => {
               key={t.id}
               onClick={() => setTab(t.id)}
               aria-current={tab === t.id ? 'page' : undefined}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black uppercase tracking-widest border-b-2 transition-colors ${
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black uppercase tracking-widest border-b-2 whitespace-nowrap shrink-0 transition-colors ${
                 tab === t.id
                   ? 'border-[#ff0068] text-[#ff0068]'
                   : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
@@ -429,6 +500,20 @@ const Cotacoes: React.FC = () => {
         </nav>
 
         {tab === 'nova' && (
+          <div className="space-y-4">
+            {editingQuoteId && (
+              <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-sky-50 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/20 rounded-2xl">
+                <p className="text-xs font-bold text-sky-700 dark:text-sky-300 flex items-center gap-2">
+                  <Pencil size={13} /> Editando cotação salva — "Salvar" atualiza este registro em vez de criar um novo.
+                </p>
+                <button onClick={resetForm} className="text-[10px] font-black uppercase tracking-widest text-sky-700 dark:text-sky-300 hover:underline shrink-0">
+                  Cancelar e começar nova
+                </button>
+              </div>
+            )}
+            {loadingQuoteEdit && (
+              <div className="flex items-center gap-2 text-xs text-slate-500"><Loader2 size={14} className="animate-spin" /> Carregando cotação...</div>
+            )}
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-5">
               <section className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-5 space-y-4">
@@ -462,8 +547,8 @@ const Cotacoes: React.FC = () => {
                   <Field label="Cidade"><input value={form.cidade} maxLength={80} onChange={e => setForm(f => ({ ...f, cidade: e.target.value }))} className={inputCls} /></Field>
                   <Field label="Estado">
                     <select value={form.estado} onChange={e => setForm(f => ({ ...f, estado: e.target.value }))} className={inputCls}>
-                      <option value="">—</option>
-                      {UFS.map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                      <option value="" style={optionStyle}>—</option>
+                      {UFS.map(uf => <option key={uf} value={uf} style={optionStyle}>{uf}</option>)}
                     </select>
                   </Field>
                   <Field label="Datas do evento"><input value={form.datas_evento} maxLength={30} onChange={e => setForm(f => ({ ...f, datas_evento: e.target.value }))} placeholder="ex: 12 a 14/09/2026" className={inputCls} /></Field>
@@ -484,9 +569,9 @@ const Cotacoes: React.FC = () => {
                 <div className="grid sm:grid-cols-3 gap-3">
                   <Field label="Suporte técnico">
                     <select value={form.operador_modalidade} onChange={e => setForm(f => ({ ...f, operador_modalidade: e.target.value as any }))} className={inputCls}>
-                      <option value="presencial">Presencial</option>
-                      <option value="remoto">Remoto</option>
-                      <option value="nenhum">Não incluído</option>
+                      <option value="presencial" style={optionStyle}>Presencial</option>
+                      <option value="remoto" style={optionStyle}>Remoto</option>
+                      <option value="nenhum" style={optionStyle}>Não incluído</option>
                     </select>
                   </Field>
                   <Field label="Dias de suporte" hint="Nº de dias, não uma data">
@@ -539,17 +624,18 @@ const Cotacoes: React.FC = () => {
                   </button>
                   <button onClick={handleSaveQuote} disabled={saving}
                     className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 transition-all disabled:opacity-50">
-                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salvar cotação
+                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {editingQuoteId ? 'Atualizar cotação' : 'Salvar cotação'}
                   </button>
                   <button onClick={resetForm} className="w-full text-[11px] font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 py-1">
                     Limpar formulário
                   </button>
                 </div>
 
-                {savedOk && <p className="text-[11px] text-emerald-500 flex items-center gap-1.5"><Check size={12} /> Cotação salva.</p>}
+                {savedOk && <p className="text-[11px] text-emerald-500 flex items-center gap-1.5"><Check size={12} /> {editingQuoteId ? 'Cotação atualizada.' : 'Cotação salva.'}</p>}
                 {saveError && <p className="text-[11px] text-rose-500">{saveError}</p>}
               </section>
             </div>
+          </div>
           </div>
         )}
 
@@ -575,26 +661,36 @@ const Cotacoes: React.FC = () => {
                   </thead>
                   <tbody>
                     {quotes.map(q => (
-                      <tr key={q.id} className="border-t border-slate-100 dark:border-white/5">
+                      <tr
+                        key={q.id}
+                        onClick={() => openQuoteForEdit(q.id)}
+                        className="border-t border-slate-100 dark:border-white/5 cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+                        title="Clique pra abrir e editar"
+                      >
                         <td className="px-4 py-3 font-bold">{q.nome_evento || '—'}</td>
                         <td className="px-4 py-3 text-slate-500">{q.nome_responsavel || '—'}</td>
                         <td className="px-4 py-3 text-slate-500">{q.cidade ? `${q.cidade}${q.estado ? '/' + q.estado : ''}` : '—'}</td>
                         <td className="px-4 py-3 text-slate-500">{q.qtd_apresentacoes ?? '—'} apres. · {q.qtd_jurados ?? '—'} jurados</td>
                         <td className="px-4 py-3 text-right font-black">{q.valor_total != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(q.valor_total) : '—'}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                           <select
                             value={q.status}
                             onChange={e => handleStatusChange(q.id, e.target.value as QuoteRow['status'])}
                             aria-label="Status da cotação"
                             className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-xl border-0 dark:[color-scheme:dark] ${STATUS_META[q.status].color}`}
                           >
-                            {Object.entries(STATUS_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                            {Object.entries(STATUS_META).map(([k, v]) => <option key={k} value={k} style={optionStyle}>{v.label}</option>)}
                           </select>
                         </td>
-                        <td className="px-4 py-3 text-right">
-                          <button onClick={() => handleDeleteQuote(q.id)} aria-label="Excluir cotação" className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors">
-                            <Trash2 size={14} />
-                          </button>
+                        <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => openQuoteForEdit(q.id)} aria-label="Editar cotação" title="Editar" className="p-1.5 text-slate-400 hover:text-[#ff0068] transition-colors">
+                              <Pencil size={14} />
+                            </button>
+                            <button onClick={() => handleDeleteQuote(q.id)} aria-label="Excluir cotação" title="Excluir" className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
