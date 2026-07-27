@@ -356,6 +356,13 @@ const Cotacoes: React.FC = () => {
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
 
+    // Referência do orçamento — estável quando a cotação já foi salva
+    // (reusa o id, então gerar o PDF de novo pra mesma cotação repete o
+    // mesmo número); pra cotação ainda não salva, gera um sufixo novo.
+    const refDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const refSuffix = (editingQuoteId ?? crypto.randomUUID()).replace(/-/g, '').slice(0, 4).toUpperCase();
+    const quoteRef = `COT-${refDate}-${refSuffix}`;
+
     doc.setFillColor(255, 0, 104);
     doc.rect(0, 0, pageWidth, 28, 'F');
     doc.setTextColor(255, 255, 255);
@@ -368,6 +375,8 @@ const Cotacoes: React.FC = () => {
       `${form.nome_evento || 'Evento'}${form.cidade ? ` · ${form.cidade}${form.estado ? '/' + form.estado : ''}` : ''}${form.datas_evento ? ` · ${form.datas_evento}` : ''}`,
       14, 21,
     );
+    doc.setFontSize(8);
+    doc.text(quoteRef, pageWidth - 14, 13, { align: 'right' });
 
     let y = 38;
     doc.setTextColor(30, 30, 30);
@@ -405,6 +414,8 @@ const Cotacoes: React.FC = () => {
       margin: { left: 14, right: 14 },
     });
 
+    const validadeDate = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR');
+
     const finalY = (doc as any).lastAutoTable.finalY + 10;
     doc.setFontSize(8);
     doc.setTextColor(120, 120, 120);
@@ -412,12 +423,21 @@ const Cotacoes: React.FC = () => {
     const condicoes = [
       '- Deslocamento, passagem e hospedagem da equipe da CoreoHub, quando presencial, são por conta do contratante.',
       '- Produtor/equipe fornece a lista de coreografias, ordem de apresentação, jurados e critérios de avaliação.',
-      '- Proposta válida por 15 dias a partir da data de emissão.',
+      `- Proposta válida até ${validadeDate}.`,
     ];
     let cy = finalY + 5;
     condicoes.forEach(line => { doc.text(line, 14, cy); cy += 4.5; });
     const emissorLine = currentUserName ? `Emitido por ${currentUserName} em ${new Date().toLocaleDateString('pt-BR')}` : `Emitido em ${new Date().toLocaleDateString('pt-BR')}`;
     doc.text(emissorLine, 14, cy + 4);
+
+    cy += 12;
+    doc.setDrawColor(230, 230, 230);
+    doc.line(14, cy, pageWidth - 14, cy);
+    cy += 5;
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text('CoreoHub — Gestão Inteligente para Festivais de Dança', 14, cy);
+    doc.text(`coreohub.com  ·  contato@coreohub.com  ·  WhatsApp ${formatEventWhatsApp('5517997936169')}`, 14, cy + 4.5);
 
     const slug = (form.nome_evento || 'evento')
       .normalize('NFD').replace(/[̀-ͯ]/g, '')
