@@ -63,6 +63,7 @@ interface QuoteRow {
   valor_operador: number | null;
   valor_total: number | null;
   observacoes: string | null;
+  created_by: string | null;
   created_at: string;
 }
 
@@ -114,6 +115,12 @@ const Cotacoes: React.FC = () => {
   const [savedOk, setSavedOk] = useState(false);
   const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null);
   const [loadingQuoteEdit, setLoadingQuoteEdit] = useState(false);
+  const [currentUserName, setCurrentUserName] = useState('');
+  // Resolve created_by (UUID) -> nome. standalone_quotes.created_by referencia
+  // auth.users, não public.profiles diretamente — sem FK declarada pra
+  // PostgREST fazer embed automático, então busca em separado (mesmo padrão
+  // já usado em Registrations.tsx pra hidratar coupon_code por id).
+  const [creatorNames, setCreatorNames] = useState<Record<string, string>>({});
 
   // [color-scheme:dark] no <select> não pinta o popup nativo de <option> no
   // Chrome/Windows (mesmo achado do JudgeMicCheck.tsx) — precisa estilizar
@@ -136,10 +143,11 @@ const Cotacoes: React.FC = () => {
       if (!user) { navigate('/login'); return; }
       const { data: profile } = await supabase
         .from('profiles')
-        .select('is_super_admin, role')
+        .select('is_super_admin, role, full_name')
         .eq('id', user.id)
         .single();
       setAuthorized(Boolean(profile?.is_super_admin) || profile?.role === 'COREOHUB_ADMIN');
+      setCurrentUserName(profile?.full_name ?? user.email ?? '');
     })();
   }, [navigate]);
 
@@ -159,12 +167,24 @@ const Cotacoes: React.FC = () => {
     setQuotesLoading(true);
     const { data, error } = await supabase
       .from('standalone_quotes')
-      .select('id, nome_evento, nome_responsavel, cidade, estado, qtd_apresentacoes, qtd_jurados, valor_total, status, created_at')
+      .select('id, nome_evento, nome_responsavel, cidade, estado, qtd_apresentacoes, qtd_jurados, valor_total, status, created_by, created_at')
       .order('created_at', { ascending: false })
       .limit(100);
     if (error) console.error('Erro ao carregar cotações:', error);
-    setQuotes((data as QuoteRow[]) ?? []);
+    const rows = (data as QuoteRow[]) ?? [];
+    setQuotes(rows);
     setQuotesLoading(false);
+
+    const ids = Array.from(new Set(rows.map(r => r.created_by).filter((id): id is string => Boolean(id))));
+    if (ids.length > 0) {
+      const { data: profs, error: profErr } = await supabase.from('profiles').select('id, full_name').in('id', ids);
+      if (profErr) { console.error('Erro ao resolver autores das cotações:', profErr); return; }
+      setCreatorNames(prev => {
+        const next = { ...prev };
+        (profs ?? []).forEach((p: any) => { next[p.id] = p.full_name ?? '—'; });
+        return next;
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -396,7 +416,8 @@ const Cotacoes: React.FC = () => {
     ];
     let cy = finalY + 5;
     condicoes.forEach(line => { doc.text(line, 14, cy); cy += 4.5; });
-    doc.text(`Emitido em ${new Date().toLocaleDateString('pt-BR')}`, 14, cy + 4);
+    const emissorLine = currentUserName ? `Emitido por ${currentUserName} em ${new Date().toLocaleDateString('pt-BR')}` : `Emitido em ${new Date().toLocaleDateString('pt-BR')}`;
+    doc.text(emissorLine, 14, cy + 4);
 
     const slug = (form.nome_evento || 'evento')
       .normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -656,6 +677,7 @@ const Cotacoes: React.FC = () => {
                       <th className="text-left px-4 py-3">Escopo</th>
                       <th className="text-right px-4 py-3">Total</th>
                       <th className="text-left px-4 py-3">Status</th>
+                      <th className="text-left px-4 py-3">Emitido por</th>
                       <th className="px-4 py-3" />
                     </tr>
                   </thead>
@@ -682,6 +704,7 @@ const Cotacoes: React.FC = () => {
                             {Object.entries(STATUS_META).map(([k, v]) => <option key={k} value={k} style={optionStyle}>{v.label}</option>)}
                           </select>
                         </td>
+                        <td className="px-4 py-3 text-slate-500">{q.created_by ? (creatorNames[q.created_by] ?? '...') : '—'}</td>
                         <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
                             <button onClick={() => openQuoteForEdit(q.id)} aria-label="Editar cotação" title="Editar" className="p-1.5 text-slate-400 hover:text-[#ff0068] transition-colors">
