@@ -142,7 +142,7 @@ const Cotacoes: React.FC = () => {
     setQuotesLoading(true);
     const { data, error } = await supabase
       .from('standalone_quotes')
-      .select('*')
+      .select('id, nome_evento, nome_responsavel, cidade, estado, qtd_apresentacoes, qtd_jurados, valor_total, status, created_at')
       .order('created_at', { ascending: false })
       .limit(100);
     if (error) console.error('Erro ao carregar cotações:', error);
@@ -510,11 +510,11 @@ const Cotacoes: React.FC = () => {
 
                 <div className="flex flex-col gap-2 pt-2">
                   <button onClick={handleGeneratePdf} disabled={valorTotalFinal <= 0}
-                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 dark:bg-white/10 hover:bg-slate-800 dark:hover:bg-white/20 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-colors disabled:opacity-40">
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 dark:bg-white/10 hover:bg-slate-800 dark:hover:bg-white/20 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
                     <Download size={14} /> Gerar PDF
                   </button>
                   <button onClick={handleSaveQuote} disabled={saving}
-                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 transition-all disabled:opacity-50">
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 transition-all disabled:opacity-50">
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salvar cotação
                   </button>
                   <button onClick={resetForm} className="w-full text-[11px] font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 py-1">
@@ -561,7 +561,8 @@ const Cotacoes: React.FC = () => {
                           <select
                             value={q.status}
                             onChange={e => handleStatusChange(q.id, e.target.value as QuoteRow['status'])}
-                            className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border-0 ${STATUS_META[q.status].color}`}
+                            aria-label="Status da cotação"
+                            className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-xl border-0 ${STATUS_META[q.status].color}`}
                           >
                             {Object.entries(STATUS_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                           </select>
@@ -620,7 +621,7 @@ const Cotacoes: React.FC = () => {
   );
 };
 
-const inputCls = 'w-full px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]';
+const inputCls = 'w-full px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]';
 
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <label className="block space-y-1">
@@ -646,7 +647,7 @@ const MoneyField: React.FC<{ label: string; value: string; onChange: (v: string)
       disabled={disabled}
       onChange={e => onChange(maskMoeda(e.target.value))}
       placeholder="R$ 0,00"
-      className={`${inputCls} disabled:opacity-40`}
+      className={`${inputCls} disabled:opacity-50`}
     />
     {hint && <span className="block text-[10px] text-slate-400">{hint}</span>}
   </label>
@@ -699,11 +700,11 @@ const ConfigRowEditor: React.FC<{
         onClick={handleSaveClick}
         disabled={!dirty}
         aria-label="Salvar faixa"
-        className="p-2 text-emerald-500 hover:bg-emerald-500/10 rounded-lg disabled:opacity-30 transition-colors"
+        className="p-2 text-emerald-500 hover:bg-emerald-500/10 rounded-2xl disabled:opacity-30 transition-colors"
       >
         <Save size={16} />
       </button>
-      <button onClick={onDelete} aria-label="Remover faixa" className="p-2 text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors">
+      <button onClick={onDelete} aria-label="Remover faixa" className="p-2 text-rose-500 hover:bg-rose-500/10 rounded-2xl transition-colors">
         <Trash2 size={16} />
       </button>
     </div>
