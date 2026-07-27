@@ -483,7 +483,7 @@ const Cotacoes: React.FC = () => {
     const { data, error } = await supabase.from('standalone_pricing_config').insert({
       categoria,
       chave: null,
-      label: 'Nova faixa',
+      label: categoria === 'terminal' ? computeTierLabel(null, null) : 'Nova faixa',
       qty_min: null,
       qty_max: null,
       valor_min: 0,
@@ -791,6 +791,17 @@ const UFS = [
   'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
 ];
 
+// Label das faixas do Terminal é DERIVADO de qty_min/qty_max, não texto
+// livre — evita o que aconteceu na mão (2026-07-27): editar a faixa "Até
+// 100" pra "51 a 100" exige lembrar de atualizar o texto separadamente do
+// número, e as duas coisas podem ficar dessincronizadas silenciosamente.
+function computeTierLabel(qtyMin: number | null, qtyMax: number | null): string {
+  if ((qtyMin == null || qtyMin === 0) && qtyMax != null) return `Até ${qtyMax} apresentações`;
+  if (qtyMin != null && qtyMax != null) return `${qtyMin} a ${qtyMax} apresentações`;
+  if (qtyMin != null && qtyMax == null) return `${qtyMin}+ apresentações`;
+  return 'Faixa incompleta';
+}
+
 const Field: React.FC<{ label: string; hint?: string; children: React.ReactNode }> = ({ label, hint, children }) => (
   <label className="block space-y-1">
     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</span>
@@ -832,6 +843,8 @@ const ConfigRowEditor: React.FC<{
   const [minText, setMinText] = useState(maskMoeda(String(Math.round(row.valor_min * 100))));
   const [maxText, setMaxText] = useState(maskMoeda(String(Math.round(row.valor_max * 100))));
 
+  const isTerminal = row.categoria === 'terminal';
+
   const handleSaveClick = () => {
     const valorMin = parseMoeda(minText);
     const valorMax = parseMoeda(maxText);
@@ -839,18 +852,32 @@ const ConfigRowEditor: React.FC<{
       alert('Valor mínimo não pode ser maior que o valor máximo.');
       return;
     }
-    const updated: PricingConfigRow = { ...row, valor_min: valorMin, valor_max: valorMax };
+    const updated: PricingConfigRow = {
+      ...row,
+      valor_min: valorMin,
+      valor_max: valorMax,
+      label: isTerminal ? computeTierLabel(row.qty_min, row.qty_max) : row.label,
+    };
     onSave(updated);
     setDirty(false);
   };
 
   return (
     <div className="flex flex-wrap items-end gap-2 p-3 bg-slate-50 dark:bg-white/5 rounded-xl">
-      <label className="flex-1 min-w-[160px] space-y-1">
-        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Label</span>
-        <input value={row.label} onChange={e => { onChange({ label: e.target.value }); setDirty(true); }} className={inputCls} />
-      </label>
-      {row.categoria === 'terminal' && (
+      {isTerminal ? (
+        <div className="flex-1 min-w-[160px] space-y-1">
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Faixa (calculada)</span>
+          <p className={`${inputCls} flex items-center text-slate-500 dark:text-slate-400 cursor-default select-none`}>
+            {computeTierLabel(row.qty_min, row.qty_max)}
+          </p>
+        </div>
+      ) : (
+        <label className="flex-1 min-w-[160px] space-y-1">
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Label</span>
+          <input value={row.label} onChange={e => { onChange({ label: e.target.value }); setDirty(true); }} className={inputCls} />
+        </label>
+      )}
+      {isTerminal && (
         <>
           <label className="w-24 space-y-1">
             <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Qtd. mín.</span>
