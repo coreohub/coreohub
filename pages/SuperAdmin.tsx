@@ -54,6 +54,7 @@ interface EventRow {
   fee_mode: 'repassar' | 'absorver' | null;
   is_public: boolean | null;
   is_demo: boolean | null;
+  acesso_liberado_nota: string | null;
 }
 
 /* Rótulos/ícones do discriminador platform_commissions.kind (migration 20260604).
@@ -152,7 +153,7 @@ const SuperAdmin = () => {
           supabase.from('profiles')
             .select('id, full_name, email, is_blocked, asaas_subconta_id, default_commission_percent, asaas_kyc_status, asaas_onboarding_url'),
           supabase.from('events')
-            .select('id, name, slug, created_by, start_date, event_type, commission_type, commission_percent, commission_fixed, fee_mode, is_public, is_demo')
+            .select('id, name, slug, created_by, start_date, event_type, commission_type, commission_percent, commission_fixed, fee_mode, is_public, is_demo, acesso_liberado_nota')
             .order('start_date', { ascending: false }),
           listInvites(),
           // Bloco 1: leads sem atribuição. Filtros: role != COREOHUB_ADMIN
@@ -438,6 +439,7 @@ const SuperAdmin = () => {
     if (patch.fee_mode           !== undefined) update.fee_mode           = patch.fee_mode;
     if (patch.event_type         !== undefined) update.event_type         = patch.event_type;
     if (patch.is_public          !== undefined) update.is_public          = patch.is_public;
+    if (patch.acesso_liberado_nota !== undefined) update.acesso_liberado_nota = patch.acesso_liberado_nota || null;
 
     const { error: updErr } = await supabase.from('events').update(update).eq('id', eventEdit.id);
     if (updErr) { alert('Falha ao salvar: ' + updErr.message); return; }
@@ -463,11 +465,16 @@ const SuperAdmin = () => {
 
   const handleMakeEventFree = async (ev: EventRow) => {
     if (!confirm(`Tornar "${ev.name}" gratuito? Comissão zera e taxa Asaas é absorvida pela plataforma.`)) return;
+    const nota = prompt(
+      'Por que esse acesso está sendo liberado? (ex: "Edital Lei Rouanet SP 2026 — contrato R$X", "Parceria estratégica")\n\nFica registrado só pra você lembrar depois.',
+      ev.acesso_liberado_nota ?? ''
+    );
+    if (nota === null) return; // cancelou o prompt
     const { error: updErr } = await supabase.from('events')
-      .update({ commission_percent: 0, commission_fixed: 0, fee_mode: 'absorver' })
+      .update({ commission_percent: 0, commission_fixed: 0, fee_mode: 'absorver', acesso_liberado_nota: nota || null })
       .eq('id', ev.id);
     if (updErr) { alert('Falha: ' + updErr.message); return; }
-    setEventsList(list => list.map(e => e.id === ev.id ? { ...e, commission_percent: 0, commission_fixed: 0, fee_mode: 'absorver' } : e));
+    setEventsList(list => list.map(e => e.id === ev.id ? { ...e, commission_percent: 0, commission_fixed: 0, fee_mode: 'absorver', acesso_liberado_nota: nota || null } : e));
   };
 
   const handleToggleEventPublic = async (ev: EventRow) => {
@@ -941,7 +948,13 @@ const SuperAdmin = () => {
                             </td>
                             <td className="px-4 py-3 text-xs tabular-nums">
                               {isFree ? (
-                                <span className="text-emerald-500 font-black uppercase tracking-widest text-[9px]">Gratuito</span>
+                                <span
+                                  className="text-emerald-500 font-black uppercase tracking-widest text-[9px] inline-flex items-center gap-1"
+                                  title={ev.acesso_liberado_nota ? `Motivo: ${ev.acesso_liberado_nota}` : 'Sem nota registrada'}
+                                >
+                                  Gratuito
+                                  {ev.acesso_liberado_nota && <span className="text-emerald-400">●</span>}
+                                </span>
                               ) : (
                                 <span className="text-slate-700 dark:text-slate-300">
                                   {ev.commission_type === 'FIXED'
@@ -1276,6 +1289,7 @@ const EventCommissionModal: React.FC<{
   const [fixed, setFixed]       = useState<number>(Number(event.commission_fixed ?? 0));
   const [feeMode, setFeeMode]   = useState<'repassar' | 'absorver'>(event.fee_mode ?? 'repassar');
   const [eventType, setEventType] = useState<'private' | 'government'>(event.event_type ?? 'private');
+  const [nota, setNota]         = useState<string>(event.acesso_liberado_nota ?? '');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -1378,6 +1392,20 @@ const EventCommissionModal: React.FC<{
             </div>
           </div>
 
+          {/* Nota de acesso liberado — motivo do acordo (contrato governo/edital/
+              lei de incentivo/parceria). Documenta o "porquê" ao lado do "o quê"
+              quando a comissão é zerada manualmente. */}
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Nota (motivo do acordo, opcional)</label>
+            <textarea
+              value={nota}
+              onChange={e => setNota(e.target.value)}
+              placeholder='Ex: "Edital Lei Rouanet SP 2026 — contrato R$X/ano"'
+              rows={2}
+              className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 resize-none"
+            />
+          </div>
+
           <button
             onClick={() => onSave({
               commission_type:    type,
@@ -1385,6 +1413,7 @@ const EventCommissionModal: React.FC<{
               commission_fixed:   type === 'FIXED'   ? fixed   : 0,
               fee_mode:           feeMode,
               event_type:         eventType,
+              acesso_liberado_nota: nota,
             })}
             className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-xl font-black text-sm uppercase tracking-widest"
           >
