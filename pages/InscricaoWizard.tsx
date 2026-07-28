@@ -26,7 +26,9 @@ import {
 } from 'lucide-react';
 import { maskTempo, parseTempoSegundos, formatTempo, maskedChange } from '../utils/masks';
 import { readAudioDuration } from '../utils/audioDuration';
+import { UF_LIST, fetchMunicipios } from '../utils/ibge';
 import TrackDurationBadge from '../components/TrackDurationBadge';
+import StaffTecnicoEditor, { StaffTecnicoValue } from '../components/StaffTecnicoEditor';
 import { trackViewEvent } from '../services/producerAnalytics';
 import ProducerPixels from '../components/ProducerPixels';
 
@@ -98,7 +100,11 @@ interface WizardData {
   duracao_minutos: string;
   coreografo_nome: string;
   estudio_nome: string;
+  estudio_uf: string;
+  estudio_cidade: string;
   tipo_apresentacao: 'Competitiva' | 'Avaliada' | '';
+  /** Ficha técnica opcional — não vira `elenco`, não tem CPF/nascimento. */
+  staff_tecnico: StaffTecnicoValue[];
   // Passo 2 — Elenco
   bailarinos: BailarinoEntry[];
   /** Em GRUPO: @ do grupo ou coreógrafo, usado pra marcar nas divulgações.
@@ -301,6 +307,9 @@ const InscricaoWizard: React.FC = () => {
     duracao_minutos: '',
     coreografo_nome: '',
     estudio_nome: '',
+    estudio_uf: '',
+    estudio_cidade: '',
+    staff_tecnico: [],
     tipo_apresentacao: '', // Sem pré-seleção quando ambos disponíveis (force escolha). Auto-set abaixo se só 1 habilitado.
     bailarinos: [{ nome: '', cpf: '', data_nascimento: '' }],
     trilha_url: '',
@@ -311,6 +320,19 @@ const InscricaoWizard: React.FC = () => {
   // Tipos de apresentação habilitados no evento (default: ambos pra retrocompat).
   // Lido de configuracoes.tipos_apresentacao. Se só houver um, força esse tipo.
   const [tiposApresentacao, setTiposApresentacao] = useState<string[]>(['Competitiva']);
+
+  // ─── Cidade do estúdio via API IBGE (cascata UF → Cidade, evita erro de digitação) ──
+  const [municipios, setMunicipios] = useState<string[]>([]);
+  const [municipiosLoading, setMunicipiosLoading] = useState(false);
+  useEffect(() => {
+    if (!data.estudio_uf) { setMunicipios([]); return; }
+    let cancelled = false;
+    setMunicipiosLoading(true);
+    fetchMunicipios(data.estudio_uf).then(list => {
+      if (!cancelled) { setMunicipios(list); setMunicipiosLoading(false); }
+    });
+    return () => { cancelled = true; };
+  }, [data.estudio_uf]);
 
   // ─── Upload de trilha (Supabase Storage bucket 'trilhas') ─────────────────
   const [trilhaFileName, setTrilhaFileName] = useState<string | null>(null);
@@ -913,6 +935,7 @@ const InscricaoWizard: React.FC = () => {
           formato_participacao: formacao?.name ?? modalidade,
           tipo_apresentacao:    data.tipo_apresentacao,
           bailarinos_detalhes:  bailarinosDetalhes,
+          staff_tecnico:        data.staff_tecnico.filter(s => s.nome.trim()),
           instagram_principal:  data.instagram_principal?.trim() || null,
           // Modo seletiva: trilha sonora vai pra pós-aprovação em /minhas-coreografias.
           // Modo normal: trilha submetida no wizard (legado).
@@ -946,6 +969,8 @@ const InscricaoWizard: React.FC = () => {
               duracao_minutos:  duracaoSec ? Math.round((duracaoSec / 60) * 100) / 100 : null,
               coreografo_nome:  normalizeNomeProprio(data.coreografo_nome),
               estudio_nome:     normalizeNomeProprio(data.estudio_nome) || null,
+              estudio_uf:       data.estudio_uf || null,
+              estudio_cidade:   data.estudio_cidade?.trim() || null,
               wizard_version:   'PR-B-2026-05-08',
               // Flag pra produtor ver no painel (legacy MinhasCoreografias).
               // Só salva quando há violação real — caso contrário, null.
@@ -1447,6 +1472,65 @@ const InscricaoWizard: React.FC = () => {
                 className={inputCls}
               />
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label htmlFor="estudio-uf" className={labelCls}>UF do estúdio</label>
+                <select
+                  id="estudio-uf"
+                  value={data.estudio_uf}
+                  onChange={e => setData(d => ({ ...d, estudio_uf: e.target.value, estudio_cidade: '' }))}
+                  className={inputCls}
+                >
+                  <option value="">—</option>
+                  {UF_LIST.map(uf => (
+                    <option key={uf} value={uf}>{uf}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="estudio-cidade" className={labelCls}>Cidade do estúdio</label>
+                {municipios.length > 0 ? (
+                  <select
+                    id="estudio-cidade"
+                    value={data.estudio_cidade}
+                    onChange={e => setData(d => ({ ...d, estudio_cidade: e.target.value }))}
+                    disabled={!data.estudio_uf}
+                    className={inputCls}
+                  >
+                    <option value="">—</option>
+                    {municipios.map(cidade => (
+                      <option key={cidade} value={cidade}>{cidade}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id="estudio-cidade"
+                    type="text"
+                    value={data.estudio_cidade}
+                    onChange={e => setData(d => ({ ...d, estudio_cidade: e.target.value }))}
+                    disabled={!data.estudio_uf || municipiosLoading}
+                    placeholder={municipiosLoading ? 'Carregando...' : (data.estudio_uf ? 'Digite a cidade' : 'Escolha a UF primeiro')}
+                    className={inputCls}
+                  />
+                )}
+              </div>
+            </div>
+
+            <details className="group">
+              <summary className="cursor-pointer text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 hover:text-[#ff0068] select-none">
+                + Equipe técnica (opcional)
+              </summary>
+              <div className="mt-3">
+                <p className="text-[9px] text-slate-400 mb-2">
+                  Coreógrafo(a) assistente, professor(a) responsável, preparador físico, figurinista/maquiador, técnico de som — aparece na ficha técnica do certificado/programa.
+                </p>
+                <StaffTecnicoEditor
+                  staff={data.staff_tecnico}
+                  onChange={next => setData(d => ({ ...d, staff_tecnico: next }))}
+                />
+              </div>
+            </details>
 
             {/* Tipo de apresentação — só aparece se o evento habilitou ambos.
                 Se for só 1, já foi forçado no state pelo load do config. */}

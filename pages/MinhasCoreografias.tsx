@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import BailarinosEditor, { type BailarinoFormValue } from '../components/BailarinosEditor';
+import StaffTecnicoEditor, { type StaffTecnicoValue } from '../components/StaffTecnicoEditor';
 import { unmaskCpfCnpj, validateCpf, parseDataISO, maskCpfCnpj, maskData } from '../utils/masks';
 import {
   collectAllBailarinosIds,
@@ -49,6 +50,7 @@ interface Registration {
   video_fee_status?:     string | null;
   video_approved_at?:    string | null;
   bailarinos_detalhes?:  any[] | null;
+  staff_tecnico?:        StaffTecnicoValue[] | null;
   instagram_principal?:  string | null;
   discount_token?:       string | null;
   /** Snapshot do video_selection_fee do evento no momento (preview de UI). */
@@ -157,6 +159,13 @@ const MinhasCoreografias = () => {
   const [cpfDraft, setCpfDraft]              = useState('');
   const [cpfSaving, setCpfSaving]            = useState(false);
   const [cpfError, setCpfError]              = useState<string | null>(null);
+  // Mesmo padrão do CPF, pro nome completo — gate acionado quando o profile
+  // veio do login Google com só 1 palavra (apelido/nome social) ou vazio.
+  // Nome completo é necessário pra certificado/credencial/nota fiscal.
+  const [fullNameModalOpen, setFullNameModalOpen] = useState(false);
+  const [fullNameDraft, setFullNameDraft]         = useState('');
+  const [fullNameSaving, setFullNameSaving]       = useState(false);
+  const [fullNameError, setFullNameError]         = useState<string | null>(null);
   // Reseta os 3 "paying" quando a página volta do bfcache (user clica
   // Voltar no browser depois de ir pro Asaas via window.location.href).
   // Sem isso, o spinner do botão fica girando indefinidamente até F5.
@@ -193,6 +202,7 @@ const MinhasCoreografias = () => {
   const [editingBailarinos, setEditingBailarinos]   = useState<string | null>(null);
   const [bailarinosForm, setBailarinosForm]         = useState<BailarinoFormValue[]>([]);
   const [instagramPrincipalForm, setInstagramPrincipalForm] = useState<string>('');
+  const [staffTecnicoForm, setStaffTecnicoForm]     = useState<StaffTecnicoValue[]>([]);
   const [savingBailarinos, setSavingBailarinos]     = useState(false);
   const [bailarinosError, setBailarinosError]       = useState<string | null>(null);
   // Map event_id → prazo_inscricao (YYYY-MM-DD) pra travar edição após deadline.
@@ -249,7 +259,7 @@ const MinhasCoreografias = () => {
           status, status_pagamento,
           payment_url, payment_preference_id, payment_id, payment_group_id,
           mod_fee, charged_amount, valor_pago, paid_at, created_at,
-          bailarinos_detalhes, instagram_principal,
+          bailarinos_detalhes, instagram_principal, staff_tecnico,
           video_url, video_status, video_fee_status, video_approved_at,
           discount_token
         `)
@@ -643,6 +653,55 @@ const MinhasCoreografias = () => {
     }
   };
 
+  /** Valida nome completo antes de pagar. Login Google às vezes traz só 1
+   *  palavra (apelido/nome social) — insuficiente pra certificado/credencial/
+   *  nota fiscal. Sempre consulta fresh do banco (mesmo motivo do requireCpf). */
+  const requireFullName = async (): Promise<boolean> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      navigate('/auth');
+      return false;
+    }
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .maybeSingle();
+    const nome = String(prof?.full_name ?? '').trim();
+    const temSobrenome = nome.split(/\s+/).filter(Boolean).length >= 2;
+    if (!temSobrenome) {
+      setFullNameDraft(nome);
+      setFullNameError(null);
+      setFullNameModalOpen(true);
+      return false;
+    }
+    return true;
+  };
+
+  const handleSaveFullNameFromModal = async () => {
+    const nome = fullNameDraft.trim();
+    if (nome.split(/\s+/).filter(Boolean).length < 2) {
+      setFullNameError('Digite nome e sobrenome.');
+      return;
+    }
+    setFullNameSaving(true);
+    setFullNameError(null);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Sessão expirada — faça login de novo.');
+      const { error: upErr } = await supabase
+        .from('profiles')
+        .update({ full_name: nome })
+        .eq('id', user.id);
+      if (upErr) throw upErr;
+      setFullNameModalOpen(false);
+    } catch (e: any) {
+      setFullNameError(e.message ?? 'Erro ao salvar nome.');
+    } finally {
+      setFullNameSaving(false);
+    }
+  };
+
   /**
    * Aplica cupom client-side via validateCoupon — mostra preview do desconto
    * ANTES de criar a fatura Asaas. Padrão Stripe/Sympla/Checkout.tsx legacy.
@@ -783,6 +842,7 @@ const MinhasCoreografias = () => {
   };
 
   const handlePagarAgregado = async (grupo: Grupo) => {
+    if (!(await requireFullName())) return;
     if (!(await requireCpf())) return;
     if (grupo.pendentes.length === 0) return;
     setPayingEvent(grupo.eventId);
@@ -837,6 +897,7 @@ const MinhasCoreografias = () => {
   };
 
   const handlePagarSingle = async (reg: Registration) => {
+    if (!(await requireFullName())) return;
     if (!(await requireCpf())) return;
     // Se a registration já tem payment_url (gerada anteriormente — ou pelo
     // create-payment-asaas legacy, ou pela create-aggregate), reusa.
@@ -885,6 +946,7 @@ const MinhasCoreografias = () => {
   // Antes vivia em SeletivaInscrito.tsx. Migrado pra inline depois do
   // refactor "Minhas Inscrições" (2026-05-19) — uma página única.
   const handlePagarTaxa = async (reg: Registration, couponCode?: string) => {
+    if (!(await requireFullName())) return;
     if (!(await requireCpf())) return;
     setPayingTaxa(reg.id);
     setActionError(p => ({ ...p, [reg.id]: '' }));
@@ -985,12 +1047,14 @@ const MinhasCoreografias = () => {
         })
       : []);
     setInstagramPrincipalForm(reg.instagram_principal ?? '');
+    setStaffTecnicoForm(Array.isArray(reg.staff_tecnico) ? reg.staff_tecnico : []);
   };
 
   const cancelEditingBailarinos = () => {
     setEditingBailarinos(null);
     setBailarinosForm([]);
     setInstagramPrincipalForm('');
+    setStaffTecnicoForm([]);
     setBailarinosError(null);
   };
 
@@ -1109,6 +1173,7 @@ const MinhasCoreografias = () => {
       const patch: Record<string, any> = {
         bailarinos_detalhes: bailarinosDetalhes,
         instagram_principal: isGrupoLike ? (igPrincipal || null) : null,
+        staff_tecnico:       staffTecnicoForm.filter(s => s.nome.trim()),
       };
 
       // .select('id') força PostgREST a retornar rows afetadas — detecta RLS
@@ -1912,6 +1977,91 @@ const MinhasCoreografias = () => {
         )}
       </AnimatePresence>
 
+      {/* Modal contextual de nome completo — mesmo padrão do CPF acima.
+          Login Google às vezes traz só 1 palavra (apelido); certificado/
+          credencial/nota fiscal exigem nome completo. */}
+      <AnimatePresence>
+        {fullNameModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={(e) => { if (e.target === e.currentTarget && !fullNameSaving) setFullNameModalOpen(false); }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fullname-modal-title"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
+              transition={{ duration: 0.15 }}
+              className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 shadow-2xl overflow-hidden"
+            >
+              <div className="px-6 pt-6 pb-2 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#ff0068]">Passo final</p>
+                  <h3 id="fullname-modal-title" className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white mt-1 italic">
+                    Confirme seu nome completo
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed normal-case">
+                    Necessário pra emitir certificado, credencial e nota fiscal corretos. Salvamos no seu perfil — não pedimos de novo.
+                  </p>
+                </div>
+                {!fullNameSaving && (
+                  <button
+                    onClick={() => setFullNameModalOpen(false)}
+                    className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 shrink-0"
+                    aria-label="Fechar"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+
+              <form
+                onSubmit={(e) => { e.preventDefault(); handleSaveFullNameFromModal(); }}
+                className="px-6 pb-6 pt-4 space-y-4"
+              >
+                <div>
+                  <label htmlFor="fullname-modal-input" className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 ml-2">
+                    Nome completo
+                  </label>
+                  <input
+                    id="fullname-modal-input"
+                    type="text"
+                    autoFocus
+                    value={fullNameDraft}
+                    onChange={(e) => { setFullNameDraft(e.target.value); setFullNameError(null); }}
+                    placeholder="Nome e sobrenome"
+                    disabled={fullNameSaving}
+                    className="mt-1.5 w-full px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-base text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-[#ff0068] focus:ring-2 focus:ring-[#ff0068]/20 transition-all"
+                  />
+                  {fullNameError && (
+                    <p className="mt-2 text-[11px] text-rose-500 font-bold flex items-center gap-1.5">
+                      <AlertCircle size={12} /> {fullNameError}
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={fullNameSaving || fullNameDraft.trim().split(/\s+/).filter(Boolean).length < 2}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {fullNameSaving ? (
+                    <><Loader2 size={14} className="animate-spin" /> Salvando…</>
+                  ) : (
+                    <><CheckCircle size={14} /> Salvar e continuar</>
+                  )}
+                </button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Banner de partial cancel (Asaas 5xx) — alerta inscrito que fatura
           local foi cancelada mas Asaas pode estar desincronizado. */}
       {partialCancelWarning && (
@@ -2036,6 +2186,16 @@ const MinhasCoreografias = () => {
                     minMembers={minMembers}
                     maxMembers={maxMembers}
                   />
+
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">
+                      Equipe técnica (opcional)
+                    </p>
+                    <StaffTecnicoEditor
+                      staff={staffTecnicoForm}
+                      onChange={setStaffTecnicoForm}
+                    />
+                  </div>
 
                   {bailarinosError && (
                     <div className="flex items-start gap-2 p-3 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-xl">

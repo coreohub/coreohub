@@ -839,21 +839,38 @@ const Registrations = () => {
 
   const handleBulkExportCSV = () => {
     if (selectedRegs.length === 0) return;
-    const headers = ['Data', 'Coreografia', 'Modalidade', 'Tipo', 'Estúdio', 'Categoria', 'Estilo', 'Inscrito', 'Email', 'WhatsApp', 'Status Inscrição', 'Status Pagamento', 'Valor (R$)'];
+    const headers = ['Data', 'Coreografia', 'Modalidade', 'Tipo', 'Estúdio', 'Cidade Estúdio', 'UF Estúdio', 'Categoria', 'Estilo', 'Inscrito', 'Email', 'WhatsApp', 'Status Inscrição', 'Status Pagamento', 'Valor (R$)', 'Bailarinos', 'Equipe Técnica'];
     const escape = (v: any) => {
       const s = v == null ? '' : String(v);
       return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const rows = selectedRegs.map((r: any) => [
-      r.created_at ? new Date(r.created_at).toLocaleString('pt-BR') : '',
-      r.nome_coreografia ?? '', r.formato_participacao ?? '', r.tipo_apresentacao ?? '',
-      r.estudio ?? '', r.categoria ?? '', r.estilo_danca ?? '',
-      r.profiles?.full_name ?? r.inscrito_nome ?? '',
-      r.profiles?.email ?? r.inscrito_email ?? '',
-      r.profiles?.whatsapp ?? r.inscrito_whatsapp ?? '',
-      r.status ?? '', r.status_pagamento ?? '',
-      String(r.valor_pago ?? r.valor_total ?? r.charged_amount ?? ''),
-    ].map(escape).join(';'));
+    const rows = selectedRegs.map((r: any) => {
+      const eventData = r.event_data ?? {};
+      const bailarinosStr = (Array.isArray(r.bailarinos_detalhes) ? r.bailarinos_detalhes : [])
+        .map((b: any) => {
+          const nome = elencoById[b?.id]?.nome ?? b?.nome ?? '';
+          const cpf = formatCpf(elencoById[b?.id]?.cpf);
+          return cpf ? `${nome} (${cpf})` : nome;
+        })
+        .filter(Boolean)
+        .join(' | ');
+      const staffStr = (Array.isArray(r.staff_tecnico) ? r.staff_tecnico : [])
+        .map((s: any) => `${s?.nome ?? ''} (${s?.tipo ?? ''})`)
+        .join(' | ');
+      return [
+        r.created_at ? new Date(r.created_at).toLocaleString('pt-BR') : '',
+        r.nome_coreografia ?? '', r.formato_participacao ?? '', r.tipo_apresentacao ?? '',
+        r.estudio ?? '', eventData.estudio_cidade ?? '', eventData.estudio_uf ?? '',
+        r.categoria ?? '', r.estilo_danca ?? '',
+        r.profiles?.full_name ?? r.inscrito_nome ?? '',
+        r.profiles?.email ?? r.inscrito_email ?? '',
+        r.profiles?.whatsapp ?? r.inscrito_whatsapp ?? '',
+        r.status ?? '', r.status_pagamento ?? '',
+        String(r.valor_pago ?? r.valor_total ?? r.charged_amount ?? ''),
+        bailarinosStr,
+        staffStr,
+      ].map(escape).join(';');
+    });
     const csv = '﻿' + [headers.join(';'), ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -1047,9 +1064,9 @@ const Registrations = () => {
   const handleExportCSV = () => {
     if (sortedRegistrations.length === 0) return;
     const headers = [
-      'Data', 'Coreografia', 'Modalidade', 'Tipo', 'Estúdio',
+      'Data', 'Coreografia', 'Modalidade', 'Tipo', 'Estúdio', 'Cidade Estúdio', 'UF Estúdio',
       'Categoria', 'Estilo', 'Inscrito', 'Email', 'WhatsApp',
-      'Status Pagamento', 'Valor (R$)',
+      'Status Pagamento', 'Valor (R$)', 'Bailarinos', 'Equipe Técnica',
     ];
     const escape = (v: any) => {
       const s = v == null ? '' : String(v);
@@ -1058,20 +1075,38 @@ const Registrations = () => {
     // Auditoria 2026-05-21: exporta na ordem do sort visível (sortedRegistrations),
     // não a ordem padrão do banco (filteredRegistrations). Quando o produtor ordena
     // por Valor pra ver as inscrições mais caras no topo, o CSV deve refletir isso.
-    const rows = sortedRegistrations.map(r => [
-      r.created_at ? new Date(r.created_at).toLocaleString('pt-BR') : '',
-      r.nome_coreografia ?? '',
-      r.formato_participacao ?? '',
-      r.tipo_apresentacao ?? '',
-      r.estudio ?? '',
-      r.categoria ?? '',
-      r.estilo_danca ?? '',
-      r.profiles?.full_name ?? '',
-      r.profiles?.email ?? '',
-      r.profiles?.whatsapp ?? '',
-      r.status_pagamento ?? '',
-      r.valor_total != null ? Number(r.valor_total).toFixed(2) : '',
-    ].map(escape).join(','));
+    const rows = sortedRegistrations.map(r => {
+      const eventData = (r as any).event_data ?? {};
+      const bailarinosStr = (Array.isArray(r.bailarinos_detalhes) ? r.bailarinos_detalhes : [])
+        .map((b: any) => {
+          const nome = elencoById[b?.id]?.nome ?? b?.nome ?? '';
+          const cpf = formatCpf(elencoById[b?.id]?.cpf);
+          return cpf ? `${nome} (${cpf})` : nome;
+        })
+        .filter(Boolean)
+        .join(' | ');
+      const staffStr = (Array.isArray((r as any).staff_tecnico) ? (r as any).staff_tecnico : [])
+        .map((s: any) => `${s?.nome ?? ''} (${s?.tipo ?? ''})`)
+        .join(' | ');
+      return [
+        r.created_at ? new Date(r.created_at).toLocaleString('pt-BR') : '',
+        r.nome_coreografia ?? '',
+        r.formato_participacao ?? '',
+        r.tipo_apresentacao ?? '',
+        r.estudio ?? '',
+        eventData.estudio_cidade ?? '',
+        eventData.estudio_uf ?? '',
+        r.categoria ?? '',
+        r.estilo_danca ?? '',
+        r.profiles?.full_name ?? '',
+        r.profiles?.email ?? '',
+        r.profiles?.whatsapp ?? '',
+        r.status_pagamento ?? '',
+        r.valor_total != null ? Number(r.valor_total).toFixed(2) : '',
+        bailarinosStr,
+        staffStr,
+      ].map(escape).join(',');
+    });
     // BOM UTF-8 pro Excel BR abrir com acentuação correta
     const csv = '﻿' + headers.join(',') + '\n' + rows.join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -2266,6 +2301,13 @@ const Registrations = () => {
                         <DetailItem label="E-mail" value={email} />
                         <DetailItem label="WhatsApp" value={whatsapp} />
                         <DetailItem label="Estúdio / Escola" value={toTitleCase(viewingReg.estudio)} />
+                        {(() => {
+                          const eventData = (viewingReg as any).event_data ?? {};
+                          const cidade = eventData.estudio_cidade;
+                          const uf = eventData.estudio_uf;
+                          if (!cidade && !uf) return null;
+                          return <DetailItem label="Cidade / UF" value={[cidade, uf].filter(Boolean).join(' / ')} />;
+                        })()}
                       </dl>
                     </section>
                   );
@@ -2452,6 +2494,24 @@ const Registrations = () => {
                         <Instagram size={11} /> Grupo/coreógrafo: <a href={`https://instagram.com/${viewingReg.instagram_principal.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="text-[#ff0068] hover:underline font-bold">{viewingReg.instagram_principal}</a>
                       </p>
                     )}
+                  </section>
+                )}
+
+                {/* Staff técnico — ficha técnica opcional, sempre readonly no painel
+                    do produtor (editor fica em /minhas-coreografias, lado inscrito). */}
+                {Array.isArray(viewingReg.staff_tecnico) && viewingReg.staff_tecnico.length > 0 && (
+                  <section>
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
+                      <Users size={12} /> Equipe técnica ({viewingReg.staff_tecnico.length})
+                    </h3>
+                    <div className="space-y-2">
+                      {viewingReg.staff_tecnico.map((s: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-white/5">
+                          <p className="text-[12px] font-bold text-slate-900 dark:text-white truncate">{s.nome}</p>
+                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 shrink-0">{s.tipo}</p>
+                        </div>
+                      ))}
+                    </div>
                   </section>
                 )}
 

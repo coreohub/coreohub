@@ -18,6 +18,53 @@ function computeReleaseAt(paidAtIso?: string): string {
   return new Date(base + RELEASE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString()
 }
 
+/** Label legível por tipo de venda — usado na notificação do super admin. */
+const SALE_KIND_LABELS: Record<string, string> = {
+  audience:        'Ingresso',
+  workshop:        'Workshop',
+  workshop_pass:   'Workshop Pass',
+  aggregate:       'Inscrição (carrinho)',
+  video_selection: 'Taxa de seletiva',
+  registration:    'Inscrição',
+}
+
+/** Notifica todo super admin (in-app, via `notifications`) quando uma venda é
+ *  aprovada. Best-effort — nunca lança, uma falha aqui não pode reverter o
+ *  processamento real do pagamento. INSERT direto: client não tem policy de
+ *  INSERT em `notifications` (só service_role/super_admin), esta function já
+ *  roda com a service role. */
+async function notifySuperAdmins(supabase: any, opts: {
+  eventId?: string | null
+  producerId?: string | null
+  eventName?: string | null
+  grossAmount: number
+  kind: string
+}): Promise<void> {
+  try {
+    const { data: admins, error } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('is_super_admin', true)
+    if (error || !admins?.length) return
+    const label = SALE_KIND_LABELS[opts.kind] ?? 'Venda'
+    const valorFmt = opts.grossAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const rows = admins.map((a: any) => ({
+      user_id:   a.id,
+      event_id:  opts.eventId ?? null,
+      type:      'sale_completed',
+      severity:  'info',
+      title:     `Venda aprovada — R$ ${valorFmt}`,
+      body:      `${label}${opts.eventName ? ` · ${opts.eventName}` : ''}`,
+      cta_url:   '/super-admin',
+      cta_label: 'Ver painel',
+      metadata:  { producer_id: opts.producerId ?? null, kind: opts.kind, gross_amount: opts.grossAmount },
+    }))
+    await supabase.from('notifications').insert(rows)
+  } catch (e) {
+    console.error('[asaas-webhook] falha ao notificar super admins:', (e as Error).message)
+  }
+}
+
 /** Pixel ID + Measurement ID master da CoreoHub. Espelha index.html. */
 const MASTER_META_PIXEL_ID = '968125229155814'
 const MASTER_GA4_ID        = 'G-Y7N93KHNP8'
@@ -209,6 +256,10 @@ async function handleAudienceTicket(opts: {
       `[asaas-webhook][audience] APROVADO | tickets=${tickets.length} bruto=R$${grossAmount}` +
       ` comissao=R$${commissionTotal.toFixed(2)} produtor=R$${producerTotal}`
     )
+    await notifySuperAdmins(supabase, {
+      eventId: eventId, producerId: eventData?.created_by, eventName: eventData?.name,
+      grossAmount, kind: 'audience',
+    })
   }
 
   // ── Emails ──────────────────────────────────────────────────────────────
@@ -385,6 +436,10 @@ async function handleWorkshopRegistration(opts: {
       `[asaas-webhook][workshop] APROVADO | reg=${registrationId} bruto=R$${grossAmount}` +
       ` comissao=R$${commissionAmount} produtor=R$${producerAmount}`
     )
+    await notifySuperAdmins(supabase, {
+      eventId: workshop?.event_id, producerId: workshop?.created_by, eventName: workshop?.name,
+      grossAmount, kind: 'workshop',
+    })
   }
 
   // ── Emails ───────────────────────────────────────────────────────────────
@@ -564,6 +619,10 @@ async function handleWorkshopPassPayment(opts: {
       `[asaas-webhook][workshop-pass] APROVADO | group=${passGroupId} N=${updatedRows.length}` +
       ` bruto=R$${grossTotal.toFixed(2)}`
     )
+    await notifySuperAdmins(supabase, {
+      eventId: pass?.event_id, producerId: pass?.created_by, eventName: pass?.name,
+      grossAmount: grossTotal, kind: 'workshop_pass',
+    })
   }
 
   // ── Emails: 1 consolidado pro comprador + 1 pro produtor ────────────────
@@ -883,6 +942,10 @@ async function handleAggregatePayment(opts: {
       `[asaas-webhook][aggregate] APROVADO payment=${paymentId} N=${n}` +
       ` bruto=R$${grossTotal} comissao=R$${commissionTotal} produtor=R$${producerTotalRow}`
     )
+    await notifySuperAdmins(supabase, {
+      eventId: paymentRow.event_id, producerId: eventData?.created_by, eventName: eventData?.name,
+      grossAmount: grossTotal, kind: 'aggregate',
+    })
   }
 
   // ── Emails de confirmação ──────────────────────────────────────────────
@@ -1169,6 +1232,11 @@ async function handleVideoSelectionFee(opts: {
         kind:              'video_selection',  // discriminador opcional pra relatórios
         release_at:        computeReleaseAt(),
       })
+
+    await notifySuperAdmins(supabase, {
+      eventId: reg?.event_id, producerId: (eventData as any)?.created_by, eventName: (eventData as any)?.name,
+      grossAmount, kind: 'video_selection',
+    })
 
     // Settlement D+7: saldo fica retido na subconta até release_at.
 
@@ -1672,6 +1740,10 @@ Deno.serve(async (req) => {
           `[asaas-webhook] APROVADO | bruto=R$${grossAmount}` +
           ` comissao=R$${commissionAmount} produtor=R$${producerAmount}`
         )
+        await notifySuperAdmins(supabase, {
+          eventId: coreo?.event_id, producerId: eventData?.created_by, eventName: eventData?.name,
+          grossAmount, kind: 'registration',
+        })
       }
 
       // Emails transacionais
