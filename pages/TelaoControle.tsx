@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { MonitorPlay, Copy, ExternalLink, RefreshCw, Check, Loader2, FlaskConical, Power, Radio, Trophy, X } from 'lucide-react';
 import { supabase, resolveActiveEventId } from '../services/supabase';
+import { trackFeatureUsed } from '../services/appAnalytics';
 import PageHeader from '../components/PageHeader';
 import { classifyAward, type AwardReveal } from '../utils/awardClassification';
 
@@ -170,6 +171,7 @@ const TelaoControle: React.FC = () => {
   // pra nunca deixar palco e vitrine dessincronizados.
   const revelarAward = async (a: Premio) => {
     setRevealError(null);
+    trackFeatureUsed('revelar_premio_telao', { award_name: a.nome });
     const r = classifyAward(a.nome, a.description);
     const valor = fmtValor(a.valor);
     // Vencedor já salvo em Premiação = fonte da verdade pra QUALQUER tipo —

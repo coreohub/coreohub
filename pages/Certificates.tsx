@@ -16,6 +16,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import imageCompression from 'browser-image-compression';
 import { supabase, supabaseUrl } from '../services/supabase';
+import { trackFeatureUsed } from '../services/appAnalytics';
 import PageHeader from '../components/PageHeader';
 import EventPickerSheet, { EventPickerOption } from '../components/EventPickerSheet';
 import {
@@ -459,6 +460,7 @@ const Certificates: React.FC = () => {
       if (error) throw new Error(error.message ?? 'Erro');
       if (data?.error) throw new Error(data.error);
       setLastBatch(data as BatchResult);
+      trackFeatureUsed('emitir_certificados', { template_type: activeType, created: data.created });
       setFeedback({ kind: 'ok', msg: `${data.created} novo(s) emitido(s) · ${data.skipped} já existiam` });
       loadTemplate();
     } catch (e: any) {

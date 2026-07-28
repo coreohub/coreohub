@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { UserRole, Profile as UserProfile } from './types';
 import { supabase } from './services/supabase';
 import { getOrCreateProfile } from './services/profileService';
+import { identifyUser, trackAppPageView } from './services/appAnalytics';
 import Sidebar from './components/Sidebar';
 import DemoBanner from './components/DemoBanner';
 import InstallAppBanner from './components/InstallAppBanner';
@@ -207,6 +208,15 @@ const PrivateLayout: React.FC<{
 }>  = ({ children, profile, theme, toggleTheme, activeRole, setActiveRole, videoSelectionEnabled }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    identifyUser(profile);
+  }, [profile?.id, profile?.role]);
+
+  useEffect(() => {
+    trackAppPageView(location.pathname);
+  }, [location.pathname]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();

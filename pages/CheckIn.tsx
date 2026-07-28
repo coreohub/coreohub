@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
+import { trackFeatureUsed } from '../services/appAnalytics';
 import { isRegistrationPaid, SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
 import PageHeader from '../components/PageHeader';
 import { PermissoesCustom } from '../types';
@@ -160,6 +161,7 @@ const CheckIn = () => {
       }
       setItems(prev => prev.map(i => i.id === id ? { ...i, check_in_status: 'OK', check_in_at: now } : i));
       setScanResult({ type: 'success', message: 'Check-in realizado!', name: item.nome_coreografia, kind: 'INSCRITO' });
+      trackFeatureUsed('checkin_qr_scan', { kind: 'INSCRITO' });
       return;
     }
 

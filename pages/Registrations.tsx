@@ -12,6 +12,7 @@ import {
 import { isRegistrationPaid } from '../utils/registrationStatus';
 import { toTitleCase, resolveTrilhaUrl } from '../utils/formatters';
 import { supabase, supabaseUrl } from '../services/supabase';
+import { trackFeatureUsed } from '../services/appAnalytics';
 import { motion, AnimatePresence } from 'motion/react';
 import { refundRegistration } from '../services/refundService';
 import EventPickerSheet from '../components/EventPickerSheet';
@@ -1063,6 +1064,7 @@ const Registrations = () => {
 
   const handleExportCSV = () => {
     if (sortedRegistrations.length === 0) return;
+    trackFeatureUsed('exportar_csv_inscricoes', { total: sortedRegistrations.length });
     const headers = [
       'Data', 'Coreografia', 'Modalidade', 'Tipo', 'Estúdio', 'Cidade Estúdio', 'UF Estúdio',
       'Categoria', 'Estilo', 'Inscrito', 'Email', 'WhatsApp',

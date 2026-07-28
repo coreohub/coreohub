@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { extractRegulationData, extractRegulationFromPdf, RegulationExtract } from '../services/geminiService';
 import PageHeader from '../components/PageHeader';
 import { uploadRegulationPdf, supabase } from '../services/supabase';
+import { trackFeatureUsed } from '../services/appAnalytics';
 import EventPickerSheet, { EventPickerOption } from '../components/EventPickerSheet';
 
 type Step = 'upload' | 'processing' | 'review' | 'done';
@@ -169,6 +170,7 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       setResult(extracted);
       setEdited({ ...extracted });
       setStep('review');
+      trackFeatureUsed('analisar_regulamento_ia', { input_mode: inputMode });
     } catch (err: any) {
       console.error(err);
       setError('Falha ao analisar. Verifique a chave Gemini e tente novamente.');

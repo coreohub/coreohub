@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../services/supabase';
+import { trackFeatureUsed } from '../services/appAnalytics';
 import {
   listCouponsByEvent, createCoupon, updateCoupon, deleteCoupon,
 } from '../services/couponService';
@@ -244,6 +245,7 @@ const Coupons: React.FC = () => {
         await updateCoupon(editingId, payload as any);
       } else {
         await createCoupon({ event_id: selectedEventId, ...payload } as any);
+        trackFeatureUsed('criar_cupom', { discount_type: form.discount_type, scopes: form.setores });
       }
       setShowModal(false);
       setEditingId(null);

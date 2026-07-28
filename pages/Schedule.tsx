@@ -9,6 +9,7 @@ import {
   Search, Megaphone, FileText, Rewind, FastForward,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import { trackFeatureUsed } from '../services/appAnalytics';
 import PageHeader from '../components/PageHeader';
 import { DndContext, closestCenter, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors, useDroppable } from '@dnd-kit/core';
 import {
@@ -1427,6 +1428,7 @@ const Schedule = () => {
         }
       });
       setAudios(newMap);
+      trackFeatureUsed('gerar_narracao_ia', { total: result.total, success: result.success, failed: result.failed });
       alert(`✓ ${result.success}/${result.total} narrações geradas. ${result.failed > 0 ? `${result.failed} falharam — verifique no console.` : ''}`);
       if (result.failed > 0) console.warn('Falhas:', result.results.filter(r => !r.ok));
     } catch (e: any) {
@@ -1776,6 +1778,7 @@ const Schedule = () => {
     setRegistrations(result);
     setOrderChanged(true);
     setIsGenerating(false);
+    trackFeatureUsed('gerar_ordem_inteligente', { minimize_judge_changes: minimizeJudgeChanges });
 
     if (minimizeJudgeChanges) {
       let trocas = 0;
@@ -1953,6 +1956,7 @@ const Schedule = () => {
       }));
       setOrderChanged(false);
       setSchedulePublishedAt(nowIso);
+      trackFeatureUsed('publicar_cronograma', { is_first_publish: isFirstPublish });
 
       // Notifica só quando faz sentido — 1ª publicação ou quando algo de
       // fato mudou. Publicar de novo sem alteração nenhuma não deveria
