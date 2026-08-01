@@ -96,7 +96,29 @@ const CriarEventoGate: React.FC = () => {
         });
       } catch {  }
 
-      setStatus('ready');
+      // signUp() não garante sessão — se confirmação de e-mail está ON no
+      // projeto (caso de prod), data.session vem null e cair direto em
+      // 'ready' jogava o produtor no wizard sem auth real (upload de PDF
+      // pra IA falhava com "Usuário não autenticado"). Mesmo padrão do
+      // signup em Auth.tsx: tenta logar imediato, só avança se de fato
+      // conseguiu sessão.
+      if (data.session) {
+        setStatus('ready');
+        return;
+      }
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: form.email,
+        password: form.password,
+      });
+      if (!signInError) {
+        setStatus('ready');
+        return;
+      }
+      if (signInError.message?.toLowerCase().includes('email not confirmed')) {
+        setFormError('Conta criada! Confirme seu e-mail pra ativar o acesso (já enviamos o link) e depois faça login.');
+        return;
+      }
+      throw signInError;
     } catch (e: any) {
       setFormError(
         e.message?.includes('already registered') || e.message?.includes('User already')
