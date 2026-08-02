@@ -34,6 +34,7 @@ import { formatEventWhatsApp, resolveEstudio } from '../utils/formatters';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
 import InstallPWAButton from '../components/InstallPWAButton';
 import { previewNarration, fetchNarrationAudios, type NarrationKind } from '../services/narrationApi';
+import { fetchUfList, fetchCitiesByUf, parseCityUf, type UfOption } from '../services/ibgeLocation';
 
 const MAX_DOC_SIZE_MB = 10;
 const MAX_DOC_SIZE_BYTES = MAX_DOC_SIZE_MB * 1024 * 1024;
@@ -1141,6 +1142,56 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   // fica sem feedback de que a alteração está de fato persistida, e o
   // produtor perde texto ao navegar de aba achando que já tinha salvo.
   const [savedDescription, setSavedDescription] = useState('');
+  // Seletor de Cidade/UF via IBGE (antes era texto livre, gerava divergência
+  // de digitação e dependia de split por vírgula pra popular events.city/state).
+  // `general.city` continua sendo a fonte salva ("Cidade, UF" combinado) —
+  // esses states só controlam os 2 <select> e sincronizam de volta pra ele.
+  const [ufList, setUfList] = useState<UfOption[]>([]);
+  const [ufListError, setUfListError] = useState(false);
+  const [cityList, setCityList] = useState<string[]>([]);
+  const [cityListLoading, setCityListLoading] = useState(false);
+  const [cityListError, setCityListError] = useState(false);
+  const [selectedUf, setSelectedUf] = useState('');
+  const [selectedCity, setSelectedCity] = useState('');
+  // Valor antigo (texto livre) que não bateu com nenhuma cidade da lista do
+  // IBGE pro UF selecionado — mantido visível como opção extra pra não
+  // apagar dado do produtor até ele escolher algo da lista de verdade.
+  const [unmatchedCity, setUnmatchedCity] = useState('');
+
+  useEffect(() => {
+    fetchUfList()
+      .then(setUfList)
+      .catch(() => setUfListError(true));
+  }, []);
+
+  useEffect(() => {
+    if (!selectedUf) { setCityList([]); setUnmatchedCity(''); return; }
+    setCityListLoading(true);
+    setCityListError(false);
+    fetchCitiesByUf(selectedUf)
+      .then(names => {
+        setCityList(names);
+        // Se a cidade atual (carregada do banco ou digitada antes dessa
+        // feature existir) não bate com nenhuma da lista oficial, mantém
+        // visível como opção extra em vez de apagar o dado do produtor.
+        setUnmatchedCity(
+          selectedCity && !names.some(n => n.toLowerCase() === selectedCity.toLowerCase())
+            ? selectedCity
+            : ''
+        );
+      })
+      .catch(() => setCityListError(true))
+      .finally(() => setCityListLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedUf]);
+
+  useEffect(() => {
+    const uf = selectedUf.trim();
+    const city = selectedCity.trim();
+    if (!city) return; // aguarda escolha de cidade — não sobrescreve com estado incompleto
+    setGeneral(g => ({ ...g, city: uf ? `${city}, ${uf}` : city }));
+  }, [selectedCity, selectedUf]);
+
   // Identidade pública do evento (vem da tabela events, não configuracoes)
   const [identity, setIdentity] = useState({
     instagram_event:    '',
@@ -1978,12 +2029,13 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           const localFromEvent = [evt.location, [evt.city, evt.state].filter(Boolean).join(' / ')]
             .filter(Boolean)
             .join(' — ') || '';
-          const cityStateFromEvent = [evt.city, evt.state].filter(Boolean).join(' / ');
+          const cityStateFromEvent = [evt.city, evt.state].filter(Boolean).join(', ');
           const descriptionFromDb = data.descricao || evt.description || DEFAULT_GENERAL.description;
+          const cityFromDb = data.cidade_estado || cityStateFromEvent || DEFAULT_GENERAL.city;
           setGeneral({
             eventName:          data.nome_evento      || evt.name        || DEFAULT_GENERAL.eventName,
             location:           data.local_evento     || evt.location    || DEFAULT_GENERAL.location,
-            city:               data.cidade_estado    || cityStateFromEvent || DEFAULT_GENERAL.city,
+            city:               cityFromDb,
             eventDate:          data.data_evento      || DEFAULT_GENERAL.eventDate,
             regDeadline:        data.prazo_inscricao  || DEFAULT_GENERAL.regDeadline,
             trackDeadline:      data.prazo_trilhas    || DEFAULT_GENERAL.trackDeadline,
@@ -1999,6 +2051,17 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             eventTime:   data.hora_evento || DEFAULT_GENERAL.eventTime,
           });
           setSavedDescription(descriptionFromDb);
+          // Preenche os 2 selects de Cidade/UF: prioriza evt.city/evt.state
+          // (colunas já separadas em events) — só cai pro parse de texto
+          // livre quando essas colunas ainda não existem pra esse evento.
+          if (evt.city && evt.state) {
+            setSelectedCity(evt.city);
+            setSelectedUf(evt.state);
+          } else {
+            const parsedCityUf = parseCityUf(cityFromDb);
+            setSelectedCity(parsedCityUf.city);
+            setSelectedUf(parsedCityUf.uf);
+          }
           if (Array.isArray(data.programacao)) setProgramacao(data.programacao);
           if (Array.isArray(data.ingressos_audiencia)) setIngressos(data.ingressos_audiencia);
           // Politica de ingressos (#11). Se a coluna nao veio (banco sem migration ainda),
@@ -2282,7 +2345,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       // Sync configuracoes → events (vitrine pública)
       // Falha aqui não bloqueia o save da config legacy.
       try {
-        const cityState = (general.city || '').split(',').map(s => s.trim()).filter(Boolean);
+        // Prefere os selects (Cidade/UF já vêm separados, sem ambiguidade).
+        // Só cai pro split por vírgula no fallback de texto livre (API do
+        // IBGE fora do ar — ufListError).
+        const cityState = selectedCity
+          ? [selectedCity, selectedUf].filter(Boolean)
+          : (general.city || '').split(',').map(s => s.trim()).filter(Boolean);
         const editionYear = general.eventDate
           ? new Date(general.eventDate + 'T12:00:00').getFullYear()
           : new Date().getFullYear();
@@ -2730,7 +2798,53 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className={label}>Cidade / Estado</label>
-                    <input type="text" value={general.city} onChange={e => setGeneral({ ...general, city: e.target.value })} placeholder="Votuporanga, SP" className={input} />
+                    {ufListError ? (
+                      // Fallback se a API do IBGE estiver fora do ar — não
+                      // trava o produtor, volta pro texto livre de sempre.
+                      <input type="text" value={general.city} onChange={e => setGeneral({ ...general, city: e.target.value })} placeholder="Votuporanga, SP" className={input} />
+                    ) : (
+                      <div className="grid grid-cols-[76px_1fr] gap-2">
+                        <select
+                          value={selectedUf}
+                          onChange={e => { setSelectedUf(e.target.value); setSelectedCity(''); }}
+                          className={input}
+                          aria-label="Estado (UF)"
+                        >
+                          <option value="" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">UF</option>
+                          {ufList.map(uf => (
+                            <option key={uf.sigla} value={uf.sigla} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                              {uf.sigla}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={selectedCity}
+                          onChange={e => setSelectedCity(e.target.value)}
+                          disabled={!selectedUf || cityListLoading}
+                          className={`${input} disabled:opacity-50 disabled:cursor-not-allowed`}
+                          aria-label="Cidade"
+                        >
+                          <option value="" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                            {cityListLoading ? 'Carregando cidades...' : selectedUf ? 'Selecione a cidade' : 'Escolha o estado primeiro'}
+                          </option>
+                          {unmatchedCity && (
+                            <option value={unmatchedCity} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                              {unmatchedCity} (valor atual)
+                            </option>
+                          )}
+                          {cityList.map(name => (
+                            <option key={name} value={name} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                              {name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    {cityListError && (
+                      <p className="text-[9px] text-amber-500 mt-1">
+                        Não consegui carregar as cidades desse estado agora. Tente de novo em instantes.
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className={label}>Data do Evento</label>
