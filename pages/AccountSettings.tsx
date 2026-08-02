@@ -66,6 +66,15 @@ const DEFAULT_CRITERIOS: EvalCriterion[] = [
 const buildDefaultTiebreaker = (cs: EvalCriterion[]) =>
   ['maior_media', ...cs.map(c => `criterio_${c.name}`)];
 
+/** Redistribui peso igual entre todos os quesitos (peso=1 pra cada — com a %
+ *  sendo peso/total, N quesitos de peso 1 sempre divide 100% igualmente,
+ *  ex: 3 quesitos = 33% cada). Roda só ao ADICIONAR/REMOVER quesito (evita
+ *  soma "torta" o produtor precisar calcular na mão); edição manual do peso
+ *  continua disponível depois como ajuste fino. Padrão Google Forms/Typeform
+ *  de pontuação de rubrica. */
+const equalizeWeights = (cs: EvalCriterion[]): EvalCriterion[] =>
+  cs.map(c => ({ ...c, peso: 1 }));
+
 /**
  * Preserves the user's manual cascade order when criterios are added/removed/renamed.
  * - Rename: detects mesmo idx com nome diferente, atualiza a referência
@@ -762,6 +771,11 @@ const detectarMinFixo = (nome: string | undefined): number | null => {
   return null;
 };
 
+/** Teto de preço pra qualquer campo de inscrição/ingresso/workshop — nenhum
+ *  valor real de mercado (mesmo festivais grandes tipo Joinville) passa
+ *  disso. Trava digitação tipo "2222222222" (achado real 2026-08-02). */
+const MAX_PRECO = 99999.99;
+
 /** Input de preço em BRL com prefixo "R$" e formato 1.234,56 ao perder foco.
  *  State local guarda o que o user digita, normaliza no blur via parsePrecoBR. */
 const PrecoInput: React.FC<{
@@ -779,11 +793,11 @@ const PrecoInput: React.FC<{
       <input
         type="text"
         inputMode="decimal"
-        maxLength={20}
+        maxLength={12}
         value={draft}
         onChange={e => setDraft(e.target.value)}
         onBlur={() => {
-          const num = parsePrecoBR(draft);
+          const num = Math.min(parsePrecoBR(draft), MAX_PRECO);
           onChange(num);
           setDraft(num ? formatPrecoBR(num) : '');
         }}
@@ -1122,6 +1136,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   };
 
   const [general, setGeneral] = useState({ ...DEFAULT_GENERAL });
+  // Snapshot do banco pro selo "Salvo"/"Não salvo" da Descrição — mesmo
+  // padrão honesto já usado no Marketing (savedMarketing). Sem isso o campo
+  // fica sem feedback de que a alteração está de fato persistida, e o
+  // produtor perde texto ao navegar de aba achando que já tinha salvo.
+  const [savedDescription, setSavedDescription] = useState('');
   // Identidade pública do evento (vem da tabela events, não configuracoes)
   const [identity, setIdentity] = useState({
     instagram_event:    '',
@@ -1186,6 +1205,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     meta_capi_last_at: null, ga4_mp_last_at: null,
   });
   const [identityUploading, setIdentityUploading] = useState(false);
+  const regulationFileInputRef = useRef<HTMLInputElement>(null);
   // Slug do evento ativo — usado pra montar URL da vitrine como smart default
   // do campo "Site oficial"
   const [activeEventSlug, setActiveEventSlug] = useState<string | null>(null);
@@ -1478,11 +1498,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     setGlobalRules({ criterios, desempate: reconcileTiebreaker(globalRules.desempate, globalRules.criterios, criterios) });
   };
   const addGlobalCriterion = () => {
-    const criterios = [...globalRules.criterios, { name: 'Novo Quesito', peso: 1 }];
+    const criterios = equalizeWeights([...globalRules.criterios, { name: 'Novo Quesito', peso: 1 }]);
     setGlobalRules({ criterios, desempate: reconcileTiebreaker(globalRules.desempate, globalRules.criterios, criterios) });
   };
   const removeGlobalCriterion = (idx: number) => {
-    const criterios = globalRules.criterios.filter((_, i) => i !== idx);
+    const criterios = equalizeWeights(globalRules.criterios.filter((_, i) => i !== idx));
     setGlobalRules({ criterios, desempate: reconcileTiebreaker(globalRules.desempate, globalRules.criterios, criterios) });
   };
   const moveGlobalTiebreaker = (idx: number, dir: 1 | -1) => {
@@ -1499,11 +1519,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     setArtisticRules({ criterios, desempate: reconcileTiebreaker(artisticRules.desempate, artisticRules.criterios, criterios) });
   };
   const addArtisticCriterion = () => {
-    const criterios = [...artisticRules.criterios, { name: 'Novo Quesito', peso: 1 }];
+    const criterios = equalizeWeights([...artisticRules.criterios, { name: 'Novo Quesito', peso: 1 }]);
     setArtisticRules({ criterios, desempate: reconcileTiebreaker(artisticRules.desempate, artisticRules.criterios, criterios) });
   };
   const removeArtisticCriterion = (idx: number) => {
-    const criterios = artisticRules.criterios.filter((_, i) => i !== idx);
+    const criterios = equalizeWeights(artisticRules.criterios.filter((_, i) => i !== idx));
     setArtisticRules({ criterios, desempate: reconcileTiebreaker(artisticRules.desempate, artisticRules.criterios, criterios) });
   };
   const moveArtisticTiebreaker = (idx: number, dir: 1 | -1) => {
@@ -1522,12 +1542,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   };
   const addCriterion = (genreId: string) => {
     const rules = getEffectiveRules(genreId);
-    const criterios = [...rules.criterios, { name: 'Novo Quesito', peso: 1 }];
+    const criterios = equalizeWeights([...rules.criterios, { name: 'Novo Quesito', peso: 1 }]);
     setGenreOverrides(prev => ({ ...prev, [genreId]: { criterios, desempate: reconcileTiebreaker(rules.desempate, rules.criterios, criterios) } }));
   };
   const removeCriterion = (genreId: string, idx: number) => {
     const rules = getEffectiveRules(genreId);
-    const criterios = rules.criterios.filter((_, i) => i !== idx);
+    const criterios = equalizeWeights(rules.criterios.filter((_, i) => i !== idx));
     setGenreOverrides(prev => ({ ...prev, [genreId]: { criterios, desempate: reconcileTiebreaker(rules.desempate, rules.criterios, criterios) } }));
   };
   const moveTiebreaker = (genreId: string, idx: number, dir: 1 | -1) => {
@@ -1959,6 +1979,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             .filter(Boolean)
             .join(' — ') || '';
           const cityStateFromEvent = [evt.city, evt.state].filter(Boolean).join(' / ');
+          const descriptionFromDb = data.descricao || evt.description || DEFAULT_GENERAL.description;
           setGeneral({
             eventName:          data.nome_evento      || evt.name        || DEFAULT_GENERAL.eventName,
             location:           data.local_evento     || evt.location    || DEFAULT_GENERAL.location,
@@ -1974,9 +1995,10 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             medalThresholds: data.medal_thresholds ?? DEFAULT_GENERAL.medalThresholds,
             premiationSystem: (data.premiation_system as 'THRESHOLD' | 'RANKING') || DEFAULT_GENERAL.premiationSystem,
             coverUrl:    data.cover_url   || evt.cover_url    || DEFAULT_GENERAL.coverUrl,
-            description: data.descricao   || evt.description  || DEFAULT_GENERAL.description,
+            description: descriptionFromDb,
             eventTime:   data.hora_evento || DEFAULT_GENERAL.eventTime,
           });
+          setSavedDescription(descriptionFromDb);
           if (Array.isArray(data.programacao)) setProgramacao(data.programacao);
           if (Array.isArray(data.ingressos_audiencia)) setIngressos(data.ingressos_audiencia);
           // Politica de ingressos (#11). Se a coluna nao veio (banco sem migration ainda),
@@ -2374,6 +2396,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         producer_ga4_id:        marketing.producer_ga4_id,
         producer_meta_pixel_id: marketing.producer_meta_pixel_id,
       });
+      setSavedDescription(general.description);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
@@ -2562,7 +2585,18 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
                 {/* Descrição */}
                 <div>
-                  <label className={label}>Descrição do Evento</label>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <label className={`${label} mb-0`}>Descrição do Evento</label>
+                    {general.description !== savedDescription ? (
+                      <span className="shrink-0 px-2.5 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30">
+                        ○ Não salvo
+                      </span>
+                    ) : (
+                      <span className="shrink-0 px-2.5 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30">
+                        ● Salvo
+                      </span>
+                    )}
+                  </div>
                   <textarea
                     rows={8}
                     value={general.description}
@@ -2570,7 +2604,10 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     placeholder="Conte sobre seu festival: história, modalidades, público, premiações..."
                     className={`${input} resize-none h-full`}
                   />
-                  <p className="text-[9px] text-slate-400 mt-1">Aparece na página pública do evento. Use para vender o evento aos inscritos.</p>
+                  <p className="text-[9px] text-slate-400 mt-1">
+                    Aparece na página pública do evento. Use para vender o evento aos inscritos.
+                    {general.description !== savedDescription && ' Clique em "Salvar Configurações" no rodapé pra confirmar.'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -2799,55 +2836,82 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
               <div className="border-t border-slate-200 dark:border-white/10 pt-5">
                 <label className={label}><FileText size={11} className="inline mr-1" /> Regulamento ou Edital (PDF)</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="file"
-                    accept="application/pdf"
-                    aria-label="Arquivo PDF do regulamento"
+                {/* Input file nativo escondido — o próprio browser sempre
+                    reseta o texto visível dele pra "Nenhum arquivo escolhido"
+                    mesmo com um PDF já salvo no banco, o que parecia bug de
+                    upload (relato real 2026-08-02). Botão custom abaixo
+                    reflete o estado de verdade (identity.regulation_pdf_url). */}
+                <input
+                  ref={regulationFileInputRef}
+                  type="file"
+                  accept="application/pdf"
+                  aria-label="Arquivo PDF do regulamento"
+                  disabled={identityUploading}
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > MAX_DOC_SIZE_BYTES) {
+                      alert(`Arquivo muito grande (${(file.size / 1024 / 1024).toFixed(1)}MB). Máximo ${MAX_DOC_SIZE_MB}MB.`);
+                      e.target.value = '';
+                      return;
+                    }
+                    setIdentityUploading(true);
+                    try {
+                      // FIX 2026-07-17 (achado #5): re-resolvia evento mais
+                      // recente ignorando o picker — upload ia pro evento
+                      // errado quando produtor tinha 2+ eventos. Usa o
+                      // evento selecionado no topo da página.
+                      if (!activeEventId) throw new Error('Nenhum evento selecionado.');
+                      const { uploadEventRules } = await import('../services/supabase');
+                      const url = await uploadEventRules(activeEventId, file);
+                      setIdentity({ ...identity, regulation_pdf_url: url });
+                    } catch (err: any) {
+                      alert(`Erro ao enviar PDF: ${err?.message ?? err}`);
+                    } finally {
+                      setIdentityUploading(false);
+                      e.target.value = '';
+                    }
+                  }}
+                />
+                {identity.regulation_pdf_url ? (
+                  <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-3 rounded-xl border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10">
+                    <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 min-w-0">
+                      <Check size={13} className="shrink-0" />
+                      <span className="truncate">✓ Regulamento enviado —{' '}
+                        <a href={identity.regulation_pdf_url} target="_blank" rel="noopener noreferrer" className="underline">Ver PDF</a>
+                      </span>
+                    </p>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        disabled={identityUploading}
+                        onClick={() => regulationFileInputRef.current?.click()}
+                        className="px-3 py-1.5 bg-white dark:bg-white/10 border border-emerald-300 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-emerald-100 dark:hover:bg-emerald-500/20 disabled:opacity-50 flex items-center gap-1.5"
+                      >
+                        {identityUploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                        Substituir
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Remover regulamento"
+                        onClick={() => setIdentity({ ...identity, regulation_pdf_url: '' })}
+                        className="text-slate-400 hover:text-rose-500 transition-colors"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
                     disabled={identityUploading}
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      if (file.size > MAX_DOC_SIZE_BYTES) {
-                        alert(`Arquivo muito grande (${(file.size / 1024 / 1024).toFixed(1)}MB). Máximo ${MAX_DOC_SIZE_MB}MB.`);
-                        e.target.value = '';
-                        return;
-                      }
-                      setIdentityUploading(true);
-                      try {
-                        // FIX 2026-07-17 (achado #5): re-resolvia evento mais
-                        // recente ignorando o picker — upload ia pro evento
-                        // errado quando produtor tinha 2+ eventos. Usa o
-                        // evento selecionado no topo da página.
-                        if (!activeEventId) throw new Error('Nenhum evento selecionado.');
-                        const { uploadEventRules } = await import('../services/supabase');
-                        const url = await uploadEventRules(activeEventId, file);
-                        setIdentity({ ...identity, regulation_pdf_url: url });
-                      } catch (err: any) {
-                        alert(`Erro ao enviar PDF: ${err?.message ?? err}`);
-                      } finally {
-                        setIdentityUploading(false);
-                        e.target.value = '';
-                      }
-                    }}
-                    className={`${input} flex-1 disabled:opacity-50`}
-                  />
-                  {identityUploading && <Loader2 size={14} className="animate-spin text-[#ff0068]" />}
-                </div>
-                {identity.regulation_pdf_url && (
-                  <p className="text-[10px] text-emerald-500 mt-2 flex items-center gap-2">
-                    <span>✓ Regulamento enviado.{' '}
-                      <a href={identity.regulation_pdf_url} target="_blank" rel="noopener noreferrer" className="underline">Ver PDF</a>
-                    </span>
-                    <button
-                      type="button"
-                      aria-label="Remover regulamento"
-                      onClick={() => setIdentity({ ...identity, regulation_pdf_url: '' })}
-                      className="text-slate-400 hover:text-rose-500 transition-colors"
-                    >
-                      <X size={12} />
-                    </button>
-                  </p>
+                    onClick={() => regulationFileInputRef.current?.click()}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-[#ff0068]/50 hover:text-[#ff0068] transition-colors disabled:opacity-50 text-[10px] font-black uppercase tracking-widest"
+                  >
+                    {identityUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                    {identityUploading ? 'Enviando...' : 'Enviar regulamento (PDF)'}
+                  </button>
                 )}
                 <p className="text-[10px] text-slate-400 mt-1">
                   Aceita regulamento privado ou edital público (prefeitura, JOMI, Bolsa Cultura). Máx {MAX_DOC_SIZE_MB}MB.
@@ -3455,9 +3519,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                                 <span className="text-slate-400 text-sm font-bold mr-1">R$</span>
                                 <input
                                   type="number"
-                                  min={0} step={0.01}
+                                  min={0} max={MAX_PRECO} step={0.01}
                                   value={item.preco || ''}
-                                  onChange={e => updateField({ preco: Number(e.target.value) })}
+                                  onChange={e => updateField({ preco: Math.min(Number(e.target.value), MAX_PRECO) })}
                                   placeholder="0,00"
                                   inputMode="decimal"
                                   className="w-24 bg-transparent text-slate-900 dark:text-white text-sm font-bold focus:outline-none"
@@ -3518,9 +3582,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                                       <span className="text-slate-400 text-xs font-bold mr-1">R$</span>
                                       <input
                                         type="number"
-                                        min={0} step={0.01}
+                                        min={0} max={MAX_PRECO} step={0.01}
                                         value={lote.preco || ''}
-                                        onChange={e => updateLote(loteIdx, { preco: Number(e.target.value) })}
+                                        onChange={e => updateLote(loteIdx, { preco: Math.min(Number(e.target.value), MAX_PRECO) })}
                                         placeholder="0,00"
                                         inputMode="decimal"
                                         className="w-full bg-transparent text-slate-900 dark:text-white text-xs font-bold focus:outline-none"
