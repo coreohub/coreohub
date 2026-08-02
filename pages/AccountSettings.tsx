@@ -1151,8 +1151,15 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [cityList, setCityList] = useState<string[]>([]);
   const [cityListLoading, setCityListLoading] = useState(false);
   const [cityListError, setCityListError] = useState(false);
-  const [selectedUf, setSelectedUf] = useState('');
-  const [selectedCity, setSelectedCity] = useState('');
+  // Inicializa a partir do mesmo default de general.city (DEFAULT_GENERAL.city)
+  // — sem isso, quando o evento ainda não tem configuracoes salva (`data`
+  // falsy no fetchConfig, ex: evento recém-criado), general.city mostra o
+  // texto default mas os selects ficavam em branco (achado real testando
+  // com Playwright: "CoreoHub Festival" nunca salvo mostrava "Votuporanga,
+  // SP" no texto mas UF/Cidade vazios).
+  const defaultCityUf = parseCityUf(DEFAULT_GENERAL.city);
+  const [selectedUf, setSelectedUf] = useState(defaultCityUf.uf);
+  const [selectedCity, setSelectedCity] = useState(defaultCityUf.city);
   // Valor antigo (texto livre) que não bateu com nenhuma cidade da lista do
   // IBGE pro UF selecionado — mantido visível como opção extra pra não
   // apagar dado do produtor até ele escolher algo da lista de verdade.
@@ -3904,6 +3911,10 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   <div>
                     <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Patrocinadores & Apoiadores</h3>
                     <p className="text-xs text-slate-500 mt-0.5">Logos que aparecem na vitrine pública. Ex: prefeitura, secretaria de cultura, marcas patrocinadoras.</p>
+                    <p className="text-[9px] text-slate-400 mt-1">
+                      PNG, JPG ou WEBP — recomendado 400×400px (fundo transparente fica melhor). Qualquer tamanho enviado é redimensionado
+                      e convertido pra WebP automaticamente, então não precisa editar antes de subir.
+                    </p>
                   </div>
                 </div>
                 <button
