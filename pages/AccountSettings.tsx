@@ -3931,34 +3931,47 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   sponsors.map((sp, i) => (
                     <div key={i} className="grid grid-cols-12 gap-2 items-center bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-xl p-3">
                       <div className="col-span-2 flex items-center justify-center">
-                        {sp.logo_url ? (
-                          <img src={sp.logo_url} alt={sp.nome} className="h-12 max-w-full object-contain" />
-                        ) : (
-                          <label className="cursor-pointer flex items-center justify-center h-12 w-full border-2 border-dashed border-slate-300 dark:border-white/10 rounded-lg text-slate-400 hover:text-[#ff0068] hover:border-[#ff0068]/40">
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (!file) return;
-                                try {
-                                  const compressed = await imageCompression(file, {
-                                    maxSizeMB: 0.2,
-                                    maxWidthOrHeight: 400,
-                                    useWebWorker: true,
-                                    fileType: 'image/webp',
-                                  });
-                                  const url = await uploadEventCover('sponsor_' + Date.now(), compressed);
-                                  setSponsors(s => s.map((x, idx) => idx === i ? { ...x, logo_url: url } : x));
-                                } catch (err: any) {
-                                  setError('Erro ao subir logo: ' + err.message);
-                                }
-                              }}
-                            />
+                        <label
+                          className={
+                            sp.logo_url
+                              ? 'group relative cursor-pointer flex items-center justify-center h-12 w-full rounded-lg overflow-hidden'
+                              : 'cursor-pointer flex items-center justify-center h-12 w-full border-2 border-dashed border-slate-300 dark:border-white/10 rounded-lg text-slate-400 hover:text-[#ff0068] hover:border-[#ff0068]/40'
+                          }
+                          title={sp.logo_url ? 'Trocar logo' : 'Enviar logo'}
+                        >
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              try {
+                                const compressed = await imageCompression(file, {
+                                  maxSizeMB: 0.2,
+                                  maxWidthOrHeight: 400,
+                                  useWebWorker: true,
+                                  fileType: 'image/webp',
+                                });
+                                const url = await uploadEventCover('sponsor_' + Date.now(), compressed);
+                                setSponsors(s => s.map((x, idx) => idx === i ? { ...x, logo_url: url } : x));
+                              } catch (err: any) {
+                                setError('Erro ao subir logo: ' + err.message);
+                              }
+                              e.target.value = '';
+                            }}
+                          />
+                          {sp.logo_url ? (
+                            <>
+                              <img src={sp.logo_url} alt={sp.nome} className="h-12 max-w-full object-contain" />
+                              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                <Upload size={14} className="text-white" />
+                              </div>
+                            </>
+                          ) : (
                             <Upload size={14} />
-                          </label>
-                        )}
+                          )}
+                        </label>
                       </div>
                       <input
                         type="text"
