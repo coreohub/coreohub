@@ -81,6 +81,10 @@ const SuperAdmin = () => {
   const [eventFilter, setEventFilter]   = useState<'all' | 'private' | 'government' | 'free'>('all');
   const [showDemoEvents, setShowDemoEvents] = useState(false);
   const [eventEdit, setEventEdit]       = useState<EventRow | null>(null);
+  // Modal custom "Tornar gratuito" — antes era window.confirm()+prompt()
+  // nativos do browser (inconsistente com o resto da UI, sem o design
+  // system, e o campo de motivo era um prompt() cru sem validação).
+  const [freeModalEvent, setFreeModalEvent] = useState<EventRow | null>(null);
   const [producerSearch, setProducerSearch] = useState('');
   // Bloco 1 (2026-05-28): leads sem atribuição. Acompanha aquisição global —
   // signups que NÃO vieram da vitrine de um evento específico. Padrão
@@ -463,18 +467,13 @@ const SuperAdmin = () => {
     setEventEdit(null);
   };
 
-  const handleMakeEventFree = async (ev: EventRow) => {
-    if (!confirm(`Tornar "${ev.name}" gratuito? Comissão zera e taxa Asaas é absorvida pela plataforma.`)) return;
-    const nota = prompt(
-      'Por que esse acesso está sendo liberado? (ex: "Edital Lei Rouanet SP 2026 — contrato R$X", "Parceria estratégica")\n\nFica registrado só pra você lembrar depois.',
-      ev.acesso_liberado_nota ?? ''
-    );
-    if (nota === null) return; // cancelou o prompt
+  const handleMakeEventFree = async (ev: EventRow, nota: string) => {
     const { error: updErr } = await supabase.from('events')
       .update({ commission_percent: 0, commission_fixed: 0, fee_mode: 'absorver', acesso_liberado_nota: nota || null })
       .eq('id', ev.id);
     if (updErr) { alert('Falha: ' + updErr.message); return; }
     setEventsList(list => list.map(e => e.id === ev.id ? { ...e, commission_percent: 0, commission_fixed: 0, fee_mode: 'absorver', acesso_liberado_nota: nota || null } : e));
+    setFreeModalEvent(null);
   };
 
   const handleToggleEventPublic = async (ev: EventRow) => {
@@ -988,7 +987,7 @@ const SuperAdmin = () => {
                               <div className="flex justify-end gap-1">
                                 {!isFree && (
                                   <button
-                                    onClick={() => handleMakeEventFree(ev)}
+                                    onClick={() => setFreeModalEvent(ev)}
                                     className="p-2 rounded-lg text-emerald-500 hover:bg-emerald-500/10"
                                     title="Tornar gratuito"
                                   >
@@ -1156,6 +1155,15 @@ const SuperAdmin = () => {
           event={eventEdit}
           onClose={() => setEventEdit(null)}
           onSave={handleSaveEventCommission}
+        />
+      )}
+
+      {/* Modal Tornar Gratuito */}
+      {freeModalEvent && (
+        <MakeFreeModal
+          event={freeModalEvent}
+          onClose={() => setFreeModalEvent(null)}
+          onConfirm={nota => handleMakeEventFree(freeModalEvent, nota)}
         />
       )}
 
@@ -1425,6 +1433,70 @@ const EventCommissionModal: React.FC<{
           >
             <Check size={16} /> Salvar Comissão
           </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/** Modal custom pra "Tornar gratuito" — substitui os confirm()/prompt()
+ *  nativos do browser (feedback real 2026-08-02: inconsistente com o resto
+ *  da UI e o motivo de auditoria era um prompt() cru, sem estar visualmente
+ *  associado à ação). Mesma lógica (zera comissão, fee_mode='absorver',
+ *  grava acesso_liberado_nota), só com o design system do CoreoHub. */
+const MakeFreeModal: React.FC<{
+  event: EventRow;
+  onClose: () => void;
+  onConfirm: (nota: string) => void;
+}> = ({ event, onClose, onConfirm }) => {
+  const [nota, setNota] = useState(event.acesso_liberado_nota ?? '');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5">
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Tornar Gratuito</h3>
+            <p className="text-xs text-slate-500 mt-0.5 truncate">{event.name}</p>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            Comissão da plataforma zera pra este evento (0% / R$0) e a taxa Asaas passa a ser <strong>absorvida pela CoreoHub</strong> em vez de repassada. O evento continua <strong>Privado</strong> — não vira Governo.
+          </p>
+
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
+              Motivo do acesso liberado (opcional)
+            </label>
+            <textarea
+              value={nota}
+              onChange={e => setNota(e.target.value)}
+              placeholder='Ex: "Edital Lei Rouanet SP 2026 — contrato R$X", "Parceria estratégica"'
+              rows={3}
+              className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 resize-none"
+            />
+            <p className="text-[9px] text-slate-400 mt-1">Fica registrado só pra auditoria interna — não aparece pro produtor.</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={onClose}
+              className="py-3.5 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 rounded-xl font-black text-sm uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-white/10"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => onConfirm(nota)}
+              className="flex items-center justify-center gap-2 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-black text-sm uppercase tracking-widest"
+            >
+              <Check size={16} /> Confirmar
+            </button>
+          </div>
         </div>
       </div>
     </div>
