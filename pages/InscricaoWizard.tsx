@@ -995,6 +995,13 @@ const InscricaoWizard: React.FC = () => {
         if (createdElencoIds.length > 0) {
           await supabase.from('elenco').delete().in('id', createdElencoIds);
         }
+        // Trigger enforce_free_event_setup_fee (migration 20260802) bloqueia
+        // inscrição em evento gratuito sem taxa de ativação paga, ou que já
+        // ultrapassou o teto da faixa contratada. Mensagem crua do Postgres
+        // não faz sentido pro inscrito — traduz pra algo acionável.
+        if (regErr?.message?.includes('FREE_EVENT_SETUP_FEE_REQUIRED') || regErr?.message?.includes('FREE_EVENT_TIER_EXCEEDED')) {
+          throw new Error('As inscrições deste evento estão temporariamente pausadas. Entre em contato com a organização do festival.');
+        }
         throw regErr ?? new Error('Erro ao criar inscrição.');
       }
 

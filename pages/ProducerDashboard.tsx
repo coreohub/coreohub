@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { UserRole } from '../types';
 import { supabase } from '../services/supabase';
@@ -6,7 +7,7 @@ import {
   DollarSign, Users, Music, AlertCircle, TrendingUp,
   Plus, Search, ArrowUpRight, CreditCard, Calendar,
   UserCheck, CheckSquare, AlertTriangle, Loader2, ChevronDown,
-  Download, BarChart3, Copy, Check, ExternalLink,
+  Download, BarChart3, Copy, Check, ExternalLink, X,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Profile as UserProfile } from '../types';
@@ -151,9 +152,15 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
   const [funnelCohort, setFunnelCohort] = useState<'all' | 'week' | 'month'>('all');
 
   /* ── Edition selector ── */
-  const [allEvents, setAllEvents] = useState<{ id: string; name: string; slug?: string; is_public?: boolean; edition_year?: number; start_date?: string; formacoes_config?: any[] }[]>([]);
+  const [allEvents, setAllEvents] = useState<{ id: string; name: string; slug?: string; is_public?: boolean; edition_year?: number; start_date?: string; formacoes_config?: any[]; is_demo?: boolean; event_type?: string; setup_fee_paid_at?: string | null; setup_fee_grandfathered?: boolean; setup_fee_tier_chave?: string | null }[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [asaasConnected, setAsaasConnected] = useState(false);
+  // Taxa de ativação de evento gratuito (Modelo B, 2026-08-02) — ver bloco
+  // dedicado logo abaixo de `linkBlocked`.
+  const [isFullyFreeEvent, setIsFullyFreeEvent] = useState<boolean | null>(null);
+  const [setupFeeTierMax, setSetupFeeTierMax] = useState<number | null>(null);
+  const [setupFeeRegCount, setSetupFeeRegCount] = useState<number | null>(null);
+  const [setupFeeModalMode, setSetupFeeModalMode] = useState<'activate' | 'upgrade' | null>(null);
 
   useEffect(() => {
     // Mesma regra do Registrations.tsx: prioriza demo + ordena por created_at
@@ -166,7 +173,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
       }
       const { data } = await supabase
         .from('events')
-        .select('id,name,slug,is_public,edition_year,start_date,formacoes_config,is_demo,created_at')
+        .select('id,name,slug,is_public,edition_year,start_date,formacoes_config,is_demo,created_at,event_type,setup_fee_paid_at,setup_fee_grandfathered,setup_fee_tier_chave')
         .eq('created_by', user.id)
         .order('created_at', { ascending: false });
       if (data && data.length > 0) {
@@ -199,6 +206,51 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
   }, [selectedEvent]);
 
   const linkBlocked = eventNeedsAsaas && !asaasConnected;
+
+  /* ── Taxa de ativação de evento gratuito (Modelo B, 2026-08-02) ──────────
+     Checa via RPC (mesma regra usada pelo trigger de banco, single source
+     of truth) se o evento é 100% gratuito — nenhuma venda em nenhuma das
+     4 fontes possíveis (inscrição/workshop/ingresso/seletiva de vídeo). Se
+     for e ainda não foi ativado (setup_fee_paid_at null, sem grandfather/
+     demo/governo), bloqueia inscrição — banner abaixo oferece ativar. */
+  useEffect(() => {
+    if (!selectedEvent) { setIsFullyFreeEvent(null); return; }
+    supabase.rpc('is_event_fully_free', { p_event_id: selectedEvent.id })
+      .then(({ data }) => setIsFullyFreeEvent(!!data));
+  }, [selectedEvent?.id]);
+
+  useEffect(() => {
+    const ev: any = selectedEvent;
+    if (!ev?.setup_fee_tier_chave || !ev?.setup_fee_paid_at) {
+      setSetupFeeTierMax(null);
+      setSetupFeeRegCount(null);
+      return;
+    }
+    (async () => {
+      const { data: tier } = await supabase
+        .from('standalone_pricing_config')
+        .select('qty_max')
+        .eq('chave', ev.setup_fee_tier_chave)
+        .maybeSingle();
+      setSetupFeeTierMax(tier?.qty_max ?? null);
+      const { count } = await supabase
+        .from('registrations')
+        .select('id', { count: 'exact', head: true })
+        .eq('event_id', ev.id)
+        .neq('status_pagamento', 'ESTORNADO');
+      setSetupFeeRegCount(count ?? 0);
+    })();
+  }, [(selectedEvent as any)?.id, (selectedEvent as any)?.setup_fee_tier_chave, (selectedEvent as any)?.setup_fee_paid_at]);
+
+  const setupFeeStatus: 'none' | 'pending_activation' | 'needs_upgrade' | 'active' = useMemo(() => {
+    const ev: any = selectedEvent;
+    if (!ev) return 'none';
+    if (ev.is_demo || ev.event_type === 'government' || ev.setup_fee_grandfathered) return 'none';
+    if (isFullyFreeEvent !== true) return 'none';
+    if (!ev.setup_fee_paid_at) return 'pending_activation';
+    if (setupFeeTierMax != null && setupFeeRegCount != null && setupFeeRegCount >= setupFeeTierMax) return 'needs_upgrade';
+    return 'active';
+  }, [selectedEvent, isFullyFreeEvent, setupFeeTierMax, setupFeeRegCount]);
 
   useEffect(() => {
     if (!selectedEventId) return;
@@ -411,6 +463,22 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
                   title="Conecte sua conta Asaas para liberar inscrições pagas"
                 >
                   <AlertCircle size={11} /> Conecte Asaas para liberar inscrições
+                </button>
+              ) : setupFeeStatus === 'pending_activation' ? (
+                <button
+                  onClick={() => setSetupFeeModalMode('activate')}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 text-[9px] font-black uppercase tracking-widest transition-all"
+                  title="Evento gratuito precisa de ativação pra abrir inscrições"
+                >
+                  <AlertCircle size={11} /> Ativar evento gratuito pra liberar inscrições
+                </button>
+              ) : setupFeeStatus === 'needs_upgrade' ? (
+                <button
+                  onClick={() => setSetupFeeModalMode('upgrade')}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 text-[9px] font-black uppercase tracking-widest transition-all"
+                  title="Evento atingiu o limite da faixa atual"
+                >
+                  <AlertCircle size={11} /> Faixa esgotada — atualizar pra liberar mais inscrições
                 </button>
               ) : (
                 <CopyLinkChip
@@ -788,7 +856,138 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
 
       {/* AsaasBadge removido daqui em 2026-05-13 — playbook pág. 16:
           dashboard operacional não é contexto financeiro ativo. */}
+
+      {setupFeeModalMode && selectedEvent && (
+        <SetupFeeActivationModal
+          eventId={selectedEvent.id}
+          mode={setupFeeModalMode}
+          onClose={() => setSetupFeeModalMode(null)}
+          onPaymentCreated={() => setSetupFeeModalMode(null)}
+        />
+      )}
     </div>
+  );
+};
+
+/** Modal de ativação/upgrade da taxa de evento gratuito (Modelo B,
+ *  2026-08-02). `createPortal` pra escapar do stacking context do
+ *  `<main z-10>` do PrivateLayout (lição já documentada no projeto —
+ *  z-index direto não basta, fica preso atrás de outros elementos). */
+const SetupFeeActivationModal: React.FC<{
+  eventId: string;
+  mode: 'activate' | 'upgrade';
+  onClose: () => void;
+  onPaymentCreated: () => void;
+}> = ({ eventId, mode, onClose, onPaymentCreated }) => {
+  const [estimativa, setEstimativa] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ invoice_url: string; tier_label: string; valor_cobrado: number } | null>(null);
+
+  const handleConfirm = async () => {
+    setError(null);
+    if (mode === 'activate') {
+      const n = Number(estimativa);
+      if (!Number.isFinite(n) || n < 0) {
+        setError('Informe um número válido de inscrições esperadas.');
+        return;
+      }
+    }
+    setLoading(true);
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('create-setup-fee-payment', {
+        body: {
+          event_id: eventId,
+          estimated_inscricoes: mode === 'activate' ? Number(estimativa) : undefined,
+          is_upgrade: mode === 'upgrade',
+        },
+      });
+      if (fnError || data?.error) throw new Error(data?.error ?? fnError?.message ?? 'Erro ao gerar cobrança.');
+      setResult(data);
+    } catch (e: any) {
+      setError(e.message ?? 'Erro ao gerar cobrança.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5">
+        <div className="flex justify-between items-start">
+          <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white italic">
+            {mode === 'activate' ? 'Ativar Evento Gratuito' : 'Atualizar Faixa'}
+          </h3>
+          <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5">
+            <X size={18} />
+          </button>
+        </div>
+
+        {result ? (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              Cobrança gerada — <strong>{result.tier_label}</strong>, R$ {result.valor_cobrado.toFixed(2)}.
+              Assim que o pagamento for confirmado, as inscrições liberam automaticamente, sem precisar voltar aqui.
+            </p>
+            <a
+              href={result.invoice_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-xl font-black text-sm uppercase tracking-widest"
+            >
+              Abrir cobrança (PIX/Cartão/Boleto)
+            </a>
+            <button onClick={onPaymentCreated} className="w-full py-2 text-xs text-slate-500 hover:underline">
+              Fechar
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {mode === 'activate' ? (
+              <>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Seu evento não tem nenhuma venda configurada (inscrição, workshop, ingresso ou seletiva de vídeo
+                  em R$0) — pra abrir as inscrições, ative com uma taxa única de acordo com o porte esperado do
+                  evento. Cobre o uso de IA de regulamento, narração, terminal de júri offline e certificados.
+                </p>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
+                    Quantas inscrições você espera?
+                  </label>
+                  <input
+                    type="number" min={0} step={1}
+                    value={estimativa}
+                    onChange={e => setEstimativa(e.target.value)}
+                    placeholder="Ex: 40"
+                    className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">
+                    É só uma estimativa — define a faixa inicial. Não precisa ser exata.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Seu evento ultrapassou o número de inscrições da faixa atual. Clique em confirmar pra gerar a
+                cobrança da diferença — assim que o pagamento for confirmado, novas inscrições liberam sozinhas.
+              </p>
+            )}
+
+            {error && <p className="text-xs text-rose-500">{error}</p>}
+
+            <button
+              onClick={handleConfirm}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-50 text-white rounded-xl font-black text-sm uppercase tracking-widest"
+            >
+              {loading ? <Loader2 size={16} className="animate-spin" /> : null}
+              {mode === 'activate' ? 'Gerar cobrança de ativação' : 'Gerar cobrança de upgrade'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
   );
 };
 

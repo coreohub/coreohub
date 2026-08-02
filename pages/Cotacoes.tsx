@@ -25,7 +25,7 @@ import {
 
 interface PricingConfigRow {
   id: string;
-  categoria: 'terminal' | 'operador' | 'setup';
+  categoria: 'terminal' | 'operador' | 'setup' | 'setup_gratis';
   chave: string | null;
   label: string;
   qty_min: number | null;
@@ -489,7 +489,9 @@ const Cotacoes: React.FC = () => {
     const { data, error } = await supabase.from('standalone_pricing_config').insert({
       categoria,
       chave: null,
-      label: categoria === 'terminal' ? computeTierLabel(null, null) : 'Nova faixa',
+      label: categoria === 'terminal' ? computeTierLabel(null, null)
+           : categoria === 'setup_gratis' ? computeTierLabel(null, null, 'inscrições')
+           : 'Nova faixa',
       qty_min: null,
       qty_max: null,
       valor_min: 0,
@@ -752,11 +754,14 @@ const Cotacoes: React.FC = () => {
 
         {tab === 'config' && (
           <div className="space-y-6">
-            {(['terminal', 'operador', 'setup'] as const).map(categoria => (
+            {(['terminal', 'operador', 'setup', 'setup_gratis'] as const).map(categoria => (
               <section key={categoria} className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-5 space-y-3">
                 <div className="flex items-center justify-between">
                   <h2 className="text-[11px] font-black uppercase tracking-widest text-slate-500">
-                    {categoria === 'terminal' ? 'Terminal de Júri (faixas por nº de apresentações)' : categoria === 'operador' ? 'Operador CoreoHub (diária)' : 'Setup / cadastro'}
+                    {categoria === 'terminal' ? 'Terminal de Júri (faixas por nº de apresentações)'
+                      : categoria === 'operador' ? 'Operador CoreoHub (diária)'
+                      : categoria === 'setup_gratis' ? 'Taxa de Ativação — Evento Gratuito (faixas por nº de inscrições)'
+                      : 'Setup / cadastro'}
                   </h2>
                   <button onClick={() => addConfigRow(categoria)} className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#ff0068] hover:underline">
                     <Plus size={12} /> Nova faixa
@@ -801,10 +806,10 @@ const UFS = [
 // livre — evita o que aconteceu na mão (2026-07-27): editar a faixa "Até
 // 100" pra "51 a 100" exige lembrar de atualizar o texto separadamente do
 // número, e as duas coisas podem ficar dessincronizadas silenciosamente.
-function computeTierLabel(qtyMin: number | null, qtyMax: number | null): string {
-  if ((qtyMin == null || qtyMin === 0) && qtyMax != null) return `Até ${qtyMax} apresentações`;
-  if (qtyMin != null && qtyMax != null) return `${qtyMin} a ${qtyMax} apresentações`;
-  if (qtyMin != null && qtyMax == null) return `${qtyMin}+ apresentações`;
+function computeTierLabel(qtyMin: number | null, qtyMax: number | null, unidadeLabel = 'apresentações'): string {
+  if ((qtyMin == null || qtyMin === 0) && qtyMax != null) return `Até ${qtyMax} ${unidadeLabel}`;
+  if (qtyMin != null && qtyMax != null) return `${qtyMin} a ${qtyMax} ${unidadeLabel}`;
+  if (qtyMin != null && qtyMax == null) return `${qtyMin}+ ${unidadeLabel}`;
   return 'Faixa incompleta';
 }
 
@@ -849,7 +854,13 @@ const ConfigRowEditor: React.FC<{
   const [minText, setMinText] = useState(maskMoeda(String(Math.round(row.valor_min * 100))));
   const [maxText, setMaxText] = useState(maskMoeda(String(Math.round(row.valor_max * 100))));
 
-  const isTerminal = row.categoria === 'terminal';
+  // Terminal (por apresentações) e Setup Gratuito (por inscrições) são as 2
+  // categorias com faixa calculada a partir de qty_min/qty_max — Operador/
+  // Setup avulso continuam com label livre (não são faixas por quantidade).
+  const isTerminal   = row.categoria === 'terminal';
+  const isSetupGratis = row.categoria === 'setup_gratis';
+  const isTierByQty  = isTerminal || isSetupGratis;
+  const unidadeLabel = isSetupGratis ? 'inscrições' : 'apresentações';
 
   const handleSaveClick = () => {
     const valorMin = parseMoeda(minText);
@@ -862,7 +873,7 @@ const ConfigRowEditor: React.FC<{
       ...row,
       valor_min: valorMin,
       valor_max: valorMax,
-      label: isTerminal ? computeTierLabel(row.qty_min, row.qty_max) : row.label,
+      label: isTierByQty ? computeTierLabel(row.qty_min, row.qty_max, unidadeLabel) : row.label,
     };
     onSave(updated);
     setDirty(false);
@@ -870,11 +881,11 @@ const ConfigRowEditor: React.FC<{
 
   return (
     <div className="flex flex-wrap items-end gap-2 p-3 bg-slate-50 dark:bg-white/5 rounded-xl">
-      {isTerminal ? (
+      {isTierByQty ? (
         <div className="flex-1 min-w-[160px] space-y-1">
           <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Faixa (calculada)</span>
           <p className={`${inputCls} flex items-center text-slate-500 dark:text-slate-400 cursor-default select-none`}>
-            {computeTierLabel(row.qty_min, row.qty_max)}
+            {computeTierLabel(row.qty_min, row.qty_max, unidadeLabel)}
           </p>
         </div>
       ) : (
@@ -883,7 +894,7 @@ const ConfigRowEditor: React.FC<{
           <input value={row.label} onChange={e => { onChange({ label: e.target.value }); setDirty(true); }} className={inputCls} />
         </label>
       )}
-      {isTerminal && (
+      {isTierByQty && (
         <>
           <label className="w-24 space-y-1">
             <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Qtd. mín.</span>

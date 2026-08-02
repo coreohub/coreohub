@@ -55,6 +55,10 @@ interface EventRow {
   is_public: boolean | null;
   is_demo: boolean | null;
   acesso_liberado_nota: string | null;
+  setup_fee_paid_at: string | null;
+  setup_fee_grandfathered: boolean | null;
+  setup_fee_tier_chave: string | null;
+  setup_fee_amount_paid: number | null;
 }
 
 /* Rótulos/ícones do discriminador platform_commissions.kind (migration 20260604).
@@ -157,7 +161,7 @@ const SuperAdmin = () => {
           supabase.from('profiles')
             .select('id, full_name, email, is_blocked, asaas_subconta_id, default_commission_percent, asaas_kyc_status, asaas_onboarding_url'),
           supabase.from('events')
-            .select('id, name, slug, created_by, start_date, event_type, commission_type, commission_percent, commission_fixed, fee_mode, is_public, is_demo, acesso_liberado_nota')
+            .select('id, name, slug, created_by, start_date, event_type, commission_type, commission_percent, commission_fixed, fee_mode, is_public, is_demo, acesso_liberado_nota, setup_fee_paid_at, setup_fee_grandfathered, setup_fee_tier_chave, setup_fee_amount_paid')
             .order('start_date', { ascending: false }),
           listInvites(),
           // Bloco 1: leads sem atribuição. Filtros: role != COREOHUB_ADMIN
@@ -468,11 +472,20 @@ const SuperAdmin = () => {
   };
 
   const handleMakeEventFree = async (ev: EventRow, nota: string) => {
+    // "Tornar gratuito" isenta de comissão E da taxa de ativação de evento
+    // gratuito (Modelo B, 2026-08-02) — mesmo modelo mental: super admin
+    // autorizando manualmente = livre de qualquer monetização CoreoHub.
     const { error: updErr } = await supabase.from('events')
-      .update({ commission_percent: 0, commission_fixed: 0, fee_mode: 'absorver', acesso_liberado_nota: nota || null })
+      .update({
+        commission_percent: 0,
+        commission_fixed: 0,
+        fee_mode: 'absorver',
+        acesso_liberado_nota: nota || null,
+        setup_fee_grandfathered: true,
+      })
       .eq('id', ev.id);
     if (updErr) { alert('Falha: ' + updErr.message); return; }
-    setEventsList(list => list.map(e => e.id === ev.id ? { ...e, commission_percent: 0, commission_fixed: 0, fee_mode: 'absorver', acesso_liberado_nota: nota || null } : e));
+    setEventsList(list => list.map(e => e.id === ev.id ? { ...e, commission_percent: 0, commission_fixed: 0, fee_mode: 'absorver', acesso_liberado_nota: nota || null, setup_fee_grandfathered: true } : e));
     setFreeModalEvent(null);
   };
 
@@ -918,6 +931,7 @@ const SuperAdmin = () => {
                         <th className="px-4 py-3">Data</th>
                         <th className="px-4 py-3">Tipo</th>
                         <th className="px-4 py-3">Comissão</th>
+                        <th className="px-4 py-3">Taxa Setup</th>
                         <th className="px-4 py-3">Vitrine</th>
                         <th className="px-4 py-3 text-right" />
                       </tr>
@@ -968,6 +982,17 @@ const SuperAdmin = () => {
                                   }
                                   {ev.fee_mode === 'absorver' && <span className="ml-1 text-[8px] text-slate-400">(absorve)</span>}
                                 </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-[9px] font-black uppercase tracking-widest">
+                              {ev.setup_fee_grandfathered ? (
+                                <span className="text-slate-400" title="Isento (evento já existia antes do lançamento da taxa, ou isenção manual)">Isento</span>
+                              ) : ev.setup_fee_paid_at ? (
+                                <span className="text-emerald-500" title={`R$ ${Number(ev.setup_fee_amount_paid ?? 0).toFixed(2)} · faixa ${ev.setup_fee_tier_chave ?? '—'}`}>
+                                  Paga
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 dark:text-slate-600" title="Só se aplica se o evento for 100% gratuito">—</span>
                               )}
                             </td>
                             <td className="px-4 py-3">

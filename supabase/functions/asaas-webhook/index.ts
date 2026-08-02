@@ -1341,18 +1341,23 @@ Deno.serve(async (req) => {
     //   "WSP:<group_id>"     = Workshop Pass (Day Pass/Full Pass — 1 cobrança → N workshop_registrations)
     //   "AGG:<payment_id>"   = fatura agregada (carrinho — 1 cobrança → N registrations)
     //   "VS:<registration>"  = taxa de seletiva de vídeo (Modelo 3 — Sessão seletiva)
+    //   "SETUP:<event_id>"   = taxa de ativação de evento gratuito
+    //   "SETUPUP:<event_id>" = upgrade de faixa da taxa de ativação
     //   <uuid>               = registration de inscrição (legado, sem prefix)
     const isAudienceTicket = externalRef.startsWith('AT:')
     const isWorkshop       = externalRef.startsWith('WS:') && !externalRef.startsWith('WSP:')
     const isWorkshopPass   = externalRef.startsWith('WSP:')
     const isAggregate      = externalRef.startsWith('AGG:')
     const isVideoSelection = externalRef.startsWith('VS:')
+    const isSetupUpgrade   = externalRef.startsWith('SETUPUP:')
+    const isSetupFee       = externalRef.startsWith('SETUP:') && !isSetupUpgrade
     const audienceGroupId  = isAudienceTicket ? externalRef.slice(3) : null
     const workshopRegistrationId = isWorkshop ? externalRef.slice(3) : null
     const workshopPassGroupId = isWorkshopPass ? externalRef.slice(4) : null
     const aggregatePaymentId = isAggregate ? externalRef.slice(4) : null
     const videoSelectionRegistrationId = isVideoSelection ? externalRef.slice(3) : null
-    const registrationId   = (isAudienceTicket || isWorkshop || isWorkshopPass || isAggregate || isVideoSelection) ? null : externalRef
+    const setupFeeEventId = isSetupFee ? externalRef.slice(6) : (isSetupUpgrade ? externalRef.slice(8) : null)
+    const registrationId   = (isAudienceTicket || isWorkshop || isWorkshopPass || isAggregate || isVideoSelection || isSetupFee || isSetupUpgrade) ? null : externalRef
 
     // Defesa em profundidade contra forja de webhook (token estatico
     // pode vazar): cross-check via API Asaas. Atacante com token vazado
@@ -1399,6 +1404,8 @@ Deno.serve(async (req) => {
                   : isWorkshopPass   ? 'workshop_pass'
                   : isAggregate      ? 'aggregate'
                   : isVideoSelection ? 'video_selection'
+                  : isSetupFee       ? 'setup_fee'
+                  : isSetupUpgrade   ? 'setup_fee_upgrade'
                                      : 'registration'
 
     // ── BRANCH: PAYMENT DELETED / CANCELLED ─────────────────────────────────
@@ -1595,6 +1602,49 @@ Deno.serve(async (req) => {
         registrationId: videoSelectionRegistrationId,
         asaasBaseUrl:   ASAAS_BASE_URL,
       })
+    }
+
+    // ── BRANCH: SETUP FEE / SETUP FEE UPGRADE (evento gratuito) ──────────────
+    // Cobrança do PRODUTOR pra CoreoHub (sentido inverso do normal, sem
+    // split — 100% cai na master). PAYMENT_RECEIVED/CONFIRMED libera o gate
+    // que o trigger enforce_free_event_setup_fee já checa em tempo real no
+    // próximo INSERT de registrations — não precisa de ação manual nenhuma.
+    if ((isSetupFee || isSetupUpgrade) && setupFeeEventId) {
+      if (statusInterno !== 'APROVADO') {
+        console.log(`[asaas-webhook] setup_fee status=${statusInterno} — nada a fazer (event=${setupFeeEventId})`)
+        return ok({ status: 'noop', reason: 'not_approved', kind: refType })
+      }
+      const { data: ev } = await supabase
+        .from('events')
+        .select('setup_fee_amount_paid, setup_fee_asaas_payment_id')
+        .eq('id', setupFeeEventId)
+        .maybeSingle()
+
+      // Idempotência: se esse payment_id já foi processado (retry de
+      // webhook), não soma de novo.
+      if (ev?.setup_fee_asaas_payment_id !== String(payment.id) && isSetupFee) {
+        console.log(`[asaas-webhook] setup_fee payment_id não bate com o pendente salvo — ignorando (possível retry antigo).`)
+        return ok({ status: 'noop', reason: 'payment_id_mismatch', kind: refType })
+      }
+
+      const novoTotal = isSetupUpgrade
+        ? parseFloat((Number(ev?.setup_fee_amount_paid ?? 0) + Number(payment.value ?? 0)).toFixed(2))
+        : Number(payment.value ?? 0)
+
+      const { error: setupErr } = await supabase
+        .from('events')
+        .update({
+          setup_fee_paid_at:     new Date().toISOString(),
+          setup_fee_amount_paid: novoTotal,
+        })
+        .eq('id', setupFeeEventId)
+
+      if (setupErr) {
+        console.error(`[asaas-webhook] erro ao confirmar setup_fee event=${setupFeeEventId}:`, setupErr.message)
+        return ok({ status: 'error', reason: setupErr.message, kind: refType })
+      }
+      console.log(`[asaas-webhook] setup_fee confirmado event=${setupFeeEventId} total_pago=R$${novoTotal.toFixed(2)} kind=${refType}`)
+      return ok({ status: 'confirmed', event_id: setupFeeEventId, kind: refType })
     }
 
     // ── BRANCH: REGISTRATION (fluxo original) ────────────────────────────────
