@@ -28,7 +28,7 @@ import {
   CreditCard, CheckCircle, AlertCircle, ExternalLink, Percent, Hash,
   Image as ImageIcon, Upload, Play, Pause, Volume2,
   Instagram, MessageCircle, Globe, Mail, FileText, Youtube, Smartphone,
-  RefreshCw,
+  RefreshCw, Facebook,
 } from 'lucide-react';
 import { formatEventWhatsApp, resolveEstudio } from '../utils/formatters';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
@@ -1202,6 +1202,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   // Identidade pública do evento (vem da tabela events, não configuracoes)
   const [identity, setIdentity] = useState({
     instagram_event:    '',
+    facebook_event:     '',
     tiktok_event:       '',
     youtube_event:      '',
     whatsapp_event:     '',
@@ -1941,7 +1942,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         let myEvent: any = null;
         if (user) {
           const evRes = await supabase
-            .from('events').select('id, slug, name, description, cover_url, location, city, state, instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, producer_ga4_id, producer_meta_pixel_id')
+            .from('events').select('id, slug, name, description, cover_url, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, producer_ga4_id, producer_meta_pixel_id')
             .eq('id', selectedEventId)
             .maybeSingle();
           // select() amplo sem checar error mascara coluna ausente como "não
@@ -1961,6 +1962,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             // Identidade pública: campos diretos da tabela events
             setIdentity({
               instagram_event:    myEvent.instagram_event ?? '',
+              facebook_event:     myEvent.facebook_event ?? '',
               tiktok_event:       myEvent.tiktok_event ?? '',
               youtube_event:      myEvent.youtube_event ?? '',
               whatsapp_event:     myEvent.whatsapp_event ?? '',
@@ -2306,6 +2308,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         .from('events')
         .update({
           instagram_event:    identity.instagram_event || null,
+          facebook_event:     identity.facebook_event || null,
           tiktok_event:       identity.tiktok_event || null,
           youtube_event:      identity.youtube_event || null,
           whatsapp_event:     identity.whatsapp_event || null,
@@ -2901,6 +2904,10 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 <div>
                   <label className={label}><Instagram size={11} className="inline mr-1" /> Instagram</label>
                   <input type="text" value={identity.instagram_event} onChange={e => setIdentity({ ...identity, instagram_event: e.target.value })} placeholder="@meufestival" className={input} />
+                </div>
+                <div>
+                  <label className={label}><Facebook size={11} className="inline mr-1" /> Facebook</label>
+                  <input type="text" value={identity.facebook_event} onChange={e => setIdentity({ ...identity, facebook_event: e.target.value })} placeholder="https://facebook.com/meufestival" className={input} />
                 </div>
                 <div>
                   <label className={label}>TikTok</label>
@@ -3636,18 +3643,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                           <div className="flex flex-wrap items-center gap-2">
                             <div className="flex items-center gap-2">
                               <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Preço</label>
-                              <div className="flex items-center bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3">
-                                <span className="text-slate-400 text-sm font-bold mr-1">R$</span>
-                                <input
-                                  type="number"
-                                  min={0} max={MAX_PRECO} step={0.01}
-                                  value={item.preco || ''}
-                                  onChange={e => updateField({ preco: Math.min(Number(e.target.value), MAX_PRECO) })}
-                                  placeholder="0,00"
-                                  inputMode="decimal"
-                                  className="w-24 bg-transparent text-slate-900 dark:text-white text-sm font-bold focus:outline-none"
-                                />
-                              </div>
+                              <PrecoInput
+                                value={Number(item.preco) || 0}
+                                onChange={n => updateField({ preco: n })}
+                                className="w-28 bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 pl-8 pr-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
+                              />
                             </div>
                             <button
                               type="button"
@@ -3699,18 +3699,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                                     )}
                                   </div>
                                   <div className="col-span-3">
-                                    <div className="flex items-center bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-2">
-                                      <span className="text-slate-400 text-xs font-bold mr-1">R$</span>
-                                      <input
-                                        type="number"
-                                        min={0} max={MAX_PRECO} step={0.01}
-                                        value={lote.preco || ''}
-                                        onChange={e => updateLote(loteIdx, { preco: Math.min(Number(e.target.value), MAX_PRECO) })}
-                                        placeholder="0,00"
-                                        inputMode="decimal"
-                                        className="w-full bg-transparent text-slate-900 dark:text-white text-xs font-bold focus:outline-none"
-                                      />
-                                    </div>
+                                    <PrecoInput
+                                      value={Number(lote.preco) || 0}
+                                      onChange={n => updateLote(loteIdx, { preco: n })}
+                                      className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 pl-7 pr-2 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:border-[#ff0068]/50"
+                                    />
                                   </div>
                                   <div className="col-span-1 flex justify-end">
                                     {!isUltimo && (
@@ -4647,7 +4640,17 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     <div>
                       <p className="font-black text-sm text-slate-900 dark:text-white uppercase">{c.name}</p>
                       <p className="text-[10px] text-slate-500 uppercase tracking-widest">
-                        {!c.max || c.max >= 99 ? `${c.min}+ anos` : `${c.min} – ${c.max} anos`}
+                        {(() => {
+                          const hasMin = c.min !== undefined && c.min !== null && c.min !== '';
+                          const hasMax = c.max !== undefined && c.max !== null && c.max !== '' && Number(c.max) < 99;
+                          // Nem min nem max = faixa livre (ex: Mista, Dança Inclusiva —
+                          // "faixas etárias variadas" no regulamento). Sem isso, virava
+                          // literalmente "undefined+ anos" na tela.
+                          if (!hasMin && !hasMax) return 'Todas as idades';
+                          if (hasMin && !hasMax) return `${c.min}+ anos`;
+                          if (!hasMin && hasMax) return `Até ${c.max} anos`;
+                          return `${c.min} – ${c.max} anos`;
+                        })()}
                       </p>
                     </div>
                   </div>
@@ -6880,7 +6883,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   placeholder="∞ sem limite"
                   className={input}
                 />
-                <p className="text-[9px] text-slate-400 mt-1">Vazio = "{tempValue.min || 0}+ anos"</p>
+                <p className="text-[9px] text-slate-400 mt-1">
+                  {tempValue.min ? `Vazio = "${tempValue.min}+ anos"` : 'Deixe Mín. e Máx. vazios pra "Todas as idades" (ex: Mista, Dança Inclusiva)'}
+                </p>
               </div>
             </div>
           </div>

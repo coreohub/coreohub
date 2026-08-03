@@ -6,7 +6,7 @@ import ProducerPixels from '../components/ProducerPixels';
 import {
   Calendar, MapPin, Music, Ticket, ExternalLink,
   ChevronRight, Trophy, Clock, Star, Loader2, ArrowLeft, Youtube, Radio,
-  Share2, Copy, Check, Instagram, Globe, MessageCircle, Mail, FileText, Download,
+  Share2, Copy, Check, Instagram, Facebook, Globe, MessageCircle, Mail, FileText, Download,
   GraduationCap, Video, Plus, Minus,
 } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -120,7 +120,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             id, slug, name, description, cover_url,
             location, city, state,
             start_date, end_date, event_time,
-            instagram_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event,
+            instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event,
             regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label,
             programacao_config, ingressos_config, formacoes_config, patrocinadores_config,
             politica_ingressos, audience_sales_enabled,
@@ -503,6 +503,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
 
   const social = {
     instagram: normalizeUrl(event.instagram_event, 'https://instagram.com/'),
+    facebook:  normalizeUrl(event.facebook_event,  'https://facebook.com/'),
     tiktok:    normalizeUrl(event.tiktok_event,    'https://tiktok.com/@'),
     youtube:   normalizeUrl(event.youtube_event,   'https://youtube.com/@'),
     website:   normalizeUrl(event.website_event,   'https://'),
@@ -1509,6 +1510,12 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 <a href={social.instagram} target="_blank" rel="noopener noreferrer"
                    className="flex items-center gap-2 px-5 py-3 bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#bc1888] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
                   <Instagram size={16} /> Instagram
+                </a>
+              )}
+              {social.facebook && (
+                <a href={social.facebook} target="_blank" rel="noopener noreferrer"
+                   className="flex items-center gap-2 px-5 py-3 bg-[#1877F2] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-all">
+                  <Facebook size={16} /> Facebook
                 </a>
               )}
               {social.tiktok && (
