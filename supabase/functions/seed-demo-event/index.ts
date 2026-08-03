@@ -1062,12 +1062,18 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
     // 5b) Cronograma_blocos: 3 blocos (Manha / Tarde / Final).
     //     Distribui as APROVADAS por formato: Solo+Duo no Manha, Trio+Grupo na Tarde.
     //     Os "Final" recebe os 3 melhores de cada formato (escolha aleatoria pro demo).
+    //     Manha+Tarde no Dia 1 (start_date), Final no Dia 2 (end_date) — evento demo
+    //     já nasce com 3 dias de span (start→end), mostra a feature de separar
+    //     numeração por dia (2026-08-03) em estado "interessante" desde o primeiro
+    //     acesso, não vazio (mesmo princípio já documentado do demo mode).
+    const diaUmStr = startDate.toISOString().split('T')[0]
+    const diaDoisStr = endDate.toISOString().split('T')[0]
     let blocosCriadosOk = 0
     try {
       const { data: blocosInseridos } = await supa.from('cronograma_blocos').insert([
-        { event_id: eventId, name: 'Bloco 1 — Manhã (Solos & Duos)', ordem: 0, cor: '#0ea5e9' },
-        { event_id: eventId, name: 'Bloco 2 — Tarde (Trios & Grupos)', ordem: 1, cor: '#8b5cf6' },
-        { event_id: eventId, name: 'Bloco 3 — Final (Highlights)',     ordem: 2, cor: '#ec4899' },
+        { event_id: eventId, name: 'Bloco 1 — Manhã (Solos & Duos)', ordem: 0, cor: '#0ea5e9', data: diaUmStr },
+        { event_id: eventId, name: 'Bloco 2 — Tarde (Trios & Grupos)', ordem: 1, cor: '#8b5cf6', data: diaUmStr },
+        { event_id: eventId, name: 'Bloco 3 — Final (Highlights)',     ordem: 2, cor: '#ec4899', data: diaDoisStr },
       ]).select('id, ordem')
 
       if (blocosInseridos && blocosInseridos.length === 3) {
