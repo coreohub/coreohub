@@ -15,6 +15,7 @@ import { supabase } from '../services/supabase';
 import { getAllGenres } from '../services/genreService';
 import { normalizeStyleName, isStyleInList } from '../utils/styleMatch';
 import { resolveEstudio, toTitleCase } from '../utils/formatters';
+import { formatDataBRComDia } from '../utils/lotes';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
 import { EventStyle } from '../types';
 import EventPickerSheet from '../components/EventPickerSheet';
@@ -369,7 +370,7 @@ const JudgesManagement = () => {
 
       const { data: regs } = await supabase
         .from('registrations')
-        .select('id, nome_coreografia, estudio, estilo_danca, ordem_apresentacao, excluded_from_schedule, event_data')
+        .select('id, nome_coreografia, estudio, estilo_danca, ordem_apresentacao, ordem_apresentacao_dia, excluded_from_schedule, event_data')
         .eq('event_id', eventId)
         .or(SCHEDULABLE_REGISTRATIONS_OR_FILTER)
         .order('ordem_apresentacao', { ascending: true });
@@ -431,7 +432,9 @@ const JudgesManagement = () => {
         const head = ['Nº', 'Coreografia', 'Estúdio/Grupo', ...criterios.map(c => `${c.name} (peso ${c.peso})`), 'Nota Final', 'Obs.'];
         const body = queue.length > 0
           ? queue.map((r: any) => [
-              String(r.ordem_apresentacao ?? '—'),
+              // Prefere o número do dia (reinicia por dia, evento multi-dia)
+              // e cai pro global quando o bloco não tem data (evento de 1 dia).
+              String(r.ordem_apresentacao_dia ?? r.ordem_apresentacao ?? '—'),
               r.nome_coreografia ?? '—',
               (r.estudio?.trim?.() || r.event_data?.estudio_nome || '—'),
               ...criterios.map(() => ''),
@@ -500,11 +503,11 @@ const JudgesManagement = () => {
       const [{ data: regs }, { data: blocosData }] = await Promise.all([
         supabase
           .from('registrations')
-          .select('id, nome_coreografia, estudio, estilo_danca, ordem_apresentacao, excluded_from_schedule, bloco_id, event_data')
+          .select('id, nome_coreografia, estudio, estilo_danca, ordem_apresentacao, ordem_apresentacao_dia, excluded_from_schedule, bloco_id, event_data')
           .eq('event_id', eventId)
           .or(SCHEDULABLE_REGISTRATIONS_OR_FILTER)
           .order('ordem_apresentacao', { ascending: true }),
-        supabase.from('cronograma_blocos').select('id, name, ordem').eq('event_id', eventId).order('ordem'),
+        supabase.from('cronograma_blocos').select('id, name, ordem, data').eq('event_id', eventId).order('ordem'),
       ]);
 
       const schedule = (regs ?? []).filter((r: any) => !r.excluded_from_schedule && r.ordem_apresentacao != null);
@@ -529,7 +532,8 @@ const JudgesManagement = () => {
       const maxCols = Math.max(1, ...schedule.map((r: any) => getBanca(r.estilo_danca).length));
 
       type LinhaJurados = {
-        ordem: number; nome: string; estudio: string; estilo: string; blocoName: string;
+        ordem: number; ordemDia: number | null; nome: string; estudio: string; estilo: string;
+        blocoName: string; blocoData: string | null;
         cols: (string | null)[]; mudou: boolean[]; trocou: boolean;
       };
       const linhas: LinhaJurados[] = [];
@@ -557,10 +561,12 @@ const JudgesManagement = () => {
         const bloco = r.bloco_id ? blocosById.get(r.bloco_id) : null;
         linhas.push({
           ordem: r.ordem_apresentacao,
+          ordemDia: r.ordem_apresentacao_dia ?? null,
           nome: toTitleCase(r.nome_coreografia) || '—',
           estudio: toTitleCase(resolveEstudio(r)) || '—',
           estilo: r.estilo_danca || '—',
           blocoName: (bloco as any)?.name || 'Sem bloco',
+          blocoData: (bloco as any)?.data ?? null,
           cols,
           mudou,
           trocou: prevCols !== null && mudou.some(Boolean),
@@ -607,7 +613,9 @@ const JudgesManagement = () => {
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(255, 0, 104);
-        doc.text(blocoName.toUpperCase(), 14, cursorY);
+        const blocoData = grupoLinhas[0]?.blocoData;
+        const headerLabel = blocoData ? `${blocoName.toUpperCase()} · ${formatDataBRComDia(blocoData).toUpperCase()}` : blocoName.toUpperCase();
+        doc.text(headerLabel, 14, cursorY);
         doc.setTextColor(40, 40, 40);
         cursorY += 4;
 
@@ -623,7 +631,7 @@ const JudgesManagement = () => {
             }]);
           }
           body.push([
-            String(r.ordem),
+            String(r.ordemDia ?? r.ordem),
             r.nome,
             r.estudio,
             r.estilo,

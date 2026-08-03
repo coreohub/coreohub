@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Megaphone, ListOrdered, ExternalLink, Clock } from 'lucide-react';
 import type { Announcement, OrdemItem } from '../hooks/useInicioAvisos';
+import { formatDataBRComDia } from '../utils/lotes';
 
 /** Avisos manuais do produtor. Aparece perto do topo da Início — é
  *  informação operacional urgente (mudança de local, atraso), não onboarding. */
@@ -76,7 +77,12 @@ export const OrdemApresentacao: React.FC<{ items: OrdemItem[]; eventTime?: strin
           >
             <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{item.nome}</span>
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 shrink-0">
-              {item.blocoNome ? `${item.blocoNome} · ` : ''}Nº {item.ordem}
+              {item.dia && item.ordemDia != null
+                // Evento de vários dias: mostra o dia + número local do dia
+                // (reinicia em 1 a cada dia), mais amigável que o número
+                // global contínuo — decisão 2026-08-03.
+                ? `${formatDataBRComDia(item.dia)} · Nº ${item.ordemDia}`
+                : `${item.blocoNome ? `${item.blocoNome} · ` : ''}Nº ${item.ordem}`}
             </span>
           </div>
         ))}

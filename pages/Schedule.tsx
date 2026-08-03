@@ -24,6 +24,7 @@ import {
 } from '../services/narrationApi';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
 import { resolveEstudio, toTitleCase, resolveTrilhaUrl } from '../utils/formatters';
+import { formatDataBRComDia } from '../utils/lotes';
 import { isStyleInList } from '../utils/styleMatch';
 
 type AudioSlot = { audio_url: string; duration_seconds: number; voice_id?: string };
@@ -51,6 +52,10 @@ interface Registration {
   status_trilha?: string;
   trilha_url?: string;
   ordem_apresentacao?: number;
+  // Número reiniciado a cada troca de dia (cronograma_blocos.data). Só
+  // exibição — ordenação/busca interna (Terminal, Mesa, jump-to-#N) continua
+  // usando ordem_apresentacao (global). NULL quando o bloco não tem data.
+  ordem_apresentacao_dia?: number | null;
   elenco?: Dancer[];
   formacao?: string;
   estilo_danca?: string;
@@ -61,6 +66,7 @@ interface Registration {
   // Snapshot congelado na última publicação — o que o inscrito vê hoje,
   // independente de quanto o produtor já reorganizou desde então.
   ordem_apresentacao_publicado?: number | null;
+  ordem_apresentacao_dia_publicado?: number | null;
   bloco_id_publicado?: string | null;
   // Wizard atual grava o nome do estúdio aqui (event_data.estudio_nome), não
   // na coluna top-level `estudio` — que fica vazia pra praticamente toda
@@ -74,6 +80,24 @@ interface Bloco {
   name: string;
   ordem: number;
   cor?: string | null;
+  // Dia do festival ao qual este bloco pertence (opcional, 'YYYY-MM-DD').
+  // NULL = evento sem separação por dia (comportamento anterior).
+  data?: string | null;
+}
+
+/** Ordena blocos por dia primeiro (nulls por último, evento sem separação
+ *  por dia fica intacto), `ordem` como desempate dentro do mesmo dia. Usado
+ *  em toda parte que hoje ordena só por `ordem` — Kanban, geração de ordem
+ *  inteligente, cálculo de numeração, modal "Gerenciar blocos" e setas
+ *  mover-pra-cima/baixo — pra garantir que blocos do mesmo dia fiquem
+ *  sempre contíguos visualmente e na numeração. */
+function sortBlocosPorDia(list: Bloco[]): Bloco[] {
+  return [...list].sort((a, b) => {
+    const da = a.data ?? '9999-99-99';
+    const db = b.data ?? '9999-99-99';
+    if (da !== db) return da < db ? -1 : 1;
+    return a.ordem - b.ordem;
+  });
 }
 
 interface Judge {
@@ -598,6 +622,11 @@ const Schedule = () => {
   /* Blocos (Etapa 2 da fusão) */
   const [blocos, setBlocos] = useState<Bloco[]>([]);
   const [showBlocosManager, setShowBlocosManager] = useState(false);
+  // Formulário inline de criar/editar bloco (nome + data opcional) — substitui
+  // os prompt() nativos antigos. `null` = form fechado; `{ id: null, ... }` =
+  // criando; `{ id: <uuid>, ... }` = editando o bloco daquele id.
+  const [blocoForm, setBlocoForm] = useState<{ id: string | null; name: string; data: string } | null>(null);
+  const [savingBlocoForm, setSavingBlocoForm] = useState(false);
   // Picker de bloco por coreografia (substitui select inline em mobile —
   // botao na row abre bottomsheet com lista de blocos pra atribuir).
   const [blocoPickerForReg, setBlocoPickerForReg] = useState<Registration | null>(null);
@@ -1547,29 +1576,44 @@ const Schedule = () => {
   };
 
   // ---------- Blocos: CRUD ----------
-  const handleAddBloco = async () => {
-    if (!selectedEventId) return;
-    const name = prompt('Nome do bloco (ex: "Bloco 1 — Manhã"):')?.trim();
-    if (!name) return;
-    const nextOrdem = blocos.length === 0 ? 0 : Math.max(...blocos.map(b => b.ordem)) + 1;
-    const { data, error } = await supabase
-      .from('cronograma_blocos')
-      .insert({ event_id: selectedEventId, name, ordem: nextOrdem })
-      .select()
-      .single();
-    if (error) { alert('Erro ao criar bloco: ' + error.message); return; }
-    if (data) setBlocos(prev => [...prev, data].sort((a, b) => a.ordem - b.ordem));
-  };
+  // Formulário inline (nome + data opcional) substitui os prompt() nativos
+  // de antes — data é a feature nova (separar numeração por dia), então
+  // merece um campo de verdade em vez de um 2º popup do navegador.
+  const openBlocoFormCreate = () => setBlocoForm({ id: null, name: '', data: '' });
+  const openBlocoFormEdit = (bloco: Bloco) => setBlocoForm({ id: bloco.id, name: bloco.name, data: bloco.data ?? '' });
+  const closeBlocoForm = () => { if (!savingBlocoForm) setBlocoForm(null); };
 
-  const handleRenameBloco = async (bloco: Bloco) => {
-    const novo = prompt('Renomear bloco:', bloco.name)?.trim();
-    if (!novo || novo === bloco.name) return;
-    const { error } = await supabase
-      .from('cronograma_blocos')
-      .update({ name: novo, updated_at: new Date().toISOString() })
-      .eq('id', bloco.id);
-    if (error) { alert('Erro ao renomear: ' + error.message); return; }
-    setBlocos(prev => prev.map(b => b.id === bloco.id ? { ...b, name: novo } : b));
+  const handleSaveBlocoForm = async () => {
+    if (!blocoForm) return;
+    const name = blocoForm.name.trim();
+    if (!name) { alert('Dê um nome ao bloco.'); return; }
+    const data = blocoForm.data.trim() || null;
+    setSavingBlocoForm(true);
+    try {
+      if (blocoForm.id) {
+        const { error } = await supabase
+          .from('cronograma_blocos')
+          .update({ name, data, updated_at: new Date().toISOString() })
+          .eq('id', blocoForm.id);
+        if (error) throw error;
+        setBlocos(prev => prev.map(b => b.id === blocoForm.id ? { ...b, name, data } : b));
+      } else {
+        if (!selectedEventId) return;
+        const nextOrdem = blocos.length === 0 ? 0 : Math.max(...blocos.map(b => b.ordem)) + 1;
+        const { data: created, error } = await supabase
+          .from('cronograma_blocos')
+          .insert({ event_id: selectedEventId, name, data, ordem: nextOrdem })
+          .select()
+          .single();
+        if (error) throw error;
+        if (created) setBlocos(prev => sortBlocosPorDia([...prev, created]));
+      }
+      setBlocoForm(null);
+    } catch (err) {
+      alert('Erro ao salvar bloco: ' + (err as { message?: string })?.message);
+    } finally {
+      setSavingBlocoForm(false);
+    }
   };
 
   const handleDeleteBloco = async (bloco: Bloco) => {
@@ -1586,7 +1630,7 @@ const Schedule = () => {
   };
 
   const handleMoveBloco = async (bloco: Bloco, direction: 'up' | 'down') => {
-    const sorted = [...blocos].sort((a, b) => a.ordem - b.ordem);
+    const sorted = sortBlocosPorDia(blocos);
     const idx = sorted.findIndex(b => b.id === bloco.id);
     const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
     if (targetIdx < 0 || targetIdx >= sorted.length) return;
@@ -1764,7 +1808,7 @@ const Schedule = () => {
     // separadamente (incluindo o "sem bloco" como grupo). Coreografias
     // nunca cruzam fronteira de bloco — produtor faz isso manualmente
     // via dropdown na linha.
-    const sortedBlocos = [...blocos].sort((a, b) => a.ordem - b.ordem);
+    const sortedBlocos = sortBlocosPorDia(blocos);
     const result: Registration[] = [];
     const genOpts = { judgeSignatures: judgeBanca.sigMap, minimizeJudgeChanges };
     for (const bloco of sortedBlocos) {
@@ -1807,28 +1851,44 @@ const Schedule = () => {
     }
   };
 
-  /** Calcula ordem global respeitando blocos: blocos em ordem (bloco.ordem),
-      dentro de cada bloco a ordem visual atual (registrations array).
-      Coreografias sem bloco vão pro final como resíduo. Compartilhado entre
-      "Salvar Ordem" (rascunho, usado ao vivo por Terminal/Telão) e
+  /** Calcula ordem global respeitando blocos: blocos em ordem (dia, depois
+      bloco.ordem), dentro de cada bloco a ordem visual atual (registrations
+      array). Coreografias sem bloco vão pro final como resíduo. Compartilhado
+      entre "Salvar Ordem" (rascunho, usado ao vivo por Terminal/Telão) e
       "Publicar pros inscritos" (snapshot congelado) — ambos precisam do
       mesmo cálculo, já que o array local não guarda ordem_apresentacao
-      atualizado entre um save e outro (só a posição no array importa). */
-  const computeOrderUpdates = (): { id: string; ordem_apresentacao: number; bloco_id: string | null }[] => {
-    const sortedBlocos = [...blocos].sort((a, b) => a.ordem - b.ordem);
-    const updates: { id: string; ordem_apresentacao: number; bloco_id: string | null }[] = [];
+      atualizado entre um save e outro (só a posição no array importa).
+
+      `ordem_apresentacao` continua global e única no evento inteiro — é o
+      que Terminal de Júri/Mesa de Palco/PDFs usam pra ordenar e buscar por
+      número, e resetá-la quebraria essa unicidade. `ordem_apresentacao_dia`
+      é um número só de EXIBIÇÃO que reinicia em 1 a cada troca do `data` do
+      bloco (multi-dia); fica `null` quando o bloco não tem data (evento de
+      1 dia só, comportamento idêntico ao anterior). */
+  const computeOrderUpdates = (): { id: string; ordem_apresentacao: number; ordem_apresentacao_dia: number | null; bloco_id: string | null }[] => {
+    const sortedBlocos = sortBlocosPorDia(blocos);
+    const updates: { id: string; ordem_apresentacao: number; ordem_apresentacao_dia: number | null; bloco_id: string | null }[] = [];
     let globalIdx = 1;
+    let dayIdx = 1;
+    let lastDia: string | null | undefined = undefined;
     for (const bloco of sortedBlocos) {
+      const dia = bloco.data ?? null;
+      if (dia !== lastDia) { dayIdx = 1; lastDia = dia; }
       registrations
         .filter(r => r.bloco_id === bloco.id)
         .forEach(r => {
-          updates.push({ id: r.id, ordem_apresentacao: globalIdx++, bloco_id: bloco.id });
+          updates.push({
+            id: r.id,
+            ordem_apresentacao: globalIdx++,
+            ordem_apresentacao_dia: dia ? dayIdx++ : null,
+            bloco_id: bloco.id,
+          });
         });
     }
     registrations
       .filter(r => !r.bloco_id)
       .forEach(r => {
-        updates.push({ id: r.id, ordem_apresentacao: globalIdx++, bloco_id: null });
+        updates.push({ id: r.id, ordem_apresentacao: globalIdx++, ordem_apresentacao_dia: null, bloco_id: null });
       });
     return updates;
   };
@@ -1852,6 +1912,7 @@ const Schedule = () => {
       const r = byId.get(u.id);
       if (!r) continue;
       if ((r.ordem_apresentacao_publicado ?? null) !== u.ordem_apresentacao ||
+          (r.ordem_apresentacao_dia_publicado ?? null) !== u.ordem_apresentacao_dia ||
           (r.bloco_id_publicado ?? null) !== (u.bloco_id ?? null)) {
         changed++;
       }
@@ -1876,7 +1937,7 @@ const Schedule = () => {
           updates.map(u =>
             supabase
               .from('registrations')
-              .update({ ordem_apresentacao: u.ordem_apresentacao, bloco_id: u.bloco_id })
+              .update({ ordem_apresentacao: u.ordem_apresentacao, ordem_apresentacao_dia: u.ordem_apresentacao_dia, bloco_id: u.bloco_id })
               .eq('id', u.id)
           )
         );
@@ -1912,8 +1973,10 @@ const Schedule = () => {
       const updates = orderUpdates.map(u => ({
         id: u.id,
         ordem_apresentacao: u.ordem_apresentacao,
+        ordem_apresentacao_dia: u.ordem_apresentacao_dia,
         bloco_id: u.bloco_id,
         ordem_apresentacao_publicado: u.ordem_apresentacao,
+        ordem_apresentacao_dia_publicado: u.ordem_apresentacao_dia,
         bloco_id_publicado: u.bloco_id,
       }));
       // UPDATE por linha (paralelo) — mesmo motivo do handleSaveOrder acima:
@@ -1926,8 +1989,10 @@ const Schedule = () => {
               .from('registrations')
               .update({
                 ordem_apresentacao: u.ordem_apresentacao,
+                ordem_apresentacao_dia: u.ordem_apresentacao_dia,
                 bloco_id: u.bloco_id,
                 ordem_apresentacao_publicado: u.ordem_apresentacao_publicado,
+                ordem_apresentacao_dia_publicado: u.ordem_apresentacao_dia_publicado,
                 bloco_id_publicado: u.bloco_id_publicado,
               })
               .eq('id', u.id)
@@ -1950,8 +2015,8 @@ const Schedule = () => {
       setRegistrations(prev => prev.map(r => {
         const u = byId.get(r.id);
         return u
-          ? { ...r, ordem_apresentacao: u.ordem_apresentacao, bloco_id: u.bloco_id,
-              ordem_apresentacao_publicado: u.ordem_apresentacao_publicado, bloco_id_publicado: u.bloco_id_publicado }
+          ? { ...r, ordem_apresentacao: u.ordem_apresentacao, ordem_apresentacao_dia: u.ordem_apresentacao_dia, bloco_id: u.bloco_id,
+              ordem_apresentacao_publicado: u.ordem_apresentacao_publicado, ordem_apresentacao_dia_publicado: u.ordem_apresentacao_dia_publicado, bloco_id_publicado: u.bloco_id_publicado }
           : r;
       }));
       setOrderChanged(false);
@@ -2048,7 +2113,7 @@ const Schedule = () => {
       doc.setFont('helvetica', 'normal');
       doc.text(eventName, pageWidth / 2, 19, { align: 'center' });
 
-      const sortedBlocos = [...blocos].sort((a, b) => a.ordem - b.ordem);
+      const sortedBlocos = sortBlocosPorDia(blocos);
       let cursorY = 36;
 
       const gruposParaExportar: { nome: string; regs: Registration[] }[] = [
@@ -2797,7 +2862,7 @@ const Schedule = () => {
             // Agrupa visualmente: blocos em ordem (bloco.ordem), dentro de cada
             // bloco SortableContext próprio (drag-drop só dentro do bloco). Sem
             // bloco no final como secao "residuo".
-            const sortedBlocos = [...blocos].sort((a, b) => a.ordem - b.ordem);
+            const sortedBlocos = sortBlocosPorDia(blocos);
             let globalIdx = 0;
             const sections: React.ReactNode[] = [];
 
@@ -2839,7 +2904,21 @@ const Schedule = () => {
                 />
               ));
 
+            // Cabeçalho de dia aparece só quando pelo menos 1 bloco tem
+            // `data` — evento de 1 dia sem blocos datados fica idêntico ao
+            // que já era (sem cabeçalho nenhum).
+            let lastDiaRender: string | null | undefined = undefined;
             for (const bloco of sortedBlocos) {
+              if (bloco.data && bloco.data !== lastDiaRender) {
+                lastDiaRender = bloco.data;
+                sections.push(
+                  <div key={`dia-${bloco.data}`} className="pt-4 first:pt-0">
+                    <span className="text-xs font-black uppercase tracking-tighter italic text-slate-700 dark:text-white/70">
+                      📅 {formatDataBRComDia(bloco.data)}
+                    </span>
+                  </div>
+                );
+              }
               const regs = registrations.filter(r => r.bloco_id === bloco.id);
               const startIdx = globalIdx;
               globalIdx += regs.length;
@@ -3112,7 +3191,7 @@ const Schedule = () => {
                 </span>
                 {!blocoPickerForReg.bloco_id && <CheckCircle2 size={14} className="text-[#ff0068]" />}
               </button>
-              {[...blocos].sort((a, b) => a.ordem - b.ordem).map(b => {
+              {sortBlocosPorDia(blocos).map(b => {
                 const active = blocoPickerForReg.bloco_id === b.id;
                 return (
                   <button
@@ -3141,7 +3220,7 @@ const Schedule = () => {
       {showBlocosManager && (
         <div
           className="fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8"
-          onClick={() => setShowBlocosManager(false)}
+          onClick={() => { setShowBlocosManager(false); setBlocoForm(null); }}
         >
           <div
             className="w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl overflow-hidden flex flex-col max-h-[85dvh]"
@@ -3162,7 +3241,7 @@ const Schedule = () => {
                 </div>
               </div>
               <button
-                onClick={() => setShowBlocosManager(false)}
+                onClick={() => { setShowBlocosManager(false); setBlocoForm(null); }}
                 className="p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white rounded-lg"
               >
                 <X size={18} />
@@ -3170,6 +3249,58 @@ const Schedule = () => {
             </div>
 
             <div className="overflow-y-auto p-5 space-y-2">
+              {blocoForm && (
+                <div className="p-4 bg-[#ff0068]/5 border border-[#ff0068]/20 rounded-2xl space-y-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#ff0068]">
+                    {blocoForm.id ? 'Editar bloco' : 'Novo bloco'}
+                  </p>
+                  <div>
+                    <label htmlFor="bloco-form-name" className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-white/40">
+                      Nome
+                    </label>
+                    <input
+                      id="bloco-form-name"
+                      type="text"
+                      autoFocus
+                      value={blocoForm.name}
+                      onChange={e => setBlocoForm(prev => prev ? { ...prev, name: e.target.value } : prev)}
+                      placeholder='Ex: "Bloco 1 — Manhã"'
+                      className="mt-1 w-full px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm font-bold text-slate-900 dark:text-white placeholder:text-slate-300 dark:placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="bloco-form-data" className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-white/40">
+                      Dia do festival (opcional)
+                    </label>
+                    <input
+                      id="bloco-form-data"
+                      type="date"
+                      value={blocoForm.data}
+                      onChange={e => setBlocoForm(prev => prev ? { ...prev, data: e.target.value } : prev)}
+                      className="mt-1 w-full px-3 py-2 bg-white dark:bg-white/5 dark:[color-scheme:dark] border border-slate-200 dark:border-white/10 rounded-xl text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#ff0068]/40"
+                    />
+                    <p className="text-[9px] text-slate-400 dark:text-white/30 mt-1">
+                      Blocos com a mesma data agrupam numa sequência própria de apresentação (Dia 1, Dia 2...). Deixe em branco pra evento de 1 dia só.
+                    </p>
+                  </div>
+                  <div className="flex gap-2 justify-end pt-1">
+                    <button
+                      onClick={closeBlocoForm}
+                      disabled={savingBlocoForm}
+                      className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl disabled:opacity-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleSaveBlocoForm}
+                      disabled={savingBlocoForm || !blocoForm.name.trim()}
+                      className="px-4 py-2 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                    >
+                      {savingBlocoForm ? 'Salvando...' : 'Salvar'}
+                    </button>
+                  </div>
+                </div>
+              )}
               {blocos.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-[11px] text-slate-400 dark:text-white/40 mb-4">
@@ -3177,7 +3308,7 @@ const Schedule = () => {
                   </p>
                 </div>
               ) : (
-                [...blocos].sort((a, b) => a.ordem - b.ordem).map((bloco, idx, arr) => {
+                sortBlocosPorDia(blocos).map((bloco, idx, arr) => {
                   const regsCount = registrations.filter(r => r.bloco_id === bloco.id).length;
                   return (
                     <div
@@ -3193,6 +3324,7 @@ const Schedule = () => {
                         </p>
                         <p className="text-[9px] text-slate-500 dark:text-white/40 mt-0.5">
                           {regsCount} {regsCount === 1 ? 'coreografia' : 'coreografias'}
+                          {bloco.data && <span className="text-[#ff0068]"> · {formatDataBRComDia(bloco.data)}</span>}
                         </p>
                       </div>
                       <button
@@ -3212,9 +3344,9 @@ const Schedule = () => {
                         <ArrowDown size={14} />
                       </button>
                       <button
-                        onClick={() => handleRenameBloco(bloco)}
+                        onClick={() => openBlocoFormEdit(bloco)}
                         className="p-1.5 text-slate-400 hover:text-[#ff0068] hover:bg-[#ff0068]/10 rounded-lg"
-                        title="Renomear"
+                        title="Editar"
                       >
                         <Edit3 size={14} />
                       </button>
@@ -3233,7 +3365,7 @@ const Schedule = () => {
 
             <div className="p-4 border-t border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02]">
               <button
-                onClick={handleAddBloco}
+                onClick={openBlocoFormCreate}
                 disabled={!selectedEventId}
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#ff0068]/20 transition-all disabled:opacity-50"
               >

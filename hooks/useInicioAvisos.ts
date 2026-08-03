@@ -15,6 +15,8 @@ export interface OrdemItem {
   id: string;
   nome: string;
   ordem: number | null;
+  ordemDia: number | null;
+  dia: string | null;
   blocoNome: string | null;
 }
 
@@ -51,7 +53,7 @@ export const useInicioAvisos = (eventId: string | null | undefined, userId: stri
           .eq('active', true)
           .order('created_at', { ascending: false }),
         supabase.from('registrations')
-          .select('id, nome_coreografia, ordem_apresentacao_publicado, bloco_id_publicado')
+          .select('id, nome_coreografia, ordem_apresentacao_publicado, ordem_apresentacao_dia_publicado, bloco_id_publicado')
           .eq('event_id', eventId)
           .eq('user_id', userId)
           .not('ordem_apresentacao_publicado', 'is', null)
@@ -69,17 +71,22 @@ export const useInicioAvisos = (eventId: string | null | undefined, userId: stri
 
       if (regs && regs.length > 0) {
         const blocoIds = [...new Set(regs.map(r => r.bloco_id_publicado).filter(Boolean))] as string[];
-        let blocosMap: Record<string, string> = {};
+        let blocosMap: Record<string, { name: string; data: string | null }> = {};
         if (blocoIds.length > 0) {
-          const { data: blocos } = await supabase.from('cronograma_blocos').select('id, name').in('id', blocoIds);
-          blocosMap = Object.fromEntries((blocos ?? []).map(b => [b.id, b.name]));
+          const { data: blocos } = await supabase.from('cronograma_blocos').select('id, name, data').in('id', blocoIds);
+          blocosMap = Object.fromEntries((blocos ?? []).map(b => [b.id, { name: b.name, data: b.data ?? null }]));
         }
-        setOrdemItems(regs.map(r => ({
-          id: r.id,
-          nome: r.nome_coreografia,
-          ordem: r.ordem_apresentacao_publicado,
-          blocoNome: r.bloco_id_publicado ? blocosMap[r.bloco_id_publicado] ?? null : null,
-        })));
+        setOrdemItems(regs.map(r => {
+          const bloco = r.bloco_id_publicado ? blocosMap[r.bloco_id_publicado] : undefined;
+          return {
+            id: r.id,
+            nome: r.nome_coreografia,
+            ordem: r.ordem_apresentacao_publicado,
+            ordemDia: r.ordem_apresentacao_dia_publicado ?? null,
+            dia: bloco?.data ?? null,
+            blocoNome: bloco?.name ?? null,
+          };
+        }));
       } else {
         setOrdemItems([]);
       }
