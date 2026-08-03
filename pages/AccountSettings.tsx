@@ -6884,7 +6884,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   className={input}
                 />
                 <p className="text-[9px] text-slate-400 mt-1">
-                  {tempValue.min ? `Vazio = "${tempValue.min}+ anos"` : 'Deixe Mín. e Máx. vazios pra "Todas as idades" (ex: Mista, Dança Inclusiva)'}
+                  {tempValue.min !== undefined && tempValue.min !== null && tempValue.min !== ''
+                    ? `Vazio = "${tempValue.min}+ anos"`
+                    : 'Deixe Mín. e Máx. vazios pra "Todas as idades" (ex: Mista, Dança Inclusiva)'}
                 </p>
               </div>
             </div>
