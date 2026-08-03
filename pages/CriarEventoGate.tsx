@@ -8,7 +8,7 @@ import AsaasBadge from '../components/AsaasBadge';
 
 const OnboardingWizard = lazy(() => import('../components/OnboardingWizard'));
 
-type AuthStatus = 'loading' | 'anon' | 'ready';
+type AuthStatus = 'loading' | 'anon' | 'ready' | 'promote_error';
 
 const CriarEventoGate: React.FC = () => {
   const navigate = useNavigate();
@@ -16,6 +16,7 @@ const CriarEventoGate: React.FC = () => {
   const [form, setForm] = useState({ full_name: '', email: '', password: '' });
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [promoteErrorMsg, setPromoteErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const check = async () => {
@@ -36,7 +37,9 @@ const CriarEventoGate: React.FC = () => {
       const avatarFromProvider   = meta.avatar_url ?? meta.picture ?? null;
 
       if (!profile) {
-        // Primeiro login (via Google geralmente) — cria profile com role ORGANIZER
+        // Primeiro login (via Google geralmente) — cria profile com role ORGANIZER.
+        // INSERT não é afetado pelo trigger protect_profiles_privileged_columns
+        // (que só dispara em UPDATE), então funciona direto do client.
         await supabase.from('profiles').insert({
           id:         user.id,
           email:      user.email ?? '',
@@ -44,15 +47,30 @@ const CriarEventoGate: React.FC = () => {
           avatar_url: avatarFromProvider,
           role:       'ORGANIZER',
         });
-      } else {
-        const updates: Record<string, any> = {};
-        if (profile.role !== 'ORGANIZER' && profile.role !== 'COREOHUB_ADMIN') {
-          updates.role = 'ORGANIZER';
-        }
-        if (!profile.full_name && fullNameFromProvider)  updates.full_name  = fullNameFromProvider;
-        if (!profile.avatar_url && avatarFromProvider)   updates.avatar_url = avatarFromProvider;
-        if (Object.keys(updates).length > 0) {
-          await supabase.from('profiles').update(updates).eq('id', user.id);
+        setStatus('ready');
+        return;
+      }
+
+      const updates: Record<string, any> = {};
+      if (!profile.full_name && fullNameFromProvider)  updates.full_name  = fullNameFromProvider;
+      if (!profile.avatar_url && avatarFromProvider)   updates.avatar_url = avatarFromProvider;
+      if (Object.keys(updates).length > 0) {
+        await supabase.from('profiles').update(updates).eq('id', user.id);
+      }
+
+      // Profile já existia (ex: corrida do OAuth criando o profile antes
+      // deste useEffect rodar) — promover role pra ORGANIZER exige a edge
+      // function com service_role, porque um UPDATE direto do client é
+      // revertido silenciosamente pelo trigger de proteção. Bug real
+      // encontrado 2026-08-03 (Lorrayne/Lyris Festival): sem isso, o
+      // produtor criava o evento normalmente mas ficava preso com
+      // role='USER' pra sempre, sem erro visível nenhum.
+      if (profile.role !== 'ORGANIZER' && profile.role !== 'COREOHUB_ADMIN') {
+        const { data, error } = await supabase.functions.invoke('promote-to-organizer');
+        if (error || (data as any)?.error) {
+          setPromoteErrorMsg((data as any)?.error ?? 'Não foi possível ativar sua conta de produtor. Tente de novo ou fale com o suporte.');
+          setStatus('promote_error');
+          return;
         }
       }
       setStatus('ready');
@@ -151,6 +169,26 @@ const CriarEventoGate: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
         <Loader2 size={32} className="animate-spin text-[#ff0068]" />
+      </div>
+    );
+  }
+
+  if (status === 'promote_error') {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 rounded-3xl p-6 space-y-4 text-center">
+          <AlertCircle size={32} className="mx-auto text-rose-500" />
+          <h1 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white">
+            Não deu pra ativar sua conta de produtor
+          </h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{promoteErrorMsg}</p>
+          <button
+            onClick={() => { setStatus('loading'); window.location.reload(); }}
+            className="w-full py-3 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-xl font-black text-sm uppercase tracking-widest"
+          >
+            Tentar de novo
+          </button>
+        </div>
       </div>
     );
   }
