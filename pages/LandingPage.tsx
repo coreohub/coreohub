@@ -355,10 +355,10 @@ const LandingPage = () => {
       <FeatureSection
         reverse
         kicker="Certificado"
-        title={<>Certificado com QR.<br /><span className="text-[#ff0068]">Ninguém falsifica, ninguém digita.</span></>}
-        body="Assim que o resultado é publicado, cada bailarino recebe o certificado automaticamente — com QR code de validação pública. Qualquer pessoa pode escanear e confirmar que é oficial. Acabou o certificado por certificado, à mão."
+        title={<>Certificado digital com QR.<br /><span className="text-[#ff0068]">Ninguém falsifica, ninguém digita.</span></>}
+        body="Assim que o resultado é publicado, cada bailarino recebe o certificado digital automaticamente — com QR code de validação pública. Qualquer pessoa pode escanear e confirmar que é oficial. Acabou o certificado por certificado, à mão."
         bullets={[
-          'Gerado e enviado automaticamente após o resultado',
+          'Certificado digital gerado e enviado automaticamente',
           'QR de validação pública — confirma autenticidade em segundos',
           'Modelo com identidade do seu festival',
           'Zero digitação, zero fila no fim do evento',
