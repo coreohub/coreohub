@@ -317,41 +317,13 @@ const LandingPage = () => {
           'Notificação automática pro inscrito (passou / não passou)',
         ]}
         mockup={
-          <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between p-3 border-b border-white/10 bg-slate-950">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Seletiva de Vídeo · 14 pendentes</span>
-              <span className="text-[9px] font-black uppercase tracking-widest text-amber-400">Período aberto</span>
-            </div>
-            <div className="p-4 space-y-3">
-              {[
-                { name: 'Arabesque Neoclássico', who: 'Luiza Moraes · Solo · Infantil', color: 'bg-white/5 border-white/10', badge: null },
-                { name: 'Carmen Reinventada', who: 'Cia Étoile · Grupo · Juvenil', color: 'bg-emerald-500/10 border-emerald-500/30', badge: { label: 'Aprovado', cls: 'text-emerald-400' } },
-                { name: 'Bolero em 7/8', who: 'Pedro & Ana · Duo · Adulto', color: 'bg-rose-500/10 border-rose-500/30', badge: { label: 'Reprovado', cls: 'text-rose-400' } },
-              ].map((s, i) => (
-                <div key={i} className={`border rounded-xl p-3 ${s.color}`}>
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-xs font-bold text-white">{s.name}</p>
-                    {s.badge && <span className={`text-[9px] font-black uppercase tracking-wider ${s.badge.cls}`}>{s.badge.label}</span>}
-                  </div>
-                  <p className="text-[10px] text-slate-500">{s.who}</p>
-                  {i === 0 && (
-                    <div className="flex gap-2 mt-2">
-                      {['Aprovar', 'Cond.', 'Reprovar'].map((btn, j) => (
-                        <button key={j} className={`px-2 py-1 rounded text-[9px] font-black uppercase ${
-                          j === 0 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                          j === 2 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
-                          'bg-white/5 text-slate-400 border border-white/10'
-                        }`}>{btn}</button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center justify-between">
-                <span className="text-[10px] text-slate-400">Notificações enviadas automaticamente</span>
-                <span className="text-[10px] font-black text-emerald-400">✓ 8 aprovados</span>
-              </div>
-            </div>
+          <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-white/10">
+            <img
+              src="/seletiva-video-nova.webp"
+              alt="Painel de revisão de vídeo da Seletiva de Vídeo CoreoHub, com botões de aprovar, condicional e reprovar"
+              className="w-full h-auto block object-cover object-center"
+              loading="lazy"
+            />
           </div>
         }
       />
@@ -372,6 +344,30 @@ const LandingPage = () => {
             <img
               src="/jurada-tablet-nova.webp"
               alt="Jurada com microfone avaliando no tablet durante apresentação de dança"
+              className="w-full h-auto block object-cover object-center"
+              loading="lazy"
+            />
+          </div>
+        }
+      />
+
+      {/* ─── 6.7. CERTIFICADO ──────────────────────────────────────────────── */}
+      <FeatureSection
+        reverse
+        kicker="Certificado"
+        title={<>Certificado com QR.<br /><span className="text-[#ff0068]">Ninguém falsifica, ninguém digita.</span></>}
+        body="Assim que o resultado é publicado, cada bailarino recebe o certificado automaticamente — com QR code de validação pública. Qualquer pessoa pode escanear e confirmar que é oficial. Acabou o certificado por certificado, à mão."
+        bullets={[
+          'Gerado e enviado automaticamente após o resultado',
+          'QR de validação pública — confirma autenticidade em segundos',
+          'Modelo com identidade do seu festival',
+          'Zero digitação, zero fila no fim do evento',
+        ]}
+        mockup={
+          <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-white/10">
+            <img
+              src="/certificado-nova.webp"
+              alt="Mão segurando certificado de participação CoreoHub com QR code de validação pública"
               className="w-full h-auto block object-cover object-center"
               loading="lazy"
             />
