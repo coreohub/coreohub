@@ -1027,7 +1027,7 @@ const JudgesManagement = () => {
               Válido só pra: {events.find(e => e.id === selectedEventId)?.name ?? '—'}
             </p>
             <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-              Peça pro jurado abrir <span className="font-bold">app.coreohub.com/entrar-juri</span> e digitar o código — ou escanear o QR, que abre o mesmo link com o código já preenchido.
+              Peça pro jurado abrir <a href="/entrar-juri" target="_blank" rel="noopener noreferrer" className="font-bold text-[#ff0068] hover:underline">app.coreohub.com/entrar-juri</a> e digitar o código — ou escanear o QR, que abre o mesmo link com o código já preenchido.
             </p>
             <p className="text-[10px] text-slate-400 mt-1">
               Ao entrar, o jurado vai ver os botões <strong className="text-slate-500 dark:text-slate-300">"Instalar app"</strong> (salva na tela do dispositivo) e <strong className="text-slate-500 dark:text-slate-300">"Configurar como Terminal"</strong> (fixa o tablet nessa tela pras próximas vezes).
