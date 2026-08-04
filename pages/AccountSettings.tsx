@@ -35,6 +35,7 @@ import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus
 import InstallPWAButton from '../components/InstallPWAButton';
 import { previewNarration, fetchNarrationAudios, type NarrationKind } from '../services/narrationApi';
 import { fetchUfList, fetchCitiesByUf, parseCityUf, type UfOption } from '../services/ibgeLocation';
+import CitySearchSelect from '../components/CitySearchSelect';
 
 const MAX_DOC_SIZE_MB = 10;
 const MAX_DOC_SIZE_BYTES = MAX_DOC_SIZE_MB * 1024 * 1024;
@@ -2827,27 +2828,16 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                             </option>
                           ))}
                         </select>
-                        <select
+                        <CitySearchSelect
                           value={selectedCity}
-                          onChange={e => setSelectedCity(e.target.value)}
-                          disabled={!selectedUf || cityListLoading}
+                          onChange={setSelectedCity}
+                          options={unmatchedCity ? [unmatchedCity, ...cityList] : cityList}
+                          disabled={!selectedUf}
+                          loading={cityListLoading}
+                          placeholder={selectedUf ? 'Digite pra buscar a cidade' : 'Escolha o estado primeiro'}
                           className={`${input} disabled:opacity-50 disabled:cursor-not-allowed`}
                           aria-label="Cidade"
-                        >
-                          <option value="" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
-                            {cityListLoading ? 'Carregando cidades...' : selectedUf ? 'Selecione a cidade' : 'Escolha o estado primeiro'}
-                          </option>
-                          {unmatchedCity && (
-                            <option value={unmatchedCity} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
-                              {unmatchedCity} (valor atual)
-                            </option>
-                          )}
-                          {cityList.map(name => (
-                            <option key={name} value={name} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
-                              {name}
-                            </option>
-                          ))}
-                        </select>
+                        />
                       </div>
                     )}
                     {cityListError && (

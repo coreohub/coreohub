@@ -4,6 +4,7 @@ import imageCompression from 'browser-image-compression';
 import { supabase } from '../services/supabase';
 import { fetchUfList, fetchCitiesByUf, parseCityUf, type UfOption } from '../services/ibgeLocation';
 import PageHeader from '../components/PageHeader';
+import CitySearchSelect from '../components/CitySearchSelect';
 import {
   User, Phone, MapPin, Save, Loader2,
   CheckCircle, AlertCircle, CreditCard, Music2,
@@ -464,27 +465,16 @@ const MeuPerfil = () => {
                     </option>
                   ))}
                 </select>
-                <select
+                <CitySearchSelect
                   value={selectedCity}
-                  onChange={e => setSelectedCity(e.target.value)}
-                  disabled={!selectedUf || cityListLoading}
+                  onChange={setSelectedCity}
+                  options={unmatchedCity ? [unmatchedCity, ...cityList] : cityList}
+                  disabled={!selectedUf}
+                  loading={cityListLoading}
+                  placeholder={selectedUf ? 'Digite pra buscar a cidade' : 'Escolha o estado primeiro'}
                   className={inputClass('disabled:opacity-50 disabled:cursor-not-allowed')}
                   aria-label="Cidade"
-                >
-                  <option value="" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
-                    {cityListLoading ? 'Carregando cidades...' : selectedUf ? 'Selecione a cidade' : 'Escolha o estado primeiro'}
-                  </option>
-                  {unmatchedCity && (
-                    <option value={unmatchedCity} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
-                      {unmatchedCity} (valor atual)
-                    </option>
-                  )}
-                  {cityList.map(name => (
-                    <option key={name} value={name} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
-                      {name}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
             )}
             {cityListError && (

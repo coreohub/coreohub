@@ -28,6 +28,7 @@ import { maskTempo, parseTempoSegundos, formatTempo, maskedChange } from '../uti
 import { readAudioDuration } from '../utils/audioDuration';
 import { UF_LIST, fetchMunicipios } from '../utils/ibge';
 import TrackDurationBadge from '../components/TrackDurationBadge';
+import CitySearchSelect from '../components/CitySearchSelect';
 import StaffTecnicoEditor, { StaffTecnicoValue } from '../components/StaffTecnicoEditor';
 import { trackViewEvent } from '../services/producerAnalytics';
 import ProducerPixels from '../components/ProducerPixels';
@@ -1498,18 +1499,16 @@ const InscricaoWizard: React.FC = () => {
               <div className="sm:col-span-2">
                 <label htmlFor="estudio-cidade" className={labelCls}>Cidade do estúdio</label>
                 {municipios.length > 0 ? (
-                  <select
+                  <CitySearchSelect
                     id="estudio-cidade"
                     value={data.estudio_cidade}
-                    onChange={e => setData(d => ({ ...d, estudio_cidade: e.target.value }))}
+                    onChange={cidade => setData(d => ({ ...d, estudio_cidade: cidade }))}
+                    options={municipios}
                     disabled={!data.estudio_uf}
+                    placeholder="Digite pra buscar a cidade"
                     className={inputCls}
-                  >
-                    <option value="">—</option>
-                    {municipios.map(cidade => (
-                      <option key={cidade} value={cidade}>{cidade}</option>
-                    ))}
-                  </select>
+                    aria-label="Cidade do estúdio"
+                  />
                 ) : (
                   <input
                     id="estudio-cidade"
