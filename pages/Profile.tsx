@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import imageCompression from 'browser-image-compression';
 import { supabase } from '../services/supabase';
+import { fetchUfList, fetchCitiesByUf, parseCityUf, type UfOption } from '../services/ibgeLocation';
 import PageHeader from '../components/PageHeader';
 import {
   User, Phone, MapPin, Save, Loader2,
@@ -107,6 +108,21 @@ const MeuPerfil = () => {
   const [error, setError]           = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const fileInputRef                = useRef<HTMLInputElement | null>(null);
+
+  /* ── Cidade/UF via IBGE (mesmo padrão de Configurações → Geral — antes
+     era texto livre, gerava divergência de digitação). `form.location`
+     continua sendo a fonte salva ("Cidade, UF" combinado). ── */
+  const [ufList, setUfList]             = useState<UfOption[]>([]);
+  const [ufListError, setUfListError]   = useState(false);
+  const [cityList, setCityList]         = useState<string[]>([]);
+  const [cityListLoading, setCityListLoading] = useState(false);
+  const [cityListError, setCityListError]     = useState(false);
+  const [selectedUf, setSelectedUf]     = useState('');
+  const [selectedCity, setSelectedCity] = useState('');
+  // Valor antigo que não bate com nenhuma cidade da lista oficial do UF —
+  // mantido visível como opção extra pra não apagar dado do user.
+  const [unmatchedCity, setUnmatchedCity] = useState('');
+  const locationHydrated = useRef(false);
 
   /* ── Edição de email (auth.users) ── */
   const [editingEmail, setEditingEmail]   = useState(false);
@@ -215,11 +231,48 @@ const MeuPerfil = () => {
           dance_role: data.dance_role || '',
           avatar_url: data.avatar_url || '',
         });
+        const parsed = parseCityUf(data.location || '');
+        setSelectedUf(parsed.uf);
+        setSelectedCity(parsed.city);
       }
+      locationHydrated.current = true;
       setLoading(false);
     };
     load();
   }, []);
+
+  useEffect(() => {
+    fetchUfList().then(setUfList).catch(() => setUfListError(true));
+  }, []);
+
+  useEffect(() => {
+    if (!selectedUf) { setCityList([]); setUnmatchedCity(''); return; }
+    setCityListLoading(true);
+    setCityListError(false);
+    fetchCitiesByUf(selectedUf)
+      .then(names => {
+        setCityList(names);
+        setUnmatchedCity(
+          selectedCity && !names.some(n => n.toLowerCase() === selectedCity.toLowerCase())
+            ? selectedCity
+            : ''
+        );
+      })
+      .catch(() => setCityListError(true))
+      .finally(() => setCityListLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedUf]);
+
+  useEffect(() => {
+    // Aguarda o load() inicial terminar de hidratar os selects a partir do
+    // profile carregado, senão sobrescreve form.location com string vazia
+    // antes da 1ª leitura do banco terminar.
+    if (!locationHydrated.current) return;
+    const uf = selectedUf.trim();
+    const city = selectedCity.trim();
+    if (!city) return;
+    setForm(f => ({ ...f, location: uf ? `${city}, ${uf}` : city }));
+  }, [selectedCity, selectedUf]);
 
   const set = (key: keyof FormState) => (val: string) =>
     setForm(f => ({ ...f, [key]: val }));
@@ -389,10 +442,56 @@ const MeuPerfil = () => {
 
           <div>
             <label className={labelClass}><MapPin size={10} /> Cidade / Estado</label>
-            <input type="text" value={form.location}
-              onChange={e => set('location')(e.target.value)}
-              placeholder="São Paulo, SP"
-              className={inputClass()} />
+            {ufListError ? (
+              // Fallback se a API do IBGE estiver fora do ar — não trava o
+              // user, volta pro texto livre de sempre.
+              <input type="text" value={form.location}
+                onChange={e => set('location')(e.target.value)}
+                placeholder="São Paulo, SP"
+                className={inputClass()} />
+            ) : (
+              <div className="grid grid-cols-[76px_1fr] gap-2">
+                <select
+                  value={selectedUf}
+                  onChange={e => { setSelectedUf(e.target.value); setSelectedCity(''); }}
+                  className={inputClass()}
+                  aria-label="Estado (UF)"
+                >
+                  <option value="" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">UF</option>
+                  {ufList.map(uf => (
+                    <option key={uf.sigla} value={uf.sigla} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                      {uf.sigla}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={selectedCity}
+                  onChange={e => setSelectedCity(e.target.value)}
+                  disabled={!selectedUf || cityListLoading}
+                  className={inputClass('disabled:opacity-50 disabled:cursor-not-allowed')}
+                  aria-label="Cidade"
+                >
+                  <option value="" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                    {cityListLoading ? 'Carregando cidades...' : selectedUf ? 'Selecione a cidade' : 'Escolha o estado primeiro'}
+                  </option>
+                  {unmatchedCity && (
+                    <option value={unmatchedCity} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                      {unmatchedCity} (valor atual)
+                    </option>
+                  )}
+                  {cityList.map(name => (
+                    <option key={name} value={name} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {cityListError && (
+              <p className="text-[9px] text-amber-500 mt-1">
+                Não consegui carregar as cidades desse estado agora. Tente de novo em instantes.
+              </p>
+            )}
           </div>
 
           {/* E-mail (auth) — alteração requer confirmação por link */}
