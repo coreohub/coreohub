@@ -62,6 +62,7 @@ const Festivais = () => {
           .from('events')
           .select('id, slug, name, description, cover_url, start_date, end_date, location, city, state, formacoes_config, edition_year, is_public')
           .eq('is_public', true)
+          .eq('is_demo', false)
           .order('start_date', { ascending: false });
         if (error) throw error;
         // Achado do produtor (2026-07-17): todo evento nasce is_public=true
