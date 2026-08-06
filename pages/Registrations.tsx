@@ -10,7 +10,7 @@ import {
   BarChart3, MessageCircle, Link2,
 } from 'lucide-react';
 import { isRegistrationPaid } from '../utils/registrationStatus';
-import { toTitleCase, resolveTrilhaUrl } from '../utils/formatters';
+import { toTitleCase, resolveTrilhaUrl, formatCategoriaAbbrev } from '../utils/formatters';
 import { supabase, supabaseUrl } from '../services/supabase';
 import { trackFeatureUsed } from '../services/appAnalytics';
 import { motion, AnimatePresence } from 'motion/react';
@@ -1671,7 +1671,7 @@ const Registrations = () => {
                     {reg.categoria && (
                       <div className="min-w-0">
                         <p className="text-slate-400 uppercase tracking-widest font-bold text-[9px]">Categoria</p>
-                        <p className="text-slate-700 dark:text-slate-300 font-bold truncate">{reg.categoria}</p>
+                        <p className="text-slate-700 dark:text-slate-300 font-bold truncate">{reg.formato_participacao ? `${reg.formato_participacao} · ` : ''}{formatCategoriaAbbrev(reg.categoria)}</p>
                       </div>
                     )}
                     {reg.created_at && (
@@ -1842,14 +1842,23 @@ const Registrations = () => {
                     <td className="px-4 sm:px-8 py-6">
                       <p className="font-black text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-[#ff0068] transition-colors">{reg.nome_coreografia}</p>
                       <p className="text-[9px] text-[#ff0068] font-bold uppercase tracking-widest">{reg.tipo_apresentacao}</p>
-                      {/* Mostra estúdio + categoria em mobile (colunas escondidas em <md/<lg) */}
-                      <p className="text-[10px] text-slate-500 mt-1 md:hidden">{toTitleCase(reg.estudio)}{reg.categoria ? ` · ${reg.categoria}` : ''}</p>
+                      {/* Mostra estúdio + formação + categoria em mobile (colunas escondidas em <md/<lg) */}
+                      <p className="text-[10px] text-slate-500 mt-1 md:hidden">{toTitleCase(reg.estudio)}{reg.formato_participacao ? ` · ${reg.formato_participacao}` : ''}{reg.categoria ? ` · ${formatCategoriaAbbrev(reg.categoria)}` : ''}</p>
                     </td>
                     <td className="px-4 sm:px-8 py-6 text-xs font-bold text-slate-700 dark:text-slate-200 hidden lg:table-cell truncate max-w-[160px]">
                       {toTitleCase(reg.inscrito_nome ?? reg.profiles?.full_name) || <span className="text-slate-400 font-normal">—</span>}
                     </td>
                     <td className="px-4 sm:px-8 py-6 text-xs font-bold text-slate-600 dark:text-slate-300 hidden md:table-cell">{toTitleCase(reg.estudio)}</td>
-                    <td className="px-4 sm:px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest hidden xl:table-cell">{reg.categoria}</td>
+                    <td className="px-4 sm:px-8 py-6 hidden xl:table-cell">
+                      {/* Padrão brasileiro (Joinville, Grand Prix): Formação +
+                          Categoria, ex. "Solo · Amador 17+" — não a ordem
+                          americana "Category + Format". Formação em destaque,
+                          categoria abreviada por baixo (Pencil & Paper data
+                          table pattern: primário forte, secundário reduzido,
+                          sem abrir coluna nova numa tabela já cheia). */}
+                      <p className="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest">{reg.formato_participacao || '—'}</p>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{formatCategoriaAbbrev(reg.categoria)}</p>
+                    </td>
                     <td className="px-4 sm:px-8 py-6 text-[10px] text-slate-500 hidden xl:table-cell whitespace-nowrap">
                       {reg.created_at ? new Date(reg.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
                     </td>

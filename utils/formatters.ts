@@ -128,6 +128,37 @@ export const slugifyFilename = (value: string): string =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'certificado';
 
+/**
+ * Categoria é texto livre digitado pelo produtor por evento (ex: "Melhor
+ * idade – a partir de 55 anos"). Pra caber numa coluna de tabela sem virar
+ * bloco de texto, extrai o nome e comprime a faixa etária: "a partir de X
+ * anos" → "X+" (convenção de mercado BR/IBGE, não "+X"), "de X a Y anos" →
+ * "X-Y". Sem faixa numérica reconhecível (ex: "Mista - grupo de faixas
+ * etárias variadas"), mostra só o nome — nunca o texto livre inteiro.
+ * Usada junto com formato_participacao (Solo/Duo/Conjunto) pra formar a
+ * "classe de disputa" no padrão brasileiro Formação + Categoria (ex: "Solo
+ * Amador"), confirmado via regulamento real do Festival de Dança de
+ * Joinville — o inverso do padrão americano "Category + Format".
+ */
+export const formatCategoriaAbbrev = (categoria?: string | null): string => {
+  if (!categoria) return '';
+  const m = categoria.match(/^(.*?)\s+[-–]\s*(.+)$/);
+  const nome = toTitleCase((m ? m[1] : categoria).trim());
+  const resto = (m ? m[2] : '').trim();
+  if (!resto) return nome;
+
+  const aPartir = resto.match(/a partir de\s*(\d+)/i);
+  if (aPartir) return `${nome} ${aPartir[1]}+`;
+
+  const faixa = resto.match(/de\s*(\d+)\s*a\s*(\d+)\s*anos/i);
+  if (faixa) {
+    const minutos = resto.match(/até\s*(\d+)\s*min/i);
+    return minutos ? `${nome} ${faixa[1]}-${faixa[2]} · até ${minutos[1]}min` : `${nome} ${faixa[1]}-${faixa[2]}`;
+  }
+
+  return nome;
+};
+
 export const getInitials = (name?: string) => {
   if (!name || typeof name !== 'string' || name.trim() === '') return 'U';
   const filteredParts = name.trim().split(/\s+/).filter(p => p.length > 0);
