@@ -143,6 +143,19 @@ const COREOGRAFIAS: CoreoSpec[] = [
   { nome: 'Quebrada Style', estilo: 'Dança Urbana' },
   { nome: 'Funk Rio', estilo: 'Dança Urbana' },
   { nome: 'Voltage', estilo: 'Dança Urbana' },
+  // Dança do Ventre (2) — gênero real de mercado (visto em evento real,
+  // Ballet Ana Rennó/Usualdance), ausente do demo até 2026-08-06.
+  { nome: 'Sob o Véu', estilo: 'Dança do Ventre' },
+  { nome: 'Oásis do Deserto', estilo: 'Dança do Ventre' },
+  // Estilo Livre — subgênero "categoria livre" (pula Eixo Etário no
+  // checkout), gênero mais usado em festivais BR reais mas nunca
+  // representado no demo.
+  { nome: 'Sem Fronteiras', estilo: 'Estilo Livre' },
+  { nome: 'Fusão de Mundos', estilo: 'Estilo Livre' },
+  // Dança Inclusiva (PCD) — vários festivais BR grandes (ex: FEDANVI São
+  // Vicente) têm trilha própria de dança em cadeira de rodas.
+  { nome: 'Movimento Livre', estilo: 'Dança Inclusiva (PCD)' },
+  { nome: 'Roda da Vida', estilo: 'Dança Inclusiva (PCD)' },
 ]
 
 // Coreografias adicionais pra Seletiva de Vídeo (pendentes de aprovacao do produtor)
@@ -239,8 +252,75 @@ const DEMO_PROGRAMACAO = [
   { hora: '23:00', atividade: 'Festa de encerramento do 1º dia — open bar até 1h' },
 ]
 
-const CATEGORIAS = ['Infantil', 'Juvenil', 'Adulto', 'Profissional']
-const FORMACOES = ['Solo', 'Duo', 'Trio', 'Grupo']
+// Faixas etárias reais de festivais BR grandes (Joinville/São Vicente/Mery
+// Rosa, pesquisa 2026-08-06) — Bheto real (Usualdance) usa Baby Class e
+// Melhor Idade sem max (min:55, sem teto), Mista sem min/max nenhum (é
+// exatamente como a config real dele guarda no banco). "Profissional" saiu
+// (nunca usado nos festivais BR pesquisados como categoria etária — Amador/
+// Profissional é nível técnico, não idade) e virou "Adulto" mais amplo.
+const CATEGORIAS_DEF: { name: string; min?: number; max?: number }[] = [
+  { name: 'Baby Class',   min: 3,  max: 6 },
+  { name: 'Infantil',     min: 7,  max: 12 },
+  { name: 'Juvenil',      min: 13, max: 16 },
+  { name: 'Adulto',       min: 17, max: 39 },
+  { name: 'Melhor Idade', min: 55 },
+  { name: 'Mista' },
+]
+const CATEGORIAS = CATEGORIAS_DEF.map(c => c.name)
+// PCD não entra aqui de propósito — não é faixa etária, é gênero (ver
+// GENEROS_SUBGENEROS abaixo, "Dança Inclusiva (PCD)"), igual o mercado BR
+// real trata (São Vicente/FEDANVI modela como gênero, não categoria).
+const FORMACOES = ['Solo', 'Duo', 'Trio', 'Quarteto', 'Grupo', 'Conjunto']
+
+// Gêneros + Subgêneros reais (Eixo Técnico) — pesquisa 2026-08-06 em
+// regulamentos de Joinville/São Vicente/Mery Rosa. Até 2026-08-06 o demo
+// nunca gravava a tabela `event_styles` de verdade (só uma lista solta de
+// strings em `configuracoes.estilos`) — o produto tem a arquitetura de 3
+// eixos pronta (genreService.ts) e o demo não mostrava ela funcionando.
+// is_categoria_livre:true pula o Eixo Etário no checkout (Estilo Livre e
+// Dança Inclusiva não têm faixa etária fixa no mercado real).
+// allow_shorter_track:true ignora duração mínima de trilha (Balé de
+// Repertório — mesmo padrão do evento real do Bheto, corrigido em 2026-07-17).
+const GENEROS_SUBGENEROS: { name: string; subgeneros: { name: string; is_categoria_livre?: boolean; allow_shorter_track?: boolean }[] }[] = [
+  {
+    name: 'Ballet Clássico',
+    subgeneros: [
+      { name: 'Variação Feminina' },
+      { name: 'Variação Masculina' },
+      { name: 'Pas de Deux' },
+      { name: 'Grand Pas de Deux' },
+      { name: 'Balé de Repertório', allow_shorter_track: true },
+    ],
+  },
+  { name: 'Jazz', subgeneros: [] },
+  { name: 'Contemporâneo', subgeneros: [] },
+  {
+    name: 'Hip Hop',
+    subgeneros: [
+      { name: 'Old School' },
+      { name: 'Breaking' },
+      { name: 'Locking' },
+      { name: 'Popping' },
+    ],
+  },
+  {
+    name: 'Dança Urbana',
+    subgeneros: [
+      { name: 'Funk' },
+      { name: 'House Dance' },
+      { name: 'Waacking' },
+    ],
+  },
+  { name: 'Dança do Ventre', subgeneros: [] },
+  {
+    name: 'Estilo Livre',
+    subgeneros: [{ name: 'Estilo Livre e suas vertentes', is_categoria_livre: true }],
+  },
+  {
+    name: 'Dança Inclusiva (PCD)',
+    subgeneros: [{ name: 'Cadeira de Rodas', is_categoria_livre: true }],
+  },
+]
 
 // ─── Workshops (Etapa 1) ──────────────────────────────────────────────────
 // Mix de workshops pra cobrir os 3 modos de pricing + standalone:
@@ -440,12 +520,15 @@ const randomNomeCompleto = (genFem = Math.random() < 0.6): string => {
   const last2 = Math.random() < 0.4 ? ' ' + pick(SOBRENOMES) : ''
   return `${first} ${last1}${last2}`
 }
+const VALOR_POR_FORMATO: Record<string, number> = { Solo: 80, Duo: 120, Trio: 150, Quarteto: 180, Grupo: 200, Conjunto: 280 }
 const formacaoSize = (formacao: string): number => {
   switch (formacao) {
     case 'Solo': return 1
     case 'Duo':  return 2
     case 'Trio': return 3
-    case 'Grupo': return 5 + Math.floor(Math.random() * 6) // 5-10
+    case 'Quarteto': return 4
+    case 'Grupo': return 5 + Math.floor(Math.random() * 4) // 5-8
+    case 'Conjunto': return 9 + Math.floor(Math.random() * 6) // 9-14
     default: return 1
   }
 }
@@ -473,10 +556,12 @@ const generateValidCpf = (): string => {
 // Usa today menos N anos pra cobrir min/max age. Retorna ISO YYYY-MM-DD.
 const generateBirthDate = (categoria: string): string => {
   const ranges: Record<string, [number, number]> = {
-    'Infantil':     [6, 11],
-    'Juvenil':      [12, 17],
-    'Adulto':       [18, 35],
-    'Profissional': [22, 45],
+    'Baby Class':   [3, 6],
+    'Infantil':     [7, 12],
+    'Juvenil':      [13, 16],
+    'Adulto':       [17, 39],
+    'Melhor Idade': [55, 80],
+    'Mista':        [8, 60],
   }
   const [minAge, maxAge] = ranges[categoria] ?? [10, 30]
   const age = minAge + Math.floor(Math.random() * (maxAge - minAge + 1))
@@ -783,10 +868,12 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       criterios: CRITERIOS_PADRAO,
     }))
 
-    const categorias = CATEGORIAS.map((nome, i) => ({
-      name: nome,
-      min: i === 0 ? 5 : i === 1 ? 12 : i === 2 ? 18 : 30,
-      max: i === 0 ? 11 : i === 1 ? 17 : i === 2 ? 29 : null,
+    // Mesmo shape das categorias reais do Bheto (Usualdance) — omite min/max
+    // quando a categoria não tem faixa fixa (Mista) em vez de forçar null.
+    const categorias = CATEGORIAS_DEF.map(c => ({
+      name: c.name,
+      ...(c.min !== undefined ? { min: c.min } : {}),
+      ...(c.max !== undefined ? { max: c.max } : {}),
     }))
 
     // 3 lotes com virada de data pra demonstrar pricing em ondas:
@@ -798,8 +885,8 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
     const lote3Virada = new Date(today.getTime() + 20 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     const precoBase = (f: string) => f === 'Solo' ? 80 : f === 'Duo' ? 60 : 50
     const sizeFor = (f: string) => {
-      const min = f === 'Solo' ? 1 : f === 'Duo' ? 2 : f === 'Trio' ? 3 : 5
-      const max = f === 'Solo' ? 1 : f === 'Duo' ? 2 : f === 'Trio' ? 3 : 50
+      const min = f === 'Solo' ? 1 : f === 'Duo' ? 2 : f === 'Trio' ? 3 : f === 'Quarteto' ? 4 : f === 'Grupo' ? 5 : 9
+      const max = f === 'Solo' ? 1 : f === 'Duo' ? 2 : f === 'Trio' ? 3 : f === 'Quarteto' ? 4 : f === 'Grupo' ? 8 : 50
       return { min, max }
     }
     const formatos = FORMACOES.map(f => {
@@ -899,6 +986,22 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
 
     // Espelha formacoes_config em events (algumas telas leem dali)
     await supa.from('events').update({ formacoes_config: formatos }).eq('id', eventId)
+
+    // Eixo Técnico de verdade — grava Gênero + Subgênero na tabela real
+    // event_styles (genreService.ts), não só a lista solta em
+    // configuracoes.estilos (usada só pra critérios de avaliação por nome).
+    // Até 2026-08-06 o demo nunca populava isso — a UI de Gêneros/Subgêneros
+    // (AccountSettings → Avaliação) sempre aparecia vazia no demo.
+    const eventStylesToInsert = GENEROS_SUBGENEROS.map(g => ({
+      event_id: eventId,
+      name: g.name,
+      sub_types: g.subgeneros,
+      is_active: true,
+      requires_subcategory: g.subgeneros.length > 0,
+      created_by: user.id,
+    }))
+    const { error: stylesErr } = await supa.from('event_styles').insert(eventStylesToInsert)
+    if (stylesErr) console.warn('Falha ao inserir event_styles demo:', stylesErr.message)
 
     // 4) Inserir 3 jurados (com PINs e is_active)
     // judges schema (atualizado em 20260514): tem mini_bio, avatar_url,
@@ -1015,7 +1118,7 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       // 90% CONFIRMADO, 10% PENDENTE
       const status_pagamento = Math.random() < 0.9 ? 'CONFIRMADO' : 'PENDENTE'
 
-      const valor_pago = formato === 'Solo' ? 80 : formato === 'Duo' ? 120 : formato === 'Trio' ? 150 : 200
+      const valor_pago = VALOR_POR_FORMATO[formato] ?? 200
 
       // Trilha sonora: 70% das APROVADAS tem trilha; resto fica pendente
       // (pra produtor testar tela de trilhas + filtro "Sem Trilha" no Schedule).
@@ -1286,7 +1389,7 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
         bailarinos_detalhes,
         status: 'PENDENTE',
         status_pagamento: 'CONFIRMADO',
-        valor_pago: formato === 'Solo' ? 80 : formato === 'Duo' ? 120 : formato === 'Trio' ? 150 : 200,
+        valor_pago: VALOR_POR_FORMATO[formato] ?? 200,
         ordem_apresentacao: 100 + i, // separa do bloco principal
         video_url: DEMO_VIDEO_URL,
         video_status: 'submitted',
