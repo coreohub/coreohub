@@ -23,7 +23,7 @@ import {
   type BatchItem, type NarrationKind,
 } from '../services/narrationApi';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
-import { resolveEstudio, toTitleCase, resolveTrilhaUrl } from '../utils/formatters';
+import { resolveEstudio, toTitleCase, resolveTrilhaUrl, buildScheduleLinePhrase, stripEstiloVertentes } from '../utils/formatters';
 import { formatDataBRComDia } from '../utils/lotes';
 import { isStyleInList } from '../utils/styleMatch';
 
@@ -57,7 +57,7 @@ interface Registration {
   // usando ordem_apresentacao (global). NULL quando o bloco não tem data.
   ordem_apresentacao_dia?: number | null;
   elenco?: Dancer[];
-  formacao?: string;
+  formato_participacao?: string;
   estilo_danca?: string;
   categoria?: string;
   classificacao_final?: string;
@@ -427,9 +427,9 @@ const SortableRow: React.FC<SortableRowProps> = ({
           <span className="text-[9px] font-bold text-slate-500 dark:text-white/40 uppercase tracking-widest truncate">
             {resolveEstudio(reg)}
           </span>
-          {reg.formacao && (
+          {reg.formato_participacao && (
             <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-white/50 rounded-full text-[8px] font-black uppercase tracking-wider">
-              {reg.formacao}
+              {reg.formato_participacao}
             </span>
           )}
           {reg.estilo_danca && (
@@ -454,6 +454,12 @@ const SortableRow: React.FC<SortableRowProps> = ({
             </span>
           )}
         </div>
+        {/* Frase pronta pra leitura em voz alta — junta os badges soltos acima
+            numa única sentença. Uso real: locutor humano lendo direto da tela
+            no dia do evento (não depende de narração IA configurada). */}
+        <p className="text-[9px] text-slate-400 dark:text-white/30 truncate italic" title={buildScheduleLinePhrase(index + 1, reg)}>
+          {buildScheduleLinePhrase(index + 1, reg)}
+        </p>
       </div>
 
       {/* elenco count — fallback bailarinos_detalhes (registrations criadas pela seed/vitrine) */}
@@ -961,7 +967,10 @@ const Schedule = () => {
     const estudioNome = resolveEstudio(reg);
     let texto = template
       .replaceAll('[COREOGRAFIA]', reg.nome_coreografia ?? '')
-      .replaceAll('[ESTUDIO]', estudioNome);
+      .replaceAll('[ESTUDIO]', estudioNome)
+      .replaceAll('[ESTILO]', stripEstiloVertentes(reg.estilo_danca))
+      .replaceAll('[FORMACAO]', reg.formato_participacao ?? '')
+      .replaceAll('[CATEGORIA]', reg.categoria ?? '');
     const pronuncias: { termo: string; pronuncia: string }[] = Array.isArray(config?.pronuncia_personalizada)
       ? config.pronuncia_personalizada
       : [];

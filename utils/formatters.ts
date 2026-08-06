@@ -100,6 +100,40 @@ export const resolveEstudio = (reg: {
   event_data?: { estudio_nome?: string | null } | null;
 }): string => reg.estudio || reg.event_data?.estudio_nome || '';
 
+/**
+ * Remove o sufixo "e suas vertentes" do nome do estilo (ex: "Estilo Livre e
+ * suas vertentes" → "Estilo Livre") — produtores cadastram estilos com esse
+ * sufixo pra indicar subgêneros agrupados, mas ele não deve aparecer lido em
+ * voz alta na narração nem na frase de locução do Cronograma.
+ */
+export const stripEstiloVertentes = (estilo?: string | null): string =>
+  (estilo || '').replace(/\s+e\s+suas\s+vertentes\s*$/i, '').trim();
+
+/**
+ * Frase formatada de locução pra uma linha do Cronograma — mesma composição
+ * usada visualmente na linha e como base pra locutor humano ler em voz alta.
+ * Formato: Nº - "Coreografia", Estúdio - Estilo - Formação - Categoria.
+ */
+export const buildScheduleLinePhrase = (
+  index: number,
+  reg: {
+    nome_coreografia?: string | null;
+    estudio?: string | null;
+    event_data?: { estudio_nome?: string | null } | null;
+    estilo_danca?: string | null;
+    formato_participacao?: string | null;
+    categoria?: string | null;
+  }
+): string => {
+  const partes = [
+    stripEstiloVertentes(reg.estilo_danca),
+    reg.formato_participacao || '',
+    reg.categoria || '',
+  ].filter(Boolean);
+  const cauda = partes.length > 0 ? ` - ${partes.join(' - ')}` : '';
+  return `${index} - "${reg.nome_coreografia ?? ''}", ${resolveEstudio(reg)}${cauda}`;
+};
+
 // Conectores PT-BR que ficam minúsculos em Title Case (exceto na 1ª palavra).
 // Corrige exibições tipo "New Corpus escola de dança" → "New Corpus Escola de Dança".
 const TITLE_CASE_LOWERCASE_WORDS = new Set(['de', 'da', 'do', 'das', 'dos', 'e']);

@@ -30,7 +30,7 @@ import {
   Instagram, MessageCircle, Globe, Mail, FileText, Youtube, Smartphone,
   RefreshCw, Facebook,
 } from 'lucide-react';
-import { formatEventWhatsApp, resolveEstudio } from '../utils/formatters';
+import { formatEventWhatsApp, resolveEstudio, stripEstiloVertentes } from '../utils/formatters';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
 import InstallPWAButton from '../components/InstallPWAButton';
 import { previewNarration, fetchNarrationAudios, type NarrationKind } from '../services/narrationApi';
@@ -1776,6 +1776,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     id: string; nome_coreografia: string; estudio: string;
     event_data?: { estudio_nome?: string } | null; duracao_trilha_segundos?: number;
     excluded_from_schedule?: boolean | null;
+    estilo_danca?: string | null; formato_participacao?: string | null; categoria?: string | null;
   }
   interface NarrAudioRow {
     registration_id: string; kind: NarrationKind; duration_seconds?: number; voice_id?: string;
@@ -1797,7 +1798,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       const [regsRes, audiosRes] = await Promise.all([
         supabase
           .from('registrations')
-          .select('id, nome_coreografia, estudio, event_data, duracao_trilha_segundos, excluded_from_schedule')
+          .select('id, nome_coreografia, estudio, event_data, duracao_trilha_segundos, excluded_from_schedule, estilo_danca, formato_participacao, categoria')
           .eq('event_id', activeEventId)
           .or(SCHEDULABLE_REGISTRATIONS_OR_FILTER),
         fetchNarrationAudios(activeEventId).catch(() => [] as NarrAudioRow[]),
@@ -1817,7 +1818,10 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     const testReg = narrRegs.find(r => r.id === testRegId);
     let texto = tpl
       .replaceAll('[COREOGRAFIA]', testReg?.nome_coreografia || 'Eclipse')
-      .replaceAll('[ESTUDIO]', (testReg ? resolveEstudio(testReg) : '') || 'Studio Demo');
+      .replaceAll('[ESTUDIO]', (testReg ? resolveEstudio(testReg) : '') || 'Studio Demo')
+      .replaceAll('[ESTILO]', stripEstiloVertentes(testReg?.estilo_danca) || 'Estilo Livre')
+      .replaceAll('[FORMACAO]', testReg?.formato_participacao || 'Solo')
+      .replaceAll('[CATEGORIA]', testReg?.categoria || 'Adulto');
     flowConfig.pronuncia_personalizada.forEach(({ termo, pronuncia }) => {
       if (termo && pronuncia) texto = texto.replaceAll(termo, pronuncia);
     });
@@ -4898,7 +4902,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   Narração de Entrada
                 </label>
                 <p className="text-xs text-slate-500 mb-3">
-                  Tocada antes da coreografia. Marcadores: <code className="text-[#ff0068] bg-[#ff0068]/10 px-1 rounded">[COREOGRAFIA]</code> e <code className="text-[#ff0068] bg-[#ff0068]/10 px-1 rounded">[ESTUDIO]</code>.
+                  Tocada antes da coreografia. Marcadores: <code className="text-[#ff0068] bg-[#ff0068]/10 px-1 rounded">[COREOGRAFIA]</code>, <code className="text-[#ff0068] bg-[#ff0068]/10 px-1 rounded">[ESTUDIO]</code>, <code className="text-[#ff0068] bg-[#ff0068]/10 px-1 rounded">[ESTILO]</code>, <code className="text-[#ff0068] bg-[#ff0068]/10 px-1 rounded">[FORMACAO]</code> e <code className="text-[#ff0068] bg-[#ff0068]/10 px-1 rounded">[CATEGORIA]</code>.
                 </p>
                 <textarea
                   rows={4}
