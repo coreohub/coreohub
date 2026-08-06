@@ -23,7 +23,7 @@ import {
   type BatchItem, type NarrationKind,
 } from '../services/narrationApi';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
-import { resolveEstudio, toTitleCase, resolveTrilhaUrl, buildScheduleLinePhrase, stripEstiloVertentes } from '../utils/formatters';
+import { resolveEstudio, toTitleCase, resolveTrilhaUrl, stripEstiloVertentes } from '../utils/formatters';
 import { formatDataBRComDia } from '../utils/lotes';
 import { isStyleInList } from '../utils/styleMatch';
 
@@ -454,12 +454,6 @@ const SortableRow: React.FC<SortableRowProps> = ({
             </span>
           )}
         </div>
-        {/* Frase pronta pra leitura em voz alta — junta os badges soltos acima
-            numa única sentença. Uso real: locutor humano lendo direto da tela
-            no dia do evento (não depende de narração IA configurada). */}
-        <p className="text-[9px] text-slate-400 dark:text-white/30 truncate italic" title={buildScheduleLinePhrase(index + 1, reg)}>
-          {buildScheduleLinePhrase(index + 1, reg)}
-        </p>
       </div>
 
       {/* elenco count — fallback bailarinos_detalhes (registrations criadas pela seed/vitrine) */}
