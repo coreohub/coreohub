@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { isStyleInList } from '../utils/styleMatch';
-import { classifyAward as classifyAwardShared } from '../utils/awardClassification';
+import { classifyAward as classifyAwardShared, resolveMedalLabel, type MedalLabels } from '../utils/awardClassification';
 import {
   BarChart3, Download, RefreshCw, Loader2, Search,
   ChevronDown, ChevronUp, ChevronRight, Trophy, CheckCircle2, AlertCircle,
@@ -60,32 +60,34 @@ type PremiationSystem = 'THRESHOLD' | 'RANKING';
 
 const DEFAULT_THRESHOLDS: MedalThresholds = { gold: 9.0, silver: 8.0, bronze: 7.0 };
 
-/* ── Medal styles ── */
-const MEDAL_GOLD          = { label: 'Ouro',         color: 'text-yellow-500', dot: 'bg-yellow-500', bg: 'bg-yellow-50 dark:bg-yellow-500/10', border: 'border-yellow-200 dark:border-yellow-500/30' };
-const MEDAL_SILVER        = { label: 'Prata',        color: 'text-slate-400',  dot: 'bg-slate-400',  bg: 'bg-slate-50 dark:bg-slate-800',      border: 'border-slate-300 dark:border-slate-600'      };
-const MEDAL_BRONZE        = { label: 'Bronze',       color: 'text-amber-600',  dot: 'bg-amber-600',  bg: 'bg-amber-50 dark:bg-amber-500/10',   border: 'border-amber-200 dark:border-amber-500/30'   };
-// Sem label de "Participação" — nem todo evento configura essa faixa como um
-// prêmio real (ex: Usualdance não tem essa categoria). Traço honesto: "abaixo
-// de bronze", sem inventar uma medalha que o produtor não ofereceu.
-const MEDAL_PARTICIPATION = { label: '—', color: 'text-slate-500',  dot: 'bg-slate-400',  bg: 'bg-slate-50 dark:bg-white/5',        border: 'border-slate-200 dark:border-white/10'       };
+/* ── Medal styles — cor/ícone ficam fixos por faixa, só o texto do label é
+ *  configurável (configuracoes.medal_labels, ex: "1º Lugar" em vez de "Ouro"). ── */
+const MEDAL_STYLE_GOLD          = { color: 'text-yellow-500', dot: 'bg-yellow-500', bg: 'bg-yellow-50 dark:bg-yellow-500/10', border: 'border-yellow-200 dark:border-yellow-500/30' };
+const MEDAL_STYLE_SILVER        = { color: 'text-slate-400',  dot: 'bg-slate-400',  bg: 'bg-slate-50 dark:bg-slate-800',      border: 'border-slate-300 dark:border-slate-600'      };
+const MEDAL_STYLE_BRONZE        = { color: 'text-amber-600',  dot: 'bg-amber-600',  bg: 'bg-amber-50 dark:bg-amber-500/10',   border: 'border-amber-200 dark:border-amber-500/30'   };
+// Sem label de "Participação" por padrão — nem todo evento configura essa
+// faixa como um prêmio real (ex: Usualdance não tem essa categoria). Traço
+// honesto: "abaixo de bronze", sem inventar uma medalha que o produtor não
+// ofereceu (mas ainda pode ser customizado via medal_labels.participation).
+const MEDAL_STYLE_PARTICIPATION = { color: 'text-slate-500',  dot: 'bg-slate-400',  bg: 'bg-slate-50 dark:bg-white/5',        border: 'border-slate-200 dark:border-white/10'       };
 
 /* ── Helpers ── */
-const getMedalByThreshold = (score: number, t: MedalThresholds) => {
-  if (score >= t.gold)   return MEDAL_GOLD;
-  if (score >= t.silver) return MEDAL_SILVER;
-  if (score >= t.bronze) return MEDAL_BRONZE;
-  return MEDAL_PARTICIPATION;
+const getMedalByThreshold = (score: number, t: MedalThresholds, labels?: MedalLabels | null) => {
+  if (score >= t.gold)   return { ...MEDAL_STYLE_GOLD,          label: resolveMedalLabel('gold', labels) };
+  if (score >= t.silver) return { ...MEDAL_STYLE_SILVER,        label: resolveMedalLabel('silver', labels) };
+  if (score >= t.bronze) return { ...MEDAL_STYLE_BRONZE,        label: resolveMedalLabel('bronze', labels) };
+  return { ...MEDAL_STYLE_PARTICIPATION, label: resolveMedalLabel('participation', labels) };
 };
 
-const getMedalByRank = (rank: number) => {
-  if (rank === 0) return MEDAL_GOLD;
-  if (rank === 1) return MEDAL_SILVER;
-  if (rank === 2) return MEDAL_BRONZE;
-  return MEDAL_PARTICIPATION;
+const getMedalByRank = (rank: number, labels?: MedalLabels | null) => {
+  if (rank === 0) return { ...MEDAL_STYLE_GOLD,          label: resolveMedalLabel('gold', labels) };
+  if (rank === 1) return { ...MEDAL_STYLE_SILVER,        label: resolveMedalLabel('silver', labels) };
+  if (rank === 2) return { ...MEDAL_STYLE_BRONZE,        label: resolveMedalLabel('bronze', labels) };
+  return { ...MEDAL_STYLE_PARTICIPATION, label: resolveMedalLabel('participation', labels) };
 };
 
-const resolveMedal = (score: number, rank: number, system: PremiationSystem, t: MedalThresholds) =>
-  system === 'RANKING' ? getMedalByRank(rank) : getMedalByThreshold(score, t);
+const resolveMedal = (score: number, rank: number, system: PremiationSystem, t: MedalThresholds, labels?: MedalLabels | null) =>
+  system === 'RANKING' ? getMedalByRank(rank, labels) : getMedalByThreshold(score, t, labels);
 
 /* ── Prêmios especiais no PDF: mesma classificação por nome usada no Telão
  *  de Palco (pages/TelaoControle.tsx) — mantém as 2 telas consistentes sobre
@@ -121,6 +123,7 @@ const ResultsPanel = () => {
   const [exportingPdf, setExportingPdf] = useState(false);
   const [thresholds, setThresholds] = useState<MedalThresholds>(DEFAULT_THRESHOLDS);
   const [premiationSystem, setPremiationSystem] = useState<PremiationSystem>('THRESHOLD');
+  const [medalLabels, setMedalLabels] = useState<MedalLabels | null>(null);
   /** id da coreografia sendo limpa, ou 'all' — null = nada em andamento.
    *  Usado pro botão "Limpar avaliações de teste" (por linha + geral). */
   const [clearing, setClearing] = useState<string | null>(null);
@@ -168,9 +171,10 @@ const ResultsPanel = () => {
     setLoading(true);
     try {
       const { fetchActiveEventConfig, resolveActiveEventId } = await import('../services/supabase');
-      const cfg = await fetchActiveEventConfig('medal_thresholds, premiation_system, regras_avaliacao, premios_especiais');
+      const cfg = await fetchActiveEventConfig('medal_thresholds, premiation_system, medal_labels, regras_avaliacao, premios_especiais');
       setThresholds(cfg?.medal_thresholds ?? DEFAULT_THRESHOLDS);
       setPremiationSystem(cfg?.premiation_system === 'RANKING' ? 'RANKING' : 'THRESHOLD');
+      setMedalLabels(cfg?.medal_labels ?? null);
       const regras: any = cfg?.regras_avaliacao ?? {};
 
       // Premiação (mesma fonte que Telão/PDF) — lê os prêmios salvos +
@@ -503,7 +507,7 @@ const ResultsPanel = () => {
     const rows: (string | number)[][] = [header];
     Object.entries(groupedByGenreCat).forEach(([, entries]) => {
       entries.forEach((r, i) => {
-        const medal = resolveMedal(r.average_score, i, premiationSystem, thresholds);
+        const medal = resolveMedal(r.average_score, i, premiationSystem, thresholds, medalLabels);
         const base = [r.nome_coreografia, r.estudio, r.estilo_danca, r.categoria, r.tipo_apresentacao, r.average_score.toFixed(2), r.evaluations_count, medal.label, r.has_outlier ? 'Sim' : ''];
         rows.push(premiationSystem === 'RANKING' ? [`${i + 1}°`, ...base] : base);
       });
@@ -748,7 +752,7 @@ const ResultsPanel = () => {
         cursorY += 4;
 
         const tableData = entries.map((r, i) => {
-          const medal = resolveMedal(r.average_score, i, premiationSystem, thresholds);
+          const medal = resolveMedal(r.average_score, i, premiationSystem, thresholds, medalLabels);
           const row = [
             r.nome_coreografia,
             r.estudio,
@@ -1028,7 +1032,7 @@ const ResultsPanel = () => {
 
                   <div className="divide-y divide-slate-100 dark:divide-white/5">
                     {entries.map((entry, idx) => {
-                      const medal  = resolveMedal(entry.average_score, idx, premiationSystem, thresholds);
+                      const medal  = resolveMedal(entry.average_score, idx, premiationSystem, thresholds, medalLabels);
                       const isOpen = expandedId === entry.id;
                       return (
                         <div key={entry.id}>

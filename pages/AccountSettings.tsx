@@ -388,6 +388,10 @@ const DEFAULT_GENERAL = {
   scoreScale: 'BASE_10' as ScoreScale,
   pinInactivityMinutes: 15 as number, // 0 = nunca bloquear
   medalThresholds: { gold: 9.0, silver: 8.0, bronze: 7.0 },
+  // Nome exibido de cada faixa — vazio = usa o default (Ouro/Prata/Bronze).
+  // Alguns regulamentos chamam a mesma faixa de "1º/2º/3º Lugar" em vez de
+  // medalha (ex: Ecodança) — o MECANISMO (nota mínima) não muda, só o texto.
+  medalLabels: { gold: '', silver: '', bronze: '' } as { gold: string; silver: string; bronze: string },
   // 'THRESHOLD' = ouro/prata/bronze por nota mínima (várias medalhas).
   // 'RANKING' = 1º/2º/3º lugar pela colocação (uma medalha por posição).
   premiationSystem: 'THRESHOLD' as 'THRESHOLD' | 'RANKING',
@@ -2059,6 +2063,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             scoreScale: (data.escala_notas as ScoreScale) || DEFAULT_GENERAL.scoreScale,
             pinInactivityMinutes: data.pin_inactivity_minutes ?? DEFAULT_GENERAL.pinInactivityMinutes,
             medalThresholds: data.medal_thresholds ?? DEFAULT_GENERAL.medalThresholds,
+            medalLabels: {
+              gold:   data.medal_labels?.gold   ?? '',
+              silver: data.medal_labels?.silver ?? '',
+              bronze: data.medal_labels?.bronze ?? '',
+            },
             premiationSystem: (data.premiation_system as 'THRESHOLD' | 'RANKING') || DEFAULT_GENERAL.premiationSystem,
             coverUrl:    data.cover_url   || evt.cover_url    || DEFAULT_GENERAL.coverUrl,
             description: descriptionFromDb,
@@ -2247,6 +2256,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         escala_notas:        general.scoreScale,
         pin_inactivity_minutes: general.pinInactivityMinutes,
         medal_thresholds:    general.medalThresholds,
+        medal_labels: {
+          gold:   general.medalLabels.gold.trim()   || null,
+          silver: general.medalLabels.silver.trim() || null,
+          bronze: general.medalLabels.bronze.trim() || null,
+        },
         premiation_system:   general.premiationSystem,
         cover_url:           general.coverUrl || null,
         descricao:           general.description || null,
@@ -6010,6 +6024,21 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                               className={`w-full px-3 py-1.5 rounded-xl border ${border} bg-white dark:bg-slate-900 text-sm font-black tabular-nums ${color} outline-none focus:ring-2 focus:ring-[#ff0068]/30 text-center`}
                             />
                           </div>
+                          {/* Nome exibido da faixa — alguns regulamentos chamam a mesma
+                              faixa de "1º/2º/3º Lugar" em vez de medalha (ex: Ecodança).
+                              O mecanismo (nota mínima) não muda, só o texto que aparece
+                              em Apuração/PDF/Certificados. Vazio = usa o nome padrão acima. */}
+                          <label htmlFor={`medal-label-${key}`} className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                            Nome exibido (opcional)
+                          </label>
+                          <input
+                            id={`medal-label-${key}`}
+                            type="text"
+                            placeholder={label}
+                            value={general.medalLabels[key]}
+                            onChange={e => setGeneral(g => ({ ...g, medalLabels: { ...g.medalLabels, [key]: e.target.value } }))}
+                            className={`w-full px-3 py-1.5 rounded-xl border ${border} bg-white dark:bg-slate-900 text-xs font-bold ${color} outline-none focus:ring-2 focus:ring-[#ff0068]/30 text-center placeholder:text-slate-400 placeholder:font-normal`}
+                          />
                         </div>
                       );
                     })}
@@ -6017,9 +6046,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   <div className="flex items-start gap-2.5 px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 rounded-2xl">
                     <Medal size={12} className="text-[#ff0068] shrink-0 mt-0.5" />
                     <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400 leading-relaxed">
-                      Ouro ≥ <strong className="text-yellow-500">{general.medalThresholds.gold}</strong>
-                      {' · '}Prata ≥ <strong className="text-slate-400">{general.medalThresholds.silver}</strong>
-                      {' · '}Bronze ≥ <strong className="text-amber-600">{general.medalThresholds.bronze}</strong>
+                      {general.medalLabels.gold || 'Ouro'} ≥ <strong className="text-yellow-500">{general.medalThresholds.gold}</strong>
+                      {' · '}{general.medalLabels.silver || 'Prata'} ≥ <strong className="text-slate-400">{general.medalThresholds.silver}</strong>
+                      {' · '}{general.medalLabels.bronze || 'Bronze'} ≥ <strong className="text-amber-600">{general.medalThresholds.bronze}</strong>
                       {' · '}Abaixo de <strong>{general.medalThresholds.bronze}</strong> = Participação
                     </p>
                   </div>

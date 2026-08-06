@@ -314,7 +314,7 @@ const GENEROS_SUBGENEROS: { name: string; subgeneros: { name: string; is_categor
   { name: 'Dança do Ventre', subgeneros: [] },
   {
     name: 'Estilo Livre',
-    subgeneros: [{ name: 'Estilo Livre e suas vertentes', is_categoria_livre: true }],
+    subgeneros: [{ name: 'Estilo Livre', is_categoria_livre: true }],
   },
   {
     name: 'Dança Inclusiva (PCD)',
