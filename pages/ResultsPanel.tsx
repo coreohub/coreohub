@@ -27,6 +27,11 @@ interface GroupedResult {
   estudio: string;
   estilo_danca: string;
   categoria: string;
+  /** Formação (Solo/Duo/Trio/Grupo/...) — cada formação é uma classe de
+   *  disputa separada do mesmo estilo+categoria, precisa entrar na chave de
+   *  agrupamento do ranking senão Trio e Solo do mesmo estilo/categoria
+   *  competem juntos por engano. */
+  formato_participacao: string;
   tipo_apresentacao: string;
   status: string;
   resultado_publicado: boolean;
@@ -238,7 +243,7 @@ const ResultsPanel = () => {
       const [regsRes, judgesRes] = await Promise.all([
         regIds.length > 0
           ? supabase.from('registrations')
-              .select('id, nome_coreografia, estudio, estilo_danca, categoria, tipo_apresentacao, status, resultado_publicado')
+              .select('id, nome_coreografia, estudio, estilo_danca, categoria, formato_participacao, tipo_apresentacao, status, resultado_publicado')
               .in('id', regIds)
           : Promise.resolve({ data: [], error: null }),
         judgeIds.length > 0
@@ -269,6 +274,7 @@ const ResultsPanel = () => {
             estudio:          reg.estudio          ?? '—',
             estilo_danca:     reg.estilo_danca      ?? '—',
             categoria:        reg.categoria         ?? '—',
+            formato_participacao: reg.formato_participacao ?? '—',
             tipo_apresentacao: reg.tipo_apresentacao ?? 'Competitiva',
             status:           reg.status_pagamento  ?? '—',
             resultado_publicado: reg.resultado_publicado === true,
@@ -394,7 +400,7 @@ const ResultsPanel = () => {
   const groupedByGenreCat = useMemo(() => {
     const groups: Record<string, GroupedResult[]> = {};
     filtered.forEach(r => {
-      const key = `${r.estilo_danca}|${r.categoria}`;
+      const key = `${r.estilo_danca}|${r.categoria}|${r.formato_participacao}`;
       if (!groups[key]) groups[key] = [];
       groups[key].push(r);
     });
@@ -724,10 +730,10 @@ const ResultsPanel = () => {
           cursorY = 20;
         }
 
-        // "K-Pop|Livre" → título é o ESTILO (gênero de dança), legenda pequena
-        // abaixo esclarece que o segundo termo é a CATEGORIA (faixa/nível) —
+        // "K-Pop|Livre|Trio" → título é o ESTILO (gênero de dança), legenda pequena
+        // abaixo esclarece que os termos seguintes são FORMAÇÃO e CATEGORIA —
         // o "|" cru confundia porque nada indicava o que cada lado significava.
-        const [estiloKey, categoriaKey] = key.split('|');
+        const [estiloKey, categoriaKey, formatoKey] = key.split('|');
 
         doc.setFontSize(13);
         doc.setFont('helvetica', 'bold');
@@ -737,7 +743,7 @@ const ResultsPanel = () => {
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(130, 130, 130);
-        doc.text(`ESTILO · CATEGORIA: ${(categoriaKey || '—').toUpperCase()}`, 20, cursorY);
+        doc.text(`ESTILO · FORMAÇÃO · CATEGORIA: ${(formatoKey || '—').toUpperCase()} · ${(categoriaKey || '—').toUpperCase()}`, 20, cursorY);
         doc.setTextColor(40, 40, 40);
         cursorY += 4;
 
@@ -984,7 +990,7 @@ const ResultsPanel = () => {
             </div>
           ) : (
             Object.entries(groupedByGenreCat).map(([key, entries]) => {
-              const [genre, category] = key.split('|');
+              const [genre, category, formato] = key.split('|');
               // Escala mista: nesse grupo, algumas coreografias têm nota combinada
               // (Técnico+Artístico) e outras só de um lado — não são comparáveis
               // na mesma régua se os pesos configurados não forem 50/50.
@@ -1005,7 +1011,7 @@ const ResultsPanel = () => {
                   <div className="flex items-center gap-3 px-5 py-3.5 bg-slate-50 dark:bg-white/[0.03] border-b border-slate-100 dark:border-white/10">
                     <Trophy size={14} className="text-[#ff0068] shrink-0" />
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-300">
-                      {genre} · {category}
+                      {genre} · {formato && formato !== '—' ? `${formato} · ` : ''}{category}
                     </span>
                     {hasMixedScale && (
                       <span
