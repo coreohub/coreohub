@@ -800,13 +800,13 @@ const VendasIngressos: React.FC = () => {
                             : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400'
                         }`}
                       >
-                        Cartão (Asaas Tap)
+                        Cartão (débito/crédito)
                       </button>
                     </div>
                     <p className="text-[10px] text-slate-500 mt-1.5">
                       {pdvMethod === 'pix'
                         ? 'Gera um QR Pix pra mostrar na tela. Confirma sozinho quando o cliente pagar — comissão normal.'
-                        : 'Cobra fisicamente no app da Asaas (Tap) antes de confirmar aqui. Sem comissão CoreoHub — o pagamento não passa pelo split.'}
+                        : 'Cobre na sua própria maquininha (Asaas Tap, Stone, Cielo, PagSeguro etc.) e só confirme aqui pra registrar. Sem comissão CoreoHub — o pagamento não passa pelo split.'}
                     </p>
                   </div>
                 </div>
