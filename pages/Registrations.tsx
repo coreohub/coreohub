@@ -1857,7 +1857,7 @@ const Registrations = () => {
                           table pattern: primário forte, secundário reduzido,
                           sem abrir coluna nova numa tabela já cheia). */}
                       <p className="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest">{reg.formato_participacao || '—'}</p>
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{formatCategoriaAbbrev(reg.categoria)}</p>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">{formatCategoriaAbbrev(reg.categoria)}</p>
                     </td>
                     <td className="px-4 sm:px-8 py-6 text-[10px] text-slate-500 hidden xl:table-cell whitespace-nowrap">
                       {reg.created_at ? new Date(reg.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
