@@ -5992,31 +5992,54 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               {/* Conditional UI por sistema escolhido */}
               {general.premiationSystem === 'THRESHOLD' ? (
                 <div className="px-5 pb-5 pt-2 space-y-3">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      Faixas de medalha
-                    </p>
-                    {/* Atalho — preenche as 3 faixas de uma vez, deixando claro que é
-                        uma ESCOLHA do produtor (não digitação livre solta). O campo de
-                        texto abaixo continua editável pra qualquer nome personalizado. */}
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Usar:</span>
-                      <button
-                        type="button"
-                        onClick={() => setGeneral(g => ({ ...g, medalLabels: { gold: '', silver: '', bronze: '' } }))}
-                        className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/10 hover:border-[#ff0068]/40 transition-colors"
-                      >
-                        Ouro/Prata/Bronze
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setGeneral(g => ({ ...g, medalLabels: { gold: '1º Lugar', silver: '2º Lugar', bronze: '3º Lugar' } }))}
-                        className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/10 hover:border-[#ff0068]/40 transition-colors"
-                      >
-                        1º/2º/3º Lugar
-                      </button>
-                    </div>
-                  </div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Faixas de medalha
+                  </p>
+                  {/* Seleção explícita do nome de faixa (não campo de texto solto —
+                      ficava ambíguo se tinha salvo ou não). Mesmo padrão visual dos
+                      cartões "Sistema de Premiação" acima: borda rosa = ativo. Só o
+                      cartão "Personalizado" revela os campos de texto editáveis. */}
+                  {(() => {
+                    const ml = general.medalLabels;
+                    const preset: 'default' | 'lugar' | 'custom' =
+                      (!ml.gold && !ml.silver && !ml.bronze) ? 'default'
+                      : (ml.gold === '1º Lugar' && ml.silver === '2º Lugar' && ml.bronze === '3º Lugar') ? 'lugar'
+                      : 'custom';
+                    const options = [
+                      { id: 'default' as const, title: 'Ouro/Prata/Bronze', desc: 'Padrão do sistema.',
+                        apply: () => setGeneral(g => ({ ...g, medalLabels: { gold: '', silver: '', bronze: '' } })) },
+                      { id: 'lugar' as const, title: '1º/2º/3º Lugar', desc: 'Nota mínima, nomeada por colocação.',
+                        apply: () => setGeneral(g => ({ ...g, medalLabels: { gold: '1º Lugar', silver: '2º Lugar', bronze: '3º Lugar' } })) },
+                      { id: 'custom' as const, title: 'Personalizado', desc: 'Digite o nome de cada faixa.',
+                        apply: () => setGeneral(g => ({ ...g, medalLabels: {
+                          gold:   g.medalLabels.gold   || 'Ouro',
+                          silver: g.medalLabels.silver || 'Prata',
+                          bronze: g.medalLabels.bronze || 'Bronze',
+                        } })) },
+                    ];
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {options.map(opt => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={opt.apply}
+                            aria-pressed={preset === opt.id}
+                            className={`text-left p-3 rounded-2xl border-2 transition-colors ${
+                              preset === opt.id
+                                ? 'border-[#ff0068] bg-[#ff0068]/5'
+                                : 'border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 hover:border-[#ff0068]/30'
+                            }`}
+                          >
+                            <p className={`text-[11px] font-black uppercase tracking-widest ${preset === opt.id ? 'text-[#ff0068]' : 'text-slate-700 dark:text-slate-200'}`}>
+                              {opt.title}
+                            </p>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{opt.desc}</p>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {([
                       { key: 'gold',   label: 'Ouro',   color: 'text-yellow-500',  bg: 'bg-yellow-50 dark:bg-yellow-500/10',  border: 'border-yellow-300 dark:border-yellow-500/30' },
@@ -6025,11 +6048,14 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     ] as const).map(({ key, label, color, bg, border }) => {
                       const val = general.medalThresholds[key];
                       const maxVal = general.scoreScale === 'BASE_100' ? 100 : 10;
+                      const ml = general.medalLabels;
+                      const isCustom = !(!ml.gold && !ml.silver && !ml.bronze)
+                        && !(ml.gold === '1º Lugar' && ml.silver === '2º Lugar' && ml.bronze === '3º Lugar');
                       return (
                         <div key={key} className={`flex flex-col gap-2 p-4 rounded-2xl border-2 ${bg} ${border}`}>
                           <div className="flex items-center gap-2">
                             <Medal size={14} className={color} />
-                            <span className={`text-[11px] font-black uppercase tracking-widest ${color}`}>{label}</span>
+                            <span className={`text-[11px] font-black uppercase tracking-widest ${color}`}>{ml[key] || label}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] text-slate-500 dark:text-slate-400 shrink-0">≥</span>
@@ -6046,21 +6072,25 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                               className={`w-full px-3 py-1.5 rounded-xl border ${border} bg-white dark:bg-slate-900 text-sm font-black tabular-nums ${color} outline-none focus:ring-2 focus:ring-[#ff0068]/30 text-center`}
                             />
                           </div>
-                          {/* Nome exibido da faixa — alguns regulamentos chamam a mesma
-                              faixa de "1º/2º/3º Lugar" em vez de medalha (ex: Ecodança).
-                              O mecanismo (nota mínima) não muda, só o texto que aparece
-                              em Apuração/PDF/Certificados. Vazio = usa o nome padrão acima. */}
-                          <label htmlFor={`medal-label-${key}`} className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                            Nome exibido (opcional)
-                          </label>
-                          <input
-                            id={`medal-label-${key}`}
-                            type="text"
-                            placeholder={label}
-                            value={general.medalLabels[key]}
-                            onChange={e => setGeneral(g => ({ ...g, medalLabels: { ...g.medalLabels, [key]: e.target.value } }))}
-                            className={`w-full px-3 py-1.5 rounded-xl border ${border} bg-white dark:bg-slate-900 text-xs font-bold ${color} outline-none focus:ring-2 focus:ring-[#ff0068]/30 text-center placeholder:text-slate-400 placeholder:font-normal`}
-                          />
+                          {/* Nome exibido só é editável no modo "Personalizado" — nos
+                              outros 2 modos o valor já foi definido pelo cartão acima,
+                              mostrar um input aqui de novo criava a dúvida "isso é
+                              editável? já salvou?" que o produtor reportou. */}
+                          {isCustom && (
+                            <>
+                              <label htmlFor={`medal-label-${key}`} className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                                Nome exibido
+                              </label>
+                              <input
+                                id={`medal-label-${key}`}
+                                type="text"
+                                placeholder={label}
+                                value={ml[key]}
+                                onChange={e => setGeneral(g => ({ ...g, medalLabels: { ...g.medalLabels, [key]: e.target.value } }))}
+                                className={`w-full px-3 py-1.5 rounded-xl border ${border} bg-white dark:bg-slate-900 text-xs font-bold ${color} outline-none focus:ring-2 focus:ring-[#ff0068]/30 text-center placeholder:text-slate-400 placeholder:font-normal`}
+                              />
+                            </>
+                          )}
                         </div>
                       );
                     })}

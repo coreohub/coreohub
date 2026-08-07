@@ -434,7 +434,7 @@ const SortableRow: React.FC<SortableRowProps> = ({
           )}
           {reg.estilo_danca && (
             <span className="px-1.5 py-0.5 bg-[#ff0068]/10 text-[#ff0068] rounded-full text-[8px] font-black uppercase tracking-wider">
-              {reg.estilo_danca}
+              {stripEstiloVertentes(reg.estilo_danca)}
             </span>
           )}
           {reg.categoria && (
@@ -2137,12 +2137,13 @@ const Schedule = () => {
           String(r.ordem_apresentacao ?? i + 1),
           r.nome_coreografia || '—',
           toTitleCase(resolveEstudio(r)) || '—',
+          stripEstiloVertentes(r.estilo_danca) || '—',
+          r.formato_participacao || '—',
           r.categoria || '—',
-          r.estilo_danca || '—',
         ]);
 
         autoTable(doc, {
-          head: [['Nº', 'Coreografia', 'Estúdio', 'Categoria', 'Estilo']],
+          head: [['Nº', 'Coreografia', 'Estúdio', 'Estilo', 'Formação', 'Categoria']],
           body,
           startY: cursorY,
           theme: 'striped',
