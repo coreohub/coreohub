@@ -32,6 +32,12 @@ interface GroupedResult {
    *  agrupamento do ranking senão Trio e Solo do mesmo estilo/categoria
    *  competem juntos por engano. */
   formato_participacao: string;
+  /** Subgênero/modalidade (ex: K-Pop → Cover/Creative) — quando o estilo tem
+   *  sub_types configurados, cada subgênero é uma classe de disputa separada
+   *  (achado real: Usualdance mistura Cover e Creative de K-Pop no mesmo
+   *  estilo+categoria+formação sem isso). Vazio quando o estilo não usa
+   *  subgênero — não deve criar um grupo a mais nesse caso. */
+  subgenero: string;
   tipo_apresentacao: string;
   status: string;
   resultado_publicado: boolean;
@@ -247,7 +253,7 @@ const ResultsPanel = () => {
       const [regsRes, judgesRes] = await Promise.all([
         regIds.length > 0
           ? supabase.from('registrations')
-              .select('id, nome_coreografia, estudio, estilo_danca, categoria, formato_participacao, tipo_apresentacao, status, resultado_publicado')
+              .select('id, nome_coreografia, estudio, estilo_danca, categoria, formato_participacao, subgenero, tipo_apresentacao, status, resultado_publicado')
               .in('id', regIds)
           : Promise.resolve({ data: [], error: null }),
         judgeIds.length > 0
@@ -279,6 +285,7 @@ const ResultsPanel = () => {
             estilo_danca:     reg.estilo_danca      ?? '—',
             categoria:        reg.categoria         ?? '—',
             formato_participacao: reg.formato_participacao ?? '—',
+            subgenero:        reg.subgenero          ?? '',
             tipo_apresentacao: reg.tipo_apresentacao ?? 'Competitiva',
             status:           reg.status_pagamento  ?? '—',
             resultado_publicado: reg.resultado_publicado === true,
@@ -404,7 +411,7 @@ const ResultsPanel = () => {
   const groupedByGenreCat = useMemo(() => {
     const groups: Record<string, GroupedResult[]> = {};
     filtered.forEach(r => {
-      const key = `${r.estilo_danca}|${r.categoria}|${r.formato_participacao}`;
+      const key = `${r.estilo_danca}|${r.categoria}|${r.formato_participacao}|${r.subgenero}`;
       if (!groups[key]) groups[key] = [];
       groups[key].push(r);
     });
@@ -502,13 +509,13 @@ const ResultsPanel = () => {
     // ordem é só de leitura; incluir "1°/2°" sugeriria uma disputa de posição
     // que não é como a medalha é decidida.
     const header = premiationSystem === 'RANKING'
-      ? ['Posição', 'Coreografia', 'Estúdio/Grupo', 'Gênero', 'Categoria', 'Tipo', 'Média', 'Nº Jurados', 'Medalha', 'Outlier']
-      : ['Coreografia', 'Estúdio/Grupo', 'Gênero', 'Categoria', 'Tipo', 'Média', 'Nº Jurados', 'Medalha', 'Outlier'];
+      ? ['Posição', 'Coreografia', 'Estúdio/Grupo', 'Gênero', 'Subgênero', 'Formação', 'Categoria', 'Tipo', 'Média', 'Nº Jurados', 'Medalha', 'Outlier']
+      : ['Coreografia', 'Estúdio/Grupo', 'Gênero', 'Subgênero', 'Formação', 'Categoria', 'Tipo', 'Média', 'Nº Jurados', 'Medalha', 'Outlier'];
     const rows: (string | number)[][] = [header];
     Object.entries(groupedByGenreCat).forEach(([, entries]) => {
       entries.forEach((r, i) => {
         const medal = resolveMedal(r.average_score, i, premiationSystem, thresholds, medalLabels);
-        const base = [r.nome_coreografia, r.estudio, r.estilo_danca, r.categoria, r.tipo_apresentacao, r.average_score.toFixed(2), r.evaluations_count, medal.label, r.has_outlier ? 'Sim' : ''];
+        const base = [r.nome_coreografia, r.estudio, r.estilo_danca, r.subgenero, r.formato_participacao, r.categoria, r.tipo_apresentacao, r.average_score.toFixed(2), r.evaluations_count, medal.label, r.has_outlier ? 'Sim' : ''];
         rows.push(premiationSystem === 'RANKING' ? [`${i + 1}°`, ...base] : base);
       });
     });
@@ -734,15 +741,16 @@ const ResultsPanel = () => {
           cursorY = 20;
         }
 
-        // "K-Pop|Livre|Trio" → título é o ESTILO (gênero de dança), legenda pequena
-        // abaixo esclarece que os termos seguintes são FORMAÇÃO e CATEGORIA —
+        // "K-Pop|Livre|Trio|Cover" → título é o ESTILO (+ subgênero/modalidade,
+        // quando existir — ex: Cover vs Creative do K-Pop são disputas
+        // separadas), legenda pequena abaixo esclarece FORMAÇÃO e CATEGORIA —
         // o "|" cru confundia porque nada indicava o que cada lado significava.
-        const [estiloKey, categoriaKey, formatoKey] = key.split('|');
+        const [estiloKey, categoriaKey, formatoKey, subgeneroKey] = key.split('|');
 
         doc.setFontSize(13);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(255, 0, 104);
-        doc.text(estiloKey || '—', 20, cursorY);
+        doc.text(subgeneroKey ? `${estiloKey || '—'} · ${subgeneroKey}` : (estiloKey || '—'), 20, cursorY);
         cursorY += 4.5;
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
@@ -994,7 +1002,7 @@ const ResultsPanel = () => {
             </div>
           ) : (
             Object.entries(groupedByGenreCat).map(([key, entries]) => {
-              const [genre, category, formato] = key.split('|');
+              const [genre, category, formato, subgenero] = key.split('|');
               // Escala mista: nesse grupo, algumas coreografias têm nota combinada
               // (Técnico+Artístico) e outras só de um lado — não são comparáveis
               // na mesma régua se os pesos configurados não forem 50/50.
@@ -1015,7 +1023,7 @@ const ResultsPanel = () => {
                   <div className="flex items-center gap-3 px-5 py-3.5 bg-slate-50 dark:bg-white/[0.03] border-b border-slate-100 dark:border-white/10">
                     <Trophy size={14} className="text-[#ff0068] shrink-0" />
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-300">
-                      {genre} · {formato && formato !== '—' ? `${formato} · ` : ''}{category}
+                      {genre}{subgenero ? ` · ${subgenero}` : ''} · {formato && formato !== '—' ? `${formato} · ` : ''}{category}
                     </span>
                     {hasMixedScale && (
                       <span

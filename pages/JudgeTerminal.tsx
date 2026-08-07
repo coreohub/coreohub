@@ -1874,6 +1874,7 @@ const JudgeTerminal = () => {
             {currentPerformance && (
               <p className="text-[8px] sm:text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate hidden sm:block">
                 {currentPerformance.estudio} · {stripEstiloVertentes(currentPerformance.estilo_danca)}
+                {currentPerformance.subgenero ? ` · ${currentPerformance.subgenero}` : ''}
                 {currentPerformance.formato_participacao ? ` · ${currentPerformance.formato_participacao}` : ''} · {currentPerformance.categoria}
                 {filteredSchedule.length > 0 && (
                   <span className="ml-2 text-slate-400 dark:text-slate-500">({currentIndex + 1}/{filteredSchedule.length})</span>
@@ -1884,6 +1885,7 @@ const JudgeTerminal = () => {
             {currentPerformance && (
               <p className="text-[8px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate sm:hidden">
                 {stripEstiloVertentes(currentPerformance.estilo_danca)}
+                {currentPerformance.subgenero ? ` · ${currentPerformance.subgenero}` : ''}
                 {currentPerformance.formato_participacao ? ` · ${currentPerformance.formato_participacao}` : ''}
                 {filteredSchedule.length > 0 && <span className="ml-1.5 text-slate-400">{currentIndex + 1}/{filteredSchedule.length}</span>}
               </p>
@@ -2084,6 +2086,7 @@ const JudgeTerminal = () => {
                             </span>
                             <span className="block text-[9px] font-bold text-slate-400 truncate">
                               {p.estudio} · {stripEstiloVertentes(p.estilo_danca)}
+                              {p.subgenero ? ` · ${p.subgenero}` : ''}
                               {p.formato_participacao ? ` · ${p.formato_participacao}` : ''}
                             </span>
                           </span>
@@ -2368,6 +2371,7 @@ const JudgeTerminal = () => {
                       </span>
                       <span className="block text-[10px] font-bold text-slate-400 truncate">
                         {p.estudio} · {stripEstiloVertentes(p.estilo_danca)}
+                        {p.subgenero ? ` · ${p.subgenero}` : ''}
                         {p.formato_participacao ? ` · ${p.formato_participacao}` : ''}
                       </span>
                     </span>
@@ -2407,6 +2411,7 @@ const JudgeTerminal = () => {
               </h3>
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                 {currentPerformance.estudio} · {stripEstiloVertentes(currentPerformance.estilo_danca)}
+                {currentPerformance.subgenero ? ` · ${currentPerformance.subgenero}` : ''}
                 {currentPerformance.formato_participacao ? ` · ${currentPerformance.formato_participacao}` : ''} · {currentPerformance.categoria}
               </p>
             </div>

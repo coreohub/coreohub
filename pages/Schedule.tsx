@@ -59,6 +59,11 @@ interface Registration {
   elenco?: Dancer[];
   formato_participacao?: string;
   estilo_danca?: string;
+  // Subgênero/modalidade (ex: K-Pop → Cover/Creative) — quando o estilo tem
+  // sub_types, cada subgênero é uma classe de disputa separada da Apuração;
+  // exibido aqui pra locutor/produtor não confundirem (achado real: Usualdance
+  // mistura Cover e Creative de K-Pop no cronograma sem essa distinção).
+  subgenero?: string;
   categoria?: string;
   classificacao_final?: string;
   bloco_id?: string | null;
@@ -435,6 +440,11 @@ const SortableRow: React.FC<SortableRowProps> = ({
           {reg.estilo_danca && (
             <span className="px-1.5 py-0.5 bg-[#ff0068]/10 text-[#ff0068] rounded-full text-[8px] font-black uppercase tracking-wider">
               {stripEstiloVertentes(reg.estilo_danca)}
+            </span>
+          )}
+          {reg.subgenero && (
+            <span className="px-1.5 py-0.5 bg-[#ff0068]/10 text-[#ff0068] rounded-full text-[8px] font-black uppercase tracking-wider">
+              {reg.subgenero}
             </span>
           )}
           {reg.categoria && (
@@ -2138,12 +2148,13 @@ const Schedule = () => {
           r.nome_coreografia || '—',
           toTitleCase(resolveEstudio(r)) || '—',
           stripEstiloVertentes(r.estilo_danca) || '—',
+          r.subgenero || '—',
           r.formato_participacao || '—',
           r.categoria || '—',
         ]);
 
         autoTable(doc, {
-          head: [['Nº', 'Coreografia', 'Estúdio', 'Estilo', 'Formação', 'Categoria']],
+          head: [['Nº', 'Coreografia', 'Estúdio', 'Estilo', 'Subgênero', 'Formação', 'Categoria']],
           body,
           startY: cursorY,
           theme: 'striped',
