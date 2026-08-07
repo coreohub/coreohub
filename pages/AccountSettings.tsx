@@ -392,6 +392,12 @@ const DEFAULT_GENERAL = {
   // Alguns regulamentos chamam a mesma faixa de "1º/2º/3º Lugar" em vez de
   // medalha (ex: Ecodança) — o MECANISMO (nota mínima) não muda, só o texto.
   medalLabels: { gold: '', silver: '', bronze: '' } as { gold: string; silver: string; bronze: string },
+  // Estado da SELEÇÃO em si (não deduzido dos valores) — deduzir do valor
+  // quebrava "Personalizado" quando os 3 campos já batiam com um dos 2
+  // presets (clicar não tinha efeito visível nenhum, o cartão certo nunca
+  // acendia). Recalculado 1x na carga a partir do que veio salvo; a partir
+  // daí só os cliques nos cartões mudam.
+  medalLabelMode: 'default' as 'default' | 'lugar' | 'custom',
   // 'THRESHOLD' = ouro/prata/bronze por nota mínima (várias medalhas).
   // 'RANKING' = 1º/2º/3º lugar pela colocação (uma medalha por posição).
   premiationSystem: 'THRESHOLD' as 'THRESHOLD' | 'RANKING',
@@ -2068,6 +2074,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               silver: data.medal_labels?.silver ?? '',
               bronze: data.medal_labels?.bronze ?? '',
             },
+            medalLabelMode: (!data.medal_labels?.gold && !data.medal_labels?.silver && !data.medal_labels?.bronze)
+              ? 'default'
+              : (data.medal_labels?.gold === '1º Lugar' && data.medal_labels?.silver === '2º Lugar' && data.medal_labels?.bronze === '3º Lugar')
+              ? 'lugar'
+              : 'custom',
             premiationSystem: (data.premiation_system as 'THRESHOLD' | 'RANKING') || DEFAULT_GENERAL.premiationSystem,
             coverUrl:    data.cover_url   || evt.cover_url    || DEFAULT_GENERAL.coverUrl,
             description: descriptionFromDb,
@@ -6000,18 +6011,13 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       cartões "Sistema de Premiação" acima: borda rosa = ativo. Só o
                       cartão "Personalizado" revela os campos de texto editáveis. */}
                   {(() => {
-                    const ml = general.medalLabels;
-                    const preset: 'default' | 'lugar' | 'custom' =
-                      (!ml.gold && !ml.silver && !ml.bronze) ? 'default'
-                      : (ml.gold === '1º Lugar' && ml.silver === '2º Lugar' && ml.bronze === '3º Lugar') ? 'lugar'
-                      : 'custom';
                     const options = [
                       { id: 'default' as const, title: 'Ouro/Prata/Bronze', desc: 'Padrão do sistema.',
-                        apply: () => setGeneral(g => ({ ...g, medalLabels: { gold: '', silver: '', bronze: '' } })) },
+                        apply: () => setGeneral(g => ({ ...g, medalLabelMode: 'default', medalLabels: { gold: '', silver: '', bronze: '' } })) },
                       { id: 'lugar' as const, title: '1º/2º/3º Lugar', desc: 'Nota mínima, nomeada por colocação.',
-                        apply: () => setGeneral(g => ({ ...g, medalLabels: { gold: '1º Lugar', silver: '2º Lugar', bronze: '3º Lugar' } })) },
+                        apply: () => setGeneral(g => ({ ...g, medalLabelMode: 'lugar', medalLabels: { gold: '1º Lugar', silver: '2º Lugar', bronze: '3º Lugar' } })) },
                       { id: 'custom' as const, title: 'Personalizado', desc: 'Digite o nome de cada faixa.',
-                        apply: () => setGeneral(g => ({ ...g, medalLabels: {
+                        apply: () => setGeneral(g => ({ ...g, medalLabelMode: 'custom', medalLabels: {
                           gold:   g.medalLabels.gold   || 'Ouro',
                           silver: g.medalLabels.silver || 'Prata',
                           bronze: g.medalLabels.bronze || 'Bronze',
@@ -6024,14 +6030,14 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                             key={opt.id}
                             type="button"
                             onClick={opt.apply}
-                            aria-pressed={preset === opt.id}
+                            aria-pressed={general.medalLabelMode === opt.id}
                             className={`text-left p-3 rounded-2xl border-2 transition-colors ${
-                              preset === opt.id
+                              general.medalLabelMode === opt.id
                                 ? 'border-[#ff0068] bg-[#ff0068]/5'
                                 : 'border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 hover:border-[#ff0068]/30'
                             }`}
                           >
-                            <p className={`text-[11px] font-black uppercase tracking-widest ${preset === opt.id ? 'text-[#ff0068]' : 'text-slate-700 dark:text-slate-200'}`}>
+                            <p className={`text-[11px] font-black uppercase tracking-widest ${general.medalLabelMode === opt.id ? 'text-[#ff0068]' : 'text-slate-700 dark:text-slate-200'}`}>
                               {opt.title}
                             </p>
                             <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{opt.desc}</p>
@@ -6049,8 +6055,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       const val = general.medalThresholds[key];
                       const maxVal = general.scoreScale === 'BASE_100' ? 100 : 10;
                       const ml = general.medalLabels;
-                      const isCustom = !(!ml.gold && !ml.silver && !ml.bronze)
-                        && !(ml.gold === '1º Lugar' && ml.silver === '2º Lugar' && ml.bronze === '3º Lugar');
+                      const isCustom = general.medalLabelMode === 'custom';
                       return (
                         <div key={key} className={`flex flex-col gap-2 p-4 rounded-2xl border-2 ${bg} ${border}`}>
                           <div className="flex items-center gap-2">
