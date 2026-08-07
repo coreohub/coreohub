@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { isStyleInList } from '../utils/styleMatch';
+import { stripEstiloVertentes } from '../utils/formatters';
 import { useT, useLocale, setLocale } from '../hooks/useT';
 import type { JudgeDictKey } from '../i18n/judge-pt';
 import { readJudgeSession, clearJudgeSession, needsMicCheck, readMicCheckState, writeMicCheckState } from './JudgeLogin';
@@ -1872,16 +1873,18 @@ const JudgeTerminal = () => {
             </h2>
             {currentPerformance && (
               <p className="text-[8px] sm:text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate hidden sm:block">
-                {currentPerformance.estudio} · {currentPerformance.estilo_danca} · {currentPerformance.categoria}
+                {currentPerformance.estudio} · {stripEstiloVertentes(currentPerformance.estilo_danca)}
+                {currentPerformance.formato_participacao ? ` · ${currentPerformance.formato_participacao}` : ''} · {currentPerformance.categoria}
                 {filteredSchedule.length > 0 && (
                   <span className="ml-2 text-slate-400 dark:text-slate-500">({currentIndex + 1}/{filteredSchedule.length})</span>
                 )}
               </p>
             )}
-            {/* Em mobile, mostra só "estilo · 1/3" — info crítica em 1 linha */}
+            {/* Em mobile, mostra só "estilo · formação · 1/3" — info crítica em 1 linha */}
             {currentPerformance && (
               <p className="text-[8px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate sm:hidden">
-                {currentPerformance.estilo_danca}
+                {stripEstiloVertentes(currentPerformance.estilo_danca)}
+                {currentPerformance.formato_participacao ? ` · ${currentPerformance.formato_participacao}` : ''}
                 {filteredSchedule.length > 0 && <span className="ml-1.5 text-slate-400">{currentIndex + 1}/{filteredSchedule.length}</span>}
               </p>
             )}
@@ -2080,7 +2083,8 @@ const JudgeTerminal = () => {
                               {p.nome_coreografia || '—'}
                             </span>
                             <span className="block text-[9px] font-bold text-slate-400 truncate">
-                              {p.estudio} · {p.estilo_danca}
+                              {p.estudio} · {stripEstiloVertentes(p.estilo_danca)}
+                              {p.formato_participacao ? ` · ${p.formato_participacao}` : ''}
                             </span>
                           </span>
                           <span className={`shrink-0 text-[8px] font-black uppercase tracking-widest
@@ -2363,7 +2367,8 @@ const JudgeTerminal = () => {
                         {p.nome_coreografia || '—'}
                       </span>
                       <span className="block text-[10px] font-bold text-slate-400 truncate">
-                        {p.estudio} · {p.estilo_danca}
+                        {p.estudio} · {stripEstiloVertentes(p.estilo_danca)}
+                        {p.formato_participacao ? ` · ${p.formato_participacao}` : ''}
                       </span>
                     </span>
                     {isLive && (
@@ -2401,7 +2406,8 @@ const JudgeTerminal = () => {
                 {currentPerformance.nome_coreografia}
               </h3>
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                {currentPerformance.estudio} · {currentPerformance.estilo_danca} · {currentPerformance.categoria}
+                {currentPerformance.estudio} · {stripEstiloVertentes(currentPerformance.estilo_danca)}
+                {currentPerformance.formato_participacao ? ` · ${currentPerformance.formato_participacao}` : ''} · {currentPerformance.categoria}
               </p>
             </div>
 
