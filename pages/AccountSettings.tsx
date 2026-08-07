@@ -5992,9 +5992,31 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               {/* Conditional UI por sistema escolhido */}
               {general.premiationSystem === 'THRESHOLD' ? (
                 <div className="px-5 pb-5 pt-2 space-y-3">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Faixas de medalha
-                  </p>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      Faixas de medalha
+                    </p>
+                    {/* Atalho — preenche as 3 faixas de uma vez, deixando claro que é
+                        uma ESCOLHA do produtor (não digitação livre solta). O campo de
+                        texto abaixo continua editável pra qualquer nome personalizado. */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Usar:</span>
+                      <button
+                        type="button"
+                        onClick={() => setGeneral(g => ({ ...g, medalLabels: { gold: '', silver: '', bronze: '' } }))}
+                        className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/10 hover:border-[#ff0068]/40 transition-colors"
+                      >
+                        Ouro/Prata/Bronze
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGeneral(g => ({ ...g, medalLabels: { gold: '1º Lugar', silver: '2º Lugar', bronze: '3º Lugar' } }))}
+                        className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/10 hover:border-[#ff0068]/40 transition-colors"
+                      >
+                        1º/2º/3º Lugar
+                      </button>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {([
                       { key: 'gold',   label: 'Ouro',   color: 'text-yellow-500',  bg: 'bg-yellow-50 dark:bg-yellow-500/10',  border: 'border-yellow-300 dark:border-yellow-500/30' },
