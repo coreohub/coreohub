@@ -108,7 +108,10 @@ const NavItem: React.FC<{ path: string; label: string; icon: React.ElementType; 
     <div className={`relative p-1 rounded-xl transition-all ${isActive ? 'bg-[#ff0068]/10' : ''}`}>
       <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8} />
       {!!badge && badge > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-[#ff0068] text-white text-[8px] font-black flex items-center justify-center leading-none border-2 border-white dark:border-slate-950">
+        // Âmbar, não rosa de marca — mesma semântica de urgência do sino
+        // (NotificationBell.tsx) e de "Pendências"/"Trilha pendente" no
+        // resto do app. Rosa fica reservado pra CTA/navegação ativa.
+        <span className="absolute -top-0.5 -right-0.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-amber-500 text-white text-[8px] font-black flex items-center justify-center leading-none border-2 border-white dark:border-slate-950">
           {badge > 9 ? '9+' : badge}
         </span>
       )}

@@ -188,8 +188,12 @@ const NotificationBell: React.FC<Props> = ({ userId }) => {
         aria-label={unreadCount > 0 ? `${unreadCount} notificações não lidas` : 'Notificações'}
       >
         <Bell size={18} />
+        {/* Âmbar, não rosa de marca — badge de contagem é sinal de urgência,
+            não deve competir visualmente com CTA/navegação ativa (que usam
+            a cor de marca). Mesma semântica já usada em "Pendências"/
+            "Trilha pendente" no resto do app. */}
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-[#ff0068] text-white rounded-full text-[9px] font-black flex items-center justify-center border-2 border-white dark:border-slate-950">
+          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-amber-500 text-white rounded-full text-[9px] font-black flex items-center justify-center border-2 border-white dark:border-slate-950">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -265,7 +269,7 @@ const NotificationBell: React.FC<Props> = ({ userId }) => {
                                 {n.title}
                               </p>
                               {isUnread && (
-                                <span className="shrink-0 w-2 h-2 rounded-full bg-[#ff0068] mt-1.5" title="Não lida" />
+                                <span className="shrink-0 w-2 h-2 rounded-full bg-amber-500 mt-1.5" title="Não lida" />
                               )}
                             </div>
                             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{n.body}</p>
