@@ -25,11 +25,21 @@ export function OtpBoxes({ value, onChange, onComplete, length = 6, autoFocus, d
   };
 
   const handleChange = (i: number, raw: string) => {
-    const digit = raw.replace(/\D/g, '').slice(-1);
+    const digitsOnly = raw.replace(/\D/g, '');
+    // Mais de 1 dígito numa caixinha só = colagem que não passou pelo evento
+    // nativo `paste` (Android/Gboard: sugestão de área de transferência e
+    // autofill de SMS inserem via input direto, sem disparar `paste` —
+    // `maxLength` do input não trunca porque removemos o atributo). Trata
+    // como o código inteiro em vez de pegar só 1 caractere.
+    if (digitsOnly.length > 1) {
+      const clean = commit(digitsOnly);
+      focus(clean.length);
+      return;
+    }
     const arr = Array.from({ length }, (_, k) => value[k] ?? '');
-    arr[i] = digit;
+    arr[i] = digitsOnly;
     commit(arr.join(''));
-    if (digit && i < length - 1) focus(i + 1);
+    if (digitsOnly && i < length - 1) focus(i + 1);
   };
 
   const handleKeyDown = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -63,7 +73,6 @@ export function OtpBoxes({ value, onChange, onComplete, length = 6, autoFocus, d
           type="text"
           inputMode="numeric"
           autoComplete={i === 0 ? 'one-time-code' : 'off'}
-          maxLength={1}
           value={c}
           disabled={disabled}
           autoFocus={autoFocus && i === 0}

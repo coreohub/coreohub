@@ -615,6 +615,16 @@ const InscricaoWizard: React.FC = () => {
     );
   }, [event, modalidade]);
 
+  // Formação com preço R$0 (lote vigente ou fee/base_fee) — evento gratuito
+  // por qualquer motivo (contrato fechado, governo, etc). Usado só pra copy
+  // do Resumo/botão final; o cálculo real de novo acontece no servidor.
+  const isFormacaoGratuita = useMemo(() => {
+    if (!formacao) return false;
+    const firstLote = ((formacao as any)?.lotes ?? [])[0];
+    const feeUnit = Number(firstLote?.preco ?? (formacao as any)?.fee ?? (formacao as any)?.base_fee ?? 0);
+    return feeUnit <= 0;
+  }, [formacao]);
+
   const minMembers = Number(formacao?.min_members ?? 1);
   // Defaults seguros baseados no NOME quando o produtor não setou max_members
   // explicitamente. Evita o bug do botão "Adicionar bailarino" em Solo (vi
@@ -2000,9 +2010,13 @@ const InscricaoWizard: React.FC = () => {
 
             <div className="border-t border-slate-200 dark:border-white/10 pt-4 mt-4">
               <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                Ao confirmar, sua inscrição é salva como pendente em <strong>Minhas Coreografias</strong>.
-                Lá você decide: pagar agora separadamente, juntar com outras coreografias em 1 PIX, ou
-                adicionar mais inscrições antes. O valor depende do lote vigente (Pix, cartão ou boleto via Asaas).
+                {isFormacaoGratuita ? (
+                  <>Esta modalidade é <strong className="text-emerald-600 dark:text-emerald-400">gratuita</strong> — ao confirmar, sua inscrição já fica aprovada, sem nenhuma cobrança.</>
+                ) : (
+                  <>Ao confirmar, sua inscrição é salva como pendente em <strong>Minhas Coreografias</strong>.
+                  Lá você decide: pagar agora separadamente, juntar com outras coreografias em 1 PIX, ou
+                  adicionar mais inscrições antes. O valor depende do lote vigente (Pix, cartão ou boleto via Asaas).</>
+                )}
               </p>
             </div>
 

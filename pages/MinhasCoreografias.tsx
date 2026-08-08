@@ -887,6 +887,12 @@ const MinhasCoreografias = () => {
         }
         throw new Error(data?.error ?? 'Erro ao gerar fatura.');
       }
+      // Evento/carrinho 100% gratuito — já aprovado direto, sem Asaas.
+      if (data?.free) {
+        await fetchAll();
+        setPayingEvent(null);
+        return;
+      }
       if (data?.invoice_url) {
         window.location.href = data.invoice_url;
       }
@@ -933,6 +939,12 @@ const MinhasCoreografias = () => {
       );
       const data = await resp.json();
       if (!resp.ok) throw new Error(data?.error ?? 'Erro ao gerar pagamento.');
+      // Formação gratuita — já aprovado direto, sem Asaas.
+      if (data?.free) {
+        await fetchAll();
+        setPayingSingle(null);
+        return;
+      }
       if (data?.invoice_url) {
         window.location.href = data.invoice_url;
       }
@@ -1418,7 +1430,11 @@ const MinhasCoreografias = () => {
                     <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
                       Pagar todas
                     </p>
-                    {discountAmount > 0 ? (
+                    {total === 0 ? (
+                      <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5 italic uppercase tracking-tight">
+                        Gratuito
+                      </p>
+                    ) : discountAmount > 0 ? (
                       <div className="mt-0.5">
                         <p className="text-[10px] font-bold text-slate-400 line-through tabular-nums">
                           {fmtMoney(subtotal)}
@@ -1448,10 +1464,12 @@ const MinhasCoreografias = () => {
                   >
                     {payingEvent === grupo.eventId ? (
                       <Loader2 size={13} className="animate-spin" />
+                    ) : total === 0 ? (
+                      <Check size={13} />
                     ) : (
                       <ShoppingCart size={13} />
                     )}
-                    Pagar tudo
+                    {total === 0 ? 'Confirmar inscrição gratuita' : 'Pagar tudo'}
                     <ChevronRight size={12} />
                   </button>
                 </div>

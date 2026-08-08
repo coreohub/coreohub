@@ -285,9 +285,13 @@ Deno.serve(async (req) => {
         baseFee = parseFloat((baseFee * bailarinosCount).toFixed(2))
       }
 
-      if (baseFee <= 0) {
+      // baseFee=0 é válido quando a formação foi explicitamente configurada
+      // como gratuita (fee/base_fee/lote a 0) — só é erro de configuração
+      // quando NÃO existe formação nenhuma resolvida pro cálculo (evento sem
+      // formacoes_config, ou nome de formação que não bate com nada ativo).
+      if (!formacaoEscolhida) {
         throw new Error(
-          `Valor não configurado para a formação "${formacaoNome || 'padrão'}" ` +
+          `Formação "${formacaoNome || 'padrão'}" não está configurada para este evento ` +
           `(inscrição ${r.nome_coreografia ?? r.id}).`
         )
       }
@@ -400,6 +404,50 @@ Deno.serve(async (req) => {
       ` valueTotal=${valueTotal} producerTotal=${producerTotal} commissionTotal=${commissionTotal} mode=${feeMode}` +
       (validatedCoupon ? ` coupon=${validatedCoupon.code} discount=${discountTotal}` : '')
     )
+
+    // ── 5c. Carrinho gratuito (valueTotal === 0) — aprova direto, sem Asaas ──
+    // Evento com todas as formações a R$0 (contrato fechado com a CoreoHub,
+    // "governo", grandfathered, etc — o MOTIVO não importa aqui) OU cupom
+    // 100% zerando o total. Asaas não aceita cobrança de R$0, e não faz
+    // sentido gerar fatura pra valor nulo. Espelha o atalho que já existia
+    // no Checkout.tsx legacy (handleConfirmFree) pro fluxo single, agora
+    // pro carrinho agregado — sem isso a inscrição fica PENDENTE pra sempre.
+    if (valueTotal === 0) {
+      const nowIso = new Date().toISOString()
+      // Mesmo valor pra toda registration do grupo (todas ficam a R$0 e
+      // compartilham o mesmo cupom, se houver) — 1 UPDATE só via .in(), não
+      // um loop de N updates.
+      const { error: freeErr } = await supabase
+        .from('registrations')
+        .update({
+          status_pagamento:   'APROVADO',
+          valor_pago:         0,
+          charged_amount:     0,
+          coupon_id:          validatedCoupon?.id ?? null,
+          coupon_redeemed_at: validatedCoupon ? nowIso : null,
+        })
+        .in('id', priced.map(p => p.reg.id))
+      if (freeErr) {
+        throw new Error(`Erro ao confirmar inscrição gratuita: ${freeErr.message}`)
+      }
+      // Incremento único do cupom (não por registration — mesmo padrão
+      // idempotente do webhook, só que aqui não existe webhook pra disparar).
+      if (validatedCoupon) {
+        const { data: couponRow } = await supabase
+          .from('coupons')
+          .select('used_count')
+          .eq('id', validatedCoupon.id)
+          .single()
+        await supabase
+          .from('coupons')
+          .update({ used_count: Number(couponRow?.used_count ?? 0) + 1 })
+          .eq('id', validatedCoupon.id)
+      }
+      return respond(200, {
+        free:             true,
+        registration_ids: priced.map(p => p.reg.id),
+      })
+    }
 
     // ── 6. Criar payment row PRIMEIRO (pra ter o UUID pro externalReference) ──
     // expiresAt já calculado no bloco de validação acima (A2).

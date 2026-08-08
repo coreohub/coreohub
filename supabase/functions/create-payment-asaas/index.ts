@@ -130,9 +130,12 @@ Deno.serve(async (req) => {
       baseFee = parseFloat((baseFee * bailarinosCount).toFixed(2))
     }
 
-    if (baseFee <= 0) {
+    // baseFee=0 é válido quando a formação foi explicitamente configurada
+    // como gratuita — só é erro de configuração quando não há formação
+    // nenhuma resolvida (evento sem formacoes_config, nome sem match).
+    if (!formacaoEscolhida) {
       throw new Error(
-        `Valor não configurado para a formação "${formacaoUsada}". Configure os preços em Configurações do Evento.`
+        `Formação "${formacaoUsada}" não está configurada para este evento. Configure os preços em Configurações do Evento.`
       )
     }
 
@@ -220,6 +223,41 @@ Deno.serve(async (req) => {
       (pricingType === 'PER_MEMBER' ? ` ${feeUnit}×${bailarinosCount}=${baseFee}` : ` base=${baseFee}`) +
       ` mode=${feeMode} charged=${chargedAmount} producer=${producerAmount} commission=${commissionAmount}`
     )
+
+    // ── 6b. Inscrição gratuita (chargedAmount === 0) — aprova direto, sem Asaas ──
+    // Formação a R$0 (evento gratuito por qualquer motivo) OU cupom 100%
+    // zerando o valor. Espelha o atalho do carrinho agregado
+    // (create-aggregate-payment-asaas) pro fluxo single/"Pagar só esta".
+    if (chargedAmount === 0) {
+      const { error: freeErr } = await supabase
+        .from('registrations')
+        .update({
+          status_pagamento:   'APROVADO',
+          valor_pago:         0,
+          charged_amount:     0,
+          coupon_id:          validatedCoupon?.id ?? null,
+          coupon_redeemed_at: validatedCoupon ? new Date().toISOString() : null,
+        })
+        .eq('id', registration_id)
+      if (freeErr) throw new Error(`Erro ao confirmar inscrição gratuita: ${freeErr.message}`)
+
+      if (validatedCoupon) {
+        const { data: couponRow } = await supabase
+          .from('coupons')
+          .select('used_count')
+          .eq('id', validatedCoupon.id)
+          .single()
+        await supabase
+          .from('coupons')
+          .update({ used_count: Number(couponRow?.used_count ?? 0) + 1 })
+          .eq('id', validatedCoupon.id)
+      }
+
+      return new Response(JSON.stringify({ free: true, registration_id }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     // ── 7. Wallet do produtor ─────────────────────────────────────────────────
     const { data: producer } = await supabase
