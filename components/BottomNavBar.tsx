@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Clapperboard, Music2, UserRound,
@@ -7,6 +7,8 @@ import {
   GraduationCap, Tag, Trophy, Award, Star, Shield, FileText,
 } from 'lucide-react';
 import { UserRole } from '../types';
+import { supabase } from '../services/supabase';
+import { isRegistrationPending } from '../utils/registrationStatus';
 
 // ─── Inscrito ─────────────────────────────────────────────────────────────────
 
@@ -94,8 +96,8 @@ const MORE_GROUPS: MoreGroup[] = [
 
 // ─── Shared nav item ──────────────────────────────────────────────────────────
 
-const NavItem: React.FC<{ path: string; label: string; icon: React.ElementType; isActive: boolean }> = ({
-  path, label, icon: Icon, isActive,
+const NavItem: React.FC<{ path: string; label: string; icon: React.ElementType; isActive: boolean; badge?: number }> = ({
+  path, label, icon: Icon, isActive, badge,
 }) => (
   <Link
     to={path}
@@ -103,8 +105,13 @@ const NavItem: React.FC<{ path: string; label: string; icon: React.ElementType; 
       isActive ? 'text-[#ff0068]' : 'text-slate-400 dark:text-slate-500'
     }`}
   >
-    <div className={`p-1 rounded-xl transition-all ${isActive ? 'bg-[#ff0068]/10' : ''}`}>
+    <div className={`relative p-1 rounded-xl transition-all ${isActive ? 'bg-[#ff0068]/10' : ''}`}>
       <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8} />
+      {!!badge && badge > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-[#ff0068] text-white text-[8px] font-black flex items-center justify-center leading-none border-2 border-white dark:border-slate-950">
+          {badge > 9 ? '9+' : badge}
+        </span>
+      )}
     </div>
     <span className="text-[10px] font-black uppercase tracking-tight leading-none">{label}</span>
   </Link>
@@ -116,16 +123,46 @@ interface Props {
   activeRole: UserRole | null;
   /** @deprecated mantido só por compat — Seletiva agora vive no Mais sheet */
   videoSelectionEnabled?: boolean;
+  userId?: string;
 }
 
-const BottomNavBar: React.FC<Props> = ({ activeRole }) => {
+const BottomNavBar: React.FC<Props> = ({ activeRole, userId }) => {
   const location = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
+  // Badge de pendências no ícone "Inscrições" (padrão Instagram/WhatsApp/
+  // Sympla) — sem realtime (não precisa ser instantâneo). Refetch no mount +
+  // quando a aba volta a ficar visível (`visibilitychange`), não a cada
+  // troca de rota — evitar 1 query redundante em toda navegação do inscrito,
+  // mesmo em telas sem relação nenhuma com pagamento.
+  const [pendingCount, setPendingCount] = useState(0);
+  const isInscritoRole = !!activeRole && INSCRITO_ROLES.has(activeRole);
+
+  useEffect(() => {
+    if (!isInscritoRole || !userId) { setPendingCount(0); return; }
+    let cancelled = false;
+    const fetchPending = () => {
+      supabase
+        .from('registrations')
+        .select('status_pagamento')
+        .eq('user_id', userId)
+        .then(({ data }) => {
+          if (cancelled) return;
+          setPendingCount((data ?? []).filter(r => isRegistrationPending(r.status_pagamento)).length);
+        });
+    };
+    fetchPending();
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchPending(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [isInscritoRole, userId]);
 
   if (!activeRole) return null;
 
   const isProdutor = PRODUTOR_ROLES.has(activeRole);
-  const isInscrito = INSCRITO_ROLES.has(activeRole);
+  const isInscrito = isInscritoRole;
 
   if (!isProdutor && !isInscrito) return null;
 
@@ -162,6 +199,7 @@ const BottomNavBar: React.FC<Props> = ({ activeRole }) => {
                 label={item.label}
                 icon={item.icon}
                 isActive={location.pathname === item.path}
+                badge={item.path === '/minhas-coreografias' ? pendingCount : undefined}
               />
             ),
           )}

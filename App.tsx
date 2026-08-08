@@ -272,7 +272,7 @@ const PrivateLayout: React.FC<{
         </main>
       </div>
 
-      <BottomNavBar activeRole={activeRole} videoSelectionEnabled={videoSelectionEnabled} />
+      <BottomNavBar activeRole={activeRole} videoSelectionEnabled={videoSelectionEnabled} userId={profile.id} />
     </div>
   );
 };

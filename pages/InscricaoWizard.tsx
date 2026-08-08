@@ -281,6 +281,11 @@ const InscricaoWizard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  // profiles.full_name nunca é setado pra quem entra via link da bio do
+  // Instagram (login por OTP, sem cadastro por senha) — só o nome digitado
+  // no Wizard (coreógrafo/bailarino solo) captura o nome real dessa pessoa.
+  // handleSubmit faz o backfill se este flag estiver true.
+  const [profileNeedsName, setProfileNeedsName] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
   // Fase 4B — gate de view_event quando inscrito chega no Wizard por link
@@ -508,6 +513,7 @@ const InscricaoWizard: React.FC = () => {
         .select('full_name')
         .eq('id', user.id)
         .maybeSingle();
+      setProfileNeedsName(!profile?.full_name?.trim());
 
       const [{ data: cfg }, { data: legacy }, { data: styles }] = await Promise.all([
         supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date, tipos_apresentacao, prazo_inscricao').eq('event_id', ev.id).maybeSingle(),
@@ -1019,6 +1025,18 @@ const InscricaoWizard: React.FC = () => {
       // Registration commitada — rascunho não é mais útil. Limpa antes de
       // qualquer branch de saída pra cobrir tanto navigate quanto window.location.
       clearWizardDraft(String(event.id));
+
+      // Backfill de profiles.full_name — nunca sobrescreve nome já existente
+      // (profileNeedsName só é true quando o profile chegou vazio). Nome do
+      // coreógrafo tem prioridade (é quem preenche o formulário); solo sem
+      // coreógrafo cai pro nome do próprio bailarino. Best-effort — falha
+      // aqui não deve travar a inscrição já commitada.
+      if (profileNeedsName) {
+        const nomeParaPerfil = (data.coreografo_nome || data.bailarinos[0]?.nome || '').trim();
+        if (nomeParaPerfil && userId) {
+          await supabase.from('profiles').update({ full_name: nomeParaPerfil }).eq('id', userId);
+        }
+      }
 
       // 3) Branching pelo modelo de seletiva (Sessão seletiva v1):
       //    Modelo 3 (taxa A obrigatória + valor > 0): marca AGUARDANDO_VIDEO,

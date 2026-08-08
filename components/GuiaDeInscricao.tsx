@@ -127,6 +127,34 @@ const GuiaSkeleton = () => (
   </div>
 );
 
+/* ── Confetti sutil — burst curto e contido dentro do card (não tela cheia).
+ * CSS/framer-motion puro, sem lib nova só pra isso. ───────────────────────── */
+const CONFETTI_COLORS = ['#ff0068', '#e3ff0a', '#1de7f2', '#10b981'];
+
+const ConfettiBurst: React.FC = () => {
+  const particles = React.useMemo(() => Array.from({ length: 14 }, (_, i) => ({
+    id: i,
+    x: (Math.random() - 0.5) * 220,
+    delay: Math.random() * 0.15,
+    color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+    rotate: Math.random() * 360,
+  })), []);
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+      {particles.map(p => (
+        <motion.span
+          key={p.id}
+          initial={{ opacity: 1, x: 0, y: -10, rotate: 0 }}
+          animate={{ opacity: 0, x: p.x, y: 140, rotate: p.rotate }}
+          transition={{ duration: 1.4, delay: p.delay, ease: 'easeOut' }}
+          className="absolute left-1/2 top-6 w-1.5 h-3 rounded-sm"
+          style={{ backgroundColor: p.color }}
+        />
+      ))}
+    </div>
+  );
+};
+
 /* ── Componente principal ─────────────────────────────────────────────────── */
 const GuiaDeInscricao: React.FC<Props> = ({ profile, config }) => {
   const navigate = useNavigate();
@@ -167,6 +195,22 @@ const GuiaDeInscricao: React.FC<Props> = ({ profile, config }) => {
   // PR-C: perfil deixa de fazer parte do "completo" — fluxo pode terminar
   // sem perfil (só não emite certificado). Tira separada cobra o perfil.
   const allDone        = hasElenco && total > 0 && comTrilha === total && pagas === total;
+
+  // Confetti sutil só na 1ª vez que o card "Inscrição Completa!" aparece —
+  // chave em localStorage por user+evento evita repetir a cada revisita
+  // (padrão Duolingo/Notion: celebra o momento, não incomoda depois).
+  const [showConfetti, setShowConfetti] = useState(false);
+  useEffect(() => {
+    if (!allDone) return;
+    try {
+      const key = `coreohub_confetti_shown_${profile.id}_${config?.event_id ?? 'default'}`;
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, '1');
+      setShowConfetti(true);
+      const t = setTimeout(() => setShowConfetti(false), 1600);
+      return () => clearTimeout(t);
+    } catch { /* localStorage indisponível — sem confetti, sem crash */ }
+  }, [allDone]);
 
   // PR-C: passo ativo é o primeiro não-concluído entre os 4.
   const activeStep =
@@ -292,8 +336,9 @@ const GuiaDeInscricao: React.FC<Props> = ({ profile, config }) => {
       <motion.div
         initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-emerald-500/5 rounded-3xl border border-emerald-500/20 overflow-hidden"
+        className="relative bg-emerald-500/5 rounded-3xl border border-emerald-500/20 overflow-hidden"
       >
+        {showConfetti && <ConfettiBurst />}
         <div className="p-6 flex items-center gap-5">
           <div className="w-14 h-14 bg-emerald-500/10 rounded-2xl flex items-center justify-center text-emerald-500 shrink-0">
             <Trophy size={28} />

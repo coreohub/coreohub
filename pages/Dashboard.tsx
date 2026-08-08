@@ -370,22 +370,25 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
         </motion.div>
       )}
 
-      {/* ── 3 Cards de resumo ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* ── 3 Cards de resumo ── grid-cols-3 desde o mobile (padding/fonte
+          reduzidos pra caber em 375px) — antes empilhava em telas pequenas
+          e ocupava a tela toda de rolagem só pra 3 números. */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
         {/* Coreografias */}
         <motion.div
           initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-          className="bg-white dark:bg-white/5 p-5 rounded-3xl border border-slate-200 dark:border-white/5 cursor-pointer hover:border-[#ff0068]/30 transition-all group"
+          className="bg-white dark:bg-white/5 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-white/5 cursor-pointer hover:border-[#ff0068]/30 transition-all group"
           onClick={() => navigate('/minhas-coreografias')}
         >
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-[#ff0068]/10 text-[#ff0068] rounded-xl">
-              <Clapperboard size={18} />
+          <div className="flex items-center gap-1.5 sm:gap-3 mb-2 sm:mb-3">
+            <div className="p-1.5 sm:p-2 bg-[#ff0068]/10 text-[#ff0068] rounded-lg sm:rounded-xl shrink-0">
+              <Clapperboard size={14} className="sm:hidden" />
+              <Clapperboard size={18} className="hidden sm:block" />
             </div>
-            <h3 className="text-[10px] font-black uppercase tracking-widest">Coreografias</h3>
+            <h3 className="text-[8px] sm:text-[10px] font-black uppercase tracking-tight sm:tracking-widest truncate">Coreografias</h3>
           </div>
-          <p className="text-2xl font-black tracking-tighter text-slate-900 dark:text-white">{total}</p>
-          <span className="text-[8px] font-bold text-slate-400 uppercase">
+          <p className="text-lg sm:text-2xl font-black tracking-tighter text-slate-900 dark:text-white">{total}</p>
+          <span className="text-[8px] font-bold text-slate-400 uppercase leading-tight block">
             {total === 0 ? 'Nenhuma inscrita' : `${pendentes > 0 ? `${pendentes} ag. pagamento` : 'Todas em dia'}`}
           </span>
         </motion.div>
@@ -393,19 +396,20 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
         {/* Trilhas */}
         <motion.div
           initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-          className="bg-white dark:bg-white/5 p-5 rounded-3xl border border-slate-200 dark:border-white/5 cursor-pointer hover:border-[#ff0068]/30 transition-all group"
+          className="bg-white dark:bg-white/5 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-white/5 cursor-pointer hover:border-[#ff0068]/30 transition-all group"
           onClick={() => navigate('/central-de-midia')}
         >
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-violet-500/10 text-violet-500 rounded-xl">
-              <Upload size={18} />
+          <div className="flex items-center gap-1.5 sm:gap-3 mb-2 sm:mb-3">
+            <div className="p-1.5 sm:p-2 bg-violet-500/10 text-violet-500 rounded-lg sm:rounded-xl shrink-0">
+              <Upload size={14} className="sm:hidden" />
+              <Upload size={18} className="hidden sm:block" />
             </div>
-            <h3 className="text-[10px] font-black uppercase tracking-widest">Trilhas</h3>
+            <h3 className="text-[8px] sm:text-[10px] font-black uppercase tracking-tight sm:tracking-widest truncate">Trilhas</h3>
           </div>
-          <p className="text-2xl font-black tracking-tighter text-slate-900 dark:text-white">
+          <p className="text-lg sm:text-2xl font-black tracking-tighter text-slate-900 dark:text-white">
             {comTrilha}<span className="text-slate-300 dark:text-slate-600">/{total}</span>
           </p>
-          <span className="text-[8px] font-bold text-slate-400 uppercase">
+          <span className="text-[8px] font-bold text-slate-400 uppercase leading-tight block">
             {total === 0 ? 'Sem coreografias' : comTrilha === total ? 'Todas enviadas' : `${total - comTrilha} pendente${total - comTrilha !== 1 ? 's' : ''}`}
           </span>
         </motion.div>
@@ -413,18 +417,19 @@ const Dashboard = ({ profile, config, activeRole }: { profile: UserProfile; conf
         {/* Status geral */}
         <motion.div
           initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-          className="bg-white dark:bg-white/5 p-5 rounded-3xl border border-slate-200 dark:border-white/5"
+          className="bg-white dark:bg-white/5 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-white/5"
         >
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-emerald-500/10 text-emerald-500 rounded-xl">
-              <Trophy size={18} />
+          <div className="flex items-center gap-1.5 sm:gap-3 mb-2 sm:mb-3">
+            <div className="p-1.5 sm:p-2 bg-emerald-500/10 text-emerald-500 rounded-lg sm:rounded-xl shrink-0">
+              <Trophy size={14} className="sm:hidden" />
+              <Trophy size={18} className="hidden sm:block" />
             </div>
-            <h3 className="text-[10px] font-black uppercase tracking-widest">Status</h3>
+            <h3 className="text-[8px] sm:text-[10px] font-black uppercase tracking-tight sm:tracking-widest truncate">Status</h3>
           </div>
-          <p className={`text-2xl font-black tracking-tighter ${statusGeral.color}`}>
+          <p className={`text-lg sm:text-2xl font-black tracking-tighter ${statusGeral.color}`}>
             {statusGeral.label}
           </p>
-          <span className="text-[8px] font-bold text-slate-400 uppercase">
+          <span className="text-[8px] font-bold text-slate-400 uppercase leading-tight block">
             {total === 0 ? 'Inscreva sua primeira coreografia' : `${pagas}/${total} confirmada${pagas !== 1 ? 's' : ''}`}
           </span>
         </motion.div>
