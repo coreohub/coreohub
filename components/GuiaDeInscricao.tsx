@@ -39,15 +39,17 @@ const DeadlineBadge = ({ label, date }: { label: string; date?: string }) => {
   );
 };
 
-/* ── Banner de perfil incompleto — PR-C: vira CTA persistente, não bloqueia ───
- * Padrão Stripe/Linear: "Complete seu perfil" deixa de bloquear o fluxo —
- * vira sugestão visível em cima de tudo enquanto faltar dado. Necessário
- * só pra emissão de certificado (validade pública = nome verificado). */
+/* ── Perfil incompleto — PR-D: dobrado pra dentro do card único do Guia ──────
+ * Antes era um card cheio próprio (motion.div com padding/borda inteira),
+ * empilhado ACIMA do Guia. Consolidação em 1 card fixo (2026-08-08): vira
+ * uma tira fina no rodapé do mesmo card, só quando o perfil está incompleto.
+ * Padrão Stripe/Linear: "Complete seu perfil" não bloqueia o fluxo — é
+ * sugestão persistente, dispensável por 24h, necessária só pra emitir
+ * certificado (validade pública = nome verificado). */
 const PROFILE_BANNER_DISMISS_KEY = 'coreohub_profile_cta_dismissed_at';
 const PROFILE_BANNER_TTL_MS = 24 * 60 * 60 * 1000;
 
-const ProfileIncompleteBanner: React.FC<{ profile: UserProfile }> = ({ profile }) => {
-  const navigate = useNavigate();
+const useProfileIncomplete = (profile: UserProfile) => {
   const [dismissed, setDismissed] = useState(() => {
     try {
       const at = Number(localStorage.getItem(PROFILE_BANNER_DISMISS_KEY) ?? 0);
@@ -56,56 +58,51 @@ const ProfileIncompleteBanner: React.FC<{ profile: UserProfile }> = ({ profile }
   });
 
   const complete = !!(profile.full_name && profile.document && profile.whatsapp);
-  if (complete || dismissed) return null;
-
   const missing = [
     !profile.full_name && 'Nome',
     !profile.document  && 'CPF',
     !profile.whatsapp  && 'WhatsApp',
   ].filter(Boolean).join(' · ');
 
-  const handleDismiss = () => {
+  const dismiss = () => {
     try { localStorage.setItem(PROFILE_BANNER_DISMISS_KEY, String(Date.now())); } catch {}
     setDismissed(true);
   };
 
+  return { show: !complete && !dismissed, missing, dismiss };
+};
+
+const ProfileIncompleteStrip: React.FC<{ missing: string; onDismiss: () => void }> = ({ missing, onDismiss }) => {
+  const navigate = useNavigate();
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-start gap-3"
-    >
-      <div className="w-9 h-9 bg-amber-500/15 rounded-xl flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
-        <UserCircle size={18} />
+    <div className="px-5 py-3 border-t border-amber-500/15 bg-amber-500/5 flex items-center gap-3">
+      <div className="w-7 h-7 bg-amber-500/15 rounded-lg flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+        <UserCircle size={14} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-black text-amber-800 dark:text-amber-200">
-          Complete seu perfil pra emitir certificado
+        <p className="text-[10px] font-bold text-amber-800 dark:text-amber-300 truncate">
+          Complete seu perfil pra emitir certificado — faltam: <strong>{missing}</strong>
         </p>
-        <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-          Faltam: <strong>{missing}</strong>. Você pode se inscrever e pagar normalmente — o perfil só
-          é necessário pra receber certificado em PDF depois.
-        </p>
-        <button
-          onClick={() => navigate('/profile')}
-          className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors"
-        >
-          Completar agora <ArrowRight size={11} />
-        </button>
       </div>
       <button
-        onClick={handleDismiss}
-        className="text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-200 shrink-0"
+        onClick={() => navigate('/profile')}
+        className="shrink-0 text-[9px] font-black text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-200 uppercase tracking-widest flex items-center gap-1"
+      >
+        Completar <ArrowRight size={10} />
+      </button>
+      <button
+        onClick={onDismiss}
+        className="shrink-0 text-amber-600/70 dark:text-amber-500/70 hover:text-amber-900 dark:hover:text-amber-200"
         aria-label="Dispensar por 24h"
         title="Dispensar por 24h"
       >
-        <X size={14} />
+        <X size={12} />
       </button>
-    </motion.div>
+    </div>
   );
 };
 
-/* ── Skeleton de carregamento ─────────────────────────────────────────────── */
+/* ── Skeleton de carregamento — 1 card único agora, não mais lista de 3 ──── */
 const GuiaSkeleton = () => (
   <div className="bg-white dark:bg-white/5 rounded-3xl border border-slate-200 dark:border-white/5 overflow-hidden animate-pulse">
     <div className="px-6 py-4 border-b border-slate-200 dark:border-white/5 flex items-center justify-between">
@@ -119,16 +116,14 @@ const GuiaSkeleton = () => (
         ))}
       </div>
     </div>
-    {[1, 2, 3].map(i => (
-      <div key={i} className="px-5 py-4 border-b border-slate-100 dark:border-white/5 flex items-center gap-4">
-        <div className="w-10 h-10 rounded-2xl bg-slate-200 dark:bg-white/10 shrink-0" />
-        <div className="flex-1 space-y-2">
-          <div className="h-2.5 w-16 bg-slate-200 dark:bg-white/10 rounded-full" />
-          <div className="h-3.5 w-40 bg-slate-200 dark:bg-white/10 rounded-full" />
-          <div className="h-2.5 w-28 bg-slate-200 dark:bg-white/10 rounded-full" />
-        </div>
+    <div className="px-5 py-5 flex items-center gap-4">
+      <div className="w-10 h-10 rounded-2xl bg-slate-200 dark:bg-white/10 shrink-0" />
+      <div className="flex-1 space-y-2">
+        <div className="h-2.5 w-16 bg-slate-200 dark:bg-white/10 rounded-full" />
+        <div className="h-3.5 w-40 bg-slate-200 dark:bg-white/10 rounded-full" />
+        <div className="h-2.5 w-28 bg-slate-200 dark:bg-white/10 rounded-full" />
       </div>
-    ))}
+    </div>
   </div>
 );
 
@@ -138,7 +133,11 @@ const GuiaDeInscricao: React.FC<Props> = ({ profile, config }) => {
   const [loading, setLoading] = useState(true);
   const [elencoCount, setElencoCount] = useState(0);
   const [coreografias, setCoreografias] = useState<any[]>([]);
-  const [expandedStep, setExpandedStep] = useState<number | null>(null);
+  // Passo que o card está exibindo no momento — default é o passo ATIVO
+  // (null = "segue o ativo automaticamente"). Clicar num pontinho de
+  // progresso fixa a preview naquele passo até o user clicar em outro.
+  const [previewStep, setPreviewStep] = useState<number | null>(null);
+  const { show: showProfileStrip, missing: profileMissing, dismiss: dismissProfile } = useProfileIncomplete(profile);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -163,21 +162,19 @@ const GuiaDeInscricao: React.FC<Props> = ({ profile, config }) => {
     c.status_pagamento === 'AGUARDANDO_VIDEO' && c.video_status !== 'approved';
   const coreoTrilhaApplicable = coreografias.filter(c => !isAwaitingVideo(c));
   const total          = coreoTrilhaApplicable.length;
-  const comTrilha      = coreoTrilhaApplicable.filter(c => c.trilha_url).length;
-  const pagas          = coreoTrilhaApplicable.filter(c => isRegistrationPaid(c.status_pagamento)).length;
+  const comTrilha       = coreoTrilhaApplicable.filter(c => c.trilha_url).length;
+  const pagas           = coreoTrilhaApplicable.filter(c => isRegistrationPaid(c.status_pagamento)).length;
   // PR-C: perfil deixa de fazer parte do "completo" — fluxo pode terminar
-  // sem perfil (só não emite certificado). Banner separado cobra o perfil.
+  // sem perfil (só não emite certificado). Tira separada cobra o perfil.
   const allDone        = hasElenco && total > 0 && comTrilha === total && pagas === total;
 
-  // PR-C: passo ativo é o primeiro não-concluído entre os 4. Sem mais "perfil".
+  // PR-C: passo ativo é o primeiro não-concluído entre os 4.
   const activeStep =
     !hasElenco         ? 1 :
     total === 0        ? 2 :
     comTrilha < total  ? 3 :
     pagas < total      ? 4 : 5;
 
-  // PR-C: removido 'locked' — todos os passos são acessíveis a qualquer momento.
-  // Estados: 'done' (concluído), 'active' (em andamento), 'pending' (não iniciado).
   type StepStatus = 'done' | 'active' | 'pending';
   const getStatus = (id: number): StepStatus => {
     if (activeStep === 5 || id < activeStep) return 'done';
@@ -264,20 +261,24 @@ const GuiaDeInscricao: React.FC<Props> = ({ profile, config }) => {
     {
       id: 4,
       Icon: CreditCard,
-      title: 'Efetue o pagamento',
+      // Copy neutra de propósito — este passo não sabe se a formação
+      // escolhida é paga ou gratuita (isso depende de formacoes_config do
+      // evento, que o Guia não consulta). "Pagamento" seria enganoso pra
+      // eventos 100% gratuitos (contrato fechado, governo, etc).
+      title: 'Finalize sua inscrição',
       subtitle: 'Confirme sua vaga no evento',
-      description: 'Realize o pagamento das inscrições para garantir sua participação. Pix, boleto ou cartão de crédito. Se preferir, o pagamento pode ser feito presencialmente no credenciamento do evento.',
-      ctaLabel: pagas === total && total > 0 ? 'Ver comprovantes' : `Pagar (${total - pagas} pend.)`,
-      ctaAction: () => navigate('/pagamento'),
+      description: 'Garanta sua participação. Se o evento cobrar inscrição, pague via Pix, boleto, cartão ou presencialmente no credenciamento. Se for gratuito, é só confirmar — sem cobrança nenhuma.',
+      ctaLabel: pagas === total && total > 0 ? 'Ver comprovantes' : `Finalizar (${total - pagas} pend.)`,
+      ctaAction: () => navigate('/minhas-coreografias'),
       detail: (
         <div className="flex flex-wrap gap-2 items-center">
           {total > 0 && pagas < total && (
             <span className="text-[10px] font-bold text-amber-500 uppercase">
-              {total - pagas} coreografia{total - pagas !== 1 ? 's' : ''} aguardando pagamento
+              {total - pagas} coreografia{total - pagas !== 1 ? 's' : ''} aguardando confirmação
             </span>
           )}
           {config?.data_limite_pagamento && (
-            <DeadlineBadge label="Pagar até" date={config.data_limite_pagamento} />
+            <DeadlineBadge label="Prazo" date={config.data_limite_pagamento} />
           )}
         </div>
       ),
@@ -288,14 +289,12 @@ const GuiaDeInscricao: React.FC<Props> = ({ profile, config }) => {
 
   if (allDone) {
     return (
-      <div className="space-y-3">
-        {/* PR-C: banner de perfil ainda aparece se incompleto, mesmo com tudo pago */}
-        <ProfileIncompleteBanner profile={profile} />
-        <motion.div
-          initial={{ opacity: 0, scale: 0.97 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="bg-emerald-500/5 rounded-3xl border border-emerald-500/20 p-6 flex items-center gap-5"
-        >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.97 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-emerald-500/5 rounded-3xl border border-emerald-500/20 overflow-hidden"
+      >
+        <div className="p-6 flex items-center gap-5">
           <div className="w-14 h-14 bg-emerald-500/10 rounded-2xl flex items-center justify-center text-emerald-500 shrink-0">
             <Trophy size={28} />
           </div>
@@ -305,154 +304,116 @@ const GuiaDeInscricao: React.FC<Props> = ({ profile, config }) => {
               Todas as etapas concluídas. Boa sorte no {config?.nome_evento || 'festival'}!
             </p>
           </div>
-        </motion.div>
-      </div>
+        </div>
+        {/* Perfil ainda pode estar incompleto mesmo com tudo pago/enviado */}
+        {showProfileStrip && (
+          <ProfileIncompleteStrip missing={profileMissing} onDismiss={dismissProfile} />
+        )}
+      </motion.div>
     );
   }
 
+  const displayStepId = previewStep ?? activeStep;
+  const displayStep = steps.find(s => s.id === displayStepId) ?? steps[0];
+  const displayStatus = getStatus(displayStep.id);
+  const { Icon } = displayStep;
+
   return (
-    <div className="space-y-3">
-      {/* PR-C: banner de perfil incompleto — não bloqueia, só sugere */}
-      <ProfileIncompleteBanner profile={profile} />
-
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white dark:bg-white/5 rounded-3xl border border-slate-200 dark:border-white/5 overflow-hidden"
-      >
-        {/* Cabeçalho */}
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-white/5 flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-black text-[#ff0068] uppercase tracking-[0.3em]">Passo a passo</span>
-            <h2 className="text-base font-black uppercase tracking-tighter leading-tight">Guia de Inscrição</h2>
-          </div>
-          {/* Barra de progresso (4 passos agora — perfil saiu) */}
-          <div className="flex items-center gap-1.5">
-            {[1, 2, 3, 4].map(s => (
-              <div
-                key={s}
-                className={`h-1.5 rounded-full transition-all duration-500 ${
-                  getStatus(s) === 'done'   ? 'bg-emerald-500 w-7' :
-                  getStatus(s) === 'active' ? 'bg-[#ff0068] w-9' :
-                                              'bg-slate-300 dark:bg-white/10 w-4'
-                }`}
-              />
-            ))}
-            <span className="ml-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              {Math.max(0, activeStep - 1)}/4
-            </span>
-          </div>
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white dark:bg-white/5 rounded-3xl border border-slate-200 dark:border-white/5 overflow-hidden"
+    >
+      {/* Cabeçalho */}
+      <div className="px-6 py-4 border-b border-slate-200 dark:border-white/5 flex items-center justify-between gap-3">
+        <div>
+          <span className="text-[10px] font-black text-[#ff0068] uppercase tracking-[0.3em]">Passo a passo</span>
+          <h2 className="text-base font-black uppercase tracking-tighter leading-tight">Guia de Inscrição</h2>
         </div>
-
-        {/* Passos — todos clicáveis (PR-C removeu lock) */}
-        <div className="divide-y divide-slate-100 dark:divide-white/5">
-          {steps.map((step) => {
-            const status = getStatus(step.id);
-            const isExpanded = expandedStep === step.id || status === 'active';
-            const { Icon } = step;
-
-            return (
-              <motion.div
-                key={step.id}
-                layout
-                onClick={() => setExpandedStep(isExpanded && status !== 'active' ? null : step.id)}
-                className={`px-5 py-4 transition-colors duration-200 cursor-pointer ${
-                  status === 'active' ? 'bg-[#ff0068]/5' : 'hover:bg-slate-50 dark:hover:bg-white/[0.03]'
-                }`}
-              >
-                {/* Linha principal: ícone + texto + seta */}
-                <div className="flex items-center gap-3 sm:gap-4">
-                  {/* Ícone / status */}
-                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 transition-all ${
-                    status === 'done'    ? 'bg-emerald-500/10 text-emerald-500' :
-                    status === 'active'  ? 'bg-[#ff0068] text-white shadow-lg shadow-[#ff0068]/25' :
-                                          'bg-slate-100 dark:bg-white/5 text-slate-400 dark:text-slate-500'
-                  }`}>
-                    {status === 'done' ? <CheckCircle2 size={18} /> : <Icon size={18} />}
-                  </div>
-
-                  {/* Texto */}
-                  <div className="flex-1 min-w-0">
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${
-                      status === 'done'   ? 'text-emerald-500' :
-                      status === 'active' ? 'text-[#ff0068]' :
-                                           'text-slate-400'
-                    }`}>
-                      {status === 'done' ? '✓ Concluído' : status === 'active' ? '● Em andamento' : `Passo ${step.id}`}
-                    </span>
-                    <h3 className="font-black uppercase tracking-tighter text-sm leading-tight text-slate-900 dark:text-white">
-                      {step.title}
-                    </h3>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 truncate">
-                      {step.subtitle}
-                    </p>
-                  </div>
-
-                  {/* Chevron pra passos done/pending */}
-                  {status !== 'active' && (
-                    <ChevronRight size={15} className="text-slate-300 dark:text-slate-600 shrink-0" />
-                  )}
-
-                  {/* Botão CTA na linha — apenas desktop (sm+) para o passo ativo */}
-                  {status === 'active' && (
-                    <div className="shrink-0 hidden sm:block">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); step.ctaAction(); }}
-                        className="flex items-center gap-2 px-4 py-2 bg-[#ff0068] text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[#ff0068]/20 whitespace-nowrap"
-                      >
-                        {step.ctaLabel} <ArrowRight size={13} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Botão CTA em largura total — apenas mobile para o passo ativo */}
-                {status === 'active' && (
-                  <div className="mt-3 ml-13 sm:hidden">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); step.ctaAction(); }}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#ff0068] text-white rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all shadow-lg shadow-[#ff0068]/20"
-                    >
-                      {step.ctaLabel} <ArrowRight size={14} />
-                    </button>
-                  </div>
-                )}
-
-                {/* Conteúdo expandido */}
-                <AnimatePresence>
-                  {isExpanded && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="mt-3 ml-13 space-y-2.5 pb-1">
-                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 leading-relaxed max-w-xl">
-                          {step.description}
-                        </p>
-                        <div className="flex flex-wrap gap-2 items-center">
-                          {step.detail}
-                        </div>
-                        {status !== 'active' && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); step.ctaAction(); }}
-                            className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 hover:text-[#ff0068] uppercase tracking-widest transition-colors mt-1"
-                          >
-                            {step.ctaLabel} <ChevronRight size={11} />
-                          </button>
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            );
-          })}
+        {/* Pontinhos de progresso — clicáveis, trocam a preview do card sem
+            navegar (padrão "step indicator" de carrossel, não decorativo). */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {[1, 2, 3, 4].map(s => (
+            <button
+              key={s}
+              onClick={() => setPreviewStep(s === displayStepId ? null : s)}
+              aria-label={`Ver passo ${s} de 4`}
+              aria-current={displayStepId === s ? 'step' : undefined}
+              title={steps[s - 1].title}
+              className={`h-1.5 rounded-full transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 ${
+                getStatus(s) === 'done'   ? 'bg-emerald-500' :
+                getStatus(s) === 'active' ? 'bg-[#ff0068]' :
+                                            'bg-slate-300 dark:bg-white/10'
+              } ${displayStepId === s ? 'w-9' : 'w-4 hover:opacity-70'}`}
+            />
+          ))}
+          <span className="ml-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            {Math.max(0, activeStep - 1)}/4
+          </span>
         </div>
-      </motion.div>
-    </div>
+      </div>
+
+      {/* Corpo — só o passo em preview (default = ativo), não a lista inteira */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={displayStep.id}
+          initial={{ opacity: 0, x: 8 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -8 }}
+          transition={{ duration: 0.15 }}
+          className="px-5 py-5"
+        >
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 transition-all ${
+              displayStatus === 'done'    ? 'bg-emerald-500/10 text-emerald-500' :
+              displayStatus === 'active'  ? 'bg-[#ff0068] text-white shadow-lg shadow-[#ff0068]/25' :
+                                            'bg-slate-100 dark:bg-white/5 text-slate-400 dark:text-slate-500'
+            }`}>
+              {displayStatus === 'done' ? <CheckCircle2 size={18} /> : <Icon size={18} />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className={`text-[10px] font-black uppercase tracking-widest ${
+                displayStatus === 'done'   ? 'text-emerald-500' :
+                displayStatus === 'active' ? 'text-[#ff0068]' :
+                                             'text-slate-400'
+              }`}>
+                {displayStatus === 'done' ? '✓ Concluído' : displayStatus === 'active' ? '● Em andamento' : `Passo ${displayStep.id}`}
+              </span>
+              <h3 className="font-black uppercase tracking-tighter text-sm leading-tight text-slate-900 dark:text-white">
+                {displayStep.title}
+              </h3>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                {displayStep.subtitle}
+              </p>
+            </div>
+            {displayStepId !== activeStep && (
+              <ChevronRight size={15} className="text-slate-300 dark:text-slate-600 shrink-0" />
+            )}
+          </div>
+
+          <div className="mt-3 space-y-2.5">
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 leading-relaxed max-w-xl">
+              {displayStep.description}
+            </p>
+            <div className="flex flex-wrap gap-2 items-center">
+              {displayStep.detail}
+            </div>
+          </div>
+
+          <button
+            onClick={() => displayStep.ctaAction()}
+            className="mt-4 w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-[#ff0068] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-[#ff0068]/20"
+          >
+            {displayStep.ctaLabel} <ArrowRight size={13} />
+          </button>
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Perfil incompleto — tira fina no rodapé do mesmo card */}
+      {showProfileStrip && (
+        <ProfileIncompleteStrip missing={profileMissing} onDismiss={dismissProfile} />
+      )}
+    </motion.div>
   );
 };
 

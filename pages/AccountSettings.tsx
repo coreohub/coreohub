@@ -2707,15 +2707,23 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   </div>
                   <textarea
                     rows={8}
+                    maxLength={600}
                     value={general.description}
-                    onChange={e => setGeneral({ ...general, description: e.target.value })}
+                    onChange={e => setGeneral({ ...general, description: e.target.value.slice(0, 600) })}
                     placeholder="Conte sobre seu festival: história, modalidades, público, premiações..."
                     className={`${input} resize-none h-full`}
                   />
-                  <p className="text-[9px] text-slate-400 mt-1">
-                    Aparece na página pública do evento. Use para vender o evento aos inscritos.
-                    {general.description !== savedDescription && ' Clique em "Salvar Configurações" no rodapé pra confirmar.'}
-                  </p>
+                  <div className="flex items-center justify-between gap-2 mt-1">
+                    <p className="text-[9px] text-slate-400">
+                      Aparece na página pública do evento. Use para vender o evento aos inscritos.
+                      {general.description !== savedDescription && ' Clique em "Salvar Configurações" no rodapé pra confirmar.'}
+                    </p>
+                    <span className={`shrink-0 text-[9px] font-bold tabular-nums ${
+                      general.description.length >= 600 ? 'text-amber-500' : 'text-slate-400'
+                    }`}>
+                      {general.description.length}/600
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

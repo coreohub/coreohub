@@ -4,7 +4,7 @@ import { supabase, supabaseUrl, supabaseAnonKey } from '../services/supabase';
 import {
   CreditCard, Loader2, AlertCircle, CheckCircle2,
   Music2, ArrowRight, Clapperboard, ExternalLink,
-  RefreshCw, ShieldCheck, Receipt,
+  RefreshCw, ShieldCheck, Receipt, Check,
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 
@@ -39,25 +39,30 @@ const fmtCurrency = (v: number) =>
  * 1. coreo.mod_fee (explícito)
  * 2. events.formacoes_config (do evento REAL da coreografia) casando pelo nome da formação
  * 3. Primeira formação ativa do evento (fallback)
+ *
+ * `resolved` distingue "formação achada e configurada como R$0 (gratuita
+ * de propósito)" de "nenhuma formação encontrada" — sem isso, os dois
+ * casos colapsavam no mesmo `0` e a UI mostrava "A definir pelo evento"
+ * pra formações genuinamente gratuitas (contrato fechado, governo, etc).
  */
 const calcularValor = (
   coreo: Coreografia,
   modalidadesByEvent: Record<string, EventFormacao[]>
-): number => {
-  if (coreo.mod_fee && coreo.mod_fee > 0) return coreo.mod_fee;
+): { value: number; resolved: boolean } => {
+  if (coreo.mod_fee && coreo.mod_fee > 0) return { value: coreo.mod_fee, resolved: true };
 
   const modalidades = (coreo.event_id && modalidadesByEvent[coreo.event_id]) || [];
 
   const nome = (coreo.tipo_apresentacao ?? coreo.formacao ?? '').toLowerCase();
   if (nome) {
     const m = modalidades.find(x => x.name?.toLowerCase() === nome);
-    const v = m?.fee ?? m?.base_fee;
-    if (v && v > 0) return Number(v);
+    if (m) return { value: Number(m.fee ?? m.base_fee ?? 0), resolved: true };
   }
 
   const primeira = modalidades.find(x => x.is_active !== false);
-  const v = primeira?.fee ?? primeira?.base_fee;
-  return v && v > 0 ? Number(v) : 0;
+  if (primeira) return { value: Number(primeira.fee ?? primeira.base_fee ?? 0), resolved: true };
+
+  return { value: 0, resolved: false };
 };
 
 const PagamentoInscrito = () => {
@@ -190,6 +195,19 @@ const PagamentoInscrito = () => {
         throw new Error(result.error ?? result.message ?? `Erro ${response.status} ao gerar o pagamento.`);
       }
 
+      // Formação gratuita (contrato fechado, governo, etc) — já aprovado
+      // direto pela edge function, sem Asaas. Não há invoice_url pra abrir;
+      // anima igual o realtime faria numa aprovação real, e some da lista.
+      if (result.free) {
+        setPaying(null);
+        setJustApproved(coreo.id);
+        setTimeout(() => {
+          setCoreografias(prev => prev.filter(c => c.id !== coreo.id));
+          setJustApproved(null);
+        }, 2500);
+        return;
+      }
+
       const paymentUrl = result.invoice_url;
       if (!paymentUrl) throw new Error('URL de pagamento não retornada pelo servidor.');
       window.location.href = paymentUrl;
@@ -202,7 +220,7 @@ const PagamentoInscrito = () => {
 
   // Total e contagem para exibir no header
   const totalPendente = useMemo(
-    () => coreografias.reduce((sum, c) => sum + calcularValor(c, modalidadesByEvent), 0),
+    () => coreografias.reduce((sum, c) => sum + calcularValor(c, modalidadesByEvent).value, 0),
     [coreografias, modalidadesByEvent]
   );
 
@@ -277,7 +295,8 @@ const PagamentoInscrito = () => {
       ) : (
         <div className="space-y-3">
           {coreografias.map(coreo => {
-            const fee = calcularValor(coreo, modalidadesByEvent);
+            const { value: fee, resolved } = calcularValor(coreo, modalidadesByEvent);
+            const isGratuita = resolved && fee === 0;
             const isPaying   = paying === coreo.id;
             const isApproved = justApproved === coreo.id;
             const rowError   = payError?.id === coreo.id ? payError.message : null;
@@ -328,9 +347,13 @@ const PagamentoInscrito = () => {
                         {coreo.trilha_url ? 'Trilha enviada' : 'Trilha pendente'}
                       </div>
                       {/* Status pagamento */}
-                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                        Aguardando pagamento
+                      <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${
+                        isGratuita
+                          ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                          : 'bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${isGratuita ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
+                        {isGratuita ? 'Gratuita — só confirmar' : 'Aguardando pagamento'}
                       </div>
                     </div>
                   </div>
@@ -338,9 +361,11 @@ const PagamentoInscrito = () => {
                   {/* Valor */}
                   <div className="text-right shrink-0">
                     <p className="text-[9px] font-bold text-slate-400 uppercase">Valor</p>
-                    {fee > 0
-                      ? <p className="text-xl font-black tracking-tighter text-slate-900 dark:text-white">{fmtCurrency(fee)}</p>
-                      : <p className="text-[9px] font-bold text-amber-500">A definir pelo evento</p>
+                    {isGratuita
+                      ? <p className="text-xl font-black tracking-tighter text-emerald-600 dark:text-emerald-400 italic uppercase">Gratuito</p>
+                      : fee > 0
+                        ? <p className="text-xl font-black tracking-tighter text-slate-900 dark:text-white">{fmtCurrency(fee)}</p>
+                        : <p className="text-[9px] font-bold text-amber-500">A definir pelo evento</p>
                     }
                   </div>
                 </div>
@@ -379,9 +404,11 @@ const PagamentoInscrito = () => {
                   }`}
                 >
                   {isApproved ? (
-                    <><CheckCircle2 size={15} /> Pagamento Aprovado</>
+                    <><CheckCircle2 size={15} /> {isGratuita ? 'Inscrição Confirmada' : 'Pagamento Aprovado'}</>
                   ) : isPaying ? (
-                    <><Loader2 size={15} className="animate-spin" /> Gerando pagamento...</>
+                    <><Loader2 size={15} className="animate-spin" /> {isGratuita ? 'Confirmando...' : 'Gerando pagamento...'}</>
+                  ) : isGratuita ? (
+                    <><Check size={15} /> Confirmar Inscrição Gratuita</>
                   ) : (
                     <><CreditCard size={15} /> Efetuar Pagamento {fee > 0 ? `— ${fmtCurrency(fee)}` : ''} <ExternalLink size={13} /></>
                   )}
