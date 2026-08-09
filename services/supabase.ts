@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { Registration, Profile, Event, UserRole } from '../types';
+import { toTitleCase } from '../utils/formatters';
 
 /**
  * CONFIGURAÇÃO DO SUPABASE:
@@ -61,11 +62,17 @@ export const updateEvent = async (id: string, updates: Partial<Event>) => {
 };
 
 export const createEvent = async (payload: Partial<Event>) => {
+  // Normaliza pra Title Case (evita "LYRIS DANCE COMPETITION" ou "lyris
+  // dance competition" cru — nome vira "Lyris Dance Competition" sempre,
+  // independente de como o produtor digitou).
+  const normalizedPayload = payload.name
+    ? { ...payload, name: toTitleCase(payload.name.trim()) }
+    : payload;
   const { data, error } = await supabase
     .from('events')
-    .insert([payload])
+    .insert([normalizedPayload])
     .select();
-    
+
   if (error) throw error;
   return data;
 };

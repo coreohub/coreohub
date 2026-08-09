@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import imageCompression from 'browser-image-compression';
 import { supabase } from '../services/supabase';
 import { fetchUfList, fetchCitiesByUf, parseCityUf, type UfOption } from '../services/ibgeLocation';
+import { toTitleCase } from '../utils/formatters';
 import PageHeader from '../components/PageHeader';
 import CitySearchSelect from '../components/CitySearchSelect';
 import {
@@ -317,7 +318,7 @@ const MeuPerfil = () => {
       if (!user) return;
       const docDigits = form.document.replace(/\D/g, '');
       const { error: err } = await supabase.from('profiles').update({
-        full_name:  form.full_name.trim(),
+        full_name:  toTitleCase(form.full_name.trim()),
         whatsapp:   form.whatsapp,
         instagram:  form.instagram.replace('@', ''),
         location:   form.location,
