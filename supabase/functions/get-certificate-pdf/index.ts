@@ -793,8 +793,27 @@ Deno.serve(async (req) => {
       const eventoNome = realEvent?.name ?? 'Festival CoreoHub Demo'
       const eventoData = realEvent?.event_date ?? new Date().toISOString().slice(0, 10)
       const eventoLocal = realEvent?.location ?? 'Votuporanga, SP'
+
+      // Workshop real do produtor (do evento selecionado, senão qualquer um
+      // dele) substitui nome/professor/duração fictícios — evita confundir o
+      // produtor com um professor de exemplo que coincide com um real do
+      // roster dele (achado real: "Jonathan Lupe" fixo aparecendo pra turma
+      // de Hip Hop, que é do Victor Big).
+      let realWorkshop: { name: string; professor_name: string | null; duracao_minutos: number | null } | null = null
+      if (isWorkshop) {
+        let wq = supabase.from('workshops').select('name, professor_name, duracao_minutos').eq('created_by', tpl.producer_id)
+        wq = previewEventId ? wq.eq('event_id', previewEventId) : wq
+        const { data: ws } = await wq.order('created_at', { ascending: false }).limit(1).maybeSingle()
+        if (ws) realWorkshop = ws
+      }
+
       const previewData = isWorkshop
-        ? { workshop_nome: 'Hip-hop Fundamentos', professor_nome: 'Jonathan Lupe', duracao_minutos: 90, evento_nome: eventoNome, evento_data: eventoData, evento_local: eventoLocal }
+        ? {
+            workshop_nome: realWorkshop?.name ?? 'Hip-hop Fundamentos',
+            professor_nome: realWorkshop?.professor_name ?? 'Jonathan Lupe',
+            duracao_minutos: realWorkshop?.duracao_minutos ?? 90,
+            evento_nome: eventoNome, evento_data: eventoData, evento_local: eventoLocal,
+          }
         : { coreografia: 'Renascer', modalidade: 'Solo · Ballet Clássico · Juvenil', classificacao: 'Medalha de Ouro', tipo_apresentacao: 'competitiva', evento_nome: eventoNome, evento_data: eventoData, evento_local: eventoLocal }
 
       const previewHash = crypto.randomUUID()

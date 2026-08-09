@@ -37,6 +37,14 @@ if (!validRoles.includes(role)) {
   process.exit(1);
 }
 
+// Parse --theme=light|dark do CLI. Default = respeita o que já está salvo (dark).
+const themeArg = process.argv.find(a => a.startsWith('--theme='));
+const forcedTheme = themeArg ? themeArg.slice(8).toLowerCase() : null;
+if (forcedTheme && !['light', 'dark'].includes(forcedTheme)) {
+  console.error(`❌ Theme "${forcedTheme}" inválido. Use: --theme=light | --theme=dark`);
+  process.exit(1);
+}
+
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'https://app.coreohub.com';
 const STATE_PATH = resolve(__dirname, '.playwright-auth', `storage-${role}.json`);
 const OUT_DIR = resolve(__dirname, '..', 'screenshots');
@@ -90,7 +98,7 @@ const browser = await chromium.launch({ headless: true });
 
 for (const route of routes) {
   // Slug pra nome de arquivo: /registrations → registrations; / → home; /a/b → a-b
-  const slug = route === '/' ? 'home' : route.replace(/^\//, '').replace(/\//g, '-');
+  const slug = route === '/' ? 'home' : route.replace(/^\//, '').replace(/[/?=&]/g, '-');
 
   const report = {
     route,
@@ -105,6 +113,14 @@ for (const route of routes) {
       viewport,
       deviceScaleFactor: 1,
     });
+    if (forcedTheme) {
+      // Seta localStorage ANTES de qualquer script da página rodar (App.tsx lê
+      // localStorage.theme no useState inicial) — evita flash do tema errado.
+      await context.addInitScript((t) => {
+        window.localStorage.setItem('theme', t);
+      }, forcedTheme);
+    }
+
     const page = await context.newPage();
 
     const consoleErrors = [];
