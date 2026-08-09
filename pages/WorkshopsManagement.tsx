@@ -464,9 +464,10 @@ const WorkshopsManagement: React.FC = () => {
               label="Vagas vendidas"
               value={salesStats.capacidadeTotal > 0 ? `${salesStats.vagasVendidas} / ${salesStats.capacidadeTotal}` : String(salesStats.vagasVendidas)}
               sub={salesStats.capacidadeTotal > 0 ? `${Math.round((salesStats.vagasVendidas / salesStats.capacidadeTotal) * 100)}% lotado` : 'inclui cortesias'}
+              tone="neutral"
             />
-            <WsMetric icon={Clock} label="Pendentes" value={String(salesStats.pendentes)} sub="aguardando pagamento" />
-            <WsMetric icon={UserCheck} label="Presenças" value={`${salesStats.presentes} / ${salesStats.vagasVendidas}`} sub="check-ins confirmados" />
+            <WsMetric icon={Clock} label="Pendentes" value={String(salesStats.pendentes)} sub="aguardando pagamento" tone="warn" />
+            <WsMetric icon={UserCheck} label="Presenças" value={`${salesStats.presentes} / ${salesStats.vagasVendidas}`} sub="check-ins confirmados" tone="neutral" />
           </div>
         )}
 
@@ -627,9 +628,15 @@ const WorkshopsManagement: React.FC = () => {
 // ════════════════════════════════════════════════════════════════════════════
 // Card de métrica do topo (mesmo padrão visual de VendasIngressos)
 // ════════════════════════════════════════════════════════════════════════════
-const WsMetric: React.FC<{ icon: React.ElementType; label: string; value: string; sub?: string }> = ({ icon: Icon, label, value, sub }) => (
+// `tone`: rosa só pro número-estrela (receita); âmbar pra pendência real;
+// cinza neutro pro resto (achado 2026-08-08/09).
+const WsMetric: React.FC<{ icon: React.ElementType; label: string; value: string; sub?: string; tone?: 'brand' | 'neutral' | 'warn' }> = ({ icon: Icon, label, value, sub, tone = 'brand' }) => (
   <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4">
-    <div className="p-2 rounded-xl bg-[#ff0068]/10 text-[#ff0068] inline-flex mb-2">
+    <div className={`p-2 rounded-xl inline-flex mb-2 ${
+      tone === 'warn'    ? 'bg-amber-500/10 text-amber-500' :
+      tone === 'neutral' ? 'bg-slate-200/60 dark:bg-white/10 text-slate-500 dark:text-slate-400' :
+                            'bg-[#ff0068]/10 text-[#ff0068]'
+    }`}>
       <Icon size={16} aria-hidden />
     </div>
     <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</p>

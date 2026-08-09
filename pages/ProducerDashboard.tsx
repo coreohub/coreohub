@@ -18,14 +18,23 @@ import DemoOnboardingCard from '../components/DemoOnboardingCard';
 import EventPickerSheet from '../components/EventPickerSheet';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
-const MetricCard = ({ title, value, sub, icon: Icon, trend, warn }: any) => (
+// `neutral`: card não é o número-estrela da tela nem tem estado de alerta
+// ativo — ícone fica cinza em vez de rosa de marca. Rosa reservado pro
+// único metric que de fato importa mais (normalmente receita/faturamento);
+// âmbar (`warn`) continua reservado pra estado real de atenção. Achado
+// 2026-08-08/09: 6 dos 8 cards eram rosa sem nenhum motivo semântico.
+const MetricCard = ({ title, value, sub, icon: Icon, trend, warn, neutral }: any) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
     className={`bg-slate-100 dark:bg-white/5 p-5 rounded-3xl border group hover:border-[#ff0068]/30 transition-all ${warn ? 'border-amber-400/40' : 'border-slate-200 dark:border-white/5'}`}
   >
     <div className="flex justify-between items-start mb-3">
-      <div className={`p-2 rounded-xl border ${warn ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-[#ff0068]/10 text-[#ff0068] border-[#ff0068]/20'}`}>
+      <div className={`p-2 rounded-xl border ${
+        warn    ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
+        neutral ? 'bg-slate-200/60 dark:bg-white/5 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-white/10' :
+                  'bg-[#ff0068]/10 text-[#ff0068] border-[#ff0068]/20'
+      }`}>
         <Icon size={18} />
       </div>
       {trend && (
@@ -547,6 +556,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
             value={metrics.inscricoesConfirmadas}
             sub={`${metrics.totalInscritos} total · ${metrics.inscricoesConfirmadas} confirmadas`}
             icon={Users}
+            neutral
           />
           <MetricCard
             title="Pagamentos"
@@ -554,6 +564,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
             sub="Pendentes de validação"
             icon={CreditCard}
             warn={metrics.pagamentosPendentes > 0}
+            neutral
           />
           <MetricCard
             title="Trilhas"
@@ -561,6 +572,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
             sub="Áudios não enviados"
             icon={Music}
             warn={metrics.trilhasPendentes > 0}
+            neutral
           />
           <MetricCard
             title="Jurados"
@@ -568,6 +580,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
             sub="Ativos / Cadastrados"
             icon={UserCheck}
             warn={metrics.totalJurados === 0}
+            neutral
           />
           <MetricCard
             title="Triagem"
@@ -575,18 +588,21 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
             sub="Infrações de regulamento"
             icon={AlertCircle}
             warn={metrics.pendenciasRegulamento > 0}
+            neutral
           />
           <MetricCard
             title="Check-in"
             value={metrics.checkinFeitos}
             sub="Credenciamentos realizados"
             icon={CheckSquare}
+            neutral
           />
           <MetricCard
             title="Data do Evento"
             value={fmtDate(eventData?.data_evento)}
             sub="Prazo para preparação"
             icon={Calendar}
+            neutral
           />
         </div>
       )}

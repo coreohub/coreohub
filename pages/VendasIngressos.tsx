@@ -442,10 +442,10 @@ const VendasIngressos: React.FC = () => {
 
       {/* Métricas */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Metric icon={Ticket} label="Vendidos" value={String(metrics.aprovados)} sub={`${metrics.pendentes} pendentes`} />
+        <Metric icon={Ticket} label="Vendidos" value={String(metrics.aprovados)} sub={`${metrics.pendentes} pendentes`} tone="neutral" />
         <Metric icon={DollarSign} label="Total bruto" value={formatBRL(metrics.totalBruto)} sub={`Líquido ${formatBRL(metrics.totalLiquido)}`} />
-        <Metric icon={Users} label="Check-ins" value={`${metrics.checkedIn} / ${metrics.aprovados}`} sub="presenças confirmadas" />
-        <Metric icon={Clock} label="Pendentes" value={String(metrics.pendentes)} sub="aguardando pagamento" />
+        <Metric icon={Users} label="Check-ins" value={`${metrics.checkedIn} / ${metrics.aprovados}`} sub="presenças confirmadas" tone="neutral" />
+        <Metric icon={Clock} label="Pendentes" value={String(metrics.pendentes)} sub="aguardando pagamento" tone="warn" />
       </div>
 
       {/* Filtros */}
@@ -1134,9 +1134,16 @@ const Td: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <td className="px-4 py-3 align-middle">{children}</td>
 );
 
-const Metric: React.FC<{ icon: any; label: string; value: string; sub?: string }> = ({ icon: Icon, label, value, sub }) => (
+// `tone`: rosa só pro número-estrela do card (dinheiro); âmbar pra pendência
+// real; cinza neutro pro resto — evita todo ícone de métrica virar rosa sem
+// motivo (achado 2026-08-08/09).
+const Metric: React.FC<{ icon: any; label: string; value: string; sub?: string; tone?: 'brand' | 'neutral' | 'warn' }> = ({ icon: Icon, label, value, sub, tone = 'brand' }) => (
   <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4">
-    <div className="p-2 rounded-xl bg-[#ff0068]/10 text-[#ff0068] inline-flex mb-2">
+    <div className={`p-2 rounded-xl inline-flex mb-2 ${
+      tone === 'warn'    ? 'bg-amber-500/10 text-amber-500' :
+      tone === 'neutral' ? 'bg-slate-200/60 dark:bg-white/10 text-slate-500 dark:text-slate-400' :
+                            'bg-[#ff0068]/10 text-[#ff0068]'
+    }`}>
       <Icon size={16} aria-hidden />
     </div>
     <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</p>

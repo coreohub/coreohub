@@ -494,7 +494,9 @@ const Coupons: React.FC = () => {
                         );
                       })()}
                     </td>
-                    <td className="px-4 sm:px-6 py-4 font-black text-[#ff0068]">{fmtDiscount(c)}</td>
+                    {/* Valor não é ação nem alerta, é dado — texto neutro em
+                        vez de rosa repetido em toda linha (achado 2026-08-08/09). */}
+                    <td className="px-4 sm:px-6 py-4 font-black text-slate-900 dark:text-white">{fmtDiscount(c)}</td>
                     <td className="px-4 sm:px-6 py-4 hidden md:table-cell">
                       {(() => {
                         const perf = couponPerf[c.id];
@@ -850,10 +852,12 @@ const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, 
   </div>
 );
 
+// Nenhum dos 3 cards é "o número-estrela" da tela (nenhum é dinheiro nem
+// alerta real) — os 3 ficam neutros em vez de rosa de marca (achado 2026-08-08/09).
 const StatCard: React.FC<{ icon: any; label: string; value: number }> = ({ icon: Icon, label, value }) => {
   return (
     <div className="bg-white dark:bg-white/5 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-white/5">
-      <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-[#ff0068]/10 text-[#ff0068] border border-[#ff0068]/20 flex items-center justify-center mb-2 sm:mb-3">
+      <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-slate-200/60 dark:bg-white/10 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-white/10 flex items-center justify-center mb-2 sm:mb-3">
         <Icon size={14} className="sm:hidden" />
         <Icon size={18} className="hidden sm:block" />
       </div>

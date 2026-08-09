@@ -356,14 +356,16 @@ const ChoreoCard: React.FC<CardProps> = ({ coreo, userName, onUploaded, onRemove
           {/* ── Audio section ── */}
           <div className="mt-3 space-y-2">
 
-            {/* Status badge */}
+            {/* Status badge — âmbar pra pendente (não rose), mesma semântica
+                de "Pendências"/"Trilha pendente" no Dashboard/Painel do
+                produtor (achado 2026-08-08/09). */}
             <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest
               ${hasAudio
                 ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
-                : 'bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400'
+                : 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400'
               }`
             }>
-              <span className={`w-1.5 h-1.5 rounded-full ${hasAudio ? 'bg-emerald-500' : 'bg-rose-500 animate-pulse'}`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${hasAudio ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
               {hasAudio ? 'Música Enviada' : 'Música Pendente'}
             </div>
 
@@ -659,7 +661,10 @@ const CentralDeMidia = () => {
           {[
             { label: 'Total',    value: total,     color: 'text-slate-900 dark:text-white',                              dot: 'bg-slate-400'   },
             { label: 'Enviados', value: enviadas,  color: 'text-emerald-600 dark:text-emerald-400',                      dot: 'bg-emerald-500' },
-            { label: 'Pendentes',value: pendentes, color: 'text-rose-600 dark:text-rose-400',                            dot: 'bg-rose-500'    },
+            // Âmbar, não vermelho/rose — mesma semântica de "pendência" que
+            // Dashboard/Painel do produtor já usam (achado 2026-08-08/09:
+            // "pendente" tinha 2 cores diferentes dependendo da tela).
+            { label: 'Pendentes',value: pendentes, color: 'text-amber-600 dark:text-amber-400',                          dot: 'bg-amber-500'   },
           ].map(({ label, value, color, dot }) => (
             <div key={label} className="p-4 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/8 rounded-2xl text-center">
               <div className="flex items-center justify-center gap-1.5 mb-1">

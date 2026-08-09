@@ -1160,7 +1160,9 @@ const JudgesManagement = () => {
                   </div>
                 </div>
 
-                {/* Competencies preview — modalidade artística destacada em violeta */}
+                {/* Competencies preview — neutro=Técnico (padrão), violeta=
+                    Artístico (exceção destacada). Rosa de marca saía repetido
+                    em 5-8 tags por jurado sem necessidade (2026-08-09). */}
                 {(judge.competencias_generos.length > 0 || judge.competencias_formatos.length > 0) && (
                   <div className="px-5 pb-3 flex flex-wrap gap-1.5">
                     {judge.competencias_generos.map(g => {
@@ -1172,7 +1174,7 @@ const JudgesManagement = () => {
                           className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${
                             isArtistico
                               ? 'bg-violet-500/15 text-violet-600 dark:text-violet-400'
-                              : 'bg-[#ff0068]/10 text-[#ff0068]'
+                              : 'bg-slate-200/60 dark:bg-white/10 text-slate-500 dark:text-slate-400'
                           }`}
                         >
                           {g}
@@ -1272,14 +1274,26 @@ const JudgesManagement = () => {
                           </div>
                         )}
                         <div className="flex flex-wrap gap-1.5">
-                          {judge.competencias_generos.map(g => (
-                            <span key={g} className="px-2 py-1 bg-[#ff0068]/10 text-[#ff0068] rounded-xl text-[9px] font-black uppercase tracking-widest">
-                              {g}
-                              {judge.competencias_artisticas?.includes(g) && (
-                                <span className="ml-1 text-violet-400" title="Avalia como Artístico">· A</span>
-                              )}
-                            </span>
-                          ))}
+                          {/* Neutro=Técnico (padrão/maioria), violeta=Artístico
+                              (exceção destacada) — mesmo par usado no card de
+                              preview acima. Rosa de marca saía repetido em
+                              5-8 tags por jurado sem necessidade (2026-08-09). */}
+                          {judge.competencias_generos.map(g => {
+                            const isArtistico = judge.competencias_artisticas?.includes(g);
+                            return (
+                              <span
+                                key={g}
+                                title={isArtistico ? 'Avalia como Artístico' : 'Avalia como Técnico'}
+                                className={`px-2 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest ${
+                                  isArtistico
+                                    ? 'bg-violet-500/15 text-violet-600 dark:text-violet-400'
+                                    : 'bg-slate-200/60 dark:bg-white/10 text-slate-500 dark:text-slate-400'
+                                }`}
+                              >
+                                {g}
+                              </span>
+                            );
+                          })}
                           {judge.competencias_formatos.map(f => (
                             <span key={f} className="px-2 py-1 bg-violet-500/10 text-violet-500 rounded-xl text-[9px] font-black uppercase tracking-widest">{f}</span>
                           ))}
