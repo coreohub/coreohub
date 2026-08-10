@@ -1107,10 +1107,13 @@ const Registrations = () => {
         r.valor_total != null ? Number(r.valor_total).toFixed(2) : '',
         bailarinosStr,
         staffStr,
-      ].map(escape).join(',');
+      ].map(escape).join(';');
     });
-    // BOM UTF-8 pro Excel BR abrir com acentuação correta
-    const csv = '﻿' + headers.join(',') + '\n' + rows.join('\n');
+    // BOM UTF-8 + delimitador ';' — Excel BR usa ';' como separador de lista
+    // (locale pt-BR reserva ',' pra casa decimal). Com ',' o Excel não separa
+    // colunas e a linha inteira cai numa célula só. Mesmo padrão do export
+    // em lote (linha ~875).
+    const csv = '﻿' + headers.join(';') + '\n' + rows.join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
