@@ -8,6 +8,7 @@ import AsaasBadge from '../components/AsaasBadge';
 import { suggestEmail } from '../utils/mailcheck';
 import { isInAppBrowser } from '../utils/inAppBrowser';
 import { resolveFirstEquipeRoute } from '../utils/permMenu';
+import { clearImpersonationState } from '../services/impersonateService';
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -275,6 +276,12 @@ const Auth = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         setIsAuthenticating(true);
+        // Flag de impersonate é lida só do localStorage (não do auth.uid()
+        // real) — se um logout anterior não passou pelos botões que limpam
+        // (sessão expirada, fechar aba), sobrevive e vaza "Visualizando
+        // como X" pro próximo login neste navegador. Login pela tela
+        // /login sempre começa uma sessão real do próprio usuário.
+        clearImpersonationState();
         // setTimeout(..., 0) garante que o navigate roda fora do lock de auth.
         // resolveLandingPath roda DENTRO do timeout (não no callback) — sem deadlock.
         setTimeout(async () => {

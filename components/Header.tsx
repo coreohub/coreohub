@@ -7,6 +7,7 @@ import BrandIcon from './BrandIcon';
 import NotificationBell from './NotificationBell';
 import { supabase } from '../services/supabase';
 import { EQUIPE_OPERACIONAL_ROLES, CARGO_LABEL } from '../utils/permMenu';
+import { clearImpersonationState } from '../services/impersonateService';
 
 interface HeaderProps {
   toggleSidebar: () => void;
@@ -88,6 +89,7 @@ const Header = ({ toggleSidebar, profile, theme, toggleTheme, activeRole, setAct
   }, []);
 
   const handleLogout = async () => {
+    clearImpersonationState();
     await supabase.auth.signOut();
     navigate('/login', { replace: true });
   };

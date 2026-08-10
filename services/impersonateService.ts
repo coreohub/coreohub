@@ -123,3 +123,13 @@ export function getImpersonationContext(): ImpersonationContext | null {
 export function isImpersonating(): boolean {
   return localStorage.getItem(IMPERSONATING_KEY) !== null;
 }
+
+/** Remove qualquer flag de impersonate do localStorage sem tocar na sessão.
+    Chamar em todo logout e no SIGNED_IN de um login novo — a flag é lida só
+    do localStorage (não do auth.uid() real), então sobrevive a um logout
+    comum e vaza "Visualizando como X" pro próximo usuário que logar no
+    mesmo navegador se não for limpa explicitamente. */
+export function clearImpersonationState(): void {
+  localStorage.removeItem(IMPERSONATING_KEY);
+  localStorage.removeItem(ORIGINAL_SESSION_KEY);
+}

@@ -6,6 +6,7 @@ import { fetchUfList, fetchCitiesByUf, parseCityUf, type UfOption } from '../ser
 import { toTitleCase } from '../utils/formatters';
 import PageHeader from '../components/PageHeader';
 import CitySearchSelect from '../components/CitySearchSelect';
+import { clearImpersonationState } from '../services/impersonateService';
 import {
   User, Phone, MapPin, Save, Loader2,
   CheckCircle, AlertCircle, CreditCard, Music2,
@@ -734,6 +735,7 @@ const MeuPerfil = () => {
       {/* Logout */}
       <button
         onClick={async () => {
+          clearImpersonationState();
           await supabase.auth.signOut();
           window.location.href = '/login';
         }}
