@@ -1980,10 +1980,17 @@ const JudgeTerminal = () => {
               quadrado de stop), cor (cinza neutro ocioso vs vermelho — o
               ÚNICO vermelho desse componente, nunca usado ocioso) e
               movimento (pulso + waveform só existem gravando). */}
+          {/* Salience assimétrica por estado (2026-08-11): ocioso fica
+              minúsculo/discreto (baixo valor informativo, mesmo padrão de
+              sempre), gravando cresce e vira impossível de ignorar — mesma
+              lógica da faixa "AO VIVO" que já existe no header quando a
+              Mesa de Som marca a apresentação. Padrão usado por Zoom/Loom/
+              Slack Huddles: o tamanho do indicador já é parte do sinal. */}
           <button
             onClick={isRecording ? stopRecording : () => { if (!isSubmitted) { startRecording(); handleActivity(); } }}
             disabled={isSubmitted}
-            className={`inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border transition-all
+            className={`inline-flex items-center gap-1.5 rounded-lg border transition-all
+              ${isRecording ? 'px-2.5 py-2' : 'px-2 py-1.5'}
               ${isSubmitted
                 ? 'bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-50 cursor-not-allowed'
                 : isRecording
@@ -1995,34 +2002,46 @@ const JudgeTerminal = () => {
             title={isRecording ? t('mic.recording') : t('mic.idle')}
           >
             {isRecording ? (
-              <span className="relative flex h-2 w-2 shrink-0">
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
                 <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isNearRecordingLimit ? 'bg-amber-500' : 'bg-red-500'}`} />
-                <span className={`relative inline-flex rounded-full h-2 w-2 ${isNearRecordingLimit ? 'bg-amber-500' : 'bg-red-500'}`} />
+                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isNearRecordingLimit ? 'bg-amber-500' : 'bg-red-500'}`} />
               </span>
             ) : (
               <Mic size={12} />
             )}
-            {isRecording ? <StopCircle size={12} /> : null}
+            {isRecording ? <StopCircle size={13} /> : null}
             {isRecording && (
               /* Waveform real — Web Audio AnalyserNode em time-domain renderizado
                  em canvas 2D. Barras verticais rolling espelhadas no centro,
-                 padrao Voice Memos / WhatsApp. */
+                 padrao Voice Memos / WhatsApp. Maior que o estado ocioso —
+                 faz parte do mesmo crescimento de salience. */
               <canvas
                 ref={el => {
                   waveformCanvasRef.current = el;
                   // HiDPI: dimensoes internas = CSS * dpr pra ficar nitido
                   if (el) {
                     const dpr = window.devicePixelRatio || 1;
-                    if (el.width !== 60 * dpr) el.width = 60 * dpr;
-                    if (el.height !== 16 * dpr) el.height = 16 * dpr;
+                    if (el.width !== 80 * dpr) el.width = 80 * dpr;
+                    if (el.height !== 20 * dpr) el.height = 20 * dpr;
                   }
                 }}
-                className="h-4 w-12 shrink-0"
+                className="h-5 w-20 shrink-0"
               />
             )}
-            <span className="text-[8px] font-black uppercase tracking-widest tabular-nums hidden sm:inline">
-              {isRecording ? formatElapsed(recordingSeconds) : t('mic.idleShort')}
-            </span>
+            {isRecording ? (
+              <span className="flex flex-col items-start leading-none shrink-0">
+                <span className="text-[8px] font-black uppercase tracking-widest hidden sm:inline">
+                  {t('mic.recording')}
+                </span>
+                <span className="text-[11px] font-black tabular-nums">
+                  {formatElapsed(recordingSeconds)}
+                </span>
+              </span>
+            ) : (
+              <span className="text-[8px] font-black uppercase tracking-widest hidden sm:inline">
+                {t('mic.idleShort')}
+              </span>
+            )}
           </button>
 
           {/* PIN setup button — escondido em mobile (acessível via outros caminhos) */}
