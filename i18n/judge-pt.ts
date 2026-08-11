@@ -132,7 +132,7 @@ const judgePt = {
   'avaliada.badge': 'Mostra Avaliada — sem pontuação',
   'avaliada.feedbackLabel': 'Observações técnicas escritas (opcional)',
   'avaliada.feedbackPlaceholder': 'Escreva suas observações técnicas para a coreografia...',
-  'avaliada.audioNote': 'O áudio técnico (microfone abaixo) é o principal canal de feedback neste modo.',
+  'avaliada.audioNote': 'O áudio técnico (botão Gravar no topo da tela) é o principal canal de feedback neste modo.',
   'avaliada.feedbackSent': 'Feedback Enviado',
 
   // Criteria panel
