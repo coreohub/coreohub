@@ -170,8 +170,18 @@ const judgeEn: Record<JudgeDictKey, string> = {
   // Mic
   'mic.recording': 'Recording',
   'mic.idle': 'Record comment',
+  'mic.idleShort': 'Record',
   'mic.recordingHint': 'Recommended max 4:00',
   'mic.idleHint': 'Tap and speak — stop when done',
+
+  // Central nudge on performance change (a reminder, never a block)
+  'nudge.title': 'New performance: {name}',
+  'nudge.subtitle': 'Record your comment whenever you like',
+  'nudge.recordCta': 'Record now',
+  'nudge.dismiss': 'Not now',
+
+  // Light confirmation when submitting without any comment
+  'submit.noCommentConfirm': 'Submit without a comment or audio?',
 
   // Submit / footer
   'submit.score': 'Submit Score',

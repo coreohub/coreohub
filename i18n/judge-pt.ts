@@ -172,8 +172,18 @@ const judgePt = {
   // Mic — push-to-talk (start/stop deliberado, sem auto-start)
   'mic.recording': 'Gravando',
   'mic.idle': 'Gravar comentário',
+  'mic.idleShort': 'Gravar',
   'mic.recordingHint': 'Máx. recomendado 4:00',
   'mic.idleHint': 'Toque e fale — pare quando terminar',
+
+  // Nudge central ao trocar de apresentação (avisa, não bloqueia)
+  'nudge.title': 'Nova apresentação: {name}',
+  'nudge.subtitle': 'Grave seu comentário quando quiser',
+  'nudge.recordCta': 'Gravar agora',
+  'nudge.dismiss': 'Agora não',
+
+  // Confirmação leve no envio sem nenhum comentário
+  'submit.noCommentConfirm': 'Enviar sem comentário nem áudio?',
 
   // Submit / footer
   'submit.score': 'Enviar Nota',

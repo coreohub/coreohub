@@ -170,8 +170,18 @@ const judgeEs: Record<JudgeDictKey, string> = {
   // Mic
   'mic.recording': 'Grabando',
   'mic.idle': 'Grabar comentario',
+  'mic.idleShort': 'Grabar',
   'mic.recordingHint': 'Máx. recomendado 4:00',
   'mic.idleHint': 'Toca y habla — detén cuando termines',
+
+  // Aviso central al cambiar de presentación (avisa, nunca bloquea)
+  'nudge.title': 'Nueva presentación: {name}',
+  'nudge.subtitle': 'Graba tu comentario cuando quieras',
+  'nudge.recordCta': 'Grabar ahora',
+  'nudge.dismiss': 'Ahora no',
+
+  // Confirmación leve al enviar sin ningún comentario
+  'submit.noCommentConfirm': '¿Enviar sin comentario ni audio?',
 
   // Submit / footer
   'submit.score': 'Enviar Nota',
