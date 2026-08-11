@@ -178,8 +178,17 @@ Deno.serve(async (req) => {
 
     const zipBytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } })
 
-    const eventSlug = sanitizeForFilename(event.name || 'evento').replace(/\s+/g, '-')
-    const zipFilename = `audios-juri-${eventSlug}.zip`
+    // Content-Disposition é header HTTP — precisa ser ASCII puro (RFC 7230),
+    // diferente dos nomes DENTRO do zip (JSZip grava UTF-8 nativamente, "ç"/
+    // "°" funcionam ali sem problema). "19° Festival Ecodança" com acento
+    // cru no header fazia o Content-Disposition inteiro ser descartado sem
+    // erro visível — filename sempre caía no fallback genérico do frontend.
+    // Mesmo padrão de normalização já usado em exportJudgeSchedulePDF
+    // (JudgesManagement.tsx) pro PDF do Cronograma de Jurados.
+    const eventSlug = (event.name || 'evento')
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase()
+    const zipFilename = `audios-juri-${eventSlug || 'evento'}.zip`
 
     return new Response(zipBytes, {
       headers: {
