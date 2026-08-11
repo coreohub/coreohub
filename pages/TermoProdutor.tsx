@@ -19,7 +19,14 @@ import PageHeader from '../components/PageHeader';
 // CoreoHub absorve gap via mecanismo BaaS, padrão Stripe/MP); adiciona
 // cláusula 7-bis (refunds devem passar pela Plataforma — refund out-of-band
 // não dispensa comissão CoreoHub e pode causar inconsistência).
-export const TERMO_PRODUTOR_VERSION = '1.3';
+// 1.3 → 1.4 (2026-08-10): adiciona parágrafo à cláusula 10 (LGPD) sobre
+// acesso do Produtor aos comentários em áudio/texto de avaliação dos
+// jurados (individual hoje, exportação em lote planejada) e retenção
+// de 90 dias desses arquivos na Plataforma.
+// 1.4 → 1.5 (2026-08-10): cláusula 10.1 dizia "exportá-los em lote quando
+// essa função estiver disponível" — a exportação em lote (.zip) foi
+// shipada no mesmo dia, texto atualizado pra tempo presente.
+export const TERMO_PRODUTOR_VERSION = '1.5';
 
 const TermoProdutor: React.FC = () => {
   const navigate = useNavigate();
@@ -282,11 +289,19 @@ const TermoProdutor: React.FC = () => {
 
           <section>
             <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">10. Dados pessoais (LGPD)</h2>
-            <p>
+            <p className="mb-2">
               O tratamento de dados pessoais coletados pela Plataforma observa a Lei Geral de Proteção de Dados
               (Lei 13.709/2018). O Produtor atua como controlador dos dados de seus inscritos, espectadores e bailarinos,
               enquanto a CoreoHub atua como operadora. Compartilhamento com o Asaas é realizado conforme necessário para
               prestação dos serviços financeiros, em conformidade com a Política de Privacidade do Asaas.
+            </p>
+            <p>
+              10.1. Os comentários em áudio e/ou texto registrados pelos jurados durante a avaliação das apresentações
+              ficam disponíveis tanto ao inscrito quanto ao <strong>Produtor</strong>, que pode acessá-los individualmente
+              pelo painel de Apuração e exportá-los em lote, para fins de gestão do
+              evento, backup e resolução de eventuais disputas. Esses arquivos permanecem na Plataforma por até
+              <strong> 90 (noventa) dias</strong> após o evento, sendo removidos automaticamente ao final desse prazo — o
+              Produtor é responsável por realizar backup próprio caso deseje retê-los por mais tempo.
             </p>
           </section>
 
@@ -342,8 +357,9 @@ const TermoProdutor: React.FC = () => {
               <span className="text-[12px] text-slate-700 dark:text-slate-300 leading-relaxed">
                 Li e aceito integralmente o Termo de Adesão do Produtor versão <strong>{TERMO_PRODUTOR_VERSION}</strong>,
                 incluindo a cláusula 5 (taxas bancárias do Asaas, taxa única de criação de conta R$ 12,90),
-                a cláusula 6 (janela de 7 dias para liberação dos repasses e antecipação manual sob risco) e
-                a cláusula 7 (ressarcimento de chargebacks/estornos e autorização de débito automático no Asaas).
+                a cláusula 6 (janela de 7 dias para liberação dos repasses e antecipação manual sob risco),
+                a cláusula 7 (ressarcimento de chargebacks/estornos e autorização de débito automático no Asaas) e
+                a cláusula 10.1 (acesso e retenção de 90 dias dos comentários de avaliação dos jurados).
               </span>
             </label>
 
