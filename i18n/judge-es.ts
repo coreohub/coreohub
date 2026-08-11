@@ -168,10 +168,10 @@ const judgeEs: Record<JudgeDictKey, string> = {
   'errors.saveFailed': 'Error al guardar la evaluación.',
 
   // Mic
-  'mic.recording': 'Grabando Feedback',
-  'mic.idle': 'Micrófono en Espera',
-  'mic.recordingHint': 'Se guardarán los últimos 90s de audio',
-  'mic.idleHint': 'Haz clic para grabar audio',
+  'mic.recording': 'Grabando',
+  'mic.idle': 'Grabar comentario',
+  'mic.recordingHint': 'Máx. recomendado 4:00',
+  'mic.idleHint': 'Toca y habla — detén cuando termines',
 
   // Submit / footer
   'submit.score': 'Enviar Nota',

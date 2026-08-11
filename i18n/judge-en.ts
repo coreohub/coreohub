@@ -168,10 +168,10 @@ const judgeEn: Record<JudgeDictKey, string> = {
   'errors.saveFailed': 'Failed to save evaluation.',
 
   // Mic
-  'mic.recording': 'Recording Feedback',
-  'mic.idle': 'Mic on Standby',
-  'mic.recordingHint': 'Last 90s of audio will be saved',
-  'mic.idleHint': 'Click to record audio',
+  'mic.recording': 'Recording',
+  'mic.idle': 'Record comment',
+  'mic.recordingHint': 'Recommended max 4:00',
+  'mic.idleHint': 'Tap and speak — stop when done',
 
   // Submit / footer
   'submit.score': 'Submit Score',

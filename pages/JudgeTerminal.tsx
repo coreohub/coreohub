@@ -399,6 +399,10 @@ const JudgeTerminal = () => {
   /* ── Audio ── */
   const [isRecording,   setIsRecording]   = useState(false);
   const [micAttempted,  setMicAttempted]  = useState(false);
+  // Push-to-talk: segundos decorridos da gravação atual, só pro timer
+  // "Gravando 00:14" — reseta em start, zera em stop.
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioContextRef    = useRef<AudioContext | null>(null);
   const analyserRef        = useRef<AnalyserNode | null>(null);
   const animationFrameRef  = useRef<number | undefined>(undefined);
@@ -411,11 +415,14 @@ const JudgeTerminal = () => {
   // chunk de cada MediaRecorder, o áudio da apresentação seguinte saía sem
   // container válido (bug real: 58% dos áudios do Usualdance corrompidos).
   const mediaRecorderRef   = useRef<MediaRecorder | null>(null);
-  // Buffer de gravação: chunks de 1s (timeslice) acumulados.
-  // Phase 2B: passa de "rolling 90s" pra gravação completa, com cap de 30 min
-  // (1800s) só pra evitar memory leak em jurado que esquece de parar.
+  // Buffer de gravação: chunks de 1s (timeslice) acumulados durante a
+  // sessão de push-to-talk (start→stop deliberado pelo jurado, 2026-08-11).
+  // Sem shift/descarte — investigação real no 19º Festival Ecodança achou
+  // o buffer rolante de 30min sendo cortado sem aviso no submit; como start/
+  // stop agora é curto e deliberado, não precisa descartar nada. Teto visível
+  // (RECORDING_WARNING_SECONDS) só muda o estado visual — nunca corta.
   const rollingChunksRef   = useRef<Blob[]>([]);
-  const BUFFER_MAX_CHUNKS  = 1800;
+  const RECORDING_WARNING_SECONDS = 240; // ~4min
 
   /* ── Submit / loading ── */
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -919,22 +926,12 @@ const JudgeTerminal = () => {
     return () => { if (inactivityRef.current) clearTimeout(inactivityRef.current); };
   }, [resetInactivityTimer]);
 
-  /* ── auto-start mic ──
-     showMicCheck no guard é obrigatório: hooks rodam sempre, independente
-     de qual JSX o componente retorna nesse render (o early-return da tela
-     de checagem não pausa efeitos). Sem essa checagem, a gravação REAL
-     começa em paralelo enquanto a equipe ainda está testando o mic —
-     com o device padrão do SO, não o confirmado no teste — e como
-     micAttempted vira true nesse primeiro disparo indevido, a gravação
-     nunca reinicia depois com o device certo. */
-  useEffect(() => {
-    if (currentPerformance && !isRecording && !micAttempted && !isSubmitted && !showMicCheck) {
-      setMicAttempted(true);
-      startRecording();
-    }
-  }, [currentPerformance, isRecording, micAttempted, isSubmitted, showMicCheck]);
-
-  /* ── Audio ── */
+  /* ── Audio ──
+     Push-to-talk deliberado (2026-08-11): sem auto-start. O jurado inicia
+     a gravação com um toque explícito no botão da coluna de critérios —
+     pesquisa de mercado (CompetitionSuite) confirma que é o padrão do
+     setor, e resolve o buffer rolante de 30min sendo cortado sem aviso
+     no submit (achado real na investigação do 19º Festival Ecodança). */
   const startRecording = async () => {
     try {
       // Usa o mesmo dispositivo confirmado na checagem pré-entrada (Judge
@@ -1020,19 +1017,22 @@ const JudgeTerminal = () => {
       };
       animationFrameRef.current = requestAnimationFrame(drawWaveform);
 
-      // Rolling buffer: chunks de 1s, mantém últimos 90s
+      // Sessão de push-to-talk: zera o buffer a cada novo start
       rollingChunksRef.current = [];
       rec.ondataavailable = e => {
-        if (e.data.size > 0) {
-          rollingChunksRef.current.push(e.data);
-          if (rollingChunksRef.current.length > BUFFER_MAX_CHUNKS) {
-            rollingChunksRef.current.shift();
-          }
-        }
+        if (e.data.size > 0) rollingChunksRef.current.push(e.data);
       };
       rec.start(1000); // timeslice de 1 segundo
       mediaRecorderRef.current = rec;
       setIsRecording(true);
+
+      // Timer da sessão de gravação (push-to-talk) — usado só pro label
+      // "Gravando 00:14" + o aviso visual de teto recomendado.
+      setRecordingSeconds(0);
+      if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingSeconds(s => s + 1);
+      }, 1000);
     } catch (err) {
       console.error('[JudgeTerminal] microfone negado/indisponível:', err);
     }
@@ -1047,6 +1047,8 @@ const JudgeTerminal = () => {
     }
     mediaRecorderRef.current = null;
     setIsRecording(false);
+    if (recordingIntervalRef.current) { clearInterval(recordingIntervalRef.current); recordingIntervalRef.current = null; }
+    setRecordingSeconds(0);
     if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     if (analyserRef.current) { analyserRef.current.disconnect(); analyserRef.current = null; }
     if (audioContextRef.current) audioContextRef.current.close();
@@ -1057,6 +1059,14 @@ const JudgeTerminal = () => {
       if (ctx) ctx.clearRect(0, 0, c.width, c.height);
     }
   };
+
+  /* ── Push-to-talk: mm:ss + teto visível (não corta, só avisa) ── */
+  const formatElapsed = (totalSeconds: number) => {
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  };
+  const isNearRecordingLimit = recordingSeconds >= RECORDING_WARNING_SECONDS;
 
   /* ── Flash invalid input ── */
   const triggerFlash = () => {
@@ -1720,6 +1730,89 @@ const JudgeTerminal = () => {
   const activeDeviceClass = (isDemoMode && previewDevice) ? deviceClasses[previewDevice] : 'h-full lg:h-[calc(100%-3rem)]';
   const showDeviceWrapper  = isDemoMode && previewDevice && previewDevice !== 'desktop';
 
+  /* ── Push-to-talk: botão de gravação (2026-08-11) ──
+     Substitui o auto-start + pill compacto do header. Renderizado tanto no
+     modo competitivo (coluna de critérios, após o comentário escrito) quanto
+     no modo Avaliada (após o textarea) — os dois únicos lugares onde a
+     gravação acontece, e nunca ao mesmo tempo (isAvaliada é estável por
+     apresentação), então dividir waveformCanvasRef entre eles é seguro. */
+  const renderRecordingControl = () => (
+    isRecording ? (
+      <div
+        className={`w-full rounded-xl border-2 px-3 py-2.5 transition-all ${
+          isNearRecordingLimit
+            ? 'border-amber-400 dark:border-amber-500/50 bg-amber-50 dark:bg-amber-500/10'
+            : 'border-rose-400 dark:border-rose-500/50 bg-rose-50 dark:bg-rose-500/10'
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <button
+            onClick={stopRecording}
+            disabled={isSubmitted}
+            className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition-all ${
+              isNearRecordingLimit ? 'bg-amber-500' : 'bg-rose-500'
+            }`}
+            title={t('mic.recording')}
+          >
+            <StopCircle size={16} className="text-white" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-2">
+              <span className={`text-[10px] font-black uppercase tracking-widest ${
+                isNearRecordingLimit ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'
+              }`}>
+                {t('mic.recording')}
+              </span>
+              <span className="text-xs font-black tabular-nums text-slate-900 dark:text-white">
+                {formatElapsed(recordingSeconds)}
+              </span>
+            </div>
+            {/* Waveform real — Web Audio AnalyserNode, ver drawWaveform */}
+            <canvas
+              ref={el => {
+                waveformCanvasRef.current = el;
+                if (el) {
+                  const dpr = window.devicePixelRatio || 1;
+                  const w = el.clientWidth || 200;
+                  if (el.width !== w * dpr) el.width = w * dpr;
+                  if (el.height !== 24 * dpr) el.height = 24 * dpr;
+                }
+              }}
+              className="h-6 w-full mt-1"
+            />
+          </div>
+        </div>
+        {isNearRecordingLimit && (
+          <p className="mt-1.5 text-[8px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest">
+            {t('mic.recordingHint')}
+          </p>
+        )}
+      </div>
+    ) : (
+      <button
+        onClick={() => { if (!isSubmitted) { startRecording(); handleActivity(); } }}
+        disabled={isSubmitted}
+        className={`w-full min-h-11 flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 border-dashed transition-all
+          ${isSubmitted
+            ? 'border-slate-200 dark:border-slate-700 opacity-50 cursor-not-allowed'
+            : 'border-[#ff0068]/40 dark:border-[#ff0068]/40 bg-[#ff0068]/5 dark:bg-[#ff0068]/10 hover:border-[#ff0068] active:scale-[0.98]'
+          }`}
+      >
+        <span className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${isSubmitted ? 'bg-slate-300 dark:bg-slate-700' : 'bg-[#ff0068]'}`}>
+          <Mic size={16} className="text-white" />
+        </span>
+        <span className="text-left min-w-0">
+          <span className={`block text-[11px] font-black uppercase tracking-tight ${isSubmitted ? 'text-slate-400' : 'text-[#ff0068]'}`}>
+            {t('mic.idle')}
+          </span>
+          <span className="block text-[8px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+            {t('mic.idleHint')}
+          </span>
+        </span>
+      </button>
+    )
+  );
+
   const terminalNode = (
     <div
       className={`relative flex flex-col bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-3xl overflow-hidden select-none border border-slate-200 dark:border-slate-700 lg:max-w-[1280px] lg:mx-auto lg:w-full ${activeDeviceClass} ${!previewDevice ? 'lg:max-h-[820px] lg:my-6 lg:shadow-2xl' : ''}`}
@@ -1901,43 +1994,10 @@ const JudgeTerminal = () => {
 
           {/* Botão MARCAR foi movido pro rodapé do painel de critérios em
               todas as resoluções — mais ergonômico (perto da área de trabalho)
-              e libera espaço no header pra status passivo. */}
-
-          {/* Mic compacto inline — substitui o card grande do rodapé */}
-          <button
-            onClick={isRecording ? stopRecording : startRecording}
-            disabled={isSubmitted}
-            className={`inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border transition-all
-              ${isSubmitted
-                ? 'bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-50 cursor-not-allowed'
-                : isRecording
-                  ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-300 dark:border-rose-500/30 text-rose-600 dark:text-rose-400'
-                  : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10'
-              }`}
-            title={isRecording ? t('mic.recording') : t('mic.idle')}
-          >
-            {isRecording ? <StopCircle size={12} /> : <Mic size={12} />}
-            {isRecording && (
-              /* Waveform real — Web Audio AnalyserNode em time-domain renderizado
-                 em canvas 2D. Barras verticais rolling espelhadas no centro,
-                 padrao Voice Memos / WhatsApp. */
-              <canvas
-                ref={el => {
-                  waveformCanvasRef.current = el;
-                  // HiDPI: dimensoes internas = CSS * dpr pra ficar nitido
-                  if (el) {
-                    const dpr = window.devicePixelRatio || 1;
-                    if (el.width !== 60 * dpr) el.width = 60 * dpr;
-                    if (el.height !== 16 * dpr) el.height = 16 * dpr;
-                  }
-                }}
-                className="h-4 w-12 shrink-0"
-              />
-            )}
-            <span className="text-[8px] font-black uppercase tracking-widest hidden sm:inline">
-              {isRecording ? 'REC' : 'MIC'}
-            </span>
-          </button>
+              e libera espaço no header pra status passivo. Botão de gravação
+              (push-to-talk) segue o mesmo padrão desde 2026-08-11 — mora
+              na coluna de critérios, logo após o comentário escrito, não
+              mais aqui no header (ver renderRecordingControl). */}
 
           {/* PIN setup button — escondido em mobile (acessível via outros caminhos) */}
           <button
@@ -2117,15 +2177,13 @@ const JudgeTerminal = () => {
                 {/* Atalho pra equipe do evento reabrir a checagem de áudio
                     sem esperar o próximo login por PIN (ex.: trocou de
                     tablet/fone no meio do evento). Só faz sentido em sessão
-                    real de jurado. stopRecording() + reset de micAttempted
-                    são obrigatórios aqui: sem isso, reabrir a checagem no
-                    meio de uma avaliação deixa o MediaRecorder antigo
-                    (device errado) rodando escondido atrás da tela de
-                    checagem, e ele nunca reinicia com o device novo depois
-                    (o efeito de auto-start só dispara quando micAttempted
-                    ainda é false). Confirmação obrigatória quando já está
-                    gravando: startRecording() zera o buffer rolante (áudio
-                    já capturado da apresentação atual) sem aviso nenhum —
+                    real de jurado. stopRecording() encerra o MediaRecorder
+                    antigo (device errado) antes de reabrir a checagem —
+                    push-to-talk (2026-08-11) não reinicia sozinho, o jurado
+                    grava de novo manualmente com o device novo depois de
+                    confirmar. Confirmação obrigatória quando já está
+                    gravando: startRecording() descartaria o áudio já
+                    capturado da apresentação atual sem aviso nenhum —
                     mesma trava de segurança de handleSwitchJudge acima. */}
                 {judgeSession && (
                   <button
@@ -2440,6 +2498,14 @@ const JudgeTerminal = () => {
               </p>
             </div>
 
+            {/* Push-to-talk — canal principal de feedback neste modo (ver
+                avaliada.audioNote acima). Mesmo controle usado no modo
+                competitivo (renderRecordingControl); desabilita sozinho
+                quando isSubmitted, igual o textarea acima. */}
+            <div className="w-full max-w-md">
+              {renderRecordingControl()}
+            </div>
+
             {/* Submitted state */}
             {isSubmitted && (
               <div className="w-full max-w-md flex flex-col items-center gap-3 p-5 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-3xl text-center">
@@ -2590,6 +2656,16 @@ const JudgeTerminal = () => {
                       : <><MessageSquare size={12} /> {t('comment.toggle')}</>
                     }
                   </button>
+                </div>
+              )}
+
+              {/* Push-to-talk: gravação de comentário em áudio (opcional,
+                  complementa o texto acima) — par lógico do comentário
+                  escrito, sem competir com o numpad da coluna da direita.
+                  Não há mais auto-start (ver renderRecordingControl). */}
+              {!isAvaliada && (
+                <div className="px-2 pt-1 pb-2 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950">
+                  {renderRecordingControl()}
                 </div>
               )}
 

@@ -169,11 +169,11 @@ const judgePt = {
   // Errors
   'errors.saveFailed': 'Erro ao salvar avaliação.',
 
-  // Mic
-  'mic.recording': 'Gravando Feedback',
-  'mic.idle': 'Microfone em Espera',
-  'mic.recordingHint': 'Áudio dos últimos 90s será salvo',
-  'mic.idleHint': 'Clique para gravar áudio',
+  // Mic — push-to-talk (start/stop deliberado, sem auto-start)
+  'mic.recording': 'Gravando',
+  'mic.idle': 'Gravar comentário',
+  'mic.recordingHint': 'Máx. recomendado 4:00',
+  'mic.idleHint': 'Toque e fale — pare quando terminar',
 
   // Submit / footer
   'submit.score': 'Enviar Nota',
