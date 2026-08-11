@@ -2029,8 +2029,8 @@ const JudgeTerminal = () => {
               />
             )}
             {isRecording ? (
-              <span className="flex flex-col items-start leading-none shrink-0">
-                <span className="text-[8px] font-black uppercase tracking-widest hidden sm:inline">
+              <span className="flex items-baseline gap-1.5 shrink-0">
+                <span className="text-[9px] font-black uppercase tracking-widest hidden sm:inline">
                   {t('mic.recording')}
                 </span>
                 <span className="text-[11px] font-black tabular-nums">
