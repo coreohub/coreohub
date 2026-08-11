@@ -2360,50 +2360,47 @@ const JudgeTerminal = () => {
         </div>
       )}
 
+      {/* ── Nudge de gravação (Camada 1, corrigido 2026-08-11) ──
+          Era overlay absoluto centralizado — descoberto em produção que
+          isso cobria o badge+título do modo Avaliada (conteúdo curto e
+          verticalmente centrado, landava exatamente atrás do card:
+          jurado via a tela "quebrada", sem crachá nem nome, achando que
+          faltava o teclado). Banner de fluxo normal, mesmo padrão do aviso
+          de empate logo abaixo — empurra o conteúdo, nunca sobrepõe nada,
+          em nenhum modo. */}
+      {showRecordingNudge && currentPerformance && !isSubmitted && (
+        <div className="shrink-0 mx-4 mt-2 flex items-start gap-3 px-4 py-3 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-2xl shadow-lg">
+          <span className="shrink-0 w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center">
+            <Mic size={14} className="text-slate-500 dark:text-slate-400" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-black uppercase tracking-tight text-slate-900 dark:text-white line-clamp-1">
+              {t('nudge.title', { name: currentPerformance.nome_coreografia || '' })}
+            </p>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+              {t('nudge.subtitle')}
+            </p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={() => { startRecording(); handleActivity(); }}
+              className="px-3 py-1.5 bg-[#ff0068] hover:bg-[#d4005a] text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-95"
+            >
+              {t('nudge.recordCta')}
+            </button>
+            <button
+              onClick={() => setShowRecordingNudge(false)}
+              className="px-2.5 py-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-[9px] font-black uppercase tracking-widest transition-all"
+              aria-label={t('nudge.dismiss')}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Main ── */}
       <main className="flex-1 overflow-y-auto relative">
-
-        {/* Nudge central de gravação (Camada 1) — flutua sobre o conteúdo,
-            não bloqueia clique fora do card (pointer-events-none no wrapper,
-            auto só no card). Some sozinho em 6s ou ao interagir. */}
-        {showRecordingNudge && currentPerformance && !isSubmitted && (
-          <div className="absolute inset-x-0 top-6 z-30 flex justify-center px-4 pointer-events-none">
-            <div className="pointer-events-auto w-full max-w-sm bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-4 flex items-start gap-3">
-              <span className="shrink-0 w-9 h-9 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center">
-                <Mic size={16} className="text-slate-500 dark:text-slate-400" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-black uppercase tracking-tight text-slate-900 dark:text-white line-clamp-1">
-                  {t('nudge.title', { name: currentPerformance.nome_coreografia || '' })}
-                </p>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                  {t('nudge.subtitle')}
-                </p>
-                <div className="flex gap-2 mt-3">
-                  <button
-                    onClick={() => { startRecording(); handleActivity(); }}
-                    className="flex-1 py-2 bg-[#ff0068] hover:bg-[#d4005a] text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-95"
-                  >
-                    {t('nudge.recordCta')}
-                  </button>
-                  <button
-                    onClick={() => setShowRecordingNudge(false)}
-                    className="px-3 py-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-[9px] font-black uppercase tracking-widest transition-all"
-                  >
-                    {t('nudge.dismiss')}
-                  </button>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowRecordingNudge(false)}
-                className="shrink-0 text-slate-300 hover:text-slate-500 dark:text-slate-600 dark:hover:text-slate-300"
-                aria-label={t('nudge.dismiss')}
-              >
-                <X size={14} />
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* All done */}
         {allDone ? (
