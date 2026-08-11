@@ -298,6 +298,11 @@ const JudgeTerminal = () => {
       ? 'Sair do terminal? Sua nota em andamento será descartada e você precisará digitar o PIN novamente pra voltar.'
       : 'Sair do terminal? Você precisará digitar o PIN novamente pra voltar.';
     if (!confirm(msg)) return;
+    // Encerra o MediaRecorder + libera o stream ANTES de navegar — sem isso
+    // a apresentação sai da tela mas o mic fica vivo de verdade, e o Chrome
+    // continua mostrando o ícone de gravação ativa na aba/barra de endereço
+    // até um F5 (browser está certo em mostrar, o stream nunca foi parado).
+    stopRecording();
     // Rota é /judge-login/:token?event=<id> — sem os dois, cai na tela "Link
     // inválido ou expirado" em vez de voltar pro PIN do produtor (código é
     // por evento desde 2026-07-15, token sozinho não basta mais).
@@ -1449,6 +1454,7 @@ const JudgeTerminal = () => {
   };
 
   const exitDemo = () => {
+    stopRecording(); // mesmo motivo do handleSwitchJudge — nunca sair com o mic vivo
     setSchedule([]);
     setCurrentIndex(0);
     setShowQueueScreen(true);
