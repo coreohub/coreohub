@@ -939,18 +939,29 @@ const JudgeTerminal = () => {
     return () => { if (inactivityRef.current) clearTimeout(inactivityRef.current); };
   }, [resetInactivityTimer]);
 
-  /* ── Nudge central (Camada 1) ──
+  /* ── Nudge central (Camada 1, versão adaptativa 2026-08-11) ──
      Sem auto-start, a troca de apresentação é o momento exato onde o
      jurado "esquece" — ele vem de uma apresentação onde talvez tenha
      gravado e presume (errado) que já tá gravando de novo. Card central
-     avisa nesse momento específico, não trava nada, some sozinho. Não
-     dispara em: mic check ainda aberto, tela de fila, já submetido, ou se
-     o jurado já começou a gravar (curioso mas possível: reabrir a checagem
-     de mic no meio e já ter clicado gravar antes do nudge sumir). */
+     avisa nesse momento específico, não trava nada, some sozinho.
+
+     Adaptativo: mostrar em TODA apresentação vira ruído depois de umas
+     5-6 repetições idênticas (habituação — mesma razão pela qual a NN/G
+     recomenda confirmação só pra ações infrequentes, não repetitivas). Só
+     mostra quando há sinal real de risco — pula sozinho se a apresentação
+     anterior já tinha áudio gravado (`rollingChunksRef` só zera dentro de
+     `startRecording`, então nesse ponto ele ainda reflete a sessão
+     anterior) — jurado já tá no ritmo, não precisa de lembrete. Reaparece
+     se ele pulou o áudio da última vez, e sempre aparece na 1ª apresentação
+     da sessão (ref começa vazio). Não dispara em: mic check ainda aberto,
+     tela de fila, já submetido, ou se o jurado já começou a gravar
+     (curioso mas possível: reabrir a checagem de mic no meio e já ter
+     clicado gravar antes do nudge sumir). */
   useEffect(() => {
     if (!currentPerformance || isSubmitted || showMicCheck || showQueueScreen || isRecording) return;
     if (nudgeShownForRef.current === currentPerformance.id) return;
     nudgeShownForRef.current = currentPerformance.id;
+    if (rollingChunksRef.current.length > 0) return; // já gravou na última — sem ruído
     setShowRecordingNudge(true);
     if (nudgeTimeoutRef.current) clearTimeout(nudgeTimeoutRef.current);
     nudgeTimeoutRef.current = setTimeout(() => setShowRecordingNudge(false), 6000);
