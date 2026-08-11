@@ -6,7 +6,8 @@
  * silenciosamente ("Load failed" no Safari/iOS).
  *
  * Allowlist: app.coreohub.com + domínios custom cadastrados em
- * middleware.ts (CUSTOM_DOMAIN_SLUGS) + localhost pra dev.
+ * middleware.ts (CUSTOM_DOMAIN_SLUGS) + staging.coreohub.com (ambiente de
+ * staging, decretado 2026-08-11) + localhost pra dev.
  * Reflete o Origin da request se estiver na allowlist; senão cai no default.
  */
 
@@ -15,6 +16,7 @@ const DEFAULT_ORIGIN = 'https://app.coreohub.com'
 const ALLOWED_ORIGINS = new Set<string>([
   DEFAULT_ORIGIN,
   'https://coreohub.com',
+  'https://staging.coreohub.com',
   'https://festival.usualdance.com',
   'http://localhost:3000',
   'http://localhost:5173',
