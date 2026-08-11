@@ -4,14 +4,14 @@ import {
   ShieldCheck, KeyRound, X, Save, Loader2, RefreshCw,
   Mic, Award, ChevronDown, ChevronUp, Upload, Camera,
   CheckCircle2, AlertCircle, Copy, Eye, EyeOff,
-  Hash, Sparkles, FileDown, MessageCircle,
+  Hash, Sparkles, FileDown, MessageCircle, Headphones,
 } from 'lucide-react';
 
 const generatePin = (): string => String(Math.floor(Math.random() * 10000)).padStart(4, '0');
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeCanvas } from 'qrcode.react';
 import imageCompression from 'browser-image-compression';
-import { supabase } from '../services/supabase';
+import { supabase, supabaseUrl } from '../services/supabase';
 import { getAllGenres } from '../services/genreService';
 import { normalizeStyleName, isStyleInList } from '../utils/styleMatch';
 import { resolveEstudio, toTitleCase } from '../utils/formatters';
@@ -743,6 +743,86 @@ const JudgesManagement = () => {
     }
   };
 
+  /* ── áudio de avaliação dos jurados (.zip) ──
+     Versão em lote do "Ouvir áudio do jurado" que já existe em ResultsPanel
+     (Apuração). audioAvailable espelha o MESMO filtro que
+     export-judge-audio aplica pra decidir o que entra no zip — evaluation
+     com audio_url, cuja registration já tem ordem_apresentacao_publicado E
+     nome_coreografia (sem isso não dá pra nomear o arquivo). Sem esse
+     espelhamento, o botão acendia com avaliações prontas mas cronograma
+     ainda não publicado ("Publicar pros inscritos" em Schedule.tsx é quem
+     seta ordem_apresentacao_publicado) — clicar resultava em 404 "nenhum
+     áudio pôde ser incluído" mesmo com áudio existindo. Retenção de 90 dias
+     (migration 20260810_audio_retention_90_dias.sql) já zera audio_url
+     sozinha, então "sem áudio" cobre tanto "evento sem avaliação com áudio"
+     quanto "áudio expirado". */
+  const [audioAvailable, setAudioAvailable] = useState(false);
+  const [exportingAudio, setExportingAudio] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedEventId) { setAudioAvailable(false); return; }
+    (async () => {
+      const { data: publishedRegs, error: regsError } = await supabase
+        .from('registrations')
+        .select('id')
+        .eq('event_id', selectedEventId)
+        .not('ordem_apresentacao_publicado', 'is', null)
+        .not('nome_coreografia', 'is', null);
+      if (regsError || !publishedRegs || publishedRegs.length === 0) {
+        if (!cancelled) setAudioAvailable(false);
+        return;
+      }
+      const regIds = publishedRegs.map(r => r.id);
+      const { count, error } = await supabase
+        .from('evaluations')
+        .select('id', { count: 'exact', head: true })
+        .eq('event_id', selectedEventId)
+        .not('audio_url', 'is', null)
+        .in('registration_id', regIds);
+      if (!cancelled) setAudioAvailable(!error && (count ?? 0) > 0);
+    })();
+    return () => { cancelled = true; };
+  }, [selectedEventId]);
+
+  const exportJudgeAudioZip = async () => {
+    if (!selectedEventId) { alert('Selecione um evento primeiro.'); return; }
+    setExportingAudio(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${supabaseUrl}/functions/v1/export-judge-audio`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ event_id: selectedEventId }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? 'Erro ao exportar áudios');
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get('Content-Disposition') ?? '';
+      const match = disposition.match(/filename="([^"]+)"/);
+      const filename = match?.[1] ?? 'audios-juri.zip';
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      console.error('Erro ao exportar áudio dos jurados:', err);
+      alert('Falha ao exportar áudios: ' + (err instanceof Error ? err.message : 'desconhecido'));
+    } finally {
+      setExportingAudio(false);
+    }
+  };
+
   /* ── open modal ── */
   const openAdd = () => {
     setEditingJudge(null);
@@ -999,6 +1079,14 @@ const JudgesManagement = () => {
             title="PDF de uso do Coordenador do Júri — mostra quando a banca de jurados muda ao longo da sequência de apresentação"
           >
             {exportingJudgeSchedule ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />} Cronograma de Jurados (PDF)
+          </button>
+          <button
+            onClick={exportJudgeAudioZip}
+            disabled={exportingAudio || !audioAvailable || !selectedEventId}
+            className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={audioAvailable ? 'Baixa todos os áudios de avaliação do evento num .zip, renomeados por ordem/coreografia/jurado' : 'Nenhum áudio disponível — retenção de 90 dias após o evento'}
+          >
+            {exportingAudio ? <Loader2 size={14} className="animate-spin" /> : <Headphones size={14} />} Áudio de Avaliação dos Jurados (.zip)
           </button>
           <button
             onClick={openAdd}
