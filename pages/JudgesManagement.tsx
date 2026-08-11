@@ -747,15 +747,15 @@ const JudgesManagement = () => {
      Versão em lote do "Ouvir áudio do jurado" que já existe em ResultsPanel
      (Apuração). audioAvailable espelha o MESMO filtro que
      export-judge-audio aplica pra decidir o que entra no zip — evaluation
-     com audio_url, cuja registration já tem ordem_apresentacao_publicado E
-     nome_coreografia (sem isso não dá pra nomear o arquivo). Sem esse
-     espelhamento, o botão acendia com avaliações prontas mas cronograma
-     ainda não publicado ("Publicar pros inscritos" em Schedule.tsx é quem
-     seta ordem_apresentacao_publicado) — clicar resultava em 404 "nenhum
-     áudio pôde ser incluído" mesmo com áudio existindo. Retenção de 90 dias
-     (migration 20260810_audio_retention_90_dias.sql) já zera audio_url
-     sozinha, então "sem áudio" cobre tanto "evento sem avaliação com áudio"
-     quanto "áudio expirado". */
+     com audio_url, cuja registration tem nome_coreografia E alguma ordem
+     (publicada OU rascunho — publicar cronograma pro público é decisão
+     separada de exportar áudio pra uso interno do produtor/coordenador do
+     júri; exigir só a publicada deixava o botão apagado em evento real com
+     áudio pronto mas cronograma ainda não publicado, ex. 19° Festival
+     Ecodança). Retenção de 90 dias (migration
+     20260810_audio_retention_90_dias.sql) já zera audio_url sozinha, então
+     "sem áudio" cobre tanto "evento sem avaliação com áudio" quanto "áudio
+     expirado". */
   const [audioAvailable, setAudioAvailable] = useState(false);
   const [exportingAudio, setExportingAudio] = useState(false);
 
@@ -763,17 +763,17 @@ const JudgesManagement = () => {
     let cancelled = false;
     if (!selectedEventId) { setAudioAvailable(false); return; }
     (async () => {
-      const { data: publishedRegs, error: regsError } = await supabase
+      const { data: orderedRegs, error: regsError } = await supabase
         .from('registrations')
         .select('id')
         .eq('event_id', selectedEventId)
-        .not('ordem_apresentacao_publicado', 'is', null)
-        .not('nome_coreografia', 'is', null);
-      if (regsError || !publishedRegs || publishedRegs.length === 0) {
+        .not('nome_coreografia', 'is', null)
+        .or('ordem_apresentacao_publicado.not.is.null,ordem_apresentacao.not.is.null');
+      if (regsError || !orderedRegs || orderedRegs.length === 0) {
         if (!cancelled) setAudioAvailable(false);
         return;
       }
-      const regIds = publishedRegs.map(r => r.id);
+      const regIds = orderedRegs.map(r => r.id);
       const { count, error } = await supabase
         .from('evaluations')
         .select('id', { count: 'exact', head: true })

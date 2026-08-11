@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
 
     const [{ data: regs, error: regsErr }, { data: judgesData, error: judgesErr }] = await Promise.all([
       regIds.length > 0
-        ? admin.from('registrations').select('id, nome_coreografia, estudio, ordem_apresentacao_publicado').in('id', regIds)
+        ? admin.from('registrations').select('id, nome_coreografia, estudio, ordem_apresentacao_publicado, ordem_apresentacao').in('id', regIds)
         : Promise.resolve({ data: [], error: null }),
       judgeIds.length > 0
         ? admin.from('judges').select('id, name').in('id', judgeIds)
@@ -122,11 +122,19 @@ Deno.serve(async (req) => {
     const usedNames = new Set<string>()
     for (const ev of evals) {
       const reg = regsById.get(ev.registration_id)
-      if (!reg || reg.ordem_apresentacao_publicado == null || !reg.nome_coreografia) continue
+      // ordem_apresentacao_publicado só existe depois que o produtor clica
+      // "Publicar pros Inscritos" no Cronograma — isso é sobre visibilidade
+      // PÚBLICA da ordem, uma decisão independente de exportar áudio pra uso
+      // interno (produtor/coordenador do júri revisando avaliação antes
+      // mesmo de publicar nada). Cai pro rascunho (ordem_apresentacao) nesse
+      // caso — evento real com áudio de teste/avaliação já feita mas
+      // cronograma ainda não publicado não pode ficar sem exportação.
+      const ordemNum = reg?.ordem_apresentacao_publicado ?? reg?.ordem_apresentacao
+      if (!reg || ordemNum == null || !reg.nome_coreografia) continue
       if (!ev.audio_url) continue
 
       const judgeName = judgesById.get(ev.judge_id)?.name || 'Jurado'
-      const ordem = String(reg.ordem_apresentacao_publicado).padStart(3, '0')
+      const ordem = String(ordemNum).padStart(3, '0')
       const ext = extractExt(ev.audio_url)
       let filename = `${ordem} - ${sanitizeForFilename(reg.nome_coreografia)} - ${sanitizeForFilename(reg.estudio || 'Sem Estudio')} - ${sanitizeForFilename(judgeName)}.${ext}`
 
