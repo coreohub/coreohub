@@ -22,7 +22,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import {
   ChevronLeft, ChevronRight, Loader2, Music2, User, Users, Upload,
-  AlertCircle, CheckCircle, Plus, Trash2, ArrowRight, Video,
+  AlertCircle, CheckCircle, Plus, Trash2, ArrowRight, Video, ShieldCheck,
 } from 'lucide-react';
 import { maskTempo, parseTempoSegundos, formatTempo, maskedChange } from '../utils/masks';
 import { readAudioDuration } from '../utils/audioDuration';
@@ -88,6 +88,12 @@ interface BailarinoEntry {
   data_nascimento: string;
   /** @ Instagram opcional. Solo/Duo/Trio: usado pra marcar em divulgações. */
   instagram_handle?: string;
+  // Autorização de responsável legal — só preenchido/exigido quando o
+  // bailarino é menor de 18 anos na data do evento. Ver `accept_minor_guardian_consent`.
+  guardian_full_name?: string;
+  guardian_cpf?: string;
+  guardian_relationship?: string;
+  guardian_consent?: boolean;
 }
 
 interface WizardData {
@@ -730,6 +736,18 @@ const InscricaoWizard: React.FC = () => {
     };
   }, [categoriaSelecionada, data.bailarinos, refDate, toleranceRule]);
 
+  // Índices dos bailarinos menores de 18 anos NA DATA DO EVENTO (idade legal
+  // real — não usa `refDate` acima, que é ajustável por regra de categoria
+  // do produtor e não deve reger maioridade). Só entram aqui bailarinos com
+  // data de nascimento já preenchida.
+  const minorIndices = useMemo(() => {
+    const eventDate = event?.event_date ?? event?.start_date ?? '';
+    return data.bailarinos
+      .map((b, i) => (b.data_nascimento ? { i, age: calcAgeOnDate(b.data_nascimento, eventDate) } : null))
+      .filter((x): x is { i: number; age: number } => x !== null && x.age < 18)
+      .map(x => x.i);
+  }, [data.bailarinos, event]);
+
   // ─── Validação por passo ─────────────────────────────────────────────────
   const validateStep = (s: number): string | null => {
     if (s === 0) {
@@ -833,6 +851,16 @@ const InscricaoWizard: React.FC = () => {
       }
       // Modo Trilha (não-seletiva): nada obrigatório — pode "anexar depois".
     }
+    if (s === 3) {
+      for (const i of minorIndices) {
+        const b = data.bailarinos[i];
+        const label = b.nome.trim() || `Bailarino ${i + 1}`;
+        if (!b.guardian_full_name?.trim())    return `${label} é menor de idade — informe o nome do responsável legal.`;
+        if (!validCPF(b.guardian_cpf ?? ''))  return `${label} é menor de idade — CPF do responsável inválido.`;
+        if (!b.guardian_relationship?.trim()) return `${label} é menor de idade — selecione o grau de parentesco do responsável.`;
+        if (!b.guardian_consent)              return `${label} é menor de idade — confirme a autorização do responsável legal.`;
+      }
+    }
     return null;
   };
 
@@ -850,7 +878,7 @@ const InscricaoWizard: React.FC = () => {
 
   // ─── Submit final: cria elenco entries + registration + redireciona ──────
   const handleSubmit = async () => {
-    const err = validateStep(2);
+    const err = validateStep(2) ?? validateStep(3);
     if (err) { setError(err); return; }
     setSubmitting(true);
     setError(null);
@@ -896,6 +924,28 @@ const InscricaoWizard: React.FC = () => {
         instagram_handle: data.bailarinos[idx]?.instagram_handle?.trim() || null,
       }));
       const createdElencoIds   = (elencoCreated ?? []).map(b => b.id);
+
+      // 1.5) Autorização de responsável legal — pra cada bailarino menor de
+      // idade, grava via RPC que captura IP+user-agent no servidor (mesmo
+      // padrão de evidência do Termo do Produtor, accept_producer_terms).
+      // Falha aqui reverte o elenco recém-criado, mesmo padrão do rollback
+      // de registration logo abaixo.
+      for (const i of minorIndices) {
+        const elencoId = elencoCreated?.[i]?.id;
+        const b = data.bailarinos[i];
+        if (!elencoId) continue;
+        const { error: consentErr } = await supabase.rpc('accept_minor_guardian_consent', {
+          p_elenco_id: elencoId,
+          p_guardian_full_name: (b.guardian_full_name ?? '').trim(),
+          p_guardian_cpf: onlyDigits(b.guardian_cpf ?? ''),
+          p_guardian_relationship: (b.guardian_relationship ?? '').trim(),
+          p_user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+        });
+        if (consentErr) {
+          if (createdElencoIds.length > 0) await supabase.from('elenco').delete().in('id', createdElencoIds);
+          throw new Error('Erro ao registrar autorização do responsável: ' + consentErr.message);
+        }
+      }
 
       // M2: salva metadados legacy (event_nome, mod_fee) em event_data pra
       // compat com MinhasCoreografias.tsx que lê esses campos pra exibir.
@@ -2037,6 +2087,79 @@ const InscricaoWizard: React.FC = () => {
                 )}
               </p>
             </div>
+
+            {/* Autorização de responsável legal — só aparece quando há
+                bailarino menor de 18 anos na data do evento. Aceite
+                eletrônico (Lei 14.063/2020), mesmo padrão de mercado usado
+                em regulamentos reais de festival (Erechim, FEDANVI, FEMDE).
+                IP+user-agent capturados no servidor via RPC no submit
+                (accept_minor_guardian_consent). */}
+            {minorIndices.length > 0 && (
+              <div className="border-t border-slate-200 dark:border-white/10 pt-4 mt-4 space-y-4">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck size={14} className="text-[#ff0068] shrink-0" />
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                    Autorização de responsável legal
+                  </p>
+                </div>
+                {minorIndices.map(i => {
+                  const b = data.bailarinos[i];
+                  const label = b.nome.trim() || `Bailarino ${i + 1}`;
+                  const updateGuardian = (patch: Partial<BailarinoEntry>) => {
+                    setData(d => ({
+                      ...d,
+                      bailarinos: d.bailarinos.map((x, j) => (j === i ? { ...x, ...patch } : x)),
+                    }));
+                  };
+                  return (
+                    <div key={i} className="p-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl space-y-3">
+                      <p className="text-xs font-black text-slate-900 dark:text-white">
+                        {label} <span className="font-bold text-slate-400 normal-case">— menor de idade na data do evento</span>
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={b.guardian_full_name ?? ''}
+                          onChange={e => updateGuardian({ guardian_full_name: e.target.value })}
+                          placeholder="Nome completo do responsável"
+                          className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068]"
+                        />
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={b.guardian_cpf ?? ''}
+                          onChange={e => updateGuardian({ guardian_cpf: maskCPF(e.target.value) })}
+                          placeholder="CPF do responsável"
+                          className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068]"
+                        />
+                        <select
+                          value={b.guardian_relationship ?? ''}
+                          onChange={e => updateGuardian({ guardian_relationship: e.target.value })}
+                          className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-lg px-3 py-2 text-[12px] text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark] sm:col-span-2"
+                        >
+                          <option value="">Grau de parentesco</option>
+                          <option value="Mãe">Mãe</option>
+                          <option value="Pai">Pai</option>
+                          <option value="Outro responsável legal">Outro responsável legal</option>
+                        </select>
+                      </div>
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!b.guardian_consent}
+                          onChange={e => updateGuardian({ guardian_consent: e.target.checked })}
+                          className="mt-0.5 shrink-0"
+                        />
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                          Declaro ser responsável legal por <strong>{label}</strong> e autorizo sua participação
+                          neste evento, incluindo uso de imagem em fotos, vídeos e transmissões.
+                        </span>
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Condições de participação — cobre transparência LGPD sobre o
                 feedback dos jurados (áudio/texto). O bailarino é terceiro: o
