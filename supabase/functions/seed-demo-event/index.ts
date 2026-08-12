@@ -1152,6 +1152,29 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       })
     }
 
+    // Garante que cada jurado demo tenha pelo menos 1 apresentação
+    // Competitiva E 1 Avaliada dentro dos próprios gêneros (competencias_
+    // generos) — sem isso, o random de 30% pode deixar um jurado (ex.
+    // Rodrigo Souza, só Hip Hop + Dança Urbana, subset menor) sem nenhuma
+    // Avaliada na fila dele por puro azar, e quem testar o terminal com
+    // aquele PIN nunca vê o modo "Mostra Avaliada" funcionando. Só
+    // reclassifica dentro de APROVADA (PENDENTE/DESCLASSIFICADA seguem
+    // sempre Competitiva por padrão, como já era).
+    for (const jurado of JURADOS) {
+      const generosNorm = jurado.generos.map(g => g.toLowerCase().trim())
+      const matching = registrationsToInsert.filter((r: any) =>
+        r.status === 'APROVADA' && generosNorm.includes(String(r.estilo_danca).toLowerCase().trim())
+      )
+      if (matching.length === 0) continue
+      const hasCompetitiva = matching.some((r: any) => r.tipo_apresentacao === 'Competitiva')
+      const hasAvaliada    = matching.some((r: any) => r.tipo_apresentacao === 'Avaliada')
+      if (!hasAvaliada) {
+        matching[0].tipo_apresentacao = 'Avaliada'
+      } else if (!hasCompetitiva) {
+        matching[0].tipo_apresentacao = 'Competitiva'
+      }
+    }
+
     const { data: insertedRegs, error: regErr } = await supa
       .from('registrations')
       .insert(registrationsToInsert)
