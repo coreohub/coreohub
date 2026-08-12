@@ -25,6 +25,11 @@ const CreateEvent = () => {
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [isDraggingPdf, setIsDraggingPdf] = useState(false);
+  // Contador em vez de bool simples — dragenter/dragleave disparam pra cada
+  // filho do drop zone, não só pra borda externa. Sem isso o highlight
+  // "pisca" ao arrastar por cima dos elementos internos.
+  const dragCounterRef = useRef(0);
   const [draftSaved, setDraftSaved] = useState(false);
   const draftTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -115,9 +120,11 @@ const CreateEvent = () => {
     }));
   };
 
-  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const processPdfFile = async (file: File) => {
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      setError('Envie um arquivo PDF.');
+      return;
+    }
     setUploadingPdf(true);
     setError(null);
     try {
@@ -135,6 +142,45 @@ const CreateEvent = () => {
       setUploadingPdf(false);
       if (pdfInputRef.current) pdfInputRef.current.value = '';
     }
+  };
+
+  const handlePdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || uploadingPdf) return;
+    processPdfFile(file);
+  };
+
+  const handlePdfDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (uploadingPdf) return;
+    dragCounterRef.current += 1;
+    setIsDraggingPdf(true);
+  };
+
+  const handlePdfDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsDraggingPdf(false);
+    }
+  };
+
+  const handlePdfDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handlePdfDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDraggingPdf(false);
+    if (uploadingPdf) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) processPdfFile(file);
   };
 
   const handleAIAnalysis = async () => {
@@ -492,12 +538,18 @@ const CreateEvent = () => {
                   </button>
                 </div>
 
-                {/* PDF upload area */}
+                {/* PDF upload area — clicável ou arrastável (drag-and-drop) */}
                 <div
                   onClick={() => !uploadingPdf && pdfInputRef.current?.click()}
+                  onDragEnter={handlePdfDragEnter}
+                  onDragOver={handlePdfDragOver}
+                  onDragLeave={handlePdfDragLeave}
+                  onDrop={handlePdfDrop}
                   className={`flex items-center gap-4 p-5 bg-slate-50 dark:bg-slate-950 rounded-2xl border-2 border-dashed transition-all ${
                     uploadingPdf
                       ? 'border-[#ff0068]/40 cursor-wait'
+                      : isDraggingPdf
+                      ? 'border-[#ff0068] bg-[#ff0068]/[0.05] scale-[1.01] cursor-pointer'
                       : 'border-slate-200 dark:border-white/10 cursor-pointer hover:border-[#ff0068]/60 hover:bg-[#ff0068]/[0.02]'
                   }`}
                 >
@@ -508,10 +560,10 @@ const CreateEvent = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                      {uploadingPdf ? 'Analisando PDF com IA…' : 'Enviar PDF do Regulamento'}
+                      {uploadingPdf ? 'Analisando PDF com IA…' : isDraggingPdf ? 'Solte o PDF aqui' : 'Enviar PDF do Regulamento'}
                     </p>
                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
-                      {uploadingPdf ? 'Aguarde, isso pode levar alguns segundos' : 'A IA extrai nome, datas, formações e critérios automaticamente'}
+                      {uploadingPdf ? 'Aguarde, isso pode levar alguns segundos' : isDraggingPdf ? 'A IA extrai nome, datas, formações e critérios automaticamente' : 'Clique ou arraste o arquivo aqui'}
                     </p>
                   </div>
                   <input

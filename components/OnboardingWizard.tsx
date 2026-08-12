@@ -33,6 +33,11 @@ const OnboardingWizard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [isDraggingPdf, setIsDraggingPdf] = useState(false);
+  // Contador em vez de bool simples — dragenter/dragleave disparam pra cada
+  // filho do drop zone (ícone, texto, etc), não só pra borda externa. Sem
+  // isso o highlight "pisca" ao arrastar por cima dos elementos internos.
+  const dragCounterRef = useRef(0);
   // Guard síncrono contra double-click. setSaving é assíncrono (React state),
   // então cliques rápidos podem entrar no handleCreate antes do re-render
   // desabilitar o botão — bug que gerou 10 events duplicados em produção.
@@ -61,9 +66,11 @@ const OnboardingWizard: React.FC = () => {
   const canAdvanceStep1 = !!(data.name.trim() && data.city.trim() && data.start_date);
   const canAdvanceStep2 = data.templates.length > 0;
 
-  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const processPdfFile = async (file: File) => {
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      setError('Envie um arquivo PDF.');
+      return;
+    }
     setAnalyzing(true);
     setError(null);
     try {
@@ -95,6 +102,46 @@ const OnboardingWizard: React.FC = () => {
       setAnalyzing(false);
       if (pdfInputRef.current) pdfInputRef.current.value = '';
     }
+  };
+
+  const handlePdfInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || analyzing) return;
+    processPdfFile(file);
+  };
+
+  const handlePdfDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (analyzing) return;
+    dragCounterRef.current += 1;
+    setIsDraggingPdf(true);
+  };
+
+  const handlePdfDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsDraggingPdf(false);
+    }
+  };
+
+  const handlePdfDragOver = (e: React.DragEvent) => {
+    // Sem isso o navegador recusa o drop (cursor vira "proibido").
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handlePdfDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDraggingPdf(false);
+    if (analyzing) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) processPdfFile(file);
   };
 
   const handleCreate = async () => {
@@ -238,13 +285,19 @@ const OnboardingWizard: React.FC = () => {
                 </p>
               </div>
 
-              {/* Atalho PDF */}
+              {/* Atalho PDF — clicável ou arrastável (drag-and-drop) */}
               <button
                 type="button"
                 onClick={() => !analyzing && pdfInputRef.current?.click()}
+                onDragEnter={handlePdfDragEnter}
+                onDragOver={handlePdfDragOver}
+                onDragLeave={handlePdfDragLeave}
+                onDrop={handlePdfDrop}
                 className={`w-full flex items-center gap-4 p-5 rounded-2xl border-2 border-dashed transition-all ${
                   analyzing
                     ? 'border-[#ff0068]/40 bg-[#ff0068]/5 cursor-wait'
+                    : isDraggingPdf
+                    ? 'border-[#e3ff0a] bg-[#e3ff0a]/15 scale-[1.01]'
                     : 'border-[#e3ff0a]/40 bg-[#e3ff0a]/5 hover:border-[#e3ff0a] hover:bg-[#e3ff0a]/10'
                 }`}
               >
@@ -255,10 +308,10 @@ const OnboardingWizard: React.FC = () => {
                 </div>
                 <div className="flex-1 text-left">
                   <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                    {analyzing ? 'Analisando PDF…' : 'Tem o regulamento em PDF?'}
+                    {analyzing ? 'Analisando PDF…' : isDraggingPdf ? 'Solte o PDF aqui' : 'Tem o regulamento em PDF?'}
                   </p>
                   <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
-                    {analyzing ? 'Aguarde — é rápido' : 'A IA preenche os campos abaixo'}
+                    {analyzing ? 'Aguarde — é rápido' : isDraggingPdf ? 'A IA preenche os campos abaixo' : 'Clique ou arraste o arquivo aqui'}
                   </p>
                 </div>
                 <FileUp size={18} className="text-slate-400 shrink-0" />
@@ -267,7 +320,7 @@ const OnboardingWizard: React.FC = () => {
                   type="file"
                   accept=".pdf"
                   className="hidden"
-                  onChange={handlePdfUpload}
+                  onChange={handlePdfInputChange}
                 />
               </button>
 
