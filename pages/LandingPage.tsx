@@ -332,7 +332,7 @@ const LandingPage = () => {
       <FeatureSection
         kicker="Júri Digital"
         title={<>Jurado avalia no tablet<br />ou notebook. <span className="text-[#ff0068]">Mesmo sem Wi-Fi.</span></>}
-        body="Esqueça a súmula de papel. O júri acessa com PIN de 4 dígitos — sem cadastro. Você acompanha cada nota em tempo real no painel, o Coordenador do Júri revisa antes de publicar, e os resultados ficam disponíveis no fim da apresentação. Sem Wi-Fi? Funciona do mesmo jeito."
+        body="Esqueça a ficha de avaliação em papel. O júri acessa com PIN de 4 dígitos — sem cadastro. Você acompanha cada nota em tempo real no painel, o Coordenador do Júri revisa antes de publicar, e os resultados ficam disponíveis no fim da apresentação. Sem Wi-Fi? Funciona do mesmo jeito."
         bullets={[
           'Login por PIN de 4 dígitos — sem cadastro, sem senha para lembrar',
           'Notas chegam em tempo real no painel do produtor',

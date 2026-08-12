@@ -9,7 +9,7 @@
  * - Tablet-first (mobile graceful)
  * - Atribuição múltipla: uma coreografia pode concorrer a vários prêmios
  *   (ex: "Coreografia X → Melhor Bailarino + Revelação")
- * - Sem campo de texto — áudio do terminal já é a súmula
+ * - Sem campo de texto — áudio do terminal já é o registro oficial
  * - Submit = snapshot semantics (apaga deliberações antigas, reinsere)
  *   pra ser idempotente e fácil de raciocinar
  */

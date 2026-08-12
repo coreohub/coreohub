@@ -272,7 +272,7 @@ const JudgesManagement = () => {
     }
   };
 
-  /* ── eventos do produtor — pro seletor do painel de código + Súmula/PDF ── */
+  /* ── eventos do produtor — pro seletor do painel de código + Ficha de Avaliação/PDF ── */
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -333,18 +333,22 @@ const JudgesManagement = () => {
     competencias_artisticas: row.competencias_artisticas || [],
   });
 
-  /* ── Súmula Geral (PDF) — folha em branco por jurado, contingência de papel
-     se o terminal cair. 1 grupo de páginas por jurado ativo, listando só as
+  /* ── Ficha de Avaliação Geral (PDF) — folha em branco por jurado,
+     contingência de papel se o terminal cair. Renomeado de "Súmula" em
+     2026-08-12 (pesquisa de mercado: nenhum festival de dança usa esse
+     termo — é jargão emprestado da arbitragem de futebol; "Ficha de
+     Avaliação" é o termo consistente em todo edital/regulamento
+     encontrado). 1 grupo de páginas por jurado ativo, listando só as
      apresentações que caem na fila DELE (mesmo filtro de gênero do terminal:
      JudgeTerminal.tsx `filteredSchedule`). Critérios/pesos vêm de
      regras_avaliacao.globalRules — overrides por gênero não entram aqui
      ainda (mesma limitação seria replicar toda a lógica de resolveGenreCriteria
      do terminal; a maioria dos eventos usa os mesmos critérios pro evento
      inteiro, overrides são exceção pontual). */
-  const [exportingSumula, setExportingSumula] = useState(false);
+  const [exportingFicha, setExportingFicha] = useState(false);
 
-  const exportSumulaPDF = async () => {
-    setExportingSumula(true);
+  const exportFichaPDF = async () => {
+    setExportingFicha(true);
     try {
       const { fetchActiveEventConfig } = await import('../services/supabase');
       const eventId = selectedEventId;
@@ -414,7 +418,7 @@ const JudgesManagement = () => {
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(15);
         doc.setFont('helvetica', 'bold');
-        doc.text('Súmula Geral de Avaliação', 14, 11);
+        doc.text('Ficha Geral de Avaliação', 14, 11);
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         doc.text(`${eventName.toUpperCase()} · Edição ${editionYear} · Jurado: ${judge.name} · Escala ${scale}`, 14, 18);
@@ -471,12 +475,12 @@ const JudgesManagement = () => {
       const slug = (eventName || 'evento')
         .normalize('NFD').replace(/[̀-ͯ]/g, '')
         .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
-      doc.save(`sumula-geral-${editionYear}-${slug}.pdf`);
+      doc.save(`ficha-avaliacao-geral-${editionYear}-${slug}.pdf`);
     } catch (err) {
-      console.error('Erro ao exportar súmula:', err);
-      alert('Falha ao gerar a súmula: ' + (err instanceof Error ? err.message : 'desconhecido'));
+      console.error('Erro ao exportar ficha de avaliação:', err);
+      alert('Falha ao gerar a ficha de avaliação: ' + (err instanceof Error ? err.message : 'desconhecido'));
     } finally {
-      setExportingSumula(false);
+      setExportingFicha(false);
     }
   };
 
@@ -517,7 +521,7 @@ const JudgesManagement = () => {
       const blocosById = new Map(blocosList.map((b: any) => [b.id, b]));
 
       // Filtra por vínculo real com o evento (event_judges) — mesma razão
-      // da Súmula acima.
+      // da Ficha de Avaliação acima.
       const activeJudges = judges.filter(j => j.is_active !== false && assignedJudgeIds.has(j.id));
       if (activeJudges.length === 0) { alert('Nenhum jurado vinculado a este evento — vincule em "Vinculado a este evento" no card do jurado.'); return; }
 
@@ -1065,12 +1069,12 @@ const JudgesManagement = () => {
             <Hash size={14} /> Código de acesso
           </button>
           <button
-            onClick={exportSumulaPDF}
-            disabled={exportingSumula || judges.length === 0 || !selectedEventId}
+            onClick={exportFichaPDF}
+            disabled={exportingFicha || judges.length === 0 || !selectedEventId}
             className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Baixa 1 folha em branco por jurado — contingência de papel se o terminal falhar no dia"
           >
-            {exportingSumula ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />} Súmula (PDF)
+            {exportingFicha ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />} Ficha de Avaliação (PDF)
           </button>
           <button
             onClick={exportJudgeSchedulePDF}
@@ -1278,8 +1282,8 @@ const JudgesManagement = () => {
                 )}
 
                 {/* Vínculo com o evento selecionado (event_judges, migration
-                    20260715) — jurado só entra na Súmula/Cronograma/terminal
-                    desse evento se estiver marcado aqui. */}
+                    20260715) — jurado só entra na Ficha de Avaliação/Cronograma/
+                    terminal desse evento se estiver marcado aqui. */}
                 {selectedEventId && (
                   <div className="px-5 pb-3">
                     <button
