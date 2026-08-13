@@ -436,7 +436,7 @@ const App: React.FC = () => {
     // de outras queries do Supabase aqui causa DEADLOCK (login trava em "Autenticando...").
     // Por isso adiamos o trabalho com setTimeout(..., 0).
     // Ref: https://github.com/supabase/auth-js/issues/762
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       if (session?.user) {
         setTimeout(async () => {
@@ -444,7 +444,15 @@ const App: React.FC = () => {
             const userProfile = await getOrCreateProfile(session.user);
             if (userProfile) {
               setProfile(userProfile);
-              setActiveRole(userProfile.role);
+              // TOKEN_REFRESHED dispara sozinho quando a aba volta a ficar em
+              // foco (ex: usuário abriu um PDF em outra guia e voltou) — sem
+              // esse guard, resetava o dropdown "VISÃO" do super admin de
+              // volta pro role real a cada refresh silencioso, atrapalhando
+              // quem estava simulando outro papel (ex: gravando tutorial
+              // como Produtor). Só reset em evento de sign-in/sign-out real.
+              if (event !== 'TOKEN_REFRESHED') {
+                setActiveRole(userProfile.role);
+              }
             }
           } catch (err) {
             console.error('[auth] erro ao carregar perfil:', err);

@@ -1074,6 +1074,24 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       regMetas.push({ coreo, formato, estudio, categoria, numBailarinos, bailarinosRaw })
     }
 
+    // ── Conflitos deliberados de bailarino ──
+    // Sem isso, o demo nunca tem conflito real pro produtor testar "Gerar
+    // Ordem Inteligente" — nomes são 100% aleatórios e nunca colidem por
+    // acaso em 50 registros. Índices fixos (não aleatórios) garantem que
+    // toda recriação do demo (própria ou de produtor) sempre nasce com os
+    // mesmos 7 conflitos, em coreografias consecutivas (intervalo 1) pra
+    // disparar o alerta com qualquer minInterval configurado.
+    const CONFLICT_AT_INDEX = [1, 3, 7, 9, 11, 13, 18]
+    for (const idx of CONFLICT_AT_INDEX) {
+      if (idx <= 0 || idx >= regMetas.length) continue
+      const prev = regMetas[idx - 1]
+      const cur = regMetas[idx]
+      if (prev.bailarinosRaw.length === 0 || cur.bailarinosRaw.length === 0) continue
+      // Bailarino da coreografia atual "é" o mesmo da anterior — mesmo
+      // nome, CPF/nascimento próprios preservados (conflito detecta por nome).
+      cur.bailarinosRaw[cur.bailarinosRaw.length - 1].nome = prev.bailarinosRaw[0].nome
+    }
+
     // ── PASSO 2: insere TODOS os bailarinos em `elenco` num batch ──
     // user_id = produtor do demo (memória licao-rls-elenco — RLS permite
     // produtor ler elenco referenciado em bailarinos_detalhes do evento dele).
