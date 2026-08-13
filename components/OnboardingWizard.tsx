@@ -92,7 +92,12 @@ const OnboardingWizard: React.FC = () => {
         ...prev,
         name:       prev.name       || x.event_name  || '',
         start_date: prev.start_date || x.start_date  || '',
-        city:       prev.city       || (x.address?.split(',')[0]?.trim() ?? ''),
+        // Usa city/state que a própria IA já separa do endereço (mesmo
+        // schema do /importar-regulamento) — split(',')[0] no address bruto
+        // pegava o nome da RUA como cidade em endereços tipo "Rua São
+        // Paulo, 3546 – Bairro - CEP" (bug real achado 2026-08-13).
+        city:       prev.city       || x.city  || '',
+        state:      prev.state      || x.state || '',
       }));
     } catch (err: any) {
       const msg = err?.message ?? 'Erro desconhecido';
