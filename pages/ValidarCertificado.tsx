@@ -131,7 +131,7 @@ const ValidarCertificado: React.FC = () => {
             <button
               type="submit"
               disabled={searching || !codeInput.trim()}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#ff0068] hover:bg-[#e0005c] px-4 py-2.5 text-sm font-black text-white disabled:opacity-50 transition"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#ff0068] hover:bg-[#e0005c] px-4 py-2.5 text-sm font-black text-white disabled:bg-slate-200 dark:disabled:bg-white/10 disabled:text-slate-400 dark:disabled:text-slate-500 transition"
             >
               {searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
               Validar

@@ -283,7 +283,7 @@ const App: React.FC = () => {
   const [activeRole, setActiveRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    return (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
+    return (localStorage.getItem('theme') as 'light' | 'dark') || 'light';
   });
   const [config, setConfig] = useState<any>({ nome_evento: "", data_evento: "" });
   // Domínio próprio por evento (ex: festival.usualdance.com) — resolve

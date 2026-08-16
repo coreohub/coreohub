@@ -40,16 +40,16 @@ const BattleArenaLive = () => {
       </div>
 
       {/* Header Info */}
-      <div className="relative z-10 flex justify-between items-start mb-12">
-        <div className="flex items-center gap-8">
-          <div className="p-6 bg-[#ff0068] rounded-[2rem] shadow-[0_0_50px_rgba(255,0,104,0.4)] animate-bounce">
-            <Swords size={48} />
+      <div className="relative z-10 flex flex-wrap justify-between items-start gap-6 mb-12">
+        <div className="flex items-center gap-4 sm:gap-8">
+          <div className="p-3 sm:p-6 bg-[#ff0068] rounded-2xl sm:rounded-[2rem] shadow-[0_0_50px_rgba(255,0,104,0.4)] animate-bounce shrink-0">
+            <Swords className="w-6 h-6 sm:w-12 sm:h-12" />
           </div>
           <div>
-            <h1 className="text-6xl font-black uppercase tracking-tighter leading-none">
+            <h1 className="text-3xl sm:text-6xl font-black uppercase tracking-tighter leading-none">
               Arena <span className="text-[#ff0068]">Live</span>
             </h1>
-            <div className="flex items-center gap-4 mt-2">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-2">
               <span className="px-4 py-1 bg-white/10 rounded-full text-[12px] font-black uppercase tracking-widest">
                 {activeMatch?.category}
               </span>
@@ -61,11 +61,11 @@ const BattleArenaLive = () => {
         </div>
 
         <div className="flex flex-col items-end gap-4">
-          <div className={`px-12 py-6 rounded-[2.5rem] border-4 flex items-center gap-6 transition-all ${
+          <div className={`px-6 py-4 sm:px-12 sm:py-6 rounded-[2rem] sm:rounded-[2.5rem] border-4 flex items-center gap-4 sm:gap-6 transition-all ${
             timeLeft < 10 ? 'border-rose-500 bg-rose-500/20 animate-pulse' : 'border-white/10 bg-white/5'
           }`}>
-            <Timer size={40} className={timeLeft < 10 ? 'text-rose-500' : 'text-[#e3ff0a]'} />
-            <span className="text-7xl font-black font-mono tracking-tighter">{formatTime(timeLeft)}</span>
+            <Timer size={40} className={`shrink-0 ${timeLeft < 10 ? 'text-rose-500' : 'text-[#e3ff0a]'}`} />
+            <span className="text-4xl sm:text-7xl font-black font-mono tracking-tighter">{formatTime(timeLeft)}</span>
           </div>
           <button
             onClick={() => setIsPaused(!isPaused)}

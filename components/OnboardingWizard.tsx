@@ -379,7 +379,7 @@ const OnboardingWizard: React.FC = () => {
               <button
                 onClick={() => setStep(2)}
                 disabled={!canAdvanceStep1}
-                className="w-full flex items-center justify-center gap-2 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-[#ff0068]/20 disabled:opacity-40 disabled:hover:scale-100"
+                className="w-full flex items-center justify-center gap-2 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-[#ff0068]/20 disabled:bg-slate-200 dark:disabled:bg-white/10 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:shadow-none disabled:hover:scale-100"
               >
                 Continuar <ArrowRight size={15} />
               </button>
@@ -456,7 +456,7 @@ const OnboardingWizard: React.FC = () => {
                 <button
                   onClick={handleCreate}
                   disabled={!canAdvanceStep2 || saving}
-                  className="flex-1 flex items-center justify-center gap-2 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-[#ff0068]/20 disabled:opacity-40 disabled:hover:scale-100"
+                  className="flex-1 flex items-center justify-center gap-2 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-[#ff0068]/20 disabled:bg-slate-200 dark:disabled:bg-white/10 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:shadow-none disabled:hover:scale-100"
                 >
                   {saving
                     ? <><Loader2 size={15} className="animate-spin" /> Criando…</>

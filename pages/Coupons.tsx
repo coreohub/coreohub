@@ -456,7 +456,13 @@ const Coupons: React.FC = () => {
           <p className="text-xs text-slate-500 mt-1">Clique em "Novo Cupom" para começar.</p>
         </div>
       ) : (
-        <div className="bg-white dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/10 overflow-x-auto">
+        <div
+          className="bg-white dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/10 overflow-x-auto"
+          style={{
+            maskImage: 'linear-gradient(to right, black calc(100% - 24px), transparent 100%)',
+            WebkitMaskImage: 'linear-gradient(to right, black calc(100% - 24px), transparent 100%)',
+          }}
+        >
           <table className="w-full min-w-[640px]">
             <thead>
               <tr className="bg-slate-50 dark:bg-white/5 text-left text-slate-500 text-[9px] font-black uppercase tracking-widest border-b border-slate-100 dark:border-white/5">
@@ -563,8 +569,8 @@ const Coupons: React.FC = () => {
                           title={c.is_active ? 'Desativar' : 'Ativar'}
                           className={`p-2 rounded-lg transition-colors ${
                             c.is_active
-                              ? 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10'
-                              : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5'
+                              ? 'text-emerald-600 dark:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10'
+                              : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5'
                           }`}
                         >
                           <Power size={16} />

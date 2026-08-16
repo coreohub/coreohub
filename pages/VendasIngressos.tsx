@@ -419,7 +419,7 @@ const VendasIngressos: React.FC = () => {
           <button
             onClick={() => { setPdvError(null); setPdvOpen(true); }}
             disabled={ticketTypes.length === 0}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500/20 disabled:opacity-30"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500/20 disabled:bg-slate-100 dark:disabled:bg-white/5 disabled:border-slate-200 dark:disabled:border-white/10 disabled:text-slate-400 dark:disabled:text-slate-500"
           >
             <Store size={12} /> Vender no balcão
           </button>

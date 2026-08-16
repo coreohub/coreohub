@@ -348,10 +348,10 @@ const TelaoControle: React.FC = () => {
         ) : (
           <>
             {/* Código gigante */}
-            <div className="bg-black/40 border border-white/10 rounded-2xl p-6 text-center">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Código do telão</p>
+            <div className="bg-slate-950 border border-white/10 rounded-2xl p-6 text-center">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-300 mb-2">Código do telão</p>
               <p className="text-5xl font-black italic tracking-tighter text-white tabular-nums select-all">{code}</p>
-              <p className="text-[11px] text-slate-400 mt-3 uppercase tracking-widest">
+              <p className="text-[11px] text-slate-300 mt-3 uppercase tracking-widest">
                 Abrir <b className="text-white">{origin.replace(/^https?:\/\//, '')}/telao</b> e digitar o código
               </p>
             </div>

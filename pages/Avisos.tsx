@@ -238,7 +238,7 @@ const Avisos: React.FC = () => {
                   onClick={() => handleToggle(a)}
                   title={a.active ? 'Pausar aviso' : 'Reativar aviso'}
                   aria-label={a.active ? 'Pausar aviso' : 'Reativar aviso'}
-                  className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white transition-colors"
+                  className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <Power size={15} />
                 </button>
@@ -246,7 +246,7 @@ const Avisos: React.FC = () => {
                   onClick={() => openEdit(a)}
                   title="Editar"
                   aria-label="Editar aviso"
-                  className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white transition-colors"
+                  className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white transition-colors"
                 >
                   <Pencil size={15} />
                 </button>

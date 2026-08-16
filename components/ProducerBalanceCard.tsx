@@ -271,7 +271,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
         <button
           onClick={() => setModalOpen(true)}
           disabled={total <= 0}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#ff0068] hover:bg-[#e0005c] disabled:bg-slate-200 dark:disabled:bg-white/10 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20"
         >
           <ArrowDownToLine size={13} />
           Transferir agora — {fmtBRL(total)}
