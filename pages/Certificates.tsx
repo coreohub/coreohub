@@ -552,7 +552,7 @@ const Certificates: React.FC = () => {
                 {formPreset === 'custom' && (
                   <Field label="Moldura completa (A4 paisagem, 842×595pt)">
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2">
-                      Suba a arte pronta do seu designer (moldura, cores, textura — tudo incluso). O CoreoHub escreve por cima só o texto dinâmico (nome, coreografia, evento, assinaturas, QR), sem aplicar nenhum filtro/overlay na sua imagem.
+                      Suba a arte pronta do seu designer (moldura, cores, textura — tudo incluso). A CoreoHub escreve por cima só o texto dinâmico (nome, coreografia, evento, assinaturas, QR), sem aplicar nenhum filtro/overlay na sua imagem.
                     </p>
                     <div className="flex items-center gap-3">
                       {formBgUrl ? (

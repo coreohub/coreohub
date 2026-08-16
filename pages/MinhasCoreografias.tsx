@@ -1332,7 +1332,13 @@ const MinhasCoreografias = () => {
 
       {/* ── Tabs (padrão Sympla/Eventbrite) ── */}
       {grupos.length > 0 && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+        <div
+          className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1"
+          style={{
+            maskImage: 'linear-gradient(to right, black calc(100% - 24px), transparent 100%)',
+            WebkitMaskImage: 'linear-gradient(to right, black calc(100% - 24px), transparent 100%)',
+          }}
+        >
           {([
             { key: 'upcoming' as Tab, label: 'Próximas',  count: tabCounts.upcoming },
             { key: 'all'      as Tab, label: 'Todas',     count: tabCounts.all },

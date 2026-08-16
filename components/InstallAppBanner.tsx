@@ -92,7 +92,7 @@ const InstallAppBanner: React.FC = () => {
           <Smartphone size={16} className="text-[#ff0068] shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
-              <span className="hidden sm:inline">Instale o CoreoHub como app — </span>
+              <span className="hidden sm:inline">Instale a CoreoHub como app — </span>
               acesso rápido na tela inicial
             </p>
           </div>

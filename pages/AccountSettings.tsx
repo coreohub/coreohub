@@ -3190,7 +3190,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Globe size={18} /></div>
                 <div>
                   <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Integrações de Marketing</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Plugue seus pixels pra rastrear visitantes e conversões nas suas próprias contas. Opcional — funciona em paralelo com o tracking interno do CoreoHub.</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Plugue seus pixels pra rastrear visitantes e conversões nas suas próprias contas. Opcional — funciona em paralelo com o tracking interno da CoreoHub.</p>
                 </div>
               </div>
               {/* Reorganizado por PLATAFORMA (padrão Segment/Shopify/Stripe):
@@ -3407,7 +3407,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     {/* Como funciona */}
                     <div className="p-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-xl">
                       <p className="text-[10px] text-blue-700 dark:text-blue-300 leading-relaxed">
-                        💡 <strong>Como funciona:</strong> com o ID preenchido, cada plataforma rastreia automaticamente visitas à vitrine, cliques em "Inscreva-se" e conversões de pagamento — em paralelo com o tracking interno do CoreoHub. Os dados aparecem na SUA conta do Google/Meta pra otimizar campanhas. O server-side (Avançado) é opcional e recupera o que o navegador bloqueia.
+                        💡 <strong>Como funciona:</strong> com o ID preenchido, cada plataforma rastreia automaticamente visitas à vitrine, cliques em "Inscreva-se" e conversões de pagamento — em paralelo com o tracking interno da CoreoHub. Os dados aparecem na SUA conta do Google/Meta pra otimizar campanhas. O server-side (Avançado) é opcional e recupera o que o navegador bloqueia.
                       </p>
                     </div>
                   </div>

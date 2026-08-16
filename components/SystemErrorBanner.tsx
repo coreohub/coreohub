@@ -26,7 +26,7 @@ const SystemErrorBanner: React.FC<Props> = ({
   supportEmail = 'contato@coreohub.com',
 }) => {
   const subject = encodeURIComponent('CoreoHub — Sistema indisponível');
-  const body = encodeURIComponent(`Olá, encontrei um erro ao acessar o CoreoHub.\n\nURL: ${typeof window !== 'undefined' ? window.location.href : ''}\nDetalhe: ${message}`);
+  const body = encodeURIComponent(`Olá, encontrei um erro ao acessar a CoreoHub.\n\nURL: ${typeof window !== 'undefined' ? window.location.href : ''}\nDetalhe: ${message}`);
 
   return (
     <div className="max-w-2xl mx-auto mt-10 p-6 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-2xl">

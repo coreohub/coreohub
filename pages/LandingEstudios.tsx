@@ -474,7 +474,7 @@ const LandingEstudios: React.FC = () => {
               </ul>
             </div>
             <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-3xl p-6">
-              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-3">Com o CoreoHub</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-3">Com a CoreoHub</p>
               <ul className="space-y-2 text-sm text-slate-300">
                 {[
                   '1 link no Instagram, tudo se resolve sozinho',
@@ -545,7 +545,7 @@ const LandingEstudios: React.FC = () => {
               },
               {
                 q: 'Posso cobrar dos próprios alunos uma "taxa de participação"?',
-                a: 'Pode. O CoreoHub trata aluno-participante e plateia-pagante como categorias diferentes. Aluno pode pagar uma taxa simbólica (R$ 30 figurino, por exemplo) e a família compra ingresso normal.',
+                a: 'Pode. A CoreoHub trata aluno-participante e plateia-pagante como categorias diferentes. Aluno pode pagar uma taxa simbólica (R$ 30 figurino, por exemplo) e a família compra ingresso normal.',
               },
               {
                 q: 'E se eu quiser sair? Tem fidelidade?',

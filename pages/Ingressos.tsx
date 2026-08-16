@@ -19,7 +19,7 @@ interface MyTicket {
   buyer_email: string | null;
   buyer_name: string | null;
   status_pagamento: string | null;
-  preco_pago: number | null;
+  preco: number | null;
   paid_at: string | null;
   access_token: string | null;
   created_at: string;
@@ -84,11 +84,12 @@ const Ingressos: React.FC = () => {
         // Meus Ingressos — só pra user logado. Mostra os de plateia (audience_tickets).
         if (user?.email) {
           try {
-            const { data: tk } = await supabase
+            const { data: tk, error: tkError } = await supabase
               .from('audience_tickets')
-              .select('id, event_id, buyer_email, buyer_name, status_pagamento, preco_pago, paid_at, access_token, created_at')
+              .select('id, event_id, buyer_email, buyer_name, status_pagamento, preco, paid_at, access_token, created_at')
               .eq('buyer_email', user.email)
               .order('created_at', { ascending: false });
+            if (tkError) console.error('Erro ao carregar meus ingressos:', tkError);
             const tickets = (tk ?? []) as MyTicket[];
             // Hidrata nome/data do evento (audience_tickets não embeda direto).
             const eventIds = Array.from(new Set(tickets.map(t => t.event_id).filter(Boolean))) as string[];
@@ -158,7 +159,7 @@ const Ingressos: React.FC = () => {
                     )}
                     {t.paid_at && (
                       <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
-                        <Clock size={9} /> Pago — {fmtMoney(t.preco_pago)}
+                        <Clock size={9} /> Pago — {fmtMoney(t.preco)}
                       </span>
                     )}
                   </div>

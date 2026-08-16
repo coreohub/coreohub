@@ -243,7 +243,7 @@ function renderEmail(payload: HookPayload): RenderedEmail {
         html: baseLayout({
           preheader: 'Confirme o convite pra acessar.',
           title: 'Convite CoreoHub',
-          intro: `Você recebeu um convite pra acessar o CoreoHub com o e-mail <strong>${escape(user.email)}</strong>. Aceite pra continuar.`,
+          intro: `Você recebeu um convite pra acessar a CoreoHub com o e-mail <strong>${escape(user.email)}</strong>. Aceite pra continuar.`,
           contentHtml: `
             <p style="margin:0;font-size:13px;line-height:1.6;color:#475569;">
               Ao aceitar o convite, você criará sua senha de acesso.
@@ -292,7 +292,7 @@ function renderEmail(payload: HookPayload): RenderedEmail {
       // Fallback genérico — não deveria cair aqui, mas se vier um tipo novo
       // do Supabase, evita 500 e ainda manda algo útil ao user.
       return {
-        subject: 'Notificação do CoreoHub',
+        subject: 'Notificação da CoreoHub',
         html: baseLayout({
           preheader: 'Atualização da sua conta.',
           title: 'Notificação',

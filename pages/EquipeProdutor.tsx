@@ -867,7 +867,7 @@ const EquipeProdutor = () => {
                       + share direto pelo apps de mensagem mais usados no BR. */}
                   <a
                     href={inviteUrl
-                      ? `https://wa.me/?text=${encodeURIComponent(`Você foi convidado pra fazer parte da equipe do CoreoHub. Acesse: ${inviteUrl}`)}`
+                      ? `https://wa.me/?text=${encodeURIComponent(`Você foi convidado pra fazer parte da equipe da CoreoHub. Acesse: ${inviteUrl}`)}`
                       : '#'}
                     target="_blank" rel="noopener noreferrer"
                     className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20"
