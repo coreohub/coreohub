@@ -469,9 +469,9 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
                 <button
                   onClick={() => navigate('/account-settings?tab=Pagamentos')}
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border bg-rose-500/10 border-rose-500/30 text-rose-500 hover:bg-rose-500/20 text-[9px] font-black uppercase tracking-widest transition-all"
-                  title="Conecte sua conta Asaas para liberar inscrições pagas"
+                  title="Conecte sua conta CoreoHub para liberar inscrições pagas"
                 >
-                  <AlertCircle size={11} /> Conecte Asaas para liberar inscrições
+                  <AlertCircle size={11} /> Conecte sua conta para liberar inscrições
                 </button>
               ) : setupFeeStatus === 'pending_activation' ? (
                 <button

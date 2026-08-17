@@ -43,7 +43,7 @@ const DemoOnboardingCard: React.FC = () => {
         </div>
 
         <h2 className="text-3xl font-black uppercase tracking-tighter italic text-slate-900 dark:text-white mb-2">
-          Bem-vindo ao <span className="text-[#ff0068]">CoreoHub</span>
+          Bem-vindo à <span className="text-[#ff0068]">CoreoHub</span>
         </h2>
         <p className="text-sm text-slate-600 dark:text-slate-400 max-w-2xl mb-6 leading-relaxed">
           Você ainda não criou nenhum evento. Pra explorar todas as features (Mesa de Som, Terminal de Júri, Coordenador, Premiação, Resultados), <strong className="text-slate-900 dark:text-white">adicione um evento de demonstração</strong> com dados fictícios e teste tudo sem afetar dados reais.

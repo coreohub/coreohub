@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import JSZip from 'https://esm.sh/jszip@3.10.1'
+import { HttpReader, ZipWriter } from 'jsr:@zip-js/zip-js'
 import { buildCorsHeaders } from '../_shared/cors.ts'
 
 /**
@@ -18,6 +18,17 @@ import { buildCorsHeaders } from '../_shared/cors.ts'
  *
  * Nunca confia em RLS pra ownership — decide tudo aqui com client de
  * service role (mesmo padrão de delete-event/manage-team-member).
+ *
+ * STREAMING (2026-08-17): eventos com banca de 3+ jurados avaliando
+ * ~100+ apresentações facilmente passam de 250-300MB de áudio bruto
+ * (cada arquivo webm ~2MB). A versão anterior baixava tudo em paralelo
+ * pra buffers em memória antes de gerar o zip com JSZip de uma vez —
+ * estourava o limite de memória da edge function e o worker morria
+ * antes do catch rodar, devolvendo resposta não-JSON (o frontend caía
+ * no fallback genérico "Erro ao exportar áudios", escondendo a causa
+ * real). Fix real: zip.js com HttpReader escreve cada entrada direto no
+ * stream de saída, sem nunca reter o arquivo inteiro em memória — pico
+ * de RAM fica limitado a poucos MB por vez, não à soma de tudo.
  */
 
 const sanitizeForFilename = (value: string): string =>
@@ -113,11 +124,8 @@ Deno.serve(async (req) => {
     const regsById = new Map((regs ?? []).map(r => [r.id, r]))
     const judgesById = new Map((judgesData ?? []).map(j => [j.id, j]))
 
-    // Monta a lista de nomeáveis primeiro (síncrono, sem I/O) — só depois
-    // baixa os arquivos, em lotes paralelos. Evento grande (3 jurados × 100
-    // apresentações = até 300 áudios) baixado 1-a-1 em série arrisca estourar
-    // o timeout da edge function; lotes de 8 em paralelo cobrem isso sem
-    // sobrecarregar o Storage.
+    // Monta a lista de nomeáveis (síncrono, sem I/O) — download real só
+    // acontece depois, entrada por entrada, direto pro stream de saída.
     const toDownload: { filename: string; url: string }[] = []
     const usedNames = new Set<string>()
     for (const ev of evals) {
@@ -145,41 +153,14 @@ Deno.serve(async (req) => {
       toDownload.push({ filename, url: ev.audio_url })
     }
 
-    const zip = new JSZip()
-    let included = 0
-    const CONCURRENCY = 8
-    for (let i = 0; i < toDownload.length; i += CONCURRENCY) {
-      const batch = toDownload.slice(i, i + CONCURRENCY)
-      const results = await Promise.all(batch.map(async item => {
-        try {
-          const res = await fetch(item.url)
-          if (!res.ok) {
-            console.error(`[export-judge-audio] falhou baixar ${item.url}: ${res.status}`)
-            return null
-          }
-          return { filename: item.filename, buf: await res.arrayBuffer() }
-        } catch (fetchErr) {
-          console.error(`[export-judge-audio] erro de rede em ${item.url}:`, fetchErr)
-          return null
-        }
-      }))
-      for (const r of results) {
-        if (!r) continue
-        zip.file(r.filename, r.buf)
-        included++
-      }
-    }
-
-    if (included === 0) {
-      return new Response(JSON.stringify({ error: 'Nenhum áudio pôde ser incluído (dados de coreografia/ordem ausentes, ou falha ao baixar os arquivos).' }), {
+    if (toDownload.length === 0) {
+      return new Response(JSON.stringify({ error: 'Nenhum áudio pôde ser incluído (dados de coreografia/ordem ausentes).' }), {
         status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    const zipBytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } })
-
     // Content-Disposition é header HTTP — precisa ser ASCII puro (RFC 7230),
-    // diferente dos nomes DENTRO do zip (JSZip grava UTF-8 nativamente, "ç"/
+    // diferente dos nomes DENTRO do zip (zip.js grava UTF-8 nativamente, "ç"/
     // "°" funcionam ali sem problema). "19° Festival Ecodança" com acento
     // cru no header fazia o Content-Disposition inteiro ser descartado sem
     // erro visível — filename sempre caía no fallback genérico do frontend.
@@ -190,7 +171,39 @@ Deno.serve(async (req) => {
       .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase()
     const zipFilename = `audios-juri-${eventSlug || 'evento'}.zip`
 
-    return new Response(zipBytes, {
+    // Streaming real: cada entrada é baixada e escrita direto no stream de
+    // saída via HttpReader, uma de cada vez — nunca mantém o arquivo
+    // inteiro em memória. Roda em background (não awaited aqui) enquanto a
+    // Response já começa a fluir pro cliente.
+    // bufferedWrite fica no default (false) de propósito — só existe pra
+    // suportar escrita PARALELA de várias entradas, e aqui elas são
+    // adicionadas uma de cada vez (await sequencial), então o próprio
+    // zip.js já não precisa reter cada arquivo inteiro em buffer.
+    const { readable, writable } = new TransformStream<Uint8Array>()
+    const zipWriter = new ZipWriter(writable)
+
+    ;(async () => {
+      let included = 0
+      for (const item of toDownload) {
+        try {
+          // level: 0 = STORE (sem recompressão) — áudio webm/opus já vem
+          // comprimido, então deflate só custaria CPU sem ganho real de
+          // tamanho.
+          await zipWriter.add(item.filename, new HttpReader(item.url), { level: 0 })
+          included++
+        } catch (fileErr) {
+          console.error(`[export-judge-audio] falhou incluir ${item.filename}:`, (fileErr as Error)?.message ?? fileErr)
+        }
+      }
+      console.log(`[export-judge-audio] zip finalizado: ${included}/${toDownload.length} áudios incluídos`)
+      try {
+        await zipWriter.close()
+      } catch (closeErr) {
+        console.error('[export-judge-audio] erro ao fechar zip:', (closeErr as Error)?.message ?? closeErr)
+      }
+    })()
+
+    return new Response(readable, {
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/zip',

@@ -108,10 +108,10 @@ const GuiaDoProdutor: React.FC<Props> = ({ profile }) => {
     {
       id: 2,
       Icon: CreditCard,
-      title: 'Conecte sua conta Asaas',
+      title: 'Conecte sua conta CoreoHub',
       subtitle: 'Subconta para receber pagamentos',
       description: 'Configure a subconta Asaas para receber os pagamentos das inscrições do seu festival. O split é automático: a comissão da plataforma é descontada antes do repasse pra você.',
-      ctaLabel: asaasConnected ? 'Ver conta Asaas' : 'Conectar agora',
+      ctaLabel: asaasConnected ? 'Ver conta CoreoHub' : 'Conectar agora',
       ctaAction: () => navigate('/account-settings?tab=Pagamentos'),
       detail: asaasConnected
         ? <span className="text-[10px] font-bold text-emerald-500 uppercase">Subconta Asaas ativa</span>

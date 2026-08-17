@@ -232,22 +232,28 @@ const Auth = () => {
   };
 
   // Decide a tela inicial pós-login com base no role do user. Produtor
-  // (ORGANIZER) cai direto no /qg-organizador. Membro de equipe (role=USER
-  // com permissoes_custom, convidado via /minha-equipe) vai pra primeira
-  // rota que ele de fato tem permissão de ver — sem isso ele caía em
-  // /dashboard, a tela de inscrito comum, sem nenhum caminho óbvio pra
-  // achar sua própria área (2026-07-14). Demais roles (inscrito real,
-  // espectador) seguem pro /dashboard padrão. Lookup feito FORA do
-  // callback de onAuthStateChange pra não deadlockar o lock interno do auth-js.
+  // (ORGANIZER) cai direto no /qg-organizador. Super admin (is_super_admin
+  // ou role=COREOHUB_ADMIN) idem — conta de admin normalmente não tem
+  // inscrições, então caía no fallback /dashboard (tela do inscrito) e
+  // ficava vazia (banner "OLÁ, CEO" sem nada embaixo, achado 2026-08-17).
+  // Membro de equipe (role=USER com permissoes_custom, convidado via
+  // /minha-equipe) vai pra primeira rota que ele de fato tem permissão de
+  // ver — sem isso ele caía em /dashboard, a tela de inscrito comum, sem
+  // nenhum caminho óbvio pra achar sua própria área (2026-07-14). Demais
+  // roles (inscrito real, espectador) seguem pro /dashboard padrão.
+  // Lookup feito FORA do callback de onAuthStateChange pra não deadlockar
+  // o lock interno do auth-js.
   const resolveLandingPath = async (userId: string): Promise<string> => {
     if (redirectTo) return redirectTo;
     try {
       const { data } = await supabase
         .from('profiles')
-        .select('role, permissoes_custom')
+        .select('role, permissoes_custom, is_super_admin')
         .eq('id', userId)
         .maybeSingle();
-      if (data?.role === 'ORGANIZER') return '/qg-organizador';
+      if (data?.role === 'ORGANIZER' || data?.role === 'COREOHUB_ADMIN' || data?.is_super_admin === true) {
+        return '/qg-organizador';
+      }
       const equipeRoute = resolveFirstEquipeRoute(data?.permissoes_custom);
       return equipeRoute ?? '/dashboard';
     } catch {

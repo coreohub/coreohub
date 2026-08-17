@@ -104,7 +104,7 @@ const ProducerAlerts: React.FC<Props> = ({ profile }) => {
           id: 'asaas-missing',
           severity: 'critical',
           icon: CreditCard,
-          title: 'Conecte sua conta Asaas',
+          title: 'Conecte sua conta CoreoHub',
           description: 'Você tem evento com inscrição paga, mas a conta de recebimento não está configurada. Sem ela, ninguém consegue pagar.',
           ctaLabel: 'Conectar agora',
           onCta: () => navigate('/account-settings?tab=Pagamentos'),

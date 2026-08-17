@@ -188,7 +188,7 @@ const TeamInviteLanding = () => {
             </span>
           </div>
           <h1 className="text-3xl font-black tracking-tighter uppercase text-slate-900 dark:text-white">
-            Bem-vindo ao <span className="text-[#ff0068] italic">CoreoHub</span>
+            Bem-vindo à <span className="text-[#ff0068] italic">CoreoHub</span>
           </h1>
           {invite && (
             <p className="text-xs text-slate-500 font-bold">
