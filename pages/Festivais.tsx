@@ -375,7 +375,7 @@ const EventCard: React.FC<{
       to={target}
       className={`group relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 hover:border-[#ff0068]/40 transition-all flex flex-col ${muted ? 'opacity-70 hover:opacity-100' : ''}`}
     >
-      <div className="relative aspect-[16/10] overflow-hidden bg-slate-900">
+      <div className="relative aspect-[1200/630] overflow-hidden bg-slate-900">
         {event.cover_url ? (
           <img
             src={event.cover_url}

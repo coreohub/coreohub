@@ -126,7 +126,7 @@ export const EventAnchorNav: React.FC<EventAnchorNavProps> = ({
               Fade nas bordas via mask-image sinaliza que rola pros lados
               (padrão Apple/Stripe) — some sozinho quando não há overflow. */}
           <div
-            className="flex-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none] -mx-4 px-4"
+            className="flex-1 min-w-0 overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none] -mx-4 px-4"
             style={{
               maskImage: 'linear-gradient(to right, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)',
               WebkitMaskImage: 'linear-gradient(to right, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)',

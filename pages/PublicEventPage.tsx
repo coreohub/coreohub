@@ -696,16 +696,22 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         </ol>
       </nav>
 
-      {/* Hero */}
-      <div id="hero" className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-[#ff0068]/20 via-transparent to-[#050505]" />
-        {event.cover_url ? (
-          <img src={event.cover_url} alt={event.name} className="w-full h-[55vh] object-cover opacity-30" />
-        ) : (
-          <div className="w-full h-[55vh] bg-gradient-to-br from-[#ff0068]/10 via-slate-900 to-[#050505]" />
-        )}
+      {/* Hero — padrão Sympla/Eventbrite: capa em opacidade real (não wash),
+          gradiente concentrado só na faixa inferior pra legibilidade do texto.
+          Título fica no fluxo normal (não absolute/clipado) puxado por
+          margin negativo — cresce livremente com títulos longos sem cortar
+          a arte nem estourar por cima do menu de âncoras. */}
+      <div id="hero" className="relative">
+        <div className="relative min-h-[38vh] sm:min-h-[46vh] lg:min-h-[52vh] overflow-hidden">
+          {event.cover_url ? (
+            <img src={event.cover_url} alt={event.name} className="absolute inset-0 w-full h-full object-cover" />
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-br from-[#ff0068]/10 via-slate-900 to-[#050505]" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-[#050505]/10" />
+        </div>
 
-        <div className="absolute inset-0 flex flex-col justify-end p-8 lg:p-16">
+        <div className="relative -mt-20 sm:-mt-24 lg:-mt-28 px-8 lg:px-16 pb-10">
           <div className="max-w-5xl">
             <Link to="/festivais" className="inline-flex items-center gap-2 mb-6 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068] transition-colors">
               <ArrowLeft size={12} /> Vitrine de festivais
@@ -730,7 +736,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             <motion.h1
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-3xl sm:text-5xl lg:text-7xl font-black uppercase tracking-tighter italic leading-none mb-4"
+              className="text-3xl sm:text-5xl lg:text-7xl font-black uppercase tracking-tighter italic leading-[1.05] mb-4 [text-shadow:0_2px_16px_rgba(0,0,0,0.6)]"
             >
               {event.name}
             </motion.h1>

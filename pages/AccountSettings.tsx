@@ -1304,6 +1304,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   // otimista, não a fonte de verdade).
   const [deleteBlockedByRegs, setDeleteBlockedByRegs] = useState(true);
   const [deleteModalOpen,     setDeleteModalOpen]     = useState(false);
+  const [showImageGuide,      setShowImageGuide]      = useState(false);
   const [deleteConfirmText,   setDeleteConfirmText]   = useState('');
   const [deleting,            setDeleting]            = useState(false);
   const [deleteError,         setDeleteError]         = useState<string | null>(null);
@@ -2619,20 +2620,29 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           <div className="space-y-6">
             {/* Vitrine Pública: banner + descrição */}
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-5">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><ImageIcon size={18} /></div>
-                <div>
-                  <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Vitrine Pública</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Como o seu festival aparece na página de Festivais (`/festivais`).</p>
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><ImageIcon size={18} /></div>
+                  <div>
+                    <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Vitrine Pública</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Como o seu festival aparece na página de Festivais (`/festivais`).</p>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setShowImageGuide(true)}
+                  className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:border-[#ff0068]/50 hover:text-[#ff0068] transition-colors"
+                >
+                  <ImageIcon size={12} /> Guia de imagens
+                </button>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Banner */}
                 <div>
-                  <label className={label}>Banner do Evento (16:10 recomendado)</label>
+                  <label className={label}>Banner do Evento (1200×630 recomendado)</label>
                   {general.coverUrl ? (
-                    <div className="relative group rounded-2xl overflow-hidden aspect-[16/10] bg-slate-100 dark:bg-slate-800">
+                    <div className="relative group rounded-2xl overflow-hidden aspect-[1200/630] bg-slate-100 dark:bg-slate-800">
                       <img src={general.coverUrl} alt="Banner" className="w-full h-full object-cover" />
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                         <label className="cursor-pointer px-4 py-2 bg-white/90 text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white">
@@ -2668,7 +2678,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       </div>
                     </div>
                   ) : (
-                    <label className="cursor-pointer flex flex-col items-center justify-center gap-3 aspect-[16/10] border-2 border-dashed border-slate-300 dark:border-white/10 rounded-2xl hover:border-[#ff0068]/50 transition-colors text-slate-400 hover:text-[#ff0068]">
+                    <label className="cursor-pointer flex flex-col items-center justify-center gap-3 aspect-[1200/630] border-2 border-dashed border-slate-300 dark:border-white/10 rounded-2xl hover:border-[#ff0068]/50 transition-colors text-slate-400 hover:text-[#ff0068]">
                       <input
                         type="file"
                         accept="image/*"
@@ -2686,7 +2696,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       />
                       <Upload size={28} />
                       <p className="text-[10px] font-black uppercase tracking-widest">Clique para enviar</p>
-                      <p className="text-[9px] text-slate-400">PNG, JPG ou WEBP — recomendado 1280×800</p>
+                      <p className="text-[9px] text-slate-400">PNG, JPG ou WEBP — recomendado 1200×630</p>
                     </label>
                   )}
                 </div>
@@ -7332,6 +7342,102 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 {deleting ? 'Excluindo...' : 'Excluir definitivamente'}
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Guia de Imagens — mockup dos tamanhos recomendados por slot de upload
+          (capa evento, capa workshop, foto professor, logo patrocinador).
+          Padrão de mercado (Sympla/Eventbrite): 1200×630 pra capa (mesma
+          proporção do og:image, cortada em "safe zone" central pros cards). */}
+      {showImageGuide && createPortal(
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Guia de imagens recomendadas"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+          onClick={() => setShowImageGuide(false)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="w-full max-w-2xl max-h-[85dvh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-3 mb-1">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068] shrink-0"><ImageIcon size={18} /></div>
+                <div>
+                  <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Guia de Imagens</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Tamanhos recomendados pra cada upload da sua vitrine.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowImageGuide(false)}
+                aria-label="Fechar"
+                className="shrink-0 p-2 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-6">
+              {/* Capa do evento */}
+              <div className="space-y-2">
+                <div className="relative aspect-[1200/630] rounded-2xl overflow-hidden bg-gradient-to-br from-[#ff0068]/20 via-slate-800 to-slate-950 border border-slate-200 dark:border-white/10 flex flex-col justify-end p-3">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-white/30 border border-white/20 rounded-full px-3 py-1">Zona segura</span>
+                  </div>
+                  <div className="relative h-3 w-24 bg-white/70 rounded-full mb-1.5" />
+                  <div className="relative h-1.5 w-14 bg-[#ff0068]/70 rounded-full" />
+                </div>
+                <p className="text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white">Capa do evento</p>
+                <p className="text-[10px] text-slate-500 leading-relaxed">
+                  <strong className="text-slate-700 dark:text-slate-300">1200×630px</strong> (proporção 1.91:1) — mesma imagem usada no card de /festivais, no topo da página do evento e no preview de compartilhamento (WhatsApp/redes). Mantenha o essencial (rostos, texto) no centro — as bordas podem ser cortadas em telas menores.
+                </p>
+              </div>
+
+              {/* Capa do workshop */}
+              <div className="space-y-2">
+                <div className="relative aspect-video rounded-2xl overflow-hidden bg-gradient-to-br from-[#1de7f2]/20 via-slate-800 to-slate-950 border border-slate-200 dark:border-white/10 flex items-end p-3">
+                  <div className="h-3 w-20 bg-white/70 rounded-full" />
+                </div>
+                <p className="text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white">Capa do workshop</p>
+                <p className="text-[10px] text-slate-500 leading-relaxed">
+                  <strong className="text-slate-700 dark:text-slate-300">1200×675px</strong> (proporção 16:9) — aparece na listagem de workshops da vitrine e no card de compartilhamento da aula.
+                </p>
+              </div>
+
+              {/* Foto do professor */}
+              <div className="space-y-2">
+                <div className="relative w-24 h-24 mx-auto sm:mx-0 rounded-full overflow-hidden bg-gradient-to-br from-[#e3ff0a]/30 via-slate-800 to-slate-950 border border-slate-200 dark:border-white/10 flex items-center justify-center">
+                  <span className="text-[8px] font-black uppercase tracking-widest text-white/40">1:1</span>
+                </div>
+                <p className="text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white">Foto do professor</p>
+                <p className="text-[10px] text-slate-500 leading-relaxed">
+                  <strong className="text-slate-700 dark:text-slate-300">Quadrada, mínimo 320×320px</strong> — rosto centralizado, fica cortada em círculo. Fundo neutro funciona melhor.
+                </p>
+              </div>
+
+              {/* Logo do patrocinador */}
+              <div className="space-y-2">
+                <div className="relative h-12 w-40 rounded-lg overflow-hidden bg-[repeating-conic-gradient(#e2e8f0_0%_25%,transparent_0%_50%)] dark:bg-[repeating-conic-gradient(#334155_0%_25%,transparent_0%_50%)] bg-[length:12px_12px] border border-slate-200 dark:border-white/10 flex items-center justify-center">
+                  <div className="h-4 w-20 bg-slate-400/60 dark:bg-white/30 rounded" />
+                </div>
+                <p className="text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white">Logo do patrocinador</p>
+                <p className="text-[10px] text-slate-500 leading-relaxed">
+                  <strong className="text-slate-700 dark:text-slate-300">PNG fundo transparente</strong>, até 400px de largura — funciona melhor na horizontal (a faixa exibida é baixa e larga).
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowImageGuide(false)}
+              className="w-full mt-6 py-3 rounded-2xl bg-[#ff0068] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#ff1a7d] transition-all"
+            >
+              Entendi
+            </button>
           </div>
         </div>,
         document.body

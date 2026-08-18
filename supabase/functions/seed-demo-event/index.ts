@@ -185,8 +185,8 @@ const COREOGRAFIAS_SELETIVA: CoreoSpec[] = [
 // URL placeholder pro video da Seletiva (Big Buck Bunny, vídeo de teste open-source)
 const DEMO_VIDEO_URL = 'https://www.youtube.com/watch?v=YE7VzlLtp-4'
 
-// Cover do evento — Unsplash CC0 dance-related (1600x900, otimizada)
-const DEMO_COVER_URL = 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=1600&q=80'
+// Cover do evento — foto real de festival de dança, cropada 1200×630 (padrão de mercado, mesma proporção do og:image)
+const DEMO_COVER_URL = 'https://ghpltzzijlvykiytwslu.supabase.co/storage/v1/object/public/event-covers/demo_festival_cover.jpg'
 
 // PDF placeholder pro regulamento (small public PDF de teste)
 const DEMO_REGULATION_PDF = 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
