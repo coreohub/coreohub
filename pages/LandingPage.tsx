@@ -181,10 +181,10 @@ const LandingPage = () => {
             <span className="text-rose-400">Virou produtor de planilha.</span>
           </h2>
           <div className="space-y-4 text-slate-300 text-lg leading-relaxed">
-            <p>Inscrição chega. Você confere comprovante de Pix manualmente.</p>
-            <p>Bailarino manda DM com dúvida que já está no regulamento.</p>
-            <p>Resultado fica preso numa planilha que você ainda não terminou.</p>
-            <p>Certificado por certificado, à mão.</p>
+            <p>Inscrição no Google Forms, cronograma na planilha, regulamento no PDF — nada conversa entre si.</p>
+            <p>Bailarino aparece escalado em duas coreografias no mesmo horário, e você só descobre no dia.</p>
+            <p>Inscrição chega, você confere comprovante de Pix um por um, manualmente.</p>
+            <p>Jurado soma nota na prancheta — se errar, o erro vira problema seu.</p>
             <p className="text-white font-bold pt-2">
               Cada hora apagando incêndio é uma hora longe do palco. E é o palco que te trouxe aqui.
             </p>
@@ -248,7 +248,7 @@ const LandingPage = () => {
                 num: '03',
                 icon: Trophy,
                 title: 'O festival roda. Você finalmente respira.',
-                body: 'Júri avalia (até offline), resultado calcula sozinho, certificado sai com QR. Você foca no palco.',
+                body: 'Júri avalia (até offline), resultado calcula sozinho, certificado sai com QR Code. Você foca no palco.',
               },
             ].map((step, i) => {
               const Icon = step.icon;
@@ -355,19 +355,19 @@ const LandingPage = () => {
       <FeatureSection
         reverse
         kicker="Certificado"
-        title={<>Certificado digital com QR.<br /><span className="text-[#ff0068]">Ninguém falsifica, ninguém digita.</span></>}
-        body="Assim que o resultado é publicado, cada bailarino recebe o certificado digital automaticamente — com QR code de validação pública. Qualquer pessoa pode escanear e confirmar que é oficial. Acabou o certificado por certificado, à mão."
+        title={<>Certificado digital com QR Code.<br /><span className="text-[#ff0068]">Ninguém falsifica, ninguém digita.</span></>}
+        body="Assim que o resultado é publicado, cada bailarino recebe o certificado digital automaticamente — com QR Code de validação pública. Qualquer pessoa pode escanear e confirmar que é oficial. Acabou o certificado por certificado, à mão."
         bullets={[
           'Certificado digital gerado e enviado automaticamente',
-          'QR de validação pública — confirma autenticidade em segundos',
+          'QR Code de validação pública — confirma autenticidade em segundos',
           'Modelo com identidade do seu festival',
-          'Zero digitação, zero fila no fim do evento',
+          'Zero digitação, certificado disponível na hora, direto no celular do bailarino',
         ]}
         mockup={
           <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-white/10">
             <img
               src="/certificado-nova.webp"
-              alt="Mão segurando certificado de participação CoreoHub com QR code de validação pública"
+              alt="Mão segurando certificado de participação CoreoHub com QR Code de validação pública"
               className="w-full h-auto block object-cover object-center"
               loading="lazy"
             />
@@ -436,7 +436,7 @@ const LandingPage = () => {
         reverse
         kicker="Credenciais físicas em PDF"
         title={<>Imprime no <span className="text-[#ff0068]">offset</span> da esquina.<br />Cola na credencial.</>}
-        body="Selecione os inscritos, escolha o modo de impressão (A6 com cordão ou adesivo Pimaco 6280) e o sistema gera o PDF pronto pra gráfica. Foto, nome, função e QR de check-in — tudo organizado nas margens exatas do papel."
+        body="Selecione os inscritos, escolha o modo de impressão (A6 com cordão ou adesivo Pimaco 6280) e o sistema gera o PDF pronto pra gráfica. Foto, nome, função e QR Code de check-in — tudo organizado nas margens exatas do papel."
         bullets={[
           'Modo A6 cordão: 4 credenciais por folha A4 em papel cartão 250g',
           'Modo Pimaco 6280: adesivos prontos pra colar em credencial pré-impressa',
@@ -451,7 +451,7 @@ const LandingPage = () => {
             </div>
             <img
               src="/credencial-fisica-mockup.webp"
-              alt="Credenciais físicas CoreoHub impressas, com QR code de check-in, penduradas em cordão"
+              alt="Credenciais físicas CoreoHub impressas, com QR Code de check-in, penduradas em cordão"
               loading="lazy"
               className="w-full h-auto object-cover"
             />
@@ -559,8 +559,8 @@ const LandingPage = () => {
           </h2>
           <p className="text-slate-300 text-lg max-w-2xl mx-auto leading-relaxed mb-12">
             10% por inscrição vendida. Zero mensalidade. Zero fidelidade.
-            Se o evento não rolar, você não paga nada. O dinheiro cai direto na sua conta via Asaas
-            — regulamentado pelo Banco Central — sem esperar repasse mensal.
+            Se o evento não rolar, você não paga nada. O dinheiro cai direto na sua conta — Pix em minutos,
+            cartão no prazo padrão da operadora — sem fechamento de caixa manual no fim do mês.
           </p>
 
           <div className="max-w-3xl mx-auto bg-gradient-to-br from-[#ff0068]/10 via-white/5 to-purple-700/10 border border-white/10 rounded-3xl p-6 md:p-10 backdrop-blur-xl">
@@ -685,7 +685,7 @@ const LandingPage = () => {
                   { f: 'Configura o evento a partir do seu regulamento', type: 'text' as const, c: 'Automático — cole o PDF, a IA extrai tudo', d: 'Manual, categoria por categoria', m: false, p: false },
                   { f: 'Júri avalia mesmo com Wi-Fi caindo',              type: 'bool' as const, c: true, d: false, m: false, p: false },
                   { f: 'Detecta conflito de bailarino em várias coreografias', type: 'bool' as const, c: true, d: false, m: false, p: false },
-                  { f: 'Certificado com QR de validação pública',         type: 'bool' as const, c: true, d: false, m: false, p: false },
+                  { f: 'Certificado com QR Code de validação pública',    type: 'bool' as const, c: true, d: false, m: false, p: false },
                   { f: 'Sem mensalidade, mesmo se o evento não rolar',    type: 'bool' as const, c: true, d: false, m: true,  p: true  },
                 ].map((row, i) => {
                   const renderCell = (val: string | boolean, colorClass: string) => {
@@ -727,11 +727,11 @@ const LandingPage = () => {
             {[
               {
                 q: 'Como recebo o dinheiro das inscrições?',
-                a: 'Direto na sua conta bancária via Asaas (regulamentado pelo Banco Central). Cada inscrição paga gera split na hora — 90% pra você, 10% comissão CoreoHub. Sem boleto perdido, sem espera de 30 dias, sem repasse mensal.',
+                a: 'Direto na sua conta bancária, numa instituição de pagamento regulamentada pelo Banco Central. Cada inscrição paga já sai com o split automático — 90% pra você, 10% comissão CoreoHub. Pix cai em minutos; cartão segue o prazo padrão da operadora. Sem fechamento de caixa manual, sem correr atrás de repasse.',
               },
               {
                 q: 'Funciona mesmo offline?',
-                a: 'Sim. Avaliação de jurados, cronograma, check-in por QR e narração funcionam mesmo sem internet no local — o app sincroniza automaticamente quando a conexão volta. Você só precisa de internet pra publicar o evento e receber pagamentos.',
+                a: 'Sim. Avaliação de jurados, cronograma, check-in por QR Code e narração funcionam mesmo sem internet no local — o app sincroniza automaticamente quando a conexão volta. Você só precisa de internet pra publicar o evento e receber pagamentos.',
               },
               {
                 q: 'E se eu quiser sair? Tem fidelidade?',

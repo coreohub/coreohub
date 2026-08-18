@@ -158,7 +158,7 @@ const PoliticaDePrivacidade: React.FC = () => {
             <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
               7. Retenção de dados
             </h2>
-            <p>Mantemos seus dados enquanto sua conta estiver ativa ou enquanto necessário para cumprir obrigações legais. Dados de transações financeiras são retidos por 5 anos conforme exigência fiscal. Certificados emitidos ficam disponíveis por tempo indeterminado para fins de validação.</p>
+            <p>Mantemos seus dados enquanto sua conta estiver ativa ou enquanto necessário para cumprir obrigações legais. Dados de transações financeiras são retidos por 5 anos conforme exigência fiscal. Certificados emitidos ficam disponíveis por tempo indeterminado para fins de validação. Comentários em áudio e/ou texto de avaliação dos jurados ficam disponíveis por até 90 dias após o evento, tanto para o inscrito quanto para o produtor do evento, sendo removidos automaticamente após esse prazo.</p>
           </section>
 
           <section>

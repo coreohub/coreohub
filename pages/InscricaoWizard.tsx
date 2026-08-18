@@ -2162,8 +2162,9 @@ const InscricaoWizard: React.FC = () => {
             )}
 
             {/* Condições de participação — cobre transparência LGPD sobre o
-                feedback dos jurados (áudio/texto). O bailarino é terceiro: o
-                inscrito aceita ao confirmar. Frase única pra todos os eventos. */}
+                feedback dos jurados (áudio/texto): acesso do produtor,
+                retenção de 90 dias. O bailarino é terceiro: o inscrito
+                aceita ao confirmar. Frase única pra todos os eventos. */}
             <div className="border-t border-slate-200 dark:border-white/10 pt-4 mt-4">
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
                 Condições de participação
@@ -2172,7 +2173,9 @@ const InscricaoWizard: React.FC = () => {
                 Ao se inscrever, você concorda que as apresentações poderão ser avaliadas por jurados e que
                 essas avaliações podem incluir <strong>comentários em áudio e/ou texto</strong>, gravados
                 durante o evento e disponibilizados de forma <strong>privada a você</strong> na plataforma,
-                com finalidade exclusivamente técnica e pedagógica.
+                com finalidade exclusivamente técnica e pedagógica. O produtor do evento também pode acessar
+                e exportar esses áudios para fins administrativos e de backup. Os arquivos de áudio ficam
+                disponíveis por até <strong>90 dias</strong> após o evento, depois são removidos.
               </p>
             </div>
           </div>

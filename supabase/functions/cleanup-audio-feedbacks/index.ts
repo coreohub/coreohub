@@ -1,5 +1,5 @@
 /**
- * Cleanup de áudio de feedback do jurado — retenção de 12 meses.
+ * Cleanup de áudio de feedback do jurado — retenção de 90 dias.
  *
  * A migration 20260501_audio_retention_cleanup.sql já cria a RPC
  * `cleanup_old_audio_feedbacks()`: ela zera `evaluations.audio_url` pra
