@@ -1,17 +1,29 @@
 /**
- * EventAnchorNav — anchor menu fixo da vitrine pública (Etapa 1.5).
+ * EventAnchorNav — anchor menu fixo da vitrine pública (Etapa 1.5, refeito 2026-08-18).
  *
- * Padrão Apple/Stripe:
- * - Sempre visível no topo (position: fixed)
- * - Semi-transparente sobre o hero, opaco depois de rolar
- * - Smooth scroll com offset pra compensar altura do nav
- * - IntersectionObserver destaca a section ativa
- * - Mobile: chips horizontais com scroll lateral
+ * Padrão de landing page de conferência/festival (não de checkout de ingresso
+ * tipo Sympla, que não tem esse menu) — 2 comportamentos diferentes por
+ * dispositivo, cada um correto no seu contexto:
  *
- * Recebe lista filtrada de seções visíveis (caller decide quais existem).
+ * - MOBILE: régua horizontal rolável com fade nas bordas (padrão
+ *   Instagram/YouTube chips) — arrastar com o dedo é um gesto natural em
+ *   touchscreen, então "esconder" o resto rolando é descoberta óbvia.
+ * - DESKTOP: mouse não tem esse affordance de arrastar uma barra de menu.
+ *   Pesquisa de mercado (conference/festival landing pages) confirmou: nav
+ *   fixa nunca deve passar de ~5 itens visíveis, o resto entra num dropdown
+ *   "Mais" de CLIQUE (nunca uma faixa rolável — isso lê como "escondido").
+ *   Mede em runtime quantos itens cabem (ResizeObserver + linha de medição
+ *   invisível) — não trava num número fixo, já que cada evento liga/desliga
+ *   seções diferentes. CTA fica sempre isolado, nunca dividindo espaço com
+ *   a navegação.
+ *
+ * Comuns aos dois: sempre visível no topo (position: fixed), semi-transparente
+ * sobre o hero e opaco depois de rolar; smooth scroll com offset; seção ativa
+ * destacada via IntersectionObserver.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { ChevronDown } from 'lucide-react';
 
 export interface AnchorSection {
   id: string;     // id do <section> alvo
@@ -24,7 +36,11 @@ interface EventAnchorNavProps {
   cta?: React.ReactNode;
 }
 
-const HEADER_HEIGHT = 64; // px — usado pra offset do scroll
+export const HEADER_HEIGHT = 64; // px — usado pra offset do scroll (exportado pra CTAs externos reusarem o mesmo offset)
+const GAP = 4; // px — mesmo valor do gap-1 usado nas pílulas
+const DESKTOP_QUERY = '(min-width: 640px)'; // breakpoint sm do Tailwind
+
+const PILL_CLASS = 'inline-flex items-center px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-colors';
 
 /** Hook: retorna o id da seção atualmente mais visível no viewport */
 function useActiveSection(sectionIds: string[]): string | null {
@@ -74,15 +90,102 @@ function useScrolled(threshold = 80): boolean {
   return scrolled;
 }
 
+/** Hook: true quando o viewport bate o breakpoint desktop (mouse, não touch-scroll) */
+function useIsDesktop(): boolean {
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(DESKTOP_QUERY).matches
+  );
+
+  useEffect(() => {
+    const mql = window.matchMedia(DESKTOP_QUERY);
+    const onChange = () => setIsDesktop(mql.matches);
+    onChange();
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+
+  return isDesktop;
+}
+
+/**
+ * Hook: quantos itens cabem na largura disponível antes de precisar do
+ * botão "Mais". Mede uma linha invisível idêntica (mesmas classes, logo
+ * mesma largura real) e recalcula em resize — nunca corta palavra no meio.
+ * Só relevante no ramo desktop (refs ficam null e o hook não faz nada no
+ * ramo mobile, que usa scroll horizontal em vez de overflow calculado).
+ */
+function useOverflowSections(sections: AnchorSection[], active: boolean) {
+  const outerRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+  const [visibleCount, setVisibleCount] = useState(sections.length);
+
+  const recalc = useCallback(() => {
+    const outer = outerRef.current;
+    const measure = measureRef.current;
+    if (!outer || !measure) return;
+
+    const available = outer.clientWidth;
+    const itemEls = Array.from(measure.querySelectorAll<HTMLElement>('[data-item]'));
+    const moreEl = measure.querySelector<HTMLElement>('[data-more]');
+    const moreWidth = moreEl ? moreEl.offsetWidth + GAP : 0;
+
+    if (itemEls.length === 0) {
+      setVisibleCount(sections.length);
+      return;
+    }
+
+    const totalWidth = itemEls.reduce((sum, el) => sum + el.offsetWidth + GAP, 0);
+    if (totalWidth <= available) {
+      setVisibleCount(sections.length);
+      return;
+    }
+
+    let used = 0;
+    let count = 0;
+    for (let i = 0; i < itemEls.length; i++) {
+      const w = itemEls[i].offsetWidth + GAP;
+      const isLast = i === itemEls.length - 1;
+      const reserve = isLast ? 0 : moreWidth; // último item não precisa reservar espaço do "Mais"
+      if (used + w + reserve <= available) {
+        used += w;
+        count++;
+      } else {
+        break;
+      }
+    }
+    setVisibleCount(count);
+  }, [sections.length]);
+
+  useEffect(() => {
+    if (!active) return;
+    recalc();
+    const ro = new ResizeObserver(() => recalc());
+    if (outerRef.current) ro.observe(outerRef.current);
+    window.addEventListener('resize', recalc);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', recalc);
+    };
+  }, [recalc, active]);
+
+  return { outerRef, measureRef, visibleCount };
+}
+
 export const EventAnchorNav: React.FC<EventAnchorNavProps> = ({
   sections,
   cta,
 }) => {
   const activeId = useActiveSection(sections.map(s => s.id));
-  // Menu agora aparece SEMPRE (padrão Apple/Stripe). Quando rolou, fica
-  // mais opaco; sobre o hero, semi-transparente com backdrop-blur.
   const scrolled = useScrolled(80);
-  const navRef = useRef<HTMLElement>(null);
+  const isDesktop = useIsDesktop();
+  const { outerRef, measureRef, visibleCount } = useOverflowSections(sections, isDesktop);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+  const mobileNavRef = useRef<HTMLDivElement>(null);
+
+  const visible = isDesktop ? sections.slice(0, visibleCount) : sections;
+  const overflow = isDesktop ? sections.slice(visibleCount) : [];
+  const activeInOverflow = overflow.some(s => s.id === activeId);
 
   // Smooth scroll com offset
   const handleClick = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
@@ -92,26 +195,43 @@ export const EventAnchorNav: React.FC<EventAnchorNavProps> = ({
     const top = el.getBoundingClientRect().top + window.scrollY - HEADER_HEIGHT - 8;
     window.scrollTo({ top, behavior: 'smooth' });
     history.replaceState(null, '', `#${id}`);
+    setMoreOpen(false);
   };
 
-  // Auto-scroll do nav horizontal pra manter item ativo visível
+  // Fecha o dropdown "Mais" ao clicar fora ou apertar Esc
   useEffect(() => {
-    if (!navRef.current || !activeId) return;
-    const activeEl = navRef.current.querySelector<HTMLAnchorElement>(`a[href="#${activeId}"]`);
+    if (!moreOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMoreOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [moreOpen]);
+
+  // Mobile: auto-scroll do nav horizontal pra manter item ativo visível
+  useEffect(() => {
+    if (isDesktop || !mobileNavRef.current || !activeId) return;
+    const activeEl = mobileNavRef.current.querySelector<HTMLAnchorElement>(`a[href="#${activeId}"]`);
     if (activeEl) {
-      const navRect = navRef.current.getBoundingClientRect();
+      const navRect = mobileNavRef.current.getBoundingClientRect();
       const elRect = activeEl.getBoundingClientRect();
       if (elRect.left < navRect.left || elRect.right > navRect.right) {
         activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
     }
-  }, [activeId]);
+  }, [activeId, isDesktop]);
 
   if (sections.length === 0) return null;
 
   return (
     <nav
-      ref={navRef}
       aria-label="Navegação do evento"
       className="fixed top-0 left-0 right-0 z-40 transition-all duration-300"
       style={{ height: HEADER_HEIGHT }}
@@ -121,44 +241,139 @@ export const EventAnchorNav: React.FC<EventAnchorNavProps> = ({
           ? 'bg-[#0b0b0f]/90 border-white/10'
           : 'bg-[#0b0b0f]/40 border-white/5'
       }`}>
-        <div className="max-w-5xl mx-auto w-full px-4 flex items-center gap-4">
-          {/* Lista horizontal de itens (scroll lateral em mobile).
-              Fade nas bordas via mask-image sinaliza que rola pros lados
-              (padrão Apple/Stripe) — some sozinho quando não há overflow. */}
-          <div
-            className="flex-1 min-w-0 overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none] -mx-4 px-4"
-            style={{
-              maskImage: 'linear-gradient(to right, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)',
-              WebkitMaskImage: 'linear-gradient(to right, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)',
-            }}
-          >
-            <ul className="flex items-center gap-1 min-w-max">
-              {sections.map(s => {
-                const isActive = activeId === s.id;
-                return (
-                  <li key={s.id}>
-                    <a
-                      href={`#${s.id}`}
-                      onClick={e => handleClick(e, s.id)}
-                      className={`relative inline-flex items-center px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors whitespace-nowrap ${
-                        isActive
-                          ? 'text-[#ff0068]'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
+        <div className="max-w-5xl mx-auto w-full px-4 flex items-center gap-3">
+          {isDesktop ? (
+            <>
+              {/* Desktop: itens visíveis nunca rolam, nunca cortam no meio.
+                  O que não couber vai pro dropdown "Mais". */}
+              <div ref={outerRef} className="flex-1 min-w-0 overflow-hidden">
+                <ul className="flex items-center gap-1">
+                  {visible.map(s => {
+                    const isActive = activeId === s.id;
+                    return (
+                      <li key={s.id}>
+                        <a
+                          href={`#${s.id}`}
+                          onClick={e => handleClick(e, s.id)}
+                          className={`relative ${PILL_CLASS} ${
+                            isActive ? 'text-[#ff0068]' : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {s.label}
+                          {isActive && (
+                            <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-[#ff0068] rounded-full" />
+                          )}
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              {overflow.length > 0 && (
+                <div ref={moreRef} className="relative shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setMoreOpen(o => !o)}
+                    aria-haspopup="menu"
+                    aria-expanded={moreOpen}
+                    className={`${PILL_CLASS} gap-1 ${
+                      activeInOverflow ? 'text-[#ff0068]' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Mais
+                    <ChevronDown size={12} className={`transition-transform ${moreOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {moreOpen && (
+                    <div
+                      role="menu"
+                      className="absolute top-full right-0 mt-2 min-w-[10rem] py-1.5 rounded-xl border border-white/10 bg-[#0b0b0f]/95 backdrop-blur-xl shadow-2xl z-50"
                     >
-                      {s.label}
-                      {isActive && (
-                        <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-[#ff0068] rounded-full" />
-                      )}
-                    </a>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-          {cta && <div className="shrink-0">{cta}</div>}
+                      {overflow.map(s => {
+                        const isActive = activeId === s.id;
+                        return (
+                          <a
+                            key={s.id}
+                            href={`#${s.id}`}
+                            role="menuitem"
+                            onClick={e => handleClick(e, s.id)}
+                            className={`block px-4 py-2.5 text-[10px] font-black uppercase tracking-widest transition-colors ${
+                              isActive ? 'text-[#ff0068]' : 'text-slate-300 hover:text-white hover:bg-white/5'
+                            }`}
+                          >
+                            {s.label}
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            /* Mobile: régua horizontal rolável, fade nas bordas sinaliza
+               overflow (padrão Instagram/YouTube chips — arrastar é um
+               gesto natural em touchscreen). */
+            <div
+              ref={mobileNavRef}
+              className="flex-1 min-w-0 overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none] -mx-4 px-4"
+              style={{
+                maskImage: 'linear-gradient(to right, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)',
+                WebkitMaskImage: 'linear-gradient(to right, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)',
+              }}
+            >
+              <ul className="flex items-center gap-1 min-w-max">
+                {visible.map(s => {
+                  const isActive = activeId === s.id;
+                  return (
+                    <li key={s.id}>
+                      <a
+                        href={`#${s.id}`}
+                        onClick={e => handleClick(e, s.id)}
+                        className={`relative ${PILL_CLASS} ${
+                          isActive ? 'text-[#ff0068]' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {s.label}
+                        {isActive && (
+                          <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-[#ff0068] rounded-full" />
+                        )}
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {/* CTA — sempre isolado, nunca divide espaço com a navegação */}
+          {cta && <div className="shrink-0 flex items-center gap-2">{cta}</div>}
         </div>
       </div>
+
+      {/* Linha de medição invisível (só usada no ramo desktop) — mesmas
+          classes dos itens reais, então offsetWidth bate exato com o que
+          vai renderizar de verdade. Deslocada pra ESQUERDA (não pra cima)
+          — técnica canônica de "fora da tela mas medível": um offset
+          vertical não impede a linha de alargar o scrollWidth horizontal
+          da página quando ela é mais larga que a viewport (exatamente o
+          cenário em que "Mais" precisa entrar em ação). */}
+      {isDesktop && (
+        <div
+          ref={measureRef}
+          aria-hidden="true"
+          className="absolute top-0 -left-[9999px] flex items-center pointer-events-none"
+          style={{ gap: GAP }}
+        >
+          {sections.map(s => (
+            <span key={s.id} data-item className={PILL_CLASS}>{s.label}</span>
+          ))}
+          <span data-more className={`${PILL_CLASS} gap-1`}>
+            Mais
+            <ChevronDown size={12} />
+          </span>
+        </div>
+      )}
     </nav>
   );
 };

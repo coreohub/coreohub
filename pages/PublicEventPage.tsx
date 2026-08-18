@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import BrandIcon from '../components/BrandIcon';
-import { EventAnchorNav, type AnchorSection } from '../components/EventAnchorNav';
+import { EventAnchorNav, HEADER_HEIGHT, type AnchorSection } from '../components/EventAnchorNav';
 import { PessoasSection, type JudgePublic, type WorkshopTeacherPublic } from '../components/PessoasSection';
 import { resolveLote, diffDias, formatDataBRComDia, todayISO, resolveActiveWorkshopLot, findNextWorkshopLot, type Lote } from '../utils/lotes';
 import { formatPrecoBR } from '../utils/masks';
@@ -643,6 +643,36 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
     enabledAwards.length > 0 ? { id: 'premiacao', label: 'Premiação' } : null,
   ].filter(Boolean) as AnchorSection[];
 
+  // CTA fixo do topo é dinâmico — aponta pra ação mais relevante DESSE
+  // evento, não sempre "Inscreva-se". Cada seção (Ingressos/Workshops)
+  // mantém a própria caixa de conversão embaixo; este é só o atalho global
+  // sempre visível (princípio do CTA fixo da Sympla, adaptado pra um evento
+  // com múltiplos "produtos" em vez de 1 tipo de ingresso só).
+  // GRATUITO não tem nada pra "comprar" (card só avisa "entrada gratuita") —
+  // só conta como candidato a CTA quando existe ação de compra de verdade
+  // (EXTERNO = link externo real; INTERNO = carrinho próprio da CoreoHub).
+  const hasPurchasableIngressos = visibleSections.some(s => s.id === 'ingressos')
+    && event.politica_ingressos !== 'GRATUITO';
+  const hasWorkshopsSection = visibleSections.some(s => s.id === 'workshops');
+  const primaryCta = (() => {
+    if (isRegistrationOpen) {
+      return { kind: 'link' as const, to: `/festival/${slugOrId}/register`, label: 'Inscreva-se' };
+    }
+    if (!eventOver && hasPurchasableIngressos) {
+      return { kind: 'anchor' as const, id: 'ingressos', label: 'Comprar ingresso' };
+    }
+    if (!eventOver && hasWorkshopsSection) {
+      return { kind: 'anchor' as const, id: 'workshops', label: 'Ver workshops' };
+    }
+    return null;
+  })();
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const top = el.getBoundingClientRect().top + window.scrollY - HEADER_HEIGHT - 8;
+    window.scrollTo({ top, behavior: 'smooth' });
+  };
+
   return (
     <div className="min-h-screen bg-[#050505] text-white">
       {/* Pixels do produtor — Fase 4B. Carrega GA4+Pixel do dono do festival
@@ -770,14 +800,24 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         sections={visibleSections}
         cta={
           <div className="flex items-center gap-2">
-            {isRegistrationOpen && (
-              <Link
-                to={`/festival/${slugOrId}/register`}
-                onClick={onInscrevaseClick}
-                className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 bg-[#ff0068] text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all"
-              >
-                Inscreva-se <ChevronRight size={12} />
-              </Link>
+            {primaryCta && (
+              primaryCta.kind === 'link' ? (
+                <Link
+                  to={primaryCta.to}
+                  onClick={onInscrevaseClick}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 bg-[#ff0068] text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all"
+                >
+                  {primaryCta.label} <ChevronRight size={12} />
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => scrollToSection(primaryCta.id)}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 bg-[#ff0068] text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all"
+                >
+                  {primaryCta.label} <ChevronRight size={12} />
+                </button>
+              )
             )}
             {/* Botão de login fixo — vitrine não tinha nenhum link de acesso
                 à conta, usuários do Usualdance relataram não achar onde entrar. */}
