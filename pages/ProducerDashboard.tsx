@@ -280,7 +280,10 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
           supabase.from('configuracoes').select('nome_evento,data_evento').eq('event_id', selectedEventId).maybeSingle().then(r =>
             r.data ? r : supabase.from('configuracoes').select('nome_evento,data_evento').eq('id', '1').maybeSingle()
           ),
-          supabase.from('judges').select('id,is_active'),
+          // Escopado por event_judges (migration 20260715) — sem isso, contava
+          // TODOS os jurados do produtor (inclusive os fictícios do demo)
+          // misturados com os reais, em qualquer evento selecionado.
+          supabase.from('event_judges').select('judges(id,is_active)').eq('event_id', selectedEventId),
           supabase.from('registrations').select('id,check_in_status').eq('event_id', selectedEventId),
           // refunded_at IS NULL pra não inflar receita histórica com comissões
           // já estornadas (espelha filtro do daily-release-funds + ProducerBalanceCard).
@@ -302,7 +305,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
             trilhasPendentes: allRegs.filter(r => !r.trilha_url && isPago(r.status_pagamento)).length,
             pendenciasRegulamento: allRegs.filter(r => r.penalidade_status === 'PENDENTE').length,
             totalJurados: judges?.length || 0,
-            juradosAtivos: judges?.filter((j: any) => j.is_active).length || 0,
+            juradosAtivos: judges?.filter((row: any) => row.judges?.is_active).length || 0,
             checkinFeitos: checkins?.filter((c: any) => c.check_in_status === 'OK').length || 0,
             totalInscritos: allRegs.length,
           });

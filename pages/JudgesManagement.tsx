@@ -127,6 +127,18 @@ const JudgesManagement = () => {
   const [saving, setSaving] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // Evento selecionado é o [DEMO]? Se sim, esconde os jurados REAIS da lista —
+  // `judges` carrega TODOS os jurados do produtor (reuso entre eventos é
+  // intencional), mas expor nome/foto/Instagram de jurados reais enquanto o
+  // produtor navega o evento demo (ex: gravando tutorial) vaza dado de
+  // cliente sem necessidade nenhuma. Jurados demo têm PIN sentinela fixo
+  // (mesmo padrão usado no backfill/trigger de event_judges, 2026-07-15).
+  const selectedEventIsDemo = events.find(e => e.id === selectedEventId)?.is_demo === true;
+  const DEMO_JUDGE_PINS = new Set(['1111', '2222', '3333']);
+  const visibleJudges = selectedEventIsDemo
+    ? judges.filter(j => DEMO_JUDGE_PINS.has(j.pin))
+    : judges;
+
   /* modal */
   const [modalOpen, setModalOpen] = useState(false);
   const [editingJudge, setEditingJudge] = useState<Judge | null>(null);
@@ -1051,7 +1063,7 @@ const JudgesManagement = () => {
           </button>
           <button
             onClick={copyInviteMessage}
-            disabled={judges.length === 0 || inviteLoading || !selectedEventId}
+            disabled={visibleJudges.length === 0 || inviteLoading || !selectedEventId}
             className="px-4 py-3 bg-[#ff0068]/10 border border-[#ff0068]/30 rounded-2xl text-[10px] font-black uppercase tracking-widest text-[#ff0068] hover:bg-[#ff0068]/20 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Copia link + código + lembrete de instalar o app numa mensagem só, pronta pra colar no WhatsApp"
           >
@@ -1060,7 +1072,7 @@ const JudgesManagement = () => {
           </button>
           <button
             onClick={toggleInvitePanel}
-            disabled={judges.length === 0 || !selectedEventId}
+            disabled={visibleJudges.length === 0 || !selectedEventId}
             aria-expanded={invitePanelOpen}
             aria-controls="invite-panel"
             className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1070,7 +1082,7 @@ const JudgesManagement = () => {
           </button>
           <button
             onClick={exportFichaPDF}
-            disabled={exportingFicha || judges.length === 0 || !selectedEventId}
+            disabled={exportingFicha || visibleJudges.length === 0 || !selectedEventId}
             className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Baixa 1 folha em branco por jurado — contingência de papel se o terminal falhar no dia"
           >
@@ -1078,7 +1090,7 @@ const JudgesManagement = () => {
           </button>
           <button
             onClick={exportJudgeSchedulePDF}
-            disabled={exportingJudgeSchedule || judges.length === 0 || !selectedEventId}
+            disabled={exportingJudgeSchedule || visibleJudges.length === 0 || !selectedEventId}
             className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             title="PDF de uso do Coordenador do Júri — mostra quando a banca de jurados muda ao longo da sequência de apresentação"
           >
@@ -1194,20 +1206,24 @@ const JudgesManagement = () => {
       )}
 
       {/* Empty */}
-      {!loading && judges.length === 0 && (
+      {!loading && visibleJudges.length === 0 && (
         <div className="py-20 text-center bg-slate-100 dark:bg-slate-900/40 border border-dashed border-slate-300 dark:border-white/10 rounded-3xl">
           <Award size={40} className="mx-auto text-slate-400 mb-3" />
-          <p className="text-xs font-black text-slate-500 uppercase tracking-widest">Nenhum jurado cadastrado ainda.</p>
-          <button onClick={openAdd} className="mt-4 px-5 py-2.5 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all">
-            Cadastrar primeiro jurado
-          </button>
+          <p className="text-xs font-black text-slate-500 uppercase tracking-widest">
+            {selectedEventIsDemo ? 'Jurados fictícios do demo não encontrados.' : 'Nenhum jurado cadastrado ainda.'}
+          </p>
+          {!selectedEventIsDemo && (
+            <button onClick={openAdd} className="mt-4 px-5 py-2.5 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all">
+              Cadastrar primeiro jurado
+            </button>
+          )}
         </div>
       )}
 
       {/* Judge cards grid */}
-      {!loading && judges.length > 0 && (
+      {!loading && visibleJudges.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-          {judges.map(judge => {
+          {visibleJudges.map(judge => {
             const isExpanded = expandedId === judge.id;
             return (
               <div
