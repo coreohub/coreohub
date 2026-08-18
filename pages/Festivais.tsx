@@ -58,11 +58,16 @@ const Festivais = () => {
     const fetchEvents = async () => {
       setLoading(true);
       try {
+        // Evento demo entra na vitrine de propósito (pedido do produtor
+        // 2026-08-18) — precisa aparecer publicamente pra gravação de
+        // tutorial/demonstração enquanto ativo. Sem filtro de is_demo:
+        // ele some sozinho quando o cron cleanup-expired-demo-events-daily
+        // apaga a row inteira (24h após criação), sem precisar de exclusão
+        // manual aqui.
         const { data, error } = await supabase
           .from('events')
           .select('id, slug, name, description, cover_url, start_date, end_date, location, city, state, formacoes_config, edition_year, is_public')
           .eq('is_public', true)
-          .eq('is_demo', false)
           .order('start_date', { ascending: false });
         if (error) throw error;
         // Achado do produtor (2026-07-17): todo evento nasce is_public=true
