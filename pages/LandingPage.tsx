@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import {
   ChevronRight, Sparkles, FileText, Wifi, Link as LinkIcon,
   Trophy, Shield, Award, GraduationCap, Mic2, Check, X, ChevronDown,
-  AlertTriangle, ArrowRight, Menu,
+  AlertTriangle, ArrowRight, Menu, Play,
   CalendarClock, Globe, IdCard, QrCode,
   Smartphone, Share2, Mail,
 } from 'lucide-react';
@@ -16,6 +16,7 @@ const LandingPage = () => {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [videoPlaying, setVideoPlaying] = useState(false);
 
   const calcReceita = calcInscricoes * calcTicket;
   const calcComissao = calcReceita * 0.10;
@@ -168,6 +169,53 @@ const LandingPage = () => {
               <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mt-1">{s.label}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* ─── 1.5. VÍDEO INSTITUCIONAL ──────────────────────────────────────────────── */}
+      <section className="px-6 py-20 lg:py-28 border-t border-white/5">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Veja na prática</p>
+            <h2 className="text-3xl md:text-5xl font-black tracking-tighter uppercase leading-[0.95] mb-6">
+              A CoreoHub<br /><span className="text-[#ff0068]">em 3 minutos.</span>
+            </h2>
+            <p className="text-slate-300 text-lg leading-relaxed">
+              Do regulamento em PDF ao certificado com QR Code — veja o festival inteiro rodando
+              dentro da plataforma, sem planilha e sem apagar incêndio.
+            </p>
+          </div>
+          <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-black">
+            {videoPlaying ? (
+              <iframe
+                src="https://www.youtube.com/embed/bLqI7Icm_eI?autoplay=1"
+                title="CoreoHub em 3 minutos"
+                className="absolute inset-0 w-full h-full"
+                allow="accelerate-compute; autoplay; encrypted-media; picture-in-picture"
+                allowFullScreen
+              />
+            ) : (
+              <button
+                onClick={() => setVideoPlaying(true)}
+                aria-label="Assistir: CoreoHub em 3 minutos"
+                className="group absolute inset-0 w-full h-full"
+              >
+                <img
+                  src="https://img.youtube.com/vi/bLqI7Icm_eI/maxresdefault.jpg"
+                  alt=""
+                  aria-hidden="true"
+                  loading="lazy"
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black/30 group-hover:bg-black/20 transition-colors" />
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <span className="flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-full bg-[#ff0068] shadow-[0_20px_60px_rgba(255,0,104,0.45)] group-hover:scale-110 transition-transform">
+                    <Play size={28} className="text-white ml-1" fill="currentColor" />
+                  </span>
+                </span>
+              </button>
+            )}
+          </div>
         </div>
       </section>
 
