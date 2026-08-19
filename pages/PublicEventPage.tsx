@@ -742,7 +742,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           <Link to="/festivais" className="inline-flex items-center gap-2 mb-6 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068] transition-colors">
             <ArrowLeft size={12} /> Vitrine de festivais
           </Link>
-          <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-8 lg:gap-12 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-8 lg:gap-12 items-start">
             {/* Coluna da foto */}
             <div>
               {event.cover_url ? (
@@ -754,6 +754,34 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 <BrandIcon size={20} />
                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">CoreoHub</span>
               </div>
+              {/* Redes sociais compactas — só desktop (lg+). No mobile a versão
+                  completa ("Siga o evento") já existe mais abaixo na página;
+                  duplicar aqui embaixo da foto empilhado faria o usuário ver
+                  redes sociais antes de saber do que se trata o evento. */}
+              {hasSocial && (
+                <div className="hidden lg:flex items-center gap-2 mt-4">
+                  {[
+                    { href: social.instagram, label: 'Instagram do evento', Icon: Instagram },
+                    { href: social.facebook,  label: 'Facebook do evento',  Icon: Facebook },
+                    { href: social.tiktok,    label: 'TikTok do evento',    Icon: TikTokIcon },
+                    { href: social.youtube,   label: 'YouTube do evento',   Icon: Youtube },
+                    { href: social.whatsapp,  label: 'WhatsApp do evento',  Icon: MessageCircle },
+                    { href: social.website,   label: 'Site oficial do evento', Icon: Globe },
+                    { href: social.email,     label: 'E-mail do evento',    Icon: Mail },
+                  ].filter(link => link.href).map(({ href, label, Icon }) => (
+                    <a
+                      key={label}
+                      href={href!}
+                      target={href!.startsWith('mailto:') ? undefined : '_blank'}
+                      rel="noopener noreferrer"
+                      aria-label={label}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:border-white/30 transition-colors"
+                    >
+                      <Icon size={14} />
+                    </a>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Coluna de informações */}
@@ -1587,9 +1615,11 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           </div>
         </div>
 
-        {/* Redes sociais do evento */}
+        {/* Redes sociais do evento — só mobile agora. No desktop já aparece
+            em versão compacta embaixo da capa no hero (evita duplicar o
+            mesmo link 2x na mesma página). */}
         {hasSocial && (
-          <div className="space-y-4">
+          <div className="space-y-4 lg:hidden">
             <h2 className="text-2xl font-black uppercase tracking-tighter">Siga o evento</h2>
             <div className="flex flex-wrap gap-3">
               {social.instagram && (
