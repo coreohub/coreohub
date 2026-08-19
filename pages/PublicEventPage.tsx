@@ -730,80 +730,103 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         </ol>
       </nav>
 
-      {/* Hero — padrão Sympla/Eventbrite: capa em opacidade real (não wash),
-          gradiente concentrado só na faixa inferior pra legibilidade do texto.
-          Título fica no fluxo normal (não absolute/clipado) puxado por
-          margin negativo — cresce livremente com títulos longos sem cortar
-          a arte nem estourar por cima do menu de âncoras. */}
-      <div id="hero" className="relative">
-        {/* Proporção fixa (mesma do upload recomendado, 1200×630) em vez de
-            altura baseada em vh — antes cada tela cortava uma fatia
-            diferente da foto sem curadoria nenhuma; agora o enquadramento é
-            sempre o mesmo, só muda o tamanho absoluto em pixels (padrão
-            Eventbrite/Sympla pra capa única enviada pelo organizador).
-            Teto de segurança é max-width em px (max-w-[1920px] mx-auto),
-            NUNCA max-height em vh — vh depende da ALTURA da janela, então
-            travar por vh reintroduz exatamente o problema que essa mudança
-            resolve (ex: 1920×1080 e 1366×768, ambos comuns em desktop,
-            teriam alturas de janela diferentes o bastante pra cortar a foto
-            de formas diferentes entre si). Capar largura em px é imune a
-            isso — só entra em jogo em monitores ultrawide/4K, bem mais raro
-            que a combinação width×height variar entre desktops comuns. */}
-        <div className="relative w-full max-w-[1920px] mx-auto aspect-[1200/630] overflow-hidden">
-          {event.cover_url ? (
-            <img src={event.cover_url} alt={event.name} className="absolute inset-0 w-full h-full object-cover" />
-          ) : (
-            <div className="absolute inset-0 bg-gradient-to-br from-[#ff0068]/10 via-slate-900 to-[#050505]" />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-[#050505]/10" />
-        </div>
-
-        <div className="relative -mt-20 sm:-mt-24 lg:-mt-28 px-8 lg:px-16 pb-10">
-          <div className="max-w-5xl">
-            <Link to="/festivais" className="inline-flex items-center gap-2 mb-6 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068] transition-colors">
-              <ArrowLeft size={12} /> Vitrine de festivais
-            </Link>
-            <div className="flex items-center gap-3 mb-4">
-              <BrandIcon size={28} />
-              <span className="text-[10px] font-black text-[#ff0068] uppercase tracking-[0.4em]">CoreoHub</span>
-            </div>
-            {(event as any).video_selection_enabled && (
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 mb-3 bg-amber-500/10 border border-amber-500/30 rounded-full">
-                <Video size={12} className="text-amber-400" />
-                <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
-                  Seletiva por vídeo
-                  {(event as any).video_selection_fee_required && Number((event as any).video_selection_fee ?? 0) > 0 && (
-                    <span className="font-bold text-amber-300/80 normal-case tracking-normal ml-2">
-                      · taxa R$ {Number((event as any).video_selection_fee).toFixed(2).replace('.', ',')} antes da análise
-                    </span>
-                  )}
-                </span>
+      {/* Hero em 2 colunas (desktop) / empilhado (mobile) — padrão Luma
+          (verificado contra a página real, não documentação de terceiros):
+          foto CONTIDA numa coluna própria, título/data/local/CTA na outra,
+          nunca disputando espaço nem ficando escondidos abaixo da dobra em
+          monitores largos e baixos. Trade-off assumido: a foto fica menor
+          em telas grandes (deixa de ser full-bleed) — decisão do produtor
+          em troca de garantir que a info nunca some sem rolar. */}
+      <div id="hero" className="relative px-8 lg:px-16 pt-10 pb-14">
+        <div className="max-w-5xl mx-auto">
+          <Link to="/festivais" className="inline-flex items-center gap-2 mb-6 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068] transition-colors">
+            <ArrowLeft size={12} /> Vitrine de festivais
+          </Link>
+          <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-8 lg:gap-12 items-start">
+            {/* Coluna da foto */}
+            <div>
+              {event.cover_url ? (
+                <img src={event.cover_url} alt={event.name} className="w-full aspect-[1200/630] object-cover rounded-2xl border border-white/10" />
+              ) : (
+                <div className="w-full aspect-[1200/630] rounded-2xl bg-gradient-to-br from-[#ff0068]/10 via-slate-900 to-[#050505] border border-white/10" />
+              )}
+              <div className="flex items-center gap-2.5 mt-4">
+                <BrandIcon size={20} />
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">CoreoHub</span>
               </div>
-            )}
-            <motion.h1
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-3xl sm:text-5xl lg:text-7xl font-black uppercase tracking-tighter italic leading-[1.05] mb-4 [text-shadow:0_2px_16px_rgba(0,0,0,0.6)]"
-            >
-              {event.name}
-            </motion.h1>
-            <div className="flex flex-wrap gap-4 text-sm">
-              {event.start_date && (
-                <div className="flex items-center gap-2 text-slate-300">
-                  <Calendar size={16} className="text-[#ff0068]" />
-                  {formatEventRange(event.start_date, event.end_date)}
-                </div>
-              )}
-              {event.event_time && (
-                <div className="flex items-center gap-2 text-slate-300">
-                  <Clock size={16} className="text-[#ff0068]" />
-                  {event.event_time}
-                </div>
-              )}
-              {localCidadeUf && (
-                <div className="flex items-center gap-2 text-slate-300">
-                  <MapPin size={16} className="text-[#ff0068]" />
-                  {localCidadeUf}
+            </div>
+
+            {/* Coluna de informações */}
+            <div>
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                {isRegistrationOpen && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-full text-[10px] font-black text-emerald-400 uppercase tracking-widest">
+                    ● Inscrições abertas
+                  </span>
+                )}
+                {(event as any).video_selection_enabled && (
+                  <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-full">
+                    <Video size={12} className="text-amber-400" />
+                    <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
+                      Seletiva por vídeo
+                      {(event as any).video_selection_fee_required && Number((event as any).video_selection_fee ?? 0) > 0 && (
+                        <span className="font-bold text-amber-300/80 normal-case tracking-normal ml-2">
+                          · taxa R$ {Number((event as any).video_selection_fee).toFixed(2).replace('.', ',')} antes da análise
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                )}
+              </div>
+              <motion.h1
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tighter italic leading-[1.05] mb-5"
+              >
+                {event.name}
+              </motion.h1>
+              <div className="flex flex-col gap-2.5 mb-6">
+                {event.start_date && (
+                  <div className="flex items-center gap-2.5 text-sm text-slate-300">
+                    <Calendar size={16} className="text-[#ff0068] shrink-0" />
+                    {formatEventRange(event.start_date, event.end_date)}
+                  </div>
+                )}
+                {event.event_time && (
+                  <div className="flex items-center gap-2.5 text-sm text-slate-300">
+                    <Clock size={16} className="text-[#ff0068] shrink-0" />
+                    {event.event_time}
+                  </div>
+                )}
+                {localCidadeUf && (
+                  <div className="flex items-center gap-2.5 text-sm text-slate-300">
+                    <MapPin size={16} className="text-[#ff0068] shrink-0" />
+                    {localCidadeUf}
+                  </div>
+                )}
+              </div>
+              {primaryCta && (
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-5 max-w-sm">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">
+                    {primaryCta.kind === 'link' ? 'Inscrições' : 'Ingressos'}
+                  </p>
+                  {primaryCta.kind === 'link' ? (
+                    <Link
+                      to={primaryCta.to}
+                      onClick={onInscrevaseClick}
+                      className="flex items-center justify-center gap-1.5 py-3.5 rounded-xl bg-[#ff0068] text-white text-[11px] font-black uppercase tracking-widest hover:scale-[1.02] transition-all"
+                    >
+                      {primaryCta.label} <ChevronRight size={13} />
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => scrollToSection(primaryCta.id)}
+                      className="w-full flex items-center justify-center gap-1.5 py-3.5 rounded-xl bg-[#ff0068] text-white text-[11px] font-black uppercase tracking-widest hover:scale-[1.02] transition-all"
+                    >
+                      {primaryCta.label} <ChevronRight size={13} />
+                    </button>
+                  )}
                 </div>
               )}
             </div>
