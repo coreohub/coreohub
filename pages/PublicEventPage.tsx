@@ -618,6 +618,11 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
 
   // Etapa 1.5: monta lista de sections visíveis pro anchor menu.
   // Renderiza só seções que de fato têm conteúdo (evita item morto no menu).
+  // Ingressos/Inscrições/Workshops geram receita — essa prioridade garante
+  // que saem por último do menu visível pro dropdown "Mais" quando o espaço
+  // aperta (seções só informativas cedem lugar primeiro, mesmo vindo antes
+  // na ordem visual).
+  const REVENUE_SECTION_PRIORITY = 1;
   const visibleSections: AnchorSection[] = [
     event.description ? { id: 'sobre', label: 'Sobre' } : null,
     hasLocalInfo ? { id: 'local', label: 'Local' } : null,
@@ -625,20 +630,19 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
     Array.isArray(event.programacao_config) && event.programacao_config.length > 0
       ? { id: 'programacao', label: 'Programação' }
       : null,
-    // Ingressos: aparece se há tipos cadastrados OU política definida
     (Array.isArray(event.ingressos_config) && event.ingressos_config.length > 0)
       || event.politica_ingressos === 'GRATUITO'
       || event.politica_ingressos === 'EXTERNO'
-      ? { id: 'ingressos', label: 'Ingressos' }
+      ? { id: 'ingressos', label: 'Ingressos', priority: REVENUE_SECTION_PRIORITY }
       : null,
     // Padrão Sympla/Eventbrite: a aba de inscrição continua navegável mesmo
     // com o prazo encerrado (usuário que volta pelo link precisa achar a
     // seção e ver o estado "Inscrições encerradas"); só o CTA flutuante
     // "INSCREVA-SE" some quando !isRegistrationOpen.
     Array.isArray(event.formacoes_config) && event.formacoes_config.length > 0
-      ? { id: 'inscricoes', label: 'Inscrições' }
+      ? { id: 'inscricoes', label: 'Inscrições', priority: REVENUE_SECTION_PRIORITY }
       : null,
-    publicWorkshops.length > 0 ? { id: 'workshops', label: 'Workshops' } : null,
+    publicWorkshops.length > 0 ? { id: 'workshops', label: 'Workshops', priority: REVENUE_SECTION_PRIORITY } : null,
     publicJudges.length > 0 ? { id: 'jurados', label: 'Jurados' } : null,
     enabledAwards.length > 0 ? { id: 'premiacao', label: 'Premiação' } : null,
   ].filter(Boolean) as AnchorSection[];
@@ -1253,14 +1257,14 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               return (
                 <div className="flex flex-wrap items-center gap-2 -mt-1">
                   {aceitaCompetitiva && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-700 dark:text-slate-300">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-300">
                       <Trophy size={12} className="text-[#ff0068]" />
                       Mostra Competitiva
                     </span>
                   )}
                   {aceitaAvaliada && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-700 dark:text-slate-300">
-                      <GraduationCap size={12} className="text-violet-400 dark:text-violet-300" />
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-300">
+                      <GraduationCap size={12} className="text-violet-300" />
                       Mostra Avaliada
                     </span>
                   )}
@@ -1479,15 +1483,15 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                   revealed && Array.isArray(award.winner_items) && award.winner_items.length > 0 ? award.winner_items : undefined;
                 const winnerNome: string | undefined = revealed && !winnerItems ? award.winner_nome : undefined;
                 return (
-                  <div key={award.id} className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-5">
-                    <p className="font-black uppercase text-sm tracking-tight text-slate-900 dark:text-white">{award.name}</p>
+                  <div key={award.id} className="bg-white/5 border border-white/10 rounded-2xl p-5">
+                    <p className="font-black uppercase text-sm tracking-tight text-white">{award.name}</p>
                     {valor && (
-                      <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 tabular-nums mt-1">
+                      <p className="text-lg font-black text-emerald-400 tabular-nums mt-1">
                         {valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </p>
                     )}
                     {award.description && (
-                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">{award.description}</p>
+                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">{award.description}</p>
                     )}
                     {award.formation && award.formation !== 'TODOS' && (
                       <span className="inline-block mt-2 px-2 py-1 rounded-full bg-[#ff0068]/10 text-[#ff0068] text-[9px] font-black uppercase tracking-widest">
@@ -1495,21 +1499,21 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                       </span>
                     )}
                     {winnerItems && (
-                      <div className="mt-3 pt-3 border-t border-slate-200 dark:border-white/10 space-y-1.5">
+                      <div className="mt-3 pt-3 border-t border-white/10 space-y-1.5">
                         <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Vencedores(as)</p>
                         {winnerItems.map((w, i) => (
                           <p key={i} className="text-sm font-black uppercase tracking-tight text-[#ff0068]">
-                            {w.nome}{w.estudio && <span className="text-slate-500 dark:text-slate-400 font-bold text-[10px] normal-case tracking-normal"> · {w.estudio}</span>}
+                            {w.nome}{w.estudio && <span className="text-slate-400 font-bold text-[10px] normal-case tracking-normal"> · {w.estudio}</span>}
                           </p>
                         ))}
                       </div>
                     )}
                     {winnerNome && (
-                      <div className="mt-3 pt-3 border-t border-slate-200 dark:border-white/10">
+                      <div className="mt-3 pt-3 border-t border-white/10">
                         <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Vencedor(a)</p>
                         <p className="text-sm font-black uppercase tracking-tight text-[#ff0068] mt-0.5">{winnerNome}</p>
                         {award.winner_estudio && (
-                          <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">{award.winner_estudio}</p>
+                          <p className="text-[10px] text-slate-400 uppercase font-bold">{award.winner_estudio}</p>
                         )}
                       </div>
                     )}

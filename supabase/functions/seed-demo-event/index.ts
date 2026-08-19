@@ -333,11 +333,11 @@ const DEMO_WORKSHOPS = [
     nome: 'Jazz Funk Intensivo',
     slug_base: 'jazz-funk-intensivo-demo',
     descricao: 'Workshop intensivo de Jazz Funk com base em coreografia comercial. Aquecimento, técnica e final com vídeo.',
-    cover_url: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=1200&h=675&fit=crop&q=80',
+    cover_url: 'https://ghpltzzijlvykiytwslu.supabase.co/storage/v1/object/public/event-covers/demo_workshop_jazzfunk.jpg',
     professor_name: 'Juliana Silveira',  // mesmo nome de jurada → testa dedup PersonCard
     professor_bio: 'Bailarina principal do Theatro Municipal de SP. Mestra em Dança Contemporânea pela UFBA. 15 anos formando profissionais.',
     professor_bio_short: 'Bailarina principal do Theatro Municipal de SP, Mestra em Dança Contemporânea.',
-    professor_photo_url: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=400&h=400&fit=crop&q=80',
+    professor_photo_url: 'https://ghpltzzijlvykiytwslu.supabase.co/storage/v1/object/public/event-covers/demo_juliana_avatar.jpg',
     professor_instagram: 'juliana.dance',
     modalidade: 'Jazz Funk',
     nivel: 'intermediario' as const,
@@ -354,7 +354,7 @@ const DEMO_WORKSHOPS = [
     nome: 'Hip Hop Foundations',
     slug_base: 'hip-hop-foundations-demo',
     descricao: 'Os fundamentos do Hip Hop pra quem quer começar do zero ou consolidar a base. Top rock, footwork e freestyle.',
-    cover_url: 'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=1200&h=675&fit=crop&q=80',
+    cover_url: 'https://ghpltzzijlvykiytwslu.supabase.co/storage/v1/object/public/event-covers/demo_workshop_hiphop.jpg',
     professor_name: 'Rodrigo Souza',     // jurado também — vai dedupar
     professor_bio: 'Pioneiro do Hip Hop em SP. 18 anos formando dançarinos urbanos. Battles Brasil/Itália.',
     professor_bio_short: 'Pioneiro do Hip Hop em SP, 18 anos formando dançarinos urbanos.',
@@ -375,7 +375,7 @@ const DEMO_WORKSHOPS = [
     nome: 'Contemporâneo: Improvisação',
     slug_base: 'contemporaneo-improvisacao-demo',
     descricao: 'Aula prática de improvisação contemporânea — Forsythe, Release Technique e estados expandidos do corpo.',
-    cover_url: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=1200&h=675&fit=crop&q=80',
+    cover_url: 'https://ghpltzzijlvykiytwslu.supabase.co/storage/v1/object/public/event-covers/demo_workshop_contemporaneo.jpg',
     professor_name: 'Ana Paula Mendes',   // só professora (não é jurada)
     professor_bio: 'Coreógrafa e dançarina contemporânea com passagem pela Cia Deborah Colker. Doutora em Artes Cênicas (USP).',
     professor_bio_short: 'Coreógrafa contemporânea, ex-Deborah Colker, doutora em Artes Cênicas pela USP.',
@@ -396,7 +396,7 @@ const DEMO_WORKSHOPS = [
     nome: 'Ballet Repertório — La Bayadère',
     slug_base: 'ballet-bayadere-demo',
     descricao: 'Variação clássica do balé La Bayadère. Técnica, expressão e detalhes do repertório russo.',
-    cover_url: 'https://images.unsplash.com/photo-1535525153412-5a092d46b4ff?w=1200&h=675&fit=crop&q=80',
+    cover_url: 'https://images.unsplash.com/photo-1746611683388-b664fc922c13?w=1200&h=675&fit=crop&q=80',
     professor_name: 'Tatiana Volkova',
     professor_bio: 'Ex-solista do Bolshoi. Atua como pedagoga e coach internacional desde 2015.',
     professor_bio_short: 'Ex-solista do Bolshoi, pedagoga internacional.',
@@ -454,7 +454,7 @@ const JURADOS = [
     gender: 'F' as const,
     generos: ['Contemporâneo', 'Ballet Clássico'],
     mini_bio: 'Bailarina principal do Theatro Municipal de SP. Mestra em Dança Contemporânea pela UFBA.',
-    avatar_url: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=400&h=400&fit=crop&q=80',
+    avatar_url: 'https://ghpltzzijlvykiytwslu.supabase.co/storage/v1/object/public/event-covers/demo_juliana_avatar.jpg',
     instagram: 'juliana.dance',
   },
   {
@@ -614,8 +614,31 @@ Deno.serve(async (req) => {
     return json({ ok: true, has_demo: !!existing, demo: existing ?? null })
   }
 
-  // PINs sentinela: judges nao tem coluna is_demo, entao identifica pelo PIN
-  const DEMO_JUDGE_PINS = ['1111', '2222', '3333']
+  // Helper: apaga só os jurados fictícios do demo — por VÍNCULO REAL com o
+  // evento demo (event_judges), nunca por PIN. PIN não é globalmente único
+  // (é um código de 4 dígitos escolhido livremente por produtor); comparar
+  // por PIN já causou um jurado real vazar na tela de gestão (2026-08-18,
+  // ver fix em JudgesManagement.tsx) — aqui o risco é pior, porque a ação
+  // é DELETE: se um jurado real do próprio usuário tiver coincidentemente
+  // PIN 1111/2222/3333, "excluir demo"/"regerar demo" apagaria um jurado de
+  // verdade. event_judges garante que só os jurados de fato vinculados a
+  // ESTE evento demo específico são removidos.
+  const deleteDemoJudges = async (userId: string) => {
+    const { data: demoEvent } = await supa
+      .from('events')
+      .select('id')
+      .eq('created_by', userId)
+      .eq('is_demo', true)
+      .maybeSingle()
+    if (!demoEvent) return
+    const { data: linked } = await supa
+      .from('event_judges')
+      .select('judge_id')
+      .eq('event_id', demoEvent.id)
+    const judgeIds = (linked ?? []).map((r: { judge_id: string }) => r.judge_id)
+    if (judgeIds.length === 0) return
+    await supa.from('judges').delete().eq('created_by', userId).in('id', judgeIds)
+  }
 
   // Helper: limpa tabelas que referenciam events via FK SEM ON DELETE CASCADE.
   // Tier 2 introduziu audience_tickets + platform_commissions com event_id FK.
@@ -704,12 +727,11 @@ Deno.serve(async (req) => {
 
   // ─── action: delete ────────────────────────────────────────────────────
   if (action === 'delete') {
-    // CASCADE em events vai pegar registrations, configuracoes, etc
-    // Mas judges nao tem event_id, entao deleta pelos PINs sentinela
-    await supa.from('judges')
-      .delete()
-      .eq('created_by', user.id)
-      .in('pin', DEMO_JUDGE_PINS)
+    // CASCADE em events vai pegar registrations, configuracoes, etc — mas
+    // judges nao tem event_id, entao precisa ser apagado à parte (via
+    // event_judges, não PIN — ver deleteDemoJudges acima). Roda ANTES do
+    // evento ser deletado (depende dele existir pra achar o vínculo).
+    await deleteDemoJudges(user.id)
     await cleanupBeforeEventDelete(user.id)
     const { error } = await supa
       .from('events')
@@ -722,11 +744,10 @@ Deno.serve(async (req) => {
 
   // ─── action: create ────────────────────────────────────────────────────
   if (action === 'create') {
-    // 1) Deleta demo anterior se houver (regerar) — judges + event
-    await supa.from('judges')
-      .delete()
-      .eq('created_by', user.id)
-      .in('pin', DEMO_JUDGE_PINS)
+    // 1) Deleta demo anterior se houver (regerar) — judges + event. Jurados
+    // primeiro (via event_judges, não PIN — ver deleteDemoJudges acima),
+    // antes do evento sumir e o vínculo junto com ele.
+    await deleteDemoJudges(user.id)
     await cleanupBeforeEventDelete(user.id)
     await supa.from('events').delete().eq('created_by', user.id).eq('is_demo', true)
 

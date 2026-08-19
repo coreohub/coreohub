@@ -33,7 +33,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const MAX_AGE_HOURS = 24
-const DEMO_JUDGE_PINS = ['1111', '2222', '3333']
 
 Deno.serve(async (req) => {
   try {
@@ -104,9 +103,25 @@ Deno.serve(async (req) => {
     await supa.from('coupons').delete().in('event_id', ids)
     // workshops vinculados (event_id IN ids) caem via CASCADE no delete de events.
     // Só workshops standalone (event_id null) dos criadores precisam de limpeza manual.
+    // Jurados fictícios do demo — por VÍNCULO REAL com o evento (event_judges),
+    // nunca por PIN. PIN é um código de 4 dígitos escolhido livremente, sem
+    // garantia de unicidade — comparar por PIN já vazou (e quase apagou) um
+    // jurado REAL cujo PIN coincidia com o sentinela (2026-08-18, mesma classe
+    // de bug corrigida em JudgesManagement.tsx e seed-demo-event). Esse cron
+    // roda sozinho todo dia sem revisão humana — usar identidade de verdade
+    // aqui é ainda mais crítico que nos outros 2 pontos. Consulta ANTES do
+    // DELETE de events (linha abaixo), que arrastaria event_judges via CASCADE.
+    const { data: linkedJudges } = await supa
+      .from('event_judges')
+      .select('judge_id')
+      .in('event_id', ids)
+    const judgeIdsToDelete = Array.from(new Set((linkedJudges ?? []).map((r: { judge_id: string }) => r.judge_id)))
+    if (judgeIdsToDelete.length > 0) {
+      await supa.from('judges').delete().in('id', judgeIdsToDelete)
+    }
+
     if (creatorIds.length > 0) {
       await supa.from('workshops').delete().in('created_by', creatorIds).is('event_id', null)
-      await supa.from('judges').delete().in('created_by', creatorIds).in('pin', DEMO_JUDGE_PINS)
 
       for (const userId of creatorIds) {
         const userIdShort = String(userId).slice(0, 8)

@@ -131,12 +131,19 @@ const JudgesManagement = () => {
   // `judges` carrega TODOS os jurados do produtor (reuso entre eventos é
   // intencional), mas expor nome/foto/Instagram de jurados reais enquanto o
   // produtor navega o evento demo (ex: gravando tutorial) vaza dado de
-  // cliente sem necessidade nenhuma. Jurados demo têm PIN sentinela fixo
-  // (mesmo padrão usado no backfill/trigger de event_judges, 2026-07-15).
+  // cliente sem necessidade nenhuma.
+  //
+  // Filtra por VÍNCULO REAL com o evento (assignedJudgeIds, vem de
+  // event_judges via RPC — mesma fonte já usada em outros 2 pontos deste
+  // arquivo), não por PIN. Uma tentativa anterior comparava PIN contra o
+  // set sentinela {1111,2222,3333} — mas PIN não é globalmente único: um
+  // jurado REAL de outro produtor pode coincidentemente ter PIN 1111 (e
+  // teve, em produção — 3 jurados reais vazaram por esse motivo em 2026-08-18
+  // antes desse fix). event_judges garante identidade real, não coincidência
+  // de 4 dígitos.
   const selectedEventIsDemo = events.find(e => e.id === selectedEventId)?.is_demo === true;
-  const DEMO_JUDGE_PINS = new Set(['1111', '2222', '3333']);
   const visibleJudges = selectedEventIsDemo
-    ? judges.filter(j => DEMO_JUDGE_PINS.has(j.pin))
+    ? judges.filter(j => assignedJudgeIds.has(j.id))
     : judges;
 
   /* modal */
@@ -206,8 +213,15 @@ const JudgesManagement = () => {
   }, [selectedEventId]);
 
   // Carrega quais jurados estão vinculados ao evento selecionado.
+  // Reset IMEDIATO (síncrono) ao trocar de evento — antes disso, trocar de um
+  // evento real pro demo deixava assignedJudgeIds com os jurados REAIS do
+  // evento anterior até a RPC resolver (ou pra sempre, se ela falhasse),
+  // reabrindo por uma janela o mesmo vazamento que visibleJudges existe pra
+  // evitar. Vazio-primeiro = fail-closed (mostra 0 jurados enquanto carrega,
+  // nunca o vínculo errado).
   useEffect(() => {
-    if (!selectedEventId) { setAssignedJudgeIds(new Set()); return; }
+    setAssignedJudgeIds(new Set());
+    if (!selectedEventId) return;
     (async () => {
       const { data, error } = await supabase.rpc('get_event_judge_ids', { p_event_id: selectedEventId });
       if (error) { console.error('get_event_judge_ids:', error.message); return; }

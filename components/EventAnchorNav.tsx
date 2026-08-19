@@ -28,6 +28,12 @@ import { ChevronDown } from 'lucide-react';
 export interface AnchorSection {
   id: string;     // id do <section> alvo
   label: string;  // exibido no menu
+  /** Maior = fica visível por mais tempo quando o espaço aperta (removido
+   *  por último). Default 0. Seções que geram receita (Ingressos, Inscrições,
+   *  Workshops) usam 1 — nunca somem pro dropdown "Mais" antes de seções só
+   *  informativas (Sobre, Local, Jurados...), mesmo vindo depois na ordem
+   *  visual. */
+  priority?: number;
 }
 
 interface EventAnchorNavProps {
@@ -117,7 +123,8 @@ function useIsDesktop(): boolean {
 function useOverflowSections(sections: AnchorSection[], active: boolean) {
   const outerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
-  const [visibleCount, setVisibleCount] = useState(sections.length);
+  const [overflowIds, setOverflowIds] = useState<Set<string>>(new Set());
+  const sectionsKey = sections.map(s => `${s.id}:${s.priority ?? 0}`).join(',');
 
   const recalc = useCallback(() => {
     const outer = outerRef.current;
@@ -129,32 +136,37 @@ function useOverflowSections(sections: AnchorSection[], active: boolean) {
     const moreEl = measure.querySelector<HTMLElement>('[data-more]');
     const moreWidth = moreEl ? moreEl.offsetWidth + GAP : 0;
 
-    if (itemEls.length === 0) {
-      setVisibleCount(sections.length);
+    if (itemEls.length === 0 || itemEls.length !== sections.length) {
+      setOverflowIds(new Set());
       return;
     }
 
-    const totalWidth = itemEls.reduce((sum, el) => sum + el.offsetWidth + GAP, 0);
+    const widths = itemEls.map(el => el.offsetWidth + GAP);
+    const totalWidth = widths.reduce((sum, w) => sum + w, 0);
     if (totalWidth <= available) {
-      setVisibleCount(sections.length);
+      setOverflowIds(new Set());
       return;
     }
 
-    let used = 0;
-    let count = 0;
-    for (let i = 0; i < itemEls.length; i++) {
-      const w = itemEls[i].offsetWidth + GAP;
-      const isLast = i === itemEls.length - 1;
-      const reserve = isLast ? 0 : moreWidth; // último item não precisa reservar espaço do "Mais"
-      if (used + w + reserve <= available) {
-        used += w;
-        count++;
-      } else {
-        break;
-      }
+    // Ordem de remoção: menor prioridade primeiro; empate desempata pelo item
+    // mais à direita na ordem visual (mantém o início da régua estável).
+    // Continua removendo, do menos importante pro mais importante, até o que
+    // sobrar (+ o botão "Mais") caber — nunca corta palavra no meio, e itens
+    // de alta prioridade (receita) só saem se não houver mais nada de baixa
+    // prioridade pra tirar antes.
+    const removalOrder = sections
+      .map((s, i) => ({ id: s.id, i, priority: s.priority ?? 0 }))
+      .sort((a, b) => (a.priority - b.priority) || (b.i - a.i));
+
+    let remaining = totalWidth;
+    const removed = new Set<string>();
+    for (const cand of removalOrder) {
+      if (remaining + moreWidth <= available) break;
+      remaining -= widths[cand.i];
+      removed.add(cand.id);
     }
-    setVisibleCount(count);
-  }, [sections.length]);
+    setOverflowIds(removed);
+  }, [sectionsKey]);
 
   useEffect(() => {
     if (!active) return;
@@ -168,7 +180,7 @@ function useOverflowSections(sections: AnchorSection[], active: boolean) {
     };
   }, [recalc, active]);
 
-  return { outerRef, measureRef, visibleCount };
+  return { outerRef, measureRef, overflowIds };
 }
 
 export const EventAnchorNav: React.FC<EventAnchorNavProps> = ({
@@ -178,13 +190,13 @@ export const EventAnchorNav: React.FC<EventAnchorNavProps> = ({
   const activeId = useActiveSection(sections.map(s => s.id));
   const scrolled = useScrolled(80);
   const isDesktop = useIsDesktop();
-  const { outerRef, measureRef, visibleCount } = useOverflowSections(sections, isDesktop);
+  const { outerRef, measureRef, overflowIds } = useOverflowSections(sections, isDesktop);
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
   const mobileNavRef = useRef<HTMLDivElement>(null);
 
-  const visible = isDesktop ? sections.slice(0, visibleCount) : sections;
-  const overflow = isDesktop ? sections.slice(visibleCount) : [];
+  const visible = isDesktop ? sections.filter(s => !overflowIds.has(s.id)) : sections;
+  const overflow = isDesktop ? sections.filter(s => overflowIds.has(s.id)) : [];
   const activeInOverflow = overflow.some(s => s.id === activeId);
 
   // Smooth scroll com offset
