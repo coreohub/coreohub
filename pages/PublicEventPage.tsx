@@ -87,6 +87,12 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   // Carrinho multi-tipo de ingressos: mapa realIdx(string) → quantidade.
   // React state local (não localStorage) — sessão zera ao sair, padrão Sympla.
   const [cart, setCart] = useState<Record<string, number>>({});
+  // Página pública do produtor — preenche o espaço vazio da coluna da foto
+  // no hero (abaixo dos ícones de rede social) só quando o produtor ativou
+  // a própria página em /profile. null = não tem página pública ativa.
+  const [publicProducer, setPublicProducer] = useState<{
+    full_name: string; avatar_url: string | null; bio: string | null; public_slug: string;
+  } | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setIsLoggedIn(!!data.session));
@@ -117,7 +123,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         const { data: eventData, error: eventError } = await supabase
           .from('events')
           .select(`
-            id, slug, name, description, cover_url,
+            id, slug, name, description, cover_url, created_by,
             location, city, state,
             start_date, end_date, event_time,
             instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event,
@@ -178,6 +184,16 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
 
         setEvent(eventData);
         setConfig(cfg);
+        // Best-effort: página pública do produtor é opt-in, maioria dos
+        // eventos não tem (RPC devolve vazio) — não bloqueia nem falha o
+        // resto do carregamento da vitrine.
+        if (eventData.created_by) {
+          supabase.rpc('get_public_producer', { p_id: eventData.created_by }).maybeSingle()
+            .then(
+              ({ data }) => { if (data) setPublicProducer(data as any); },
+              () => {},
+            );
+        }
         // view_event é disparado num useEffect separado que aguarda
         // pixelsReady (ver abaixo) — não dispara aqui.
 
@@ -781,6 +797,31 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                     </a>
                   ))}
                 </div>
+              )}
+              {/* Produzido por — preenche o espaço vazio da coluna em telas
+                  largas com dado real (nome+bio do produtor), não enfeite.
+                  Só aparece quando o produtor ativou a própria página em
+                  /profile — sem isso, coluna fica só com foto+ícones mesmo. */}
+              {publicProducer && (
+                <Link
+                  to={`/produtor/${publicProducer.public_slug}`}
+                  className="hidden lg:flex items-start gap-3 mt-5 pt-5 border-t border-white/10 group"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff0068] to-[#d4005a] flex items-center justify-center text-white font-black text-sm overflow-hidden shrink-0">
+                    {publicProducer.avatar_url
+                      ? <img src={publicProducer.avatar_url} alt={publicProducer.full_name} className="w-full h-full object-cover" />
+                      : publicProducer.full_name?.[0]?.toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Produzido por</p>
+                    <p className="text-sm font-black text-white group-hover:text-[#ff0068] transition-colors truncate">
+                      {publicProducer.full_name}
+                    </p>
+                    {publicProducer.bio && (
+                      <p className="text-xs text-slate-400 leading-relaxed line-clamp-3 mt-1">{publicProducer.bio}</p>
+                    )}
+                  </div>
+                </Link>
               )}
             </div>
 

@@ -51,6 +51,7 @@ const CriarEventoGate          = lazy(() => import('./pages/CriarEventoGate'));
 const FestivalShowcase         = lazy(() => import('./pages/FestivalShowcase'));
 const PublicEventPage          = lazy(() => import('./pages/PublicEventPage'));
 const Festivais                = lazy(() => import('./pages/Festivais'));
+const ProducerPublicPage       = lazy(() => import('./pages/ProducerPublicPage'));
 const ShortCodeRedirect        = lazy(() => import('./pages/ShortCodeRedirect'));
 const InscricaoWizard          = lazy(() => import('./pages/InscricaoWizard'));
 const Checkout                 = lazy(() => import('./pages/Checkout'));
@@ -587,6 +588,7 @@ const App: React.FC = () => {
 
         <Route path="/festivais" element={<Suspense fallback={<PageLoader />}><Festivais /></Suspense>} />
         <Route path="/evento/:idOrSlug" element={<Suspense fallback={<PageLoader />}><PublicEventPage /></Suspense>} />
+        <Route path="/produtor/:slug" element={<Suspense fallback={<PageLoader />}><ProducerPublicPage /></Suspense>} />
         <Route path="/u/:code" element={<Suspense fallback={<PageLoader />}><ShortCodeRedirect /></Suspense>} />
         {/* Ingressos de plateia — todas públicas (guest checkout / acesso por token).
             Carrinho multi-tipo via /checkout-ingresso/<slug> (state.cart da vitrine);

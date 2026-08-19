@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import imageCompression from 'browser-image-compression';
 import { supabase } from '../services/supabase';
 import { fetchUfList, fetchCitiesByUf, parseCityUf, type UfOption } from '../services/ibgeLocation';
-import { toTitleCase } from '../utils/formatters';
+import { toTitleCase, slugify } from '../utils/formatters';
 import PageHeader from '../components/PageHeader';
 import CitySearchSelect from '../components/CitySearchSelect';
 import { clearImpersonationState } from '../services/impersonateService';
@@ -11,6 +11,7 @@ import {
   User, Phone, MapPin, Save, Loader2,
   CheckCircle, AlertCircle, CreditCard, Music2,
   Instagram, Camera, XCircle, Mail, Edit3, Lock, LogOut,
+  Globe, MessageCircle, ExternalLink,
 } from 'lucide-react';
 
 /* ── CPF/CNPJ validation ── */
@@ -89,6 +90,13 @@ interface FormState {
   document: string;
   dance_role: string;
   avatar_url: string;
+  // Página pública do produtor (/produtor/<slug>) — só relevante pra isProducer
+  public_page_enabled: boolean;
+  public_slug: string;
+  bio: string;
+  instagram_producer: string;
+  whatsapp_producer: string;
+  website_producer: string;
 }
 
 const MeuPerfil = () => {
@@ -104,7 +112,11 @@ const MeuPerfil = () => {
   const [form, setForm]         = useState<FormState>({
     full_name: '', whatsapp: '', instagram: '',
     location: '', document: '', dance_role: '', avatar_url: '',
+    public_page_enabled: false, public_slug: '', bio: '',
+    instagram_producer: '', whatsapp_producer: '', website_producer: '',
   });
+  const [slugError, setSlugError] = useState<string | null>(null);
+  const [slugTouched, setSlugTouched] = useState(false);
   const [loading, setLoading]       = useState(true);
   const [saving, setSaving]         = useState(false);
   const [saved, setSaved]           = useState(false);
@@ -233,7 +245,17 @@ const MeuPerfil = () => {
                         : data.document ? maskDoc(data.document) : '',
           dance_role: data.dance_role || '',
           avatar_url: data.avatar_url || '',
+          public_page_enabled: data.public_page_enabled || false,
+          // Sugere um slug a partir do nome quando o produtor ainda não
+          // escolheu um — calculado aqui (não só no useEffect abaixo) pra
+          // não depender de 2 setForm em sequência colidirem em StrictMode.
+          public_slug:         data.public_slug || (data.full_name ? slugify(data.full_name, 'produtor') : ''),
+          bio:                 data.bio || '',
+          instagram_producer:  data.instagram_producer || '',
+          whatsapp_producer:   data.whatsapp_producer || '',
+          website_producer:    data.website_producer || '',
         });
+        if (data.public_slug) setSlugTouched(true);
         const parsed = parseCityUf(data.location || '');
         setSelectedUf(parsed.uf);
         setSelectedCity(parsed.city);
@@ -280,6 +302,16 @@ const MeuPerfil = () => {
   const set = (key: keyof FormState) => (val: string) =>
     setForm(f => ({ ...f, [key]: val }));
 
+  // Sugere slug a partir do nome enquanto o produtor não editou o campo à
+  // mão — mesmo padrão de "auto até tocar" usado em vários formulários do
+  // produto (ex.: slug do evento no OnboardingWizard).
+  useEffect(() => {
+    if (slugTouched) return;
+    if (!form.full_name.trim()) return;
+    setForm(f => ({ ...f, public_slug: slugify(f.full_name, 'produtor') }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.full_name, slugTouched]);
+
   const handleAvatarUpload = async (file: File) => {
     if (!file) return;
     setAvatarUploading(true);
@@ -312,12 +344,25 @@ const MeuPerfil = () => {
       setError(isProducer ? 'CPF/CNPJ inválido. Corrija antes de salvar.' : 'CPF inválido. Corrija antes de salvar.');
       return;
     }
+    if (isProducer && form.public_page_enabled && !slugify(form.public_slug, '')) {
+      setError('Defina um endereço válido pra sua página pública antes de ativar.');
+      return;
+    }
     setSaving(true);
     setError(null);
+    setSlugError(null);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const docDigits = form.document.replace(/\D/g, '');
+      const producerFields = isProducer ? {
+        public_page_enabled: form.public_page_enabled,
+        public_slug:         form.public_slug ? slugify(form.public_slug, 'produtor') : null,
+        bio:                 form.bio.trim() || null,
+        instagram_producer:  form.instagram_producer.replace('@', '') || null,
+        whatsapp_producer:   form.whatsapp_producer || null,
+        website_producer:    form.website_producer || null,
+      } : {};
       const { error: err } = await supabase.from('profiles').update({
         full_name:  toTitleCase(form.full_name.trim()),
         whatsapp:   form.whatsapp,
@@ -329,8 +374,16 @@ const MeuPerfil = () => {
         document:   docDigits || null,
         dance_role: form.dance_role,
         avatar_url: form.avatar_url || null,
+        ...producerFields,
       }).eq('id', user.id);
-      if (err) throw err;
+      if (err) {
+        // 23505 = unique_violation — slug já em uso por outro produtor.
+        if ((err as any).code === '23505') {
+          setSlugError('Esse endereço já está em uso por outra conta. Escolha outro.');
+          throw new Error('Endereço da página pública já está em uso.');
+        }
+        throw err;
+      }
       setSaved(true);
       // Se veio com ?return=<path> (deep link de fluxo interrompido), navega
       // de volta após 1.2s — dá tempo do user ver o toast "Salvo!"
@@ -706,6 +759,104 @@ const MeuPerfil = () => {
           </div>
         </div>
       </div>
+
+      {/* Página pública do produtor — opt-in, só ORGANIZER/COREOHUB_ADMIN.
+          Reúne bio+redes+link pra todos os eventos do produtor num só lugar
+          (padrão Luma "user page" / Sympla "Página do Organizador",
+          confirmado nas 2 plataformas reais — ver CLAUDE.md backlog P2). */}
+      {isProducer && (
+        <div className="bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/8 rounded-2xl overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-slate-100 dark:border-white/8 bg-slate-50 dark:bg-white/[0.02] flex items-center justify-between gap-3">
+            <h2 className="text-[9px] font-black uppercase tracking-widest text-slate-400">Página Pública</h2>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={form.public_page_enabled}
+              onClick={() => setForm(f => ({ ...f, public_page_enabled: !f.public_page_enabled }))}
+              className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${
+                form.public_page_enabled ? 'bg-[#ff0068]' : 'bg-slate-300 dark:bg-white/10'
+              }`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                form.public_page_enabled ? 'translate-x-4' : ''
+              }`} />
+            </button>
+          </div>
+          <div className="p-5 space-y-4">
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Reúne todos os seus festivais num link só — sua bio, redes sociais e a lista de edições (atuais e passadas). Desligado por padrão até você preencher e ativar.
+            </p>
+
+            <div>
+              <label className={labelClass}><ExternalLink size={10} /> Endereço da página</label>
+              <div className="flex items-center rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 overflow-hidden focus-within:border-[#ff0068] transition-colors">
+                <span className="pl-4 pr-1 text-xs text-slate-400 shrink-0 select-none">
+                  {window.location.origin.replace(/^https?:\/\//, '')}/produtor/
+                </span>
+                <input
+                  type="text"
+                  value={form.public_slug}
+                  onChange={e => { setSlugTouched(true); setSlugError(null); set('public_slug')(e.target.value); }}
+                  onBlur={() => setForm(f => ({ ...f, public_slug: slugify(f.public_slug, '') }))}
+                  placeholder="seu-nome"
+                  className="flex-1 min-w-0 py-3 pr-4 bg-transparent text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
+                />
+              </div>
+              {slugError && <p className="text-[9px] text-rose-500 font-bold mt-1">{slugError}</p>}
+              {form.public_page_enabled && form.public_slug && !slugError && (
+                <a
+                  href={`/produtor/${form.public_slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-[10px] font-black text-[#ff0068] uppercase tracking-widest mt-2 hover:underline"
+                >
+                  Ver página pública <ExternalLink size={10} />
+                </a>
+              )}
+            </div>
+
+            <div>
+              <label className={labelClass}>Bio curta</label>
+              <textarea
+                value={form.bio}
+                onChange={e => set('bio')(e.target.value.slice(0, 280))}
+                placeholder="Quem produz seus festivais — 1 ou 2 frases."
+                rows={3}
+                className={`${inputClass()} resize-none`}
+              />
+              <p className="text-[9px] text-slate-400 mt-1 text-right">{form.bio.length}/280</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}><Instagram size={10} /> Instagram (produtor)</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">@</span>
+                  <input type="text" value={form.instagram_producer}
+                    onChange={e => set('instagram_producer')(e.target.value.replace('@', ''))}
+                    placeholder="seuprodutor"
+                    className={`${inputClass()} pl-8`} />
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}><MessageCircle size={10} /> WhatsApp (produtor)</label>
+                <input type="tel" value={form.whatsapp_producer}
+                  onChange={e => set('whatsapp_producer')(maskPhone(e.target.value))}
+                  placeholder="(11) 99999-9999"
+                  className={inputClass()} />
+              </div>
+            </div>
+
+            <div>
+              <label className={labelClass}><Globe size={10} /> Site</label>
+              <input type="text" value={form.website_producer}
+                onChange={e => set('website_producer')(e.target.value)}
+                placeholder="seusite.com.br"
+                className={inputClass()} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Error */}
       {error && (

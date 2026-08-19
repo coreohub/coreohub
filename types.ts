@@ -347,6 +347,14 @@ export interface Profile {
   location?: string;
   dance_role?: string;
 
+  // Página pública do produtor (/produtor/<slug>) — opt-in, ver Profile.tsx
+  public_page_enabled?: boolean;
+  public_slug?: string;
+  bio?: string;
+  instagram_producer?: string;
+  whatsapp_producer?: string;
+  website_producer?: string;
+
   /** Flag de super admin — espelha profiles.is_super_admin no banco. Painel
    *  /super-admin aceita esse OU role === COREOHUB_ADMIN. */
   is_super_admin?: boolean;

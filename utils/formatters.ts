@@ -126,16 +126,19 @@ export const toTitleCase = (value?: string | null): string => {
     .join(' ');
 };
 
-/** Nome de arquivo seguro (sem acento, sem espaço, sem maiúscula) pra
- * `a.download` — nomes com "João"/"Conceição" viram %-encoded ou somem
- * silenciosamente em alguns SO/navegador quando usados crus no atributo. */
-export const slugifyFilename = (value: string): string =>
+/** Slug genérico: sem acento, sem espaço, sem maiúscula, só [a-z0-9-]. */
+export const slugify = (value: string, fallback = 'item'): string =>
   value
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'certificado';
+    .replace(/^-+|-+$/g, '') || fallback;
+
+/** Nome de arquivo seguro (sem acento, sem espaço, sem maiúscula) pra
+ * `a.download` — nomes com "João"/"Conceição" viram %-encoded ou somem
+ * silenciosamente em alguns SO/navegador quando usados crus no atributo. */
+export const slugifyFilename = (value: string): string => slugify(value, 'certificado');
 
 /**
  * Categoria é texto livre digitado pelo produtor por evento (ex: "Melhor
