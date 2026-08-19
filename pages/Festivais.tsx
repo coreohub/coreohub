@@ -8,6 +8,7 @@ import {
 import { motion } from 'motion/react';
 import BrandIcon from '../components/BrandIcon';
 import { Event } from '../types';
+import { precoVigente } from '../utils/lotes';
 
 const UFS = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT',
@@ -123,13 +124,18 @@ const Festivais = () => {
 
   const hasActiveFilters = search || stateFilter || monthFilter !== null;
 
+  // Preço real vem do lote vigente (formacoes_config[].lotes[].preco), não
+  // só do campo legado `fee` — evento com sistema de lotes configurado
+  // (padrão atual) sempre tinha `fee` vazio aqui, caindo em "Inscrição
+  // gratuita" mesmo com preço real configurado. precoVigente() já resolve
+  // lote → fee, mesma lógica que a página do evento usa de verdade.
   const minPrice = (e: Event): number | null => {
     if (!e.formacoes_config?.length) return null;
-    const fees = e.formacoes_config
-      .map((m: any) => Number(m.fee))
-      .filter((n: number) => !Number.isNaN(n) && n > 0);
-    if (!fees.length) return 0;
-    return Math.min(...fees);
+    const prices = e.formacoes_config
+      .map((m: any) => precoVigente(m))
+      .filter((n: number) => n > 0);
+    if (!prices.length) return 0;
+    return Math.min(...prices);
   };
 
   const formatDateRange = (start?: string, end?: string) => {
