@@ -736,7 +736,12 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           margin negativo — cresce livremente com títulos longos sem cortar
           a arte nem estourar por cima do menu de âncoras. */}
       <div id="hero" className="relative">
-        <div className="relative min-h-[38vh] sm:min-h-[46vh] lg:min-h-[52vh] overflow-hidden">
+        {/* Proporção fixa (mesma do upload recomendado, 1200×630) em vez de
+            altura baseada em vh — antes cada tela cortava uma fatia
+            diferente da foto sem curadoria nenhuma; agora o enquadramento é
+            sempre o mesmo, só muda o tamanho absoluto em pixels (padrão
+            Eventbrite/Sympla pra capa única enviada pelo organizador). */}
+        <div className="relative w-full aspect-[1200/630] max-h-[52vh] overflow-hidden">
           {event.cover_url ? (
             <img src={event.cover_url} alt={event.name} className="absolute inset-0 w-full h-full object-cover" />
           ) : (
