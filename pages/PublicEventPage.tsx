@@ -740,8 +740,16 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             altura baseada em vh — antes cada tela cortava uma fatia
             diferente da foto sem curadoria nenhuma; agora o enquadramento é
             sempre o mesmo, só muda o tamanho absoluto em pixels (padrão
-            Eventbrite/Sympla pra capa única enviada pelo organizador). */}
-        <div className="relative w-full aspect-[1200/630] max-h-[52vh] overflow-hidden">
+            Eventbrite/Sympla pra capa única enviada pelo organizador).
+            Teto de segurança é max-width em px (max-w-[1920px] mx-auto),
+            NUNCA max-height em vh — vh depende da ALTURA da janela, então
+            travar por vh reintroduz exatamente o problema que essa mudança
+            resolve (ex: 1920×1080 e 1366×768, ambos comuns em desktop,
+            teriam alturas de janela diferentes o bastante pra cortar a foto
+            de formas diferentes entre si). Capar largura em px é imune a
+            isso — só entra em jogo em monitores ultrawide/4K, bem mais raro
+            que a combinação width×height variar entre desktops comuns. */}
+        <div className="relative w-full max-w-[1920px] mx-auto aspect-[1200/630] overflow-hidden">
           {event.cover_url ? (
             <img src={event.cover_url} alt={event.name} className="absolute inset-0 w-full h-full object-cover" />
           ) : (
