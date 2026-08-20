@@ -801,11 +801,16 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               {/* Produzido por — preenche o espaço vazio da coluna em telas
                   largas com dado real (nome+bio do produtor), não enfeite.
                   Só aparece quando o produtor ativou a própria página em
-                  /profile — sem isso, coluna fica só com foto+ícones mesmo. */}
+                  /profile — sem isso, coluna fica só com foto+ícones mesmo.
+                  Ao contrário dos ícones de rede social logo acima (esses
+                  sim `hidden lg:` pra não duplicar a seção "Siga o evento"
+                  que já existe full no mobile), esse bloco é conteúdo novo
+                  sem equivalente mobile em outro lugar da página — precisa
+                  aparecer em toda largura de tela. */}
               {publicProducer && (
                 <Link
                   to={`/produtor/${publicProducer.public_slug}`}
-                  className="hidden lg:flex items-start gap-3 mt-5 pt-5 border-t border-white/10 group"
+                  className="flex items-start gap-3 mt-5 pt-5 border-t border-white/10 group"
                 >
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff0068] to-[#d4005a] flex items-center justify-center text-white font-black text-sm overflow-hidden shrink-0">
                     {publicProducer.avatar_url

@@ -785,6 +785,36 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
     const endDate   = new Date(today.getTime() + 32 * 24 * 60 * 60 * 1000) // +32 dias
     const regDeadline = new Date(today.getTime() + 20 * 24 * 60 * 60 * 1000) // +20 dias
 
+    // Slug legível — antes era `demo-${user.id.slice(0,8)}` (hash sem
+    // sentido nenhum pra quem recebe o link, ex: "demo-32d6025c"). Base fixa
+    // do nome do evento + 1º nome do produtor (evita colisão entre produtores
+    // diferentes que criam o próprio demo, já que `created_by` é por conta) +
+    // sufixo numérico só se colidir de verdade (raro).
+    const demoSlugify = (text: string) =>
+      text
+        .toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9\s-]/g, '')
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+    const { data: producerProfile } = await supa
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .maybeSingle()
+    const producerFragment =
+      demoSlugify(producerProfile?.full_name ?? user.email?.split('@')[0] ?? 'demo').split('-')[0] || 'demo'
+    const demoSlugBase = `coreohub-open-demo-${producerFragment}`
+    let demoSlug = demoSlugBase
+    for (let attempt = 2; attempt < 10; attempt++) {
+      const { data: collision } = await supa.from('events').select('id').eq('slug', demoSlug).maybeSingle()
+      if (!collision) break
+      demoSlug = `${demoSlugBase}-${attempt}`
+    }
+    const demoEventUrl = `${Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'}/evento/${demoSlug}`
+
     const { data: ev, error: evErr } = await supa.from('events').insert([{
       name: eventName,
       description: eventDescription,
@@ -796,7 +826,7 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       is_public: true, // demo precisa ser publico pra produtor testar a vitrine
       created_by: user.id,
       scoring_system: 'BASE_10',
-      slug: `demo-${user.id.slice(0, 8)}`,
+      slug: demoSlug,
       // Identidade visual e contato (Leva 1)
       cover_url: DEMO_COVER_URL,
       location: 'Teatro Municipal de Demonstração — Av. Paulista, 1000',
@@ -812,7 +842,7 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       // Demonstra como produtor pode usar a página gerada como site oficial
       // (smart default — mesmo padrão do chip "Usar página da vitrine" em
       // AccountSettings).
-      website_event: `${Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'}/evento/demo-${user.id.slice(0, 8)}`,
+      website_event: demoEventUrl,
       // Tolerância de idade + tempos de palco vivem em configuracoes
       // (não em events). UI lê de lá. Removido daqui pra evitar erro
       // de coluna inexistente no schema cache do PostgREST.
@@ -848,7 +878,7 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
         { nome: 'Ficha Técnica de Palco', url: DEMO_REGULATION_PDF },
         { nome: 'Mapa de Acesso ao Teatro', url: DEMO_REGULATION_PDF },
       ],
-      destaque_link_url: `${Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'}/evento/demo-${user.id.slice(0, 8)}`,
+      destaque_link_url: demoEventUrl,
       destaque_link_label: 'Confira a programação completa',
     }]).select('id').single()
 
