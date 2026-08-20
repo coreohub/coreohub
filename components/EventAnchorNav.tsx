@@ -24,6 +24,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { ChevronDown } from 'lucide-react';
+import BrandIcon from './BrandIcon';
 
 export interface AnchorSection {
   id: string;     // id do <section> alvo
@@ -254,6 +255,22 @@ export const EventAnchorNav: React.FC<EventAnchorNavProps> = ({
           : 'bg-[#0b0b0f]/40 border-white/5'
       }`}>
         <div className="max-w-5xl mx-auto w-full px-4 flex items-center gap-3">
+          {/* Marca no canto superior esquerdo — padrão de mercado (toda nav
+              fixa de landing de evento/conferência tem a marca à esquerda;
+              essa barra não tinha nenhuma, só os itens de menu + CTA).
+              Link externo pro site institucional, mesmo destino já usado
+              pelo "CoreoHub" do breadcrumb logo acima nesta mesma página. */}
+          <a
+            href="https://coreohub.com"
+            className="shrink-0 flex items-center gap-1.5"
+            aria-label="CoreoHub"
+          >
+            <BrandIcon size={22} />
+            <span className="hidden sm:block text-[10px] font-black uppercase tracking-tighter text-white">
+              Coreo<span className="text-[#ff0068]">Hub</span>
+            </span>
+          </a>
+
           {isDesktop ? (
             <>
               {/* Desktop: itens visíveis nunca rolam, nunca cortam no meio.
