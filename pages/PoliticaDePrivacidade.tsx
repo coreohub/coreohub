@@ -3,7 +3,18 @@ import { Link } from 'react-router-dom';
 
 const PoliticaDePrivacidade: React.FC = () => {
   useEffect(() => {
+    const prevTitle = document.title;
     document.title = 'Política de Privacidade — CoreoHub';
+
+    const setMeta = (name: string, content: string) => {
+      let el = document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`);
+      const prev = el?.getAttribute('content') ?? null;
+      if (!el) { el = document.createElement('meta'); el.name = name; document.head.appendChild(el); }
+      el.setAttribute('content', content);
+      return prev;
+    };
+    const prevDesc = setMeta('description', 'Política de Privacidade da CoreoHub: como coletamos, usamos e protegemos os dados de produtores, jurados e bailarinos, em conformidade com a LGPD.');
+
     let canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
     if (!canonical) {
       canonical = document.createElement('link');
@@ -11,7 +22,11 @@ const PoliticaDePrivacidade: React.FC = () => {
       document.head.appendChild(canonical);
     }
     canonical.href = 'https://www.coreohub.com/privacidade';
-    return () => { canonical!.href = 'https://www.coreohub.com/'; };
+    return () => {
+      document.title = prevTitle;
+      if (prevDesc !== null) setMeta('description', prevDesc);
+      canonical!.href = 'https://www.coreohub.com/';
+    };
   }, []);
 
   return (

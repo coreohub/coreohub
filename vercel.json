@@ -39,6 +39,28 @@
       "destination": "/api/og-workshop?slug=:slug"
     },
     {
+      "source": "/festivais",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot).*)"
+        }
+      ],
+      "destination": "/api/og-marketing?page=festivais"
+    },
+    {
+      "source": "/governo",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot).*)"
+        }
+      ],
+      "destination": "/api/og-marketing?page=governo"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

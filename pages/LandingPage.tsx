@@ -201,7 +201,14 @@ const LandingPage = () => {
                 className="group absolute inset-0 w-full h-full"
               >
                 <img
-                  src="https://img.youtube.com/vi/bLqI7Icm_eI/maxresdefault.jpg"
+                  src="https://img.youtube.com/vi/bLqI7Icm_eI/hqdefault.jpg"
+                  onError={(e) => {
+                    // hqdefault existe pra todo vídeo desde o upload; maxresdefault
+                    // só é gerado depois e pode 404 em vídeo recém-postado — se um
+                    // dia hqdefault também falhar, cai pro thumbnail padrão (mqdefault).
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = 'https://img.youtube.com/vi/bLqI7Icm_eI/mqdefault.jpg';
+                  }}
                   alt=""
                   aria-hidden="true"
                   loading="lazy"

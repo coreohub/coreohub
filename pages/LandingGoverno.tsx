@@ -38,7 +38,7 @@ const LandingGoverno: React.FC = () => {
       el.setAttribute('content', content);
       return prev;
     };
-    const prevDesc = setMeta('description', 'Gestão de festivais e mostras de dança para secretarias, institutos e editais públicos: conformidade LGPD e Lei 14.133/2021, operação offline e documentação pronta para licitação.');
+    const prevDesc = setMeta('description', 'Gestão de festivais e mostras de dança para secretarias, institutos e editais públicos: LGPD, Lei 14.133/2021, operação offline.');
 
     let canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
     if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical); }
