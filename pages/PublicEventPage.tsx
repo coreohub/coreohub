@@ -795,10 +795,6 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               ) : (
                 <div className="w-full aspect-[1200/630] rounded-2xl bg-gradient-to-br from-[#ff0068]/10 via-slate-900 to-[#050505] border border-white/10" />
               )}
-              <div className="flex items-center gap-2.5 mt-4">
-                <BrandIcon size={20} />
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">CoreoHub</span>
-              </div>
               {/* Redes sociais compactas — só desktop (lg+). No mobile a versão
                   completa ("Siga o evento") já existe mais abaixo na página;
                   duplicar aqui embaixo da foto empilhado faria o usuário ver
