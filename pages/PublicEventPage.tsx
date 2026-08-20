@@ -783,7 +783,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           monitores largos e baixos. Trade-off assumido: a foto fica menor
           em telas grandes (deixa de ser full-bleed) — decisão do produtor
           em troca de garantir que a info nunca some sem rolar. */}
-      <div id="hero" className="relative px-8 lg:px-16 pt-10 pb-14">
+      <div id="hero" className="relative px-8 lg:px-16 pt-10 pb-6">
         <div className="max-w-6xl mx-auto">
           <Link to="/festivais" className="inline-flex items-center gap-2 mb-6 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068] transition-colors">
             <ArrowLeft size={12} /> Vitrine de festivais
@@ -954,7 +954,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
       />
 
       {/* Content */}
-      <div className="max-w-6xl mx-auto px-8 py-16 space-y-12">
+      <div className="max-w-6xl mx-auto px-8 pt-6 pb-16 space-y-12">
         {/* Banner de evento encerrado — padrão Sympla/Eventbrite: página continua
             no ar (certificado/resultado/compartilhamento), mas todas as compras
             (inscrição/ingresso/workshop/pass) ficam desabilitadas. */}
