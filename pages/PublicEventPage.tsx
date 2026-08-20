@@ -394,7 +394,11 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
     window.open(`https://wa.me/?text=${text}`, '_blank', 'noopener');
   };
 
-  // "Produzido por" — renderizado 2x com visibilidade oposta por breakpoint
+  // "Produzido por" — só avatar+nome, SEM bio (verificado contra 2 páginas
+  // reais da Luma, luma.com/h5f7kvbm e luma.com/dd25sp: a seção "Hosted By"
+  // do evento mostra só nome/foto/ícones de contato, nunca a bio — bio fica
+  // exclusiva da página do organizador, que é pra onde este bloco linka).
+  // Renderizado 2x com visibilidade oposta por breakpoint
   // (não com CSS Grid auto-placement puro): no desktop precisa ficar colado
   // nos ícones de rede social, DENTRO da coluna da foto — colocá-lo como
   // irmão do grid deixava a altura da linha 1 (puxada pela coluna de info,
@@ -416,9 +420,6 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         <p className="text-sm font-black text-white group-hover:text-[#ff0068] transition-colors truncate">
           {publicProducer.full_name}
         </p>
-        {publicProducer.bio && (
-          <p className="text-xs text-slate-400 leading-relaxed line-clamp-3 mt-1">{publicProducer.bio}</p>
-        )}
       </div>
     </Link>
   );
@@ -826,7 +827,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               {/* Desktop: colado nos ícones acima, dentro da coluna da foto
                   (ver comentário de renderProducerBadge sobre o motivo de
                   não usar 1 instância só via CSS Grid). */}
-              {renderProducerBadge('hidden lg:flex items-start gap-3 mt-4 pt-4 border-t border-white/10 group')}
+              {renderProducerBadge('hidden lg:flex items-center gap-3 mt-4 pt-4 border-t border-white/10 group')}
             </div>
 
             {/* Coluna de informações */}
@@ -910,7 +911,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 quem visita o evento vê do que se trata ANTES de saber quem
                 produziu — no mobile, onde cada rolagem custa mais, isso
                 importa ainda mais que no desktop. */}
-            {renderProducerBadge('flex lg:hidden items-start gap-3 pt-5 border-t border-white/10 group')}
+            {renderProducerBadge('flex lg:hidden items-center gap-3 pt-5 border-t border-white/10 group')}
           </div>
         </div>
       </div>
