@@ -756,7 +756,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           /evento/<slug>, breadcrumb só descreve contexto. Padrão a11y:
           <nav aria-label="Breadcrumb"> + lista ordenada. */}
       <nav aria-label="Breadcrumb" className="relative z-10 bg-black/40 backdrop-blur-sm border-b border-white/5">
-        <ol className="max-w-5xl mx-auto px-8 py-2.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 overflow-x-auto whitespace-nowrap">
+        <ol className="max-w-6xl mx-auto px-8 py-2.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 overflow-x-auto whitespace-nowrap">
           <li>
             <a href="https://coreohub.com" className="hover:text-[#ff0068] transition-colors">
               CoreoHub
@@ -783,11 +783,11 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           em telas grandes (deixa de ser full-bleed) — decisão do produtor
           em troca de garantir que a info nunca some sem rolar. */}
       <div id="hero" className="relative px-8 lg:px-16 pt-10 pb-14">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <Link to="/festivais" className="inline-flex items-center gap-2 mb-6 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068] transition-colors">
             <ArrowLeft size={12} /> Vitrine de festivais
           </Link>
-          <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-8 lg:gap-12 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-[460px_1fr] gap-8 lg:gap-12 items-start">
             {/* Coluna da foto */}
             <div>
               {event.cover_url ? (
@@ -957,7 +957,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
       />
 
       {/* Content */}
-      <div className="max-w-5xl mx-auto px-8 py-16 space-y-12">
+      <div className="max-w-6xl mx-auto px-8 py-16 space-y-12">
         {/* Banner de evento encerrado — padrão Sympla/Eventbrite: página continua
             no ar (certificado/resultado/compartilhamento), mas todas as compras
             (inscrição/ingresso/workshop/pass) ficam desabilitadas. */}
@@ -1810,7 +1810,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           Mostra qty + total de face; checkout exibe taxa/cupom (padrão Sympla). */}
       {cartTotalQty > 0 && (
         <div className="fixed bottom-0 inset-x-0 z-[60] bg-[#0b0b0f]/95 backdrop-blur border-t border-[#ff0068]/30 shadow-[0_-8px_30px_rgba(0,0,0,0.5)]">
-          <div className="max-w-5xl mx-auto px-4 sm:px-8 py-3 flex items-center justify-between gap-4">
+          <div className="max-w-6xl mx-auto px-4 sm:px-8 py-3 flex items-center justify-between gap-4">
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                 {cartTotalQty} ingresso{cartTotalQty === 1 ? '' : 's'}
