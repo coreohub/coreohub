@@ -798,36 +798,6 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                   ))}
                 </div>
               )}
-              {/* Produzido por — preenche o espaço vazio da coluna em telas
-                  largas com dado real (nome+bio do produtor), não enfeite.
-                  Só aparece quando o produtor ativou a própria página em
-                  /profile — sem isso, coluna fica só com foto+ícones mesmo.
-                  Ao contrário dos ícones de rede social logo acima (esses
-                  sim `hidden lg:` pra não duplicar a seção "Siga o evento"
-                  que já existe full no mobile), esse bloco é conteúdo novo
-                  sem equivalente mobile em outro lugar da página — precisa
-                  aparecer em toda largura de tela. */}
-              {publicProducer && (
-                <Link
-                  to={`/produtor/${publicProducer.public_slug}`}
-                  className="flex items-start gap-3 mt-5 pt-5 border-t border-white/10 group"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff0068] to-[#d4005a] flex items-center justify-center text-white font-black text-sm overflow-hidden shrink-0">
-                    {publicProducer.avatar_url
-                      ? <img src={publicProducer.avatar_url} alt={publicProducer.full_name} className="w-full h-full object-cover" />
-                      : publicProducer.full_name?.[0]?.toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Produzido por</p>
-                    <p className="text-sm font-black text-white group-hover:text-[#ff0068] transition-colors truncate">
-                      {publicProducer.full_name}
-                    </p>
-                    {publicProducer.bio && (
-                      <p className="text-xs text-slate-400 leading-relaxed line-clamp-3 mt-1">{publicProducer.bio}</p>
-                    )}
-                  </div>
-                </Link>
-              )}
             </div>
 
             {/* Coluna de informações */}
@@ -904,6 +874,43 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 </div>
               )}
             </div>
+
+            {/* Produzido por — preenche o espaço vazio da coluna da foto em
+                telas largas com dado real (nome+bio do produtor), não
+                enfeite. Só aparece quando o produtor ativou a própria
+                página em /profile.
+                3º filho do grid de propósito, fora das 2 colunas: no
+                desktop (2 colunas) o auto-placement do CSS Grid encaixa
+                sozinho embaixo da foto (linha 2, coluna 1), já que as duas
+                primeiras células da linha 1 já foram ocupadas por
+                foto+info. No mobile (1 coluna) cai na ordem natural do
+                DOM — por ÚLTIMO, depois do título/data/CTA. Mesmo padrão
+                dos concorrentes (Luma etc): quem visita o evento vê do
+                que se trata ANTES de saber quem produziu — no mobile,
+                onde cada rolagem custa mais, isso importa ainda mais que
+                no desktop (que mostra as 2 colunas juntas, sem custo de
+                rolagem extra). */}
+            {publicProducer && (
+              <Link
+                to={`/produtor/${publicProducer.public_slug}`}
+                className="flex items-start gap-3 pt-5 border-t border-white/10 group"
+              >
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff0068] to-[#d4005a] flex items-center justify-center text-white font-black text-sm overflow-hidden shrink-0">
+                  {publicProducer.avatar_url
+                    ? <img src={publicProducer.avatar_url} alt={publicProducer.full_name} className="w-full h-full object-cover" />
+                    : publicProducer.full_name?.[0]?.toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Produzido por</p>
+                  <p className="text-sm font-black text-white group-hover:text-[#ff0068] transition-colors truncate">
+                    {publicProducer.full_name}
+                  </p>
+                  {publicProducer.bio && (
+                    <p className="text-xs text-slate-400 leading-relaxed line-clamp-3 mt-1">{publicProducer.bio}</p>
+                  )}
+                </div>
+              </Link>
+            )}
           </div>
         </div>
       </div>
