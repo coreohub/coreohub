@@ -1,5 +1,5 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { UserRole, Profile as UserProfile } from './types';
 import { supabase } from './services/supabase';
@@ -48,7 +48,6 @@ const ProducerInviteLanding    = lazy(() => import('./pages/ProducerInvite'));
 const TeamInviteLanding        = lazy(() => import('./pages/TeamInvite'));
 const CreateEvent              = lazy(() => import('./pages/CreateEvent'));
 const CriarEventoGate          = lazy(() => import('./pages/CriarEventoGate'));
-const FestivalShowcase         = lazy(() => import('./pages/FestivalShowcase'));
 const PublicEventPage          = lazy(() => import('./pages/PublicEventPage'));
 const Festivais                = lazy(() => import('./pages/Festivais'));
 const ProducerPublicPage       = lazy(() => import('./pages/ProducerPublicPage'));
@@ -276,6 +275,17 @@ const PrivateLayout: React.FC<{
       <BottomNavBar activeRole={activeRole} videoSelectionEnabled={videoSelectionEnabled} userId={profile.id} />
     </div>
   );
+};
+
+/** /festival/:idOrSlug (raiz, sem sub-rota) é o stub FestivalShowcase nunca
+    terminado desde o commit inicial do projeto — mostra "Página em
+    construção" pra quem cai nele direto. As sub-rotas (/register,
+    /inscrever, /checkout, /leaderboard) continuam intactas como alias
+    legado pra QR code/flyer antigo. Isso só redireciona a raiz pra vitrine
+    real (/evento/:idOrSlug). */
+const FestivalRootRedirect: React.FC = () => {
+  const { idOrSlug } = useParams();
+  return <Navigate to={`/evento/${idOrSlug}`} replace />;
 };
 
 const App: React.FC = () => {
@@ -528,6 +538,9 @@ const App: React.FC = () => {
         <Route path="/equipe-convite/:token" element={<Suspense fallback={<PageLoader />}><TeamInviteLanding /></Suspense>} />
 
         <Route path="/dashboard" element={<PrivateRoute {...privateRouteProps}><Dashboard profile={profile!} config={config} activeRole={activeRole!} /></PrivateRoute>} />
+        {/* Alias em PT (2026-08-23) — URL antiga em inglês continua funcionando
+            pra não quebrar links/notificações já enviados com o caminho velho. */}
+        <Route path="/inicio" element={<Navigate to="/dashboard" replace />} />
         <Route path="/bailarinos" element={<PrivateRoute {...privateRouteProps}><Bailarinos /></PrivateRoute>} />
         <Route path="/minhas-coreografias" element={<PrivateRoute {...privateRouteProps}><MinhasCoreografias /></PrivateRoute>} />
         <Route path="/central-de-midia" element={<PrivateRoute {...privateRouteProps}><CentralDeMidia /></PrivateRoute>} />
@@ -543,7 +556,9 @@ const App: React.FC = () => {
 
         <Route path="/qg-organizador" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm="financeiro"><ProducerDashboard profile={profile!} /></RequirePermission></PrivateRoute>} />
         <Route path="/registrations" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm={['inscricoes_leitura', 'triagem']}><Registrations /></RequirePermission></PrivateRoute>} />
+        <Route path="/inscricoes" element={<Navigate to="/registrations" replace />} />
         <Route path="/manage-schedule" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm={['cronograma_leitura', 'cronograma_editar']}><Schedule /></RequirePermission></PrivateRoute>} />
+        <Route path="/cronograma" element={<Navigate to="/manage-schedule" replace />} />
         <Route path="/apuracao" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm="resultados_leitura"><ResultsPanel /></RequirePermission></PrivateRoute>} />
         <Route path="/equipe-jurados" element={<PrivateRoute {...privateRouteProps}><JudgesManagement /></PrivateRoute>} />
         <Route path="/account-settings" element={<PrivateRoute {...privateRouteProps}><AccountSettings onSaveSuccess={fetchConfig} /></PrivateRoute>} />
@@ -557,6 +572,7 @@ const App: React.FC = () => {
         <Route path="/conferencia" element={<JudgeStandaloneRoute><Conferencia /></JudgeStandaloneRoute>} />
         <Route path="/jurado-seletiva" element={<JudgeStandaloneRoute><JuradoSeletiva /></JudgeStandaloneRoute>} />
         <Route path="/deliberacoes" element={<PrivateRoute {...privateRouteProps}><Deliberacoes /></PrivateRoute>} />
+        <Route path="/premiacao" element={<Navigate to="/deliberacoes" replace />} />
         <Route path="/judge-practice" element={<PrivateRoute {...privateRouteProps}><JudgePractice /></PrivateRoute>} />
         <Route path="/equipe-jurados-config" element={<PrivateRoute {...privateRouteProps}><JudgeManagement /></PrivateRoute>} />
 
@@ -564,6 +580,7 @@ const App: React.FC = () => {
             aqui só garante que quem não tem NENHUM escopo de checkin_* nem
             entra na página. */}
         <Route path="/check-in" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm={['checkin_inscritos', 'checkin_ingressos', 'checkin_workshops', 'checkin_equipe', 'checkin_jurados']}><CheckIn /></RequirePermission></PrivateRoute>} />
+        <Route path="/credenciamento" element={<Navigate to="/check-in" replace />} />
         <Route path="/marcacao-palco" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm="marcacao_palco"><StageMarker /></RequirePermission></PrivateRoute>} />
         <Route path="/telao-palco" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="controle_telao"><TelaoControle /></RequirePermission></Suspense></PrivateRoute>} />
         <Route path="/minha-equipe" element={<PrivateRoute {...privateRouteProps}><EquipeProdutor /></PrivateRoute>} />
@@ -611,7 +628,7 @@ const App: React.FC = () => {
         <Route path="/workshops-do-evento" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="gerenciar_workshops"><WorkshopsManagement /></RequirePermission></Suspense></PrivateRoute>} />
         <Route path="/cupons"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="gerenciar_cupons"><Coupons /></RequirePermission></Suspense></PrivateRoute>} />
         <Route path="/avisos"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="gerenciar_avisos"><Avisos /></RequirePermission></Suspense></PrivateRoute>} />
-        <Route path="/festival/:idOrSlug" element={<FestivalShowcase />} />
+        <Route path="/festival/:idOrSlug" element={<FestivalRootRedirect />} />
         {/* Inscrição unificada: ambas as rotas renderizam o mesmo Wizard.
             /inscrever (sem modalidade) → mostra Passo 0 (seleção visual de
             modalidade) antes do passo Coreografia. Usado por entry points
