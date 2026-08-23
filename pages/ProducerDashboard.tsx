@@ -122,7 +122,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
   // Lição: rotas operacionais do produtor precisam de gate de role além
   // do PrivateRoute (auth-only).
   if (profile?.role !== UserRole.ORGANIZER && !profile?.is_super_admin) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/inicio" replace />;
   }
 
   const navigate = useNavigate();
@@ -796,7 +796,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button
-                      onClick={() => navigate('/registrations')}
+                      onClick={() => navigate('/inscricoes')}
                       className="text-slate-400 hover:text-[#ff0068] transition-all"
                     >
                       <ArrowUpRight size={16} />
@@ -819,14 +819,14 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
                 label: 'Triagem Regulamento',
                 sub: `${metrics.pendenciasRegulamento} pendências`,
                 icon: AlertCircle,
-                path: '/registrations',
+                path: '/inscricoes',
                 warn: metrics.pendenciasRegulamento > 0,
               },
               {
                 label: 'Validar Pagamentos',
                 sub: `${metrics.pagamentosPendentes} pendências Pix`,
                 icon: CreditCard,
-                path: '/registrations',
+                path: '/inscricoes',
                 warn: metrics.pagamentosPendentes > 0,
               },
               {
@@ -840,7 +840,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
                 label: 'Credenciamento',
                 sub: `${metrics.checkinFeitos} credenciados`,
                 icon: CheckSquare,
-                path: '/check-in',
+                path: '/credenciamento',
                 warn: false,
               },
             ].map(action => (

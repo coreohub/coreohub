@@ -10,7 +10,7 @@ import { LayoutDashboard, ClipboardList, Ticket, GraduationCap, Video, Tag } fro
 // consolidada das 4 fontes; ordem das demais = funil (entrada → add-ons → cupom).
 const TABS = [
   { path: '/vendas',              label: 'Visão Geral', icon: LayoutDashboard },
-  { path: '/registrations',       label: 'Inscrições', icon: ClipboardList },
+  { path: '/inscricoes',          label: 'Inscrições', icon: ClipboardList },
   { path: '/vendas-ingressos',    label: 'Ingressos',  icon: Ticket        },
   { path: '/workshops-do-evento', label: 'Workshops',  icon: GraduationCap },
   { path: '/seletiva-video',      label: 'Seletiva',   icon: Video         },

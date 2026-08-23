@@ -51,14 +51,14 @@ export function isEquipeAtiva(role: UserRole | null | undefined, perms: Permisso
 export type PermKey = keyof PermissoesCustom;
 
 export const PERM_MENU: { perm: PermKey; path: string; label: string; icon: React.ElementType }[] = [
-  { perm: 'cronograma_leitura', path: '/manage-schedule', label: 'Cronograma',          icon: Calendar        },
+  { perm: 'cronograma_leitura', path: '/cronograma', label: 'Cronograma',          icon: Calendar        },
   // Qualquer escopo de checkin_* já libera o menu — CheckIn.tsx restringe
   // por dentro pra só oferecer os tipos de QR que o membro de fato tem.
-  { perm: 'checkin_inscritos',  path: '/check-in',        label: 'Credenciamento',      icon: QrCode          },
-  { perm: 'checkin_ingressos',  path: '/check-in',        label: 'Credenciamento',      icon: QrCode          },
-  { perm: 'checkin_workshops',  path: '/check-in',        label: 'Credenciamento',      icon: QrCode          },
-  { perm: 'checkin_equipe',     path: '/check-in',        label: 'Credenciamento',      icon: QrCode          },
-  { perm: 'checkin_jurados',    path: '/check-in',        label: 'Credenciamento',      icon: QrCode          },
+  { perm: 'checkin_inscritos',  path: '/credenciamento',        label: 'Credenciamento',      icon: QrCode          },
+  { perm: 'checkin_ingressos',  path: '/credenciamento',        label: 'Credenciamento',      icon: QrCode          },
+  { perm: 'checkin_workshops',  path: '/credenciamento',        label: 'Credenciamento',      icon: QrCode          },
+  { perm: 'checkin_equipe',     path: '/credenciamento',        label: 'Credenciamento',      icon: QrCode          },
+  { perm: 'checkin_jurados',    path: '/credenciamento',        label: 'Credenciamento',      icon: QrCode          },
   // Credenciais.tsx não filtra por tipo — imprime todo o roster do evento.
   // Só quem tem checkin_inscritos (escopo amplo) ganha esse item de menu.
   { perm: 'checkin_inscritos',  path: '/credenciais',     label: 'Credenciais',         icon: QrCode          },
@@ -66,8 +66,8 @@ export const PERM_MENU: { perm: PermKey; path: string; label: string; icon: Reac
   { perm: 'suporte_juri',       path: '/suporte-juri',    label: 'Coordenador do Júri', icon: Headphones      },
   { perm: 'controle_telao',     path: '/telao-palco',     label: 'Telão de Palco',      icon: MonitorPlay     },
   { perm: 'gerenciar_avisos',   path: '/avisos',          label: 'Avisos',              icon: Megaphone       },
-  { perm: 'inscricoes_leitura', path: '/registrations',   label: 'Inscrições',          icon: ClipboardList   },
-  { perm: 'triagem',            path: '/registrations',   label: 'Triagem',             icon: Filter          },
+  { perm: 'inscricoes_leitura', path: '/inscricoes',   label: 'Inscrições',          icon: ClipboardList   },
+  { perm: 'triagem',            path: '/inscricoes',   label: 'Triagem',             icon: Filter          },
   { perm: 'seletiva_video',     path: '/seletiva-video',  label: 'Seletiva de Vídeo',   icon: Video           },
   { perm: 'gerenciar_workshops', path: '/workshops-do-evento', label: 'Workshops',       icon: GraduationCap   },
   { perm: 'vendas_ingressos',   path: '/vendas-ingressos', label: 'Vendas de Ingressos', icon: Ticket          },

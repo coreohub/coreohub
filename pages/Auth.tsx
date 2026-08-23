@@ -255,9 +255,9 @@ const Auth = () => {
         return '/qg-organizador';
       }
       const equipeRoute = resolveFirstEquipeRoute(data?.permissoes_custom);
-      return equipeRoute ?? '/dashboard';
+      return equipeRoute ?? '/inicio';
     } catch {
-      return '/dashboard';
+      return '/inicio';
     }
   };
 
@@ -354,7 +354,7 @@ const Auth = () => {
               full_name: email.split('@')[0],
             },
             // Após confirmar, redireciona pra dashboard (ou redirectTo se vier de checkout).
-            emailRedirectTo: `${window.location.origin}${redirectTo || '/dashboard'}`,
+            emailRedirectTo: `${window.location.origin}${redirectTo || '/inicio'}`,
           },
         });
         if (signUpError) throw signUpError;

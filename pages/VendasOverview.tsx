@@ -90,7 +90,7 @@ const VendasOverview: React.FC = () => {
         if (!active) return;
         setEventName(ev?.name ?? '');
         setMetrics([
-          { key: 'inscricoes', label: 'Inscrições', path: '/registrations',       icon: ClipboardList, receita: inscricoesReceita, count: regsPagas.length,            countLabel: 'inscrições pagas' },
+          { key: 'inscricoes', label: 'Inscrições', path: '/inscricoes',          icon: ClipboardList, receita: inscricoesReceita, count: regsPagas.length,            countLabel: 'inscrições pagas' },
           { key: 'ingressos',  label: 'Ingressos',  path: '/vendas-ingressos',    icon: Ticket,        receita: ingressosReceita,  count: ticketsAprovados.length,     countLabel: 'ingressos vendidos' },
           { key: 'workshops',  label: 'Workshops',  path: '/workshops-do-evento', icon: GraduationCap, receita: workshopsReceita,  count: workshopRegsAprovados.length, countLabel: 'vagas vendidas' },
           { key: 'seletiva',   label: 'Seletiva',   path: '/seletiva-video',      icon: Video,         receita: seletivaReceita,   count: seletivaCount,                countLabel: 'taxas pagas' },

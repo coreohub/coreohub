@@ -1237,7 +1237,7 @@ function buildLeadReengagement(p: LeadReengagementPayload) {
   const slug = p.eventoSlug ?? ''
   const ctaUrl = slug
     ? `${p.appUrl ?? 'https://coreohub.com'}/evento/${slug}`
-    : `${p.appUrl ?? 'https://app.coreohub.com'}/dashboard`
+    : `${p.appUrl ?? 'https://app.coreohub.com'}/inicio`
 
   const urgencyColor = p.diasRestantes <= 3 ? '#f59e0b' : '#ff0068'
   const urgencyBg    = p.diasRestantes <= 3 ? '#fffbeb' : '#fff5f8'

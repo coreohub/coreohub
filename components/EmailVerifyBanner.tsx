@@ -78,7 +78,7 @@ const EmailVerifyBanner: React.FC = () => {
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email,
-        options: { emailRedirectTo: `${window.location.origin}/dashboard` },
+        options: { emailRedirectTo: `${window.location.origin}/inicio` },
       });
       if (error) throw error;
       setFeedback({ kind: 'ok', msg: 'Link reenviado pro seu e-mail. Verifique também a caixa de spam.' });

@@ -286,7 +286,7 @@ const PagamentoInscrito = () => {
             </p>
           </div>
           <button
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate('/inicio')}
             className="flex items-center gap-2 px-5 py-2.5 bg-[#ff0068] text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-md shadow-[#ff0068]/20 hover:scale-105 transition-all"
           >
             Voltar ao Início <ArrowRight size={13} />

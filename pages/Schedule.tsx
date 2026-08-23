@@ -2077,7 +2077,7 @@ const Schedule = () => {
         title: 'Ordem de apresentação publicada',
         body: 'Confira sua posição na fila de apresentação na tela Início.',
         cta_label: 'Ver ordem',
-        cta_url: '/dashboard',
+        cta_url: '/inicio',
       });
       if (error) throw error;
       setShowPublishModal(false);

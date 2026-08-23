@@ -543,10 +543,10 @@ const App: React.FC = () => {
         <Route path="/convite/:token" element={<Suspense fallback={<PageLoader />}><ProducerInviteLanding /></Suspense>} />
         <Route path="/equipe-convite/:token" element={<Suspense fallback={<PageLoader />}><TeamInviteLanding /></Suspense>} />
 
-        <Route path="/dashboard" element={<PrivateRoute {...privateRouteProps}><Dashboard profile={profile!} config={config} activeRole={activeRole!} /></PrivateRoute>} />
-        {/* Alias em PT (2026-08-23) — URL antiga em inglês continua funcionando
-            pra não quebrar links/notificações já enviados com o caminho velho. */}
-        <Route path="/inicio" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/inicio" element={<PrivateRoute {...privateRouteProps}><Dashboard profile={profile!} config={config} activeRole={activeRole!} /></PrivateRoute>} />
+        {/* Alias reverso (2026-08-23) — URL antiga em inglês continua
+            funcionando pra não quebrar links/notificações já enviados. */}
+        <Route path="/dashboard" element={<Navigate to="/inicio" replace />} />
         <Route path="/bailarinos" element={<PrivateRoute {...privateRouteProps}><Bailarinos /></PrivateRoute>} />
         <Route path="/minhas-coreografias" element={<PrivateRoute {...privateRouteProps}><MinhasCoreografias /></PrivateRoute>} />
         <Route path="/central-de-midia" element={<PrivateRoute {...privateRouteProps}><CentralDeMidia /></PrivateRoute>} />
@@ -561,10 +561,10 @@ const App: React.FC = () => {
         <Route path="/credenciais" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="checkin_inscritos"><Credenciais /></RequirePermission></Suspense></PrivateRoute>} />
 
         <Route path="/qg-organizador" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm="financeiro"><ProducerDashboard profile={profile!} /></RequirePermission></PrivateRoute>} />
-        <Route path="/registrations" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm={['inscricoes_leitura', 'triagem']}><Registrations /></RequirePermission></PrivateRoute>} />
-        <Route path="/inscricoes" element={<Navigate to="/registrations" replace />} />
-        <Route path="/manage-schedule" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm={['cronograma_leitura', 'cronograma_editar']}><Schedule /></RequirePermission></PrivateRoute>} />
-        <Route path="/cronograma" element={<Navigate to="/manage-schedule" replace />} />
+        <Route path="/inscricoes" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm={['inscricoes_leitura', 'triagem']}><Registrations /></RequirePermission></PrivateRoute>} />
+        <Route path="/registrations" element={<Navigate to="/inscricoes" replace />} />
+        <Route path="/cronograma" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm={['cronograma_leitura', 'cronograma_editar']}><Schedule /></RequirePermission></PrivateRoute>} />
+        <Route path="/manage-schedule" element={<Navigate to="/cronograma" replace />} />
         <Route path="/apuracao" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm="resultados_leitura"><ResultsPanel /></RequirePermission></PrivateRoute>} />
         <Route path="/equipe-jurados" element={<PrivateRoute {...privateRouteProps}><JudgesManagement /></PrivateRoute>} />
         <Route path="/account-settings" element={<PrivateRoute {...privateRouteProps}><AccountSettings onSaveSuccess={fetchConfig} /></PrivateRoute>} />
@@ -577,16 +577,16 @@ const App: React.FC = () => {
         <Route path="/deliberacao" element={<JudgeStandaloneRoute><Deliberacao /></JudgeStandaloneRoute>} />
         <Route path="/conferencia" element={<JudgeStandaloneRoute><Conferencia /></JudgeStandaloneRoute>} />
         <Route path="/jurado-seletiva" element={<JudgeStandaloneRoute><JuradoSeletiva /></JudgeStandaloneRoute>} />
-        <Route path="/deliberacoes" element={<PrivateRoute {...privateRouteProps}><Deliberacoes /></PrivateRoute>} />
-        <Route path="/premiacao" element={<Navigate to="/deliberacoes" replace />} />
+        <Route path="/premiacao" element={<PrivateRoute {...privateRouteProps}><Deliberacoes /></PrivateRoute>} />
+        <Route path="/deliberacoes" element={<Navigate to="/premiacao" replace />} />
         <Route path="/judge-practice" element={<PrivateRoute {...privateRouteProps}><JudgePractice /></PrivateRoute>} />
         <Route path="/equipe-jurados-config" element={<PrivateRoute {...privateRouteProps}><JudgeManagement /></PrivateRoute>} />
 
         {/* CheckIn.tsx já se blinda por dentro (restringe por tipo de QR) —
             aqui só garante que quem não tem NENHUM escopo de checkin_* nem
             entra na página. */}
-        <Route path="/check-in" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm={['checkin_inscritos', 'checkin_ingressos', 'checkin_workshops', 'checkin_equipe', 'checkin_jurados']}><CheckIn /></RequirePermission></PrivateRoute>} />
-        <Route path="/credenciamento" element={<Navigate to="/check-in" replace />} />
+        <Route path="/credenciamento" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm={['checkin_inscritos', 'checkin_ingressos', 'checkin_workshops', 'checkin_equipe', 'checkin_jurados']}><CheckIn /></RequirePermission></PrivateRoute>} />
+        <Route path="/check-in" element={<Navigate to="/credenciamento" replace />} />
         <Route path="/marcacao-palco" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm="marcacao_palco"><StageMarker /></RequirePermission></PrivateRoute>} />
         <Route path="/telao-palco" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="controle_telao"><TelaoControle /></RequirePermission></Suspense></PrivateRoute>} />
         <Route path="/minha-equipe" element={<PrivateRoute {...privateRouteProps}><EquipeProdutor /></PrivateRoute>} />

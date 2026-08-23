@@ -189,7 +189,7 @@ Deno.serve(async (req) => {
       severity: dl <= 3 ? 'warning' : 'info',
       title: notifTitle,
       body: notifBody,
-      cta_url:   event.slug ? `/evento/${event.slug}` : '/dashboard',
+      cta_url:   event.slug ? `/evento/${event.slug}` : '/inicio',
       cta_label: 'Inscrever agora',
       metadata: {
         entry_event_id: eventId,

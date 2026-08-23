@@ -912,7 +912,7 @@ const ResultsPanel = () => {
           Deliberacoes.tsx; aqui só usa a mesma fonte pra contar quantos já
           têm vencedor definido, sem reimplementar a tela inteira aqui dentro. */}
       {awards.length > 0 && (
-        <button onClick={() => navigate('/deliberacoes')}
+        <button onClick={() => navigate('/premiacao')}
           className="w-full flex items-center justify-between gap-3 px-5 py-4 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl hover:bg-slate-50 dark:hover:bg-white/10 transition-all text-left">
           <div className="flex items-center gap-3 min-w-0">
             <Trophy size={18} className="text-[#ff0068] shrink-0" />

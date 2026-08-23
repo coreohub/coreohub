@@ -92,9 +92,9 @@ const menuSections: MenuSection[] = [
     roles: ALL_ORGANIZER,
     tone: 'pink',
     items: [
-      { path: '/registrations',   label: 'Inscrições',        icon: ClipboardList },
+      { path: '/inscricoes',   label: 'Inscrições',        icon: ClipboardList },
       { path: '/seletiva-video',  label: 'Seletiva de Vídeo', icon: Video         },
-      { path: '/manage-schedule', label: 'Cronograma',        icon: Calendar      },
+      { path: '/cronograma', label: 'Cronograma',        icon: Calendar      },
       { path: '/narracao-ia', label: 'Narração IA', icon: Mic2 },
       { path: '/marcacao-palco',  label: 'Marcação de Palco', icon: PersonStanding },
       { path: '/telao-palco',     label: 'Telão de Palco',    icon: MonitorPlay   },
@@ -111,7 +111,7 @@ const menuSections: MenuSection[] = [
     tone: 'orange',
     items: [
       { path: '/vendas',              label: 'Visão Geral', icon: LayoutDashboard },
-      { path: '/registrations',       label: 'Inscrições', icon: ClipboardList },
+      { path: '/inscricoes',       label: 'Inscrições', icon: ClipboardList },
       { path: '/vendas-ingressos',    label: 'Ingressos',  icon: Ticket        },
       { path: '/workshops-do-evento', label: 'Workshops',  icon: GraduationCap },
       { path: '/seletiva-video',      label: 'Seletiva',   icon: Video         },
@@ -125,7 +125,7 @@ const menuSections: MenuSection[] = [
     tone: 'emerald',
     items: [
       { path: '/apuracao',     label: 'Apuração',     icon: BarChart2 },
-      { path: '/deliberacoes', label: 'Premiação',    icon: Trophy    },
+      { path: '/premiacao', label: 'Premiação',    icon: Trophy    },
       { path: '/certificados', label: 'Certificados', icon: Award     },
     ],
   },
@@ -143,7 +143,7 @@ const menuSections: MenuSection[] = [
     section: 'Inscrito',
     roles: ALL_USER_OR_EQUIPE,
     items: [
-      { path: '/dashboard',           label: 'Início',                icon: LayoutDashboard },
+      { path: '/inicio',           label: 'Início',                icon: LayoutDashboard },
       { path: '/bailarinos',          label: 'Meu Elenco',            icon: Users           },
       { path: '/minhas-coreografias', label: 'Minhas Inscrições',     icon: Clapperboard    },
       { path: '/central-de-midia',    label: 'Trilha Sonora',         icon: Music2          },
@@ -164,17 +164,17 @@ const menuSections: MenuSection[] = [
     roles: ALL_EQUIPE,
     items: [
       // Coordenador — acesso amplo
-      { path: '/check-in',        label: 'Credenciamento',          icon: QrCode,          roles: [UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
+      { path: '/credenciamento',        label: 'Credenciamento',          icon: QrCode,          roles: [UserRole.COORDENADOR, UserRole.STAFF, UserRole.ORGANIZER, UserRole.COREOHUB_ADMIN] },
       // Cronograma: ORGANIZER ja ve em "Sonoplastia e Cronograma" na secao Produtor — evita duplicar
-      { path: '/manage-schedule', label: 'Cronograma',              icon: Calendar,        roles: [UserRole.COORDENADOR, UserRole.MESARIO, UserRole.SONOPLASTA, UserRole.RECEPCAO, UserRole.PALCO, UserRole.STAFF, UserRole.COREOHUB_ADMIN] },
+      { path: '/cronograma', label: 'Cronograma',              icon: Calendar,        roles: [UserRole.COORDENADOR, UserRole.MESARIO, UserRole.SONOPLASTA, UserRole.RECEPCAO, UserRole.PALCO, UserRole.STAFF, UserRole.COREOHUB_ADMIN] },
       // Credenciamento
-      { path: '/check-in',        label: 'Credenciamento',          icon: QrCode,          roles: [UserRole.RECEPCAO] },
+      { path: '/credenciamento',        label: 'Credenciamento',          icon: QrCode,          roles: [UserRole.RECEPCAO] },
       // Marcacao de Palco — ORGANIZER ja ve em "Operação"; COREOHUB_ADMIN tem acesso via outras vias
       { path: '/marcacao-palco',  label: 'Marcação de Palco',       icon: PersonStanding,  roles: [UserRole.PALCO, UserRole.COORDENADOR, UserRole.STAFF] },
       // Coordenador do Juri — ORGANIZER ja ve em "Sistema"; evita duplicar
       { path: '/suporte-juri',    label: 'Coordenador do Júri',     icon: Headphones,      roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF] },
       // Deliberacao: ORGANIZER ja ve na secao Produtor — evita duplicar
-      { path: '/deliberacoes',    label: 'Premiação',               icon: Trophy,          roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.COREOHUB_ADMIN] },
+      { path: '/premiacao',    label: 'Premiação',               icon: Trophy,          roles: [UserRole.MESARIO, UserRole.COORDENADOR, UserRole.STAFF, UserRole.COREOHUB_ADMIN] },
     ],
   },
   {

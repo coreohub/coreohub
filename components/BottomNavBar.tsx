@@ -21,7 +21,7 @@ const INSCRITO_ROLES = new Set([
 ]);
 
 const INSCRITO_NAV = [
-  { path: '/dashboard',           label: 'Início',  icon: LayoutDashboard },
+  { path: '/inicio',              label: 'Início',  icon: LayoutDashboard },
   { path: '/bailarinos',          label: 'Elenco',  icon: Users           },
   { path: '/minhas-coreografias', label: 'Inscrições', icon: Clapperboard },
   { path: '/central-de-midia',    label: 'Trilha',  icon: Music2          },
@@ -41,8 +41,8 @@ const PRODUTOR_ROLES = new Set([
 // 2026-05-25.
 const buildProdutorNav = () => [
   { path: '/qg-organizador',   label: 'Painel',    icon: LayoutDashboard },
-  { path: '/registrations',    label: 'Inscrições', icon: ClipboardList },
-  { path: '/manage-schedule',  label: 'Crono',     icon: Calendar      },
+  { path: '/inscricoes',       label: 'Inscrições', icon: ClipboardList },
+  { path: '/cronograma',       label: 'Crono',     icon: Calendar      },
   { path: '__more__',          label: 'Mais',      icon: MoreHorizontal },
   { path: '/account-settings', label: 'Config',    icon: Settings      },
 ];
@@ -82,7 +82,7 @@ const MORE_GROUPS: MoreGroup[] = [
     label: 'Resultados', tone: 'text-emerald-500',
     items: [
       { path: '/results',                 label: 'Apuração',         icon: Trophy },
-      { path: '/deliberacoes',            label: 'Premiação',        icon: Star   },
+      { path: '/premiacao',               label: 'Premiação',        icon: Star   },
       { path: '/certificados',            label: 'Certificados',     icon: Award  },
     ],
   },

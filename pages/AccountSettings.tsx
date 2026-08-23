@@ -4820,7 +4820,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 </div>
                 <button
                   type="button"
-                  onClick={() => navigate('/manage-schedule')}
+                  onClick={() => navigate('/cronograma')}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-[#ff0068]/40 hover:text-[#ff0068] transition-all shrink-0"
                   title="Ver como as narrações tocam no Cronograma do evento"
                 >
