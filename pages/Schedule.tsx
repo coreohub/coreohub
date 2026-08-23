@@ -613,9 +613,13 @@ const Schedule = () => {
   // faixa a cada render; preload='metadata' baixa só o cabeçalho do arquivo.
   const [trackDurations, setTrackDurations] = useState<Record<string, number>>({});
   const trackDurationsRequested = useRef<Set<string>>(new Set());
-  const [minInterval, setMinInterval] = useState(10);
   const [tempoEntrada, setTempoEntrada] = useState(15);
   const [intervaloSeguranca, setIntervaloSeguranca] = useState(3);
+  // Contagem de apresentações (não segundos) — o mesmo bailarino não pode
+  // aparecer 2x dentro desse intervalo. Campo próprio desde 2026-08-23: antes
+  // dividia estado com intervaloSeguranca (segundos), então mexer num mexia
+  // no outro visualmente e o algoritmo só reagia depois de "Salvar".
+  const [intervaloBailarinos, setIntervaloBailarinos] = useState(3);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
@@ -807,7 +811,8 @@ const Schedule = () => {
         cfg = data;
       }
 
-      if (cfg?.intervalo_seguranca) { setMinInterval(cfg.intervalo_seguranca); setIntervaloSeguranca(cfg.intervalo_seguranca); }
+      if (cfg?.intervalo_seguranca) setIntervaloSeguranca(cfg.intervalo_seguranca);
+      if (cfg?.intervalo_seguranca_bailarinos) setIntervaloBailarinos(cfg.intervalo_seguranca_bailarinos);
       if (cfg?.tempo_entrada) setTempoEntrada(cfg.tempo_entrada);
       if (cfg) setConfig(cfg);
       const list = regs || [];
@@ -1512,8 +1517,8 @@ const Schedule = () => {
   };
 
   const conflicts = useMemo(
-    () => buildConflictMap(registrations, minInterval),
-    [registrations, minInterval]
+    () => buildConflictMap(registrations, intervaloBailarinos),
+    [registrations, intervaloBailarinos]
   );
 
   // Banca de jurados por coreografia: cruza estilo_danca com as competências
@@ -1826,11 +1831,11 @@ const Schedule = () => {
     const genOpts = { judgeSignatures: judgeBanca.sigMap, minimizeJudgeChanges };
     for (const bloco of sortedBlocos) {
       const regsDoBloco = registrations.filter(r => r.bloco_id === bloco.id);
-      const ordered = generateSmartOrder([...regsDoBloco], minInterval, genOpts);
+      const ordered = generateSmartOrder([...regsDoBloco], intervaloBailarinos, genOpts);
       result.push(...ordered);
     }
     const semBloco = registrations.filter(r => !r.bloco_id);
-    const orderedSemBloco = generateSmartOrder([...semBloco], minInterval, genOpts);
+    const orderedSemBloco = generateSmartOrder([...semBloco], intervaloBailarinos, genOpts);
     result.push(...orderedSemBloco);
     setRegistrations(result);
     setOrderChanged(true);
@@ -2240,10 +2245,10 @@ const Schedule = () => {
       // Grava na row do evento (multi-tenant), não na legacy id='1' compartilhada.
       // Espelha a leitura por event_id e o padrão do /narracao-ia.
       await supabase.from('configuracoes').update({
-        tempo_entrada:       tempoEntrada,
-        intervalo_seguranca: intervaloSeguranca,
+        tempo_entrada:                  tempoEntrada,
+        intervalo_seguranca:            intervaloSeguranca,
+        intervalo_seguranca_bailarinos: intervaloBailarinos,
       }).eq('id', selectedEventId);
-      setMinInterval(intervaloSeguranca);
       setShowSettings(false);
     } catch (err) {
       console.error('Erro ao salvar configurações:', err);
@@ -2551,12 +2556,12 @@ const Schedule = () => {
             <div className="flex items-center gap-3">
               <input
                 type="range" min={1} max={20}
-                value={intervaloSeguranca}
-                onChange={(e) => setIntervaloSeguranca(Number(e.target.value))}
+                value={intervaloBailarinos}
+                onChange={(e) => setIntervaloBailarinos(Number(e.target.value))}
                 className="w-40 accent-[#ff0068]"
               />
               <span className="text-xl font-black text-[#ff0068] w-16">
-                {intervaloSeguranca} <span className="text-[9px] text-slate-400 font-bold">apres.</span>
+                {intervaloBailarinos} <span className="text-[9px] text-slate-400 font-bold">apres.</span>
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
