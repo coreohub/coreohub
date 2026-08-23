@@ -57,9 +57,53 @@ const Festivais = () => {
     return () => {
       document.title = prevTitle;
       if (prevDesc !== null) setMeta('description', prevDesc);
-      canonical!.href = 'https://www.coreohub.com/';
+      canonical!.href = 'https://coreohub.com/';
     };
   }, []);
+
+  // JSON-LD ItemList/Event (2026-08-23) — Google lê schema estruturado do DOM
+  // renderizado (diferente de bot de preview social, que não roda JS), então
+  // injeção via useEffect é suficiente aqui. URL de cada evento aponta pro
+  // canonical real que api/og.ts já declara pro Googlebot (app.coreohub.com),
+  // não pra raiz nova — evita 2 URLs concorrendo pelo mesmo evento.
+  useEffect(() => {
+    if (events.length === 0) return;
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.text = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'ItemList',
+      itemListElement: events.map((e, idx) => ({
+        '@type': 'ListItem',
+        position: idx + 1,
+        item: {
+          '@type': 'Event',
+          name: e.name,
+          startDate: e.start_date,
+          endDate: e.end_date || undefined,
+          eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+          eventStatus: 'https://schema.org/EventScheduled',
+          location: {
+            '@type': 'Place',
+            // DB column real é "location", tipo Event só declara "address"
+            // (mesmo mismatch já existente na linha 424 deste arquivo).
+            name: (e as any).location || e.city || 'Brasil',
+            address: {
+              '@type': 'PostalAddress',
+              addressLocality: e.city || undefined,
+              addressRegion: e.state || undefined,
+              addressCountry: 'BR',
+            },
+          },
+          image: e.cover_url || undefined,
+          description: (e.description ?? '').replace(/\s+/g, ' ').trim().slice(0, 200) || undefined,
+          url: `https://app.coreohub.com/evento/${e.slug ?? e.id}`,
+        },
+      })),
+    });
+    document.head.appendChild(script);
+    return () => { script.remove(); };
+  }, [events]);
 
   useEffect(() => {
     const fetchEvents = async () => {

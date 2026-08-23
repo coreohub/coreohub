@@ -11,7 +11,7 @@
         {
           "type": "header",
           "key": "user-agent",
-          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot).*)"
+          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Googlebot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot).*)"
         }
       ],
       "destination": "/api/og?slug=:slug"
@@ -22,7 +22,7 @@
         {
           "type": "header",
           "key": "user-agent",
-          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot).*)"
+          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Googlebot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot).*)"
         }
       ],
       "destination": "/api/og?slug=:slug"
@@ -33,7 +33,7 @@
         {
           "type": "header",
           "key": "user-agent",
-          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot).*)"
+          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Googlebot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot).*)"
         }
       ],
       "destination": "/api/og-workshop?slug=:slug"
@@ -44,7 +44,7 @@
         {
           "type": "header",
           "key": "user-agent",
-          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot).*)"
+          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Googlebot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot).*)"
         }
       ],
       "destination": "/api/og-marketing?page=festivais"
@@ -55,10 +55,34 @@
         {
           "type": "header",
           "key": "user-agent",
-          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot).*)"
+          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Googlebot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot).*)"
         }
       ],
       "destination": "/api/og-marketing?page=governo"
+    },
+    {
+      "source": "/",
+      "has": [
+        { "type": "host", "value": "coreohub.com" },
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Googlebot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot).*)"
+        }
+      ],
+      "destination": "/api/og-marketing?page=raiz"
+    },
+    {
+      "source": "/",
+      "has": [
+        { "type": "host", "value": "www.coreohub.com" },
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Googlebot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot).*)"
+        }
+      ],
+      "destination": "/api/og-marketing?page=raiz"
     },
     {
       "source": "/(.*)",
