@@ -496,8 +496,13 @@ const App: React.FC = () => {
 
   // Phase 2B+: tablet em modo Terminal redireciona / pra /judge-login/<token>
   // automaticamente (kiosk mode).
-  // Domínio de marketing (coreohub.com / www.coreohub.com) mostra a sales page
-  // na home; app.coreohub.com continua indo pro login/kiosk como sempre.
+  // 2026-08-23: coreohub.com/www.coreohub.com (domínio raiz) passa a mostrar a
+  // vitrine pública (Festivais) na home em vez da landing de marketing —
+  // mesmo padrão de Sympla/Even3 (vitrine no domínio raiz, painel isolado no
+  // subdomínio "app."). A landing de vendas continua acessível em /lp em
+  // qualquer domínio. app.coreohub.com continua indo pro login/kiosk como
+  // sempre — nenhuma rota pública foi removida de lá, só deixou de ser a
+  // porta de entrada preferencial (evita quebrar link já compartilhado).
   const isMarketingDomain = ['coreohub.com', 'www.coreohub.com'].includes(window.location.hostname);
   const RootRedirect = () => {
     try {
@@ -517,9 +522,11 @@ const App: React.FC = () => {
         <Route path="/" element={
           customDomainSlug
             ? <Suspense fallback={<PageLoader />}><PublicEventPage forcedSlug={customDomainSlug} /></Suspense>
-            : (isMarketingDomain ? <LandingPage /> : <RootRedirect />)
+            : (isMarketingDomain ? <Suspense fallback={<PageLoader />}><Festivais /></Suspense> : <RootRedirect />)
         } />
-        {/* Sales page nova — acesse via /lp também (alias, qualquer domínio) */}
+        {/* Landing de vendas — acessível em /lp em qualquer domínio (antes era
+            a home de coreohub.com/www.coreohub.com; 2026-08-23: home virou a
+            vitrine pública, landing de marketing se mudou pra cá). */}
         <Route path="/lp" element={<LandingPage />} />
         <Route path="/termos" element={<TermosDeUso />} />
         <Route path="/privacidade" element={<PoliticaDePrivacidade />} />

@@ -44,9 +44,15 @@ const Festivais = () => {
     };
     const prevDesc = setMeta('description', 'Descubra festivais e mostras de dança com inscrições abertas em todo o Brasil. Filtre por estado e mês e inscreva sua coreografia.');
 
+    // Este componente renderiza em 2 pontos de montagem — raiz (coreohub.com/
+    // www.coreohub.com, desde 2026-08-23) e /festivais (qualquer domínio,
+    // inclusive app.coreohub.com como fallback de compat). Canonical precisa
+    // refletir o path real de cada um, senão a raiz aponta pra /festivais
+    // como "versão oficial" mesmo quando é ela mesma que está sendo servida.
+    const canonicalPath = window.location.pathname === '/' ? '/' : '/festivais';
     let canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
     if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical); }
-    canonical.href = 'https://www.coreohub.com/festivais';
+    canonical.href = `https://www.coreohub.com${canonicalPath}`;
 
     return () => {
       document.title = prevTitle;
