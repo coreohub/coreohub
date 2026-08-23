@@ -10,7 +10,10 @@ import { Sparkles, X } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
 
-const DemoBanner: React.FC = () => {
+const DemoBanner: React.FC<{
+  suppressed?: boolean;
+  onActiveChange?: (active: boolean, eventName: string) => void;
+}> = ({ suppressed, onActiveChange }) => {
   const [isDemo, setIsDemo] = useState(false);
   const [eventName, setEventName] = useState<string>('');
   const navigate = useNavigate();
@@ -20,7 +23,7 @@ const DemoBanner: React.FC = () => {
     (async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user) { onActiveChange?.(false, ''); return; }
         // Mesma resolução de "evento atual" do resolveActiveEventId()
         // (services/supabase.ts) — evento REAL sempre vence um demo mais
         // recente. Antes, essa query duplicada só olhava created_at e podia
@@ -35,16 +38,23 @@ const DemoBanner: React.FC = () => {
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
-        if (alive && ev?.is_demo) {
+        if (!alive) return;
+        if (ev?.is_demo) {
           setIsDemo(true);
           setEventName(ev.name);
+          onActiveChange?.(true, ev.name);
+        } else {
+          onActiveChange?.(false, '');
         }
       } catch { /* silencioso */ }
     })();
     return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!isDemo) return null;
+  // Suprimido quando impersonando — o aviso de demo já foi absorvido na
+  // linha do ImpersonateBanner (App.tsx passa demoEventName pra lá).
+  if (!isDemo || suppressed) return null;
 
   return (
     <div className="bg-amber-100 dark:bg-amber-500/15 border-b-2 border-amber-300 dark:border-amber-500/30 px-4 py-2.5 flex items-center justify-between gap-3">

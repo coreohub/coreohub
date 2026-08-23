@@ -8,17 +8,31 @@ import {
 
 /** Banner sticky no topo do app quando o super admin está visualizando
     como outro produtor. Mostra contexto + botão "Sair" pra restaurar a
-    session original. */
-const ImpersonateBanner: React.FC = () => {
+    session original.
+    `demoEventName`: quando o evento visualizado também é demo, absorve o
+    aviso numa linha só em vez de empilhar com o DemoBanner por baixo.
+    `onActiveChange`: reporta pro layout se está impersonando, pra faixas
+    de menor prioridade (ex: InstallAppBanner) cederem espaço. */
+const ImpersonateBanner: React.FC<{
+  demoEventName?: string;
+  onActiveChange?: (active: boolean) => void;
+}> = ({ demoEventName, onActiveChange }) => {
   const [ctx, setCtx] = useState<ImpersonationContext | null>(null);
   const [stopping, setStopping] = useState(false);
 
   useEffect(() => {
-    setCtx(getImpersonationContext());
+    const next = getImpersonationContext();
+    setCtx(next);
+    onActiveChange?.(!!next);
     // Cross-tab: se outra aba parar o impersonate, esta atualiza
-    const onStorage = () => setCtx(getImpersonationContext());
+    const onStorage = () => {
+      const updated = getImpersonationContext();
+      setCtx(updated);
+      onActiveChange?.(!!updated);
+    };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!ctx) return null;
@@ -47,6 +61,9 @@ const ImpersonateBanner: React.FC = () => {
             {ctx.target_name ?? ctx.target_email}
           </strong>
           <span className="hidden sm:inline"> · {ctx.target_role}</span>
+          {demoEventName && (
+            <span> · evento de demonstração ({demoEventName})</span>
+          )}
         </p>
       </div>
       <button

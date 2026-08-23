@@ -61,7 +61,7 @@ const trackSession = (): number => {
   }
 };
 
-const InstallAppBanner: React.FC = () => {
+const InstallAppBanner: React.FC<{ suppressed?: boolean }> = ({ suppressed }) => {
   const [show, setShow] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const { promptInstall } = usePWAInstall();
@@ -83,7 +83,10 @@ const InstallAppBanner: React.FC = () => {
     setShow(false);
   };
 
-  if (!show) return null;
+  // Suprimido enquanto qualquer faixa de status/contexto está ativa (é a
+  // única puramente promocional — nunca compete por atenção com
+  // impersonation/demo/email não verificado).
+  if (!show || suppressed) return null;
 
   return (
     <>

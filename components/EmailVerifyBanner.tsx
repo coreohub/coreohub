@@ -25,7 +25,7 @@ const wasDismissedRecently = () => {
   }
 };
 
-const EmailVerifyBanner: React.FC = () => {
+const EmailVerifyBanner: React.FC<{ onActiveChange?: (active: boolean) => void }> = ({ onActiveChange }) => {
   const [needsVerify, setNeedsVerify] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
@@ -68,7 +68,15 @@ const EmailVerifyBanner: React.FC = () => {
       cancelled = true;
       subscription.unsubscribe();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Reporta pro layout se a faixa está de fato visível (considera dismiss),
+  // pra faixas de menor prioridade (InstallAppBanner) cederem espaço.
+  useEffect(() => {
+    onActiveChange?.(needsVerify && !dismissed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsVerify, dismissed]);
 
   const handleResend = async () => {
     if (!email) return;

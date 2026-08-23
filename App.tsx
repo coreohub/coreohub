@@ -210,6 +210,16 @@ const PrivateLayout: React.FC<{
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Coordenação de faixas de status (Impersonate/Demo/EmailVerify) —
+  // nenhuma faixa promocional (InstallAppBanner) pode competir com uma
+  // faixa de estado/contexto. Padrão de mercado: priorizar por severidade
+  // em vez de empilhar (Carbon Design System, Mobbin) — a faixa de menor
+  // urgência cede espaço em vez de brigar visualmente pelo topo.
+  const [isImpersonating, setIsImpersonating] = useState(false);
+  const [demoEventName, setDemoEventName] = useState<string | null>(null);
+  const [emailNeedsVerify, setEmailNeedsVerify] = useState(false);
+  const anyStatusBannerActive = isImpersonating || !!demoEventName || emailNeedsVerify;
+
   useEffect(() => {
     identifyUser(profile);
   }, [profile?.id, profile?.role]);
@@ -250,16 +260,23 @@ const PrivateLayout: React.FC<{
         <main className="flex-1 overflow-y-auto relative z-10 pb-20 sm:pb-4">
           {/* ImpersonateBanner: sticky topo quando super admin está
               "Visualizando como Produtor". Z-index alto pra ficar sobre
-              outros banners. Some automaticamente quando não está impersonando. */}
-          <ImpersonateBanner />
-          {/* DemoBanner: sticky no topo se evento ativo é demo (Stripe Test Mode pattern) */}
-          <DemoBanner />
+              outros banners. Some automaticamente quando não está impersonando.
+              Quando o evento também é demo, absorve o aviso de demo numa
+              linha só (em vez de empilhar 2 faixas de "não é o real"). */}
+          <ImpersonateBanner demoEventName={demoEventName ?? undefined} onActiveChange={setIsImpersonating} />
+          {/* DemoBanner: sticky no topo se evento ativo é demo (Stripe Test Mode
+              pattern). Suprimido enquanto impersonando — o aviso já foi
+              absorvido na linha do ImpersonateBanner acima. */}
+          <DemoBanner suppressed={isImpersonating} onActiveChange={(active, name) => setDemoEventName(active ? name : null)} />
           {/* EmailVerifyBanner: padrão Stripe/Linear — sinaliza email não
               confirmado sem bloquear. Some quando user verifica ou dispensa por 24h. */}
-          <EmailVerifyBanner />
+          <EmailVerifyBanner onActiveChange={setEmailNeedsVerify} />
           {/* InstallAppBanner: aparece após 2ª sessão (não first-load) — research
-              Pinterest mostra que prompt cedo demais tem 91% dismiss rate. */}
-          <InstallAppBanner />
+              Pinterest mostra que prompt cedo demais tem 91% dismiss rate.
+              Suprimido enquanto qualquer faixa de status/contexto está ativa —
+              é a única puramente promocional, então é ela que cede espaço
+              (nunca compete por atenção com impersonation/demo/email). */}
+          <InstallAppBanner suppressed={anyStatusBannerActive} />
           <div className="p-3 lg:p-4">
             <Suspense fallback={<PageLoader />}>
               {children}

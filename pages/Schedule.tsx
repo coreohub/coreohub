@@ -121,7 +121,20 @@ function formatDateTimeBr(iso: string): string {
 }
 
 // ---------- conflict detection ----------
-function buildConflictMap(
+// Identidade do bailarino por nome — comportamento original e intencional
+// (ver seed-demo-event/index.ts: "conflito detecta por nome"). O bug real
+// não era a chave de identidade, era o ESCOPO: essa função comparava
+// posições na lista INTEIRA do evento (todos os blocos misturados), mas
+// "Gerar Ordem Inteligente" só reordena DENTRO de cada bloco (nunca cruza
+// Bloco 1/2/3). Resultado: o badge acusava "conflito" entre coreografias de
+// blocos diferentes (ex: Manhã vs Tarde) que o botão jamais poderia resolver
+// — daí a sensação de "não faz nada" (bug real 2026-08-23). Fix: computar
+// os conflitos por bloco (+ grupo "sem bloco"), igual o algoritmo já faz.
+function resolveDancerIdentity(dancer: any): string | undefined {
+  return dancer.cpf || dancer.full_name || dancer.nome || dancer.name;
+}
+
+function buildConflictMapForGroup(
   registrations: Registration[],
   minInterval: number
 ): Record<string, { dancerName: string; otherIndex: number }[]> {
@@ -134,7 +147,7 @@ function buildConflictMap(
 
   registrations.forEach((reg, index) => {
     elencoOf(reg).forEach((dancer: any) => {
-      const id = dancer.cpf || dancer.full_name || dancer.nome || dancer.name;
+      const id = resolveDancerIdentity(dancer);
       if (!id) return;
       if (!dancerPositions[id]) dancerPositions[id] = [];
       dancerPositions[id].push(index);
@@ -150,11 +163,8 @@ function buildConflictMap(
         const r1 = registrations[cur];
         const r2 = registrations[nxt];
         const r1Elenco = elencoOf(r1);
-        const dancerName =
-          r1Elenco.find((d: any) => (d.cpf || d.full_name || d.nome || d.name) === dancerId)?.full_name ||
-          r1Elenco.find((d: any) => (d.cpf || d.full_name || d.nome || d.name) === dancerId)?.nome ||
-          r1Elenco.find((d: any) => (d.cpf || d.full_name || d.nome || d.name) === dancerId)?.name ||
-          dancerId;
+        const matched = r1Elenco.find((d: any) => resolveDancerIdentity(d) === dancerId);
+        const dancerName = matched?.full_name || matched?.nome || matched?.name || dancerId;
 
         if (!conflictMap[r1.id]) conflictMap[r1.id] = [];
         conflictMap[r1.id].push({ dancerName, otherIndex: nxt + 1 });
@@ -166,6 +176,28 @@ function buildConflictMap(
   });
 
   return conflictMap;
+}
+
+// Agrupa por bloco (+ "sem bloco") antes de detectar conflito — mesma
+// segmentação que generateSmartOrder já usa pra reordenar. `otherIndex` fica
+// relativo à posição DENTRO do bloco (bate com o "#ORDEM" mostrado na tela
+// pra esse bloco), não mais um índice cru do evento inteiro.
+function buildConflictMap(
+  registrations: Registration[],
+  minInterval: number
+): Record<string, { dancerName: string; otherIndex: number }[]> {
+  const groups = new Map<string, Registration[]>();
+  registrations.forEach((r) => {
+    const key = r.bloco_id ?? '__sem_bloco__';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(r);
+  });
+
+  const merged: Record<string, { dancerName: string; otherIndex: number }[]> = {};
+  for (const group of groups.values()) {
+    Object.assign(merged, buildConflictMapForGroup(group, minInterval));
+  }
+  return merged;
 }
 
 // ---------- smart scheduler ----------
@@ -200,7 +232,7 @@ function generateSmartOrder(
       let conflicts = 0;
 
       getElenco(reg).forEach((dancer: any) => {
-        const id = dancer.cpf || dancer.full_name || dancer.nome || dancer.name;
+        const id = resolveDancerIdentity(dancer);
         if (!id) return;
         const last = lastSeenPosition[id];
         if (last !== undefined && position - last < minInterval) {
@@ -232,7 +264,7 @@ function generateSmartOrder(
     const chosen = remaining.splice(bestIdx, 1)[0];
 
     getElenco(chosen).forEach((dancer: any) => {
-      const id = dancer.cpf || dancer.full_name || dancer.nome || dancer.name;
+      const id = resolveDancerIdentity(dancer);
       if (id) lastSeenPosition[id] = result.length;
     });
 
