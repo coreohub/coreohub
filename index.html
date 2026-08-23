@@ -3,13 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- 2026-08-23: raiz virou a vitrine pública (antes era a landing de
-         venda do produto, que se mudou pra /lp) — título/descrição/canonical
-         espelham exatamente o que Festivais.tsx seta via JS (api/og-marketing
-         serve o mesmo conteúdo pra bots que não rodam JS), pra raw HTML e DOM
-         renderizado nunca discordarem entre si. -->
-    <title>Festivais e mostras de dança abertos — CoreoHub</title>
-    <meta name="description" content="Descubra festivais e mostras de dança com inscrições abertas em todo o Brasil. Filtre por estado e mês e inscreva sua coreografia.">
+    <title>CoreoHub — Gestão inteligente para festivais e mostras de dança</title>
+    <meta name="description" content="Plataforma de gestão para festivais e mostras de dança: inscrições, júri digital, cronograma com IA e certificados automáticos. Sem mensalidade.">
     <meta name="author" content="CoreoHub Tecnologia LTDA">
     <meta name="theme-color" content="#ff0068">
     <link rel="icon" type="image/png" href="/coreohub-avatar.png">
@@ -21,8 +16,8 @@
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="canonical" href="https://coreohub.com/">
     <meta name="robots" content="index, follow">
-    <meta property="og:title" content="Festivais e mostras de dança abertos — CoreoHub">
-    <meta property="og:description" content="Descubra festivais e mostras de dança com inscrições abertas em todo o Brasil. Filtre por estado e mês e inscreva sua coreografia.">
+    <meta property="og:title" content="CoreoHub — Gestão inteligente para festivais e mostras de dança">
+    <meta property="og:description" content="Inscrições, júri digital, cronograma e certificados numa plataforma só. Sem mensalidade — você paga apenas quando vende. Configure seu festival em 30 segundos.">
     <meta property="og:image" content="https://coreohub.com/og-image.jpg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -33,8 +28,8 @@
     <meta property="og:site_name" content="CoreoHub">
     <meta property="og:locale" content="pt_BR">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Festivais e mostras de dança abertos — CoreoHub">
-    <meta name="twitter:description" content="Descubra festivais e mostras de dança com inscrições abertas em todo o Brasil. Filtre por estado e mês e inscreva sua coreografia.">
+    <meta name="twitter:title" content="CoreoHub — Gestão inteligente para festivais e mostras de dança">
+    <meta name="twitter:description" content="Inscrições, júri digital, cronograma e certificados numa plataforma só. Sem mensalidade — você paga apenas quando vende.">
     <meta name="twitter:image" content="https://coreohub.com/og-image.jpg">
     <meta name="twitter:image:alt" content="Bailarinas em vestidos vermelhos com leques dourados no palco de um festival de dança">
     <!-- LCP da landing: puxa o hero junto com o HTML em vez de esperar o bundle React. -->
@@ -61,6 +56,22 @@
             "contactType": "customer support",
             "availableLanguage": "Portuguese",
             "url": "https://wa.me/5517997936169"
+          }
+        },
+        {
+          "@type": "SoftwareApplication",
+          "name": "CoreoHub",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "Web",
+          "url": "https://coreohub.com/",
+          "description": "Plataforma de gestão de festivais e mostras de dança: inscrições online, pagamentos via split automático (Asaas), júri digital por tablet (funciona offline), cronograma inteligente, bilheteria, check-in por QR code e emissão automática de certificados.",
+          "featureList": ["Inscrições online por modalidade", "Pagamento via Pix, cartão e boleto com split automático", "Júri digital por tablet (funciona sem Wi-Fi)", "Cronograma inteligente com detecção de conflito de bailarino", "Seletiva de vídeo pré-festival", "Bilheteria e workshops integrados", "Check-in por QR code", "Certificados automáticos com QR de validação", "Narração por IA", "Configuração automática de evento por regulamento em PDF"],
+          "publisher": { "@id": "https://coreohub.com/#organization" },
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "BRL",
+            "description": "Sem mensalidade e sem fidelidade. Cobrança apenas por comissão sobre as inscrições vendidas."
           }
         },
         {

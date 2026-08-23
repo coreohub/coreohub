@@ -34,15 +34,6 @@ type PageMeta = {
 };
 
 const PAGES: Record<string, PageMeta> = {
-  // 2026-08-23: raiz do domínio de marketing virou a vitrine — mesmo
-  // conteúdo de "festivais", só com path "/" pro canonical/og:url bater
-  // com a URL real que o bot está vendo.
-  raiz: {
-    path: '/',
-    title: 'Festivais e mostras de dança abertos — CoreoHub',
-    description:
-      'Descubra festivais e mostras de dança com inscrições abertas em todo o Brasil. Filtre por estado e mês e inscreva sua coreografia.',
-  },
   festivais: {
     path: '/festivais',
     title: 'Festivais e mostras de dança abertos — CoreoHub',

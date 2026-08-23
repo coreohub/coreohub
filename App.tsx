@@ -496,13 +496,14 @@ const App: React.FC = () => {
 
   // Phase 2B+: tablet em modo Terminal redireciona / pra /judge-login/<token>
   // automaticamente (kiosk mode).
-  // 2026-08-23: coreohub.com/www.coreohub.com (domínio raiz) passa a mostrar a
-  // vitrine pública (Festivais) na home em vez da landing de marketing —
-  // mesmo padrão de Sympla/Even3 (vitrine no domínio raiz, painel isolado no
-  // subdomínio "app."). A landing de vendas continua acessível em /lp em
-  // qualquer domínio. app.coreohub.com continua indo pro login/kiosk como
-  // sempre — nenhuma rota pública foi removida de lá, só deixou de ser a
-  // porta de entrada preferencial (evita quebrar link já compartilhado).
+  // Domínio de marketing (coreohub.com / www.coreohub.com) mostra a sales page
+  // na home; app.coreohub.com continua indo pro login/kiosk como sempre.
+  //
+  // 2026-08-23: tentativa de trocar a home pela vitrine (Festivais) revertida
+  // no mesmo dia — o produtor já tinha distribuído coreohub.com como link de
+  // vendas pra vários clientes via WhatsApp esperando a landing de pitch, não
+  // a vitrine. A vitrine sempre teve endereço próprio em /festivais, que
+  // nunca foi afetado por essa tentativa nem por essa reversão.
   const isMarketingDomain = ['coreohub.com', 'www.coreohub.com'].includes(window.location.hostname);
   const RootRedirect = () => {
     try {
@@ -522,11 +523,9 @@ const App: React.FC = () => {
         <Route path="/" element={
           customDomainSlug
             ? <Suspense fallback={<PageLoader />}><PublicEventPage forcedSlug={customDomainSlug} /></Suspense>
-            : (isMarketingDomain ? <Suspense fallback={<PageLoader />}><Festivais /></Suspense> : <RootRedirect />)
+            : (isMarketingDomain ? <LandingPage /> : <RootRedirect />)
         } />
-        {/* Landing de vendas — acessível em /lp em qualquer domínio (antes era
-            a home de coreohub.com/www.coreohub.com; 2026-08-23: home virou a
-            vitrine pública, landing de marketing se mudou pra cá). */}
+        {/* Sales page também acessível via /lp (alias, qualquer domínio) */}
         <Route path="/lp" element={<LandingPage />} />
         <Route path="/termos" element={<TermosDeUso />} />
         <Route path="/privacidade" element={<PoliticaDePrivacidade />} />
