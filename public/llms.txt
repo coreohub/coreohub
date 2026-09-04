@@ -1,0 +1,15 @@
+# CoreoHub
+
+> CoreoHub é a plataforma de gestão para festivais e mostras de dança no Brasil: inscrições online, pagamentos com split automático (Pix, cartão, boleto via Asaas), júri digital por tablet (funciona offline), cronograma inteligente com detecção de conflito de bailarino, bilheteria e workshops integrados, check-in por QR code e certificados automáticos. Sem mensalidade — cobrança só por comissão sobre as inscrições vendidas.
+
+## Páginas principais
+
+- [Home](https://coreohub.com/): visão geral do produto, funcionalidades, planos e FAQ.
+- [Festivais](https://coreohub.com/festivais): vitrine pública com os festivais e mostras de dança ativos na plataforma, abertos pra inscrição.
+- [Governo](https://coreohub.com/governo): página específica para editais públicos e mostras municipais/governamentais.
+- [Termos de Uso](https://coreohub.com/termos): termos de uso da plataforma.
+- [Política de Privacidade](https://coreohub.com/privacidade): política de privacidade e tratamento de dados (LGPD).
+
+## Sobre a empresa
+
+CoreoHub Tecnologia LTDA, Brasil. Atende produtores de festivais, competições e mostras de dança em todo o país. Contato via WhatsApp: https://wa.me/5517997936169

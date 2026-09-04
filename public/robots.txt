@@ -44,5 +44,5 @@ Disallow: /meu-workshop/
 Disallow: /api/
 Disallow: /termo-produtor
 
-Sitemap: https://www.coreohub.com/sitemap.xml
+Sitemap: https://coreohub.com/sitemap.xml
 Sitemap: https://app.coreohub.com/sitemap.xml
