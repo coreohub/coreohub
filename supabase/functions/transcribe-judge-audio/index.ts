@@ -20,11 +20,13 @@ import { buildCorsHeaders } from '../_shared/cors.ts'
  *  - `{ evaluation_id }` — single, usado pelo inscrito em /meus-resultados
  *    (botão "Transcrever" ao lado do player de áudio) e también internamente
  *    pelo modo batch.
- *  - `{ event_id, registration_id? }` — batch, usado pelo produtor no botão
- *    "Transcrição dos Jurados (PDF)" em JudgesManagement.tsx. Processa até
- *    MAX_PER_CALL avaliações pendentes por chamada (evita timeout da edge
- *    function em evento grande) — o frontend chama de novo em loop até
- *    `remaining === 0` ou o limite diário ser atingido.
+ *  - `{ event_id, registration_ids? }` — batch, usado pelo produtor no
+ *    botão "Transcrição dos Jurados (PDF)" em JudgesManagement.tsx.
+ *    `registration_ids` omitido = evento inteiro; `[id]` = 1 coreografia;
+ *    `[id1, id2, ...]` = seleção múltipla. Processa até MAX_PER_CALL
+ *    avaliações pendentes por chamada (evita timeout da edge function em
+ *    evento grande) — o frontend chama de novo em loop até `remaining === 0`
+ *    ou o limite diário ser atingido.
  *
  * Limite de custo: 30 transcrições/dia por produtor via `ai_usage_log`
  * (mesma tabela/mesmo padrão do parser de regulamento, que usa 15/dia).
@@ -93,7 +95,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}))
-    const { evaluation_id, event_id, registration_id } = body
+    const { evaluation_id, event_id, registration_ids } = body
 
     if (!evaluation_id && !event_id) {
       return new Response(JSON.stringify({ error: 'evaluation_id ou event_id é obrigatório' }), {
@@ -207,7 +209,7 @@ Deno.serve(async (req) => {
 
     /* ── Modo batch (event_id [+ registration_id]) — só produtor dono ── */
     const { data: event, error: evErr } = await admin
-      .from('events').select('id, created_by').eq('id', event_id).maybeSingle()
+      .from('events').select('id, name, created_by').eq('id', event_id).maybeSingle()
     if (evErr) throw evErr
     if (!event) {
       return new Response(JSON.stringify({ error: 'Evento não encontrado.' }), {
@@ -220,8 +222,12 @@ Deno.serve(async (req) => {
       })
     }
 
+    // registration_ids (array) cobre tanto "uma coreografia" ([id]) quanto
+    // "várias coreografias" ([id1, id2, ...]) — o painel de seleção múltipla
+    // em JudgesManagement.tsx sempre manda array; sem o campo, processa o
+    // evento inteiro (modo "todas").
     let regQuery = admin.from('registrations').select('id').eq('event_id', event_id).eq('resultado_publicado', true)
-    if (registration_id) regQuery = regQuery.eq('id', registration_id)
+    if (Array.isArray(registration_ids) && registration_ids.length > 0) regQuery = regQuery.in('id', registration_ids)
     const { data: regs, error: regsErr } = await regQuery
     if (regsErr) throw regsErr
     const regIds = (regs ?? []).map(r => r.id)
@@ -257,12 +263,42 @@ Deno.serve(async (req) => {
       }
     }
 
+    const limitReached = remainingQuota <= 0 && totalCandidates > transcribed + failed
+
+    // Rede de segurança de custo (decisão do produtor, ver
+    // memory/backlog_transcricao_pdf_audios_jurados.md): quando o limite
+    // diário é batido de verdade, avisa o(s) super admin(s) via inbox
+    // in-app já existente (mesmo sino que todo mundo usa) — sem UI nova,
+    // sem e-mail. Best-effort: falha aqui nunca derruba a resposta pro
+    // produtor, que já tem o retorno de limit_reached pra mostrar o aviso
+    // dele na hora (com contato de suporte).
+    if (limitReached) {
+      try {
+        const { data: admins } = await admin.from('profiles').select('id').eq('is_super_admin', true)
+        if (admins && admins.length > 0) {
+          const rows = admins.map((a: any) => ({
+            user_id: a.id,
+            event_id,
+            type: 'ai_usage_limit_reached',
+            severity: 'warning',
+            title: 'Limite diário de transcrição atingido',
+            body: `Um produtor bateu o limite de ${DAILY_LIMIT} transcrições de áudio/dia no evento "${event.name ?? event_id}".`,
+            metadata: { producer_id: user.id, event_id, feature: 'transcribe-judge-audio' },
+          }))
+          const { error: notifErr } = await admin.from('notifications').insert(rows)
+          if (notifErr) console.warn('[transcribe-judge-audio] falha ao notificar admin:', notifErr.message)
+        }
+      } catch (notifEx) {
+        console.warn('[transcribe-judge-audio] falha ao notificar admin:', (notifEx as Error)?.message ?? notifEx)
+      }
+    }
+
     return new Response(JSON.stringify({
       transcribed,
       failed,
       remaining: Math.max(0, totalCandidates - transcribed - failed),
       total_candidates: totalCandidates,
-      limit_reached: remainingQuota <= 0 && totalCandidates > transcribed + failed,
+      limit_reached: limitReached,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

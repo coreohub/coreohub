@@ -865,12 +865,29 @@ const JudgesManagement = () => {
      limite diário de 30 transcrições/produtor. */
   interface TranscriptCandidate { id: string; nome_coreografia: string; estudio: string; ordem: number | null; }
   const [transcriptCandidates, setTranscriptCandidates] = useState<TranscriptCandidate[]>([]);
-  const [transcriptFilterRegId, setTranscriptFilterRegId] = useState<string>('all');
+  const [transcriptPanelOpen, setTranscriptPanelOpen] = useState(false);
+  const [transcriptMode, setTranscriptMode] = useState<'all' | 'one' | 'many'>('all');
+  const [transcriptSelectedId, setTranscriptSelectedId] = useState<string>('');
+  const [transcriptSelectedIds, setTranscriptSelectedIds] = useState<Set<string>>(new Set());
   const [exportingTranscript, setExportingTranscript] = useState(false);
   const [transcriptProgress, setTranscriptProgress] = useState<{ done: number; total: number } | null>(null);
+  // Aviso pro produtor fica só na hora (não vai dentro do PDF — quem recebe o
+  // arquivo é o estúdio, texto interno de cota confundiria). Some sozinho na
+  // próxima geração.
+  const [transcriptLimitHit, setTranscriptLimitHit] = useState(false);
+  // Último PDF de 1 coreografia gerado — habilita "Compartilhar no WhatsApp"
+  // sem precisar gerar de novo. Só faz sentido no modo "uma" (zip de "várias"
+  // não compartilha bem via WhatsApp).
+  const [transcriptLastSingle, setTranscriptLastSingle] = useState<{ blob: Blob; filename: string; nome: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    setTranscriptPanelOpen(false);
+    setTranscriptMode('all');
+    setTranscriptSelectedId('');
+    setTranscriptSelectedIds(new Set());
+    setTranscriptLimitHit(false);
+    setTranscriptLastSingle(null);
     if (!selectedEventId) { setTranscriptCandidates([]); return; }
     (async () => {
       const { data: regs } = await supabase
@@ -900,54 +917,77 @@ const JudgesManagement = () => {
         }))
         .sort((a: TranscriptCandidate, b: TranscriptCandidate) => (a.ordem ?? 999999) - (b.ordem ?? 999999));
       setTranscriptCandidates(list);
-      setTranscriptFilterRegId('all');
     })();
     return () => { cancelled = true; };
   }, [selectedEventId]);
 
+  const slugifyTranscript = (s: string): string =>
+    (s || 'coreografia')
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'coreografia';
+
+  const toggleTranscriptSelected = (id: string) => {
+    setTranscriptSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
   const exportTranscriptPDF = async () => {
     if (!selectedEventId) { alert('Selecione um evento primeiro.'); return; }
+    const scopedRegs = transcriptMode === 'all'
+      ? transcriptCandidates
+      : transcriptMode === 'one'
+        ? transcriptCandidates.filter(c => c.id === transcriptSelectedId)
+        : transcriptCandidates.filter(c => transcriptSelectedIds.has(c.id));
+    if (scopedRegs.length === 0) {
+      alert(transcriptMode === 'one' ? 'Selecione uma coreografia.' : 'Selecione ao menos 1 coreografia.');
+      return;
+    }
+
     setExportingTranscript(true);
     setTranscriptProgress(null);
+    setTranscriptLimitHit(false);
+    setTranscriptLastSingle(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const regFilter = transcriptFilterRegId !== 'all' ? transcriptFilterRegId : undefined;
+      // registration_ids omitido = evento inteiro (modo "todas"); array com 1
+      // ou N ids cobre "uma" e "várias" na mesma chamada de batch.
+      const registrationIds = transcriptMode === 'all' ? undefined : scopedRegs.map(r => r.id);
 
       // Loop: cada chamada processa até 8 transcrições pendentes. Repete até
       // não sobrar pendência (remaining=0) ou o limite diário ser atingido.
       let safety = 30; // hard cap de iterações — nunca deveria bater (30 × 8 = 240 transcrições)
-      let lastResult: any = null;
+      let progressDone = 0;
+      let limitHit = false;
       while (safety-- > 0) {
         const res = await fetch(`${supabaseUrl}/functions/v1/transcribe-judge-audio`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-          body: JSON.stringify({ event_id: selectedEventId, registration_id: regFilter }),
+          body: JSON.stringify({ event_id: selectedEventId, registration_ids: registrationIds }),
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.error ?? 'Erro ao transcrever áudios');
         }
-        lastResult = await res.json();
-        const doneSoFar = (transcriptProgress?.done ?? 0) + (lastResult.transcribed ?? 0) + (lastResult.failed ?? 0);
-        setTranscriptProgress({ done: doneSoFar, total: lastResult.total_candidates ?? 0 });
-        if ((lastResult.remaining ?? 0) <= 0 || lastResult.limit_reached) break;
+        const result = await res.json();
+        progressDone += (result.transcribed ?? 0) + (result.failed ?? 0);
+        setTranscriptProgress({ done: progressDone, total: result.total_candidates ?? 0 });
+        if (result.limit_reached) limitHit = true;
+        if ((result.remaining ?? 0) <= 0 || result.limit_reached) break;
       }
+      setTranscriptLimitHit(limitHit);
 
-      // Busca todas as avaliações publicadas com transcrição (já existentes +
-      // recém-geradas) pra montar o PDF — não depende só do que essa chamada
-      // processou agora, cobre também transcrições cacheadas de antes.
-      const scopedRegs = regFilter
-        ? transcriptCandidates.filter(c => c.id === regFilter)
-        : transcriptCandidates;
+      // Busca todas as avaliações publicadas (já existentes + recém-geradas)
+      // pra montar o PDF — sem filtrar por audio_url aqui, pra incluir também
+      // avaliações só com comentário escrito (sem áudio nenhum).
       const regIds = scopedRegs.map(r => r.id);
-      if (regIds.length === 0) { alert('Nenhuma coreografia com áudio publicado encontrada.'); return; }
-
       const { data: evals, error: evalsErr } = await supabase
         .from('evaluations')
-        .select('id, registration_id, judge_id, final_weighted_average, audio_transcript, feedback_text')
+        .select('id, registration_id, judge_id, final_weighted_average, audio_url, audio_transcript, feedback_text')
         .eq('event_id', selectedEventId)
         .in('registration_id', regIds)
-        .not('audio_url', 'is', null)
         .order('registration_id');
       if (evalsErr) throw evalsErr;
 
@@ -957,20 +997,23 @@ const JudgesManagement = () => {
         const { data: judgesData } = await supabase.from('judges').select('id, name').in('id', judgeIds);
         (judgesData ?? []).forEach((j: any) => judgeNameById.set(j.id, j.name));
       }
-      const regById = new Map(scopedRegs.map(r => [r.id, r]));
 
-      const { default: jsPDF } = await import('jspdf');
       let eventName = 'Evento';
-      const { data: ev } = await supabase.from('events').select('name, edition_year').eq('id', selectedEventId).maybeSingle();
+      const { data: ev } = await supabase.from('events').select('name').eq('id', selectedEventId).maybeSingle();
       if (ev) eventName = ev.name || eventName;
 
-      const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      let cursorY = 0;
-      const scopeLabel = regFilter ? (regById.get(regFilter)?.nome_coreografia ?? 'Coreografia selecionada') : 'Todas as coreografias';
+      const { default: jsPDF } = await import('jspdf');
 
-      const drawHeader = () => {
+      // Monta 1 documento com N coreografias — usado tanto pro PDF combinado
+      // (modo "todas"/"uma") quanto, chamado com 1 coreografia só por vez,
+      // pra cada arquivo do .zip do modo "várias". Retorna null quando não
+      // sobra nenhuma seção com conteúdo (evita PDF vazio).
+      const buildTranscriptDoc = (regsForDoc: TranscriptCandidate[], scopeLabel: string) => {
+        const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        let cursorY = 32;
+
         doc.setFillColor(255, 0, 104);
         doc.rect(0, 0, pageWidth, 24, 'F');
         doc.setTextColor(255, 255, 255);
@@ -981,100 +1024,136 @@ const JudgesManagement = () => {
         doc.setFont('helvetica', 'normal');
         doc.text(`${eventName.toUpperCase()} · ${scopeLabel}`, 14, 18);
         doc.setTextColor(40, 40, 40);
-        cursorY = 32;
-      };
-      drawHeader();
 
-      const ensureSpace = (needed: number) => {
-        if (cursorY + needed > pageHeight - 16) { doc.addPage(); cursorY = 16; }
-      };
+        const ensureSpace = (needed: number) => {
+          if (cursorY + needed > pageHeight - 20) { doc.addPage(); cursorY = 16; }
+        };
 
-      // Agrupa por coreografia (na ordem de apresentação) — 1 seção por
-      // coreografia, com todos os jurados que a avaliaram dentro dela.
-      let anySection = false;
-      scopedRegs.forEach(reg => {
-        const regEvals = (evals ?? []).filter((e: any) => e.registration_id === reg.id && (e.audio_transcript || e.feedback_text));
-        if (regEvals.length === 0) return;
-        anySection = true;
+        let anySection = false;
+        regsForDoc.forEach(reg => {
+          const regEvals = (evals ?? []).filter((e: any) =>
+            e.registration_id === reg.id && (e.audio_url || (e.feedback_text && e.feedback_text.trim()))
+          );
+          if (regEvals.length === 0) return;
+          anySection = true;
 
-        ensureSpace(20);
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(255, 0, 104);
-        doc.text(reg.nome_coreografia, 14, cursorY);
-        doc.setFontSize(8.5);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(120, 120, 120);
-        doc.text(reg.estudio, 14, cursorY + 5);
-        cursorY += 11;
-
-        regEvals.forEach((e: any) => {
-          ensureSpace(16);
-          const judgeName = judgeNameById.get(e.judge_id) || 'Jurado';
-          const finalScore = e.final_weighted_average != null ? ` · Nota: ${Number(e.final_weighted_average).toFixed(2)}` : '';
-          doc.setFontSize(9);
+          ensureSpace(20);
+          doc.setFontSize(12);
           doc.setFont('helvetica', 'bold');
-          doc.setTextColor(40, 40, 40);
-          doc.text(`${judgeName}${finalScore}`, 14, cursorY);
-          cursorY += 5;
+          doc.setTextColor(255, 0, 104);
+          doc.text(reg.nome_coreografia, 14, cursorY);
+          doc.setFontSize(8.5);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(120, 120, 120);
+          doc.text(reg.estudio, 14, cursorY + 5);
+          cursorY += 11;
 
-          if (e.feedback_text && e.feedback_text.trim()) {
-            doc.setFontSize(7.5);
-            doc.setFont('helvetica', 'italic');
-            doc.setTextColor(120, 120, 120);
-            doc.text('COMENTÁRIO ESCRITO', 14, cursorY);
-            cursorY += 4;
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(8.5);
+          regEvals.forEach((e: any) => {
+            ensureSpace(16);
+            const judgeName = judgeNameById.get(e.judge_id) || 'Jurado';
+            const finalScore = e.final_weighted_average != null ? ` · Nota: ${Number(e.final_weighted_average).toFixed(2)}` : '';
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
             doc.setTextColor(40, 40, 40);
-            const lines = doc.splitTextToSize(e.feedback_text.trim(), pageWidth - 28);
-            lines.forEach((line: string) => { ensureSpace(4.5); doc.text(line, 14, cursorY); cursorY += 4.5; });
-            cursorY += 2;
-          }
+            doc.text(`${judgeName}${finalScore}`, 14, cursorY);
+            cursorY += 5;
 
-          if (e.audio_transcript && e.audio_transcript.trim()) {
+            if (e.feedback_text && e.feedback_text.trim()) {
+              doc.setFontSize(7.5);
+              doc.setFont('helvetica', 'italic');
+              doc.setTextColor(120, 120, 120);
+              doc.text('COMENTÁRIO ESCRITO', 14, cursorY);
+              cursorY += 4;
+              doc.setFont('helvetica', 'normal');
+              doc.setFontSize(8.5);
+              doc.setTextColor(40, 40, 40);
+              const lines = doc.splitTextToSize(e.feedback_text.trim(), pageWidth - 28);
+              lines.forEach((line: string) => { ensureSpace(4.5); doc.text(line, 14, cursorY); cursorY += 4.5; });
+              cursorY += 2;
+            }
+
+            // 3 estados possíveis, texto neutro (esse PDF sai da casa —
+            // sem jargão interno tipo "limite diário"): transcrito, áudio
+            // existe mas ainda não foi transcrito, ou nunca teve áudio.
             ensureSpace(8);
             doc.setFontSize(7.5);
             doc.setFont('helvetica', 'italic');
             doc.setTextColor(120, 120, 120);
-            doc.text('TRANSCRIÇÃO DO ÁUDIO', 14, cursorY);
+            doc.text('COMENTÁRIO EM ÁUDIO', 14, cursorY);
             cursorY += 4;
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(8.5);
-            doc.setTextColor(40, 40, 40);
-            const lines = doc.splitTextToSize(e.audio_transcript.trim(), pageWidth - 28);
-            lines.forEach((line: string) => { ensureSpace(4.5); doc.text(line, 14, cursorY); cursorY += 4.5; });
-          } else {
-            doc.setFontSize(8);
-            doc.setFont('helvetica', 'italic');
-            doc.setTextColor(180, 180, 180);
-            doc.text('Transcrição indisponível (limite diário de transcrições atingido — tente gerar de novo amanhã).', 14, cursorY);
-            cursorY += 5;
-          }
-          cursorY += 6;
+            if (e.audio_url && e.audio_transcript && e.audio_transcript.trim()) {
+              doc.setTextColor(40, 40, 40);
+              const lines = doc.splitTextToSize(e.audio_transcript.trim(), pageWidth - 28);
+              lines.forEach((line: string) => { ensureSpace(4.5); doc.text(line, 14, cursorY); cursorY += 4.5; });
+            } else if (e.audio_url) {
+              doc.setFont('helvetica', 'italic');
+              doc.setTextColor(150, 150, 150);
+              doc.text('Comentário em áudio gravado — transcrição em processamento.', 14, cursorY);
+              cursorY += 4.5;
+            } else {
+              doc.setFont('helvetica', 'italic');
+              doc.setTextColor(150, 150, 150);
+              doc.text('Este jurado não deixou comentário em áudio.', 14, cursorY);
+              cursorY += 4.5;
+            }
+            cursorY += 6;
+          });
+          cursorY += 3;
         });
-        cursorY += 3;
-      });
 
-      if (!anySection) {
-        alert('Nenhuma avaliação com áudio ou comentário disponível pra essa seleção.');
-        return;
+        if (!anySection) return null;
+
+        const generatedAt = new Date();
+        const generatedLabel = `Gerado em ${generatedAt.toLocaleDateString('pt-BR')} às ${generatedAt.toLocaleTimeString('pt-BR').slice(0, 5)}`;
+        const totalPages = doc.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+          doc.setPage(i);
+          doc.setFontSize(7);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(150, 150, 150);
+          doc.text('Emitido por CoreoHub — Gestão Inteligente para Festivais e Mostras de Dança', 14, pageHeight - 11);
+          doc.setFontSize(6.5);
+          doc.setFont('helvetica', 'normal');
+          doc.text(`${generatedLabel} · transcrição automática por IA, pode conter imprecisões.`, 14, pageHeight - 6);
+          doc.text(`Página ${i} de ${totalPages}`, pageWidth - 14, pageHeight - 8, { align: 'right' });
+        }
+        return doc;
+      };
+
+      if (transcriptMode === 'many') {
+        const [{ default: JSZip }, { saveAs }] = await Promise.all([import('jszip'), import('file-saver')]);
+        const zip = new JSZip();
+        let included = 0;
+        scopedRegs.forEach(reg => {
+          const doc = buildTranscriptDoc([reg], reg.nome_coreografia);
+          if (!doc) return;
+          const ordemStr = String(reg.ordem ?? 0).padStart(3, '0');
+          const filename = `transcricao-${ordemStr}-${slugifyTranscript(reg.nome_coreografia)}.pdf`;
+          zip.file(filename, doc.output('blob'));
+          included++;
+        });
+        if (included === 0) { alert('Nenhuma avaliação com áudio ou comentário disponível pra essa seleção.'); return; }
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        saveAs(zipBlob, `transcricoes-jurados-${slugifyTranscript(eventName)}.zip`);
+      } else {
+        const scopeLabel = transcriptMode === 'one'
+          ? (scopedRegs[0]?.nome_coreografia ?? 'Coreografia selecionada')
+          : 'Todas as coreografias';
+        const doc = buildTranscriptDoc(scopedRegs, scopeLabel);
+        if (!doc) { alert('Nenhuma avaliação com áudio ou comentário disponível pra essa seleção.'); return; }
+
+        if (transcriptMode === 'one') {
+          const reg = scopedRegs[0];
+          const ordemStr = String(reg.ordem ?? 0).padStart(3, '0');
+          const filename = `transcricao-${ordemStr}-${slugifyTranscript(reg.nome_coreografia)}.pdf`;
+          doc.save(filename);
+          setTranscriptLastSingle({ blob: doc.output('blob'), filename, nome: reg.nome_coreografia });
+        } else {
+          doc.save(`transcricao-audios-juri-${slugifyTranscript(eventName)}.pdf`);
+        }
       }
-
-      const totalPages = doc.getNumberOfPages();
-      for (let i = 1; i <= totalPages; i++) {
-        doc.setPage(i);
-        doc.setFontSize(6.5);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(150, 150, 150);
-        doc.text('Transcrição gerada automaticamente por IA a partir do áudio original — pode conter imprecisões.', 14, pageHeight - 8);
-        doc.text(`Página ${i} de ${totalPages}`, pageWidth - 14, pageHeight - 8, { align: 'right' });
-      }
-
-      const slug = (eventName || 'evento')
-        .normalize('NFD').replace(/[̀-ͯ]/g, '')
-        .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
-      doc.save(`transcricao-audios-juri-${slug}.pdf`);
     } catch (err) {
       console.error('Erro ao exportar transcrição:', err);
       alert('Falha ao gerar a transcrição: ' + (err instanceof Error ? err.message : 'desconhecido'));
@@ -1082,6 +1161,28 @@ const JudgesManagement = () => {
       setExportingTranscript(false);
       setTranscriptProgress(null);
     }
+  };
+
+  // "Compartilhar no WhatsApp" do PDF de 1 coreografia (só faz sentido no
+  // modo "uma" — zip de "várias" fica pesado/confuso pra compartilhar assim).
+  // Tenta Web Share API com o arquivo real (Android/iOS abrem o share sheet
+  // nativo com WhatsApp na lista, mesmo padrão de shareAudio em MyResults.tsx);
+  // sem suporte (desktop), abre o WhatsApp só com texto avisando que o PDF já
+  // foi baixado — anexar é manual nesse caso.
+  const shareTranscriptPDF = async () => {
+    if (!transcriptLastSingle) return;
+    const { blob, filename, nome } = transcriptLastSingle;
+    try {
+      const file = new File([blob], filename, { type: 'application/pdf' });
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: `Transcrição — ${nome}`, text: `Transcrição da avaliação de "${nome}" — CoreoHub` });
+        return;
+      }
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return;
+    }
+    const message = `Segue a transcrição da avaliação de "${nome}" — arquivo "${filename}" já baixado no seu computador, é só anexar aqui.`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
   };
 
   /* ── open modal ── */
@@ -1349,29 +1450,15 @@ const JudgesManagement = () => {
           >
             {exportingAudio ? <Loader2 size={14} className="animate-spin" /> : <Headphones size={14} />} Áudio de Avaliação dos Jurados (.zip)
           </button>
-          {transcriptCandidates.length > 0 && (
-            <select
-              value={transcriptFilterRegId}
-              onChange={e => setTranscriptFilterRegId(e.target.value)}
-              aria-label="Filtrar transcrição por coreografia"
-              className="px-3 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 focus:outline-none focus:border-[#ff0068]/40 dark:[color-scheme:dark]"
-            >
-              <option value="all">Todas as coreografias</option>
-              {transcriptCandidates.map(c => (
-                <option key={c.id} value={c.id}>{c.nome_coreografia} — {c.estudio}</option>
-              ))}
-            </select>
-          )}
           <button
-            onClick={exportTranscriptPDF}
-            disabled={exportingTranscript || transcriptCandidates.length === 0 || !selectedEventId}
+            onClick={() => setTranscriptPanelOpen(o => !o)}
+            disabled={!selectedEventId}
+            aria-expanded={transcriptPanelOpen}
+            aria-controls="transcript-panel"
             className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            title={transcriptCandidates.length === 0 ? 'Sem áudio publicado disponível pra transcrever' : 'Transcreve os áudios (Gemini) e monta 1 PDF — evento inteiro ou só a coreografia selecionada acima'}
+            title="Transcreve os áudios dos jurados (IA) e monta um PDF — evento inteiro, 1 coreografia ou várias de uma vez"
           >
-            {exportingTranscript
-              ? <><Loader2 size={14} className="animate-spin" /> {transcriptProgress ? `Transcrevendo ${transcriptProgress.done}/${transcriptProgress.total}...` : 'Transcrevendo...'}</>
-              : <><FileText size={14} /> Transcrição dos Jurados (PDF)</>
-            }
+            <FileText size={14} /> Transcrição dos Jurados (PDF)
           </button>
           <button
             onClick={openAdd}
@@ -1443,6 +1530,123 @@ const JudgesManagement = () => {
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Painel de Transcrição dos Jurados — abre/fecha com o botão do
+          toolbar, mesmo padrão do painel de "Código de acesso" acima.
+          Filtro (escopo) e ação (gerar) ficam dentro da mesma caixa —
+          evita a ambiguidade de 2 elementos soltos no toolbar. */}
+      {transcriptPanelOpen && (
+        <div id="transcript-panel" className="p-5 bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-2xl space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068] shrink-0"><FileText size={18} /></div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white">Transcrição dos Jurados</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Transcreve o comentário em áudio (IA) da avaliação publicada e monta o PDF pra baixar ou compartilhar.</p>
+            </div>
+          </div>
+
+          {transcriptCandidates.length === 0 ? (
+            <p className="text-[11px] text-slate-400 italic">Nenhuma coreografia com avaliação publicada e áudio disponível ainda.</p>
+          ) : (
+            <>
+              <div className="flex gap-2">
+                {(['all', 'one', 'many'] as const).map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setTranscriptMode(m)}
+                    className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${transcriptMode === m ? 'bg-[#ff0068] text-white shadow-md' : 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400'}`}
+                  >
+                    {m === 'all' ? 'Todas' : m === 'one' ? 'Uma coreografia' : 'Várias coreografias'}
+                  </button>
+                ))}
+              </div>
+
+              {transcriptMode === 'one' && (
+                <select
+                  value={transcriptSelectedId}
+                  onChange={e => setTranscriptSelectedId(e.target.value)}
+                  aria-label="Escolher coreografia"
+                  className="w-full px-3 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#ff0068]/40 dark:[color-scheme:dark]"
+                >
+                  <option value="">— Selecione a coreografia —</option>
+                  {transcriptCandidates.map(c => (
+                    <option key={c.id} value={c.id}>{c.ordem != null ? `${c.ordem} — ` : ''}{c.nome_coreografia} — {c.estudio}</option>
+                  ))}
+                </select>
+              )}
+
+              {transcriptMode === 'many' && (
+                <div className="max-h-48 overflow-y-auto space-y-1 border border-slate-200 dark:border-white/10 rounded-xl p-2">
+                  {transcriptCandidates.map(c => (
+                    <label key={c.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={transcriptSelectedIds.has(c.id)}
+                        onChange={() => toggleTranscriptSelected(c.id)}
+                        className="accent-[#ff0068]"
+                      />
+                      <span className="text-xs text-slate-700 dark:text-slate-200">
+                        {c.ordem != null ? `${c.ordem} — ` : ''}{c.nome_coreografia} — {c.estudio}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              <button
+                onClick={exportTranscriptPDF}
+                disabled={exportingTranscript || (transcriptMode === 'one' && !transcriptSelectedId) || (transcriptMode === 'many' && transcriptSelectedIds.size === 0)}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {exportingTranscript
+                  ? <><Loader2 size={14} className="animate-spin" /> {transcriptProgress ? `Transcrevendo ${transcriptProgress.done}/${transcriptProgress.total}...` : 'Transcrevendo...'}</>
+                  : <>
+                      <FileDown size={14} />
+                      {transcriptMode === 'many'
+                        ? `Gerar ${transcriptSelectedIds.size} PDF${transcriptSelectedIds.size === 1 ? '' : 's'} (.zip)`
+                        : 'Gerar PDF'}
+                    </>
+                }
+              </button>
+
+              {transcriptLastSingle && (
+                <button
+                  onClick={shareTranscriptPDF}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] transition-all"
+                >
+                  <MessageCircle size={14} /> Compartilhar no WhatsApp
+                </button>
+              )}
+
+              {transcriptLimitHit && (
+                <div className="flex items-start gap-2.5 p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-xl">
+                  <AlertCircle size={14} className="text-amber-500 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-[11px] font-bold text-amber-700 dark:text-amber-300 leading-snug">
+                      Limite diário de transcrições atingido — algumas avaliações ficaram sem transcrição. Gere de novo amanhã, ou fale com o suporte se precisar antes disso.
+                    </p>
+                    <div className="flex gap-2 mt-2">
+                      <a
+                        href="https://wa.me/5517997936169?text=Oi%2C%20bati%20o%20limite%20di%C3%A1rio%20de%20transcri%C3%A7%C3%A3o%20de%20%C3%A1udio%20dos%20jurados%20e%20preciso%20de%20ajuda"
+                        target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all"
+                      >
+                        <MessageCircle size={11} /> WhatsApp
+                      </a>
+                      <a
+                        href="mailto:contato@coreohub.com?subject=Limite%20de%20transcri%C3%A7%C3%A3o%20atingido"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-amber-500/20 border border-amber-300 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all"
+                      >
+                        E-mail
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 
