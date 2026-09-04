@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '../services/supabase';
+import { supabase, supabaseUrl } from '../services/supabase';
 import { UserRole } from '../types';
-import { Trophy, Star, Music, Loader2, Volume2, Award, ChevronDown, ChevronUp, Search, Download, FileText, MessageSquare, Share2 } from 'lucide-react';
+import { Trophy, Star, Music, Loader2, Volume2, Award, ChevronDown, ChevronUp, Search, Download, FileText, MessageSquare, Share2, Captions } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface MyResultsProps {
@@ -20,11 +20,13 @@ interface MyRegistration {
   classificacao_final?: number;
   resultado_publicado?: boolean;
   evaluations: {
+    id: string;
     judge_name: string;
     scores: Record<string, number>;
     final: number;
     audio_url?: string;
     feedback_text?: string | null;
+    audio_transcript?: string | null;
   }[];
 }
 
@@ -59,6 +61,11 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
   const [downloadingAudio, setDownloadingAudio] = useState<string | null>(null);
   const [sharingAudio, setSharingAudio] = useState<string | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
+  // Transcrição em texto do áudio do jurado (planejado 2026-09-04) — sob
+  // demanda, cacheada em evaluations.audio_transcript. Só disponível quando
+  // o resultado já foi publicado (mesmo gate de sigilo do júri usado pro
+  // nome do jurado); a edge function reforça essa checagem no servidor.
+  const [transcribingId, setTranscribingId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchMyResults = async () => {
@@ -113,11 +120,13 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
 
         const withEvals: MyRegistration[] = regs.map((reg) => {
           const evaluations = (evalsByRegId[reg.id] || []).map((e: any) => ({
+            id: e.id,
             judge_name: judgeNameById[e.judge_id] || 'Jurado',
             scores: e.scores || {},
             final: Number(e.final_weighted_average) || 0,
             audio_url: e.audio_url,
             feedback_text: e.feedback_text ?? null,
+            audio_transcript: e.audio_transcript ?? null,
           }));
 
           return {
@@ -242,6 +251,33 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
   const shareFeedbackText = (regName: string, judgeName: string, text: string) => {
     const message = `Comentário de ${judgeName} sobre "${regName}":\n\n"${text}"\n\n— via CoreoHub`;
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+  };
+
+  /* Pede a transcrição em texto do áudio do jurado (Gemini, via edge
+     function transcribe-judge-audio) e guarda no state local pra exibir sem
+     precisar recarregar a página. */
+  const transcribeAudio = async (evaluationId: string) => {
+    setTranscribingId(evaluationId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${supabaseUrl}/functions/v1/transcribe-judge-audio`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ evaluation_id: evaluationId }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? 'Erro ao transcrever áudio');
+
+      setRegistrations(regs => regs.map(reg => ({
+        ...reg,
+        evaluations: reg.evaluations.map(ev => ev.id === evaluationId ? { ...ev, audio_transcript: json.transcript } : ev),
+      })));
+    } catch (err) {
+      console.error('Erro ao transcrever áudio:', err);
+      setError(err instanceof Error ? err.message : 'Falha ao transcrever o áudio. Tente novamente.');
+    } finally {
+      setTranscribingId(null);
+    }
   };
 
   /* Gera PDF do scoresheet (notas por quesito + comentário escrito) de uma
@@ -514,6 +550,20 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
                                           : <Share2 size={14} />
                                         }
                                       </button>
+                                      {isPublished && !ev.audio_transcript && (
+                                        <button
+                                          onClick={() => transcribeAudio(ev.id)}
+                                          disabled={transcribingId === ev.id}
+                                          aria-label="Transcrever comentário em áudio pra texto"
+                                          title="Transcrever pra texto (IA)"
+                                          className="p-2.5 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-[#ff0068] transition-all disabled:opacity-50"
+                                        >
+                                          {transcribingId === ev.id
+                                            ? <Loader2 size={14} className="animate-spin" />
+                                            : <Captions size={14} />
+                                          }
+                                        </button>
+                                      )}
                                     </>
                                   )}
                                   {isPublished && <ScoreBadge score={ev.final} />}
@@ -538,6 +588,26 @@ const MyResults: React.FC<MyResultsProps> = ({ activeRole }) => {
                                   <button
                                     onClick={() => shareFeedbackText(reg.nome_coreografia, ev.judge_name, ev.feedback_text!.trim())}
                                     aria-label="Compartilhar comentário do jurado no WhatsApp"
+                                    title="Compartilhar"
+                                    className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-[#ff0068] transition-all"
+                                  >
+                                    <Share2 size={13} />
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* Transcrição do áudio — cacheada em audio_transcript, gerada
+                                  sob demanda pelo botão de legenda ao lado do player. */}
+                              {ev.audio_transcript && ev.audio_transcript.trim() && (
+                                <div className="flex gap-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-xl px-3 py-2.5">
+                                  <Captions size={13} className="text-[#ff0068] shrink-0 mt-0.5" />
+                                  <div className="flex-1">
+                                    <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1">Transcrição do áudio (IA)</p>
+                                    <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{ev.audio_transcript.trim()}</p>
+                                  </div>
+                                  <button
+                                    onClick={() => shareFeedbackText(reg.nome_coreografia, ev.judge_name, ev.audio_transcript!.trim())}
+                                    aria-label="Compartilhar transcrição do áudio no WhatsApp"
                                     title="Compartilhar"
                                     className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-[#ff0068] transition-all"
                                   >

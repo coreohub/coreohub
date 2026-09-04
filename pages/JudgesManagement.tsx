@@ -4,7 +4,7 @@ import {
   ShieldCheck, KeyRound, X, Save, Loader2, RefreshCw,
   Mic, Award, ChevronDown, ChevronUp, Upload, Camera,
   CheckCircle2, AlertCircle, Copy, Eye, EyeOff,
-  Hash, Sparkles, FileDown, MessageCircle, Headphones,
+  Hash, Sparkles, FileDown, MessageCircle, Headphones, FileText,
 } from 'lucide-react';
 
 const generatePin = (): string => String(Math.floor(Math.random() * 10000)).padStart(4, '0');
@@ -853,6 +853,237 @@ const JudgesManagement = () => {
     }
   };
 
+  /* ── Transcrição dos Jurados (PDF) — planejado 2026-09-04, ver
+     memory/backlog_transcricao_pdf_audios_jurados.md. Transcreve em texto
+     (Gemini, edge function transcribe-judge-audio) o áudio de feedback de
+     cada avaliação PUBLICADA do evento (mesmo gate de sigilo do júri usado
+     pro nome do jurado, migration 20260712) e monta 1 PDF — evento inteiro
+     por padrão, ou filtrado a 1 coreografia (pedido real do Bheto Bastelli:
+     mandar só o PDF de 1 coreografia pro estúdio dela). A edge function
+     processa no máximo 8 áudios por chamada (evita timeout em evento
+     grande) — o botão chama em loop até não sobrar pendência ou bater o
+     limite diário de 30 transcrições/produtor. */
+  interface TranscriptCandidate { id: string; nome_coreografia: string; estudio: string; ordem: number | null; }
+  const [transcriptCandidates, setTranscriptCandidates] = useState<TranscriptCandidate[]>([]);
+  const [transcriptFilterRegId, setTranscriptFilterRegId] = useState<string>('all');
+  const [exportingTranscript, setExportingTranscript] = useState(false);
+  const [transcriptProgress, setTranscriptProgress] = useState<{ done: number; total: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedEventId) { setTranscriptCandidates([]); return; }
+    (async () => {
+      const { data: regs } = await supabase
+        .from('registrations')
+        .select('id, nome_coreografia, estudio, event_data, ordem_apresentacao_publicado, ordem_apresentacao, resultado_publicado')
+        .eq('event_id', selectedEventId)
+        .eq('resultado_publicado', true)
+        .not('nome_coreografia', 'is', null);
+      if (cancelled) return;
+      const regIds = (regs ?? []).map((r: any) => r.id);
+      if (regIds.length === 0) { setTranscriptCandidates([]); return; }
+      const { data: evalsWithAudio } = await supabase
+        .from('evaluations')
+        .select('registration_id')
+        .eq('event_id', selectedEventId)
+        .not('audio_url', 'is', null)
+        .in('registration_id', regIds);
+      if (cancelled) return;
+      const regIdsWithAudio = new Set((evalsWithAudio ?? []).map((e: any) => e.registration_id));
+      const list = (regs ?? [])
+        .filter((r: any) => regIdsWithAudio.has(r.id))
+        .map((r: any) => ({
+          id: r.id,
+          nome_coreografia: r.nome_coreografia,
+          estudio: resolveEstudio(r) || 'Sem estúdio',
+          ordem: r.ordem_apresentacao_publicado ?? r.ordem_apresentacao ?? null,
+        }))
+        .sort((a: TranscriptCandidate, b: TranscriptCandidate) => (a.ordem ?? 999999) - (b.ordem ?? 999999));
+      setTranscriptCandidates(list);
+      setTranscriptFilterRegId('all');
+    })();
+    return () => { cancelled = true; };
+  }, [selectedEventId]);
+
+  const exportTranscriptPDF = async () => {
+    if (!selectedEventId) { alert('Selecione um evento primeiro.'); return; }
+    setExportingTranscript(true);
+    setTranscriptProgress(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const regFilter = transcriptFilterRegId !== 'all' ? transcriptFilterRegId : undefined;
+
+      // Loop: cada chamada processa até 8 transcrições pendentes. Repete até
+      // não sobrar pendência (remaining=0) ou o limite diário ser atingido.
+      let safety = 30; // hard cap de iterações — nunca deveria bater (30 × 8 = 240 transcrições)
+      let lastResult: any = null;
+      while (safety-- > 0) {
+        const res = await fetch(`${supabaseUrl}/functions/v1/transcribe-judge-audio`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+          body: JSON.stringify({ event_id: selectedEventId, registration_id: regFilter }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error ?? 'Erro ao transcrever áudios');
+        }
+        lastResult = await res.json();
+        const doneSoFar = (transcriptProgress?.done ?? 0) + (lastResult.transcribed ?? 0) + (lastResult.failed ?? 0);
+        setTranscriptProgress({ done: doneSoFar, total: lastResult.total_candidates ?? 0 });
+        if ((lastResult.remaining ?? 0) <= 0 || lastResult.limit_reached) break;
+      }
+
+      // Busca todas as avaliações publicadas com transcrição (já existentes +
+      // recém-geradas) pra montar o PDF — não depende só do que essa chamada
+      // processou agora, cobre também transcrições cacheadas de antes.
+      const scopedRegs = regFilter
+        ? transcriptCandidates.filter(c => c.id === regFilter)
+        : transcriptCandidates;
+      const regIds = scopedRegs.map(r => r.id);
+      if (regIds.length === 0) { alert('Nenhuma coreografia com áudio publicado encontrada.'); return; }
+
+      const { data: evals, error: evalsErr } = await supabase
+        .from('evaluations')
+        .select('id, registration_id, judge_id, final_weighted_average, audio_transcript, feedback_text')
+        .eq('event_id', selectedEventId)
+        .in('registration_id', regIds)
+        .not('audio_url', 'is', null)
+        .order('registration_id');
+      if (evalsErr) throw evalsErr;
+
+      const judgeIds = Array.from(new Set((evals ?? []).map((e: any) => e.judge_id).filter(Boolean)));
+      const judgeNameById = new Map<string, string>();
+      if (judgeIds.length > 0) {
+        const { data: judgesData } = await supabase.from('judges').select('id, name').in('id', judgeIds);
+        (judgesData ?? []).forEach((j: any) => judgeNameById.set(j.id, j.name));
+      }
+      const regById = new Map(scopedRegs.map(r => [r.id, r]));
+
+      const { default: jsPDF } = await import('jspdf');
+      let eventName = 'Evento';
+      const { data: ev } = await supabase.from('events').select('name, edition_year').eq('id', selectedEventId).maybeSingle();
+      if (ev) eventName = ev.name || eventName;
+
+      const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      let cursorY = 0;
+      const scopeLabel = regFilter ? (regById.get(regFilter)?.nome_coreografia ?? 'Coreografia selecionada') : 'Todas as coreografias';
+
+      const drawHeader = () => {
+        doc.setFillColor(255, 0, 104);
+        doc.rect(0, 0, pageWidth, 24, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Transcrição dos Áudios dos Jurados', 14, 11);
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${eventName.toUpperCase()} · ${scopeLabel}`, 14, 18);
+        doc.setTextColor(40, 40, 40);
+        cursorY = 32;
+      };
+      drawHeader();
+
+      const ensureSpace = (needed: number) => {
+        if (cursorY + needed > pageHeight - 16) { doc.addPage(); cursorY = 16; }
+      };
+
+      // Agrupa por coreografia (na ordem de apresentação) — 1 seção por
+      // coreografia, com todos os jurados que a avaliaram dentro dela.
+      let anySection = false;
+      scopedRegs.forEach(reg => {
+        const regEvals = (evals ?? []).filter((e: any) => e.registration_id === reg.id && (e.audio_transcript || e.feedback_text));
+        if (regEvals.length === 0) return;
+        anySection = true;
+
+        ensureSpace(20);
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 0, 104);
+        doc.text(reg.nome_coreografia, 14, cursorY);
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(120, 120, 120);
+        doc.text(reg.estudio, 14, cursorY + 5);
+        cursorY += 11;
+
+        regEvals.forEach((e: any) => {
+          ensureSpace(16);
+          const judgeName = judgeNameById.get(e.judge_id) || 'Jurado';
+          const finalScore = e.final_weighted_average != null ? ` · Nota: ${Number(e.final_weighted_average).toFixed(2)}` : '';
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(40, 40, 40);
+          doc.text(`${judgeName}${finalScore}`, 14, cursorY);
+          cursorY += 5;
+
+          if (e.feedback_text && e.feedback_text.trim()) {
+            doc.setFontSize(7.5);
+            doc.setFont('helvetica', 'italic');
+            doc.setTextColor(120, 120, 120);
+            doc.text('COMENTÁRIO ESCRITO', 14, cursorY);
+            cursorY += 4;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8.5);
+            doc.setTextColor(40, 40, 40);
+            const lines = doc.splitTextToSize(e.feedback_text.trim(), pageWidth - 28);
+            lines.forEach((line: string) => { ensureSpace(4.5); doc.text(line, 14, cursorY); cursorY += 4.5; });
+            cursorY += 2;
+          }
+
+          if (e.audio_transcript && e.audio_transcript.trim()) {
+            ensureSpace(8);
+            doc.setFontSize(7.5);
+            doc.setFont('helvetica', 'italic');
+            doc.setTextColor(120, 120, 120);
+            doc.text('TRANSCRIÇÃO DO ÁUDIO', 14, cursorY);
+            cursorY += 4;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8.5);
+            doc.setTextColor(40, 40, 40);
+            const lines = doc.splitTextToSize(e.audio_transcript.trim(), pageWidth - 28);
+            lines.forEach((line: string) => { ensureSpace(4.5); doc.text(line, 14, cursorY); cursorY += 4.5; });
+          } else {
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'italic');
+            doc.setTextColor(180, 180, 180);
+            doc.text('Transcrição indisponível (limite diário de transcrições atingido — tente gerar de novo amanhã).', 14, cursorY);
+            cursorY += 5;
+          }
+          cursorY += 6;
+        });
+        cursorY += 3;
+      });
+
+      if (!anySection) {
+        alert('Nenhuma avaliação com áudio ou comentário disponível pra essa seleção.');
+        return;
+      }
+
+      const totalPages = doc.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(6.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(150, 150, 150);
+        doc.text('Transcrição gerada automaticamente por IA a partir do áudio original — pode conter imprecisões.', 14, pageHeight - 8);
+        doc.text(`Página ${i} de ${totalPages}`, pageWidth - 14, pageHeight - 8, { align: 'right' });
+      }
+
+      const slug = (eventName || 'evento')
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
+      doc.save(`transcricao-audios-juri-${slug}.pdf`);
+    } catch (err) {
+      console.error('Erro ao exportar transcrição:', err);
+      alert('Falha ao gerar a transcrição: ' + (err instanceof Error ? err.message : 'desconhecido'));
+    } finally {
+      setExportingTranscript(false);
+      setTranscriptProgress(null);
+    }
+  };
+
   /* ── open modal ── */
   const openAdd = () => {
     setEditingJudge(null);
@@ -1117,6 +1348,30 @@ const JudgesManagement = () => {
             title={audioAvailable ? 'Baixa todos os áudios de avaliação do evento num .zip, renomeados por ordem/coreografia/jurado' : 'Nenhum áudio disponível — retenção de 90 dias após o evento'}
           >
             {exportingAudio ? <Loader2 size={14} className="animate-spin" /> : <Headphones size={14} />} Áudio de Avaliação dos Jurados (.zip)
+          </button>
+          {transcriptCandidates.length > 0 && (
+            <select
+              value={transcriptFilterRegId}
+              onChange={e => setTranscriptFilterRegId(e.target.value)}
+              aria-label="Filtrar transcrição por coreografia"
+              className="px-3 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 focus:outline-none focus:border-[#ff0068]/40 dark:[color-scheme:dark]"
+            >
+              <option value="all">Todas as coreografias</option>
+              {transcriptCandidates.map(c => (
+                <option key={c.id} value={c.id}>{c.nome_coreografia} — {c.estudio}</option>
+              ))}
+            </select>
+          )}
+          <button
+            onClick={exportTranscriptPDF}
+            disabled={exportingTranscript || transcriptCandidates.length === 0 || !selectedEventId}
+            className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-[#ff0068] hover:border-[#ff0068]/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={transcriptCandidates.length === 0 ? 'Sem áudio publicado disponível pra transcrever' : 'Transcreve os áudios (Gemini) e monta 1 PDF — evento inteiro ou só a coreografia selecionada acima'}
+          >
+            {exportingTranscript
+              ? <><Loader2 size={14} className="animate-spin" /> {transcriptProgress ? `Transcrevendo ${transcriptProgress.done}/${transcriptProgress.total}...` : 'Transcrevendo...'}</>
+              : <><FileText size={14} /> Transcrição dos Jurados (PDF)</>
+            }
           </button>
           <button
             onClick={openAdd}
