@@ -12,9 +12,15 @@ O cliente escolhe um dos 3 planos abaixo — não é um cálculo automático dec
 
 | Faixa | Fórmula | Faixa de participantes (referência, ticket médio R$50) |
 |---|---|---|
-| **Começo** | 10% sobre o valor vendido. Taxa mínima R$ 0,00 — só paga se vender. | até ~100 participantes (~R$ 5.000 de faturamento) |
-| **Essencial** | R$ 250,00 fixo por evento + 5% sobre o valor vendido. | ~101 a ~2.500 participantes |
-| **Escala** | R$ 1.490,00 fixo por evento + R$ 2,00 por participante, **com teto de 4,5% do faturamento total** (nunca paga mais que isso). | acima de ~2.500 participantes (~R$ 120 mil+ de faturamento) |
+| **Começo** | 10% sobre o valor vendido. Taxa mínima R$ 0,00 — só paga se vender. | até 100 participantes (até R$ 5.000 de faturamento) |
+| **Essencial** | R$ 250,00 fixo por evento + 5% sobre o valor vendido. | 100 a 2.500 participantes |
+| **Escala** | R$ 1.490,00 fixo por evento + R$ 2,00 por participante, **com teto de 4,5% do faturamento total** (nunca paga mais que isso). | acima de 2.500 participantes (a partir de R$ 124 mil de faturamento) |
+
+**Nota de copy (não usar números aproximados com "~" na interface):** os valores acima são referência interna pra engenharia calibrar as faixas — na UI (calculadora, cards de plano), exibir os números redondos e sem til (ex: "100 a 2.500 participantes", "Compensa a partir de R$ 5.000 em vendas"), não "~100" nem "~R$5 mil". Símbolo "~" não é prática comum de copy no Brasil e gera confusão. Ver protótipo visual publicado (mockup HTML da seção de planos, revisado nesta sessão) pro copy final aplicado nos 3 cards.
+
+**Nota de copy (chips "compensa a partir de"):** padronizados em **R$ (faturamento/vendas)**, não em participantes — é a base real da cobrança (% sobre venda), enquanto "participantes" só faz sentido pro leitor se ele souber do ticket médio assumido (R$50), que é uma suposição interna. Essencial: "Compensa a partir de R$ 5.000 em vendas". Escala: "Compensa a partir de R$ 124 mil em vendas".
+
+**Nota de copy (removida):** blocos de copy com cabeçalho tipo "Por que vence [a concorrência]" foram removidos do texto de vendas dos planos — não é vocabulário/prática comum no Brasil. O argumento competitivo de cada plano deve ficar embutido na prosa do "para quem é", não isolado num bloco com esse rótulo.
 
 ### Por que o teto do Escala é 4,5% (não 6%)
 
@@ -22,7 +28,7 @@ Com ticket médio de R$50/participante, o componente "R$2,00 por participante" d
 
 **Atenção:** se o ticket médio assumido (R$50) mudar no futuro, este teto precisa ser recalculado — ele não é um número absoluto, é derivado da relação entre as 3 fórmulas.
 
-### Por que a faixa do Escala é "acima de ~2.500 participantes" (não 600) — decisão fechada, não reabrir (2026-09-04)
+### Por que a faixa do Escala é "acima de 2.500 participantes" (não 600) — decisão fechada, não reabrir (2026-09-04)
 
 Cálculo de cruzamento entre Essencial e Escala (com ticket médio R$50, `p` = participantes, GMV = 50·p):
 
@@ -31,11 +37,11 @@ Essencial = 250 + 2,5·p
 Escala    = 1490 + 2·p
 ```
 
-Igualando: `250 + 2,5p = 1490 + 2p → 0,5p = 1240 → p = 2.480` (~R$ 124 mil de faturamento). **O Escala só fica mais barato que o Essencial a partir de ~2.480 participantes — não 600.** Conferindo em 600 participantes: Essencial = R$ 1.750, Escala = R$ 2.690 (54% mais caro). Qualquer produtor de 600 a ~2.480 participantes que escolhesse o Escala pagaria a mais por engano.
+Igualando: `250 + 2,5p = 1490 + 2p → 0,5p = 1240 → p = 2.480` (R$ 124 mil de faturamento). **O Escala só fica mais barato que o Essencial a partir de 2.480 participantes — não 600.** Conferindo em 600 participantes: Essencial = R$ 1.750, Escala = R$ 2.690 (54% mais caro). Qualquer produtor de 600 a 2.480 participantes que escolhesse o Escala pagaria a mais por engano.
 
-O teto de 4,5% também não resolve a faixa intermediária: ele só passa a valer (fica abaixo da fórmula) acima de ~5.960 participantes (`1490+2p = 0,045·50p → p ≈ 5.960`), bem depois do próprio cruzamento com o Essencial.
+O teto de 4,5% também não resolve a faixa intermediária: ele só passa a valer (fica abaixo da fórmula) acima de 5.960 participantes (`1490+2p = 0,045·50p → p ≈ 5.960`), bem depois do próprio cruzamento com o Essencial.
 
-**Decisão: corrigir a faixa de referência para "acima de ~2.500 participantes", não forçar a fórmula do Escala pra caber em 600.** Não existe buraco competitivo real na faixa 600–2.480 que o Escala precise tapar — o Essencial já vence a proposta real do concorrente Sistema Dance nessa faixa (validado no caso Usualdance Festival, ver seção de análise abaixo: Essencial bate o Sistema Dance até ~R$43/pessoa de ticket médio). Forçar o cruzamento pra 600 (baixando o fixo pra ~R$550 ou o variável pra ~R$0,43/pessoa) cortaria receita sem ganhar cliente nenhum, e contradiz o posicionamento "a CoreoHub não compete pra ser a mais barata do mercado" (ver seção Posicionamento). O caso de referência real pro Escala é um festival do porte do Joinville (maior do mundo, 50 mil+ bailarinos), não um evento de porte médio como o Usualdance (~300).
+**Decisão: corrigir a faixa de referência para "acima de 2.500 participantes", não forçar a fórmula do Escala pra caber em 600.** Não existe buraco competitivo real na faixa 600–2.480 que o Escala precise tapar — o Essencial já vence a proposta real do concorrente Sistema Dance nessa faixa (validado no caso Usualdance Festival, ver seção de análise abaixo: Essencial bate o Sistema Dance até R$43/pessoa de ticket médio). Forçar o cruzamento pra 600 (baixando o fixo pra R$550 ou o variável pra R$0,43/pessoa) cortaria receita sem ganhar cliente nenhum, e contradiz o posicionamento "a CoreoHub não compete pra ser a mais barata do mercado" (ver seção Posicionamento). O caso de referência real pro Escala é um festival do porte do Joinville (maior do mundo, 50 mil+ bailarinos), não um evento de porte médio como o Usualdance (300).
 
 ## Mecanismo de cobrança: o cliente escolhe o plano
 
@@ -74,12 +80,12 @@ Lead capture + transparência de preço. Fica na página de planos (ver seção 
 participantes_estimados = numero_coreografias × media_bailarinos_por_coreografia
 faturamento_estimado   = participantes_estimados × TICKET_MEDIO   // TICKET_MEDIO = R$ 50 (constante interna, não exposta/editável pelo lead)
 ```
-Selecionar a faixa pela tabela de participantes acima só para fins de **exibição/rótulo** ("você está na faixa Essencial"). O valor mostrado ("quanto você paga") deve ser calculado como o **mínimo entre as três fórmulas** aplicadas a `faturamento_estimado` e `participantes_estimados`, coerente com o mecanismo de cobrança real descrito acima — não mostrar ao lead um valor que o sistema de produção não vai realmente cobrar.
+Selecionar a faixa pela tabela de participantes acima (Começo/Essencial/Escala) — essa é a faixa recomendada, mostrada como rótulo ("seu festival se encaixa no plano Essencial"). O valor mostrado ("quanto você paga") é calculado aplicando a **fórmula dessa faixa recomendada** sobre `faturamento_estimado`/`participantes_estimados` — **não** o mínimo entre as três fórmulas (essa ideia foi descartada, ver seção "Mecanismo de cobrança": o cliente escolhe o plano, o cálculo não decide sozinho por trás). Deixar claro na UI que é uma estimativa pro plano recomendado, e que o cliente pode escolher outro plano se preferir.
 
 ### Resultado exibido
 Mostrar lado a lado, de forma transparente (reforça positioning de equilíbrio, não desconto):
 - **"Seu festival fatura (estimado): R$ X"**
-- **"Você paga à CoreoHub: R$ Y"** (o valor mínimo calculado)
+- **"Você paga à CoreoHub: R$ Y"** (fórmula do plano recomendado pelo tamanho estimado)
 - Opcional: margem líquida estimada = X − Y
 - CTA: "Quero essa proposta" → dispara o submit/salvamento do lead
 
@@ -97,8 +103,8 @@ Campos sugeridos:
 | `media_bailarinos_coreografia` | numeric | valor que o usuário ajustou no form |
 | `participantes_estimados` | int | calculado |
 | `faturamento_estimado` | numeric | calculado |
-| `faixa_recomendada` | text | "Começo" / "Essencial" / "Escala" (rótulo, não trava cobrança real) |
-| `valor_estimado` | numeric | mínimo das 3 fórmulas |
+| `faixa_recomendada` | text | "Começo" / "Essencial" / "Escala" (recomendação pelo tamanho estimado — cliente pode escolher outro plano) |
+| `valor_estimado` | numeric | fórmula da faixa recomendada aplicada ao faturamento estimado |
 | `origem` | text | utm/referrer, se houver |
 
 **Espelhamento opcional em Google Sheets:** o usuário já disponibilizou uma planilha como editor para acompanhamento manual/comercial (fora do Supabase):
@@ -107,8 +113,10 @@ Sugestão de implementação: Supabase Edge Function (trigger no insert de `calc
 
 ## Hero e página de planos (site)
 
-- **Remover a menção fixa "10%" do hero** — não faz mais sentido isolar um número de uma faixa só, especialmente com o mecanismo "sempre a menor das três fórmulas" (o cliente pode acabar pagando bem menos que 10%). Substituir por mensagem alinhada ao posicionamento de equilíbrio (ex: algo como "você paga proporcional ao que o seu festival fatura, sempre a taxa mais justa pro seu tamanho" — copy final ainda em aberto).
-- **Seção de planos ao final da página**, mostrando as 3 faixas (Começo/Essencial/Escala) como cards informativos + a calculadora — construir só depois que os textos de venda finais (`Planos CoreoHub.docx`) estiverem 100% fechados.
+- **Remover a menção fixa "10%" do hero** — não faz mais sentido isolar um número de uma faixa só, já que existem 3 planos com fórmulas diferentes e o cliente escolhe o que serve pro porte do evento dele. Substituir por mensagem alinhada ao posicionamento de equilíbrio (ex: algo como "você paga proporcional ao que o seu festival fatura, sempre a taxa mais justa pro seu tamanho" — copy final ainda em aberto).
+- **Seção "Modelo transparente — Você só paga quando vende"** (decisão desta sessão): a calculadora pública mora numa seção própria, separada dos cards de plano — não duplicar o CTA "Simular meu evento" dentro de cada card. Essa seção mostra o pitch de transparência + um preview da calculadora (inputs: nome do festival, nº de coreografias, média de bailarinos por coreografia, WhatsApp) com o único CTA "Simular meu evento" da página.
+- **Seção de planos ao final da página**, mostrando as 3 faixas (Começo/Essencial/Escala) como cards, cada um com CTA próprio: **"Quero esse plano"** pro Começo e Essencial (venda self-service), **"Falar com o time"** pro Escala (venda consultiva, porte grande). Nenhum card usa "Simular meu evento" como CTA — isso fica só na seção da calculadora.
+- **Protótipo visual já produzido** (artifact HTML desta sessão, referência de copy/layout final): 3 cards com nome do plano, faixa de participantes, fórmula, chip "compensa a partir de R$X em vendas", "para quem é", frase de venda entre aspas, e o CTA. Sem blocos "Por que vence" (não é prática de copy no Brasil — argumento competitivo fica embutido na prosa).
 
 ## Referência: caso real usado para validar os números
 
