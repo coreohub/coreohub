@@ -13,14 +13,29 @@ O cliente escolhe um dos 3 planos abaixo — não é um cálculo automático dec
 | Faixa | Fórmula | Faixa de participantes (referência, ticket médio R$50) |
 |---|---|---|
 | **Começo** | 10% sobre o valor vendido. Taxa mínima R$ 0,00 — só paga se vender. | até ~100 participantes (~R$ 5.000 de faturamento) |
-| **Essencial** | R$ 250,00 fixo por evento + 5% sobre o valor vendido. | ~101 a ~600 participantes |
-| **Escala** | R$ 1.490,00 fixo por evento + R$ 2,00 por participante, **com teto de 4,5% do faturamento total** (nunca paga mais que isso). | acima de ~600 participantes |
+| **Essencial** | R$ 250,00 fixo por evento + 5% sobre o valor vendido. | ~101 a ~2.500 participantes |
+| **Escala** | R$ 1.490,00 fixo por evento + R$ 2,00 por participante, **com teto de 4,5% do faturamento total** (nunca paga mais que isso). | acima de ~2.500 participantes (~R$ 120 mil+ de faturamento) |
 
 ### Por que o teto do Escala é 4,5% (não 6%)
 
 Com ticket médio de R$50/participante, o componente "R$2,00 por participante" do Escala já equivale a 4% do faturamento. Um teto de 6% (valor usado numa iteração anterior desta spec) fica **acima** da taxa do Essencial (5%), o que quebra a lógica "quanto maior o evento, menor a taxa efetiva" — nenhum evento grande teria motivo real para preferir o Escala. **O teto precisa ficar sempre abaixo da taxa da faixa anterior (5%)** para a progressão fazer sentido. 4,5% garante isso com margem, considerando variação de ticket médio real (eventos podem ter ticket menor que R$50, o que reduziria ainda mais o % efetivo do componente por participante).
 
 **Atenção:** se o ticket médio assumido (R$50) mudar no futuro, este teto precisa ser recalculado — ele não é um número absoluto, é derivado da relação entre as 3 fórmulas.
+
+### Por que a faixa do Escala é "acima de ~2.500 participantes" (não 600) — decisão fechada, não reabrir (2026-09-04)
+
+Cálculo de cruzamento entre Essencial e Escala (com ticket médio R$50, `p` = participantes, GMV = 50·p):
+
+```
+Essencial = 250 + 2,5·p
+Escala    = 1490 + 2·p
+```
+
+Igualando: `250 + 2,5p = 1490 + 2p → 0,5p = 1240 → p = 2.480` (~R$ 124 mil de faturamento). **O Escala só fica mais barato que o Essencial a partir de ~2.480 participantes — não 600.** Conferindo em 600 participantes: Essencial = R$ 1.750, Escala = R$ 2.690 (54% mais caro). Qualquer produtor de 600 a ~2.480 participantes que escolhesse o Escala pagaria a mais por engano.
+
+O teto de 4,5% também não resolve a faixa intermediária: ele só passa a valer (fica abaixo da fórmula) acima de ~5.960 participantes (`1490+2p = 0,045·50p → p ≈ 5.960`), bem depois do próprio cruzamento com o Essencial.
+
+**Decisão: corrigir a faixa de referência para "acima de ~2.500 participantes", não forçar a fórmula do Escala pra caber em 600.** Não existe buraco competitivo real na faixa 600–2.480 que o Escala precise tapar — o Essencial já vence a proposta real do concorrente Sistema Dance nessa faixa (validado no caso Usualdance Festival, ver seção de análise abaixo: Essencial bate o Sistema Dance até ~R$43/pessoa de ticket médio). Forçar o cruzamento pra 600 (baixando o fixo pra ~R$550 ou o variável pra ~R$0,43/pessoa) cortaria receita sem ganhar cliente nenhum, e contradiz o posicionamento "a CoreoHub não compete pra ser a mais barata do mercado" (ver seção Posicionamento). O caso de referência real pro Escala é um festival do porte do Joinville (maior do mundo, 50 mil+ bailarinos), não um evento de porte médio como o Usualdance (~300).
 
 ## Mecanismo de cobrança: o cliente escolhe o plano
 
