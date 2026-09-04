@@ -23,6 +23,7 @@ import CentralDeMidia from './pages/CentralDeMidia';
 import Profile from './pages/Profile';
 import Auth from './pages/Auth';
 import LandingPage from './pages/LandingPage';
+const Planos = lazy(() => import('./pages/Planos'));
 import TermosDeUso from './pages/TermosDeUso';
 import PoliticaDePrivacidade from './pages/PoliticaDePrivacidade';
 const LandingGoverno  = lazy(() => import('./pages/LandingGoverno'));
@@ -544,6 +545,7 @@ const App: React.FC = () => {
         } />
         {/* Sales page também acessível via /lp (alias, qualquer domínio) */}
         <Route path="/lp" element={<LandingPage />} />
+        <Route path="/planos" element={<Suspense fallback={<PageLoader />}><Planos /></Suspense>} />
         <Route path="/termos" element={<TermosDeUso />} />
         <Route path="/privacidade" element={<PoliticaDePrivacidade />} />
         {/* Setor público: landing dedicada + PDF técnico imprimível */}

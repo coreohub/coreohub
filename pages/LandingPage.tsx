@@ -71,10 +71,10 @@ const LandingPage = () => {
               Entrar
             </a>
             <button
-              onClick={() => navigate('/criar-evento')}
+              onClick={() => navigate('/planos')}
               className="px-4 py-2 bg-[#ff0068] text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-transform"
             >
-              Criar festival →
+              Ver planos →
             </button>
           </nav>
           {/* mobile: hamburger */}
@@ -100,10 +100,10 @@ const LandingPage = () => {
             </a>
             <div className="pt-3">
               <button
-                onClick={() => { navigate('/criar-evento'); setMenuOpen(false); }}
+                onClick={() => { navigate('/planos'); setMenuOpen(false); }}
                 className="w-full px-4 py-3 bg-[#ff0068] text-white rounded-xl text-sm font-black uppercase tracking-widest"
               >
-                Criar festival →
+                Ver planos →
               </button>
             </div>
           </div>
@@ -145,11 +145,11 @@ const LandingPage = () => {
 
             <div className="mt-5 sm:mt-6 flex flex-col sm:flex-row items-center justify-center gap-4 sm:justify-start">
               <button
-                onClick={() => navigate('/criar-evento')}
+                onClick={() => navigate('/planos')}
                 className="group relative px-8 py-5 bg-[#ff0068] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_20px_60px_rgba(255,0,104,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-transform"
               >
                 <span className="relative z-10 flex items-center gap-2">
-                  Criar meu festival grátis <ChevronRight size={18} />
+                  Ver planos <ChevronRight size={18} />
                 </span>
               </button>
             </div>
@@ -683,7 +683,7 @@ const LandingPage = () => {
               <p className="text-slate-400 text-sm mt-1">Secretarias de cultura e editais públicos têm modelo de proposta próprio.</p>
             </div>
             <a
-              href="https://wa.me/5517997936169?text=Ol%C3%A1%2C%20Sou%20de%20uma%20institui%C3%A7%C3%A3o%20p%C3%BAblica%20e%20gostaria%20de%20falar%20sobre%20a%20CoreoHub"
+              href="https://wa.me/5517981264290?text=Ol%C3%A1%2C%20Sou%20de%20uma%20institui%C3%A7%C3%A3o%20p%C3%BAblica%20e%20gostaria%20de%20falar%20sobre%20a%20CoreoHub"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-5 py-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-colors shrink-0"
@@ -847,10 +847,10 @@ const LandingPage = () => {
             Crie seu festival agora. Compartilhe o link hoje à noite. Receba a primeira inscrição amanhã.
           </p>
           <button
-            onClick={() => navigate('/criar-evento')}
+            onClick={() => navigate('/planos')}
             className="inline-flex items-center gap-2 px-10 py-5 bg-[#ff0068] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_20px_60px_rgba(255,0,104,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-transform"
           >
-            Criar meu festival grátis <ArrowRight size={18} />
+            Ver planos <ArrowRight size={18} />
           </button>
           <p className="text-xs text-slate-500 mt-5">
             Sem cartão de crédito · Você só paga quando vende · Cancela quando quiser
@@ -891,8 +891,8 @@ const LandingPage = () => {
               <ul className="space-y-2 text-[11px] text-slate-400">
                 <li><a href="mailto:contato@coreohub.com" className="hover:text-[#ff0068]">contato@coreohub.com</a></li>
                 <li>
-                  <a href="https://wa.me/5517997936169" target="_blank" rel="noopener noreferrer" className="hover:text-[#ff0068]">
-                    +55 17 99793-6169
+                  <a href="https://wa.me/5517981264290" target="_blank" rel="noopener noreferrer" className="hover:text-[#ff0068]">
+                    +55 17 98126-4290
                   </a>
                 </li>
               </ul>
@@ -916,7 +916,7 @@ const LandingPage = () => {
 
       {/* ─── BOTÃO FLUTUANTE WHATSAPP ──────────────────────────────────────────────── */}
       <a
-        href="https://wa.me/5517997936169?text=Ol%C3%A1%2C%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20a%20Coreohub"
+        href="https://wa.me/5517981264290?text=Ol%C3%A1%2C%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre%20a%20Coreohub"
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Falar no WhatsApp"
