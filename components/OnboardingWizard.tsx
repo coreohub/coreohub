@@ -1,10 +1,11 @@
-import React, { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles, FileUp, ArrowRight, ArrowLeft, Trophy, Star,
   CheckCircle2, RefreshCw, AlertCircle, Copy, MessageCircle,
-  Settings2, Loader2,
+  Settings2, Loader2, CreditCard,
 } from 'lucide-react';
 import { createEvent, supabase } from '../services/supabase';
 import { extractRegulationFromPdfOrThrow, isExtractEmpty, RegulationExtract } from '../services/geminiService';
@@ -13,6 +14,20 @@ import { generateEventSlug } from '../services/eventSlug';
 import { EventFormat } from '../types';
 
 type Step = 1 | 2 | 3;
+
+// Plano comercial (docs/pricing-model-spec.md). Vem pré-definido via ?plano=
+// — do CTA "Quero este plano" de /planos (comeco/essencial), ou de um link
+// direto que a CoreoHub manda depois de fechar Escala por conversa
+// (?plano=escala — nunca aparece como opção clicável na tela, só chega
+// assim). Quando vem da URL, não pergunta de novo: mostra só a confirmação,
+// com opção de trocar (Começo/Essencial apenas — Escala é venda consultiva).
+type PlanoId = 'comeco' | 'essencial' | 'escala';
+const VALID_PLANOS: PlanoId[] = ['comeco', 'essencial', 'escala'];
+const PLANO_LABELS: Record<PlanoId, { nome: string; resumo: string }> = {
+  comeco:    { nome: 'Começo',    resumo: '10% sobre venda · R$ 0 mínimo, só paga se vender.' },
+  essencial: { nome: 'Essencial', resumo: 'R$ 250 fixo (cobrado agora) + 5% sobre venda.' },
+  escala:    { nome: 'Escala',    resumo: 'R$ 1.490 fixo (cobrado agora) + R$ 2/participante, teto de 4,5%.' },
+};
 
 /** Mescla arrays de configs sem duplicar por `name` — primeira ocorrência vence. */
 const mergeByName = <T extends { name: string }>(items: T[]): T[] => {
@@ -27,7 +42,35 @@ const mergeByName = <T extends { name: string }>(items: T[]): T[] => {
 
 const OnboardingWizard: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const pdfInputRef = useRef<HTMLInputElement>(null);
+
+  const planoFromUrlRaw = searchParams.get('plano');
+  const planoFromUrl: PlanoId | null = VALID_PLANOS.includes(planoFromUrlRaw as PlanoId) ? (planoFromUrlRaw as PlanoId) : null;
+  const [selectedPlan, setSelectedPlan] = useState<PlanoId>(planoFromUrl ?? 'comeco');
+  const [showPlanoSelector, setShowPlanoSelector] = useState(planoFromUrl === null);
+  const [planFeeResult, setPlanFeeResult] = useState<{ invoice_url: string; valor_cobrado: number; plano_label: string } | null>(null);
+  const [pendingEventId, setPendingEventId] = useState<string | null>(null);
+
+  // Enquanto o modal de cobrança está aberto, escuta em tempo real o
+  // pagamento confirmar — sem precisar o produtor clicar em nada. O
+  // webhook seta billing_plan_fixed_fee_paid_at assim que a Asaas confirma.
+  useEffect(() => {
+    if (!planFeeResult || !pendingEventId) return;
+    const channel = supabase
+      .channel(`plan-fee-${pendingEventId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'events', filter: `id=eq.${pendingEventId}` },
+        (payload: any) => {
+          if (payload.new?.billing_plan_fixed_fee_paid_at) {
+            setPlanFeeResult(null);
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [planFeeResult, pendingEventId]);
 
   const [step, setStep] = useState<Step>(1);
   const [error, setError] = useState<string | null>(null);
@@ -213,6 +256,24 @@ const OnboardingWizard: React.FC = () => {
 
       setCreatedEvent({ id: ev.id, slug: ev.slug ?? slug });
       setStep(3);
+
+      // billing_plan NÃO entra no payload de createEvent — evento sempre
+      // nasce em Começo (default do banco). Se o plano escolhido for outro,
+      // dispara a cobrança do componente fixo AGORA (adiantado, não no
+      // fechamento — docs/pricing-model-spec.md). Só o webhook promove o
+      // evento pro plano pago, depois de confirmado.
+      if (selectedPlan !== 'comeco') {
+        try {
+          const { data: feeData, error: fnError } = await supabase.functions.invoke('create-plan-fixed-fee-payment', {
+            body: { event_id: ev.id, plano: selectedPlan },
+          });
+          if (fnError || feeData?.error) throw new Error(feeData?.error ?? fnError?.message ?? 'Erro ao gerar cobrança do plano.');
+          setPendingEventId(ev.id);
+          setPlanFeeResult(feeData);
+        } catch (feeErr: any) {
+          setError(feeErr.message ?? 'Evento criado, mas não foi possível iniciar a cobrança do plano. Acesse Configurações pra tentar de novo.');
+        }
+      }
     } catch (e: any) {
       setError(e.message ?? 'Erro ao criar o evento.');
     } finally {
@@ -446,6 +507,64 @@ const OnboardingWizard: React.FC = () => {
                 })}
               </div>
 
+              {/* Plano comercial — trava depois de criado (sem troca
+                  self-service). Quando veio pré-definido por ?plano= (CTA
+                  de /planos, ou link direto de Escala já negociado), mostra
+                  só a confirmação — não pergunta de novo o que o produtor
+                  já escolheu. */}
+              <div className="bg-white dark:bg-slate-900/60 rounded-3xl border border-slate-200 dark:border-white/10 p-6">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Plano do evento</p>
+                {!showPlanoSelector ? (
+                  <div className="flex items-center justify-between gap-3 p-4 rounded-2xl border-2 border-[#ff0068] bg-[#ff0068]/5">
+                    <div>
+                      <p className="font-black uppercase italic tracking-tight text-slate-900 dark:text-white">{PLANO_LABELS[selectedPlan].nome}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{PLANO_LABELS[selectedPlan].resumo}</p>
+                    </div>
+                    {selectedPlan !== 'escala' && (
+                      <button
+                        type="button"
+                        onClick={() => setShowPlanoSelector(true)}
+                        className="shrink-0 text-[10px] font-black uppercase tracking-widest text-[#ff0068] hover:underline"
+                      >
+                        Trocar
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPlan('comeco')}
+                        className={`text-left p-4 rounded-2xl border-2 transition-all ${
+                          selectedPlan === 'comeco'
+                            ? 'border-[#ff0068] bg-[#ff0068]/5'
+                            : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
+                        }`}
+                      >
+                        <p className="font-black uppercase italic tracking-tight text-slate-900 dark:text-white">{PLANO_LABELS.comeco.nome}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{PLANO_LABELS.comeco.resumo}</p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPlan('essencial')}
+                        className={`text-left p-4 rounded-2xl border-2 transition-all ${
+                          selectedPlan === 'essencial'
+                            ? 'border-[#ff0068] bg-[#ff0068]/5'
+                            : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
+                        }`}
+                      >
+                        <p className="font-black uppercase italic tracking-tight text-slate-900 dark:text-white">{PLANO_LABELS.essencial.nome}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{PLANO_LABELS.essencial.resumo}</p>
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-500 mt-3 leading-relaxed">
+                      O plano escolhido vale pro evento inteiro — não dá pra trocar depois de criado (mudança de porte vira negociação direta com a gente). Precisa do plano Escala (grande porte)? <a href="https://wa.me/5517997936169?text=Ol%C3%A1%2C%20quero%20falar%20sobre%20o%20plano%20Escala%20da%20CoreoHub" target="_blank" rel="noopener noreferrer" className="text-[#ff0068] hover:underline font-bold">Fala com a gente</a>.
+                    </p>
+                  </>
+                )}
+              </div>
+
               <div className="flex gap-3">
                 <button
                   onClick={() => setStep(1)}
@@ -534,9 +653,50 @@ const OnboardingWizard: React.FC = () => {
           )}
         </AnimatePresence>
       </div>
+      {planFeeResult && (
+        <PlanFeePaymentModal
+          result={planFeeResult}
+          onDismiss={() => setPlanFeeResult(null)}
+        />
+      )}
     </div>
   );
 };
+
+const PlanFeePaymentModal: React.FC<{
+  result: { invoice_url: string; valor_cobrado: number; plano_label: string };
+  onDismiss: () => void;
+}> = ({ result, onDismiss }) => createPortal(
+  <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5">
+      <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white italic">
+        Falta ativar o plano
+      </h3>
+      <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+        Gerei a cobrança do plano {result.plano_label}: <strong>R$ {result.valor_cobrado.toFixed(2)}</strong>.
+      </p>
+      <a
+        href={result.invoice_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-center gap-2 w-full px-5 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-transform"
+      >
+        <CreditCard size={16} /> Pagar agora
+      </a>
+      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+        <RefreshCw size={12} className="animate-spin shrink-0" />
+        Aguardando confirmação do pagamento — o plano ativa sozinho, esta tela some na hora.
+      </div>
+      <button
+        onClick={onDismiss}
+        className="w-full px-5 py-3 text-slate-500 dark:text-slate-400 font-bold text-xs uppercase tracking-widest hover:text-slate-700 dark:hover:text-white transition-colors"
+      >
+        Prefiro pagar depois, fechar este aviso
+      </button>
+    </div>
+  </div>,
+  document.body
+);
 
 const inputCls = 'w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:border-[#ff0068]/50 focus:ring-2 focus:ring-[#ff0068]/20 transition-all';
 
