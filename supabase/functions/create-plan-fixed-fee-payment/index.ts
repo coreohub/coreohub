@@ -7,8 +7,8 @@
 // split contínuo já resolve pro resto).
 //
 // Plano trava depois de escolhido — sem troca self-service. Por isso esta
-// function só aceita rodar UMA vez por evento (enquanto billing_plan ainda
-// é 'comeco' e billing_plan_fixed_fee_paid_at é NULL). Mudança de plano
+// function só aceita rodar enquanto billing_plan ainda é 'comeco' (inclusive
+// evento antigo que nunca escolheu plano explicitamente). Mudança de plano
 // depois disso é negociação manual (WhatsApp/admin), não uma feature.
 //
 // externalReference: "PLANFEE:<event_id>:<plano>" — branch no
@@ -62,8 +62,9 @@ Deno.serve(async (req) => {
 
     // Plano trava depois de escolhido — sem troca self-service (spec fechada
     // 2026-09-04). Só permite gerar cobrança enquanto o evento ainda está no
-    // plano padrão (Começo) e nunca pagou fixo nenhum.
-    if (event.billing_plan !== 'comeco' || event.billing_plan_fixed_fee_paid_at) {
+    // plano padrão (Começo) — inclusive evento antigo que nunca escolheu
+    // plano explicitamente, e quer fazer upgrade agora pela 1ª vez.
+    if (event.billing_plan !== 'comeco') {
       throw new Error('Este evento já tem um plano definido — mudança de plano é negociação manual, não self-service.')
     }
 
