@@ -312,6 +312,24 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* ─── 4.5. CTA INTERMEDIÁRIO ──────────────────────────────────────────────── */}
+      <section className="px-6 py-16 border-t border-white/5">
+        <div className="max-w-3xl mx-auto text-center bg-gradient-to-br from-[#ff0068]/10 via-white/5 to-purple-700/10 border border-white/10 rounded-3xl p-8 md:p-10">
+          <h3 className="text-2xl md:text-3xl font-black uppercase tracking-tight italic">
+            Já deu pra ver como funciona. <span className="text-[#ff0068]">Quanto custaria no seu festival?</span>
+          </h3>
+          <p className="text-slate-300 text-sm md:text-base mt-3 max-w-xl mx-auto">
+            Simule com os números do seu evento e veja o plano certo pro seu porte — leva menos de 1 minuto.
+          </p>
+          <button
+            onClick={() => navigate('/planos')}
+            className="mt-6 inline-flex items-center justify-center gap-2 px-8 py-4 bg-[#ff0068] text-white rounded-xl text-sm font-black uppercase tracking-widest hover:bg-[#ff1a7d] transition-colors"
+          >
+            Fazer simulação <ArrowRight size={16} />
+          </button>
+        </div>
+      </section>
+
       {/* ─── 5. IA CONFIGURA ──────────────────────────────────────────────── */}
       <FeatureSection
         kicker="Setup em 30 segundos"
@@ -571,14 +589,14 @@ const LandingPage = () => {
               <span className="text-[#ff0068]">aprova.</span>
             </h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col gap-4">
               <p className="text-slate-300 text-sm leading-relaxed flex-1">"Uma das plataformas de gestão de eventos mais completas que já utilizei. Além da praticidade, ela entrega praticamente TUDO em um formato prático e didático. Tive a honra de conhecer e utilizar na produção do Usualdance Festival, e com certeza daqui pra frente estará no Extreme Festival."</p>
               <div className="flex items-center gap-3 border-t border-white/10 pt-4">
                 <img src="/will-nunes.webp" alt="Will Nunes" className="w-10 h-10 rounded-full object-cover object-top shrink-0" />
                 <div>
                   <p className="text-white text-sm font-black">Will Nunes</p>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Produtor do Extreme Festival</p>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Produtor do Extreme Festival · Monte Aprazível-SP</p>
                 </div>
               </div>
             </div>
@@ -588,7 +606,17 @@ const LandingPage = () => {
                 <img src="/jonathan-lupe.webp" alt="Jonathan Lupe" className="w-10 h-10 rounded-full object-cover object-center shrink-0" />
                 <div>
                   <p className="text-white text-sm font-black">Jonathan Lupe</p>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Jurado · Usualdance Festival</p>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Jurado · Usualdance Festival · São José do Rio Preto-SP</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col gap-4">
+              <p className="text-slate-300 text-sm leading-relaxed flex-1">"Fiquei muito satisfeito com o júri digital, cronograma e ordem das apresentações. Melhor ainda o suporte que da equipe quando mais precisei. Recomendo muito."</p>
+              <div className="flex items-center gap-3 border-t border-white/10 pt-4">
+                <img src="/bheto-bastheli.webp" alt="Bheto Bastheli" className="w-10 h-10 rounded-full object-cover object-center shrink-0" />
+                <div>
+                  <p className="text-white text-sm font-black">Bheto Bastheli</p>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Produtor do Festival Ecodança · Limeira-SP</p>
                 </div>
               </div>
             </div>
