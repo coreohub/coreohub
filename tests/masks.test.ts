@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   maskCpfCnpj, unmaskCpfCnpj, maskMoeda, parseMoeda, formatPrecoBR, parsePrecoBR,
   maskData, parseDataISO, maskTempo, parseTempoSegundos, formatTempo,
-  validateCpf, validateCnpj,
+  validateCpf, validateCnpj, maskTelefoneBR, unmaskTelefoneBR,
 } from '../utils/masks';
 
 // CPF/CNPJ válidos batem na API Asaas — se a validação local deixar passar lixo,
@@ -18,6 +18,21 @@ describe('maskCpfCnpj', () => {
   });
   it('ignora não-dígitos e limita a 14', () => {
     expect(unmaskCpfCnpj('123.456.789-01')).toBe('12345678901');
+  });
+});
+
+describe('maskTelefoneBR', () => {
+  it('formata celular (11 dígitos) com o 9º dígito', () => {
+    expect(maskTelefoneBR('17981264290')).toBe('(17) 98126-4290');
+  });
+  it('formata fixo (10 dígitos)', () => {
+    expect(maskTelefoneBR('1738211234')).toBe('(17) 3821-1234');
+  });
+  it('ignora não-dígitos e limita a 11', () => {
+    expect(maskTelefoneBR('(17) 98126-4290999')).toBe('(17) 98126-4290');
+  });
+  it('unmaskTelefoneBR extrai só os dígitos', () => {
+    expect(unmaskTelefoneBR('(17) 98126-4290')).toBe('17981264290');
   });
 });
 

@@ -8,21 +8,94 @@ import {
   Smartphone, Share2, Mail,
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { supabaseUrl } from '@/services/supabase';
+import { maskTelefoneBR, unmaskTelefoneBR } from '@/utils/masks';
+
+type FaixaPlano = 'comeco' | 'essencial' | 'escala';
+
+const PLANO_LABEL: Record<FaixaPlano, string> = { comeco: 'Começo', essencial: 'Essencial', escala: 'Escala' };
 
 const LandingPage = () => {
   const navigate = useNavigate();
-  const [calcInscricoes, setCalcInscricoes] = useState(200);
-  const [calcTicket, setCalcTicket] = useState(150);
+  const [calcCoreografias, setCalcCoreografias] = useState(40);
+  const [calcMediaBailarinos, setCalcMediaBailarinos] = useState(5);
+  const [calcTicket, setCalcTicket] = useState(50); // ticket médio POR PARTICIPANTE — mesma base usada pra calibrar as faixas dos planos (docs/pricing-model-spec.md)
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(false);
 
-  const calcReceita = calcInscricoes * calcTicket;
-  const calcComissao = calcReceita * 0.10;
-  const calcLiquido = calcReceita - calcComissao;
+  const [showLeadForm, setShowLeadForm] = useState(false);
+  const [leadNome, setLeadNome] = useState('');
+  const [leadWhatsapp, setLeadWhatsapp] = useState('');
+  const [leadSubmitting, setLeadSubmitting] = useState(false);
+  const [leadSubmitted, setLeadSubmitted] = useState(false);
+  const [leadError, setLeadError] = useState<string | null>(null);
+
   const fmtBRL = (n: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(n);
+
+  // Modelo de 3 planos (docs/pricing-model-spec.md) — o cliente escolhe o
+  // plano, aqui só recomendamos pelo porte estimado do evento.
+  const calcParticipantes = Math.round(calcCoreografias * calcMediaBailarinos);
+  const calcFaturamento = calcParticipantes * calcTicket;
+
+  const valorComeco = calcFaturamento * 0.10;
+  const valorEssencial = 250 + calcFaturamento * 0.05;
+  const valorEscala = 1490 + Math.min(calcParticipantes * 2, calcFaturamento * 0.045);
+  const valoresPorFaixa: Record<FaixaPlano, number> = { comeco: valorComeco, essencial: valorEssencial, escala: valorEscala };
+
+  const faixaRecomendada: FaixaPlano =
+    calcParticipantes <= 100 ? 'comeco' : calcParticipantes <= 2500 ? 'essencial' : 'escala';
+  const calcComissao = valoresPorFaixa[faixaRecomendada];
+  const calcLiquido = calcFaturamento - calcComissao;
+  const taxaEfetiva = calcFaturamento > 0 ? (calcComissao / calcFaturamento) * 100 : 0;
+
+  // Referência: cobrança "por pessoa" comum em sistemas dedicados do setor
+  // (R$3/pessoa até 800, R$2,50 acima, mínimo R$600) — mesma estrutura
+  // encontrada em propostas reais recebidas por produtores de festival.
+  const cobrancaPorPessoa = Math.max(
+    600,
+    calcParticipantes <= 800 ? calcParticipantes * 3 : 800 * 3 + (calcParticipantes - 800) * 2.5
+  );
+
+  const submitCalculatorLead = async () => {
+    setLeadError(null);
+    const nome = leadNome.trim();
+    const whatsappDigits = unmaskTelefoneBR(leadWhatsapp);
+    if (!nome) { setLeadError('Digite o nome do festival.'); return; }
+    if (whatsappDigits.length < 10) { setLeadError('Digite um WhatsApp válido com DDD.'); return; }
+
+    setLeadSubmitting(true);
+    try {
+      const resp = await fetch(`${supabaseUrl}/functions/v1/submit-calculator-lead`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome_festival: nome,
+          whatsapp: whatsappDigits,
+          numero_coreografias: calcCoreografias,
+          media_bailarinos_coreografia: calcMediaBailarinos,
+          ticket_medio: calcTicket,
+          participantes_estimados: calcParticipantes,
+          faturamento_estimado: calcFaturamento,
+          faixa_recomendada: faixaRecomendada,
+          valor_estimado: calcComissao,
+          origem: document.referrer || 'direct',
+        }),
+      });
+      if (!resp.ok) throw new Error('request_failed');
+      setLeadSubmitted(true);
+    } catch {
+      setLeadError('Não conseguimos salvar agora. Tente de novo ou chama no WhatsApp direto.');
+    } finally {
+      setLeadSubmitting(false);
+    }
+  };
+
+  const leadWhatsappMessage = encodeURIComponent(
+    `Olá! Simulei meu festival na CoreoHub: ${calcCoreografias} coreografias, ~${calcParticipantes} participantes, faturamento estimado ${fmtBRL(calcFaturamento)}. Plano recomendado: ${PLANO_LABEL[faixaRecomendada]}. Nome do festival: ${leadNome || '(não informado)'}.`
+  );
 
   useEffect(() => {
     document.title = 'CoreoHub — Gestão inteligente para festivais e mostras de dança';
@@ -609,72 +682,190 @@ const LandingPage = () => {
         <div className="max-w-5xl mx-auto text-center">
           <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Modelo transparente</p>
           <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase mb-6">
-            Você só paga <span className="text-[#ff0068]">quando vende</span>.<br />
+            Você paga <span className="text-[#ff0068]">proporcional</span> ao que vende.<br />
             E o dinheiro cai direto na sua conta.
           </h2>
           <p className="text-slate-300 text-lg max-w-2xl mx-auto leading-relaxed mb-12">
-            10% por inscrição vendida. Zero mensalidade. Zero fidelidade.
-            Se o evento não rolar, você não paga nada. O dinheiro cai direto na sua conta — Pix em minutos,
-            cartão no prazo padrão da operadora — sem fechamento de caixa manual no fim do mês.
+            3 planos, um pra cada porte de festival — do primeiro evento à competição nacional.
+            Zero mensalidade fora do plano escolhido. Zero fidelidade. O dinheiro cai direto na sua conta —
+            Pix em minutos, cartão no prazo padrão da operadora — sem fechamento de caixa manual no fim do mês.
           </p>
 
           <div className="max-w-3xl mx-auto bg-gradient-to-br from-[#ff0068]/10 via-white/5 to-purple-700/10 border border-white/10 rounded-3xl p-6 md:p-10 backdrop-blur-xl">
             <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mb-6">Simule seu festival</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
               <div className="text-left">
-                <label htmlFor="calc-inscricoes" className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Inscrições no festival: <span className="text-[#ff0068] font-mono">{calcInscricoes}</span>
+                <label htmlFor="calc-coreografias" className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Nº de coreografias: <span className="text-[#ff0068] font-mono">{calcCoreografias}</span>
                 </label>
                 <input
-                  id="calc-inscricoes"
-                  type="range" min={20} max={1000} step={10}
-                  value={calcInscricoes}
-                  onChange={(e) => setCalcInscricoes(Number(e.target.value))}
-                  aria-label="Número de inscrições no festival"
-                  aria-valuetext={`${calcInscricoes} inscrições`}
+                  id="calc-coreografias"
+                  type="range" min={5} max={500} step={5}
+                  value={calcCoreografias}
+                  onChange={(e) => setCalcCoreografias(Number(e.target.value))}
+                  aria-label="Número de coreografias inscritas"
+                  aria-valuetext={`${calcCoreografias} coreografias`}
                   className="w-full mt-2 accent-[#ff0068]"
                 />
                 <div className="flex justify-between text-[9px] text-slate-500 mt-1">
-                  <span>20</span><span>1000</span>
+                  <span>5</span><span>500</span>
+                </div>
+              </div>
+              <div className="text-left">
+                <label htmlFor="calc-bailarinos" className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Média de bailarinos/coreografia: <span className="text-[#ff0068] font-mono">{calcMediaBailarinos}</span>
+                </label>
+                <input
+                  id="calc-bailarinos"
+                  type="range" min={1} max={15} step={1}
+                  value={calcMediaBailarinos}
+                  onChange={(e) => setCalcMediaBailarinos(Number(e.target.value))}
+                  aria-label="Média de bailarinos por coreografia"
+                  aria-valuetext={`${calcMediaBailarinos} bailarinos em média`}
+                  className="w-full mt-2 accent-[#ff0068]"
+                />
+                <div className="flex justify-between text-[9px] text-slate-500 mt-1">
+                  <span>1 (solo)</span><span>15 (grupão)</span>
                 </div>
               </div>
               <div className="text-left">
                 <label htmlFor="calc-ticket" className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Ticket médio: <span className="text-[#ff0068] font-mono">{fmtBRL(calcTicket)}</span>
+                  Ticket médio por bailarino: <span className="text-[#ff0068] font-mono">{fmtBRL(calcTicket)}</span>
                 </label>
                 <input
                   id="calc-ticket"
-                  type="range" min={50} max={500} step={10}
+                  type="range" min={20} max={150} step={5}
                   value={calcTicket}
                   onChange={(e) => setCalcTicket(Number(e.target.value))}
-                  aria-label="Ticket médio por inscrição"
+                  aria-label="Ticket médio por bailarino inscrito"
                   aria-valuetext={fmtBRL(calcTicket)}
                   className="w-full mt-2 accent-[#ff0068]"
                 />
                 <div className="flex justify-between text-[9px] text-slate-500 mt-1">
-                  <span>R$ 50</span><span>R$ 500</span>
+                  <span>R$ 20</span><span>R$ 150</span>
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left">
-              <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Receita bruta</p>
-                <p className="text-xl md:text-2xl font-black tabular-nums text-white mt-1">{fmtBRL(calcReceita)}</p>
+
+            <div aria-live="polite">
+              <p className="text-xs text-slate-400 mb-4">
+                ≈ <span className="text-white font-bold tabular-nums">{calcParticipantes}</span> participantes estimados ·
+                plano recomendado{' '}
+                <span className="text-[#ff0068] font-black uppercase">{PLANO_LABEL[faixaRecomendada]}</span>
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left">
+                <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Faturamento estimado</p>
+                  <p className="text-xl md:text-2xl font-black tabular-nums text-white mt-1">{fmtBRL(calcFaturamento)}</p>
+                </div>
+                <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-rose-400">
+                    Você paga ({taxaEfetiva.toFixed(1)}% efetivo)
+                  </p>
+                  <p className="text-xl md:text-2xl font-black tabular-nums text-rose-400 mt-1">{fmtBRL(calcComissao)}</p>
+                </div>
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400">Você fica com</p>
+                  <p className="text-xl md:text-2xl font-black tabular-nums text-emerald-400 mt-1">{fmtBRL(calcLiquido)}</p>
+                </div>
               </div>
-              <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4">
-                <p className="text-[9px] font-black uppercase tracking-widest text-rose-400">Comissão (10%)</p>
-                <p className="text-xl md:text-2xl font-black tabular-nums text-rose-400 mt-1">{fmtBRL(calcComissao)}</p>
+
+              {/* Comparativo transparente entre os 3 planos — reforça "equilíbrio", não desconto */}
+              <div className="mt-4 grid grid-cols-3 gap-2 text-left">
+                {(['comeco', 'essencial', 'escala'] as FaixaPlano[]).map((faixa) => (
+                  <div
+                    key={faixa}
+                    className={`rounded-lg p-3 border ${
+                      faixa === faixaRecomendada
+                        ? 'bg-[#ff0068]/15 border-[#ff0068]/40'
+                        : 'bg-white/[0.03] border-white/10'
+                    }`}
+                  >
+                    <p className={`text-[9px] font-black uppercase tracking-widest ${faixa === faixaRecomendada ? 'text-[#ff0068]' : 'text-slate-500'}`}>
+                      {PLANO_LABEL[faixa]}{faixa === faixaRecomendada ? ' ✓' : ''}
+                    </p>
+                    <p className={`text-sm md:text-base font-black tabular-nums mt-1 ${faixa === faixaRecomendada ? 'text-white' : 'text-slate-400'}`}>
+                      {fmtBRL(valoresPorFaixa[faixa])}
+                    </p>
+                  </div>
+                ))}
               </div>
-              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
-                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400">Você fica com</p>
-                <p className="text-xl md:text-2xl font-black tabular-nums text-emerald-400 mt-1">{fmtBRL(calcLiquido)}</p>
-              </div>
+
+              <p className="text-xs text-slate-400 mt-6">
+                Sistemas do setor que cobram <span className="text-white font-bold">por pessoa</span> (modelo comum no mercado, sem relação
+                com o valor da inscrição): <span className="text-rose-400 font-bold">{fmtBRL(cobrancaPorPessoa)}</span> pro
+                mesmo evento. Sua mistura real de solo/duo/trio/grupo muda esse comparativo — por isso a CoreoHub cobra
+                proporcional ao que você de fato vende, não por cabeça.
+              </p>
             </div>
-            <p className="text-xs text-slate-400 mt-6">
-              No modelo tradicional: você paga <span className="text-rose-400 font-bold">R$ 290 a R$ 990/mês</span> de
-              mensalidade pra outras plataformas, mesmo quando o evento não rolou.
-              Aqui é zero — só paga quando inscrição entra.
-            </p>
+
+            {!leadSubmitted ? (
+              !showLeadForm ? (
+                <button
+                  type="button"
+                  onClick={() => setShowLeadForm(true)}
+                  className="mt-8 w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-[#ff0068] text-white rounded-xl text-sm font-black uppercase tracking-widest hover:bg-[#ff1a7d] transition-colors"
+                >
+                  Quero essa proposta <ArrowRight size={16} />
+                </button>
+              ) : (
+                <div className="mt-8 text-left bg-white/5 border border-white/10 rounded-2xl p-5">
+                  <p className="text-white text-sm font-bold mb-4">
+                    Deixa seu contato que a gente te chama com a proposta certinha pro plano {PLANO_LABEL[faixaRecomendada]}.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="lead-nome" className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nome do festival</label>
+                      <input
+                        id="lead-nome"
+                        type="text"
+                        value={leadNome}
+                        onChange={(e) => setLeadNome(e.target.value)}
+                        placeholder="Ex: Festival de Dança de..."
+                        className="w-full mt-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#ff0068]"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="lead-whatsapp" className="text-[10px] font-black uppercase tracking-widest text-slate-400">WhatsApp</label>
+                      <input
+                        id="lead-whatsapp"
+                        type="tel"
+                        inputMode="numeric"
+                        value={leadWhatsapp}
+                        onChange={(e) => setLeadWhatsapp(maskTelefoneBR(e.target.value))}
+                        placeholder="(17) 98126-4290"
+                        className="w-full mt-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#ff0068]"
+                      />
+                    </div>
+                  </div>
+                  {leadError && <p className="text-rose-400 text-xs mt-3">{leadError}</p>}
+                  <button
+                    type="button"
+                    onClick={submitCalculatorLead}
+                    disabled={leadSubmitting}
+                    className="mt-4 w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3 bg-[#ff0068] text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#ff1a7d] transition-colors disabled:opacity-50"
+                  >
+                    {leadSubmitting ? 'Enviando...' : 'Enviar simulação'}
+                  </button>
+                </div>
+              )
+            ) : (
+              <div className="mt-8 text-left bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-5" aria-live="polite">
+                <p className="text-emerald-400 text-sm font-bold">Recebemos sua simulação! 🎉</p>
+                <p className="text-slate-300 text-sm mt-1">
+                  Nosso time entra em contato no WhatsApp pra fechar os detalhes da sua proposta.
+                </p>
+                <a
+                  href={`https://wa.me/5517981264290?text=${leadWhatsappMessage}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 inline-flex items-center gap-2 px-5 py-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-colors"
+                >
+                  Falar agora no WhatsApp <ArrowRight size={14} />
+                </a>
+              </div>
+            )}
           </div>
 
           <div className="max-w-3xl mx-auto mt-8 bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -711,7 +902,7 @@ const LandingPage = () => {
                   <th className="py-4 px-3 text-center">
                     <div className="inline-flex flex-col items-center">
                       <span className="text-sm font-black uppercase tracking-tight text-[#ff0068]">CoreoHub</span>
-                      <span className="text-[9px] text-slate-500">10% só quando vende</span>
+                      <span className="text-[9px] text-slate-500">Plano sob medida, só quando vende</span>
                     </div>
                   </th>
                   <th className="py-4 px-3 text-center">
@@ -736,7 +927,7 @@ const LandingPage = () => {
               </thead>
               <tbody className="text-sm">
                 {[
-                  { f: 'Preço', type: 'text' as const, c: '10% só quando vende', d: 'Mensalidade fixa*', m: '7-12% + taxa fixa', p: 'Seu tempo: ~3h/dia' },
+                  { f: 'Preço', type: 'text' as const, c: '3 planos, sem mensalidade fora deles', d: 'Mensalidade fixa*', m: '7-12% + taxa fixa', p: 'Seu tempo: ~3h/dia' },
                   { f: 'Configura o evento a partir do seu regulamento', type: 'text' as const, c: 'Automático — cole o PDF, a IA extrai tudo', d: 'Manual, categoria por categoria', m: false, p: false },
                   { f: 'Júri avalia mesmo com Wi-Fi caindo',              type: 'bool' as const, c: true, d: false, m: false, p: false },
                   { f: 'Detecta conflito de bailarino em várias coreografias', type: 'bool' as const, c: true, d: false, m: false, p: false },
@@ -782,7 +973,7 @@ const LandingPage = () => {
             {[
               {
                 q: 'Como recebo o dinheiro das inscrições?',
-                a: 'Direto na sua conta bancária, numa instituição de pagamento regulamentada pelo Banco Central. Cada inscrição paga já sai com o split automático — 90% pra você, 10% comissão CoreoHub. Pix cai em minutos; cartão segue o prazo padrão da operadora. Sem fechamento de caixa manual, sem correr atrás de repasse.',
+                a: 'Direto na sua conta bancária, numa instituição de pagamento regulamentada pelo Banco Central. Cada inscrição paga já sai com o split automático — o restante pra você, a comissão do seu plano pra CoreoHub. Pix cai em minutos; cartão segue o prazo padrão da operadora. Sem fechamento de caixa manual, sem correr atrás de repasse.',
               },
               {
                 q: 'Funciona mesmo offline?',

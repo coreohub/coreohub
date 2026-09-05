@@ -109,6 +109,25 @@ export function parsePrecoBR(str: string): number {
   return isNaN(num) ? 0 : num;
 }
 
+/** "17981264290" → "(17) 98126-4290" · "1738211234" → "(17) 3821-1234".
+ *  Detecta pelo length: 11 dígitos = celular (9º dígito), 10 = fixo. Limita a 11 dígitos. */
+export function maskTelefoneBR(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 10) {
+    return digits
+      .replace(/(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{4})(\d)/, '$1-$2');
+  }
+  return digits
+    .replace(/(\d{2})(\d)/, '($1) $2')
+    .replace(/(\d{5})(\d)/, '$1-$2');
+}
+
+/** Extrai só os dígitos (10 ou 11), sem o "+55" pra guardar no banco/CTA de WhatsApp. */
+export function unmaskTelefoneBR(value: string): string {
+  return value.replace(/\D/g, '');
+}
+
 /** "01011990" → "01/01/1990". Limita a 8 dígitos. */
 export function maskData(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 8);
