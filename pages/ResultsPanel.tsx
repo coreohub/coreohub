@@ -127,6 +127,7 @@ const ResultsPanel = () => {
   const [filterCategory, setFilterCategory] = useState('');
   const [publishing, setPublishing] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportingJudgeNotes, setExportingJudgeNotes] = useState(false);
   const [thresholds, setThresholds] = useState<MedalThresholds>(DEFAULT_THRESHOLDS);
   const [premiationSystem, setPremiationSystem] = useState<PremiationSystem>('THRESHOLD');
   const [medalLabels, setMedalLabels] = useState<MedalLabels | null>(null);
@@ -642,6 +643,17 @@ const ResultsPanel = () => {
 
           const fmtValor = (v?: string) => v ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '';
 
+          // Faixas (Ouro/Prata/Bronze ou 1º/2º/3º Lugar) juntam TODA coreografia
+          // que caiu naquela faixa de nota, festival inteiro — pode ser dezenas
+          // de estilos/categorias diferentes. Uma lista achatada fica ilegível
+          // (achado real do Bheto/Ecodança: "Troféu 3º Lugar" com 12 nomes sem
+          // organização nenhuma). Em vez de listar tudo na célula da tabela
+          // principal, guarda os grupos aqui e desenha uma mini-seção por
+          // Estilo·Formação·Categoria logo abaixo — sem mudar o MECANISMO
+          // (a faixa de nota continua decidindo a medalha no festival inteiro,
+          // só a APRESENTAÇÃO fica organizada).
+          const faixaGroupsByAward: Record<string, [string, GroupedResult[]][]> = {};
+
           const awardRows = awards.map(a => {
             const r = classifyAward(a);
             let vencedor = '—';
@@ -658,12 +670,18 @@ const ResultsPanel = () => {
               const naFaixa = competitiva
                 .filter(x => x.evaluations_count > 0 && x.average_score >= lo && (hi == null || x.average_score < hi))
                 .sort((x, y) => y.average_score - x.average_score);
-              // Uma coreografia por linha (autotable respeita \n) — a faixa Ouro
-              // pode ter muitas coreografias; juntar tudo com "; " virava um
-              // parágrafo ilegível numa célula só.
-              vencedor = naFaixa.length > 0
-                ? naFaixa.map(x => `${x.nome_coreografia} (${x.average_score.toFixed(2)})`).join('\n')
-                : 'Nenhuma coreografia na faixa';
+              if (naFaixa.length > 0) {
+                const groups: Record<string, GroupedResult[]> = {};
+                naFaixa.forEach(x => {
+                  const key = `${x.estilo_danca}|${x.categoria}|${x.formato_participacao}|${x.subgenero}`;
+                  if (!groups[key]) groups[key] = [];
+                  groups[key].push(x);
+                });
+                faixaGroupsByAward[a.id] = Object.entries(groups).sort(([k1], [k2]) => k1.localeCompare(k2));
+                vencedor = `${naFaixa.length} coreografia${naFaixa.length === 1 ? '' : 's'} — ver detalhamento por estilo/categoria abaixo`;
+              } else {
+                vencedor = 'Nenhuma coreografia na faixa';
+              }
             } else if (r.tipo === 'maior_nota') {
               const top = competitiva.filter(x => x.evaluations_count > 0).sort((x, y) => y.average_score - x.average_score)[0];
               vencedor = top ? `${top.nome_coreografia} (${top.average_score.toFixed(2)})` : '—';
@@ -694,6 +712,51 @@ const ResultsPanel = () => {
           });
 
           cursorY = (doc as any).lastAutoTable.finalY + 10;
+
+          // Mini-seção por faixa, organizada por Estilo·Formação·Categoria —
+          // resolve a ilegibilidade da lista achatada sem mudar o mecanismo.
+          for (const a of awards) {
+            const groupsForAward = faixaGroupsByAward[a.id];
+            if (!groupsForAward || groupsForAward.length === 0) continue;
+
+            if (cursorY > pageHeight - 50) { doc.addPage(); cursorY = 20; }
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(255, 0, 104);
+            doc.text(`${a.nome} — por Estilo · Formação · Categoria`, 20, cursorY);
+            doc.setTextColor(40, 40, 40);
+            cursorY += 6;
+
+            for (const [key, entries] of groupsForAward) {
+              if (cursorY > pageHeight - 40) { doc.addPage(); cursorY = 20; }
+              const [estiloKey, categoriaKey, formatoKey, subgeneroKey] = key.split('|');
+              doc.setFontSize(10);
+              doc.setFont('helvetica', 'bold');
+              doc.setTextColor(40, 40, 40);
+              doc.text(subgeneroKey ? `${estiloKey || '—'} · ${subgeneroKey}` : (estiloKey || '—'), 20, cursorY);
+              cursorY += 3.5;
+              doc.setFontSize(7.5);
+              doc.setFont('helvetica', 'normal');
+              doc.setTextColor(130, 130, 130);
+              doc.text(`FORMAÇÃO · CATEGORIA: ${(formatoKey || '—').toUpperCase()} · ${(categoriaKey || '—').toUpperCase()}`, 20, cursorY);
+              doc.setTextColor(40, 40, 40);
+              cursorY += 3;
+
+              autoTable(doc, {
+                head: [['Coreografia', 'Estúdio/Grupo', 'Média']],
+                body: entries.map(x => [x.nome_coreografia, x.estudio, x.average_score.toFixed(2)]),
+                startY: cursorY,
+                theme: 'striped',
+                headStyles: { fillColor: [90, 90, 90], textColor: 255, fontSize: 8, fontStyle: 'bold' },
+                bodyStyles: { fontSize: 8, textColor: 40 },
+                alternateRowStyles: { fillColor: [248, 248, 250] },
+                columnStyles: { 2: { cellWidth: 18, halign: 'center', fontStyle: 'bold' } },
+                margin: { left: 20, right: 20 },
+              });
+              cursorY = (doc as any).lastAutoTable.finalY + 6;
+            }
+            cursorY += 4;
+          }
         }
       }
 
@@ -822,6 +885,152 @@ const ResultsPanel = () => {
     }
   };
 
+  /* ── PDF "Notas por Jurado" — pedido real do Bheto (Ecodança): quer ver a
+   *  nota que CADA jurado deu por critério, por coreografia, não só a média
+   *  agregada da Apuração Final. Reaproveita scores_detail (já carregado no
+   *  fetch, mesmo dado que já aparece expandido na tela) — zero query nova.
+   *  Critérios (as chaves de sd.scores) são os do regulamento configurado
+   *  pro evento em Configurações → Avaliação, não um rótulo genérico. ── */
+  const exportJudgeNotesPDF = async () => {
+    setExportingJudgeNotes(true);
+    try {
+      const { resolveActiveEventId } = await import('../services/supabase');
+      const eventId = await resolveActiveEventId();
+      let eventName = 'Notas por Jurado';
+      let editionYear = new Date().getFullYear();
+      if (eventId) {
+        const { data: ev } = await supabase
+          .from('events')
+          .select('name, edition_year, start_date')
+          .eq('id', eventId)
+          .maybeSingle();
+        if (ev) {
+          eventName = ev.name || eventName;
+          editionYear = ev.edition_year ?? (ev.start_date ? new Date(ev.start_date).getFullYear() : editionYear);
+        }
+      }
+
+      const { default: jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
+      const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+
+      // Só coreografias com pelo menos 1 avaliação — sem isso a tabela por
+      // jurado fica vazia (jspdf-autotable com body=[] não agrega valor).
+      const withNotes = competitiva.filter(r => r.total_evaluations_count > 0);
+
+      // Capa
+      doc.setFillColor(255, 0, 104);
+      doc.rect(0, 0, pageWidth, 50, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(24);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Notas por Jurado', pageWidth / 2, 25, { align: 'center' });
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text(eventName.toUpperCase(), pageWidth / 2, 35, { align: 'center' });
+      doc.text(`Edição ${editionYear}`, pageWidth / 2, 42, { align: 'center' });
+
+      doc.setTextColor(40, 40, 40);
+      doc.setFontSize(10);
+      doc.text(`Total de coreografias com nota: ${withNotes.length}`, 20, 65);
+
+      let cursorY = 80;
+
+      // Agrupa por Estilo · Formação · Categoria · Subgênero (mesma chave da
+      // Apuração Final), ordem alfabética pra ficar previsível de folhear.
+      const groups: Record<string, GroupedResult[]> = {};
+      withNotes.forEach(r => {
+        const key = `${r.estilo_danca}|${r.categoria}|${r.formato_participacao}|${r.subgenero}`;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(r);
+      });
+      Object.values(groups).forEach(g => g.sort((a, b) => b.average_score - a.average_score));
+      const sortedGroups = Object.entries(groups).sort(([k1], [k2]) => k1.localeCompare(k2));
+
+      for (const [key, entries] of sortedGroups) {
+        if (cursorY > pageHeight - 50) { doc.addPage(); cursorY = 20; }
+        const [estiloKey, categoriaKey, formatoKey, subgeneroKey] = key.split('|');
+        doc.setFontSize(13);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 0, 104);
+        doc.text(subgeneroKey ? `${estiloKey || '—'} · ${subgeneroKey}` : (estiloKey || '—'), 20, cursorY);
+        cursorY += 4.5;
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(130, 130, 130);
+        doc.text(`FORMAÇÃO · CATEGORIA: ${(formatoKey || '—').toUpperCase()} · ${(categoriaKey || '—').toUpperCase()}`, 20, cursorY);
+        doc.setTextColor(40, 40, 40);
+        cursorY += 6;
+
+        for (const entry of entries) {
+          if (cursorY > pageHeight - 45) { doc.addPage(); cursorY = 20; }
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(40, 40, 40);
+          doc.text(`${entry.nome_coreografia} — ${entry.estudio}`, 20, cursorY);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8);
+          doc.setTextColor(130, 130, 130);
+          doc.text(`Nota final combinada: ${entry.average_score.toFixed(2)}`, pageWidth - 20, cursorY, { align: 'right' });
+          doc.setTextColor(40, 40, 40);
+          cursorY += 3;
+
+          const body = entry.scores_detail.map(sd => {
+            const criterios = Object.entries(sd.scores).map(([k, v]) => `${k}: ${Number(v).toFixed(1)}`).join('\n');
+            return [
+              sd.judge,
+              sd.tipo_juri === 'artistico' ? 'Artístico' : 'Técnico',
+              criterios || '—',
+              sd.final != null ? Number(sd.final).toFixed(2) : '—',
+            ];
+          });
+
+          autoTable(doc, {
+            head: [['Jurado', 'Tipo', 'Critérios', 'Nota']],
+            body,
+            startY: cursorY,
+            theme: 'striped',
+            headStyles: { fillColor: [40, 40, 40], textColor: 255, fontSize: 8, fontStyle: 'bold' },
+            bodyStyles: { fontSize: 8, textColor: 40, valign: 'top' },
+            alternateRowStyles: { fillColor: [248, 248, 250] },
+            columnStyles: {
+              0: { cellWidth: 32 },
+              1: { cellWidth: 20, halign: 'center' },
+              3: { cellWidth: 16, halign: 'center', fontStyle: 'bold' },
+            },
+            margin: { left: 20, right: 20 },
+          });
+          cursorY = (doc as any).lastAutoTable.finalY + 6;
+        }
+        cursorY += 4;
+      }
+
+      // Rodape em todas paginas
+      const totalPages = doc.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(140, 140, 140);
+        const dateStr = `${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR').slice(0, 5)}`;
+        doc.text(`Gerado em ${dateStr} • CoreoHub`, 20, pageHeight - 8);
+        doc.text(`Página ${i} de ${totalPages}`, pageWidth - 20, pageHeight - 8, { align: 'right' });
+      }
+
+      const slug = (eventName || 'evento')
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
+      doc.save(`notas-por-jurado-${editionYear}-${slug}.pdf`);
+    } catch (err) {
+      console.error('Erro ao exportar PDF de notas por jurado:', err);
+      alert('Falha ao gerar PDF: ' + (err instanceof Error ? err.message : 'desconhecido'));
+    } finally {
+      setExportingJudgeNotes(false);
+    }
+  };
+
   /* ── Stats ── */
   const outlierCount = competitiva.filter(r => r.has_outlier).length;
   const pendingCount = allResults.filter(r => r.evaluations_count === 0).length;
@@ -860,6 +1069,16 @@ const ResultsPanel = () => {
             {exportingPdf
               ? <><Loader2 size={14} className="animate-spin" /> Gerando...</>
               : <><FileDown size={14} /> Exportar PDF</>}
+          </button>
+          <button
+            onClick={exportJudgeNotesPDF}
+            disabled={exportingJudgeNotes || competitiva.length === 0}
+            className="px-4 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-600 dark:text-slate-300 font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-white/10 transition-all disabled:opacity-40 flex items-center gap-2"
+            title="Gerar PDF com a nota de cada jurado, por critério, por coreografia"
+          >
+            {exportingJudgeNotes
+              ? <><Loader2 size={14} className="animate-spin" /> Gerando...</>
+              : <><FileDown size={14} /> Notas por Jurado (PDF)</>}
           </button>
           <button
             onClick={handleClearAll}
