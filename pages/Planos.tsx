@@ -107,6 +107,7 @@ const Planos: React.FC = () => {
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [leadNome, setLeadNome] = useState('');
   const [leadWhatsapp, setLeadWhatsapp] = useState('');
+  const [leadEmail, setLeadEmail] = useState('');
   const [leadSubmitting, setLeadSubmitting] = useState(false);
   const [leadSubmitted, setLeadSubmitted] = useState(false);
   const [leadError, setLeadError] = useState<string | null>(null);
@@ -129,8 +130,10 @@ const Planos: React.FC = () => {
     setLeadError(null);
     const nome = leadNome.trim();
     const whatsappDigits = unmaskTelefoneBR(leadWhatsapp);
+    const emailTrimmed = leadEmail.trim();
     if (!nome) { setLeadError('Digite o nome do festival.'); return; }
     if (whatsappDigits.length < 10) { setLeadError('Digite um WhatsApp válido com DDD.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) { setLeadError('Digite um e-mail válido.'); return; }
 
     setLeadSubmitting(true);
     try {
@@ -140,6 +143,7 @@ const Planos: React.FC = () => {
         body: JSON.stringify({
           nome_festival: nome,
           whatsapp: whatsappDigits,
+          email: emailTrimmed,
           numero_coreografias: calcCoreografias,
           media_bailarinos_coreografia: calcMediaBailarinos,
           ticket_medio: calcTicket,
@@ -280,7 +284,7 @@ const Planos: React.FC = () => {
                 <p className="text-white text-sm font-bold mb-4">
                   Deixa seu contato que a gente te chama com a proposta certinha pro plano {nomeRecomendado}.
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label htmlFor="lead-nome" className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nome do festival</label>
                     <input
@@ -304,7 +308,19 @@ const Planos: React.FC = () => {
                       className="w-full mt-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#ff0068]"
                     />
                   </div>
+                  <div>
+                    <label htmlFor="lead-email" className="text-[10px] font-black uppercase tracking-widest text-slate-400">E-mail</label>
+                    <input
+                      id="lead-email"
+                      type="email"
+                      value={leadEmail}
+                      onChange={(e) => setLeadEmail(e.target.value)}
+                      placeholder="voce@email.com"
+                      className="w-full mt-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#ff0068]"
+                    />
+                  </div>
                 </div>
+                <p className="text-[11px] text-slate-500 mt-3">Mandamos essa simulação em detalhes pro seu e-mail também.</p>
                 {leadError && <p className="text-rose-400 text-xs mt-3">{leadError}</p>}
                 <button
                   type="button"
@@ -320,7 +336,7 @@ const Planos: React.FC = () => {
             <div className="mt-6 text-left bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-5" aria-live="polite">
               <p className="text-emerald-400 text-sm font-bold">Recebemos sua simulação! 🎉</p>
               <p className="text-slate-300 text-sm mt-1">
-                Nosso time entra em contato no WhatsApp pra fechar os detalhes da sua proposta.
+                Mandamos o resumo em detalhes pro seu e-mail. Nosso time também entra em contato no WhatsApp pra fechar os detalhes da sua proposta.
               </p>
               <a
                 href={`https://wa.me/5517981264290?text=${leadWhatsappMessage}`}

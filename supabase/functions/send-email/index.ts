@@ -1215,6 +1215,59 @@ interface PayoutReleasedPayload {
 
 // ─── Lead reengagement (funil) ───────────────────────────────────────────────
 
+// ─── Calculadora pública (proposta simulada) ───────────────────────────────
+
+interface CalculatorProposalPayload {
+  leadEmail:              string
+  leadNome:               string  // nome do festival, não da pessoa (form não pede nome próprio)
+  leadWhatsapp:           string  // dígitos, pra montar o link wa.me no CTA
+  numeroCoreografias:     number
+  mediaBailarinos:        number
+  ticketMedio:            number
+  participantesEstimados: number
+  faturamentoEstimado:    number
+  planoNome:              string  // "Começo" | "Essencial" | "Escala"
+  valorEstimado:          number
+}
+
+function buildCalculatorProposal(p: CalculatorProposalPayload) {
+  const waText = encodeURIComponent(
+    `Olá! Simulei meu festival na CoreoHub: ${p.numeroCoreografias} coreografias, ~${p.participantesEstimados} participantes, faturamento estimado ${money(p.faturamentoEstimado)}. Plano recomendado: ${p.planoNome}. Nome do festival: ${p.leadNome}.`
+  )
+  const ctaUrl = `https://wa.me/5517981264290?text=${waText}`
+
+  const contentHtml = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      ${infoRow('Nº de coreografias', String(p.numeroCoreografias))}
+      ${infoRow('Média de bailarinos/coreografia', String(p.mediaBailarinos))}
+      ${infoRow('Ticket médio por bailarino', money(p.ticketMedio))}
+      ${infoRow('Participantes estimados', String(p.participantesEstimados))}
+      ${infoRow('Faturamento estimado', money(p.faturamentoEstimado))}
+    </table>
+    <div style="margin-top:20px;padding:22px;border-radius:14px;background:#fff5f8;border:2px solid #ff0068;text-align:center;">
+      <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#ff0068;">Plano recomendado</p>
+      <p style="margin:8px 0 0;font-size:28px;font-weight:900;color:#0b0b0f;letter-spacing:-.02em;">${escape(p.planoNome)}</p>
+      <p style="margin:6px 0 0;font-size:14px;line-height:1.5;color:#475569;">Você pagaria <strong>${money(p.valorEstimado)}</strong> pro porte simulado</p>
+    </div>
+    <p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      Essa é uma estimativa pro plano recomendado pelo porte informado — você pode escolher outro plano se preferir.
+      Fala com a gente no WhatsApp que fechamos os detalhes certinhos pro <strong>${escape(p.leadNome)}</strong>.
+    </p>`
+
+  return {
+    subject: `[${p.leadNome}] Sua simulação CoreoHub — plano ${p.planoNome}`,
+    html: baseLayout({
+      preheader: `Simulação do ${p.leadNome}: plano ${p.planoNome}, ${money(p.valorEstimado)} estimado.`,
+      title: 'Sua simulação está pronta',
+      intro: `Aqui está o resumo da simulação que você fez pro <strong>${escape(p.leadNome)}</strong>.`,
+      contentHtml,
+      ctaLabel: 'Falar no WhatsApp',
+      ctaUrl,
+      footerNote: 'Você recebeu este email porque pediu uma simulação de preço no site da CoreoHub.',
+    }),
+  }
+}
+
 interface LeadReengagementPayload {
   /** Email do lead (destino). */
   leadEmail:          string
@@ -1734,6 +1787,18 @@ Deno.serve(async (req) => {
         to = p.produtorEmail
         subject = tpl.subject
         html = tpl.html
+        break
+      }
+      case 'calculator_proposal': {
+        const p = payload as unknown as CalculatorProposalPayload
+        if (!p.leadEmail) throw new Error('leadEmail é obrigatório')
+        if (!p.leadNome) throw new Error('leadNome é obrigatório')
+        if (!p.planoNome) throw new Error('planoNome é obrigatório')
+        const tpl = buildCalculatorProposal(p)
+        to = p.leadEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.leadNome
         break
       }
       case 'lead_reengagement': {

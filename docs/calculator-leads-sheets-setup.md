@@ -27,7 +27,7 @@ function doPost(e) {
   // Cria o cabeçalho na primeira vez que a planilha for usada
   if (sheet.getLastRow() === 0) {
     sheet.appendRow([
-      'created_at', 'nome_festival', 'whatsapp', 'numero_coreografias',
+      'created_at', 'nome_festival', 'whatsapp', 'email', 'numero_coreografias',
       'media_bailarinos_coreografia', 'ticket_medio', 'participantes_estimados',
       'faturamento_estimado', 'faixa_recomendada', 'valor_estimado', 'origem'
     ]);
@@ -39,6 +39,7 @@ function doPost(e) {
     data.created_at || new Date().toISOString(),
     data.nome_festival || '',
     data.whatsapp || '',
+    data.email || '',
     data.numero_coreografias || '',
     data.media_bailarinos_coreografia || '',
     data.ticket_medio || '',

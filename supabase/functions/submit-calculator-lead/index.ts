@@ -13,6 +13,7 @@
 // {
 //   nome_festival: string,
 //   whatsapp: string,               // com ou sem máscara, normalizado aqui
+//   email: string,                  // recebe a proposta em HTML (send-email, template calculator_proposal)
 //   numero_coreografias: number,
 //   media_bailarinos_coreografia: number,
 //   ticket_medio: number,
@@ -38,6 +39,8 @@ const json = (data: unknown, status = 200) =>
   })
 
 const FAIXAS = ['comeco', 'essencial', 'escala']
+const PLANO_LABEL: Record<string, string> = { comeco: 'Começo', essencial: 'Essencial', escala: 'Escala' }
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function toPositiveNumber(v: unknown): number | null {
   const n = Number(v)
@@ -57,6 +60,7 @@ Deno.serve(async (req: Request) => {
 
   const nomeFestival = typeof body.nome_festival === 'string' ? body.nome_festival.trim() : ''
   const whatsappDigits = typeof body.whatsapp === 'string' ? body.whatsapp.replace(/\D/g, '') : ''
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
   const faixaRecomendada = typeof body.faixa_recomendada === 'string' ? body.faixa_recomendada : ''
 
   const numeroCoreografias = toPositiveNumber(body.numero_coreografias)
@@ -71,6 +75,9 @@ Deno.serve(async (req: Request) => {
   }
   if (whatsappDigits.length < 10 || whatsappDigits.length > 13) {
     return json({ error: 'whatsapp_invalido' }, 400)
+  }
+  if (!EMAIL_REGEX.test(email)) {
+    return json({ error: 'email_invalido' }, 400)
   }
   if (!FAIXAS.includes(faixaRecomendada)) {
     return json({ error: 'faixa_recomendada_invalida' }, 400)
@@ -95,6 +102,7 @@ Deno.serve(async (req: Request) => {
     .insert({
       nome_festival: nomeFestival,
       whatsapp: whatsappDigits,
+      email,
       numero_coreografias: Math.round(numeroCoreografias),
       media_bailarinos_coreografia: mediaBailarinos,
       ticket_medio: ticketMedio,
@@ -111,38 +119,72 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'db_error', detail: error?.message }, 500)
   }
 
-  // Espelhamento best-effort na planilha Google (Apps Script Web App).
-  // Nunca bloqueia nem falha a resposta pro lead — é só um espelho pra
-  // acompanhamento manual/comercial, Supabase é a fonte de verdade.
-  const sheetsWebhookUrl = Deno.env.get('CALCULATOR_LEADS_SHEETS_WEBHOOK_URL')
-  if (sheetsWebhookUrl) {
-    try {
-      const resp = await fetch(sheetsWebhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          created_at: inserted.created_at,
-          nome_festival: nomeFestival,
-          whatsapp: whatsappDigits,
-          numero_coreografias: Math.round(numeroCoreografias),
-          media_bailarinos_coreografia: mediaBailarinos,
-          ticket_medio: ticketMedio,
-          participantes_estimados: Math.round(participantesEstimados),
-          faturamento_estimado: faturamentoEstimado,
-          faixa_recomendada: faixaRecomendada,
-          valor_estimado: valorEstimado,
-          origem: origem ?? '',
-        }),
-      })
+  // Proposta em HTML por e-mail (Resend, via send-email) — fire-and-forget,
+  // não bloqueia a resposta pro lead (mesmo padrão de outras edge functions
+  // do projeto, ex. create-aggregate-payment-asaas). WhatsApp continua
+  // sendo o canal de conversa; o e-mail é só o "documento" da simulação.
+  fetch(`${supabaseUrl}/functions/v1/send-email`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'calculator_proposal',
+      payload: {
+        leadEmail: email,
+        leadNome: nomeFestival,
+        leadWhatsapp: whatsappDigits,
+        numeroCoreografias: Math.round(numeroCoreografias),
+        mediaBailarinos,
+        ticketMedio,
+        participantesEstimados: Math.round(participantesEstimados),
+        faturamentoEstimado,
+        planoNome: PLANO_LABEL[faixaRecomendada] ?? faixaRecomendada,
+        valorEstimado,
+      },
+    }),
+  })
+    .then((resp) => {
       if (resp.ok) {
-        await supa
+        return supa
           .from('calculator_leads')
-          .update({ sheet_synced_at: new Date().toISOString() })
+          .update({ proposal_email_sent_at: new Date().toISOString() })
           .eq('id', inserted.id)
       }
-    } catch {
-      // best-effort — falha no espelho não afeta o lead já salvo
-    }
+    })
+    .catch(() => { /* best-effort — falha no envio de e-mail não afeta o lead já salvo */ })
+
+  // Espelhamento best-effort na planilha Google (Apps Script Web App) —
+  // idem, fire-and-forget. Nunca bloqueia nem falha a resposta pro lead;
+  // é só um espelho pra acompanhamento manual/comercial, Supabase é a
+  // fonte de verdade.
+  const sheetsWebhookUrl = Deno.env.get('CALCULATOR_LEADS_SHEETS_WEBHOOK_URL')
+  if (sheetsWebhookUrl) {
+    fetch(sheetsWebhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        created_at: inserted.created_at,
+        nome_festival: nomeFestival,
+        whatsapp: whatsappDigits,
+        email,
+        numero_coreografias: Math.round(numeroCoreografias),
+        media_bailarinos_coreografia: mediaBailarinos,
+        ticket_medio: ticketMedio,
+        participantes_estimados: Math.round(participantesEstimados),
+        faturamento_estimado: faturamentoEstimado,
+        faixa_recomendada: faixaRecomendada,
+        valor_estimado: valorEstimado,
+        origem: origem ?? '',
+      }),
+    })
+      .then((resp) => {
+        if (resp.ok) {
+          return supa
+            .from('calculator_leads')
+            .update({ sheet_synced_at: new Date().toISOString() })
+            .eq('id', inserted.id)
+        }
+      })
+      .catch(() => { /* best-effort — falha no espelho não afeta o lead já salvo */ })
   }
 
   return json({ ok: true, id: inserted.id })
