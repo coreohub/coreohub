@@ -36,7 +36,22 @@ const LandingEstudios: React.FC = () => {
 
   const ingressosVendidos = calcAlunos * calcConvidados;
   const calcReceita = ingressosVendidos * calcTicket;
-  const calcComissao = calcReceita * 0.10;
+
+  // Modelo de 3 planos (docs/pricing-model-spec.md) — Começo/Essencial são %
+  // puro sobre a receita, aplicável a qualquer fonte de venda. O Escala não
+  // entra aqui de propósito: sua componente variável (R$2/participante) só
+  // conta bailarino×coreografia de inscrição competitiva — ingresso de
+  // plateia fica fora dessa contagem por decisão do spec. Um espetáculo de
+  // estúdio é 100% receita de ingresso, então a fórmula do Escala resultaria
+  // sempre em R$1.490 fixo (variável=0), número que não reflete o porte real
+  // do evento — por isso o Escala fica só como link de fala-com-a-gente.
+  type PlanoEstudio = 'comeco' | 'essencial';
+  const valorComeco = calcReceita * 0.10;
+  const valorEssencial = 250 + calcReceita * 0.05;
+  const valoresPorPlano: Record<PlanoEstudio, number> = { comeco: valorComeco, essencial: valorEssencial };
+  const planoRecomendado: PlanoEstudio = calcReceita <= 5000 ? 'comeco' : 'essencial';
+  const planoLabel: Record<PlanoEstudio, string> = { comeco: 'Começo', essencial: 'Essencial' };
+  const calcComissao = valoresPorPlano[planoRecomendado];
   const calcLiquido = calcReceita - calcComissao;
   const fmtBRL = (n: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(n);
@@ -420,13 +435,21 @@ const LandingEstudios: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 text-left">
+            <p className="text-xs text-slate-400 mb-4" aria-live="polite">
+              <span className="text-white font-bold tabular-nums">{ingressosVendidos}</span> ingressos vendidos ·
+              receita estimada <span className="text-white font-bold tabular-nums">{fmtBRL(calcReceita)}</span> ·
+              plano recomendado <span className="text-[#ff0068] font-black uppercase">{planoLabel[planoRecomendado]}</span>
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left">
               <div className="bg-white/5 border border-white/10 rounded-xl p-4">
                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Ingressos vendidos</p>
                 <p className="text-xl md:text-2xl font-black tabular-nums text-white mt-1">{ingressosVendidos}</p>
               </div>
               <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4">
-                <p className="text-[9px] font-black uppercase tracking-widest text-rose-400">Comissão (plano Começo)</p>
+                <p className="text-[9px] font-black uppercase tracking-widest text-rose-400">
+                  Você paga (plano {planoLabel[planoRecomendado]})
+                </p>
                 <p className="text-xl md:text-2xl font-black tabular-nums text-rose-400 mt-1">{fmtBRL(calcComissao)}</p>
               </div>
               <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
@@ -435,10 +458,33 @@ const LandingEstudios: React.FC = () => {
               </div>
             </div>
 
+            <div className="mt-4 grid grid-cols-2 gap-2 text-left max-w-sm">
+              {(['comeco', 'essencial'] as PlanoEstudio[]).map((plano) => (
+                <div
+                  key={plano}
+                  className={`rounded-lg p-3 border ${
+                    plano === planoRecomendado
+                      ? 'bg-[#ff0068]/15 border-[#ff0068]/40'
+                      : 'bg-white/[0.03] border-white/10'
+                  }`}
+                >
+                  <p className={`text-[9px] font-black uppercase tracking-widest ${plano === planoRecomendado ? 'text-[#ff0068]' : 'text-slate-500'}`}>
+                    Plano {planoLabel[plano]}{plano === planoRecomendado ? ' ✓' : ''}
+                  </p>
+                  <p className={`text-sm md:text-base font-black tabular-nums mt-1 ${plano === planoRecomendado ? 'text-white' : 'text-slate-400'}`}>
+                    {fmtBRL(valoresPorPlano[plano])}
+                  </p>
+                </div>
+              ))}
+            </div>
+
             <p className="text-xs text-slate-400 mt-6">
-              Simulação no plano Começo (10%, sem taxa fixa) — o mais indicado pra 1ª mostra ou espetáculo pequeno.
-              Espetáculos maiores podem compensar mais nos planos Essencial ou Escala.{' '}
-              <Link to="/planos" className="text-[#ff0068] font-bold hover:underline">Veja todos os planos</Link>.
+              Espetáculo muito grande (milhares de ingressos, múltiplas sessões)? O plano Escala tem teto de
+              4,5% do faturamento.{' '}
+              <a href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Olá! Quero saber sobre o plano Escala pro meu espetáculo.')}`} target="_blank" rel="noopener noreferrer" className="text-[#ff0068] font-bold hover:underline">
+                Fala com a gente no WhatsApp
+              </a>{' '}
+              ou <Link to="/planos" className="text-[#ff0068] font-bold hover:underline">veja todos os planos</Link>.
             </p>
           </div>
         </div>

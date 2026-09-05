@@ -1258,7 +1258,7 @@ function buildCalculatorProposal(p: CalculatorProposalPayload) {
     </p>`
 
   return {
-    subject: `[${p.leadNome}] Plano ${p.planoNome} recomendado — ${money(p.valorEstimado)} estimado`,
+    subject: `[Simulação CoreoHub] Plano ${p.planoNome} pra "${p.leadNome.slice(0, 50)}" — ${money(p.valorEstimado)} estimado`,
     html: baseLayout({
       preheader: `Simulação do ${p.leadNome}: plano ${p.planoNome}, ${money(p.valorEstimado)} estimado.`,
       title: 'Sua simulação está pronta',
