@@ -59,6 +59,8 @@ interface EventRow {
   setup_fee_grandfathered: boolean | null;
   setup_fee_tier_chave: string | null;
   setup_fee_amount_paid: number | null;
+  billing_plan: 'comeco' | 'essencial' | 'escala' | null;
+  billing_plan_fixed_fee_paid_at: string | null;
 }
 
 /* Rótulos/ícones do discriminador platform_commissions.kind (migration 20260604).
@@ -161,7 +163,7 @@ const SuperAdmin = () => {
           supabase.from('profiles')
             .select('id, full_name, email, is_blocked, asaas_subconta_id, default_commission_percent, asaas_kyc_status, asaas_onboarding_url'),
           supabase.from('events')
-            .select('id, name, slug, created_by, start_date, event_type, commission_type, commission_percent, commission_fixed, fee_mode, is_public, is_demo, acesso_liberado_nota, setup_fee_paid_at, setup_fee_grandfathered, setup_fee_tier_chave, setup_fee_amount_paid')
+            .select('id, name, slug, created_by, start_date, event_type, commission_type, commission_percent, commission_fixed, fee_mode, is_public, is_demo, acesso_liberado_nota, setup_fee_paid_at, setup_fee_grandfathered, setup_fee_tier_chave, setup_fee_amount_paid, billing_plan, billing_plan_fixed_fee_paid_at')
             .order('start_date', { ascending: false }),
           listInvites(),
           // Bloco 1: leads sem atribuição. Filtros: role != COREOHUB_ADMIN
@@ -448,6 +450,17 @@ const SuperAdmin = () => {
     if (patch.event_type         !== undefined) update.event_type         = patch.event_type;
     if (patch.is_public          !== undefined) update.is_public          = patch.is_public;
     if (patch.acesso_liberado_nota !== undefined) update.acesso_liberado_nota = patch.acesso_liberado_nota || null;
+    // Troca de plano manual pelo super admin (docs/pricing-model-spec.md —
+    // não existe troca self-service pelo produtor, só admin ou negociação
+    // direta). commission_percent deriva sozinho via trigger
+    // sync_commission_percent_from_billing_plan. Marca o fixo como "pago"
+    // pra não ficar pendurado esperando um pagamento que não vai vir (é
+    // concessão manual, não fluxo de cobrança); volta a NULL se voltar
+    // pro Começo.
+    if (patch.billing_plan !== undefined && patch.billing_plan !== eventEdit.billing_plan) {
+      update.billing_plan = patch.billing_plan;
+      update.billing_plan_fixed_fee_paid_at = patch.billing_plan === 'comeco' ? null : new Date().toISOString();
+    }
 
     const { error: updErr } = await supabase.from('events').update(update).eq('id', eventEdit.id);
     if (updErr) { alert('Falha ao salvar: ' + updErr.message); return; }
@@ -1329,6 +1342,8 @@ const EventCommissionModal: React.FC<{
   const [feeMode, setFeeMode]   = useState<'repassar' | 'absorver'>(event.fee_mode ?? 'repassar');
   const [eventType, setEventType] = useState<'private' | 'government'>(event.event_type ?? 'private');
   const [nota, setNota]         = useState<string>(event.acesso_liberado_nota ?? '');
+  const [billingPlan, setBillingPlan] = useState<'comeco' | 'essencial' | 'escala'>(event.billing_plan ?? 'comeco');
+  const BILLING_PLAN_COMMISSION: Record<string, number> = { comeco: 10, essencial: 5, escala: 4.5 };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -1431,6 +1446,34 @@ const EventCommissionModal: React.FC<{
             </div>
           </div>
 
+          {/* Plano comercial (docs/pricing-model-spec.md) — produtor não tem
+              troca self-service depois de escolhido; só admin ou negociação
+              direta. commission_percent deriva sozinho via trigger no banco
+              quando este campo muda. */}
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Plano (docs/pricing-model-spec.md)</label>
+            <div className="grid grid-cols-3 gap-2">
+              {(['comeco', 'essencial', 'escala'] as const).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setBillingPlan(p)}
+                  className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
+                    billingPlan === p
+                      ? 'bg-[#ff0068]/10 text-[#ff0068] border-[#ff0068]/40'
+                      : 'bg-slate-50 dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'
+                  }`}
+                >
+                  {p === 'comeco' ? 'Começo' : p === 'essencial' ? 'Essencial' : 'Escala'}
+                </button>
+              ))}
+            </div>
+            {billingPlan !== event.billing_plan && (
+              <p className="text-[10px] text-amber-500 font-bold mt-1.5">
+                Troca manual — marca o componente fixo como concessão (sem cobrança), e recalcula a comissão pra {BILLING_PLAN_COMMISSION[billingPlan]}%.
+              </p>
+            )}
+          </div>
+
           {/* Nota de acesso liberado — motivo do acordo (contrato governo/edital/
               lei de incentivo/parceria). Documenta o "porquê" ao lado do "o quê"
               quando a comissão é zerada manualmente. */}
@@ -1448,11 +1491,12 @@ const EventCommissionModal: React.FC<{
           <button
             onClick={() => onSave({
               commission_type:    type,
-              commission_percent: type === 'PERCENT' ? percent : 0,
+              commission_percent: billingPlan !== event.billing_plan ? BILLING_PLAN_COMMISSION[billingPlan] : (type === 'PERCENT' ? percent : 0),
               commission_fixed:   type === 'FIXED'   ? fixed   : 0,
               fee_mode:           feeMode,
               event_type:         eventType,
               acesso_liberado_nota: nota,
+              billing_plan:       billingPlan,
             })}
             className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#ff0068] hover:bg-[#e0005c] text-white rounded-xl font-black text-sm uppercase tracking-widest"
           >
