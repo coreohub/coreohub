@@ -28,7 +28,6 @@ export default function CookieBanner() {
     const isPublicSurface = path === '/'
       || path.startsWith('/lp')
       || path.startsWith('/governo')
-      || path.startsWith('/estudios')
       || path.startsWith('/evento/')
       || path.startsWith('/festival/')
       || path.startsWith('/u/')

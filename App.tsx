@@ -28,7 +28,6 @@ import TermosDeUso from './pages/TermosDeUso';
 import PoliticaDePrivacidade from './pages/PoliticaDePrivacidade';
 const LandingGoverno  = lazy(() => import('./pages/LandingGoverno'));
 const PropostaGoverno = lazy(() => import('./pages/PropostaGoverno'));
-const LandingEstudios = lazy(() => import('./pages/LandingEstudios'));
 
 // Páginas secundárias — lazy loading para reduzir bundle inicial
 const RegistrationGradeConfig = lazy(() => import('./pages/RegistrationGradeConfig'));
@@ -551,7 +550,6 @@ const App: React.FC = () => {
         {/* Setor público: landing dedicada + PDF técnico imprimível */}
         <Route path="/governo" element={<Suspense fallback={<PageLoader />}><LandingGoverno /></Suspense>} />
         <Route path="/governo/proposta" element={<Suspense fallback={<PageLoader />}><PropostaGoverno /></Suspense>} />
-        <Route path="/estudios" element={<Navigate to="/" replace />} />
         <Route path="/login" element={<Auth />} />
         <Route path="/register" element={<Auth />} />
         <Route path="/judge-login" element={<Suspense fallback={<PageLoader />}><JudgeLogin /></Suspense>} />

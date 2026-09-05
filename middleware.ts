@@ -33,7 +33,7 @@ const CUSTOM_DOMAIN_SLUGS: Record<string, string> = {
 // NÃO está dentro de <PrivateRoute>). Qualquer coisa fora dessa lista nesse
 // hostname é área logada e ganha noindex.
 const PUBLIC_PATH_PREFIXES = [
-  '/lp', '/termos', '/privacidade', '/governo', '/estudios',
+  '/lp', '/termos', '/privacidade', '/governo',
   '/login', '/register', '/judge-login', '/entrar-juri', '/telao',
   '/convite', '/equipe-convite', '/festivais', '/evento', '/produtor',
   '/u', '/checkout-ingresso', '/meu-ingresso', '/workshop',

@@ -37,7 +37,6 @@ Deno.serve(async () => {
     const staticPages = [
       { loc: SITE_URL, priority: 1.0, changefreq: 'daily' },
       { loc: `${SITE_URL}/festivais`, priority: 0.9, changefreq: 'daily' },
-      { loc: `${SITE_URL}/estudios`, priority: 0.6, changefreq: 'monthly' },
       { loc: `${SITE_URL}/criar-evento`, priority: 0.5, changefreq: 'monthly' },
     ];
 
