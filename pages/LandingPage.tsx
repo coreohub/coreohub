@@ -688,8 +688,11 @@ const LandingPage = () => {
                   { f: 'Configura o evento a partir do seu regulamento', type: 'text' as const, c: 'Automático — cole o PDF, a IA extrai tudo', d: 'Manual, categoria por categoria', m: false, p: false },
                   { f: 'Júri avalia mesmo com Wi-Fi caindo',              type: 'bool' as const, c: true, d: false, m: false, p: false },
                   { f: 'Detecta conflito de bailarino em várias coreografias', type: 'bool' as const, c: true, d: false, m: false, p: false },
+                  { f: 'Seletiva de vídeo pré-festival com banca de jurados', type: 'bool' as const, c: true, d: false, m: false, p: false },
+                  { f: 'Telão de palco com resultado revelado ao vivo',   type: 'bool' as const, c: true, d: false, m: false, p: false },
+                  { f: 'Narração automática por IA entre apresentações',  type: 'bool' as const, c: true, d: false, m: false, p: false },
                   { f: 'Certificado com QR Code de validação pública',    type: 'bool' as const, c: true, d: false, m: false, p: false },
-                  { f: 'Sem mensalidade, mesmo se o evento não rolar',    type: 'bool' as const, c: true, d: false, m: true,  p: true  },
+                  { f: 'Sem contrato de fidelidade',                      type: 'bool' as const, c: true, d: false, m: true,  p: true  },
                 ].map((row, i) => {
                   const renderCell = (val: string | boolean, colorClass: string) => {
                     if (typeof val === 'string') return <span className={`text-xs font-bold ${colorClass}`}>{val}</span>;
