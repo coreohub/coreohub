@@ -10,7 +10,7 @@ import {
   Crown, DollarSign, Users, Calendar, TrendingUp, Loader2,
   AlertCircle, Mail, Copy, Trash2, Plus, X, Check, Lock, Unlock,
   ExternalLink, BarChart3, Download, Eye, Ticket, GraduationCap,
-  Video, ShieldCheck, ShieldAlert, ShieldQuestion, Search,
+  Video, ShieldCheck, ShieldAlert, ShieldQuestion, Search, Calculator, RefreshCw,
 } from 'lucide-react';
 import { startImpersonate } from '../services/impersonateService';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -61,6 +61,7 @@ interface EventRow {
   setup_fee_amount_paid: number | null;
   billing_plan: 'comeco' | 'essencial' | 'escala' | null;
   billing_plan_fixed_fee_paid_at: string | null;
+  billing_settlement_closed_at: string | null;
 }
 
 /* Rótulos/ícones do discriminador platform_commissions.kind (migration 20260604).
@@ -91,6 +92,9 @@ const SuperAdmin = () => {
   // nativos do browser (inconsistente com o resto da UI, sem o design
   // system, e o campo de motivo era um prompt() cru sem validação).
   const [freeModalEvent, setFreeModalEvent] = useState<EventRow | null>(null);
+  // Fase 3 (docs/pricing-model-spec.md) — acerto de fechamento do
+  // componente variável do plano Escala.
+  const [settlementModalEvent, setSettlementModalEvent] = useState<EventRow | null>(null);
   const [producerSearch, setProducerSearch] = useState('');
   // Bloco 1 (2026-05-28): leads sem atribuição. Acompanha aquisição global —
   // signups que NÃO vieram da vitrine de um evento específico. Padrão
@@ -163,7 +167,7 @@ const SuperAdmin = () => {
           supabase.from('profiles')
             .select('id, full_name, email, is_blocked, asaas_subconta_id, default_commission_percent, asaas_kyc_status, asaas_onboarding_url'),
           supabase.from('events')
-            .select('id, name, slug, created_by, start_date, event_type, commission_type, commission_percent, commission_fixed, fee_mode, is_public, is_demo, acesso_liberado_nota, setup_fee_paid_at, setup_fee_grandfathered, setup_fee_tier_chave, setup_fee_amount_paid, billing_plan, billing_plan_fixed_fee_paid_at')
+            .select('id, name, slug, created_by, start_date, event_type, commission_type, commission_percent, commission_fixed, fee_mode, is_public, is_demo, acesso_liberado_nota, setup_fee_paid_at, setup_fee_grandfathered, setup_fee_tier_chave, setup_fee_amount_paid, billing_plan, billing_plan_fixed_fee_paid_at, billing_settlement_closed_at')
             .order('start_date', { ascending: false }),
           listInvites(),
           // Bloco 1: leads sem atribuição. Filtros: role != COREOHUB_ADMIN
@@ -1039,6 +1043,19 @@ const SuperAdmin = () => {
                                 >
                                   <BarChart3 size={14} />
                                 </button>
+                                {ev.billing_plan === 'escala' && (
+                                  <button
+                                    onClick={() => setSettlementModalEvent(ev)}
+                                    className={`p-2 rounded-lg ${
+                                      ev.billing_settlement_closed_at
+                                        ? 'text-emerald-500 hover:bg-emerald-500/10'
+                                        : 'text-amber-500 hover:bg-amber-500/10'
+                                    }`}
+                                    title={ev.billing_settlement_closed_at ? 'Acerto já fechado' : 'Calcular acerto de fechamento (Escala)'}
+                                  >
+                                    <Calculator size={14} />
+                                  </button>
+                                )}
                                 {ev.slug && (
                                   <a
                                     href={`/evento/${ev.slug}`}
@@ -1202,6 +1219,18 @@ const SuperAdmin = () => {
           event={freeModalEvent}
           onClose={() => setFreeModalEvent(null)}
           onConfirm={nota => handleMakeEventFree(freeModalEvent, nota)}
+        />
+      )}
+
+      {/* Modal Acerto de Fechamento (Escala) */}
+      {settlementModalEvent && (
+        <SettlementModal
+          event={settlementModalEvent}
+          onClose={() => setSettlementModalEvent(null)}
+          onClosed={() => {
+            setEventsList(list => list.map(e => e.id === settlementModalEvent.id ? { ...e, billing_settlement_closed_at: new Date().toISOString() } : e));
+            setSettlementModalEvent(null);
+          }}
         />
       )}
 
@@ -1513,6 +1542,156 @@ const EventCommissionModal: React.FC<{
  *  da UI e o motivo de auditoria era um prompt() cru, sem estar visualmente
  *  associado à ação). Mesma lógica (zera comissão, fee_mode='absorver',
  *  grava acesso_liberado_nota), só com o design system do CoreoHub. */
+/** Fase 3 (docs/pricing-model-spec.md) — acerto de fechamento do
+ *  componente variável do plano Escala. Busca a prévia ao abrir; confirmar
+ *  gera cobrança complementar (se devido > coletado) ou fecha na hora (se
+ *  não há nada a cobrar — crédito eventual vira negociação manual). */
+const SettlementModal: React.FC<{
+  event: EventRow;
+  onClose: () => void;
+  onClosed: () => void;
+}> = ({ event, onClose, onClosed }) => {
+  const [loading, setLoading] = useState(true);
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ gmv_liquido: number; comissao_coletada: number; total_participantes: number; valor_devido_real: number; diferenca: number } | null>(null);
+  const [charge, setCharge] = useState<{ invoice_url: string; valor_cobrado: number } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError(null);
+      const { data, error: fnError } = await supabase.functions.invoke('close-event-billing-settlement', {
+        body: { event_id: event.id, confirm: false },
+      });
+      if (fnError || data?.error) { setError(data?.error ?? fnError?.message ?? 'Erro ao calcular prévia.'); setLoading(false); return; }
+      setPreview(data);
+      setLoading(false);
+    })();
+  }, [event.id]);
+
+  // Enquanto aguarda o pagamento da cobrança complementar, fecha sozinho
+  // via Realtime quando o webhook confirmar — mesmo padrão já usado no
+  // OnboardingWizard pro componente fixo.
+  useEffect(() => {
+    if (!charge) return;
+    const channel = supabase
+      .channel(`plan-settlement-${event.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'events', filter: `id=eq.${event.id}` },
+        (payload: any) => {
+          if (payload.new?.billing_settlement_closed_at) onClosed();
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [charge, event.id, onClosed]);
+
+  const handleConfirm = async () => {
+    setConfirming(true);
+    setError(null);
+    const { data, error: fnError } = await supabase.functions.invoke('close-event-billing-settlement', {
+      body: { event_id: event.id, confirm: true },
+    });
+    if (fnError || data?.error) { setError(data?.error ?? fnError?.message ?? 'Erro ao confirmar acerto.'); setConfirming(false); return; }
+    if (data.mode === 'closed_no_charge') { onClosed(); return; }
+    setCharge(data);
+    setConfirming(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5">
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Acerto de Fechamento</h3>
+            <p className="text-xs text-slate-500 mt-0.5 truncate">{event.name} · plano Escala</p>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5">
+            <X size={18} />
+          </button>
+        </div>
+
+        {loading && (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 size={24} className="animate-spin text-[#ff0068]" />
+          </div>
+        )}
+
+        {error && (
+          <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl">
+            <AlertCircle size={14} className="text-red-500 shrink-0" />
+            <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
+          </div>
+        )}
+
+        {!loading && preview && !charge && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Participantes</p>
+                <p className="font-black text-slate-900 dark:text-white mt-1">{preview.total_participantes}</p>
+              </div>
+              <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Faturamento líquido</p>
+                <p className="font-black text-slate-900 dark:text-white mt-1">R$ {preview.gmv_liquido.toFixed(2)}</p>
+              </div>
+              <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Já coletado (split)</p>
+                <p className="font-black text-slate-900 dark:text-white mt-1">R$ {preview.comissao_coletada.toFixed(2)}</p>
+              </div>
+              <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Devido real (R$2/part., teto 4,5%)</p>
+                <p className="font-black text-slate-900 dark:text-white mt-1">R$ {preview.valor_devido_real.toFixed(2)}</p>
+              </div>
+            </div>
+
+            {preview.diferenca > 0 ? (
+              <div className="p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl text-xs text-amber-700 dark:text-amber-400 font-bold">
+                Falta cobrar <strong>R$ {preview.diferenca.toFixed(2)}</strong> do produtor — confirmar gera a cobrança complementar.
+              </div>
+            ) : (
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl text-xs text-emerald-700 dark:text-emerald-400 font-bold">
+                Já coletado o suficiente (ou a mais) — confirmar fecha na hora, sem cobrança. Diferença de R$ {Math.abs(preview.diferenca).toFixed(2)} a favor do produtor vira negociação manual, não estorno automático.
+              </div>
+            )}
+
+            <button
+              onClick={handleConfirm}
+              disabled={confirming}
+              className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#ff0068] hover:bg-[#e0005c] disabled:opacity-60 text-white rounded-xl font-black text-sm uppercase tracking-widest"
+            >
+              {confirming ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+              Confirmar acerto
+            </button>
+          </div>
+        )}
+
+        {charge && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+              Cobrança complementar gerada: <strong>R$ {charge.valor_cobrado.toFixed(2)}</strong>.
+            </p>
+            <a
+              href={charge.invoice_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full px-5 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-transform"
+            >
+              Ver cobrança
+            </a>
+            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+              <RefreshCw size={12} className="animate-spin shrink-0" />
+              Aguardando pagamento — o acerto fecha sozinho quando confirmar.
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const MakeFreeModal: React.FC<{
   event: EventRow;
   onClose: () => void;

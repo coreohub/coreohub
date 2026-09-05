@@ -1346,6 +1346,8 @@ Deno.serve(async (req) => {
     //   "PLANFEE:<event_id>:<plano>" = componente fixo do plano comercial
     //                          (Essencial/Escala), cobrado adiantado na
     //                          escolha do plano (docs/pricing-model-spec.md)
+    //   "PLANSETTLE:<event_id>" = acerto de fechamento do componente
+    //                          variável do plano Escala (Fase 3)
     //   <uuid>               = registration de inscrição (legado, sem prefix)
     const isAudienceTicket = externalRef.startsWith('AT:')
     const isWorkshop       = externalRef.startsWith('WS:') && !externalRef.startsWith('WSP:')
@@ -1355,6 +1357,7 @@ Deno.serve(async (req) => {
     const isSetupUpgrade   = externalRef.startsWith('SETUPUP:')
     const isSetupFee       = externalRef.startsWith('SETUP:') && !isSetupUpgrade
     const isPlanFee        = externalRef.startsWith('PLANFEE:')
+    const isPlanSettlement = externalRef.startsWith('PLANSETTLE:')
     const audienceGroupId  = isAudienceTicket ? externalRef.slice(3) : null
     const workshopRegistrationId = isWorkshop ? externalRef.slice(3) : null
     const workshopPassGroupId = isWorkshopPass ? externalRef.slice(4) : null
@@ -1363,7 +1366,8 @@ Deno.serve(async (req) => {
     const setupFeeEventId = isSetupFee ? externalRef.slice(6) : (isSetupUpgrade ? externalRef.slice(8) : null)
     const planFeeEventId  = isPlanFee ? externalRef.split(':')[1] : null
     const planFeePlano    = isPlanFee ? externalRef.split(':')[2] : null
-    const registrationId   = (isAudienceTicket || isWorkshop || isWorkshopPass || isAggregate || isVideoSelection || isSetupFee || isSetupUpgrade || isPlanFee) ? null : externalRef
+    const planSettlementEventId = isPlanSettlement ? externalRef.slice(11) : null
+    const registrationId   = (isAudienceTicket || isWorkshop || isWorkshopPass || isAggregate || isVideoSelection || isSetupFee || isSetupUpgrade || isPlanFee || isPlanSettlement) ? null : externalRef
 
     // Defesa em profundidade contra forja de webhook (token estatico
     // pode vazar): cross-check via API Asaas. Atacante com token vazado
@@ -1413,6 +1417,7 @@ Deno.serve(async (req) => {
                   : isSetupFee       ? 'setup_fee'
                   : isSetupUpgrade   ? 'setup_fee_upgrade'
                   : isPlanFee        ? 'plan_fee'
+                  : isPlanSettlement ? 'plan_settlement'
                                      : 'registration'
 
     // ── BRANCH: PAYMENT DELETED / CANCELLED ─────────────────────────────────
@@ -1690,6 +1695,40 @@ Deno.serve(async (req) => {
       }
       console.log(`[asaas-webhook] plan_fee confirmado event=${planFeeEventId} plano=${planFeePlano}`)
       return ok({ status: 'confirmed', event_id: planFeeEventId, plano: planFeePlano, kind: refType })
+    }
+
+    // ── BRANCH: PLAN SETTLEMENT (acerto de fechamento do Escala) ────────────
+    // Cobrança complementar do PRODUTOR (sem split). PAYMENT_RECEIVED/
+    // CONFIRMED fecha o acerto — os valores (devido/coletado) já foram
+    // gravados como snapshot por close-event-billing-settlement no momento
+    // em que a cobrança foi gerada; aqui só marca o fechamento.
+    if (isPlanSettlement && planSettlementEventId) {
+      if (statusInterno !== 'APROVADO') {
+        console.log(`[asaas-webhook] plan_settlement status=${statusInterno} — nada a fazer (event=${planSettlementEventId})`)
+        return ok({ status: 'noop', reason: 'not_approved', kind: refType })
+      }
+      const { data: ev } = await supabase
+        .from('events')
+        .select('billing_settlement_asaas_payment_id')
+        .eq('id', planSettlementEventId)
+        .maybeSingle()
+
+      if (ev?.billing_settlement_asaas_payment_id !== String(payment.id)) {
+        console.log(`[asaas-webhook] plan_settlement payment_id não bate com o pendente salvo — ignorando (possível retry antigo).`)
+        return ok({ status: 'noop', reason: 'payment_id_mismatch', kind: refType })
+      }
+
+      const { error: settleErr } = await supabase
+        .from('events')
+        .update({ billing_settlement_closed_at: new Date().toISOString() })
+        .eq('id', planSettlementEventId)
+
+      if (settleErr) {
+        console.error(`[asaas-webhook] erro ao fechar plan_settlement event=${planSettlementEventId}:`, settleErr.message)
+        return ok({ status: 'error', reason: settleErr.message, kind: refType })
+      }
+      console.log(`[asaas-webhook] plan_settlement fechado event=${planSettlementEventId}`)
+      return ok({ status: 'confirmed', event_id: planSettlementEventId, kind: refType })
     }
 
     // ── BRANCH: REGISTRATION (fluxo original) ────────────────────────────────

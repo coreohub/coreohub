@@ -14,7 +14,7 @@ DECLARE
   v_competidores BIGINT;
   v_cursistas    BIGINT;
 BEGIN
-  IF NOT EXISTS (
+  IF auth.role() <> 'service_role' AND NOT EXISTS (
     SELECT 1 FROM events e
     WHERE e.id = p_event_id
       AND (
