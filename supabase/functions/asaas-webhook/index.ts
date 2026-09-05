@@ -1343,6 +1343,9 @@ Deno.serve(async (req) => {
     //   "VS:<registration>"  = taxa de seletiva de vídeo (Modelo 3 — Sessão seletiva)
     //   "SETUP:<event_id>"   = taxa de ativação de evento gratuito
     //   "SETUPUP:<event_id>" = upgrade de faixa da taxa de ativação
+    //   "PLANFEE:<event_id>:<plano>" = componente fixo do plano comercial
+    //                          (Essencial/Escala), cobrado adiantado na
+    //                          escolha do plano (docs/pricing-model-spec.md)
     //   <uuid>               = registration de inscrição (legado, sem prefix)
     const isAudienceTicket = externalRef.startsWith('AT:')
     const isWorkshop       = externalRef.startsWith('WS:') && !externalRef.startsWith('WSP:')
@@ -1351,13 +1354,16 @@ Deno.serve(async (req) => {
     const isVideoSelection = externalRef.startsWith('VS:')
     const isSetupUpgrade   = externalRef.startsWith('SETUPUP:')
     const isSetupFee       = externalRef.startsWith('SETUP:') && !isSetupUpgrade
+    const isPlanFee        = externalRef.startsWith('PLANFEE:')
     const audienceGroupId  = isAudienceTicket ? externalRef.slice(3) : null
     const workshopRegistrationId = isWorkshop ? externalRef.slice(3) : null
     const workshopPassGroupId = isWorkshopPass ? externalRef.slice(4) : null
     const aggregatePaymentId = isAggregate ? externalRef.slice(4) : null
     const videoSelectionRegistrationId = isVideoSelection ? externalRef.slice(3) : null
     const setupFeeEventId = isSetupFee ? externalRef.slice(6) : (isSetupUpgrade ? externalRef.slice(8) : null)
-    const registrationId   = (isAudienceTicket || isWorkshop || isWorkshopPass || isAggregate || isVideoSelection || isSetupFee || isSetupUpgrade) ? null : externalRef
+    const planFeeEventId  = isPlanFee ? externalRef.split(':')[1] : null
+    const planFeePlano    = isPlanFee ? externalRef.split(':')[2] : null
+    const registrationId   = (isAudienceTicket || isWorkshop || isWorkshopPass || isAggregate || isVideoSelection || isSetupFee || isSetupUpgrade || isPlanFee) ? null : externalRef
 
     // Defesa em profundidade contra forja de webhook (token estatico
     // pode vazar): cross-check via API Asaas. Atacante com token vazado
@@ -1406,6 +1412,7 @@ Deno.serve(async (req) => {
                   : isVideoSelection ? 'video_selection'
                   : isSetupFee       ? 'setup_fee'
                   : isSetupUpgrade   ? 'setup_fee_upgrade'
+                  : isPlanFee        ? 'plan_fee'
                                      : 'registration'
 
     // ── BRANCH: PAYMENT DELETED / CANCELLED ─────────────────────────────────
@@ -1645,6 +1652,44 @@ Deno.serve(async (req) => {
       }
       console.log(`[asaas-webhook] setup_fee confirmado event=${setupFeeEventId} total_pago=R$${novoTotal.toFixed(2)} kind=${refType}`)
       return ok({ status: 'confirmed', event_id: setupFeeEventId, kind: refType })
+    }
+
+    // ── BRANCH: PLAN FEE (componente fixo do plano Essencial/Escala) ───────
+    // Cobrança do PRODUTOR pra CoreoHub (sentido inverso do normal, sem
+    // split). PAYMENT_RECEIVED/CONFIRMED promove o evento pro plano
+    // escolhido — commission_percent deriva sozinho via trigger
+    // sync_commission_percent_from_billing_plan (docs/pricing-model-spec.md).
+    if (isPlanFee && planFeeEventId && planFeePlano) {
+      if (statusInterno !== 'APROVADO') {
+        console.log(`[asaas-webhook] plan_fee status=${statusInterno} — nada a fazer (event=${planFeeEventId})`)
+        return ok({ status: 'noop', reason: 'not_approved', kind: refType })
+      }
+      const { data: ev } = await supabase
+        .from('events')
+        .select('billing_plan_asaas_payment_id')
+        .eq('id', planFeeEventId)
+        .maybeSingle()
+
+      // Idempotência: retry de webhook não reprocessa o mesmo payment_id.
+      if (ev?.billing_plan_asaas_payment_id !== String(payment.id)) {
+        console.log(`[asaas-webhook] plan_fee payment_id não bate com o pendente salvo — ignorando (possível retry antigo).`)
+        return ok({ status: 'noop', reason: 'payment_id_mismatch', kind: refType })
+      }
+
+      const { error: planErr } = await supabase
+        .from('events')
+        .update({
+          billing_plan: planFeePlano,
+          billing_plan_fixed_fee_paid_at: new Date().toISOString(),
+        })
+        .eq('id', planFeeEventId)
+
+      if (planErr) {
+        console.error(`[asaas-webhook] erro ao confirmar plan_fee event=${planFeeEventId}:`, planErr.message)
+        return ok({ status: 'error', reason: planErr.message, kind: refType })
+      }
+      console.log(`[asaas-webhook] plan_fee confirmado event=${planFeeEventId} plano=${planFeePlano}`)
+      return ok({ status: 'confirmed', event_id: planFeeEventId, plano: planFeePlano, kind: refType })
     }
 
     // ── BRANCH: REGISTRATION (fluxo original) ────────────────────────────────

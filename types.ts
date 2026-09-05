@@ -146,6 +146,12 @@ export interface Event {
 
   edition_year?: number;      // Ano/edição do festival (ex: 2026, 2027)
 
+  // Plano comercial (docs/pricing-model-spec.md) — travado após escolhido,
+  // sem troca self-service. Componente fixo (Essencial/Escala) é cobrado
+  // adiantado, ver billing_plan_fixed_fee_paid_at.
+  billing_plan?: 'comeco' | 'essencial' | 'escala';
+  billing_plan_fixed_fee_paid_at?: string | null;
+
   formacoes_config?: any[]; // Array of { name, min_members, max_members, fee, format }
   categories_config?: any[]; // Array of { name, min_age, max_age }
   styles_config?: any[]; // Array of { name, fee, slots_limit, weight }

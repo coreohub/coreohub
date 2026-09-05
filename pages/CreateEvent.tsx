@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { createPortal } from 'react-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Save, ArrowLeft, FileText, Info, RefreshCw,
-  AlertCircle, Sparkles, Upload, Check, FileUp,
+  AlertCircle, Sparkles, Upload, Check, FileUp, CreditCard,
 } from 'lucide-react';
 
 const DRAFT_KEY = 'coreohub_create_event_draft';
@@ -15,9 +16,21 @@ import { EventFormat } from '../types';
 
 type TabType = 'general' | 'regulation';
 
+const PLANO_INICIAL: Record<string, 'comeco' | 'essencial'> = { comeco: 'comeco', essencial: 'essencial' };
+
 const CreateEvent = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const pdfInputRef = useRef<HTMLInputElement>(null);
+
+  // Plano comercial (docs/pricing-model-spec.md) — vem pré-selecionado do
+  // CTA "Quero este plano" de /planos (?plano=essencial), mas o produtor
+  // pode trocar aqui antes de criar. Escala não entra no self-service (é
+  // venda consultiva, CTA de /planos vai direto pro WhatsApp).
+  const [selectedPlan, setSelectedPlan] = useState<'comeco' | 'essencial'>(
+    PLANO_INICIAL[searchParams.get('plano') ?? ''] ?? 'comeco'
+  );
+  const [planFeeResult, setPlanFeeResult] = useState<{ invoice_url: string; valor_cobrado: number } | null>(null);
 
   const [activeTab, setActiveTab] = useState<TabType>('general');
   const [isSaving, setIsSaving] = useState(false);
@@ -229,8 +242,24 @@ const CreateEvent = () => {
         ? new Date(formData.start_date).getFullYear() || new Date().getFullYear()
         : new Date().getFullYear();
       const { slug } = await generateEventSlug(formData.name, year);
-      await createEvent({ ...formData, slug, created_by: user.id });
+      // billing_plan NÃO entra no payload — evento sempre nasce em Começo
+      // (default do banco). Só o webhook do plan-fee promove pro Essencial,
+      // depois de confirmado o pagamento do componente fixo (docs/pricing-
+      // model-spec.md — plano trava, sem troca self-service).
+      const created = await createEvent({ ...formData, slug, created_by: user.id });
       localStorage.removeItem(DRAFT_KEY);
+
+      if (selectedPlan === 'essencial') {
+        const newEventId = created?.[0]?.id;
+        if (!newEventId) throw new Error('Evento criado, mas não foi possível iniciar a cobrança do plano. Acesse o QG do Organizador.');
+        const { data, error: fnError } = await supabase.functions.invoke('create-plan-fixed-fee-payment', {
+          body: { event_id: newEventId, plano: 'essencial' },
+        });
+        if (fnError || data?.error) throw new Error(data?.error ?? fnError?.message ?? 'Erro ao gerar cobrança do plano.');
+        setPlanFeeResult(data);
+        return;
+      }
+
       navigate('/qg-organizador');
     } catch (err: any) {
       setError(err.message);
@@ -248,6 +277,7 @@ const CreateEvent = () => {
   const labelCls = 'text-[10px] font-black text-slate-500 uppercase tracking-widest px-1';
 
   return (
+    <>
     <div className="max-w-5xl mx-auto space-y-6 p-4 md:p-0">
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
@@ -287,6 +317,40 @@ const CreateEvent = () => {
           <AlertCircle size={16} /> {error}
         </div>
       )}
+
+      {/* Plano comercial — trava depois de criado (sem troca self-service) */}
+      <div className="bg-white dark:bg-slate-900/40 p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm">
+        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1 mb-3">Plano do evento</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => setSelectedPlan('comeco')}
+            className={`text-left p-4 rounded-2xl border-2 transition-all ${
+              selectedPlan === 'comeco'
+                ? 'border-[#ff0068] bg-[#ff0068]/5'
+                : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
+            }`}
+          >
+            <p className="font-black uppercase italic tracking-tight text-slate-900 dark:text-white">Começo</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">10% sobre venda · R$ 0 mínimo, só paga se vender.</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedPlan('essencial')}
+            className={`text-left p-4 rounded-2xl border-2 transition-all ${
+              selectedPlan === 'essencial'
+                ? 'border-[#ff0068] bg-[#ff0068]/5'
+                : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
+            }`}
+          >
+            <p className="font-black uppercase italic tracking-tight text-slate-900 dark:text-white">Essencial</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">R$ 250 fixo (cobrado agora) + 5% sobre venda.</p>
+          </button>
+        </div>
+        <p className="text-[10px] text-slate-500 dark:text-slate-500 mt-3 leading-relaxed">
+          O plano escolhido vale pro evento inteiro — não dá pra trocar depois de criado (mudança de porte vira negociação direta com a gente). Precisa do plano Escala (grande porte)? <a href="https://wa.me/5517997936169?text=Ol%C3%A1%2C%20quero%20falar%20sobre%20o%20plano%20Escala%20da%20CoreoHub" target="_blank" rel="noopener noreferrer" className="text-[#ff0068] hover:underline font-bold">Fala com a gente</a>.
+        </p>
+      </div>
 
       {/* Tabs */}
       <div className="flex gap-1.5 p-1.5 bg-slate-100 dark:bg-slate-900/50 rounded-3xl border border-slate-200 dark:border-white/5">
@@ -609,7 +673,46 @@ const CreateEvent = () => {
         </AnimatePresence>
       </div>
     </div>
+    {planFeeResult && (
+      <PlanFeePaymentModal
+        result={planFeeResult}
+        onContinue={() => navigate('/qg-organizador')}
+      />
+    )}
+    </>
   );
 };
+
+const PlanFeePaymentModal: React.FC<{
+  result: { invoice_url: string; valor_cobrado: number };
+  onContinue: () => void;
+}> = ({ result, onContinue }) => createPortal(
+  <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5">
+      <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white italic">
+        Evento criado — falta ativar o plano
+      </h3>
+      <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+        Gerei a cobrança do plano Essencial: <strong>R$ {result.valor_cobrado.toFixed(2)}</strong>.
+        Assim que o pagamento for confirmado, o plano ativa sozinho — sem precisar voltar aqui.
+      </p>
+      <a
+        href={result.invoice_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-center gap-2 w-full px-5 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-transform"
+      >
+        <CreditCard size={16} /> Pagar agora
+      </a>
+      <button
+        onClick={onContinue}
+        className="w-full px-5 py-3 text-slate-500 dark:text-slate-400 font-bold text-xs uppercase tracking-widest hover:text-slate-700 dark:hover:text-white transition-colors"
+      >
+        Já paguei / continuar pro QG do Organizador
+      </button>
+    </div>
+  </div>,
+  document.body
+);
 
 export default CreateEvent;

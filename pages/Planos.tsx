@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { MessageCircle } from 'lucide-react';
+import { MessageCircle, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
 
 const WHATSAPP_NUMBER = '5517981264290';
@@ -19,6 +19,7 @@ interface Plan {
   frase: string;
   ctaLabel: string;
   ctaHref: string;
+  ctaExternal?: boolean; // true = WhatsApp (nova aba); false/undefined = leva pro cadastro (mesma aba)
 }
 
 const PLANOS: Plan[] = [
@@ -30,7 +31,7 @@ const PLANOS: Plan[] = [
     paraQuem: 'Mostras e festivais iniciantes — eventos pequenos que ainda não sabem quanto vão vender.',
     frase: '"Tire o seu festival do papel sem gastar nada. A CoreoHub cresce junto com você."',
     ctaLabel: 'Quero este plano',
-    ctaHref: waLink('Olá! Quero o plano Começo da CoreoHub.'),
+    ctaHref: 'https://app.coreohub.com/criar-evento?plano=comeco',
   },
   {
     nome: 'Essencial',
@@ -42,7 +43,7 @@ const PLANOS: Plan[] = [
     paraQuem: 'Festivais regionais, mostras de dança e eventos de porte médio — de 50 participantes até milhares.',
     frase: '"Seu evento cresceu? Sua taxa efetiva diminui. Um custo fixo que cabe no bolso."',
     ctaLabel: 'Quero este plano',
-    ctaHref: waLink('Olá! Quero o plano Essencial da CoreoHub.'),
+    ctaHref: 'https://app.coreohub.com/criar-evento?plano=essencial',
   },
   {
     nome: 'Escala',
@@ -51,8 +52,9 @@ const PLANOS: Plan[] = [
     compensa: 'Compensa a partir de R$ 124 mil em vendas',
     paraQuem: 'Festivais de grande porte, convenções nacionais e competições com milhares de bailarinos inscritos — referência: porte Joinville, o maior festival de dança do mundo.',
     frase: '"A estrutura premium completa da CoreoHub, com teto de taxa garantido. Previsibilidade total pra sua gestão."',
-    ctaLabel: 'Quero este plano',
+    ctaLabel: 'Falar com o time',
     ctaHref: waLink('Olá! Quero falar sobre o plano Escala da CoreoHub.'),
+    ctaExternal: true,
   },
 ];
 
@@ -137,15 +139,14 @@ const Planos: React.FC = () => {
 
               <a
                 href={p.ctaHref}
-                target="_blank"
-                rel="noopener noreferrer"
+                {...(p.ctaExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                 className={`mt-auto flex items-center justify-center gap-2 text-center rounded-2xl px-5 py-4 text-xs font-black uppercase tracking-widest transition-transform hover:scale-[1.02] active:scale-[0.98] ${
                   p.featured
                     ? 'bg-[#ff0068] text-white shadow-[0_16px_40px_rgba(255,0,104,0.35)]'
                     : 'bg-white/5 border border-white/15 text-white hover:bg-white/10'
                 }`}
               >
-                <MessageCircle size={16} /> {p.ctaLabel}
+                {p.ctaExternal ? <MessageCircle size={16} /> : <ArrowRight size={16} />} {p.ctaLabel}
               </a>
             </div>
           ))}
