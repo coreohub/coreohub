@@ -46,6 +46,12 @@ const PAGES: Record<string, PageMeta> = {
     description:
       'Gestão de festivais e mostras de dança para secretarias, institutos e editais públicos: LGPD, Lei 14.133/2021, operação offline.',
   },
+  planos: {
+    path: '/planos',
+    title: 'Planos e preços — CoreoHub',
+    description:
+      'Começo (10% sobre venda, sem taxa fixa), Essencial (R$250 + 5%) ou Escala (R$1.490 + R$2/participante, teto de 4,5%). Sem mensalidade — você paga proporcional ao que o festival fatura.',
+  },
 };
 
 const html = (meta: PageMeta): string => {

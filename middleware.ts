@@ -23,7 +23,7 @@
 import { rewrite, next } from '@vercel/functions';
 
 const BOT_UA_REGEX =
-  /WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot/i;
+  /WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot|GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-Web|anthropic-ai|PerplexityBot|Perplexity-User|Google-Extended|Amazonbot|Bytespider|CCBot/i;
 
 const CUSTOM_DOMAIN_SLUGS: Record<string, string> = {
   'festival.usualdance.com': 'usualdance-festival-2026',
