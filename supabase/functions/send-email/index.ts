@@ -299,13 +299,16 @@ async function sendViaResend(params: {
   replyTo?: string
   /** Nome do festival — se passado, From vira "{festivalName} via CoreoHub <email-original>" */
   festivalName?: string
+  /** Override completo do From ("Nome <email>") — pra templates que não fazem sentido sair
+   *  do alias padrão (EMAIL_FROM), ex. calculator_proposal (lead de marketing, não pagamento). */
+  fromOverride?: string
 }) {
   const apiKey = Deno.env.get('RESEND_API_KEY')
   if (!apiKey) {
     throw new Error('RESEND_API_KEY não configurado')
   }
 
-  const baseFrom = Deno.env.get('EMAIL_FROM') ?? 'CoreoHub <onboarding@resend.dev>'
+  const baseFrom = params.fromOverride ?? Deno.env.get('EMAIL_FROM') ?? 'CoreoHub <onboarding@resend.dev>'
 
   // Constrói From dinâmico: "Festival X via CoreoHub <email>" quando há nome do festival
   let from = baseFrom
@@ -1255,7 +1258,7 @@ function buildCalculatorProposal(p: CalculatorProposalPayload) {
     </p>`
 
   return {
-    subject: `[${p.leadNome}] Sua simulação CoreoHub — plano ${p.planoNome}`,
+    subject: `[${p.leadNome}] Plano ${p.planoNome} recomendado — ${money(p.valorEstimado)} estimado`,
     html: baseLayout({
       preheader: `Simulação do ${p.leadNome}: plano ${p.planoNome}, ${money(p.valorEstimado)} estimado.`,
       title: 'Sua simulação está pronta',
@@ -1566,6 +1569,7 @@ Deno.serve(async (req) => {
     let html: string
     let festivalName: string | undefined
     let replyTo: string | undefined
+    let fromOverride: string | undefined
 
     switch (type) {
       case 'payment_confirmed_registrant': {
@@ -1798,7 +1802,11 @@ Deno.serve(async (req) => {
         to = p.leadEmail
         subject = tpl.subject
         html = tpl.html
-        festivalName = p.leadNome
+        // Sem festivalName aqui de propósito: "{leadNome} via CoreoHub" ficaria
+        // como se o PRÓPRIO festival do lead estivesse mandando o email, quando
+        // é a CoreoHub mandando a simulação dele. Remetente neutro + alias
+        // próprio (não pagamentos@, que é só pra emails de cobrança/repasse).
+        fromOverride = 'CoreoHub <contato@coreohub.com>'
         break
       }
       case 'lead_reengagement': {
@@ -1840,7 +1848,7 @@ Deno.serve(async (req) => {
         throw new Error(`type desconhecido: ${type}`)
     }
 
-    const { id } = await sendViaResend({ to, subject, html, festivalName, replyTo })
+    const { id } = await sendViaResend({ to, subject, html, festivalName, replyTo, fromOverride })
 
     console.log(`[send-email] ok type=${type} to=${to} id=${id}`)
 

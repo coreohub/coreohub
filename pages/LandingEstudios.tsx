@@ -12,7 +12,7 @@
  * Diferenças vs /governo:
  *  - Pessoa física / MEI, decisão rápida
  *  - Self-service total, sem call comercial
- *  - Mostra preço (10% por venda)
+ *  - Mostra preço (taxa proporcional ao plano escolhido — Começo/Essencial/Escala)
  */
 
 import React, { useState } from 'react';
@@ -103,7 +103,7 @@ const LandingEstudios: React.FC = () => {
 
         <div className="relative z-10 max-w-5xl mx-auto w-full grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-white/5 pt-8 mt-12">
           {[
-            { val: '10%', label: 'Por ingresso vendido' },
+            { val: 'A partir de 10%', label: 'Por ingresso vendido' },
             { val: '0', label: 'Mensalidade' },
             { val: '15min', label: 'Pra publicar' },
             { val: '∞', label: 'Alunos no espetáculo' },
@@ -365,8 +365,9 @@ const LandingEstudios: React.FC = () => {
             Sem mensalidade. Sem fidelidade.
           </h2>
           <p className="text-slate-300 text-lg max-w-2xl mx-auto leading-relaxed mb-12">
-            10% de comissão por ingresso ou workshop vendido. Dinheiro cai direto na sua conta via Asaas
-            (regulamentado pelo Banco Central). Espetáculo cancelado por chuva? Você não paga nada.
+            A partir de 10% de comissão por ingresso ou workshop vendido, sem mensalidade fora do plano
+            escolhido. Dinheiro cai direto na sua conta via Asaas (regulamentado pelo Banco Central).
+            Espetáculo cancelado por chuva? Sem venda, sem comissão.
           </p>
 
           <div className="max-w-3xl mx-auto bg-gradient-to-br from-[#ff0068]/10 via-white/5 to-purple-700/10 border border-white/10 rounded-3xl p-6 md:p-10 backdrop-blur-xl">
@@ -425,7 +426,7 @@ const LandingEstudios: React.FC = () => {
                 <p className="text-xl md:text-2xl font-black tabular-nums text-white mt-1">{ingressosVendidos}</p>
               </div>
               <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4">
-                <p className="text-[9px] font-black uppercase tracking-widest text-rose-400">Comissão (10%)</p>
+                <p className="text-[9px] font-black uppercase tracking-widest text-rose-400">Comissão (plano Começo)</p>
                 <p className="text-xl md:text-2xl font-black tabular-nums text-rose-400 mt-1">{fmtBRL(calcComissao)}</p>
               </div>
               <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
@@ -435,8 +436,9 @@ const LandingEstudios: React.FC = () => {
             </div>
 
             <p className="text-xs text-slate-400 mt-6">
-              Sem mensalidade. Se cancelar o espetáculo: você não paga nada.
-              Se vender pouco: você paga pouco. Sem letra miúda.
+              Simulação no plano Começo (10%, sem taxa fixa) — o mais indicado pra 1ª mostra ou espetáculo pequeno.
+              Espetáculos maiores podem compensar mais nos planos Essencial ou Escala.{' '}
+              <Link to="/planos" className="text-[#ff0068] font-bold hover:underline">Veja todos os planos</Link>.
             </p>
           </div>
         </div>
@@ -537,7 +539,7 @@ const LandingEstudios: React.FC = () => {
               },
               {
                 q: 'Como recebo o dinheiro dos ingressos?',
-                a: 'Direto na sua conta bancária via Asaas (regulamentado pelo Banco Central). Cada ingresso pago gera split na hora — 90% pra você, 10% comissão CoreoHub. Sem boleto perdido, sem espera de 30 dias.',
+                a: 'Direto na sua conta bancária via Asaas (regulamentado pelo Banco Central). Cada ingresso pago gera split na hora — o restante pra você, a comissão do seu plano pra CoreoHub. Sem boleto perdido, sem espera de 30 dias.',
               },
               {
                 q: 'Espetáculo cancelado por chuva ou pandemia: pago alguma coisa?',
