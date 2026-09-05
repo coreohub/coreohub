@@ -2,6 +2,18 @@
 
 > Última atualização: 2026-09-04. Fonte: sessão de mapeamento de concorrentes + análise do caso real "Usualdance Festival 2026". Documentos de trabalho relacionados (Word, não versionados no repo): `\\SERVIDOR\Cultural Estudio\Cultural Estúdio (Driver)\CoreoHub\Concorrentes Coreohub.docx` e `Planos CoreoHub.docx`.
 
+## Status de implementação
+
+**✅ Fase 1 — Fundação (escolha de plano + cobrança adiantada) SHIPADO e validado com pagamento real em 2026-09-04.**
+
+- Migration `20260904_billing_plan.sql` (+ correções `20260904b`/`20260904c`): `events.billing_plan` (comeco/essencial/escala, default comeco) + trigger que deriva `commission_percent` automático do plano (10%/5%/4,5%) — reaproveita 100% do split contínuo já existente (`create-payment-asaas` e afins não precisaram mudar). Coluna travada contra troca self-service via `protect_commission_columns`.
+- Edge function `create-plan-fixed-fee-payment`: cobra o componente fixo (Essencial R$250 / Escala R$1.490) **adiantado**, na escolha do plano — mesmo padrão sem-split da taxa de evento gratuito. Gate correto: só roda enquanto `billing_plan = 'comeco'` (cobre inclusive evento antigo que nunca escolheu plano, ex: migração de cliente vindo de outra plataforma).
+- Branch `PLANFEE:` no `asaas-webhook` confirma o pagamento e promove o evento sozinho, sem ação manual.
+- UI real fica em `components/OnboardingWizard.tsx` (Step 2, "Formato") — **não** em `pages/CreateEvent.tsx`, que é código órfão (importado no `App.tsx` mas nunca roteado; achado testando o fluxo de ponta a ponta). Seletor de plano não pergunta de novo quando já veio definido por `?plano=` (CTA de `/planos`, ou link direto de Escala pós-negociação). Modal de cobrança fecha sozinho via Supabase Realtime (precisou habilitar Realtime na tabela `events`, nunca tinha sido habilitada) quando o webhook confirma — sem clique manual.
+- **Validado end-to-end com pagamento real**: evento de teste descartável, plano Essencial temporariamente rebaixado pra R$5 (mínimo Asaas) só pro smoke test, pago de verdade, webhook promoveu `billing_plan`/`commission_percent` sozinho, evento de teste apagado, valor restaurado pra R$250 depois.
+- **Pendente (Fase 2/3, ver abaixo)**: contagem de participante do Escala (simplificada em 2026-09-04 — soma direta de participação por coreografia, sem dedupe por CPF, ver seção "Regra de contagem de participante") + taxa provisória do split contínuo + acerto do componente variável no fechamento.
+- Cliente real aguardando Escala: produtora do **Lyris Dance Competition** (migração da CPL Cloud já feita) — motivou priorizar a Fase 2 em seguida.
+
 ## Posicionamento (decisão do produto, não só de marketing)
 
 A CoreoHub **não compete para ser a mais barata do mercado**. Compete para ser a plataforma com **preço em equilíbrio** — proporcional ao que o evento realmente fatura, sem truques de cobrança (ex: o concorrente Sistema Dance conta em dobro quem dança e também faz curso; a CoreoHub não deve fazer isso). Nenhuma recomendação de preço deve partir de "cortar pra vencer a concorrência por valor" — a vitória vem de transparência + proporcionalidade + features, não de undercut.
@@ -70,12 +82,18 @@ Isso resolve a objeção comercial "se meu festival crescer mais do que eu esper
 
 ## Regra de contagem de participante
 
-Inspirada na proposta real do concorrente Sistema Dance (considerada uma prática justa):
+**Correção 2026-09-04 (achado numa pergunta do produtor — reabre e substitui a regra de dedupe por CPF que estava aqui antes, marcada como "fechada" mais cedo no mesmo dia):**
 
-- Uma mesma pessoa inscrita em **várias coreografias** conta **1 vez** como participante (não paga/conta por coreografia). Dedup por CPF — mesmo padrão já usado na resolução de identidade de bailarino do Cronograma (`resolveDancerIdentity`, Schedule.tsx).
-- Se a mesma pessoa **também** se inscrever em um curso/workshop, isso conta como **um segundo serviço utilizado** (categoria separada: "cursista"), não uma duplicata da mesma inscrição de dança.
-- **Ingresso de plateia (público geral que compra pra assistir, não compete) NÃO entra nessa contagem** (decisão fechada, 2026-09-04). Essa receita continua sendo cobrada por percentual, dentro do faturamento usado pra aplicar o teto de 4,5% do Escala — nunca vira parte do componente fixo "R$2,00 por participante". Motivo: sem essa exclusão, um festival grande que vende muito ingresso de plateia (ex: porte Joinville) poderia escolher o Escala especificamente pra escapar da comissão proporcional sobre a bilheteria, que hoje cresce junto com o evento — isso corta receita justamente nos maiores clientes, o oposto do que o Escala deveria fazer. O Sistema Dance (referência desta regra) também só cobra por quem compete + cursista, sem contemplar bilheteria de plateia — não é um exemplo a seguir nesse ponto, é só a origem da regra de dedupe por pessoa.
-- Essa regra de dedupe é irrelevante para as faixas Começo/Essencial (cobrança é % sobre o valor vendido, já reflete a realidade financeira automaticamente, plateia incluída). É **relevante e obrigatória** para o Escala, cujo componente "R$2,00 por participante" depende de uma contagem de pessoas única e correta (só quem compete + cursista, plateia sempre em %).
+A versão anterior desta seção dizia que uma mesma pessoa inscrita em várias coreografias contava **1 vez** como participante, com dedupe por CPF — inspirada na proposta do Sistema Dance. **Essa regra foi descartada.** O motivo: o modelo do Sistema Dance é "R$3 por pessoa" — pra eles, dedupe faz sentido, porque a cobrança em si é "por pessoa". O componente do Escala não é assim: é um proxy de porte/uso da plataforma, e:
+
+1. **O produtor já cobra o inscrito por coreografia** — uma 2ª coreografia da mesma pessoa é receita nova de verdade, não uma repetição.
+2. **O custo operacional da CoreoHub escala por coreografia**, não por pessoa única — cada coreografia passa pelo júri, cronograma e certificado, independente de quantas outras aquele bailarino também está.
+3. **A própria matemática do teto/cruzamento** (seção "Por que a faixa do Escala é...") assume `GMV = 50 × participantes` — só bate com o ticket médio de R$50 se "participantes" for a contagem **crua** (cada vaga em cada coreografia). Aplicar dedupe de verdade quebraria essa calibração pra qualquer evento com muita gente em Duo/Trio/Grupo.
+4. Dedupe por CPF também é frágil de implementar (mesma classe de bug de identidade já documentada no Cronograma) e deixa de ser necessário nesse desenho.
+
+**Regra atual**: o componente "R$2,00 por participante" do Escala conta cada **participação** — bailarino × coreografia, soma direta pelo elenco das inscrições do evento, sem dedupe nenhum. Cursista de workshop conta como categoria separada (um segundo serviço, contabilizado à parte, também sem dedupe). **Ingresso de plateia (público geral que compra pra assistir, não compete) continua fora dessa contagem** (decisão fechada, 2026-09-04) — essa receita é cobrada por percentual, dentro do faturamento usado pra aplicar o teto de 4,5%, nunca vira parte do componente fixo "R$2,00 por participante". Motivo: sem essa exclusão, um festival grande que vende muito ingresso de plateia (ex: porte Joinville) poderia escolher o Escala especificamente pra escapar da comissão proporcional sobre a bilheteria — isso cortaria receita justamente nos maiores clientes, o oposto do que o Escala deveria fazer.
+
+Essa regra é irrelevante para Começo/Essencial (cobrança é % sobre o valor vendido, já reflete a realidade financeira automaticamente, plateia incluída, sem precisar contar pessoa nenhuma).
 
 ## Calculadora pública (site CoreoHub)
 
