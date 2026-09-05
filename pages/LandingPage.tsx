@@ -51,14 +51,6 @@ const LandingPage = () => {
   const calcLiquido = calcFaturamento - calcComissao;
   const taxaEfetiva = calcFaturamento > 0 ? (calcComissao / calcFaturamento) * 100 : 0;
 
-  // Referência: cobrança "por pessoa" comum em sistemas dedicados do setor
-  // (R$3/pessoa até 800, R$2,50 acima, mínimo R$600) — mesma estrutura
-  // encontrada em propostas reais recebidas por produtores de festival.
-  const cobrancaPorPessoa = Math.max(
-    600,
-    calcParticipantes <= 800 ? calcParticipantes * 3 : 800 * 3 + (calcParticipantes - 800) * 2.5
-  );
-
   const submitCalculatorLead = async () => {
     setLeadError(null);
     const nome = leadNome.trim();
@@ -783,7 +775,7 @@ const LandingPage = () => {
                     }`}
                   >
                     <p className={`text-[9px] font-black uppercase tracking-widest ${faixa === faixaRecomendada ? 'text-[#ff0068]' : 'text-slate-500'}`}>
-                      {PLANO_LABEL[faixa]}{faixa === faixaRecomendada ? ' ✓' : ''}
+                      Plano {PLANO_LABEL[faixa]}{faixa === faixaRecomendada ? ' ✓' : ''}
                     </p>
                     <p className={`text-sm md:text-base font-black tabular-nums mt-1 ${faixa === faixaRecomendada ? 'text-white' : 'text-slate-400'}`}>
                       {fmtBRL(valoresPorFaixa[faixa])}
@@ -792,12 +784,6 @@ const LandingPage = () => {
                 ))}
               </div>
 
-              <p className="text-xs text-slate-400 mt-6">
-                Sistemas do setor que cobram <span className="text-white font-bold">por pessoa</span> (modelo comum no mercado, sem relação
-                com o valor da inscrição): <span className="text-rose-400 font-bold">{fmtBRL(cobrancaPorPessoa)}</span> pro
-                mesmo evento. Sua mistura real de solo/duo/trio/grupo muda esse comparativo — por isso a CoreoHub cobra
-                proporcional ao que você de fato vende, não por cabeça.
-              </p>
             </div>
 
             {!leadSubmitted ? (
