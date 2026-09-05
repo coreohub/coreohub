@@ -596,7 +596,8 @@ const LandingPage = () => {
                 <img src="/will-nunes.webp" alt="Will Nunes" className="w-10 h-10 rounded-full object-cover object-top shrink-0" />
                 <div>
                   <p className="text-white text-sm font-black">Will Nunes</p>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Produtor do Extreme Festival · Monte Aprazível-SP</p>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Monte Aprazível-SP</p>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Produtor do Extreme Festival</p>
                 </div>
               </div>
             </div>
@@ -606,17 +607,19 @@ const LandingPage = () => {
                 <img src="/jonathan-lupe.webp" alt="Jonathan Lupe" className="w-10 h-10 rounded-full object-cover object-center shrink-0" />
                 <div>
                   <p className="text-white text-sm font-black">Jonathan Lupe</p>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Jurado · Usualdance Festival · São José do Rio Preto-SP</p>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">São José do Rio Preto-SP</p>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Jurado · Usualdance Festival</p>
                 </div>
               </div>
             </div>
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col gap-4">
               <p className="text-slate-300 text-sm leading-relaxed flex-1">"Fiquei muito satisfeito com o júri digital, cronograma e ordem das apresentações. Melhor ainda o suporte que da equipe quando mais precisei. Recomendo muito."</p>
               <div className="flex items-center gap-3 border-t border-white/10 pt-4">
-                <img src="/bheto-bastheli.webp" alt="Bheto Bastheli" className="w-10 h-10 rounded-full object-cover object-center shrink-0" />
+                <img src="/bheto-bastheli.webp" alt="Bhetto Bastelli" className="w-10 h-10 rounded-full object-cover object-center shrink-0" />
                 <div>
-                  <p className="text-white text-sm font-black">Bheto Bastheli</p>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Produtor do Festival Ecodança · Limeira-SP</p>
+                  <p className="text-white text-sm font-black">Bhetto Bastelli</p>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Limeira-SP</p>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Produtor do Festival Ecodança</p>
                 </div>
               </div>
             </div>
