@@ -613,7 +613,7 @@ const LandingPage = () => {
               </div>
             </div>
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col gap-4">
-              <p className="text-slate-300 text-sm leading-relaxed flex-1">"Fiquei muito satisfeito com o júri digital, cronograma e ordem das apresentações. Melhor ainda o suporte que da equipe quando mais precisei. Recomendo muito."</p>
+              <p className="text-slate-300 text-sm leading-relaxed flex-1">"A Coreohub foi uma grande parceira na construção do Festival Ecodança. Mesmo entrando já com o festival em andamento, o serviço contratado facilitou muito a logística. O suporte da equipe foi essencial pra tudo dar certo. Super recomendo — pra 2026 já vou estar com a Coreohub desde o início!"</p>
               <div className="flex items-center gap-3 border-t border-white/10 pt-4">
                 <img src="/bheto-bastheli.webp" alt="Bhetto Bastelli" className="w-10 h-10 rounded-full object-cover object-center shrink-0" />
                 <div>
