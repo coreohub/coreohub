@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, MessageCircle } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 
 const WHATSAPP_NUMBER = '5517981264290';
@@ -10,7 +10,6 @@ const waLink = (text: string) => `https://wa.me/${WHATSAPP_NUMBER}?text=${encode
 
 interface Plan {
   nome: string;
-  faixa: string;
   tag?: string;
   featured?: boolean;
   precoLinha: React.ReactNode;
@@ -25,7 +24,6 @@ interface Plan {
 const PLANOS: Plan[] = [
   {
     nome: 'Começo',
-    faixa: 'Até 100 participantes',
     precoLinha: <><span className="text-4xl font-black text-[#ff0068]">10%</span><span className="text-lg font-bold text-slate-500">sobre venda</span></>,
     precoDetalhe: 'Sem taxa fixa por evento.',
     compensa: 'R$ 0,00 mínimo · só paga se vender',
@@ -36,7 +34,6 @@ const PLANOS: Plan[] = [
   },
   {
     nome: 'Essencial',
-    faixa: '100 a 2.500 participantes',
     tag: 'Mais escolhido',
     featured: true,
     precoLinha: <><span className="text-3xl md:text-4xl font-black text-white">R$ 250</span><span className="text-lg font-bold text-slate-500">+</span><span className="text-4xl font-black text-[#ff0068]">5%</span></>,
@@ -49,7 +46,6 @@ const PLANOS: Plan[] = [
   },
   {
     nome: 'Escala',
-    faixa: 'Acima de 2.500 participantes',
     precoLinha: <><span className="text-3xl md:text-4xl font-black text-white">R$ 1.490</span><span className="text-lg font-bold text-slate-500">+</span><span className="text-2xl font-black text-[#ff0068]">R$ 2</span><span className="text-xs font-bold text-slate-500 self-end mb-1">por participante</span></>,
     precoDetalhe: 'Teto de 4,5% do faturamento — nunca paga mais que isso.',
     compensa: 'Compensa a partir de R$ 124 mil em vendas',
@@ -105,7 +101,7 @@ const Planos: React.FC = () => {
       </section>
 
       {/* ─── CARDS ──────────────────────────────────────────────── */}
-      <section className="px-6 pb-16">
+      <section className="px-6 pb-24">
         <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
           {PLANOS.map((p) => (
             <div
@@ -121,10 +117,9 @@ const Planos: React.FC = () => {
                   {p.tag}
                 </span>
               )}
-              <h2 className={`text-2xl font-black uppercase italic tracking-tight ${p.featured ? 'text-[#ff1a7d]' : 'text-white'}`}>
+              <h2 className={`text-2xl font-black uppercase italic tracking-tight mb-6 ${p.featured ? 'text-[#ff1a7d]' : 'text-white'}`}>
                 {p.nome}
               </h2>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mt-1 mb-6">{p.faixa}</p>
 
               <div className="flex items-baseline gap-2 flex-wrap mb-1">{p.precoLinha}</div>
               <p className="text-xs text-slate-400 mb-4">{p.precoDetalhe}</p>
@@ -154,27 +149,6 @@ const Planos: React.FC = () => {
               </a>
             </div>
           ))}
-        </div>
-      </section>
-
-      {/* ─── SIMULAÇÃO PERSONALIZADA ──────────────────────────────────────────────── */}
-      <section className="px-6 pb-24">
-        <div className="max-w-3xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-6 md:p-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="text-left">
-            <p className="text-white font-bold text-sm">Quer uma simulação com os números do seu festival?</p>
-            <p className="text-slate-400 text-sm mt-1">
-              Manda o número de coreografias e a média de bailarinos por coreografia que a gente calcula
-              na hora quanto seu evento tende a faturar e qual plano compensa mais.
-            </p>
-          </div>
-          <a
-            href={waLink('Olá! Quero simular o valor da CoreoHub pro meu festival.')}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-5 py-3 bg-[#ff0068] text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-transform shrink-0"
-          >
-            Simular no WhatsApp <ArrowRight size={14} />
-          </a>
         </div>
       </section>
 
