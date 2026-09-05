@@ -11,8 +11,20 @@
 - Branch `PLANFEE:` no `asaas-webhook` confirma o pagamento e promove o evento sozinho, sem ação manual.
 - UI real fica em `components/OnboardingWizard.tsx` (Step 2, "Formato") — **não** em `pages/CreateEvent.tsx`, que é código órfão (importado no `App.tsx` mas nunca roteado; achado testando o fluxo de ponta a ponta). Seletor de plano não pergunta de novo quando já veio definido por `?plano=` (CTA de `/planos`, ou link direto de Escala pós-negociação). Modal de cobrança fecha sozinho via Supabase Realtime (precisou habilitar Realtime na tabela `events`, nunca tinha sido habilitada) quando o webhook confirma — sem clique manual.
 - **Validado end-to-end com pagamento real**: evento de teste descartável, plano Essencial temporariamente rebaixado pra R$5 (mínimo Asaas) só pro smoke test, pago de verdade, webhook promoveu `billing_plan`/`commission_percent` sozinho, evento de teste apagado, valor restaurado pra R$250 depois.
-- **Pendente (Fase 2/3, ver abaixo)**: contagem de participante do Escala (simplificada em 2026-09-04 — soma direta de participação por coreografia, sem dedupe por CPF, ver seção "Regra de contagem de participante") + taxa provisória do split contínuo + acerto do componente variável no fechamento.
-- Cliente real aguardando Escala: produtora do **Lyris Dance Competition** (migração da CPL Cloud já feita) — motivou priorizar a Fase 2 em seguida.
+- Cliente real aguardando Escala: produtora do **Lyris Dance Competition** (migração da CPL Cloud já feita) — motivou priorizar as Fases 2/3 em seguida.
+
+**✅ Fase 2 — RPC de contagem de participante (Escala) SHIPADO em 2026-09-04.**
+
+- Migration `20260905_event_participant_count.sql`: `get_event_participant_count(p_event_id)` soma `jsonb_array_length(bailarinos_detalhes)` de toda registration paga (competidor, sem dedupe por CPF — ver correção na seção "Regra de contagem de participante") + `workshop_registrations` válidas (cursista, categoria separada). Ingresso de plateia nunca entra. Sem UI própria — só camada de dado, consumida pela Fase 3.
+- Validado contra o Usualdance Festival real (42 registrations pagas → 130 competidores + 9 cursistas = 139 participantes) — soma bate exatamente com o esperado.
+
+**✅ Fase 3 — Acerto de fechamento do componente variável (Escala) SHIPADO em 2026-09-04 — ainda sem validação com pagamento real (sem cliente Escala ativo até agora).**
+
+- Migration `20260905b_event_billing_settlement.sql`: colunas `billing_settlement_*` em `events` + RPC `get_event_billing_settlement_preview` (devido real = `LEAST(2×participantes, 4,5%×GMV líquido)` vs. já coletado via split contínuo, usando `platform_commissions`). Corrigiu também um bug nas RPCs da Fase 2/3: faltava liberar `service_role`, sem isso a edge function nunca conseguiria chamá-las.
+- Edge function `close-event-billing-settlement` (admin-only): modo preview (sem side-effect) e modo confirm — diferença ≤0 fecha na hora, sem cobrança (crédito eventual vira negociação manual, nunca estorno automático); diferença >0 gera cobrança complementar (sem split, mesmo padrão do componente fixo).
+- Branch `PLANSETTLE:` no `asaas-webhook` fecha o acerto sozinho quando a Asaas confirma o pagamento.
+- Botão **"Calcular acerto"** no `/super-admin` (só aparece pra evento em Escala) — mostra a prévia antes de qualquer cobrança, fecha sozinho via Realtime quando o pagamento confirma.
+- **Pendente**: nunca testado com pagamento real (sem cliente Escala ativo pra gerar dado de verdade). Validar ponta a ponta quando o primeiro evento Escala real (ex: Lyris Dance Competition) tiver dados suficientes de venda pra fechar.
 
 ## Posicionamento (decisão do produto, não só de marketing)
 
