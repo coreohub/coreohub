@@ -160,7 +160,7 @@ const LandingPage = () => {
         {/* barra de stats */}
         <div className="relative z-10 max-w-5xl mx-auto w-full grid grid-cols-3 gap-4 border-t border-white/10 px-6 pt-6 pb-8">
           {[
-            { val: '10%', label: 'só quando vende' },
+            { val: 'Sob medida', label: 'pro tamanho do evento' },
             { val: 'R$ 0', label: 'de mensalidade' },
             { val: '100%', label: 'digital, sem papel' },
           ].map((s, i) => (

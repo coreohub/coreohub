@@ -99,18 +99,8 @@ const Planos: React.FC = () => {
             Preço que cresce <span className="text-[#ff0068]">junto</span> com seu festival
           </motion.h1>
           <p className="mt-6 text-slate-300 text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
-            Sem mensalidade. Você paga uma taxa proporcional ao que o seu evento realmente fatura —
-            nunca mais que isso, nunca escondida.
+            Sem mensalidade. Você paga uma taxa proporcional ao que o seu evento realmente fatura.
           </p>
-
-          <div className="mt-8 max-w-2xl mx-auto flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-6 py-4 text-left">
-            <div className="shrink-0 w-8 h-8 rounded-full bg-[#E3FF0A] text-black font-black text-sm flex items-center justify-center">=</div>
-            <p className="text-xs md:text-sm text-slate-300 leading-relaxed">
-              A CoreoHub não compete pra ser <strong className="text-white">a mais barata</strong> do mercado
-              — compete pra ser a mais <strong className="text-white">em equilíbrio</strong>. Os 3 planos seguem
-              a mesma lógica proporcional, só muda o tamanho do evento.
-            </p>
-          </div>
         </div>
       </section>
 
@@ -164,38 +154,6 @@ const Planos: React.FC = () => {
               </a>
             </div>
           ))}
-        </div>
-      </section>
-
-      {/* ─── ONDE CADA PLANO COMPENSA ──────────────────────────────────────────────── */}
-      <section className="px-6 pb-16">
-        <div className="max-w-4xl mx-auto rounded-3xl border border-white/10 bg-white/5 p-7 md:p-10">
-          <h2 className="text-lg font-black uppercase italic tracking-tight mb-2">Onde cada plano compensa</h2>
-          <p className="text-xs text-slate-500 mb-6">Faturamento estimado com ticket médio de R$ 50 por participante.</p>
-
-          <div className="relative h-1.5 rounded-full bg-gradient-to-r from-[#E3FF0A] via-[#E3FF0A] to-[#ff0068] mx-1 mb-14">
-            <div className="absolute -top-8 text-center" style={{ left: '4%', transform: 'translateX(-50%)' }}>
-              <p className="text-[11px] font-black text-white whitespace-nowrap">R$ 5 mil</p>
-            </div>
-            <div className="absolute top-3 text-center" style={{ left: '4%', transform: 'translateX(-50%)' }}>
-              <p className="text-[10px] font-bold text-slate-400 whitespace-nowrap">Começo → Essencial</p>
-            </div>
-            <div className="absolute -top-8 text-center" style={{ left: '58%', transform: 'translateX(-50%)' }}>
-              <p className="text-[11px] font-black text-white whitespace-nowrap">R$ 124 mil</p>
-            </div>
-            <div className="absolute top-3 text-center" style={{ left: '58%', transform: 'translateX(-50%)' }}>
-              <p className="text-[10px] font-bold text-slate-400 whitespace-nowrap">Essencial → Escala</p>
-            </div>
-          </div>
-
-          <p className="text-xs md:text-sm text-slate-400 leading-relaxed">
-            O cruzamento entre <strong className="text-white">Essencial</strong> e <strong className="text-white">Escala</strong> só
-            acontece a partir de <strong className="text-white">2.500 participantes</strong> — não antes disso. A conta é simples:
-            {' '}<code className="text-[#1DE7F2] bg-white/5 rounded px-1.5 py-0.5 text-[11px]">250 + 2,5 · participantes</code> (Essencial)
-            só supera <code className="text-[#1DE7F2] bg-white/5 rounded px-1.5 py-0.5 text-[11px]">1.490 + 2 · participantes</code> (Escala)
-            perto de 2.480 participantes. Por isso um festival de 600 pessoas fica melhor no Essencial: trocar pro Escala
-            nesse porte custaria cerca de 54% a mais, sem ganhar nada em troca.
-          </p>
         </div>
       </section>
 
