@@ -58,8 +58,14 @@ function baseLayout(opts: {
   ctaLabel?: string
   ctaUrl?: string
   footerNote?: string
+  /** Selo Asaas (exigência regulatória em e-mails financeiros — pagamento,
+   *  cobrança, boas-vindas, finalização de cadastro). Default true: qualquer
+   *  template que não passar esse campo continua com o selo — erra pro lado
+   *  conforme. Só desligar explicitamente em e-mails comprovadamente sem
+   *  nenhuma transação (operacional/marketing/interno). Ver backlog #36. */
+  includeAsaasSeal?: boolean
 }): string {
-  const { preheader, title, intro, contentHtml, ctaLabel, ctaUrl, footerNote } = opts
+  const { preheader, title, intro, contentHtml, ctaLabel, ctaUrl, footerNote, includeAsaasSeal = true } = opts
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -100,10 +106,12 @@ function baseLayout(opts: {
             </p>
           </td>
         </tr>
-        <tr>
+        ${
+          includeAsaasSeal
+            ? `<tr>
           <td style="padding:8px 32px 28px;text-align:center;">
             <!-- Selo Asaas — exigência regulatória do BaaS (Resolução Conjunta nº 16/2025 BCB).
-                 Obrigatório em e-mails conforme Playbook Asaas.
+                 Obrigatório em e-mails financeiros conforme Playbook Asaas.
                  ID oficial: d58edae9-a53c-4ab3-9e71-a4e04d8a8b15 -->
             <a href="https://asaas.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">
               <img
@@ -119,7 +127,9 @@ function baseLayout(opts: {
               instituição de pagamento autorizada pelo Banco Central do Brasil.
             </p>
           </td>
-        </tr>
+        </tr>`
+            : ''
+        }
       </table>
     </td>
   </tr>
@@ -381,6 +391,8 @@ function buildAdminNewProducer(p: { produtorNome?: string; produtorEmail: string
       title: 'Novo produtor cadastrado',
       intro: 'Notificação interna — alguém acabou de criar conta de produtor no CoreoHub.',
       contentHtml,
+      // Notificação interna pro admin — não é comunicação financeira com o produtor.
+      includeAsaasSeal: false,
     }),
   }
 }
@@ -486,6 +498,8 @@ function buildEventCreatedProducer(p: EventCreatedPayload) {
       ctaLabel: 'Acessar painel do produtor',
       ctaUrl: `${p.appUrl ?? 'https://app.coreohub.com'}`,
       footerNote: 'Você está recebendo este email por ser o produtor responsável pelo evento.',
+      // Confirmação de criação de evento — sem nenhuma transação envolvida.
+      includeAsaasSeal: false,
     }),
   }
 }
@@ -1069,6 +1083,8 @@ function buildTrilhaReminder(p: TrilhaReminderPayload) {
       contentHtml,
       ctaLabel: 'Enviar trilha',
       ctaUrl: p.ctaUrl,
+      // Lembrete operacional (upload de arquivo) — sem transação envolvida.
+      includeAsaasSeal: false,
     }),
   }
 }
@@ -1267,6 +1283,8 @@ function buildCalculatorProposal(p: CalculatorProposalPayload) {
       ctaLabel: 'Falar no WhatsApp',
       ctaUrl,
       footerNote: 'Você recebeu este email porque pediu uma simulação de preço no site da CoreoHub.',
+      // Simulação de preço (lead de marketing) — nenhuma cobrança foi feita.
+      includeAsaasSeal: false,
     }),
   }
 }
@@ -1319,6 +1337,8 @@ function buildAdminCalculatorLead(p: CalculatorProposalPayload) {
       contentHtml,
       ctaLabel: ctaUrl ? 'Falar no WhatsApp' : undefined,
       ctaUrl,
+      // Notificação interna pro admin — não é comunicação financeira com o lead.
+      includeAsaasSeal: false,
     }),
   }
 }
@@ -1378,6 +1398,8 @@ function buildLeadReengagement(p: LeadReengagementPayload) {
       ctaLabel: 'Inscrever agora',
       ctaUrl,
       footerNote: 'Você está recebendo este email porque criou conta no CoreoHub mas ainda não completou inscrição. Se não quiser participar, basta ignorar.',
+      // Reengajamento de lead (marketing) — sem transação envolvida.
+      includeAsaasSeal: false,
     }),
   }
 }
