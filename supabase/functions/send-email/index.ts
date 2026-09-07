@@ -1867,10 +1867,13 @@ Deno.serve(async (req) => {
         try {
           const adminTpl = buildAdminCalculatorLead(p)
           // fire-and-forget — não await pra não atrasar a resposta
+          // Mesmo fromOverride do email do lead (contato@, não pagamentos@ —
+          // que é o EMAIL_FROM default, reservado pra cobrança/repasse).
           sendViaResend({
             to: adminEmail,
             subject: adminTpl.subject,
             html: adminTpl.html,
+            fromOverride: 'CoreoHub <contato@coreohub.com>',
           }).catch(err => console.warn('[send-email] admin calculator lead notify falhou:', err?.message ?? err))
         } catch (err: any) {
           console.warn('[send-email] admin calculator lead notify skip:', err?.message ?? err)
