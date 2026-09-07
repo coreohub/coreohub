@@ -375,8 +375,10 @@ const Planos: React.FC = () => {
       </section>
 
       {/* ─── CARDS ──────────────────────────────────────────────── */}
-      <section className="px-6 pb-24">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+      <section className="relative px-6 pt-4 pb-24 border-t border-white/5 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,0,104,0.10),transparent_60%)]" />
+        <p className="relative text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-6 text-center">Confira os planos</p>
+        <div className="relative max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
           {PLANOS.map((p) => {
             const isRecomendado = p.id === faixaRecomendada;
             return (
