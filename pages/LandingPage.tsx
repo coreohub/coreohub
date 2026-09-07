@@ -95,7 +95,7 @@ const LandingPage = () => {
                 onClick={() => { navigate('/planos'); setMenuOpen(false); }}
                 className="w-full px-4 py-3 bg-[#ff0068] text-white rounded-xl text-sm font-black uppercase tracking-widest"
               >
-                Ver planos →
+                Fazer simulação →
               </button>
             </div>
           </div>
@@ -141,7 +141,9 @@ const LandingPage = () => {
                 className="group relative px-8 py-5 bg-[#ff0068] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_20px_60px_rgba(255,0,104,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-transform"
               >
                 <span className="relative z-10 flex items-center gap-2">
-                  Fazer simulação <ChevronRight size={18} />
+                  <span className="sm:hidden">Ver planos</span>
+                  <span className="hidden sm:inline">Fazer simulação</span>
+                  <ChevronRight size={18} />
                 </span>
               </button>
             </div>

@@ -111,6 +111,9 @@ const Planos: React.FC = () => {
   const [leadSubmitting, setLeadSubmitting] = useState(false);
   const [leadSubmitted, setLeadSubmitted] = useState(false);
   const [leadError, setLeadError] = useState<string | null>(null);
+  // Recolhido por padrão só no mobile — evita a simulação empurrar os
+  // cards de plano pra fora da primeira dobra da tela (feedback 2026-09-07).
+  const [simExpanded, setSimExpanded] = useState(false);
 
   const calcParticipantes = Math.round(calcCoreografias * calcMediaBailarinos);
   const calcFaturamento = calcParticipantes * calcTicket;
@@ -205,10 +208,29 @@ const Planos: React.FC = () => {
       </section>
 
       {/* ─── SIMULAÇÃO ──────────────────────────────────────────────── */}
-      <section className="px-6 pb-16">
+      <section className="px-6 pb-8 sm:pb-16">
         <div className="max-w-4xl mx-auto bg-gradient-to-br from-[#ff0068]/10 via-white/5 to-purple-700/10 border border-white/10 rounded-3xl p-6 md:p-10 backdrop-blur-xl">
-          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mb-6 text-center md:text-left">Simule seu festival</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mb-4 sm:mb-6 text-center md:text-left">Simule seu festival</p>
+
+          {/* Toggle só no mobile — no desktop a simulação já fica sempre aberta */}
+          <button
+            type="button"
+            onClick={() => setSimExpanded((v) => !v)}
+            aria-expanded={simExpanded}
+            aria-controls="simulador-detalhes"
+            className="sm:hidden w-full flex items-center justify-between gap-3 px-4 py-3 mb-4 bg-white/5 border border-white/10 rounded-xl text-left"
+          >
+            <span className="text-xs text-slate-300">
+              ≈ <span className="text-white font-bold tabular-nums">{calcParticipantes}</span> participantes · faturamento{' '}
+              <span className="text-white font-bold tabular-nums">{fmtBRL(calcFaturamento)}</span>
+            </span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-[#ff0068] shrink-0">
+              {simExpanded ? 'Fechar ▲' : 'Ajustar ▾'}
+            </span>
+          </button>
+
+          <div id="simulador-detalhes" className={`${simExpanded ? 'block' : 'hidden'} sm:block`}>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6">
             <div className="text-left">
               <label htmlFor="calc-coreografias" className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                 Nº de coreografias: <span className="text-[#ff0068] font-mono">{calcCoreografias}</span>
@@ -222,7 +244,7 @@ const Planos: React.FC = () => {
                 aria-valuetext={`${calcCoreografias} coreografias`}
                 className="w-full mt-2 accent-[#ff0068]"
               />
-              <div className="flex justify-between text-[9px] text-slate-500 mt-1">
+              <div className="hidden sm:flex justify-between text-[9px] text-slate-500 mt-1">
                 <span>5</span><span>500</span>
               </div>
             </div>
@@ -239,7 +261,7 @@ const Planos: React.FC = () => {
                 aria-valuetext={`${calcMediaBailarinos} bailarinos em média`}
                 className="w-full mt-2 accent-[#ff0068]"
               />
-              <div className="flex justify-between text-[9px] text-slate-500 mt-1">
+              <div className="hidden sm:flex justify-between text-[9px] text-slate-500 mt-1">
                 <span>1 (solo)</span><span>15 (grupão)</span>
               </div>
             </div>
@@ -256,7 +278,7 @@ const Planos: React.FC = () => {
                 aria-valuetext={fmtBRL(calcTicket)}
                 className="w-full mt-2 accent-[#ff0068]"
               />
-              <div className="flex justify-between text-[9px] text-slate-500 mt-1">
+              <div className="hidden sm:flex justify-between text-[9px] text-slate-500 mt-1">
                 <span>R$ 20</span><span>R$ 150</span>
               </div>
             </div>
@@ -348,6 +370,7 @@ const Planos: React.FC = () => {
               </a>
             </div>
           )}
+          </div>
         </div>
       </section>
 
