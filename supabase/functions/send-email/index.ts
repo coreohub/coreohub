@@ -1271,6 +1271,58 @@ function buildCalculatorProposal(p: CalculatorProposalPayload) {
   }
 }
 
+// ─── Template: admin_calculator_lead ───────────────────────────────────────
+// Notifica contato@coreohub.com toda vez que um lead completa a simulação
+// "Simule seu festival" em /planos. Disparado em paralelo com
+// calculator_proposal (cópia interna pro admin), mesmo padrão de
+// buildAdminNewProducer no case producer_welcome.
+
+function buildAdminCalculatorLead(p: CalculatorProposalPayload) {
+  // leadWhatsapp vem como dígitos sem DDI (10 = fixo, 11 = celular), validado
+  // em submit-calculator-lead (10-13 dígitos totais). Formata só os casos
+  // comuns pra exibição; fora disso, mostra cru (nunca quebra o e-mail).
+  const wa = p.leadWhatsapp ?? ''
+  const whatsappFormatado =
+    wa.length === 11 ? `+55 (${wa.slice(0, 2)}) ${wa.slice(2, 7)}-${wa.slice(7)}`
+    : wa.length === 10 ? `+55 (${wa.slice(0, 2)}) ${wa.slice(2, 6)}-${wa.slice(6)}`
+    : wa || '—'
+  const waText = encodeURIComponent(
+    `Olá ${p.leadNome}! Vi que você simulou o plano ${p.planoNome} pro seu festival na CoreoHub. Bora conversar?`
+  )
+  const ctaUrl = p.leadWhatsapp ? `https://wa.me/55${p.leadWhatsapp}?text=${waText}` : undefined
+
+  const contentHtml = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      ${infoRow('Festival', escape(p.leadNome))}
+      ${infoRow('WhatsApp', escape(whatsappFormatado))}
+      ${infoRow('E-mail', escape(p.leadEmail))}
+      ${infoRow('Nº de coreografias', String(p.numeroCoreografias))}
+      ${infoRow('Média de bailarinos/coreografia', String(p.mediaBailarinos))}
+      ${infoRow('Participantes estimados', String(p.participantesEstimados))}
+      ${infoRow('Faturamento estimado', money(p.faturamentoEstimado))}
+    </table>
+    <div style="margin-top:20px;padding:22px;border-radius:14px;background:#fff5f8;border:2px solid #ff0068;text-align:center;">
+      <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#ff0068;">Plano recomendado</p>
+      <p style="margin:8px 0 0;font-size:28px;font-weight:900;color:#0b0b0f;letter-spacing:-.02em;">${escape(p.planoNome)}</p>
+      <p style="margin:6px 0 0;font-size:14px;line-height:1.5;color:#475569;">Valor estimado: <strong>${money(p.valorEstimado)}</strong></p>
+    </div>
+    <p style="margin:24px 0 0;font-size:12px;color:#64748b;">
+      Lead também recebeu a proposta por e-mail. Considere chamar no WhatsApp enquanto está quente.
+    </p>`
+
+  return {
+    subject: `🧮 Novo lead da simulação: ${p.leadNome} (${p.planoNome})`,
+    html: baseLayout({
+      preheader: `Novo lead: ${p.leadNome} simulou o plano ${p.planoNome}.`,
+      title: 'Novo lead da calculadora',
+      intro: 'Notificação interna — alguém acabou de simular o preço do festival em /planos.',
+      contentHtml,
+      ctaLabel: ctaUrl ? 'Falar no WhatsApp' : undefined,
+      ctaUrl,
+    }),
+  }
+}
+
 interface LeadReengagementPayload {
   /** Email do lead (destino). */
   leadEmail:          string
@@ -1807,6 +1859,22 @@ Deno.serve(async (req) => {
         // é a CoreoHub mandando a simulação dele. Remetente neutro + alias
         // próprio (não pagamentos@, que é só pra emails de cobrança/repasse).
         fromOverride = 'CoreoHub <contato@coreohub.com>'
+
+        // Em paralelo, dispara notificação interna pro admin do CoreoHub
+        // avisando que um novo lead chegou (best-effort — falha não bloqueia
+        // o e-mail de proposta pro lead). Mesmo padrão de admin_new_producer.
+        const adminEmail = Deno.env.get('ADMIN_NOTIFY_EMAIL') ?? 'contato@coreohub.com'
+        try {
+          const adminTpl = buildAdminCalculatorLead(p)
+          // fire-and-forget — não await pra não atrasar a resposta
+          sendViaResend({
+            to: adminEmail,
+            subject: adminTpl.subject,
+            html: adminTpl.html,
+          }).catch(err => console.warn('[send-email] admin calculator lead notify falhou:', err?.message ?? err))
+        } catch (err: any) {
+          console.warn('[send-email] admin calculator lead notify skip:', err?.message ?? err)
+        }
         break
       }
       case 'lead_reengagement': {
