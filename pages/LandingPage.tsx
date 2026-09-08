@@ -161,7 +161,7 @@ const LandingPage = () => {
             const Icon = s.icon;
             return (
               <div key={i} className="text-center flex flex-col items-center">
-                <Icon size={18} className="text-[#ff0068] mb-1.5" aria-hidden="true" />
+                <Icon size={26} className="text-[#ff0068] mb-2" aria-hidden="true" />
                 <p className="text-2xl md:text-4xl font-black text-white tracking-tighter">{s.val}</p>
                 <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mt-1">{s.label}</p>
               </div>

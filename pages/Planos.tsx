@@ -212,13 +212,14 @@ const Planos: React.FC = () => {
         <div className="max-w-4xl mx-auto bg-gradient-to-br from-[#ff0068]/10 via-white/5 to-purple-700/10 border border-white/10 rounded-3xl p-5 md:p-6 backdrop-blur-xl">
           <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mb-3 sm:mb-4 text-center md:text-left">Simule seu festival</p>
 
-          {/* Toggle só no mobile — no desktop a simulação já fica sempre aberta */}
+          {/* Recolhido por padrão em qualquer tela — em monitor mais baixo mesmo o
+              desktop precisava disso pros planos aparecerem sem rolar demais */}
           <button
             type="button"
             onClick={() => setSimExpanded((v) => !v)}
             aria-expanded={simExpanded}
             aria-controls="simulador-detalhes"
-            className="sm:hidden w-full flex items-center justify-between gap-3 px-4 py-3 mb-4 bg-white/5 border border-white/10 rounded-xl text-left"
+            className="w-full flex items-center justify-between gap-3 px-4 py-3 mb-4 bg-white/5 border border-white/10 rounded-xl text-left"
           >
             <span className="text-xs text-slate-300">
               ≈ <span className="text-white font-bold tabular-nums">{calcParticipantes}</span> participantes · faturamento{' '}
@@ -229,7 +230,7 @@ const Planos: React.FC = () => {
             </span>
           </button>
 
-          <div id="simulador-detalhes" className={`${simExpanded ? 'block' : 'hidden'} sm:block`}>
+          <div id="simulador-detalhes" className={simExpanded ? 'block' : 'hidden'}>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-4">
             <div className="text-left">
               <label htmlFor="calc-coreografias" className="text-[10px] font-black uppercase tracking-widest text-slate-400">
