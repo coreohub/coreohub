@@ -5,6 +5,7 @@ import { UserRole, Profile as UserProfile } from './types';
 import { supabase } from './services/supabase';
 import { getOrCreateProfile } from './services/profileService';
 import { identifyUser, trackAppPageView } from './services/appAnalytics';
+import { trackPageView } from './services/analytics';
 import Sidebar from './components/Sidebar';
 import DemoBanner from './components/DemoBanner';
 import InstallAppBanner from './components/InstallAppBanner';
@@ -103,6 +104,23 @@ const PageLoader = () => (
     <Loader2 size={28} className="animate-spin text-[#ff0068]" />
   </div>
 );
+
+/**
+ * Page view do GA4 pras rotas públicas de marketing — fora do PrivateLayout,
+ * que já dispara o próprio page_view pro painel autenticado (App.tsx linha
+ * ~227). send_page_view:false é global (index.html), então sem isso nenhuma
+ * dessas rotas gera page_view nenhum (achado 2026-09-08, verificação GA4/planos).
+ */
+const PUBLIC_TRACKED_PATHS = new Set(['/', '/lp', '/planos', '/termos', '/privacidade', '/governo', '/governo/proposta']);
+const PublicPageViewTracker: React.FC = () => {
+  const location = useLocation();
+  useEffect(() => {
+    if (PUBLIC_TRACKED_PATHS.has(location.pathname)) {
+      trackPageView(location.pathname);
+    }
+  }, [location.pathname]);
+  return null;
+};
 
 interface PrivateRouteProps {
   session: any;
@@ -536,6 +554,7 @@ const App: React.FC = () => {
 
   return (
     <Router>
+      <PublicPageViewTracker />
       <Routes>
         <Route path="/" element={
           customDomainSlug
