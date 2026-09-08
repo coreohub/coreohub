@@ -2399,11 +2399,14 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         const formacoesAdapted = formats.map((f: any) => {
           const firstLote = f.lotes?.[0];
           const min = Number(f.minMembers ?? 1);
-          // Solo/Duo/Trio têm tamanho fixo (max = min). Grupo (min >= 4) tem
-          // teto aberto = 99. Antes max ficava 99 pra qualquer min > 1, o que
-          // fazia o InscricaoWizard tratar Duo/Trio como grupo na branch do
-          // @ Instagram (`maxMembers > 3` → campo único do grupo).
-          const max = min <= 3 ? min : 99;
+          // Só formatos com NOME de tamanho fixo (Solo/Duo/Trio/Quarteto/...,
+          // ver detectarMinFixo) têm max = min. Qualquer outro nome (ex:
+          // "Grupo", "Conjunto") é sempre teto aberto = 99, mesmo com mínimo
+          // 2 ou 3 — bug real 2026-09-08: produtor criava "Grupo" com mínimo
+          // 3 esperando "3 ou mais" e o sistema travava em exatamente 3,
+          // porque a regra antiga (`min <= 3 ? min : 99`) decidia pelo NÚMERO
+          // digitado, não pelo nome do formato.
+          const max = detectarMinFixo(f.name) !== null ? min : 99;
           return {
             id:           String(f.id),
             name:         f.name,
