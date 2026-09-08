@@ -190,27 +190,27 @@ const Planos: React.FC = () => {
       </header>
 
       {/* ─── HERO ──────────────────────────────────────────────── */}
-      <section className="px-6 pt-20 pb-8 lg:pt-28 lg:pb-12">
+      <section className="px-6 pt-10 pb-6 lg:pt-14 lg:pb-8">
         <div className="max-w-4xl mx-auto text-center">
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-4">Planos</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Planos</p>
           <motion.h1
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="text-4xl md:text-6xl font-black tracking-tighter uppercase italic leading-[0.98]"
+            className="text-3xl md:text-5xl font-black tracking-tighter uppercase italic leading-[0.98]"
           >
             Preço que cresce <span className="text-[#ff0068]">junto</span> com seu festival
           </motion.h1>
-          <p className="mt-6 text-slate-300 text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
+          <p className="mt-3 text-slate-300 text-sm md:text-base max-w-2xl mx-auto leading-relaxed">
             Sem mensalidade. Você paga uma taxa proporcional ao que o seu evento realmente fatura.
           </p>
         </div>
       </section>
 
       {/* ─── SIMULAÇÃO ──────────────────────────────────────────────── */}
-      <section className="px-6 pb-8 sm:pb-16">
-        <div className="max-w-4xl mx-auto bg-gradient-to-br from-[#ff0068]/10 via-white/5 to-purple-700/10 border border-white/10 rounded-3xl p-6 md:p-10 backdrop-blur-xl">
-          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mb-4 sm:mb-6 text-center md:text-left">Simule seu festival</p>
+      <section className="px-6 pb-8 sm:pb-10">
+        <div className="max-w-4xl mx-auto bg-gradient-to-br from-[#ff0068]/10 via-white/5 to-purple-700/10 border border-white/10 rounded-3xl p-5 md:p-6 backdrop-blur-xl">
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mb-3 sm:mb-4 text-center md:text-left">Simule seu festival</p>
 
           {/* Toggle só no mobile — no desktop a simulação já fica sempre aberta */}
           <button
@@ -230,7 +230,7 @@ const Planos: React.FC = () => {
           </button>
 
           <div id="simulador-detalhes" className={`${simExpanded ? 'block' : 'hidden'} sm:block`}>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-4">
             <div className="text-left">
               <label htmlFor="calc-coreografias" className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                 Nº de coreografias: <span className="text-[#ff0068] font-mono">{calcCoreografias}</span>

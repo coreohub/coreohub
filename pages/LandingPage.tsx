@@ -5,7 +5,7 @@ import {
   Trophy, Shield, Award, GraduationCap, Mic2, Check, X, ChevronDown,
   AlertTriangle, ArrowRight, Menu, Play,
   CalendarClock, Globe, IdCard, QrCode,
-  Smartphone, Share2, Mail,
+  Smartphone, Share2, Mail, Target, Wallet,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -154,15 +154,19 @@ const LandingPage = () => {
         {/* barra de stats */}
         <div className="relative z-10 max-w-5xl mx-auto w-full grid grid-cols-3 gap-4 border-t border-white/10 px-6 pt-6 pb-8">
           {[
-            { val: 'Sob medida', label: 'pro tamanho do evento' },
-            { val: 'R$ 0', label: 'de mensalidade' },
-            { val: '100%', label: 'digital, sem papel' },
-          ].map((s, i) => (
-            <div key={i} className="text-center">
-              <p className="text-2xl md:text-4xl font-black text-white tracking-tighter">{s.val}</p>
-              <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mt-1">{s.label}</p>
-            </div>
-          ))}
+            { val: 'Sob medida', label: 'pro tamanho do evento', icon: Target },
+            { val: 'R$ 0', label: 'de mensalidade', icon: Wallet },
+            { val: '100%', label: 'digital, sem papel', icon: Smartphone },
+          ].map((s, i) => {
+            const Icon = s.icon;
+            return (
+              <div key={i} className="text-center flex flex-col items-center">
+                <Icon size={18} className="text-[#ff0068] mb-1.5" aria-hidden="true" />
+                <p className="text-2xl md:text-4xl font-black text-white tracking-tighter">{s.val}</p>
+                <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mt-1">{s.label}</p>
+              </div>
+            );
+          })}
         </div>
       </section>
 
