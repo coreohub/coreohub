@@ -860,7 +860,8 @@ const LandingPage = () => {
               </div>
               <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
                 Sistema operacional pra festivais e mostras de dança. Inscrições, jurados, palco,
-                ingressos e certificados num único link.
+                ingressos e certificados num único link. Criado por quem produz festivais de dança
+                há mais de 25 anos.
               </p>
             </div>
 
