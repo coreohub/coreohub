@@ -5,6 +5,7 @@
 ## Páginas principais
 
 - [Home](https://coreohub.com/): visão geral do produto, funcionalidades, planos e FAQ.
+- [Planos](https://coreohub.com/planos): os 3 planos de comissão (Começo, Essencial, Escala), calculadora de simulação e taxas de ingresso/workshop/seletiva por vídeo.
 - [Festivais](https://coreohub.com/festivais): vitrine pública com os festivais e mostras de dança ativos na plataforma, abertos pra inscrição.
 - [Governo](https://coreohub.com/governo): página específica para editais públicos e mostras municipais/governamentais.
 - [Termos de Uso](https://coreohub.com/termos): termos de uso da plataforma.

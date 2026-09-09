@@ -435,6 +435,41 @@ const Planos: React.FC = () => {
         </div>
       </section>
 
+      {/* ─── ALÉM DA INSCRIÇÃO ──────────────────────────────────────────────── */}
+      <section className="px-6 pb-24 border-t border-white/5">
+        <div className="max-w-4xl mx-auto pt-16">
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3 text-center">Além da inscrição</p>
+          <h2 className="text-2xl md:text-3xl font-black uppercase italic tracking-tight text-center mb-3">
+            Seu evento também vende <span className="text-[#ff0068]">ingresso</span> e <span className="text-[#ff0068]">workshop</span>
+          </h2>
+          <p className="text-slate-300 text-sm text-center max-w-2xl mx-auto mb-8 leading-relaxed">
+            Os planos acima cobrem a inscrição das coreografias. Se seu festival também vende ingresso de plateia, workshop ou faz seletiva por vídeo, cada frente tem sua própria taxa — configurável por evento, não travada num número fixo.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
+              <p className="text-3xl font-black text-[#ff0068] mb-2">10%</p>
+              <p className="text-sm font-bold text-white mb-1">Ingressos de plateia</p>
+              <p className="text-xs text-slate-400 leading-relaxed">Sobre a venda de ingresso pro público que vai assistir.</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
+              <p className="text-3xl font-black text-[#ff0068] mb-2">10%</p>
+              <p className="text-sm font-bold text-white mb-1">Workshops</p>
+              <p className="text-xs text-slate-400 leading-relaxed">Sobre a venda de aulas e workshops do seu evento.</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
+              <p className="text-3xl font-black text-[#ff0068] mb-2">Taxa fixa</p>
+              <p className="text-sm font-bold text-white mb-1">Seletiva por vídeo</p>
+              <p className="text-xs text-slate-400 leading-relaxed">Valor único por evento pra curadoria prévia por vídeo.</p>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-slate-500 text-center mt-6">
+            Valores de referência — cada taxa é configurável por evento junto com nosso time.
+          </p>
+        </div>
+      </section>
+
       {/* ─── FOOTER ──────────────────────────────────────────────── */}
       <footer className="px-6 py-12 border-t border-white/5">
         <div className="max-w-5xl mx-auto">

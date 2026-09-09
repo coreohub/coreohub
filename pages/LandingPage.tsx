@@ -643,8 +643,8 @@ const LandingPage = () => {
           </h2>
           <p className="text-slate-300 text-lg max-w-2xl mx-auto leading-relaxed mb-10">
             3 planos, um pra cada porte de festival — do primeiro evento à competição nacional.
-            Zero mensalidade fora do plano escolhido. Zero fidelidade. O dinheiro cai direto na sua conta —
-            Pix em minutos, cartão no prazo padrão da operadora — sem fechamento de caixa manual no fim do mês.
+            Zero mensalidade fora do plano escolhido. Zero fidelidade. O dinheiro cai direto na sua conta,
+            de forma automática — sem fechamento de caixa manual no fim do mês.
           </p>
 
           <div className="max-w-3xl mx-auto bg-gradient-to-br from-[#ff0068]/10 via-white/5 to-purple-700/10 border border-white/10 rounded-3xl p-8 md:p-10 backdrop-blur-xl">
@@ -770,7 +770,7 @@ const LandingPage = () => {
             {[
               {
                 q: 'Como recebo o dinheiro das inscrições?',
-                a: 'Direto na sua conta bancária, numa instituição de pagamento regulamentada pelo Banco Central. Cada inscrição paga já sai com o split automático — o restante pra você, a comissão do seu plano pra CoreoHub. Pix cai em minutos; cartão segue o prazo padrão da operadora. Sem fechamento de caixa manual, sem correr atrás de repasse.',
+                a: 'O repasse é automático. Cada inscrição paga já sai com o split — a comissão do seu plano fica com a CoreoHub, o resto fica retido na sua conta por até 7 dias (mesma janela de segurança usada por Stripe e Sympla) e depois a CoreoHub transfere via Pix direto pra sua conta, sem você precisar clicar em nada. Quer o dinheiro antes disso? O botão "Transferir agora" antecipa a qualquer momento, sem taxa.',
               },
               {
                 q: 'Funciona mesmo offline?',
