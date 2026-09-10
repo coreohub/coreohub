@@ -22,7 +22,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import {
   ChevronLeft, ChevronRight, Loader2, Music2, User, Users, Upload,
-  AlertCircle, CheckCircle, Plus, Trash2, ArrowRight, Video, ShieldCheck, Check,
+  AlertCircle, CheckCircle, Plus, Trash2, ArrowRight, Video, ShieldCheck,
 } from 'lucide-react';
 import { maskTempo, parseTempoSegundos, formatTempo, maskedChange } from '../utils/masks';
 import { readAudioDuration } from '../utils/audioDuration';
@@ -110,10 +110,6 @@ interface WizardData {
   estudio_uf: string;
   estudio_cidade: string;
   tipo_apresentacao: 'Competitiva' | 'Avaliada' | '';
-  /** Eixo opcional transversal — só aparece quando o produtor liga
-   *  `configuracoes.aceita_danca_inclusiva`. PCD pode se inscrever em
-   *  qualquer estilo, não é categoria própria. */
-  is_pcd: boolean;
   /** Ficha técnica opcional — não vira `elenco`, não tem CPF/nascimento. */
   staff_tecnico: StaffTecnicoValue[];
   // Passo 2 — Elenco
@@ -326,7 +322,6 @@ const InscricaoWizard: React.FC = () => {
     estudio_uf: '',
     estudio_cidade: '',
     staff_tecnico: [],
-    is_pcd: false,
     tipo_apresentacao: '', // Sem pré-seleção quando ambos disponíveis (force escolha). Auto-set abaixo se só 1 habilitado.
     bailarinos: [{ nome: '', cpf: '', data_nascimento: '' }],
     trilha_url: '',
@@ -527,8 +522,8 @@ const InscricaoWizard: React.FC = () => {
       setProfileNeedsName(!profile?.full_name?.trim());
 
       const [{ data: cfg }, { data: legacy }, { data: styles }] = await Promise.all([
-        supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date, tipos_apresentacao, prazo_inscricao, aceita_danca_inclusiva').eq('event_id', ev.id).maybeSingle(),
-        supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date, tipos_apresentacao, prazo_inscricao, aceita_danca_inclusiva').eq('id', '1').maybeSingle(),
+        supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date, tipos_apresentacao, prazo_inscricao').eq('event_id', ev.id).maybeSingle(),
+        supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date, tipos_apresentacao, prazo_inscricao').eq('id', '1').maybeSingle(),
         // Gêneros estruturados (com sub_types/modalidades). Source of truth nova.
         supabase.from('event_styles').select('id, name, is_active, sub_types').eq('event_id', ev.id).eq('is_active', true).order('name'),
       ]);
@@ -693,8 +688,12 @@ const InscricaoWizard: React.FC = () => {
   const selectedModalityObj = (selectedStyleObj?.sub_types ?? []).find(
     (m: any) => (typeof m === 'string' ? m : m.name) === data.subgenero
   );
+  // Formação marcada como Dança Inclusiva (PCD) também é idade livre — mesmo
+  // padrão de mercado (Santa Catarina Dança/Catanduva: PCD não respeita
+  // faixa etária competitiva).
   const isCategoriaLivre = !!(
-    selectedModalityObj && typeof selectedModalityObj === 'object' && (selectedModalityObj as any).is_categoria_livre
+    (selectedModalityObj && typeof selectedModalityObj === 'object' && (selectedModalityObj as any).is_categoria_livre)
+    || (formacao as any)?.is_pcd
   );
 
   // Categoria selecionada (resolve min_age/max_age pra checagem etária).
@@ -1006,7 +1005,7 @@ const InscricaoWizard: React.FC = () => {
           categoria:            isCategoriaLivre ? 'Livre' : data.categoria,
           formato_participacao: formacao?.name ?? modalidade,
           tipo_apresentacao:    data.tipo_apresentacao,
-          is_pcd:               config?.aceita_danca_inclusiva ? data.is_pcd : false,
+          is_pcd:               !!(formacao as any)?.is_pcd,
           bailarinos_detalhes:  bailarinosDetalhes,
           staff_tecnico:        data.staff_tecnico.filter(s => s.nome.trim()),
           instagram_principal:  data.instagram_principal?.trim() || null,
@@ -1470,7 +1469,9 @@ const InscricaoWizard: React.FC = () => {
                     Categoria Livre
                   </p>
                   <p className="text-xs text-slate-400 mt-1">
-                    Esta modalidade ({data.subgenero}) não tem restrição de idade.
+                    {(formacao as any)?.is_pcd
+                      ? 'Formação de Dança Inclusiva (PCD) não tem restrição de idade.'
+                      : `Esta modalidade (${data.subgenero}) não tem restrição de idade.`}
                   </p>
                 </div>
               ) : (
@@ -1492,32 +1493,23 @@ const InscricaoWizard: React.FC = () => {
               )}
             </div>
 
-            {config?.aceita_danca_inclusiva && (
-              <button
-                type="button"
-                onClick={() => setData(d => ({ ...d, is_pcd: !d.is_pcd }))}
-                className={`w-full flex items-start gap-3 p-4 rounded-2xl border transition-all text-left ${
-                  data.is_pcd
-                    ? 'border-[#ff0068] bg-[#ff0068]/5'
-                    : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
-                }`}
-              >
-                <div className={`shrink-0 mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center ${
-                  data.is_pcd ? 'border-[#ff0068] bg-[#ff0068]' : 'border-slate-300 dark:border-white/20'
-                }`}>
-                  {data.is_pcd && <Check size={13} className="text-white" strokeWidth={3} />}
-                </div>
+            {/* Dança Inclusiva (PCD) não é mais um checkbox solto — é uma
+                propriedade da FORMAÇÃO escolhida (padrão Santa Catarina
+                Dança/Catanduva). Se o produtor marcou essa formação como
+                PCD em Configurações → Formações, só confirma aqui — não tem
+                o que decidir de novo. */}
+            {(formacao as any)?.is_pcd && (
+              <div className="w-full flex items-start gap-3 p-4 rounded-2xl border border-sky-500/30 bg-sky-500/5">
+                <ShieldCheck size={18} className="shrink-0 mt-0.5 text-sky-500" />
                 <div className="min-w-0">
-                  <p className={`text-[11px] font-black uppercase tracking-widest ${
-                    data.is_pcd ? 'text-[#ff0068]' : 'text-slate-700 dark:text-slate-200'
-                  }`}>
-                    Esta inscrição é de dança inclusiva (PCD)
+                  <p className="text-[11px] font-black uppercase tracking-widest text-sky-600 dark:text-sky-400">
+                    Inscrição em Dança Inclusiva (PCD)
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-                    Sinaliza pra produção e pro júri que essa apresentação pode precisar de adaptação de palco ou avaliação. Não muda o estilo nem a categoria escolhidos.
+                    Sinaliza pra produção e pro júri que essa apresentação pode precisar de adaptação de palco ou avaliação.
                   </p>
                 </div>
-              </button>
+              </div>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

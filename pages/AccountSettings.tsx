@@ -437,6 +437,10 @@ interface FormatItem {
   minMembers: number;
   /** Tempo máximo da modalidade (MM:SS). '' = sem limite. */
   max_time?: string;
+  /** Dança Inclusiva (PCD) — idade livre, marca is_pcd nas inscrições dessa
+   *  formação. Padrão de mercado (Santa Catarina Dança/Catanduva): PCD é
+   *  formação própria, não marcação transversal em cima de outra. */
+  is_pcd?: boolean;
 }
 
 const DEFAULT_FORMATS: FormatItem[] = [
@@ -1529,7 +1533,6 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [styles,  setStyles]  = useState<string[]>(DEFAULT_MODALITIES);
   const [formats, setFormats] = useState<any[]>(DEFAULT_FORMATS);
   const [categories, setCategories] = useState<any[]>(DEFAULT_CATEGORIES);
-  const [aceitaDancaInclusiva, setAceitaDancaInclusiva] = useState<boolean>(false);
   const [nivelTecnicoEnabled,  setNivelTecnicoEnabled]  = useState<boolean>(false);
   const [links,   setLinks]   = useState<any[]>([]);
 
@@ -2114,7 +2117,6 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           setStyles(data.estilos?.length    ? data.estilos    : DEFAULT_MODALITIES);
           setFormats(data.formatos?.length ? data.formatos.map(migrateFormat) : DEFAULT_FORMATS);
           setCategories(data.categorias?.length ? data.categorias : DEFAULT_CATEGORIES);
-          setAceitaDancaInclusiva(!!data.aceita_danca_inclusiva);
           setNivelTecnicoEnabled(!!data.nivel_tecnico_enabled);
           setLinks(data.links || []);
           if (data.tolerancia) setToleranceRule(data.tolerancia);
@@ -2285,7 +2287,6 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         estilos:             styles,
         formatos:            formats,
         categorias:          categories,
-        aceita_danca_inclusiva: aceitaDancaInclusiva,
         nivel_tecnico_enabled:  nivelTecnicoEnabled,
         tolerancia:          toleranceRule,
         age_reference:       ageReference,
@@ -2420,6 +2421,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             // que zerava a validação de duração do Wizard e o selo da trilha.
             max_time:     (f.max_time && String(f.max_time).trim()) || null,
             is_active:    true,
+            is_pcd:       !!f.is_pcd,
           };
         });
 
@@ -4073,45 +4075,25 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               </div>
             </div>
 
-            {/* Eixos opcionais — Dança Inclusiva (transversal) + Nível Técnico
-                (4 níveis fixos quando ON). Auditoria de mercado 2026-05-06: FAD/YAGP
-                NÃO usam nível técnico, JOPEF/VIBE usam — fica opcional. */}
+            {/* Eixos opcionais — Nível Técnico (4 níveis fixos quando ON).
+                Auditoria de mercado 2026-05-06: FAD/YAGP NÃO usam nível
+                técnico, JOPEF/VIBE usam — fica opcional.
+                Dança Inclusiva (PCD) SAIU daqui em 2026-09-10 — pesquisa de
+                mercado (Santa Catarina Dança/Joinville/Erechim/Catanduva)
+                mostrou que PCD é modelada como FORMAÇÃO própria (mesmo nível
+                de Solo/Duo/Trio/Grupo), não como toggle transversal por cima
+                de qualquer estilo. Configura em Formações (toggle "Dança
+                Inclusiva (PCD)" no editor de cada formato). */}
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-5">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Award size={18} /></div>
                 <div>
                   <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Eixos Opcionais</h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Recursos extras que adicionam camadas de classificação ou inclusão.
+                    Recursos extras que adicionam camadas de classificação.
                   </p>
                 </div>
               </div>
-
-              {/* Dança Inclusiva (PCD) — toggle transversal */}
-              <button
-                onClick={() => setAceitaDancaInclusiva(v => !v)}
-                className={`w-full flex items-start gap-3 p-4 rounded-2xl border transition-all text-left ${
-                  aceitaDancaInclusiva
-                    ? 'border-[#ff0068] bg-[#ff0068]/5'
-                    : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
-                }`}
-              >
-                <div className={`shrink-0 mt-0.5 ${aceitaDancaInclusiva ? 'text-[#ff0068]' : 'text-slate-400 dark:text-slate-500'}`}>
-                  {aceitaDancaInclusiva ? <CheckSquare size={18} /> : <Square size={18} />}
-                </div>
-                <div className="min-w-0">
-                  <p className={`text-[11px] font-black uppercase tracking-widest ${
-                    aceitaDancaInclusiva ? 'text-[#ff0068]' : 'text-slate-700 dark:text-slate-200'
-                  }`}>
-                    Aceitar inscrições de Dança Inclusiva (PCD)
-                  </p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-                    Toggle transversal — bailarinos PCD podem se inscrever em qualquer estilo.
-                    A inscrição ganha indicador "Inclusiva" pra adaptações de palco e avaliação.
-                    Padrão Santa Catarina Dança.
-                  </p>
-                </div>
-              </button>
 
               {/* Nível técnico — toggle + lista fixa */}
               <button
@@ -4501,7 +4483,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       <DollarSign size={16} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-black text-sm text-slate-900 dark:text-white uppercase truncate">{f.name}</p>
+                      <p className="font-black text-sm text-slate-900 dark:text-white uppercase truncate flex items-center gap-1.5">
+                        {f.name}
+                        {f.is_pcd && (
+                          <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">PCD</span>
+                        )}
+                      </p>
                       <p className="text-[10px] text-slate-500 uppercase tracking-widest">
                         {f.pricingType === 'PER_MEMBER' ? 'por participante' : 'valor fixo'} · mín. {f.minMembers} pessoa{f.minMembers > 1 ? 's' : ''}
                       </p>
@@ -6957,6 +6944,26 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               />
               <p className="text-[9px] text-slate-400 mt-1">
                 Valida a duração no envio da trilha (selo ✓/⚠) e no Wizard de inscrição.
+              </p>
+            </div>
+
+            <div>
+              <label className={label}>Dança Inclusiva (PCD)</label>
+              <button
+                type="button"
+                onClick={() => setTempValue((v: any) => ({ ...v, is_pcd: !v.is_pcd }))}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                  tempValue.is_pcd
+                    ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30'
+                    : 'bg-slate-100 dark:bg-white/5 text-slate-500 border border-slate-200 dark:border-white/10'
+                }`}
+                title={tempValue.is_pcd ? 'Idade livre + marca PCD nas inscrições dessa formação' : 'Formato comum, respeita categorias etárias'}
+              >
+                {tempValue.is_pcd ? <ToggleRight size={12} /> : <ToggleLeft size={12} />}
+                {tempValue.is_pcd ? 'Sim — formato inclusivo' : 'Não — formato comum'}
+              </button>
+              <p className="text-[9px] text-slate-400 mt-1">
+                Padrão de mercado (Santa Catarina Dança, Catanduva): idade livre, sem exigir categoria etária. O estilo continua livre pra escolher. Configure a taxa como R$ 0 acima se for isenta.
               </p>
             </div>
           </div>
