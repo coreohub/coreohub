@@ -417,7 +417,6 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       if (edited.politica_ingressos) updates.politica_ingressos  = edited.politica_ingressos;
       if (edited.url_ingressos)      updates.url_ingressos       = edited.url_ingressos;
       if (edited.genres?.length)     updates.estilos             = edited.genres;
-      if (edited.aceita_danca_inclusiva !== null) updates.aceita_danca_inclusiva = edited.aceita_danca_inclusiva;
       if (edited.nivel_tecnico_enabled !== null)  updates.nivel_tecnico_enabled  = edited.nivel_tecnico_enabled;
       if (edited.stage_safety_interval_seconds)   updates.intervalo_seguranca    = edited.stage_safety_interval_seconds;
       if (edited.city && edited.state) updates.cidade_estado     = `${edited.city}, ${edited.state}`;

@@ -246,7 +246,6 @@ const schema = {
       // menciona algo como "cancelamentos até X dias antes têm direito a
       // Y%, após isso não há reembolso". Salva em events.video_fee_refund_policy.
       refund_policy: { type: 'string' },
-      aceita_danca_inclusiva: { type: 'boolean' },
       nivel_tecnico_enabled: { type: 'boolean' },
       stage_safety_interval_seconds: { type: 'number' },
       social_links: {
@@ -432,7 +431,6 @@ ATENÇÃO ANTI-CONFUSÃO (palavras enganosas):
 • prizes[].valor: valor monetário em R$ (number, decimal). PREENCHA APENAS quando o regulamento citar EXPLICITAMENTE o valor em dinheiro do prêmio. Ex "Melhor Grupo da Noite: R$ 5.000,00" → valor=5000. "Melhor Coreógrafo recebe R$ 1.500" → valor=1500. NÃO INFIRA, NÃO INVENTE. Se o prêmio é só "troféu", "medalha", "bolsa de estudos", "intercâmbio", "kit de produtos" sem valor em R$ declarado, OMITA o campo valor. Quando o regulamento diz "premiação total de R$ 50.000 dividida entre os ganhadores", NÃO distribua — deixe valor omitido e capture o texto em bonifications.
 • formacoes[].min_performers / max_performers: limites de bailarinos por modalidade quando regulamento detalha. Ex "Solo: 1 bailarino" → min=1, max=1. "Duo: 2 bailarinos" → min=2, max=2. "Trio: 3" → min=3, max=3. "Grupo: 4 a 15 bailarinos" → min=4, max=15. "Conjunto: 16 a 30" → min=16, max=30. Se regulamento não cita números, OMITA — não infira por convenção (Solo geralmente é 1 mas pode haver exceção).
 • bonifications: array de strings com bonificações por colocação, descrições de bolsas, intercâmbios e premiações estruturadas que não se encaixam em prizes[]. Ex ["1º lugar Geral recebe bolsa integral na CIA do festival", "Top 3 ganham R$ 1.000 cada em material", "Coreógrafos premiados recebem intercâmbio em workshop"]. Texto literal do regulamento, sem reformular.
-• aceita_danca_inclusiva: festival aceita dança inclusiva / coreografias com bailarinos PCD? boolean.
 • nivel_tecnico_enabled: festival tem eixo técnico (Iniciante/Intermediário/Avançado) além de categoria por idade? boolean.
 • stage_safety_interval_seconds: intervalo de segurança entre apresentações em SEGUNDOS. Ex "intervalo de 30s entre coreografias" → 30.
 • social_links: { instagram, tiktok, youtube, whatsapp, website, email } do festival/produtora se mencionados. Instagram/TikTok sem o "@". WhatsApp como número com DDI ("+5517..."). Email completo.
@@ -525,7 +523,6 @@ ATENÇÃO ANTI-CONFUSÃO (palavras enganosas):
 • prizes[].valor: valor monetário em R$ (number, decimal). PREENCHA APENAS quando o regulamento citar EXPLICITAMENTE o valor em dinheiro do prêmio. Ex "Melhor Grupo da Noite: R$ 5.000,00" → valor=5000. "Melhor Coreógrafo recebe R$ 1.500" → valor=1500. NÃO INFIRA, NÃO INVENTE. Se o prêmio é só "troféu", "medalha", "bolsa de estudos", "intercâmbio", "kit de produtos" sem valor em R$ declarado, OMITA o campo valor. Quando o regulamento diz "premiação total de R$ 50.000 dividida entre os ganhadores", NÃO distribua — deixe valor omitido e capture o texto em bonifications.
 • formacoes[].min_performers / max_performers: limites de bailarinos por modalidade quando regulamento detalha. Ex "Solo: 1 bailarino" → min=1, max=1. "Duo: 2 bailarinos" → min=2, max=2. "Trio: 3" → min=3, max=3. "Grupo: 4 a 15 bailarinos" → min=4, max=15. "Conjunto: 16 a 30" → min=16, max=30. Se regulamento não cita números, OMITA — não infira por convenção (Solo geralmente é 1 mas pode haver exceção).
 • bonifications: array de strings com bonificações por colocação, descrições de bolsas, intercâmbios e premiações estruturadas que não se encaixam em prizes[]. Ex ["1º lugar Geral recebe bolsa integral na CIA do festival", "Top 3 ganham R$ 1.000 cada em material", "Coreógrafos premiados recebem intercâmbio em workshop"]. Texto literal do regulamento, sem reformular.
-• aceita_danca_inclusiva: festival aceita dança inclusiva / coreografias com bailarinos PCD? boolean.
 • nivel_tecnico_enabled: festival tem eixo técnico (Iniciante/Intermediário/Avançado) além de categoria por idade? boolean.
 • stage_safety_interval_seconds: intervalo de segurança entre apresentações em SEGUNDOS. Ex "intervalo de 30s entre coreografias" → 30.
 • social_links: { instagram, tiktok, youtube, whatsapp, website, email } do festival/produtora se mencionados. Instagram/TikTok sem o "@". WhatsApp como número com DDI ("+5517..."). Email completo.

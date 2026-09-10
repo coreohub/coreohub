@@ -147,7 +147,6 @@ export interface RegulationExtract {
   event_styles_structured: { name: string; sub_types: { name: string }[] }[]
   /** Política textual de cancelamento/reembolso (vai pra events.video_fee_refund_policy). */
   refund_policy: string | null
-  aceita_danca_inclusiva: boolean | null
   nivel_tecnico_enabled: boolean | null
   stage_safety_interval_seconds: number | null
   social_links: SocialLinksExtract | null
@@ -173,7 +172,7 @@ function buildEmptyExtract(): RegulationExtract {
     tipos_apresentacao: [], premiation_system: null, medal_thresholds: null,
     politica_ingressos: null, url_ingressos: null, genres: [],
     event_styles_structured: [], refund_policy: null,
-    aceita_danca_inclusiva: null, nivel_tecnico_enabled: null,
+    nivel_tecnico_enabled: null,
     stage_safety_interval_seconds: null, social_links: null, cover_url_hint: null,
     bonifications: [],
     summary: '',
@@ -219,7 +218,6 @@ function parseRawExtract(raw: any): RegulationExtract {
     genres:                     raw.genres                     ?? [],
     event_styles_structured:    raw.event_styles_structured    ?? [],
     refund_policy:              raw.refund_policy              ?? null,
-    aceita_danca_inclusiva:     raw.aceita_danca_inclusiva     ?? null,
     nivel_tecnico_enabled:      raw.nivel_tecnico_enabled      ?? null,
     stage_safety_interval_seconds: raw.stage_safety_interval_seconds ?? null,
     social_links:               raw.social_links               ?? null,
