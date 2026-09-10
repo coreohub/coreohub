@@ -17,6 +17,7 @@ interface Presentation {
   ordem_apresentacao?: number;
   excluded_from_schedule?: boolean;
   bloco_id?: string | null;
+  is_pcd?: boolean;
 }
 
 interface Bloco {
@@ -130,7 +131,7 @@ const StageMarker = () => {
     try {
       let regsQuery = supabase
         .from('registrations')
-        .select('id,nome_coreografia,estudio,categoria,estilo_danca,elenco,ordem_apresentacao,excluded_from_schedule,bloco_id')
+        .select('id,nome_coreografia,estudio,categoria,estilo_danca,elenco,ordem_apresentacao,excluded_from_schedule,bloco_id,is_pcd')
         .eq('event_id', eventId)
         .or(SCHEDULABLE_REGISTRATIONS_OR_FILTER)
         .order('ordem_apresentacao', { ascending: true });
@@ -719,6 +720,11 @@ const StageMarker = () => {
           <p className="text-xl font-black uppercase tracking-tight leading-tight text-white">
             {current?.nome_coreografia ?? '—'}
           </p>
+          {current?.is_pcd && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 mt-1 bg-sky-500/15 border border-sky-500/40 rounded-full" title="Dança inclusiva (PCD) — confirme adaptação de palco">
+              <span className="text-[9px] font-black uppercase tracking-widest text-sky-300">PCD · Adaptação de palco</span>
+            </span>
+          )}
           <div className="flex flex-wrap gap-2 pt-1">
             {current?.estudio && (
               <span className="text-[9px] font-black uppercase tracking-widest text-[#ff0068]">{current.estudio}</span>
@@ -855,7 +861,12 @@ const StageMarker = () => {
             <Music size={14} className="text-slate-400" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Próxima</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Próxima</p>
+              {next.is_pcd && (
+                <span className="px-1 py-0.5 bg-sky-500/15 border border-sky-500/40 rounded text-[7px] font-black uppercase tracking-widest text-sky-300" title="Dança inclusiva (PCD)">PCD</span>
+              )}
+            </div>
             <p className="text-[11px] font-black uppercase text-white truncate">{next.nome_coreografia}</p>
             <p className="text-[9px] text-slate-400 truncate">{next.estudio}</p>
           </div>

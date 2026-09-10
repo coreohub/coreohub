@@ -101,7 +101,7 @@ const Credenciais: React.FC = () => {
         const [regsRes, wsRes, judgesRes] = await Promise.all([
           supabase
             .from('registrations')
-            .select('id,nome_coreografia,estudio,event_data,estilo_danca,categoria,formato_participacao,status,status_pagamento')
+            .select('id,nome_coreografia,estudio,event_data,estilo_danca,categoria,formato_participacao,status,status_pagamento,is_pcd')
             .eq('event_id', selectedEventId)
             .or(SCHEDULABLE_REGISTRATIONS_OR_FILTER)
             .order('nome_coreografia'),
@@ -123,7 +123,7 @@ const Credenciais: React.FC = () => {
           type: 'INSCRITO',
           name: r.nome_coreografia || 'Sem nome',
           subtitle: resolveEstudio(r) || undefined,
-          category: [r.formato_participacao, r.categoria].filter(Boolean).join(' · ') || undefined,
+          category: [r.formato_participacao, r.categoria, r.is_pcd ? 'PCD' : null].filter(Boolean).join(' · ') || undefined,
           qrValue: r.id,
         }));
 

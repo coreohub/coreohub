@@ -1932,6 +1932,14 @@ const JudgeTerminal = () => {
               <span className="text-[8px] font-black uppercase tracking-[0.2em] text-rose-500 hidden sm:inline">{t('header.live')}</span>
             </div>
           )}
+          {currentPerformance?.is_pcd && (
+            <span
+              className="shrink-0 px-1.5 py-0.5 rounded-full bg-sky-500/10 border border-sky-500/30 text-[8px] font-black uppercase tracking-widest text-sky-600 dark:text-sky-400"
+              title="Dança inclusiva (PCD) — pode precisar de adaptação na avaliação"
+            >
+              PCD
+            </span>
+          )}
           <div className="min-w-0">
             <h2 className="text-sm sm:text-base font-black uppercase tracking-tighter italic leading-none truncate text-slate-900 dark:text-white">
               {currentPerformance?.nome_coreografia || t('header.waiting')}
@@ -2511,8 +2519,13 @@ const JudgeTerminal = () => {
                           : <span className="block w-2 h-2 rounded-full border border-slate-300 dark:border-slate-600" />}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[12px] font-black uppercase tracking-tight text-slate-900 dark:text-white truncate">
-                        {p.nome_coreografia || '—'}
+                      <span className="flex items-center gap-1.5">
+                        <span className="block text-[12px] font-black uppercase tracking-tight text-slate-900 dark:text-white truncate">
+                          {p.nome_coreografia || '—'}
+                        </span>
+                        {p.is_pcd && (
+                          <span className="shrink-0 px-1 py-0.5 rounded bg-sky-500/10 border border-sky-500/30 text-[7px] font-black uppercase tracking-widest text-sky-600 dark:text-sky-400">PCD</span>
+                        )}
                       </span>
                       <span className="block text-[10px] font-bold text-slate-400 truncate">
                         {p.estudio} · {stripEstiloVertentes(p.estilo_danca)}

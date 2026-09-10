@@ -409,6 +409,18 @@ const SortableRow: React.FC<SortableRowProps> = ({
               </span>
             </span>
           )}
+          {/* PCD — sinaliza a equipe de palco a preparar adaptação ANTES da
+              apresentação subir (não é um problema, é um heads-up). */}
+          {(reg as any).is_pcd && (
+            <span
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-sky-500/10 border border-sky-500/30 shrink-0"
+              title="Dança inclusiva (PCD) — pode precisar de adaptação de palco"
+            >
+              <span className="text-[8px] font-black uppercase tracking-widest text-sky-600 dark:text-sky-400">
+                PCD
+              </span>
+            </span>
+          )}
           {hasEntrada && (
             <div
               className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full shrink-0 border ${
