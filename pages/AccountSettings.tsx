@@ -4408,6 +4408,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
                               {/* Categoria Livre toggle */}
                               <button
+                                aria-pressed={!!sub.is_categoria_livre}
                                 onClick={async () => {
                                   try {
                                     const updated = await editSubgenre(genre, idx, { ...sub, is_categoria_livre: !sub.is_categoria_livre });
@@ -6859,6 +6860,27 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             </div>
 
             <div>
+              <label className={label}>Dança Inclusiva (PCD)</label>
+              <button
+                type="button"
+                aria-pressed={!!tempValue.is_pcd}
+                onClick={() => setTempValue((v: any) => ({ ...v, is_pcd: !v.is_pcd }))}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                  tempValue.is_pcd
+                    ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30'
+                    : 'bg-slate-100 dark:bg-white/5 text-slate-500 border border-slate-200 dark:border-white/10'
+                }`}
+                title={tempValue.is_pcd ? 'Idade livre + marca PCD nas inscrições dessa formação' : 'Formato comum, respeita categorias etárias'}
+              >
+                {tempValue.is_pcd ? <ToggleRight size={12} /> : <ToggleLeft size={12} />}
+                {tempValue.is_pcd ? 'Sim — formato inclusivo' : 'Não — formato comum'}
+              </button>
+              <p className="text-[9px] text-slate-400 mt-1">
+                Idade livre, sem exigir categoria etária. Configure a taxa como R$ 0,00 abaixo se for isenta.
+              </p>
+            </div>
+
+            <div>
               <div className="flex items-center justify-between mb-2">
                 <label className={label}>Lotes de Preço</label>
                 <button onClick={addLote} className="text-[10px] font-black uppercase tracking-widest text-[#ff0068] hover:text-[#e0005c] flex items-center gap-1">
@@ -6947,25 +6969,6 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               </p>
             </div>
 
-            <div>
-              <label className={label}>Dança Inclusiva (PCD)</label>
-              <button
-                type="button"
-                onClick={() => setTempValue((v: any) => ({ ...v, is_pcd: !v.is_pcd }))}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                  tempValue.is_pcd
-                    ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30'
-                    : 'bg-slate-100 dark:bg-white/5 text-slate-500 border border-slate-200 dark:border-white/10'
-                }`}
-                title={tempValue.is_pcd ? 'Idade livre + marca PCD nas inscrições dessa formação' : 'Formato comum, respeita categorias etárias'}
-              >
-                {tempValue.is_pcd ? <ToggleRight size={12} /> : <ToggleLeft size={12} />}
-                {tempValue.is_pcd ? 'Sim — formato inclusivo' : 'Não — formato comum'}
-              </button>
-              <p className="text-[9px] text-slate-400 mt-1">
-                Padrão de mercado (Santa Catarina Dança, Catanduva): idade livre, sem exigir categoria etária. O estilo continua livre pra escolher. Configure a taxa como R$ 0 acima se for isenta.
-              </p>
-            </div>
           </div>
         );
       }
