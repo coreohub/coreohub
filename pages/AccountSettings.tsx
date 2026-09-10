@@ -6868,12 +6868,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
                   tempValue.is_pcd
                     ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30'
-                    : 'bg-slate-100 dark:bg-white/5 text-slate-500 border border-slate-200 dark:border-white/10'
+                    : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10'
                 }`}
                 title={tempValue.is_pcd ? 'Idade livre + marca PCD nas inscrições dessa formação' : 'Formato comum, respeita categorias etárias'}
               >
                 {tempValue.is_pcd ? <ToggleRight size={12} /> : <ToggleLeft size={12} />}
-                {tempValue.is_pcd ? 'Sim — formato inclusivo' : 'Não — formato comum'}
+                {tempValue.is_pcd ? 'Ativado' : 'Desativado'}
               </button>
               <p className="text-[9px] text-slate-400 mt-1">
                 Idade livre, sem exigir categoria etária. Configure a taxa como R$ 0,00 abaixo se for isenta.

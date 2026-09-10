@@ -82,11 +82,20 @@ export async function getAllGenres(options?: { includeHidden?: boolean; eventId?
 
   if (error) throw error;
 
-  // Filtra: mantém global (event_id NULL), do user (created_by = userId)
-  // ou de eventos do user. Descarta órfãos (event_id de outro evento).
+  // Filtra: mantém global (event_id NULL) ou de evento QUE AINDA EXISTE do
+  // user. Descarta órfãos (event_id de outro evento OU de evento já apagado).
   // Quando eventId é passado, RESTRINGE a esse evento + catálogo global
   // (esconde gêneros dos OUTROS eventos do produtor — evita duplicatas
   // visuais na tela de Configurações).
+  //
+  // Achado 2026-09-10: existia um branch extra `created_by === userId` no
+  // fallback sem-eventId que mantinha QUALQUER linha criada pelo user,
+  // mesmo de evento já deletado — para uma conta que cria/apaga muitos
+  // eventos de teste (super admin), isso acumulava dezenas de gêneros
+  // órfãos ("Dança do Ventre" x40+) que vazavam pra dentro de QUALQUER
+  // evento real configurado depois. `producerEventIds` já cobre "evento
+  // que ainda existe do user" — o branch extra era redundante E era
+  // exatamente o buraco. Removido.
   const scopedEventId = options?.eventId ?? null;
   const filtered = (data ?? []).filter((r: any) => {
     if (scopedEventId) {
@@ -95,8 +104,7 @@ export async function getAllGenres(options?: { includeHidden?: boolean; eventId?
       return false;
     }
     if (r.event_id === null) return true;             // catálogo global
-    if (userId && r.created_by === userId) return true; // criado pelo user
-    if (producerEventIds.includes(r.event_id)) return true; // do evento dele
+    if (producerEventIds.includes(r.event_id)) return true; // de evento do user que ainda existe
     return false;
   });
 
