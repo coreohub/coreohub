@@ -3,7 +3,7 @@
  *
  * Envia emails transacionais via Resend (https://resend.com).
  *
- * Chamado internamente pelo `mp-webhook` quando um pagamento é aprovado.
+ * Chamado internamente pelo `asaas-webhook` quando um pagamento é aprovado.
  * É stateless — não toca no banco; apenas traduz um tipo + payload em um
  * email HTML e dispara pela API do Resend.
  *
