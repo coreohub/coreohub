@@ -2,7 +2,7 @@
 
 Gestão inteligente pra festivais de dança (BR). SaaS multi-tenant onde produtor cadastra evento, recebe inscrições, vende ingressos, roda júri/cronograma/premiação, gera certificados, e o público compra ingresso e baixa material.
 
-Em produção: ~71 telas, ~30 componentes compartilhados, 31 edge functions Supabase, 90+ migrations SQL.
+Em produção: 82 arquivos em `pages/` (3 confirmados órfãos em 2026-09-10, ver auditoria — `JudgeCompetencyManager`, `ShiftChangeOverlay`, `TeamManagement`, candidatos a remoção), 43 componentes compartilhados, 61 edge functions Supabase (62 pastas menos `_shared`), 192 migrations SQL. Números anteriores (~71/~30/31/90+) estavam desatualizados — corrigidos após auditoria de código morto de 2026-09-10.
 
 ## Produto
 
