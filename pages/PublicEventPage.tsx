@@ -65,6 +65,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
     professor_instagram: string | null; professor_is_public: boolean;
     modalidade: string | null; nivel: string; data_inicio: string;
     duracao_minutos: number | null; preco_padrao: number; gratis_para_inscritos: boolean;
+    display_order: number | null; is_featured: boolean; featured_badge_text: string | null;
   }>>([]);
   // Lote vigente por workshop (id → {nome, preco}), pra exibir badge "1º lote"
   // + preço correto já na listagem (antes só a página de detalhe resolvia).
@@ -230,12 +231,24 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         // RLS já filtra is_published=true pra anon. Carrega só campos exibidos.
         const { data: wsData } = await supabase
           .from('workshops')
-          .select('id, slug, name, cover_url, professor_name, professor_bio, professor_photo_url, professor_instagram, professor_is_public, modalidade, nivel, data_inicio, duracao_minutos, preco_padrao, gratis_para_inscritos')
+          .select('id, slug, name, cover_url, professor_name, professor_bio, professor_photo_url, professor_instagram, professor_is_public, modalidade, nivel, data_inicio, duracao_minutos, preco_padrao, gratis_para_inscritos, display_order, is_featured, featured_badge_text')
           .eq('event_id', eventData.id)
           .eq('is_published', true)
           .order('data_inicio', { ascending: true });
         if (Array.isArray(wsData)) {
-          setPublicWorkshops(wsData as any);
+          // Destaque primeiro, depois ordem manual (display_order, nulls por
+          // último), com data_inicio como desempate final — produtor com
+          // camp/passes em vez de aula avulsa quer controlar a ordem na mão
+          // (ex: Vicenza Experience sempre primeiro, mesmo criado por último).
+          const sorted = [...wsData].sort((a: any, b: any) => {
+            if (a.is_featured !== b.is_featured) return a.is_featured ? -1 : 1;
+            const ao = a.display_order, bo = b.display_order;
+            if (ao != null && bo != null && ao !== bo) return ao - bo;
+            if (ao != null && bo == null) return -1;
+            if (ao == null && bo != null) return 1;
+            return new Date(a.data_inicio).getTime() - new Date(b.data_inicio).getTime();
+          });
+          setPublicWorkshops(sorted as any);
 
           // Lote vigente por workshop — mesma regra do RPC get_workshop_stock
           // (maior ordem, is_active, dentro da janela data_inicio/data_fim).
@@ -1520,31 +1533,42 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                   : ws.nivel;
                 const loteAtivo = workshopActiveLot[ws.id];
                 const preco = loteAtivo ? loteAtivo.preco : ws.preco_padrao;
+                const featured = ws.is_featured;
                 return (
                   <button
                     key={ws.id}
                     onClick={() => navigate(`/workshop/${ws.slug ?? ws.id}${discountToken ? `?discount_token=${discountToken}` : ''}`)}
-                    className="text-left bg-white/5 border border-white/10 hover:border-[#ff0068]/40 rounded-2xl overflow-hidden transition-colors group"
+                    className={
+                      featured
+                        ? 'text-left col-span-1 sm:col-span-2 lg:col-span-3 bg-gradient-to-br from-amber-400/15 via-yellow-300/5 to-amber-500/15 border-2 border-amber-400/60 hover:border-amber-300 rounded-2xl overflow-hidden transition-colors group relative shadow-[0_0_30px_-10px_rgba(251,191,36,0.4)]'
+                        : 'text-left bg-white/5 border border-white/10 hover:border-[#ff0068]/40 rounded-2xl overflow-hidden transition-colors group'
+                    }
                   >
-                    <div className="aspect-[16/9] bg-gradient-to-br from-[#ff0068]/20 to-purple-500/20 relative overflow-hidden">
-                      {(ws.cover_url || ws.professor_photo_url) && (
-                        <img src={ws.cover_url || ws.professor_photo_url || ''} alt={ws.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
-                      )}
-                      {ws.gratis_para_inscritos && (
-                        <span className="absolute top-2 right-2 inline-flex items-center text-[9px] font-black uppercase tracking-widest bg-violet-500/90 text-white px-2 py-0.5 rounded-full">
-                          Grátis p/ inscritos
-                        </span>
-                      )}
-                    </div>
-                    <div className="p-4 space-y-1.5">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068]">{ws.modalidade ?? 'Workshop'} · {nivelLabel}</p>
-                      <h3 className="font-black uppercase tracking-tight text-white text-sm leading-tight line-clamp-2">{ws.name}</h3>
+                    {featured && ws.featured_badge_text && (
+                      <span className="absolute top-3 left-3 z-10 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest bg-gradient-to-r from-amber-400 to-yellow-300 text-slate-900 px-3 py-1 rounded-full shadow-lg">
+                        ★ {ws.featured_badge_text}
+                      </span>
+                    )}
+                    <div className={featured ? 'sm:flex sm:items-stretch' : ''}>
+                      <div className={featured ? 'aspect-[16/9] sm:aspect-auto sm:w-2/5 bg-gradient-to-br from-amber-400/20 to-purple-500/20 relative overflow-hidden' : 'aspect-[16/9] bg-gradient-to-br from-[#ff0068]/20 to-purple-500/20 relative overflow-hidden'}>
+                        {(ws.cover_url || ws.professor_photo_url) && (
+                          <img src={ws.cover_url || ws.professor_photo_url || ''} alt={ws.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                        )}
+                        {ws.gratis_para_inscritos && (
+                          <span className="absolute top-2 right-2 inline-flex items-center text-[9px] font-black uppercase tracking-widest bg-violet-500/90 text-white px-2 py-0.5 rounded-full">
+                            Grátis p/ inscritos
+                          </span>
+                        )}
+                      </div>
+                      <div className={featured ? 'p-4 sm:p-6 space-y-1.5 sm:flex-1 sm:flex sm:flex-col sm:justify-center' : 'p-4 space-y-1.5'}>
+                      <p className={featured ? 'text-[10px] font-black uppercase tracking-widest text-amber-400' : 'text-[9px] font-black uppercase tracking-widest text-[#ff0068]'}>{ws.modalidade ?? 'Workshop'} · {nivelLabel}</p>
+                      <h3 className={featured ? 'font-black uppercase tracking-tight text-white text-xl sm:text-2xl leading-tight' : 'font-black uppercase tracking-tight text-white text-sm leading-tight line-clamp-2'}>{ws.name}</h3>
                       <p className="text-xs text-slate-400">com {ws.professor_name}</p>
                       <p className="text-[11px] text-slate-500">{dataFmt}{ws.duracao_minutos ? ` · ${ws.duracao_minutos}min` : ''}</p>
                       {loteAtivo && (
                         <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">{loteAtivo.nome}</p>
                       )}
-                      <p className="text-sm font-black text-white pt-1">
+                      <p className={featured ? 'text-2xl font-black text-amber-300 pt-1' : 'text-sm font-black text-white pt-1'}>
                         {preco === 0
                           ? 'Grátis'
                           : Number(preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
@@ -1554,6 +1578,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                           <AvisoViradaLote preco={loteAtivo.proximo.preco} dataVirada={loteAtivo.proximo.dataVirada} dias={loteAtivo.proximo.dias} formatPreco={n => `R$ ${formatPrecoBR(n)}`} />
                         </p>
                       )}
+                      </div>
                     </div>
                   </button>
                 );

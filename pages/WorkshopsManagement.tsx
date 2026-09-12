@@ -44,6 +44,9 @@ interface WorkshopRow {
   workshop_fee_mode: FeeMode;
   workshop_max_per_cpf: number;
   is_published: boolean;
+  display_order: number | null;
+  is_featured: boolean;
+  featured_badge_text: string | null;
 }
 
 interface JudgeOption {
@@ -160,6 +163,9 @@ const WorkshopsManagement: React.FC = () => {
     workshop_fee_mode: 'repassar' as FeeMode,
     workshop_max_per_cpf: 4,
     is_published: false,
+    display_order: '' as string | number,
+    is_featured: false,
+    featured_badge_text: '',
   };
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
@@ -288,6 +294,9 @@ const WorkshopsManagement: React.FC = () => {
       workshop_fee_mode: w.workshop_fee_mode,
       workshop_max_per_cpf: w.workshop_max_per_cpf,
       is_published: w.is_published,
+      display_order: w.display_order ?? '',
+      is_featured: w.is_featured,
+      featured_badge_text: w.featured_badge_text ?? '',
     });
     setFormError(null);
     setShowModal(true);
@@ -344,6 +353,9 @@ const WorkshopsManagement: React.FC = () => {
       workshop_fee_mode: form.workshop_fee_mode,
       workshop_max_per_cpf: Number(form.workshop_max_per_cpf),
       is_published: form.is_published,
+      display_order: form.display_order === '' ? null : Number(form.display_order),
+      is_featured: form.is_featured,
+      featured_badge_text: form.is_featured ? (form.featured_badge_text.trim() || null) : null,
     };
 
     const { error } = editingId
@@ -1364,6 +1376,21 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
           </Section>
 
           {/* Publicação */}
+          <Section title="Destaque na vitrine">
+            <Field label="Ordem de exibição (opcional)">
+              <input type="number" value={form.display_order} onChange={e => upd('display_order', e.target.value)} className={inputCls} placeholder="vazio = ordena por data" />
+            </Field>
+            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+              <input type="checkbox" checked={form.is_featured} onChange={e => upd('is_featured', e.target.checked)} />
+              Destacar este card (maior, acabamento dourado)
+            </label>
+            {form.is_featured && (
+              <Field label="Texto do selo">
+                <input value={form.featured_badge_text} onChange={e => upd('featured_badge_text', e.target.value)} className={inputCls} placeholder="MELHOR CUSTO-BENEFÍCIO" maxLength={40} />
+              </Field>
+            )}
+          </Section>
+
           <Section title="Publicação">
             <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
               <input type="checkbox" checked={form.is_published} onChange={e => upd('is_published', e.target.checked)} />
