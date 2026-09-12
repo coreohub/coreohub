@@ -94,6 +94,8 @@ Deno.serve(async (req) => {
       combo_opt_in,
       discount_token,
       bailarino_id,
+      inclui_hospedagem,
+      roommate_preference,
     } = body as {
       workshop_id?: string
       workshop_lot_id?: string | null
@@ -103,6 +105,8 @@ Deno.serve(async (req) => {
       combo_opt_in?: boolean
       discount_token?: string
       bailarino_id?: string
+      inclui_hospedagem?: boolean
+      roommate_preference?: string
     }
 
     // ── Validações básicas ───────────────────────────────────────────────────
@@ -151,7 +155,7 @@ Deno.serve(async (req) => {
         auto_detect_combo, capacidade_max,
         workshop_commission_percent, workshop_fee_mode,
         workshop_max_per_cpf, workshop_reservation_minutes,
-        is_published
+        is_published, hospedagem_delta, hospedagem_noites
       `)
       .eq('id', workshop_id)
       .single()
@@ -277,7 +281,8 @@ Deno.serve(async (req) => {
 
     // ── Pricing: resolve preço base + preço pago ─────────────────────────────
     // preço base = lote.preco se tem lote, senão workshop.preco_padrao
-    const precoBase = lotPreco ?? Number(workshop.preco_padrao ?? 0)
+    // (let, não const: hospedagem soma nele logo abaixo quando marcada)
+    let precoBase = lotPreco ?? Number(workshop.preco_padrao ?? 0)
 
     // preço pago: cobre 3 modos:
     //   - gratis_para_inscritos + combo: 0
@@ -295,6 +300,20 @@ Deno.serve(async (req) => {
     }
 
     if (precoPago < 0) throw new Error('Preço calculado negativo — config inválida')
+
+    // ── Hospedagem (add-on) ──────────────────────────────────────────────────
+    // Delta fixo por workshop, somado ANTES do cupom (cupom desconta sobre o
+    // total pass+hospedagem, igual um carrinho normal). Estoque por noite é
+    // checado de forma atômica dentro da RPC de reserva (tudo-ou-nada).
+    const inclHospedagem = !!inclui_hospedagem
+    if (inclHospedagem) {
+      if (workshop.hospedagem_delta == null) {
+        throw new Error('Este workshop não oferece hospedagem')
+      }
+      const delta = Number(workshop.hospedagem_delta)
+      precoBase = parseFloat((precoBase + delta).toFixed(2))
+      precoPago = parseFloat((precoPago + delta).toFixed(2))
+    }
 
     // ── Cupom (scope=workshop|all) ───────────────────────────────────────────
     let couponId: string | null = null
@@ -399,6 +418,8 @@ Deno.serve(async (req) => {
         p_coupon_id:           couponId,
         p_coupon_code:         couponCode,
         p_discount_amount:     discountAmount,
+        p_inclui_hospedagem:   inclHospedagem,
+        p_roommate_preference: roommate_preference?.trim() || null,
       }
     )
 
@@ -438,6 +459,7 @@ Deno.serve(async (req) => {
         discount_amount:   discountAmount,
         fee_mode:          feeMode,
         external_reference: null,
+        inclui_hospedagem: inclHospedagem,
       }, 201)
     }
 
@@ -561,6 +583,7 @@ Deno.serve(async (req) => {
       coupon_code:       couponCode,
       fee_mode:          feeMode,
       external_reference: externalRef,
+      inclui_hospedagem: inclHospedagem,
     }, 201)
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)

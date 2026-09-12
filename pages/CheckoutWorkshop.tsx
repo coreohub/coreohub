@@ -59,6 +59,13 @@ const CheckoutWorkshop: React.FC = () => {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
 
+  // Hospedagem (add-on, Frente 1 do Vicenza Dance Camp) — só relevante quando
+  // o workshop tem hospedagem_delta configurado. Pool de vagas é por noite,
+  // compartilhado entre todos os passes do mesmo evento.
+  const [inclHospedagem, setInclHospedagem] = useState(false);
+  const [roommatePreference, setRoommatePreference] = useState('');
+  const [lodgingEsgotada, setLodgingEsgotada] = useState(false);
+
   const [name, setName]   = useState('');
   const [email, setEmail] = useState('');
   const [cpf, setCpf]     = useState('');
@@ -149,6 +156,15 @@ const CheckoutWorkshop: React.FC = () => {
         if (stRow?.active_lot_esgotado || stRow?.esgotado) {
           setError('Esgotado');
           return;
+        }
+
+        // Checa se alguma noite que esse pass cobre já está esgotada no pool
+        // de hospedagem do evento — desabilita o toggle preventivamente (a
+        // RPC de reserva é quem faz a checagem atômica de verdade no submit).
+        if (ws.hospedagem_delta != null && Array.isArray(ws.hospedagem_noites) && ws.hospedagem_noites.length > 0 && ws.event_id) {
+          const { data: lodgingStock } = await supabase.rpc('get_lodging_stock', { p_event_id: ws.event_id });
+          const esgotada = (lodgingStock ?? []).some((r: any) => ws.hospedagem_noites.includes(r.night_date) && r.esgotado);
+          setLodgingEsgotada(esgotada);
         }
       } finally {
         setLoading(false);
@@ -241,16 +257,18 @@ const CheckoutWorkshop: React.FC = () => {
         comboApplied = true;
       }
     }
+    const hospedagemDelta = inclHospedagem && workshop.hospedagem_delta != null ? Number(workshop.hospedagem_delta) : 0;
+    const precoComHospedagem = precoAposCombo + hospedagemDelta;
     const discount = couponApplied ? Number(couponApplied.discount) : 0;
-    const baseAfterCoupon = Math.max(0, Number((precoAposCombo - discount).toFixed(2)));
+    const baseAfterCoupon = Math.max(0, Number((precoComHospedagem - discount).toFixed(2)));
     const commPct = Number(workshop.workshop_commission_percent ?? 10);
     const commission = Number((baseAfterCoupon * (commPct / 100)).toFixed(2));
     const feeMode = workshop.workshop_fee_mode ?? 'repassar';
     const charged = baseAfterCoupon === 0
       ? 0
       : feeMode === 'repassar' ? Number((baseAfterCoupon + commission).toFixed(2)) : baseAfterCoupon;
-    return { precoBase, precoAposCombo, comboApplied, discount, commission, feeMode, charged };
-  }, [workshop, stock, combo, couponApplied]);
+    return { precoBase, precoAposCombo, comboApplied, hospedagemDelta, discount, commission, feeMode, charged };
+  }, [workshop, stock, combo, couponApplied, inclHospedagem]);
 
   const handleApplyCoupon = async () => {
     if (!workshop || couponLoading) return;
@@ -259,7 +277,7 @@ const CheckoutWorkshop: React.FC = () => {
     setCouponError(null);
     setCouponLoading(true);
     try {
-      const baseValue = breakdown?.precoAposCombo ?? Number(workshop.preco_padrao);
+      const baseValue = (breakdown?.precoAposCombo ?? Number(workshop.preco_padrao)) + (breakdown?.hospedagemDelta ?? 0);
       if (baseValue === 0) {
         throw new Error('Combo grátis aplicado — cupom não é necessário');
       }
@@ -314,6 +332,8 @@ const CheckoutWorkshop: React.FC = () => {
           user_id: user?.id,
           combo_opt_in: true,
           coupon_code: couponApplied?.code,
+          inclui_hospedagem: inclHospedagem,
+          roommate_preference: inclHospedagem ? (roommatePreference.trim() || undefined) : undefined,
           ...(tokenInfo && selectedBailarinoId
             ? { discount_token: discountToken, bailarino_id: selectedBailarinoId }
             : {}),
@@ -479,6 +499,41 @@ const CheckoutWorkshop: React.FC = () => {
             </>
           )}
 
+          {/* Hospedagem (add-on) */}
+          {workshop.hospedagem_delta != null && (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={inclHospedagem}
+                  disabled={lodgingEsgotada}
+                  onChange={e => setInclHospedagem(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-[#ff0068]"
+                />
+                <div>
+                  <p className="text-sm font-bold text-white">
+                    Incluir hospedagem <span className="text-[#ff0068]">+{formatBRL(Number(workshop.hospedagem_delta))}</span>
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">Hotel 4 estrelas, acomodação tripla compartilhada, café da manhã incluso.</p>
+                  {lodgingEsgotada && (
+                    <p className="text-xs text-rose-300 mt-1 font-bold">Vagas de hospedagem esgotadas pro período deste pass.</p>
+                  )}
+                </div>
+              </label>
+              {inclHospedagem && (
+                <FieldLabel icon={UserIcon} label="Prefere compartilhar o quarto com alguém? (opcional)">
+                  <input
+                    type="text"
+                    value={roommatePreference}
+                    onChange={e => setRoommatePreference(e.target.value)}
+                    className={inputCls}
+                    placeholder="Nome de quem você quer dividir o quarto"
+                  />
+                </FieldLabel>
+              )}
+            </div>
+          )}
+
           {/* Cupom */}
           {breakdown && breakdown.precoAposCombo > 0 && (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
@@ -522,6 +577,9 @@ const CheckoutWorkshop: React.FC = () => {
               <Row label="Preço base" value={formatBRL(breakdown.precoBase)} />
               {breakdown.comboApplied && breakdown.precoAposCombo !== breakdown.precoBase && (
                 <Row label="Desconto inscrito" value={`−${formatBRL(breakdown.precoBase - breakdown.precoAposCombo)}`} highlight="violet" />
+              )}
+              {breakdown.hospedagemDelta > 0 && (
+                <Row label="Hospedagem" value={`+${formatBRL(breakdown.hospedagemDelta)}`} />
               )}
               {breakdown.discount > 0 && (
                 <Row label="Cupom" value={`−${formatBRL(breakdown.discount)}`} highlight="emerald" />

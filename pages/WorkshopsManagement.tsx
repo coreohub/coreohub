@@ -47,6 +47,8 @@ interface WorkshopRow {
   display_order: number | null;
   is_featured: boolean;
   featured_badge_text: string | null;
+  hospedagem_delta: number | null;
+  hospedagem_noites: string[] | null;
 }
 
 interface JudgeOption {
@@ -130,6 +132,7 @@ const WorkshopsManagement: React.FC = () => {
   const [showModal, setShowModal]           = useState(false);
   const [editingId, setEditingId]           = useState<string | null>(null);
   const [showLotsModal, setShowLotsModal]   = useState<WorkshopRow | null>(null);
+  const [showLodgingModal, setShowLodgingModal] = useState(false);
   const [showBuyersModal, setShowBuyersModal] = useState<WorkshopRow | null>(null);
   // Jurados do produtor — pra reaproveitar como professor (nome/foto/bio/@).
   const [judges, setJudges] = useState<JudgeOption[]>([]);
@@ -166,6 +169,8 @@ const WorkshopsManagement: React.FC = () => {
     display_order: '' as string | number,
     is_featured: false,
     featured_badge_text: '',
+    hospedagem_delta: '' as string | number,
+    hospedagem_noites: '', // texto: datas separadas por vírgula, YYYY-MM-DD
   };
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
@@ -297,6 +302,8 @@ const WorkshopsManagement: React.FC = () => {
       display_order: w.display_order ?? '',
       is_featured: w.is_featured,
       featured_badge_text: w.featured_badge_text ?? '',
+      hospedagem_delta: w.hospedagem_delta ?? '',
+      hospedagem_noites: Array.isArray(w.hospedagem_noites) ? w.hospedagem_noites.join(', ') : '',
     });
     setFormError(null);
     setShowModal(true);
@@ -316,6 +323,19 @@ const WorkshopsManagement: React.FC = () => {
     }
     if (form.capacidade_max !== '' && Number(form.capacidade_max) < 1) {
       return setFormError('Capacidade deve ser pelo menos 1');
+    }
+    const hospedagemNoitesParsed = form.hospedagem_noites
+      .split(',')
+      .map((s: string) => s.trim())
+      .filter(Boolean);
+    if (hospedagemNoitesParsed.some((d: string) => !/^\d{4}-\d{2}-\d{2}$/.test(d))) {
+      return setFormError('Noites de hospedagem devem estar no formato AAAA-MM-DD, separadas por vírgula');
+    }
+    if (form.hospedagem_delta !== '' && hospedagemNoitesParsed.length === 0) {
+      return setFormError('Informe as noites de hospedagem (ou limpe o valor do acréscimo)');
+    }
+    if (form.hospedagem_delta === '' && hospedagemNoitesParsed.length > 0) {
+      return setFormError('Informe o valor do acréscimo de hospedagem (ou limpe as noites)');
     }
 
     setSaving(true);
@@ -356,6 +376,8 @@ const WorkshopsManagement: React.FC = () => {
       display_order: form.display_order === '' ? null : Number(form.display_order),
       is_featured: form.is_featured,
       featured_badge_text: form.is_featured ? (form.featured_badge_text.trim() || null) : null,
+      hospedagem_delta: form.hospedagem_delta === '' ? null : Number(form.hospedagem_delta),
+      hospedagem_noites: hospedagemNoitesParsed.length > 0 ? hospedagemNoitesParsed : null,
     };
 
     const { error } = editingId
@@ -431,13 +453,23 @@ const WorkshopsManagement: React.FC = () => {
               Crie e venda workshops independentes ou atrelados aos seus festivais. Suporta combo automático para inscritos da mostra.
             </p>
           </div>
-          <button
-            onClick={openCreate}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#ff0068] px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] transition"
-          >
-            <Plus size={16} />
-            Novo workshop
-          </button>
+          <div className="flex items-center gap-2">
+            {selectedScope !== 'all' && selectedScope !== 'standalone' && (
+              <button
+                onClick={() => setShowLodgingModal(true)}
+                className="inline-flex items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/40 px-4 py-2.5 text-sm font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition"
+              >
+                Hospedagem do evento
+              </button>
+            )}
+            <button
+              onClick={openCreate}
+              className="inline-flex items-center gap-2 rounded-xl bg-[#ff0068] px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] transition"
+            >
+              <Plus size={16} />
+              Novo workshop
+            </button>
+          </div>
         </div>
 
         {/* Filtro de escopo */}
@@ -622,6 +654,14 @@ const WorkshopsManagement: React.FC = () => {
         <BuyersModal
           workshop={showBuyersModal}
           onClose={() => setShowBuyersModal(null)}
+        />
+      )}
+
+      {/* Modal de hospedagem do evento (pool de vagas por noite) */}
+      {showLodgingModal && selectedScope !== 'all' && selectedScope !== 'standalone' && (
+        <LodgingNightsModal
+          eventId={selectedScope}
+          onClose={() => setShowLodgingModal(false)}
         />
       )}
 
@@ -1068,6 +1108,157 @@ const BuyersModal: React.FC<{ workshop: WorkshopRow; onClose: () => void }> = ({
 };
 
 // ════════════════════════════════════════════════════════════════════════════
+// Modal: hospedagem do evento — pool de vagas por noite, compartilhado entre
+// todos os passes/workshops do evento (quem marca "incluir hospedagem" em
+// qualquer produto disputa o mesmo quarto de hotel na mesma data).
+// ════════════════════════════════════════════════════════════════════════════
+interface LodgingNight {
+  id: string;
+  night_date: string;
+  capacity_max: number;
+}
+interface LodgingStockRow {
+  night_date: string;
+  capacity_max: number;
+  ocupadas: number;
+  restantes: number;
+  esgotado: boolean;
+}
+
+const LodgingNightsModal: React.FC<{ eventId: string; onClose: () => void }> = ({ eventId, onClose }) => {
+  const [nights, setNights] = useState<LodgingNight[]>([]);
+  const [stock, setStock] = useState<Record<string, LodgingStockRow>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [newDate, setNewDate] = useState('');
+  const [newCap, setNewCap] = useState<string | number>('');
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const [{ data: nightsData, error: nErr }, { data: stockData }] = await Promise.all([
+      supabase.from('event_lodging_nights').select('id, night_date, capacity_max').eq('event_id', eventId).order('night_date'),
+      supabase.rpc('get_lodging_stock', { p_event_id: eventId }),
+    ]);
+    if (nErr) setError(nErr.message);
+    setNights(nightsData ?? []);
+    const byNight: Record<string, LodgingStockRow> = {};
+    (stockData ?? []).forEach((r: LodgingStockRow) => { byNight[r.night_date] = r; });
+    setStock(byNight);
+    setLoading(false);
+  }, [eventId]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
+  }, [onClose]);
+
+  const addNight = async () => {
+    setError(null);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) return setError('Data inválida');
+    if (newCap === '' || Number(newCap) < 0) return setError('Capacidade inválida');
+    setSaving(true);
+    const { error: insErr } = await supabase.from('event_lodging_nights').insert({
+      event_id: eventId, night_date: newDate, capacity_max: Number(newCap),
+    });
+    setSaving(false);
+    if (insErr) return setError(insErr.message.includes('duplicate') ? 'Essa noite já está cadastrada' : insErr.message);
+    setNewDate(''); setNewCap('');
+    refresh();
+  };
+
+  const updateCapacity = async (id: string, cap: number) => {
+    if (cap < 0) return;
+    const { error: updErr } = await supabase.from('event_lodging_nights').update({ capacity_max: cap }).eq('id', id);
+    if (updErr) setError(updErr.message);
+    else refresh();
+  };
+
+  const removeNight = async (id: string) => {
+    const { error: delErr } = await supabase.from('event_lodging_nights').delete().eq('id', id);
+    if (delErr) setError(delErr.message);
+    else refresh();
+  };
+
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-labelledby="lodging-modal-title" className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl max-w-xl w-full shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[85vh]" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-5 pb-4 border-b border-slate-200 dark:border-white/10 shrink-0">
+          <div>
+            <h2 id="lodging-modal-title" className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Hospedagem do evento</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Vagas de hotel por noite — compartilhadas entre todos os passes que oferecem hospedagem.</p>
+          </div>
+          <button onClick={onClose} aria-label="Fechar" className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg shrink-0"><X size={18} /></button>
+        </div>
+
+        {error && (
+          <div className="mx-5 sm:mx-6 mt-4 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 p-3 text-sm text-rose-700 dark:text-rose-200 flex items-center gap-2 shrink-0">
+            <AlertCircle size={16} />{error}
+          </div>
+        )}
+
+        <div className="overflow-y-auto px-5 sm:px-6 py-4 flex-1 space-y-4">
+          {loading ? (
+            <div className="flex justify-center py-8"><Loader2 className="animate-spin text-slate-400" size={24} /></div>
+          ) : nights.length === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400">Nenhuma noite cadastrada ainda. Adicione abaixo cada data que o hotel cobre, com o total de vagas disponíveis nela.</p>
+          ) : (
+            <div className="space-y-2">
+              {nights.map(n => {
+                const s = stock[n.night_date];
+                return (
+                  <div key={n.id} className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-white/10 px-3 py-2">
+                    <span className="text-sm font-bold text-slate-900 dark:text-white w-28 shrink-0">
+                      {new Date(n.night_date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}
+                    </span>
+                    <input
+                      type="number"
+                      defaultValue={n.capacity_max}
+                      onBlur={e => { const v = Number(e.target.value); if (v !== n.capacity_max) updateCapacity(n.id, v); }}
+                      className="w-20 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 dark:text-white px-2 py-1 text-sm"
+                    />
+                    <span className={`text-xs font-bold shrink-0 ${s?.esgotado ? 'text-rose-500' : 'text-slate-500 dark:text-slate-400'}`}>
+                      {s ? `${s.ocupadas}/${s.capacity_max} ocupadas${s.esgotado ? ' · esgotado' : ''}` : '0 ocupadas'}
+                    </span>
+                    <button onClick={() => removeNight(n.id)} aria-label={`Remover noite ${n.night_date}`} className="ml-auto p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex items-end gap-2 pt-3 border-t border-slate-200 dark:border-white/10">
+            <label className="block flex-1">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Data (noite)</span>
+              <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 dark:text-white px-3 py-2 text-sm" />
+            </label>
+            <label className="block w-28">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Vagas</span>
+              <input type="number" value={newCap} onChange={e => setNewCap(e.target.value)} className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 dark:text-white px-3 py-2 text-sm" />
+            </label>
+            <button onClick={addNight} disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-[#ff0068] px-4 py-2 text-sm font-bold text-white hover:bg-[#ff1a78] disabled:opacity-50 transition">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              Adicionar
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-5 sm:px-6 py-4 border-t border-slate-200 dark:border-white/10 shrink-0 bg-white dark:bg-slate-900">
+          <button onClick={onClose} className="px-4 py-2.5 rounded-lg text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10">Fechar</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+};
+
+// ════════════════════════════════════════════════════════════════════════════
 // Modal: form de workshop
 // ════════════════════════════════════════════════════════════════════════════
 interface WorkshopFormModalProps {
@@ -1376,6 +1567,20 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
           </Section>
 
           {/* Publicação */}
+          <Section title="Hospedagem (add-on)">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Some ao preço do lote quando o comprador marca "incluir hospedagem" no checkout. As vagas por noite são controladas em "Hospedagem do evento" (botão no topo da lista).
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Acréscimo (R$)">
+                <input type="number" step="0.01" value={form.hospedagem_delta} onChange={e => upd('hospedagem_delta', e.target.value)} className={inputCls} placeholder="vazio = sem hospedagem" />
+              </Field>
+              <Field label="Noites cobertas (AAAA-MM-DD, separadas por vírgula)">
+                <input value={form.hospedagem_noites} onChange={e => upd('hospedagem_noites', e.target.value)} className={inputCls} placeholder="2027-01-18, 2027-01-19, ..." />
+              </Field>
+            </div>
+          </Section>
+
           <Section title="Destaque na vitrine">
             <Field label="Ordem de exibição (opcional)">
               <input type="number" value={form.display_order} onChange={e => upd('display_order', e.target.value)} className={inputCls} placeholder="vazio = ordena por data" />
