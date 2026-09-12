@@ -96,6 +96,7 @@ Deno.serve(async (req) => {
       bailarino_id,
       inclui_hospedagem,
       roommate_preference,
+      day_option_id,
     } = body as {
       workshop_id?: string
       workshop_lot_id?: string | null
@@ -107,6 +108,7 @@ Deno.serve(async (req) => {
       bailarino_id?: string
       inclui_hospedagem?: boolean
       roommate_preference?: string
+      day_option_id?: string
     }
 
     // ── Validações básicas ───────────────────────────────────────────────────
@@ -420,6 +422,7 @@ Deno.serve(async (req) => {
         p_discount_amount:     discountAmount,
         p_inclui_hospedagem:   inclHospedagem,
         p_roommate_preference: roommate_preference?.trim() || null,
+        p_day_option_id:       day_option_id ?? null,
       }
     )
 

@@ -66,6 +66,12 @@ const CheckoutWorkshop: React.FC = () => {
   const [roommatePreference, setRoommatePreference] = useState('');
   const [lodgingEsgotada, setLodgingEsgotada] = useState(false);
 
+  // Day Pass — escolha de dia (Frente 2). Quando o workshop tem opções de
+  // dia cadastradas, a escolha vira obrigatória (validado no submit e de
+  // novo, atomicamente, na RPC).
+  const [dayOptions, setDayOptions] = useState<Array<{ day_option_id: string; day_date: string; label: string | null; capacity_max: number | null; esgotado: boolean }>>([]);
+  const [selectedDayOptionId, setSelectedDayOptionId] = useState('');
+
   const [name, setName]   = useState('');
   const [email, setEmail] = useState('');
   const [cpf, setCpf]     = useState('');
@@ -166,6 +172,11 @@ const CheckoutWorkshop: React.FC = () => {
           const esgotada = (lodgingStock ?? []).some((r: any) => ws.hospedagem_noites.includes(r.night_date) && r.esgotado);
           setLodgingEsgotada(esgotada);
         }
+
+        // Day Pass — carrega opções de dia (se houver). Sem nenhuma, o
+        // workshop funciona normal (sem escolha exigida).
+        const { data: dayStock } = await supabase.rpc('get_workshop_day_stock', { p_workshop_id: id });
+        setDayOptions(dayStock ?? []);
       } finally {
         setLoading(false);
       }
@@ -308,6 +319,7 @@ const CheckoutWorkshop: React.FC = () => {
     && !!email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
     && isValidCpf(cpf)
     && !paying && !error && !comboLoading
+    && (dayOptions.length === 0 || !!selectedDayOptionId)
     // tokenInfo fica `undefined` enquanto a RPC resolve_discount_token ainda
     // não respondeu — tratar como "sem token" deixaria o comprador submeter
     // antes do desconto carregar e perder o benefício silenciosamente.
@@ -334,6 +346,7 @@ const CheckoutWorkshop: React.FC = () => {
           coupon_code: couponApplied?.code,
           inclui_hospedagem: inclHospedagem,
           roommate_preference: inclHospedagem ? (roommatePreference.trim() || undefined) : undefined,
+          day_option_id: selectedDayOptionId || undefined,
           ...(tokenInfo && selectedBailarinoId
             ? { discount_token: discountToken, bailarino_id: selectedBailarinoId }
             : {}),
@@ -428,6 +441,34 @@ const CheckoutWorkshop: React.FC = () => {
               <input type="tel" value={phone} onChange={e => setPhone(formatPhone(e.target.value))} className={inputCls} placeholder="(00) 00000-0000" maxLength={15} />
             </FieldLabel>
           </div>
+
+          {/* Day Pass — escolha de dia (obrigatória quando configurada) */}
+          {dayOptions.length > 0 && (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+              <FieldLabel icon={GraduationCap} label="Escolha o dia">
+                <select
+                  value={selectedDayOptionId}
+                  onChange={e => setSelectedDayOptionId(e.target.value)}
+                  className={`${inputCls} [color-scheme:dark]`}
+                  required
+                >
+                  <option value="" style={{ backgroundColor: '#18181f', color: '#fff' }}>Selecione...</option>
+                  {dayOptions.map(d => (
+                    <option
+                      key={d.day_option_id}
+                      value={d.day_option_id}
+                      disabled={d.esgotado}
+                      style={{ backgroundColor: '#18181f', color: d.esgotado ? '#666' : '#fff' }}
+                    >
+                      {new Date(d.day_date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
+                      {d.label ? ` — ${d.label}` : ''}
+                      {d.esgotado ? ' (esgotado)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </FieldLabel>
+            </div>
+          )}
 
           {/* Link de desconto por coreografia (?discount_token=) — seletor de
               bailarino substitui CPF/login pra detectar o combo. */}

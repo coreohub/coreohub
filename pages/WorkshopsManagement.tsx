@@ -133,6 +133,7 @@ const WorkshopsManagement: React.FC = () => {
   const [editingId, setEditingId]           = useState<string | null>(null);
   const [showLotsModal, setShowLotsModal]   = useState<WorkshopRow | null>(null);
   const [showLodgingModal, setShowLodgingModal] = useState(false);
+  const [showDayOptionsModal, setShowDayOptionsModal] = useState<WorkshopRow | null>(null);
   const [showBuyersModal, setShowBuyersModal] = useState<WorkshopRow | null>(null);
   // Jurados do produtor — pra reaproveitar como professor (nome/foto/bio/@).
   const [judges, setJudges] = useState<JudgeOption[]>([]);
@@ -594,6 +595,12 @@ const WorkshopsManagement: React.FC = () => {
                         <Layers size={12} />Lotes
                       </button>
                       <button
+                        onClick={() => setShowDayOptionsModal(w)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-white/10 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition"
+                      >
+                        <Calendar size={12} />Dias
+                      </button>
+                      <button
                         onClick={() => setShowBuyersModal(w)}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-white/10 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition"
                       >
@@ -662,6 +669,14 @@ const WorkshopsManagement: React.FC = () => {
         <LodgingNightsModal
           eventId={selectedScope}
           onClose={() => setShowLodgingModal(false)}
+        />
+      )}
+
+      {/* Modal de dias disponíveis (Day Pass) — por workshop */}
+      {showDayOptionsModal && (
+        <DayOptionsModal
+          workshop={showDayOptionsModal}
+          onClose={() => setShowDayOptionsModal(null)}
         />
       )}
 
@@ -1243,6 +1258,155 @@ const LodgingNightsModal: React.FC<{ eventId: string; onClose: () => void }> = (
               <input type="number" value={newCap} onChange={e => setNewCap(e.target.value)} className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 dark:text-white px-3 py-2 text-sm" />
             </label>
             <button onClick={addNight} disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-[#ff0068] px-4 py-2 text-sm font-bold text-white hover:bg-[#ff1a78] disabled:opacity-50 transition">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              Adicionar
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-5 sm:px-6 py-4 border-t border-slate-200 dark:border-white/10 shrink-0 bg-white dark:bg-slate-900">
+          <button onClick={onClose} className="px-4 py-2.5 rounded-lg text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10">Fechar</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// Modal: dias disponíveis (Day Pass) — quando configurado, o comprador é
+// obrigado a escolher 1 dia no checkout; cada dia tem sua própria capacidade
+// (ou ilimitada se em branco). Genérico — qualquer produtor pode usar pra
+// qualquer workshop, não é exclusivo de camp multi-dia.
+// ════════════════════════════════════════════════════════════════════════════
+interface DayOption {
+  id: string;
+  day_date: string;
+  label: string | null;
+  capacity_max: number | null;
+}
+interface DayStockRow {
+  day_option_id: string;
+  ocupadas: number;
+  restantes: number | null;
+  esgotado: boolean;
+}
+
+const DayOptionsModal: React.FC<{ workshop: WorkshopRow; onClose: () => void }> = ({ workshop, onClose }) => {
+  const [options, setOptions] = useState<DayOption[]>([]);
+  const [stock, setStock] = useState<Record<string, DayStockRow>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [newDate, setNewDate] = useState('');
+  const [newLabel, setNewLabel] = useState('');
+  const [newCap, setNewCap] = useState<string | number>('');
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const [{ data: optData, error: oErr }, { data: stockData }] = await Promise.all([
+      supabase.from('workshop_day_options').select('id, day_date, label, capacity_max').eq('workshop_id', workshop.id).order('day_date'),
+      supabase.rpc('get_workshop_day_stock', { p_workshop_id: workshop.id }),
+    ]);
+    if (oErr) setError(oErr.message);
+    setOptions(optData ?? []);
+    const byOption: Record<string, DayStockRow> = {};
+    (stockData ?? []).forEach((r: DayStockRow) => { byOption[r.day_option_id] = r; });
+    setStock(byOption);
+    setLoading(false);
+  }, [workshop.id]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
+  }, [onClose]);
+
+  const addOption = async () => {
+    setError(null);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) return setError('Data inválida');
+    setSaving(true);
+    const { error: insErr } = await supabase.from('workshop_day_options').insert({
+      workshop_id: workshop.id,
+      day_date: newDate,
+      label: newLabel.trim() || null,
+      capacity_max: newCap === '' ? null : Number(newCap),
+    });
+    setSaving(false);
+    if (insErr) return setError(insErr.message.includes('duplicate') ? 'Esse dia já está cadastrado' : insErr.message);
+    setNewDate(''); setNewLabel(''); setNewCap('');
+    refresh();
+  };
+
+  const removeOption = async (id: string) => {
+    const { error: delErr } = await supabase.from('workshop_day_options').delete().eq('id', id);
+    if (delErr) setError(delErr.message);
+    else refresh();
+  };
+
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-labelledby="day-options-modal-title" className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl max-w-xl w-full shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[85vh]" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-5 pb-4 border-b border-slate-200 dark:border-white/10 shrink-0">
+          <div>
+            <h2 id="day-options-modal-title" className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Dias disponíveis — {workshop.name}</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Se cadastrar pelo menos 1 dia aqui, o comprador é obrigado a escolher um no checkout (ex: Day Pass). Sem nenhum dia cadastrado, o workshop funciona normal (sem escolha).</p>
+          </div>
+          <button onClick={onClose} aria-label="Fechar" className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg shrink-0"><X size={18} /></button>
+        </div>
+
+        {error && (
+          <div className="mx-5 sm:mx-6 mt-4 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 p-3 text-sm text-rose-700 dark:text-rose-200 flex items-center gap-2 shrink-0">
+            <AlertCircle size={16} />{error}
+          </div>
+        )}
+
+        <div className="overflow-y-auto px-5 sm:px-6 py-4 flex-1 space-y-4">
+          {loading ? (
+            <div className="flex justify-center py-8"><Loader2 className="animate-spin text-slate-400" size={24} /></div>
+          ) : options.length === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400">Nenhum dia cadastrado ainda.</p>
+          ) : (
+            <div className="space-y-2">
+              {options.map(o => {
+                const s = stock[o.id];
+                return (
+                  <div key={o.id} className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-white/10 px-3 py-2">
+                    <div className="w-32 shrink-0">
+                      <span className="text-sm font-bold text-slate-900 dark:text-white block">
+                        {new Date(o.day_date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}
+                      </span>
+                      {o.label && <span className="text-[11px] text-slate-500 dark:text-slate-400">{o.label}</span>}
+                    </div>
+                    <span className={`text-xs font-bold shrink-0 ${s?.esgotado ? 'text-rose-500' : 'text-slate-500 dark:text-slate-400'}`}>
+                      {o.capacity_max == null ? 'sem limite' : `${s?.ocupadas ?? 0}/${o.capacity_max}${s?.esgotado ? ' · esgotado' : ''}`}
+                    </span>
+                    <button onClick={() => removeOption(o.id)} aria-label={`Remover dia ${o.day_date}`} className="ml-auto p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-end gap-2 pt-3 border-t border-slate-200 dark:border-white/10">
+            <label className="block">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Data</span>
+              <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 dark:text-white px-3 py-2 text-sm" />
+            </label>
+            <label className="block flex-1 min-w-[140px]">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Rótulo (opcional)</span>
+              <input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="Ex: Ballet & Jazz" className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 dark:text-white px-3 py-2 text-sm" />
+            </label>
+            <label className="block w-28">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Vagas</span>
+              <input type="number" value={newCap} onChange={e => setNewCap(e.target.value)} placeholder="sem limite" className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 dark:text-white px-3 py-2 text-sm" />
+            </label>
+            <button onClick={addOption} disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-[#ff0068] px-4 py-2 text-sm font-bold text-white hover:bg-[#ff1a78] disabled:opacity-50 transition">
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
               Adicionar
             </button>
