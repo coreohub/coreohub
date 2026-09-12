@@ -49,6 +49,9 @@ interface WorkshopRow {
   featured_badge_text: string | null;
   hospedagem_delta: number | null;
   hospedagem_noites: string[] | null;
+  camp_dias: string[] | null;
+  early_arrival_delta: number | null;
+  late_departure_delta: number | null;
 }
 
 interface JudgeOption {
@@ -133,6 +136,7 @@ const WorkshopsManagement: React.FC = () => {
   const [editingId, setEditingId]           = useState<string | null>(null);
   const [showLotsModal, setShowLotsModal]   = useState<WorkshopRow | null>(null);
   const [showLodgingModal, setShowLodgingModal] = useState(false);
+  const [showDayCapacityModal, setShowDayCapacityModal] = useState(false);
   const [showDayOptionsModal, setShowDayOptionsModal] = useState<WorkshopRow | null>(null);
   const [showBuyersModal, setShowBuyersModal] = useState<WorkshopRow | null>(null);
   // Jurados do produtor — pra reaproveitar como professor (nome/foto/bio/@).
@@ -172,6 +176,9 @@ const WorkshopsManagement: React.FC = () => {
     featured_badge_text: '',
     hospedagem_delta: '' as string | number,
     hospedagem_noites: '', // texto: datas separadas por vírgula, YYYY-MM-DD
+    camp_dias: '', // texto: datas separadas por vírgula, YYYY-MM-DD — capacidade diária combinada
+    early_arrival_delta: '' as string | number,
+    late_departure_delta: '' as string | number,
   };
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
@@ -305,6 +312,9 @@ const WorkshopsManagement: React.FC = () => {
       featured_badge_text: w.featured_badge_text ?? '',
       hospedagem_delta: w.hospedagem_delta ?? '',
       hospedagem_noites: Array.isArray(w.hospedagem_noites) ? w.hospedagem_noites.join(', ') : '',
+      camp_dias: Array.isArray(w.camp_dias) ? w.camp_dias.join(', ') : '',
+      early_arrival_delta: w.early_arrival_delta ?? '',
+      late_departure_delta: w.late_departure_delta ?? '',
     });
     setFormError(null);
     setShowModal(true);
@@ -337,6 +347,19 @@ const WorkshopsManagement: React.FC = () => {
     }
     if (form.hospedagem_delta === '' && hospedagemNoitesParsed.length > 0) {
       return setFormError('Informe o valor do acréscimo de hospedagem (ou limpe as noites)');
+    }
+    const campDiasParsed = form.camp_dias
+      .split(',')
+      .map((s: string) => s.trim())
+      .filter(Boolean);
+    if (campDiasParsed.some((d: string) => !/^\d{4}-\d{2}-\d{2}$/.test(d))) {
+      return setFormError('Dias de camp devem estar no formato AAAA-MM-DD, separados por vírgula');
+    }
+    if (form.early_arrival_delta !== '' && form.hospedagem_delta === '') {
+      return setFormError('Chegada antecipada exige hospedagem configurada nesse pass');
+    }
+    if (form.late_departure_delta !== '' && form.hospedagem_delta === '') {
+      return setFormError('Saída estendida exige hospedagem configurada nesse pass');
     }
 
     setSaving(true);
@@ -379,6 +402,9 @@ const WorkshopsManagement: React.FC = () => {
       featured_badge_text: form.is_featured ? (form.featured_badge_text.trim() || null) : null,
       hospedagem_delta: form.hospedagem_delta === '' ? null : Number(form.hospedagem_delta),
       hospedagem_noites: hospedagemNoitesParsed.length > 0 ? hospedagemNoitesParsed : null,
+      camp_dias: campDiasParsed.length > 0 ? campDiasParsed : null,
+      early_arrival_delta: form.early_arrival_delta === '' ? null : Number(form.early_arrival_delta),
+      late_departure_delta: form.late_departure_delta === '' ? null : Number(form.late_departure_delta),
     };
 
     const { error } = editingId
@@ -461,6 +487,14 @@ const WorkshopsManagement: React.FC = () => {
                 className="inline-flex items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/40 px-4 py-2.5 text-sm font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition"
               >
                 Hospedagem do evento
+              </button>
+            )}
+            {selectedScope !== 'all' && selectedScope !== 'standalone' && (
+              <button
+                onClick={() => setShowDayCapacityModal(true)}
+                className="inline-flex items-center gap-2 rounded-xl bg-sky-500/10 border border-sky-500/40 px-4 py-2.5 text-sm font-bold text-sky-600 dark:text-sky-400 hover:bg-sky-500/20 transition"
+              >
+                Capacidade diária
               </button>
             )}
             <button
@@ -669,6 +703,14 @@ const WorkshopsManagement: React.FC = () => {
         <LodgingNightsModal
           eventId={selectedScope}
           onClose={() => setShowLodgingModal(false)}
+        />
+      )}
+
+      {/* Modal de capacidade diária combinada (teto por dia, somando todos os passes) */}
+      {showDayCapacityModal && selectedScope !== 'all' && selectedScope !== 'standalone' && (
+        <DayCapacityModal
+          eventId={selectedScope}
+          onClose={() => setShowDayCapacityModal(false)}
         />
       )}
 
@@ -1139,6 +1181,17 @@ interface LodgingStockRow {
   restantes: number;
   esgotado: boolean;
 }
+interface LodgingGuest {
+  registration_id: string;
+  buyer_name: string;
+  buyer_cpf: string;
+  buyer_email: string;
+  buyer_phone: string | null;
+  workshop_name: string;
+  night_date: string;
+  early_arrival: boolean;
+  late_departure: boolean;
+}
 
 const LodgingNightsModal: React.FC<{ eventId: string; onClose: () => void }> = ({ eventId, onClose }) => {
   const [nights, setNights] = useState<LodgingNight[]>([]);
@@ -1148,6 +1201,11 @@ const LodgingNightsModal: React.FC<{ eventId: string; onClose: () => void }> = (
   const [error, setError] = useState<string | null>(null);
   const [newDate, setNewDate] = useState('');
   const [newCap, setNewCap] = useState<string | number>('');
+  // Ver/exportar hóspedes por noite (pedido da Lorrayne: quantas pessoas e
+  // quem são, pra ela organizar diretamente com o hotel).
+  const [showGuests, setShowGuests] = useState(false);
+  const [guests, setGuests] = useState<LodgingGuest[]>([]);
+  const [loadingGuests, setLoadingGuests] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -1164,6 +1222,81 @@ const LodgingNightsModal: React.FC<{ eventId: string; onClose: () => void }> = (
   }, [eventId]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  const loadGuests = useCallback(async () => {
+    setLoadingGuests(true);
+    try {
+      const { data: wsData } = await supabase.from('workshops').select('id, name').eq('event_id', eventId);
+      const wsIds = (wsData ?? []).map(w => w.id);
+      const wsNameById: Record<string, string> = {};
+      (wsData ?? []).forEach(w => { wsNameById[w.id] = w.name; });
+      if (wsIds.length === 0) { setGuests([]); return; }
+
+      const { data: regs } = await supabase
+        .from('workshop_registrations')
+        .select('id, buyer_name, buyer_cpf, buyer_email, buyer_phone, workshop_id, early_arrival, late_departure')
+        .in('workshop_id', wsIds)
+        .eq('inclui_hospedagem', true)
+        .in('status_pagamento', ['APROVADO', 'GRATUITO', 'CORTESIA']);
+      const regIds = (regs ?? []).map(r => r.id);
+      if (regIds.length === 0) { setGuests([]); return; }
+
+      const { data: nightsData } = await supabase
+        .from('workshop_registration_lodging_nights')
+        .select('workshop_registration_id, night_date')
+        .in('workshop_registration_id', regIds);
+
+      const regById: Record<string, any> = {};
+      (regs ?? []).forEach(r => { regById[r.id] = r; });
+
+      const rows: LodgingGuest[] = (nightsData ?? []).map(n => {
+        const r = regById[n.workshop_registration_id] as any;
+        return {
+          registration_id: n.workshop_registration_id,
+          buyer_name: r?.buyer_name ?? '',
+          buyer_cpf: r?.buyer_cpf ?? '',
+          buyer_email: r?.buyer_email ?? '',
+          buyer_phone: r?.buyer_phone ?? null,
+          workshop_name: wsNameById[r?.workshop_id] ?? '',
+          night_date: n.night_date,
+          early_arrival: !!r?.early_arrival,
+          late_departure: !!r?.late_departure,
+        };
+      });
+      rows.sort((a, b) => a.night_date.localeCompare(b.night_date) || a.buyer_name.localeCompare(b.buyer_name));
+      setGuests(rows);
+    } finally {
+      setLoadingGuests(false);
+    }
+  }, [eventId]);
+
+  const toggleGuests = () => {
+    const next = !showGuests;
+    setShowGuests(next);
+    if (next && guests.length === 0) loadGuests();
+  };
+
+  const exportGuestsCsv = () => {
+    const header = ['Noite', 'Nome', 'Documento', 'E-mail', 'Telefone', 'Passe', 'Chegada antecipada', 'Saída estendida'];
+    const lines = guests.map(g => [
+      g.night_date,
+      g.buyer_name,
+      g.buyer_cpf,
+      g.buyer_email,
+      g.buyer_phone ?? '',
+      g.workshop_name,
+      g.early_arrival ? 'sim' : 'não',
+      g.late_departure ? 'sim' : 'não',
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+    const csv = [header.join(','), ...lines].join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `hospedagem-${eventId}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -1258,6 +1391,204 @@ const LodgingNightsModal: React.FC<{ eventId: string; onClose: () => void }> = (
               <input type="number" value={newCap} onChange={e => setNewCap(e.target.value)} className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 dark:text-white px-3 py-2 text-sm" />
             </label>
             <button onClick={addNight} disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-[#ff0068] px-4 py-2 text-sm font-bold text-white hover:bg-[#ff1a78] disabled:opacity-50 transition">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              Adicionar
+            </button>
+          </div>
+
+          {/* Ver/exportar hóspedes — pra ela organizar direto com o hotel */}
+          <div className="pt-3 border-t border-slate-200 dark:border-white/10">
+            <div className="flex items-center justify-between gap-2">
+              <button
+                onClick={toggleGuests}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-[#ff0068]"
+              >
+                {showGuests ? 'Ocultar hóspedes' : 'Ver hóspedes por noite'}
+              </button>
+              {showGuests && guests.length > 0 && (
+                <button
+                  onClick={exportGuestsCsv}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-white/10 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10"
+                >
+                  Exportar CSV
+                </button>
+              )}
+            </div>
+            {showGuests && (
+              loadingGuests ? (
+                <div className="flex justify-center py-6"><Loader2 className="animate-spin text-slate-400" size={20} /></div>
+              ) : guests.length === 0 ? (
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-3">Ninguém com hospedagem confirmada ainda.</p>
+              ) : (
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-slate-500 dark:text-slate-400">
+                        <th className="pr-3 py-1 font-bold">Noite</th>
+                        <th className="pr-3 py-1 font-bold">Nome</th>
+                        <th className="pr-3 py-1 font-bold">Passe</th>
+                        <th className="pr-3 py-1 font-bold">Contato</th>
+                        <th className="pr-3 py-1 font-bold">Extras</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {guests.map((g, i) => (
+                        <tr key={`${g.registration_id}-${g.night_date}`} className={i % 2 === 0 ? '' : 'bg-slate-50 dark:bg-white/5'}>
+                          <td className="pr-3 py-1 whitespace-nowrap font-bold text-slate-900 dark:text-white">
+                            {new Date(g.night_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                          </td>
+                          <td className="pr-3 py-1">{g.buyer_name}</td>
+                          <td className="pr-3 py-1">{g.workshop_name}</td>
+                          <td className="pr-3 py-1 text-slate-500 dark:text-slate-400">{g.buyer_email}</td>
+                          <td className="pr-3 py-1 text-slate-500 dark:text-slate-400">
+                            {g.early_arrival && 'chegada+ '}{g.late_departure && 'saída+'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-5 sm:px-6 py-4 border-t border-slate-200 dark:border-white/10 shrink-0 bg-white dark:bg-slate-900">
+          <button onClick={onClose} className="px-4 py-2.5 rounded-lg text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10">Fechar</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// Modal: capacidade diária COMBINADA do evento — teto de participantes por
+// dia-calendário, somando TODOS os passes que ocupam aquele dia (Experience+
+// Week+Final+Day+Single Class). Mesmo padrão de LodgingNightsModal, só que
+// pra presença no camp em vez de noite de hotel.
+// ════════════════════════════════════════════════════════════════════════════
+interface DayCapacityRow { id: string; day_date: string; capacity_max: number }
+interface DayCapacityStockRow { day_date: string; capacity_max: number; ocupadas: number; restantes: number; esgotado: boolean }
+
+const DayCapacityModal: React.FC<{ eventId: string; onClose: () => void }> = ({ eventId, onClose }) => {
+  const [days, setDays] = useState<DayCapacityRow[]>([]);
+  const [stock, setStock] = useState<Record<string, DayCapacityStockRow>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [newDate, setNewDate] = useState('');
+  const [newCap, setNewCap] = useState<string | number>('');
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const [{ data: daysData, error: dErr }, { data: stockData }] = await Promise.all([
+      supabase.from('event_day_capacity').select('id, day_date, capacity_max').eq('event_id', eventId).order('day_date'),
+      supabase.rpc('get_event_day_stock', { p_event_id: eventId }),
+    ]);
+    if (dErr) setError(dErr.message);
+    setDays(daysData ?? []);
+    const byDay: Record<string, DayCapacityStockRow> = {};
+    (stockData ?? []).forEach((r: DayCapacityStockRow) => { byDay[r.day_date] = r; });
+    setStock(byDay);
+    setLoading(false);
+  }, [eventId]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
+  }, [onClose]);
+
+  const addDay = async () => {
+    setError(null);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) return setError('Data inválida');
+    if (newCap === '' || Number(newCap) < 0) return setError('Capacidade inválida');
+    setSaving(true);
+    const { error: insErr } = await supabase.from('event_day_capacity').insert({
+      event_id: eventId, day_date: newDate, capacity_max: Number(newCap),
+    });
+    setSaving(false);
+    if (insErr) return setError(insErr.message.includes('duplicate') ? 'Esse dia já está cadastrado' : insErr.message);
+    setNewDate(''); setNewCap('');
+    refresh();
+  };
+
+  const updateCapacity = async (id: string, cap: number) => {
+    if (cap < 0) return;
+    const { error: updErr } = await supabase.from('event_day_capacity').update({ capacity_max: cap }).eq('id', id);
+    if (updErr) setError(updErr.message);
+    else refresh();
+  };
+
+  const removeDay = async (id: string) => {
+    const { error: delErr } = await supabase.from('event_day_capacity').delete().eq('id', id);
+    if (delErr) setError(delErr.message);
+    else refresh();
+  };
+
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-labelledby="daycap-modal-title" className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl max-w-xl w-full shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[85vh]" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-5 pb-4 border-b border-slate-200 dark:border-white/10 shrink-0">
+          <div>
+            <h2 id="daycap-modal-title" className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Capacidade diária</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Teto de participantes por dia — soma TODOS os passes que ocupam aquele dia (marcados em "Dias de camp" no formulário de cada pass, ou pelo dia escolhido no Day Pass). Sem cadastro pra uma data = sem limite.</p>
+          </div>
+          <button onClick={onClose} aria-label="Fechar" className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg shrink-0"><X size={18} /></button>
+        </div>
+
+        {error && (
+          <div className="mx-5 sm:mx-6 mt-4 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 p-3 text-sm text-rose-700 dark:text-rose-200 flex items-center gap-2 shrink-0">
+            <AlertCircle size={16} />{error}
+          </div>
+        )}
+
+        <div className="overflow-y-auto px-5 sm:px-6 py-4 flex-1 space-y-4">
+          {loading ? (
+            <div className="flex justify-center py-8"><Loader2 className="animate-spin text-slate-400" size={24} /></div>
+          ) : days.length === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400">Nenhum teto cadastrado ainda — todos os dias ficam sem limite até você adicionar um aqui.</p>
+          ) : (
+            <div className="space-y-2">
+              {days.map(d => {
+                const s = stock[d.day_date];
+                return (
+                  <div key={d.id} className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-white/10 px-3 py-2">
+                    <span className="text-sm font-bold text-slate-900 dark:text-white w-28 shrink-0">
+                      {new Date(d.day_date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}
+                    </span>
+                    <input
+                      type="number"
+                      defaultValue={d.capacity_max}
+                      onBlur={e => { const v = Number(e.target.value); if (v !== d.capacity_max) updateCapacity(d.id, v); }}
+                      className="w-20 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 dark:text-white px-2 py-1 text-sm"
+                    />
+                    <span className={`text-xs font-bold shrink-0 ${s?.esgotado ? 'text-rose-500' : 'text-slate-500 dark:text-slate-400'}`}>
+                      {s ? `${s.ocupadas}/${s.capacity_max} ocupadas${s.esgotado ? ' · esgotado' : ''}` : '0 ocupadas'}
+                    </span>
+                    <button onClick={() => removeDay(d.id)} aria-label={`Remover teto de ${d.day_date}`} className="ml-auto p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex items-end gap-2 pt-3 border-t border-slate-200 dark:border-white/10">
+            <label className="block flex-1">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Data</span>
+              <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 dark:text-white px-3 py-2 text-sm" />
+            </label>
+            <label className="block w-28">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Teto</span>
+              <input type="number" value={newCap} onChange={e => setNewCap(e.target.value)} className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 dark:text-white px-3 py-2 text-sm" />
+            </label>
+            <button onClick={addDay} disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-[#ff0068] px-4 py-2 text-sm font-bold text-white hover:bg-[#ff1a78] disabled:opacity-50 transition">
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
               Adicionar
             </button>
@@ -1733,7 +2064,7 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
           {/* Publicação */}
           <Section title="Hospedagem (add-on)">
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Some ao preço do lote quando o comprador marca "incluir hospedagem" no checkout. As vagas por noite são controladas em "Hospedagem do evento" (botão no topo da lista).
+              Some ao preço do lote quando o comprador marca "incluir hospedagem" no checkout. As vagas por noite são controladas em "Hospedagem do evento" (botão no topo da lista). Quando o workshop tem "Dias" (Day Pass) cadastrados, a noite reservada segue o dia escolhido no checkout em vez desta lista fixa.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Acréscimo (R$)">
@@ -1743,6 +2074,23 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
                 <input value={form.hospedagem_noites} onChange={e => upd('hospedagem_noites', e.target.value)} className={inputCls} placeholder="2027-01-18, 2027-01-19, ..." />
               </Field>
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <Field label="Chegada antecipada — acréscimo (R$, opcional)">
+                <input type="number" step="0.01" value={form.early_arrival_delta} onChange={e => upd('early_arrival_delta', e.target.value)} className={inputCls} placeholder="vazio = opção desligada" />
+              </Field>
+              <Field label="Saída estendida — acréscimo (R$, opcional)">
+                <input type="number" step="0.01" value={form.late_departure_delta} onChange={e => upd('late_departure_delta', e.target.value)} className={inputCls} placeholder="vazio = opção desligada" />
+              </Field>
+            </div>
+          </Section>
+
+          <Section title="Capacidade diária combinada (opcional)">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Dias-calendário que este pass ocupa pra fins de teto diário do evento (soma junto com todos os outros passes na mesma data). Configure o teto por dia no botão "Capacidade diária" no topo da lista. Deixe vazio se este pass não deve entrar nessa conta (ex: quando o workshop já tem "Dias" cadastrados pra Day Pass — nesse caso o dia escolhido no checkout já entra sozinho).
+            </p>
+            <Field label="Dias de camp (AAAA-MM-DD, separados por vírgula)">
+              <input value={form.camp_dias} onChange={e => upd('camp_dias', e.target.value)} className={inputCls} placeholder="2027-01-18, 2027-01-19, ..." />
+            </Field>
           </Section>
 
           <Section title="Destaque na vitrine">

@@ -97,6 +97,8 @@ Deno.serve(async (req) => {
       inclui_hospedagem,
       roommate_preference,
       day_option_id,
+      early_arrival,
+      late_departure,
     } = body as {
       workshop_id?: string
       workshop_lot_id?: string | null
@@ -109,6 +111,8 @@ Deno.serve(async (req) => {
       inclui_hospedagem?: boolean
       roommate_preference?: string
       day_option_id?: string
+      early_arrival?: boolean
+      late_departure?: boolean
     }
 
     // ── Validações básicas ───────────────────────────────────────────────────
@@ -157,7 +161,8 @@ Deno.serve(async (req) => {
         auto_detect_combo, capacidade_max,
         workshop_commission_percent, workshop_fee_mode,
         workshop_max_per_cpf, workshop_reservation_minutes,
-        is_published, hospedagem_delta, hospedagem_noites
+        is_published, hospedagem_delta, hospedagem_noites,
+        early_arrival_delta, late_departure_delta
       `)
       .eq('id', workshop_id)
       .single()
@@ -308,13 +313,25 @@ Deno.serve(async (req) => {
     // total pass+hospedagem, igual um carrinho normal). Estoque por noite é
     // checado de forma atômica dentro da RPC de reserva (tudo-ou-nada).
     const inclHospedagem = !!inclui_hospedagem
+    const wantsEarlyArrival = !!early_arrival
+    const wantsLateDeparture = !!late_departure
     if (inclHospedagem) {
       if (workshop.hospedagem_delta == null) {
         throw new Error('Este workshop não oferece hospedagem')
       }
-      const delta = Number(workshop.hospedagem_delta)
+      let delta = Number(workshop.hospedagem_delta)
+      if (wantsEarlyArrival) {
+        if (workshop.early_arrival_delta == null) throw new Error('Chegada antecipada não disponível pra esse pass')
+        delta += Number(workshop.early_arrival_delta)
+      }
+      if (wantsLateDeparture) {
+        if (workshop.late_departure_delta == null) throw new Error('Saída estendida não disponível pra esse pass')
+        delta += Number(workshop.late_departure_delta)
+      }
       precoBase = parseFloat((precoBase + delta).toFixed(2))
       precoPago = parseFloat((precoPago + delta).toFixed(2))
+    } else if (wantsEarlyArrival || wantsLateDeparture) {
+      throw new Error('Chegada antecipada/saída estendida exigem hospedagem incluída')
     }
 
     // ── Cupom (scope=workshop|all) ───────────────────────────────────────────
@@ -423,6 +440,8 @@ Deno.serve(async (req) => {
         p_inclui_hospedagem:   inclHospedagem,
         p_roommate_preference: roommate_preference?.trim() || null,
         p_day_option_id:       day_option_id ?? null,
+        p_early_arrival:       wantsEarlyArrival,
+        p_late_departure:      wantsLateDeparture,
       }
     )
 
@@ -463,6 +482,8 @@ Deno.serve(async (req) => {
         fee_mode:          feeMode,
         external_reference: null,
         inclui_hospedagem: inclHospedagem,
+        early_arrival: wantsEarlyArrival,
+        late_departure: wantsLateDeparture,
       }, 201)
     }
 
@@ -587,6 +608,8 @@ Deno.serve(async (req) => {
       fee_mode:          feeMode,
       external_reference: externalRef,
       inclui_hospedagem: inclHospedagem,
+      early_arrival: wantsEarlyArrival,
+      late_departure: wantsLateDeparture,
     }, 201)
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)

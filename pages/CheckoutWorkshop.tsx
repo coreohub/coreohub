@@ -65,6 +65,11 @@ const CheckoutWorkshop: React.FC = () => {
   const [inclHospedagem, setInclHospedagem] = useState(false);
   const [roommatePreference, setRoommatePreference] = useState('');
   const [lodgingEsgotada, setLodgingEsgotada] = useState(false);
+  // "Chegar um dia antes" / "sair um dia depois" — diária extra opcional na
+  // ponta do período (Frente 4), preço fixo por pass, só some ao marcar
+  // hospedagem.
+  const [earlyArrival, setEarlyArrival] = useState(false);
+  const [lateDeparture, setLateDeparture] = useState(false);
 
   // Day Pass — escolha de dia (Frente 2). Quando o workshop tem opções de
   // dia cadastradas, a escolha vira obrigatória (validado no submit e de
@@ -268,7 +273,9 @@ const CheckoutWorkshop: React.FC = () => {
         comboApplied = true;
       }
     }
-    const hospedagemDelta = inclHospedagem && workshop.hospedagem_delta != null ? Number(workshop.hospedagem_delta) : 0;
+    let hospedagemDelta = inclHospedagem && workshop.hospedagem_delta != null ? Number(workshop.hospedagem_delta) : 0;
+    if (inclHospedagem && earlyArrival && workshop.early_arrival_delta != null) hospedagemDelta += Number(workshop.early_arrival_delta);
+    if (inclHospedagem && lateDeparture && workshop.late_departure_delta != null) hospedagemDelta += Number(workshop.late_departure_delta);
     const precoComHospedagem = precoAposCombo + hospedagemDelta;
     const discount = couponApplied ? Number(couponApplied.discount) : 0;
     const baseAfterCoupon = Math.max(0, Number((precoComHospedagem - discount).toFixed(2)));
@@ -279,7 +286,7 @@ const CheckoutWorkshop: React.FC = () => {
       ? 0
       : feeMode === 'repassar' ? Number((baseAfterCoupon + commission).toFixed(2)) : baseAfterCoupon;
     return { precoBase, precoAposCombo, comboApplied, hospedagemDelta, discount, commission, feeMode, charged };
-  }, [workshop, stock, combo, couponApplied, inclHospedagem]);
+  }, [workshop, stock, combo, couponApplied, inclHospedagem, earlyArrival, lateDeparture]);
 
   const handleApplyCoupon = async () => {
     if (!workshop || couponLoading) return;
@@ -347,6 +354,8 @@ const CheckoutWorkshop: React.FC = () => {
           inclui_hospedagem: inclHospedagem,
           roommate_preference: inclHospedagem ? (roommatePreference.trim() || undefined) : undefined,
           day_option_id: selectedDayOptionId || undefined,
+          early_arrival: inclHospedagem && earlyArrival,
+          late_departure: inclHospedagem && lateDeparture,
           ...(tokenInfo && selectedBailarinoId
             ? { discount_token: discountToken, bailarino_id: selectedBailarinoId }
             : {}),
@@ -562,15 +571,43 @@ const CheckoutWorkshop: React.FC = () => {
                 </div>
               </label>
               {inclHospedagem && (
-                <FieldLabel icon={UserIcon} label="Prefere compartilhar o quarto com alguém? (opcional)">
-                  <input
-                    type="text"
-                    value={roommatePreference}
-                    onChange={e => setRoommatePreference(e.target.value)}
-                    className={inputCls}
-                    placeholder="Nome de quem você quer dividir o quarto"
-                  />
-                </FieldLabel>
+                <>
+                  <FieldLabel icon={UserIcon} label="Prefere compartilhar o quarto com alguém? (opcional)">
+                    <input
+                      type="text"
+                      value={roommatePreference}
+                      onChange={e => setRoommatePreference(e.target.value)}
+                      className={inputCls}
+                      placeholder="Nome de quem você quer dividir o quarto"
+                    />
+                  </FieldLabel>
+                  {workshop.early_arrival_delta != null && (
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={earlyArrival}
+                        onChange={e => setEarlyArrival(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 accent-[#ff0068]"
+                      />
+                      <p className="text-sm font-bold text-white">
+                        Chegar um dia antes <span className="text-[#ff0068]">+{formatBRL(Number(workshop.early_arrival_delta))}</span>
+                      </p>
+                    </label>
+                  )}
+                  {workshop.late_departure_delta != null && (
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={lateDeparture}
+                        onChange={e => setLateDeparture(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 accent-[#ff0068]"
+                      />
+                      <p className="text-sm font-bold text-white">
+                        Sair um dia depois <span className="text-[#ff0068]">+{formatBRL(Number(workshop.late_departure_delta))}</span>
+                      </p>
+                    </label>
+                  )}
+                </>
               )}
             </div>
           )}
