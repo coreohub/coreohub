@@ -41,6 +41,7 @@ interface Workshop {
   preco_inscritos_mostra: number | null;
   gratis_para_inscritos: boolean;
   is_published: boolean;
+  hospedagem_delta: number | null;
 }
 
 interface Stock {
@@ -243,7 +244,12 @@ const PublicWorkshopPage: React.FC = () => {
               {stock?.active_lot_nome && (
                 <p className="text-[10px] font-black text-[#ff0068] uppercase tracking-widest mb-0.5">{stock.active_lot_nome}</p>
               )}
-              <p className="text-3xl font-black text-white">{fmtCurrency(precoAtivo)}</p>
+              <p className="text-3xl font-black text-white">{fmtCurrency(precoAtivo)} <span className="text-sm font-bold text-slate-400 align-middle">sem hospedagem</span></p>
+              {workshop.hospedagem_delta != null && precoAtivo != null && (
+                <p className="text-sm font-bold text-[#ff0068] mt-1">
+                  {fmtCurrency(Number(precoAtivo) + Number(workshop.hospedagem_delta))} <span className="text-slate-400 font-medium">com hospedagem</span>
+                </p>
+              )}
               {precoCombo != null && precoCombo < (precoAtivo ?? 0) && (
                 <p className="text-xs text-violet-300 mt-1">↓ {fmtCurrency(precoCombo)} para inscritos da mostra</p>
               )}

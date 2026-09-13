@@ -599,6 +599,10 @@ export default function CheckoutIngresso() {
         </button>
         </form>
 
+        <p className="text-center text-[11px] text-slate-500 mt-3">
+          Sua vaga só é confirmada após o pagamento ser aprovado.
+        </p>
+
         <div className="mt-4 flex items-center justify-center gap-2 text-[10px] text-slate-500">
           <ShieldCheck size={12} className="text-emerald-400" />
           Pagamento seguro processado por

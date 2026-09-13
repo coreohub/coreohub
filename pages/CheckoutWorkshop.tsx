@@ -702,6 +702,12 @@ const CheckoutWorkshop: React.FC = () => {
                 : `Comprar · ${formatBRL(breakdown?.charged ?? 0)}`}
           </button>
 
+          {breakdown?.charged !== 0 && (
+            <p className="text-center text-[11px] text-slate-500">
+              Sua vaga só é confirmada após o pagamento ser aprovado.
+            </p>
+          )}
+
           <div className="flex items-center justify-center gap-2 text-[10px] text-slate-500 uppercase tracking-widest">
             <ShieldCheck size={11} /> Pagamento seguro Asaas · CoreoHub
           </div>

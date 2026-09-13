@@ -66,6 +66,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
     modalidade: string | null; nivel: string; data_inicio: string;
     duracao_minutos: number | null; preco_padrao: number; gratis_para_inscritos: boolean;
     display_order: number | null; is_featured: boolean; featured_badge_text: string | null;
+    hospedagem_delta: number | null;
   }>>([]);
   // Lote vigente por workshop (id → {nome, preco}), pra exibir badge "1º lote"
   // + preço correto já na listagem (antes só a página de detalhe resolvia).
@@ -231,7 +232,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         // RLS já filtra is_published=true pra anon. Carrega só campos exibidos.
         const { data: wsData } = await supabase
           .from('workshops')
-          .select('id, slug, name, cover_url, professor_name, professor_bio, professor_photo_url, professor_instagram, professor_is_public, modalidade, nivel, data_inicio, duracao_minutos, preco_padrao, gratis_para_inscritos, display_order, is_featured, featured_badge_text')
+          .select('id, slug, name, cover_url, professor_name, professor_bio, professor_photo_url, professor_instagram, professor_is_public, modalidade, nivel, data_inicio, duracao_minutos, preco_padrao, gratis_para_inscritos, display_order, is_featured, featured_badge_text, hospedagem_delta')
           .eq('event_id', eventData.id)
           .eq('is_published', true)
           .order('data_inicio', { ascending: true });
@@ -1587,6 +1588,11 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                       {loteAtivo?.proximo && (
                         <p className="text-[10px] font-bold text-[#ff0068]">
                           <AvisoViradaLote preco={loteAtivo.proximo.preco} dataVirada={loteAtivo.proximo.dataVirada} dias={loteAtivo.proximo.dias} formatPreco={n => `R$ ${formatPrecoBR(n)}`} />
+                        </p>
+                      )}
+                      {ws.hospedagem_delta != null && (
+                        <p className="text-[10px] font-bold text-slate-400">
+                          + hospedagem: {(Number(preco) + Number(ws.hospedagem_delta)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </p>
                       )}
                       </div>
