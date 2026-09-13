@@ -49,8 +49,15 @@ const PAGES: Record<string, PageMeta> = {
   planos: {
     path: '/planos',
     title: 'Planos e preços — CoreoHub',
+    // Espelha PLANOS_DESCRIPTION em pages/Planos.tsx — 2 fontes de verdade
+    // desconectadas (SPA client-side vs. este HTML estático pra bot), já
+    // ficaram fora de sincronia uma vez (achado 2026-09-13, sessão da
+    // Lorrayne). Bots que NÃO executam JS (GPTBot/ClaudeBot/PerplexityBot/
+    // etc, todos no matcher de vercel.json) só veem esta versão — Googlebot
+    // renderiza JS e vê a versão real da SPA, mas os crawlers de IA (GEO/AEO)
+    // dependem inteiramente deste texto estar correto.
     description:
-      'Começo (10% sobre venda, sem taxa fixa), Essencial (R$250 + 5%) ou Escala (R$1.490 + R$2/participante, teto de 4,5%). Sem mensalidade — você paga proporcional ao que o festival fatura.',
+      'Começo (10% sobre inscrições, ingressos e workshops, sem taxa fixa), Essencial (R$250 + 5%) ou Escala (R$1.490 + R$2/participante, teto de 4,5%). Sem mensalidade — você paga proporcional ao que o festival fatura. Só a seletiva por vídeo tem taxa própria, configurável à parte.',
   },
 };
 

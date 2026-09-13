@@ -38,6 +38,11 @@ Deno.serve(async () => {
       { loc: SITE_URL, priority: 1.0, changefreq: 'daily' },
       { loc: `${SITE_URL}/festivais`, priority: 0.9, changefreq: 'daily' },
       { loc: `${SITE_URL}/criar-evento`, priority: 0.5, changefreq: 'monthly' },
+      // Faltava — achado 2026-09-13 durante a verificação de SEO/GEO/AEO
+      // pós-mudanças no simulador. Página real com meta/canonical/rewrite
+      // de bot (api/og-marketing.ts) próprios, mas nunca listada aqui —
+      // sem sitemap, discovery depende só de link interno/backlink.
+      { loc: `${SITE_URL}/planos`, priority: 0.7, changefreq: 'monthly' },
     ];
 
     const eventEntries = (events ?? []).map((ev) => {
