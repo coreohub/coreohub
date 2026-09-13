@@ -14,6 +14,11 @@
       "destination": "https://ghpltzzijlvykiytwslu.supabase.co/functions/v1/sitemap-xml"
     },
     {
+      "source": "/sitemap.xml",
+      "has": [{ "type": "host", "value": "coreohub.com" }],
+      "destination": "https://ghpltzzijlvykiytwslu.supabase.co/functions/v1/sitemap-xml"
+    },
+    {
       "source": "/evento/:slug",
       "has": [
         {
