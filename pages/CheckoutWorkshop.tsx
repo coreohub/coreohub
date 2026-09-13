@@ -413,7 +413,7 @@ const CheckoutWorkshop: React.FC = () => {
         </div>
       )}
 
-      <div className="max-w-2xl mx-auto px-4 py-6 -mt-8 relative">
+      <div className={`max-w-2xl mx-auto px-4 py-6 relative ${workshop?.cover_url ? '-mt-8' : ''}`}>
         <button onClick={() => navigate(`/workshop/${workshop?.slug ?? workshop?.id}`)} className="inline-flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068] mb-6">
           <ArrowLeft size={14} /> Voltar pro workshop
         </button>
