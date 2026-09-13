@@ -1726,6 +1726,170 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
       }
     }
 
+    // ─── 8c) Camp de Férias — Frentes 1-4 do modelo Vicenza Dance Camp ──────
+    // Mostra o módulo Workshops no papel de CAMP MULTI-DIA (sem mostra
+    // competitiva nenhuma): passe com/sem hospedagem, Day Pass com escolha
+    // de dia, chegada antecipada + saída estendida, capacidade diária
+    // combinada entre passes e pool de vagas de hospedagem por noite.
+    // Datas ficam 14-18 dias depois do festival principal (startDate) pra
+    // não se misturar visualmente com a mostra na vitrine/cronograma.
+    let campWorkshopsOk = 0
+    let campRegsOk = 0
+    try {
+      const isoDate = (offsetDays: number) =>
+        new Date(startDate.getTime() + offsetDays * 24 * 3600000).toISOString().slice(0, 10)
+      const campDatesOffsets = [14, 15, 16, 17, 18] // 5 dias corridos do camp
+
+      const campWorkshopsToInsert = [
+        {
+          event_id: eventId,
+          created_by: user.id,
+          name: 'Camp de Férias CoreoHub — Completo',
+          slug: `camp-ferias-completo-demo-${slugSuffix}`,
+          description: 'A experiência completa do camp: 5 dias de imersão com preparação física, técnica e repertório. Hospedagem em hotel parceiro incluída na opção com hospedagem.',
+          cover_url: null, // sem capa cadastrada de propósito — mesma situação real de produtor que ainda não subiu a arte, mostra o fallback funcionando
+          professor_name: 'Corpo Docente do Camp CoreoHub',
+          professor_bio: null, professor_bio_short: null, professor_photo_url: null, professor_instagram: null,
+          professor_is_public: false,
+          modalidade: 'Multi-modalidade', nivel: 'todos' as const,
+          data_inicio: `${isoDate(14)}T08:00:00.000Z`, data_fim: `${isoDate(18)}T20:00:00.000Z`,
+          duracao_minutos: null, local: 'Hotel parceiro — Serra Gaúcha (fictício)', capacidade_max: null,
+          preco_padrao: 497, preco_inscritos_mostra: null, gratis_para_inscritos: false, auto_detect_combo: false,
+          workshop_commission_percent: 10, workshop_fee_mode: 'repassar', workshop_max_per_cpf: 4, workshop_reservation_minutes: 10,
+          is_published: true, display_order: 1, is_featured: true, featured_badge_text: 'MELHOR CUSTO-BENEFÍCIO',
+          hospedagem_delta: 450, hospedagem_noites: campDatesOffsets.slice(0, 4).map(isoDate), // 4 noites, checkout no 5º dia
+          camp_dias: campDatesOffsets.map(isoDate),
+          early_arrival_delta: 140, late_departure_delta: 140,
+        },
+        {
+          event_id: eventId,
+          created_by: user.id,
+          name: 'Camp de Férias CoreoHub — Fim de Semana',
+          slug: `camp-ferias-fds-demo-${slugSuffix}`,
+          description: 'Os 2 últimos dias do camp, pra quem não pode participar da semana inteira.',
+          cover_url: null,
+          professor_name: 'Corpo Docente do Camp CoreoHub',
+          professor_bio: null, professor_bio_short: null, professor_photo_url: null, professor_instagram: null,
+          professor_is_public: false,
+          modalidade: 'Multi-modalidade', nivel: 'todos' as const,
+          data_inicio: `${isoDate(17)}T08:00:00.000Z`, data_fim: `${isoDate(18)}T20:00:00.000Z`,
+          duracao_minutos: null, local: 'Hotel parceiro — Serra Gaúcha (fictício)', capacidade_max: null,
+          preco_padrao: 197, preco_inscritos_mostra: null, gratis_para_inscritos: false, auto_detect_combo: false,
+          workshop_commission_percent: 10, workshop_fee_mode: 'repassar', workshop_max_per_cpf: 4, workshop_reservation_minutes: 10,
+          is_published: true, display_order: 2, is_featured: false, featured_badge_text: null,
+          hospedagem_delta: 150, hospedagem_noites: [isoDate(17)],
+          camp_dias: [isoDate(17), isoDate(18)],
+          early_arrival_delta: 140, late_departure_delta: null,
+        },
+        {
+          event_id: eventId,
+          created_by: user.id,
+          name: 'Camp de Férias CoreoHub — Day Pass',
+          slug: `camp-ferias-daypass-demo-${slugSuffix}`,
+          description: 'Escolha 1 dia do camp pra participar. Sujeito à disponibilidade daquele dia (capacidade combinada com os outros passes).',
+          cover_url: null,
+          professor_name: 'Corpo Docente do Camp CoreoHub',
+          professor_bio: null, professor_bio_short: null, professor_photo_url: null, professor_instagram: null,
+          professor_is_public: false,
+          modalidade: 'Multi-modalidade', nivel: 'todos' as const,
+          data_inicio: `${isoDate(14)}T08:00:00.000Z`, data_fim: `${isoDate(14)}T20:00:00.000Z`,
+          duracao_minutos: null, local: 'Hotel parceiro — Serra Gaúcha (fictício)', capacidade_max: null,
+          preco_padrao: 97, preco_inscritos_mostra: null, gratis_para_inscritos: false, auto_detect_combo: false,
+          workshop_commission_percent: 10, workshop_fee_mode: 'repassar', workshop_max_per_cpf: 4, workshop_reservation_minutes: 10,
+          is_published: true, display_order: 3, is_featured: false, featured_badge_text: null,
+          hospedagem_delta: 90, hospedagem_noites: null, // dinâmico — segue o dia escolhido no checkout (Frente 4)
+          camp_dias: null, // idem — dia escolhido já entra sozinho na capacidade combinada
+          early_arrival_delta: null, late_departure_delta: null,
+        },
+      ]
+
+      const { data: insertedCampWorkshops, error: campWsErr } = await supa
+        .from('workshops')
+        .insert(campWorkshopsToInsert)
+        .select('id, name')
+      if (campWsErr) {
+        console.warn('Falha ao inserir camp workshops:', campWsErr.message)
+      } else if (insertedCampWorkshops && insertedCampWorkshops.length === 3) {
+        campWorkshopsOk = insertedCampWorkshops.length
+        const [campCompleto, , campDayPass] = insertedCampWorkshops
+
+        // Vagas de hospedagem por noite (Frente 1) + capacidade diária
+        // combinada do evento (Frente 4) — mesmas 5 datas do camp.
+        const lodgingNightsToInsert = campDatesOffsets.slice(0, 4).map(off => ({
+          event_id: eventId, night_date: isoDate(off), capacity_max: 30,
+        }))
+        const { error: lodgingErr } = await supa.from('event_lodging_nights').insert(lodgingNightsToInsert)
+        if (lodgingErr) console.warn('Falha event_lodging_nights:', lodgingErr.message)
+
+        const dayCapacityToInsert = campDatesOffsets.map(off => ({
+          event_id: eventId, day_date: isoDate(off), capacity_max: 50,
+        }))
+        const { error: dayCapErr } = await supa.from('event_day_capacity').insert(dayCapacityToInsert)
+        if (dayCapErr) console.warn('Falha event_day_capacity:', dayCapErr.message)
+
+        // Dias disponíveis do Day Pass (Frente 2) — 1 opção por dia do camp.
+        const dayOptionsToInsert = campDatesOffsets.map((off, i) => ({
+          workshop_id: campDayPass.id,
+          day_date: isoDate(off),
+          label: `Dia ${i + 1} do camp`,
+          capacity_max: null,
+        }))
+        const { error: dayOptErr } = await supa.from('workshop_day_options').insert(dayOptionsToInsert)
+        if (dayOptErr) console.warn('Falha workshop_day_options:', dayOptErr.message)
+
+        // Inscrições reais no Camp Completo — algumas com hospedagem, colega
+        // de quarto e chegada antecipada, pra "Ver hóspedes por noite" não
+        // aparecer vazio quando o produtor for explorar o demo.
+        const campRegsToInsert: any[] = []
+        for (let i = 0; i < 5; i++) {
+          const isFem = Math.random() < 0.7
+          const nome = randomNomeCompleto(isFem)
+          const inclui = i < 4 // 4 de 5 incluem hospedagem
+          const earlyArr = inclui && i < 2
+          const preco = 497
+          const totalPago = preco + (inclui ? 450 : 0) + (earlyArr ? 140 : 0)
+          const commission = +(totalPago * 0.1).toFixed(2)
+          campRegsToInsert.push({
+            workshop_id: campCompleto.id,
+            workshop_lot_id: null, lot_nome: null, lot_ordem: null,
+            buyer_name: nome,
+            buyer_email: `${nome.toLowerCase().replace(/\s+/g, '.').normalize('NFD').replace(/[̀-ͯ]/g, '')}@demo.coreohub.local`,
+            buyer_cpf: generateValidCpf(),
+            buyer_phone: `119${Math.floor(Math.random() * 1e8).toString().padStart(8, '0')}`,
+            user_id: null, combo_registration_id: null, is_combo: false,
+            preco_base: preco, preco_pago: totalPago, status_pagamento: 'APROVADO',
+            commission_amount: commission, producer_amount: totalPago - commission, fee_mode: 'repassar',
+            attended: false, attended_at: null, paid_at: new Date().toISOString(), payment_method: 'PIX',
+            inclui_hospedagem: inclui,
+            roommate_preference: inclui && i % 2 === 0 ? randomNomeCompleto(Math.random() < 0.5) : null,
+            early_arrival: earlyArr, late_departure: false,
+          })
+        }
+        const { data: insertedCampRegs, error: campRegErr } = await supa
+          .from('workshop_registrations')
+          .insert(campRegsToInsert)
+          .select('id, inclui_hospedagem')
+        if (campRegErr) {
+          console.warn('Falha camp workshop_registrations:', campRegErr.message)
+        } else if (insertedCampRegs) {
+          campRegsOk = insertedCampRegs.length
+          const lodgingNightsRowsToInsert: any[] = []
+          insertedCampRegs.forEach((r: any) => {
+            if (!r.inclui_hospedagem) return
+            campDatesOffsets.slice(0, 4).forEach(off => {
+              lodgingNightsRowsToInsert.push({ workshop_registration_id: r.id, night_date: isoDate(off) })
+            })
+          })
+          if (lodgingNightsRowsToInsert.length > 0) {
+            const { error: wrlnErr } = await supa.from('workshop_registration_lodging_nights').insert(lodgingNightsRowsToInsert)
+            if (wrlnErr) console.warn('Falha workshop_registration_lodging_nights:', wrlnErr.message)
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn('Falha no seed do camp de férias:', e?.message ?? e)
+    }
+
     // ─── 9) Cupons (Tier 2 plateia + Workshops) ─────────────────────────────
     let couponsOk = 0
     const couponsToInsert = DEMO_COUPONS.map(c => ({
@@ -1915,6 +2079,8 @@ Inscrições por lotes com desconto progressivo. Garante seu lugar no 1º lote!`
         workshops: workshopsOk,
         workshop_lots: lotesOk,
         workshop_registrations: workshopRegsOk,
+        camp_workshops: campWorkshopsOk,
+        camp_registrations: campRegsOk,
         coupons: couponsOk,
         audience_tickets: audienceTicketsOk,
       },
