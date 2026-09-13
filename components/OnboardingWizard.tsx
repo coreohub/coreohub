@@ -24,9 +24,9 @@ type Step = 1 | 2 | 3;
 type PlanoId = 'comeco' | 'essencial' | 'escala';
 const VALID_PLANOS: PlanoId[] = ['comeco', 'essencial', 'escala'];
 const PLANO_LABELS: Record<PlanoId, { nome: string; resumo: string }> = {
-  comeco:    { nome: 'Começo',    resumo: '10% sobre venda · R$ 0 mínimo, só paga se vender.' },
-  essencial: { nome: 'Essencial', resumo: 'R$ 250 fixo (cobrado agora) + 5% sobre venda.' },
-  escala:    { nome: 'Escala',    resumo: 'R$ 1.490 fixo (cobrado agora) + R$ 2/participante, teto de 4,5%.' },
+  comeco:    { nome: 'Começo',    resumo: '10% sobre inscrições, ingressos e workshops · R$ 0 mínimo, só paga se vender.' },
+  essencial: { nome: 'Essencial', resumo: 'R$ 250 fixo (cobrado agora) + 5% sobre inscrições, ingressos e workshops.' },
+  escala:    { nome: 'Escala',    resumo: 'R$ 1.490 fixo (cobrado agora) + R$ 2/participante, teto de 4,5% sobre inscrições, ingressos e workshops.' },
 };
 
 /** Mescla arrays de configs sem duplicar por `name` — primeira ocorrência vence. */
