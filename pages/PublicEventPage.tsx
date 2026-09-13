@@ -1595,7 +1595,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                       <p className="text-xs text-slate-400">com {ws.professor_name}</p>
                       <p className="text-[11px] text-slate-500">{dataFmt}{ws.duracao_minutos ? ` · ${ws.duracao_minutos}min` : ''}</p>
                       {featured && ws.description && (
-                        <p className="text-xs font-bold text-amber-200/90 uppercase tracking-wide whitespace-pre-line leading-relaxed pt-1">
+                        <p className="text-xs font-medium text-amber-200/90 whitespace-pre-line leading-relaxed pt-1">
                           {ws.description}
                         </p>
                       )}
