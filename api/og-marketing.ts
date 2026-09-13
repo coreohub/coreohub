@@ -31,6 +31,8 @@ type PageMeta = {
   path: string;
   title: string;
   description: string;
+  /** Imagem própria pra essa página. Sem isso, cai no DEFAULT_IMAGE (foto do Hero da home). */
+  image?: string;
 };
 
 const PAGES: Record<string, PageMeta> = {
@@ -58,11 +60,16 @@ const PAGES: Record<string, PageMeta> = {
     // dependem inteiramente deste texto estar correto.
     description:
       'Começo (10% sobre inscrições, ingressos e workshops, sem taxa fixa), Essencial (R$250 + 5%) ou Escala (R$1.490 + R$2/participante, teto de 4,5%). Sem mensalidade — você paga proporcional ao que o festival fatura. Só a seletiva por vídeo tem taxa própria, configurável à parte.',
+    // Imagem própria (cartões Começo/Essencial/Escala) — sem isso, compartilhar
+    // o link de Planos mostrava a mesma foto do Hero da home, sem relação
+    // nenhuma com preço/comercial. Achado 2026-09-13.
+    image: `${SITE_URL}/og-planos.jpg`,
   },
 };
 
 const html = (meta: PageMeta): string => {
   const url = `${SITE_URL}${meta.path}`;
+  const image = meta.image ?? DEFAULT_IMAGE;
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -74,7 +81,7 @@ const html = (meta: PageMeta): string => {
 <!-- Open Graph (WhatsApp, Telegram, Facebook, Instagram, LinkedIn) -->
 <meta property="og:title" content="${esc(meta.title)}">
 <meta property="og:description" content="${esc(meta.description)}">
-<meta property="og:image" content="${esc(DEFAULT_IMAGE)}">
+<meta property="og:image" content="${esc(image)}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:url" content="${esc(url)}">
@@ -86,7 +93,7 @@ const html = (meta: PageMeta): string => {
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${esc(meta.title)}">
 <meta name="twitter:description" content="${esc(meta.description)}">
-<meta name="twitter:image" content="${esc(DEFAULT_IMAGE)}">
+<meta name="twitter:image" content="${esc(image)}">
 
 <link rel="canonical" href="${esc(url)}">
 </head>
