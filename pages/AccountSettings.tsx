@@ -2288,9 +2288,15 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         nome_evento:         general.eventName,
         local_evento:        general.location,
         cidade_estado:       general.city,
-        data_evento:         general.eventDate,
-        prazo_inscricao:     general.regDeadline,
-        prazo_trilhas:       general.trackDeadline,
+        data_evento:         general.eventDate || null,
+        // prazo_inscricao/prazo_trilhas são colunas `date` de verdade no banco
+        // (a migration original documentava `text`, mas foi alterada direto
+        // via SQL Editor sem nunca virar migration nova) — string vazia
+        // quebra com "invalid input syntax for type date". Só passou a
+        // acontecer agora que esses campos podem ficar vazios de verdade
+        // (antes sempre tinham o valor fantasma preenchendo).
+        prazo_inscricao:     general.regDeadline || null,
+        prazo_trilhas:       general.trackDeadline || null,
         tipos_apresentacao:  general.tipos_apresentacao,
         escala_notas:        general.scoreScale,
         pin_inactivity_minutes: general.pinInactivityMinutes,
@@ -2890,11 +2896,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       // trava o produtor, volta pro texto livre de sempre.
                       <input type="text" value={general.city} onChange={e => setGeneral({ ...general, city: e.target.value })} placeholder="Votuporanga, SP" className={input} />
                     ) : (
-                      <div className="grid grid-cols-[76px_1fr] gap-2">
+                      <div className="grid grid-cols-[92px_1fr] gap-2">
                         <select
                           value={selectedUf}
                           onChange={e => { setSelectedUf(e.target.value); setSelectedCity(''); }}
-                          className={input}
+                          className={`${input} px-3!`}
                           aria-label="Estado (UF)"
                         >
                           <option value="" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">UF</option>
