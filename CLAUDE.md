@@ -2,7 +2,7 @@
 
 Gestão inteligente pra festivais de dança (BR). SaaS multi-tenant onde produtor cadastra evento, recebe inscrições, vende ingressos, roda júri/cronograma/premiação, gera certificados, e o público compra ingresso e baixa material.
 
-Em produção: 77 arquivos em `pages/`, 39 componentes compartilhados, 61 edge functions Supabase (62 pastas menos `_shared`), 195 migrations SQL. Números corrigidos e mantidos atualizados após a auditoria de código morto de 2026-09-10 (ver Histórico recente) — a versão anterior desta linha (~71/~30/31/90+, depois 82/43/61/192) ficou defasada 2x na mesma sessão só de rodar a limpeza.
+Em produção: 77 arquivos em `pages/`, 39 componentes compartilhados, 61 edge functions Supabase (62 pastas menos `_shared`), 200 migrations SQL. Números corrigidos e mantidos atualizados após a auditoria de código morto de 2026-09-10 (ver Histórico recente) — a versão anterior desta linha (~71/~30/31/90+, depois 82/43/61/192) ficou defasada 2x na mesma sessão só de rodar a limpeza.
 
 ## Produto
 
@@ -247,6 +247,16 @@ Setup técnico em `scripts/README-playwright.md`. Read-only enforced (só `goto`
 ## Histórico recente (últimas ~2 semanas)
 
 Cronológico inverso. Detalhes individuais em `memory/`.
+
+### 2026-09-13 — Vicenza Dance Camp: lote avança por quantidade + description no card + gap real achado e corrigido ✅ SHIPADO EM PRODUÇÃO
+
+Continuação da configuração do evento Vicenza Dance Camp 2027 (Lorrayne, mesma conta do Lyris Dance Competition — ver [[vicenza_dance_camp_planejamento_2026_09_12]]). 2 commits (`b016d38`, `b45a0ad`), merge `dev→main` autorizado e feito (fast-forward, sem conflitos), em produção real.
+
+- **`get_workshop_stock()` recriada** — escolha do lote ativo agora considera esgotamento por QUANTIDADE, não só janela de data. Regra em 2 estágios: lotes com `data_inicio` explícita continuam preferindo a maior ordem já iniciada (preserva o fix de 2026-06-23); sem isso, cai pros lotes sem nenhuma data e pega o de menor ordem ainda não esgotado por `quantidade_maxima`, avançando sozinho quando esgota. Padrão confirmado em Eventbrite/Ticket Tailor (tiered pricing com progressão automática por quantidade) antes de implementar. **Bug achado no smoke**: rascunho tinha `SELECT capacidade_max ... FROM workshops` sem alias — ambíguo com o OUT param da própria função, o mesmo erro já corrigido uma vez em 2026-06-24 (`w.capacidade_max`) que se perdeu ao recriar a função do zero. Corrigido antes de aplicar. Validado via smoke transacional (BEGIN/ROLLBACK) com 2 cenários: progressão só-por-quantidade (0→14→15 vendidos, troca exata no 15º) + regressão do caso por data de 2026-06-23 — ambos OK.
+- **`workshops.description` passa a renderizar no card destacado da vitrine** (`pages/PublicEventPage.tsx`) — campo já existia no schema, nunca era buscado nem exibido. Adicionado ao select + tipo do state + parágrafo condicional (só quando `is_featured`).
+- **Descrição do evento enriquecida** — parágrafo real da Lorrayne (bolsas/oportunidades/conexões, texto dela, não reescrito) apendado em `events.description` + `configuracoes.descricao` (dual-row), via SQL idempotente.
+- **🚨 Gap real achado DEPOIS de mandar a mensagem de status pra cliente**: auditoria completa no banco pra confirmar o que foi comunicado revelou que o Vicenza Experience só tinha **1 lote cadastrado** (Lançamento, R$697, `quantidade_maxima=15`) — nenhum 2º lote. Sem ele, quando as 15 vagas esgotassem, `get_workshop_stock` não achava nenhum lote ativo, e 2 coisas ruins aconteciam ao mesmo tempo: o checkout caía no fallback `preco_padrao` (não subia de preço, quebrando a promessa) E a flag de esgotado ficava `FALSE` por acidente do fallback (venda ilimitada e silenciosa a R$697). Corrigido com INSERT direto do "1º Lote" (ordem 2, R$797 — valor já mencionado por ela na config original, sem limite de quantidade). Confirmado via `get_workshop_stock` ao vivo pós-fix. **Lição**: toda feature tipo "avança sozinho entre lotes/tiers" comunicada como pronta merece checar se TODOS os degraus da escada existem, não só o 1º — lógica perfeita não serve de nada se faltar o próximo degrau.
+- **Validação**: `npm run lint` + `npm run build` limpos nos 2 commits de código.
 
 ### 2026-09-10 — Auditoria completa de código morto (Fases 1-3) ✅ SHIPADO — encerrada de propósito antes da Fase 4 granular
 
