@@ -251,7 +251,7 @@ const Festivais = () => {
               <span className="inline-block pr-4 text-[#ff0068]">próximo palco</span>
             </h1>
             <p className="text-slate-400 text-lg max-w-xl leading-relaxed">
-              Festivais, mostras e batalhas de dança em todo o Brasil. Filtre por estado e mês, encontre o seu e inscreva-se em segundos.
+              Festivais, mostras e camps de dança em todo o Brasil. Filtre por estado e mês, encontre o seu e inscreva-se em segundos.
             </p>
           </motion.div>
         </div>
