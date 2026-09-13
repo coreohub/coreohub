@@ -1531,6 +1531,13 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   // Tier 1 paid tickets (vivem em events.audience_*)
   const [audienceSalesEnabled, setAudienceSalesEnabled] = useState<boolean>(false);
   const [audienceCommissionPercent, setAudienceCommissionPercent] = useState<number>(10);
+  // TRUE quando o admin editou audienceCommissionPercent na mão nesta tela —
+  // enquanto FALSE, o trigger de banco mantém esse valor em sincronia com o
+  // billing_plan do evento (ver migration 20260913d). Só sobrescrevemos pra
+  // TRUE quando o próprio input é tocado, nunca em qualquer outro save da
+  // página (senão o save genérico de qualquer produtor reenviaria o valor
+  // carregado e apagaria a distinção "nunca foi tocado" vs "foi customizado").
+  const [audienceCommissionPercentManual, setAudienceCommissionPercentManual] = useState<boolean>(false);
   const [audienceFeeMode, setAudienceFeeMode] = useState<'repassar' | 'absorver'>('repassar');
   const [audienceMaxPerCpf, setAudienceMaxPerCpf] = useState<number>(6);
   const [audienceMaxPerPurchase, setAudienceMaxPerPurchase] = useState<number>(6);
@@ -1967,7 +1974,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         let myEvent: any = null;
         if (user) {
           const evRes = await supabase
-            .from('events').select('id, slug, name, description, cover_url, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, producer_ga4_id, producer_meta_pixel_id')
+            .from('events').select('id, slug, name, description, cover_url, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, audience_sales_enabled, audience_commission_percent, audience_commission_percent_manual, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, producer_ga4_id, producer_meta_pixel_id')
             .eq('id', selectedEventId)
             .maybeSingle();
           // select() amplo sem checar error mascara coluna ausente como "não
@@ -2035,6 +2042,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             if ((myEvent as any).audience_commission_percent != null) {
               setAudienceCommissionPercent(Number((myEvent as any).audience_commission_percent));
             }
+            setAudienceCommissionPercentManual(!!(myEvent as any).audience_commission_percent_manual);
             if ((myEvent as any).audience_fee_mode) {
               setAudienceFeeMode((myEvent as any).audience_fee_mode);
             }
@@ -2490,6 +2498,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           // Tier 1 paid tickets
           audience_sales_enabled:        audienceSalesEnabled && politicaIngressos === 'INTERNO',
           audience_commission_percent:   audienceCommissionPercent,
+          audience_commission_percent_manual: audienceCommissionPercentManual,
           audience_fee_mode:             audienceFeeMode,
           audience_max_per_cpf:          audienceMaxPerCpf,
           audience_max_per_purchase:     audienceMaxPerPurchase,
@@ -3912,10 +3921,13 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                                 type="number"
                                 min={0} max={100} step={0.5}
                                 value={audienceCommissionPercent}
-                                onChange={e => setAudienceCommissionPercent(Number(e.target.value))}
+                                onChange={e => { setAudienceCommissionPercent(Number(e.target.value)); setAudienceCommissionPercentManual(true); }}
                                 className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold focus:outline-none focus:border-[#ff0068]/50"
                               />
                               <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 font-bold">⚙️ Admin: editável só pra você. Produtores veem como fixo.</p>
+                              {audienceCommissionPercentManual && (
+                                <p className="text-[10px] text-slate-400 mt-1">Customizado manualmente — não muda mais sozinho se o plano do evento trocar.</p>
+                              )}
                             </>
                           ) : (
                             <>
