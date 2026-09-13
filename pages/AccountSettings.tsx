@@ -20,7 +20,7 @@ import DemoSettingsTab from '../components/DemoSettingsTab';
 import {
   Settings, Clock, Save, Plus, Pencil, Trash2, Check, Info,
   Music2, DollarSign, Users, AlertTriangle,
-  Clapperboard, Link2, CheckSquare, Square, X,
+  Clapperboard, CheckSquare, Square, X,
   ChevronDown, ChevronRight, ToggleLeft, ToggleRight, Loader2, Sparkles,
   Scale, ArrowUp, ArrowDown, Copy, GripVertical,
   Trophy, Star, Zap, Crown, Shirt, Award, Lock, Medal,
@@ -324,7 +324,6 @@ type TabType =
   | 'Categorias'
   | 'Tolerância'
   | 'Fluxo do Evento'
-  | 'Redirecionamentos'
   | 'Pagamentos'
   | 'Demo';
 
@@ -342,8 +341,7 @@ const TABS: { label: TabType; icon: React.ElementType }[] = [
   { label: 'Tolerância',        icon: AlertTriangle },   // 5a. Regras de idade
   { label: 'Fluxo do Evento',   icon: Clapperboard },    // 5b. Narração, marcação
   { label: 'Pagamentos',        icon: CreditCard },      // 6. Conta Asaas
-  { label: 'Redirecionamentos', icon: Link2 },           // 7a. Links personalizados (avançado)
-  { label: 'Demo',              icon: Sparkles },        // 7b. Sandbox (avançado)
+  { label: 'Demo',              icon: Sparkles },        // 7. Sandbox (avançado)
 ];
 
 const TIPOS_APRESENTACAO_OPTIONS = [
@@ -1534,7 +1532,6 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [formats, setFormats] = useState<any[]>(DEFAULT_FORMATS);
   const [categories, setCategories] = useState<any[]>(DEFAULT_CATEGORIES);
   const [nivelTecnicoEnabled,  setNivelTecnicoEnabled]  = useState<boolean>(false);
-  const [links,   setLinks]   = useState<any[]>([]);
 
   /* ── Gêneros (Eixo Técnico) ── */
   const [genres,        setGenres]        = useState<EventStyle[]>([]);
@@ -2118,7 +2115,6 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           setFormats(data.formatos?.length ? data.formatos.map(migrateFormat) : DEFAULT_FORMATS);
           setCategories(data.categorias?.length ? data.categorias : DEFAULT_CATEGORIES);
           setNivelTecnicoEnabled(!!data.nivel_tecnico_enabled);
-          setLinks(data.links || []);
           if (data.tolerancia) setToleranceRule(data.tolerancia);
           if (data.age_reference) setAgeReference(data.age_reference as 'EVENT_DAY' | 'YEAR_END' | 'FIXED_DATE');
           if (data.age_reference_date) setAgeRefDate(data.age_reference_date);
@@ -2302,7 +2298,6 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         tempo_marcacao_palco: flowConfig.tempo_marcacao_palco,
         gatilho_marcacao:     flowConfig.gatilho_marcacao,
         modo_sonoplastia:     flowConfig.modo_sonoplastia,
-        links,
         regras_avaliacao:    { globalRules, overrides: genreOverrides, artisticRules, pesoTecnico, pesoArtistico } satisfies EvalConfig,
         // FIX 2026-05-17 (pós-incidente Usualdance): só salva premios_especiais
         // se foi carregado do banco OU se o user tocou na lista. Sem isso, save
@@ -2537,7 +2532,6 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const handleDelete = (id: number | string) => {
     if (activeTab === 'Formações')         setFormats(formats.filter(f => f.id !== id));
     if (activeTab === 'Categorias')        setCategories(categories.filter(c => c.id !== id));
-    if (activeTab === 'Redirecionamentos') setLinks(links.filter((_: any, i: number) => i !== id));
   };
   const handleModalSubmit = () => {
     if (activeTab === 'Formações') {
@@ -2571,10 +2565,6 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     if (activeTab === 'Categorias') {
       if (modalMode === 'add') setCategories([...categories, { ...tempValue, id: Date.now() }]);
       else setCategories(categories.map(c => c.id === editingId ? { ...tempValue, id: editingId } : c));
-    }
-    if (activeTab === 'Redirecionamentos') {
-      if (modalMode === 'add') setLinks([...links, tempValue]);
-      else setLinks(links.map((l: any, i: number) => i === editingId ? tempValue : l));
     }
     setIsModalOpen(false);
   };
@@ -5168,33 +5158,6 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           </div>
         );
 
-      /* ── REDIRECIONAMENTOS ── */
-      case 'Redirecionamentos':
-        return (
-          <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
-            <CRUDHeader title="Links & Redirecionamentos" onAdd={openAdd} />
-            <div className="space-y-3">
-              {links.map((lk: any, i: number) => (
-                <Row key={i}>
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="w-9 h-9 bg-[#ff0068]/10 rounded-xl flex items-center justify-center text-[#ff0068] shrink-0">
-                      <Link2 size={15} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-black text-sm text-slate-900 dark:text-white uppercase truncate">{lk.label || 'Link sem título'}</p>
-                      <p className="text-[10px] text-slate-500 truncate">{lk.url}</p>
-                    </div>
-                  </div>
-                  <ActBtns onEdit={() => openEdit(i, lk)} onDelete={() => handleDelete(i)} />
-                </Row>
-              ))}
-              {links.length === 0 && (
-                <p className="text-center text-slate-400 py-8 text-sm">Nenhum redirecionamento cadastrado.</p>
-              )}
-            </div>
-          </div>
-        );
-
       /* ── PAGAMENTOS ── */
       case 'Pagamentos':
         return (
@@ -7000,19 +6963,6 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     : 'Deixe Mín. e Máx. vazios pra "Todas as idades" (ex: Mista, Dança Inclusiva)'}
                 </p>
               </div>
-            </div>
-          </div>
-        );
-      case 'Redirecionamentos':
-        return (
-          <div className="space-y-4">
-            <div>
-              <label className={label}>Título do Link</label>
-              <input type="text" value={tempValue.label || ''} onChange={e => setTempValue((v: any) => ({ ...v, label: e.target.value }))} placeholder="Ex: Regulamento, WhatsApp..." className={input} autoFocus />
-            </div>
-            <div>
-              <label className={label}>URL</label>
-              <input type="url" value={tempValue.url || ''} onChange={e => setTempValue((v: any) => ({ ...v, url: e.target.value }))} placeholder="https://..." className={input} />
             </div>
           </div>
         );
