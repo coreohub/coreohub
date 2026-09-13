@@ -461,12 +461,19 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   // TODAS as compras da vitrine — inscrição, ingresso e workshop/pass.
   const eventOver = isEventOver(event);
 
+  // Evento tem inscrição competitiva (mostra) configurada? Camps/workshops
+  // puros (ex: colônia de férias) não têm formações — sem isso, badge/CTA
+  // de "Inscrições"/"Resultados" apareciam mesmo sem nenhuma modalidade
+  // pra inscrever, apontando pro Wizard vazio.
+  const hasFormacoes = Array.isArray(event.formacoes_config) && event.formacoes_config.length > 0;
+
   // Prazo real de inscrição vem de configuracoes.prazo_inscricao (campo que o
   // produtor preenche em Configurações → Geral). `event.registration_start_date`/
   // `registration_end_date` são colunas declaradas em types.ts mas nunca
   // migradas no banco — não usar (ficavam sempre undefined, então o botão
   // nunca desabilitava de fato).
   const isRegistrationOpen = (() => {
+    if (!hasFormacoes) return false;
     if (eventOver) return false;
     const prazo = config?.prazo_inscricao;
     if (!prazo) return true;
@@ -1483,7 +1490,11 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
               <BrandIcon size={24} /> Workshops
             </h2>
-            <p className="text-xs text-slate-400">Aprimore sua técnica com quem é referência. Inscritos da mostra têm preço especial.</p>
+            <p className="text-xs text-slate-400">
+              {hasFormacoes
+                ? 'Aprimore sua técnica com quem é referência. Inscritos da mostra têm preço especial.'
+                : 'Aprimore sua técnica com quem é referência.'}
+            </p>
 
             {/* Passes (Day Pass/Full Pass) — destaque acima dos workshops avulsos,
                 padrão de convenções de dança (NUVO/JUMP): pacote por nível de acesso. */}
@@ -1670,9 +1681,13 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         {/* CTA */}
         <div className="bg-gradient-to-r from-[#ff0068]/20 to-transparent border border-[#ff0068]/20 rounded-[3rem] p-10 flex flex-col md:flex-row items-center justify-between gap-8">
           <div>
-            <h3 className="text-3xl font-black uppercase tracking-tighter italic">Pronto para dançar?</h3>
+            <h3 className="text-3xl font-black uppercase tracking-tighter italic">
+              {hasFormacoes ? 'Pronto para dançar?' : 'Pronto pra viver essa experiência?'}
+            </h3>
             <p className="text-slate-400 text-sm mt-2">
-              {isRegistrationOpen ? 'As inscrições estão abertas. Garanta sua vaga agora.' : 'Inscrições encerradas.'}
+              {hasFormacoes
+                ? (isRegistrationOpen ? 'As inscrições estão abertas. Garanta sua vaga agora.' : 'Inscrições encerradas.')
+                : (hasWorkshopsSection ? 'Escolha seu pass e garanta sua vaga.' : 'Confira os detalhes do evento acima.')}
             </p>
           </div>
           <div className="flex flex-col gap-3 min-w-[200px]">
@@ -1685,12 +1700,23 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 Inscreva-se <ChevronRight size={16} />
               </Link>
             )}
-            <Link
-              to={`/festival/${slugOrId}/leaderboard`}
-              className="px-8 py-4 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:border-[#ff0068]/50 transition-all flex items-center justify-center gap-2"
-            >
-              <Trophy size={16} /> Resultados
-            </Link>
+            {!hasFormacoes && hasWorkshopsSection && (
+              <button
+                type="button"
+                onClick={() => scrollToSection('workshops')}
+                className="px-8 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30 flex items-center justify-center gap-2"
+              >
+                Ver workshops <ChevronRight size={16} />
+              </button>
+            )}
+            {hasFormacoes && (
+              <Link
+                to={`/festival/${slugOrId}/leaderboard`}
+                className="px-8 py-4 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:border-[#ff0068]/50 transition-all flex items-center justify-center gap-2"
+              >
+                <Trophy size={16} /> Resultados
+              </Link>
+            )}
           </div>
         </div>
 
