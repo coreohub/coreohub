@@ -175,8 +175,8 @@ const WorkshopsManagement: React.FC = () => {
     is_featured: false,
     featured_badge_text: '',
     hospedagem_delta: '' as string | number,
-    hospedagem_noites: '', // texto: datas separadas por vírgula, YYYY-MM-DD
-    camp_dias: '', // texto: datas separadas por vírgula, YYYY-MM-DD — capacidade diária combinada
+    hospedagem_noites: [] as string[], // datas YYYY-MM-DD, selecionadas via input date + chips
+    camp_dias: [] as string[], // datas YYYY-MM-DD — capacidade diária combinada
     early_arrival_delta: '' as string | number,
     late_departure_delta: '' as string | number,
   };
@@ -311,8 +311,8 @@ const WorkshopsManagement: React.FC = () => {
       is_featured: w.is_featured,
       featured_badge_text: w.featured_badge_text ?? '',
       hospedagem_delta: w.hospedagem_delta ?? '',
-      hospedagem_noites: Array.isArray(w.hospedagem_noites) ? w.hospedagem_noites.join(', ') : '',
-      camp_dias: Array.isArray(w.camp_dias) ? w.camp_dias.join(', ') : '',
+      hospedagem_noites: Array.isArray(w.hospedagem_noites) ? w.hospedagem_noites : [],
+      camp_dias: Array.isArray(w.camp_dias) ? w.camp_dias : [],
       early_arrival_delta: w.early_arrival_delta ?? '',
       late_departure_delta: w.late_departure_delta ?? '',
     });
@@ -335,26 +335,14 @@ const WorkshopsManagement: React.FC = () => {
     if (form.capacidade_max !== '' && Number(form.capacidade_max) < 1) {
       return setFormError('Capacidade deve ser pelo menos 1');
     }
-    const hospedagemNoitesParsed = form.hospedagem_noites
-      .split(',')
-      .map((s: string) => s.trim())
-      .filter(Boolean);
-    if (hospedagemNoitesParsed.some((d: string) => !/^\d{4}-\d{2}-\d{2}$/.test(d))) {
-      return setFormError('Noites de hospedagem devem estar no formato AAAA-MM-DD, separadas por vírgula');
-    }
+    const hospedagemNoitesParsed: string[] = form.hospedagem_noites ?? [];
     if (form.hospedagem_delta !== '' && hospedagemNoitesParsed.length === 0) {
       return setFormError('Informe as noites de hospedagem (ou limpe o valor do acréscimo)');
     }
     if (form.hospedagem_delta === '' && hospedagemNoitesParsed.length > 0) {
       return setFormError('Informe o valor do acréscimo de hospedagem (ou limpe as noites)');
     }
-    const campDiasParsed = form.camp_dias
-      .split(',')
-      .map((s: string) => s.trim())
-      .filter(Boolean);
-    if (campDiasParsed.some((d: string) => !/^\d{4}-\d{2}-\d{2}$/.test(d))) {
-      return setFormError('Dias de camp devem estar no formato AAAA-MM-DD, separados por vírgula');
-    }
+    const campDiasParsed: string[] = form.camp_dias ?? [];
     if (form.early_arrival_delta !== '' && form.hospedagem_delta === '') {
       return setFormError('Chegada antecipada exige hospedagem configurada nesse pass');
     }
@@ -1765,6 +1753,23 @@ interface WorkshopFormModalProps {
 const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, formError, saving, isEdit, events, judges, onClose, onSave }) => {
   const upd = (k: string, v: any) => setForm((p: any) => ({ ...p, [k]: v }));
 
+  // "Noites cobertas"/"Dias de camp" — chips de data + input nativo, em vez de
+  // texto cru separado por vírgula (frágil pro produtor digitar sem erro).
+  const [newHospedagemNoite, setNewHospedagemNoite] = useState('');
+  const [newCampDia, setNewCampDia] = useState('');
+  const fmtDataBR = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR');
+  const addDateToField = (field: 'hospedagem_noites' | 'camp_dias', value: string, reset: (v: string) => void) => {
+    if (!value) return;
+    const atual: string[] = form[field] ?? [];
+    if (!atual.includes(value)) {
+      upd(field, [...atual, value].sort());
+    }
+    reset('');
+  };
+  const removeDateFromField = (field: 'hospedagem_noites' | 'camp_dias', value: string) => {
+    upd(field, (form[field] ?? []).filter((d: string) => d !== value));
+  };
+
   // Reaproveitar jurado já cadastrado como professor (snapshot/cópia — não
   // vincula). Pré-preenche nome/foto/bio/@; campos seguem editáveis depois.
   const applyJudge = (judgeId: string) => {
@@ -2070,8 +2075,25 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
               <Field label="Acréscimo (R$)">
                 <input type="number" step="0.01" value={form.hospedagem_delta} onChange={e => upd('hospedagem_delta', e.target.value)} className={inputCls} placeholder="vazio = sem hospedagem" />
               </Field>
-              <Field label="Noites cobertas (AAAA-MM-DD, separadas por vírgula)">
-                <input value={form.hospedagem_noites} onChange={e => upd('hospedagem_noites', e.target.value)} className={inputCls} placeholder="2027-01-18, 2027-01-19, ..." />
+              <Field label="Noites cobertas">
+                {form.hospedagem_noites.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {form.hospedagem_noites.map((d: string) => (
+                      <span key={d} className="inline-flex items-center gap-1 rounded-full bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-slate-200 text-xs font-bold px-2.5 py-1">
+                        {fmtDataBR(d)}
+                        <button type="button" onClick={() => removeDateFromField('hospedagem_noites', d)} aria-label={`Remover ${fmtDataBR(d)}`} className="text-slate-500 hover:text-rose-500">
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input type="date" value={newHospedagemNoite} onChange={e => setNewHospedagemNoite(e.target.value)} className={inputCls} />
+                  <button type="button" onClick={() => addDateToField('hospedagem_noites', newHospedagemNoite, setNewHospedagemNoite)} className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-[#ff0068] px-3 py-2 text-xs font-bold text-white hover:bg-[#ff1a78] transition">
+                    <Plus size={14} /> Adicionar
+                  </button>
+                </div>
               </Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
@@ -2088,8 +2110,25 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Dias-calendário que este pass ocupa pra fins de teto diário do evento (soma junto com todos os outros passes na mesma data). Configure o teto por dia no botão "Capacidade diária" no topo da lista. Deixe vazio se este pass não deve entrar nessa conta (ex: quando o workshop já tem "Dias" cadastrados pra Day Pass — nesse caso o dia escolhido no checkout já entra sozinho).
             </p>
-            <Field label="Dias de camp (AAAA-MM-DD, separados por vírgula)">
-              <input value={form.camp_dias} onChange={e => upd('camp_dias', e.target.value)} className={inputCls} placeholder="2027-01-18, 2027-01-19, ..." />
+            <Field label="Dias de camp">
+              {form.camp_dias.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {form.camp_dias.map((d: string) => (
+                    <span key={d} className="inline-flex items-center gap-1 rounded-full bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-slate-200 text-xs font-bold px-2.5 py-1">
+                      {fmtDataBR(d)}
+                      <button type="button" onClick={() => removeDateFromField('camp_dias', d)} aria-label={`Remover ${fmtDataBR(d)}`} className="text-slate-500 hover:text-rose-500">
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <input type="date" value={newCampDia} onChange={e => setNewCampDia(e.target.value)} className={inputCls} />
+                <button type="button" onClick={() => addDateToField('camp_dias', newCampDia, setNewCampDia)} className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-[#ff0068] px-3 py-2 text-xs font-bold text-white hover:bg-[#ff1a78] transition">
+                  <Plus size={14} /> Adicionar
+                </button>
+              </div>
             </Field>
           </Section>
 
