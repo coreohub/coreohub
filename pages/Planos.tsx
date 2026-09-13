@@ -69,6 +69,80 @@ const PLANOS_DESCRIPTION =
 const fmtBRL = (n: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(n);
 
+const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
+
+/* ═══════════════════════ SimField ═══════════════════════
+   Slider + campo numérico editável, sincronizados nos dois sentidos.
+   O campo usa o mesmo tema lime (#E3FF0A) dos badges "compensa a partir
+   de..." nos cards de plano abaixo — pedido explícito do produtor pra dar
+   destaque visual e permitir digitar o valor em vez de só arrastar.
+   16px+ de fonte no input evita zoom automático do Safari/iOS em campo
+   <16px (lição já documentada no projeto, terminal do júri 2026-07-16). */
+interface SimFieldProps {
+  id: string;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (n: number) => void;
+  ariaValueText: string;
+  prefix?: string;
+  minCaption: string;
+  maxCaption: string;
+}
+
+const SimField: React.FC<SimFieldProps> = ({ id, label, value, min, max, step, onChange, ariaValueText, prefix, minCaption, maxCaption }) => {
+  // Estado local do texto digitado — evita clampar a cada tecla (impossível
+  // digitar "150" se "1" já fosse forçado pro mínimo 5). Clampa só no blur.
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => { setDraft(String(value)); }, [value]);
+
+  const commit = () => {
+    const n = Number(draft);
+    const next = Number.isFinite(n) ? clamp(Math.round(n / step) * step, min, max) : value;
+    onChange(next);
+    setDraft(String(next));
+  };
+
+  return (
+    <div className="text-left">
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <label htmlFor={id} id={`${id}-label`} className="text-[11px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">
+          {label}
+        </label>
+        <div className="inline-flex items-center gap-1 min-h-9 rounded-full border border-[#E3FF0A]/25 bg-[#E3FF0A]/10 pl-2.5 pr-1.5 py-1 shrink-0">
+          {prefix && <span className="text-[#E3FF0A] font-mono font-black text-sm">{prefix}</span>}
+          <input
+            id={`${id}-num`}
+            type="number"
+            inputMode="numeric"
+            min={min} max={max} step={step}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+            aria-labelledby={`${id}-label`}
+            className="w-12 bg-transparent text-[#E3FF0A] font-mono font-black text-base text-right focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+        </div>
+      </div>
+      <input
+        id={id}
+        type="range" min={min} max={max} step={step}
+        value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        aria-labelledby={`${id}-label`}
+        aria-valuetext={ariaValueText}
+        className="w-full h-2.5 sm:h-auto touch-none mt-2 accent-[#ff0068]"
+      />
+      <div className="flex justify-between text-[9px] text-slate-500 mt-1">
+        <span>{minCaption}</span><span>{maxCaption}</span>
+      </div>
+    </div>
+  );
+};
+
 const Planos: React.FC = () => {
   // SEO próprio da página (SPA não muda o head estático sozinha — mesmo
   // padrão de Festivais.tsx). Cobre Googlebot (renderiza JS); bots que não
@@ -231,58 +305,35 @@ const Planos: React.FC = () => {
           </button>
 
           <div id="simulador-detalhes" className={simExpanded ? 'block' : 'hidden'}>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-4">
-            <div className="text-left">
-              <label htmlFor="calc-coreografias" className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                Nº de coreografias: <span className="text-[#ff0068] font-mono">{calcCoreografias}</span>
-              </label>
-              <input
-                id="calc-coreografias"
-                type="range" min={5} max={500} step={5}
-                value={calcCoreografias}
-                onChange={(e) => setCalcCoreografias(Number(e.target.value))}
-                aria-label="Número de coreografias inscritas"
-                aria-valuetext={`${calcCoreografias} coreografias`}
-                className="w-full mt-2 accent-[#ff0068]"
-              />
-              <div className="hidden sm:flex justify-between text-[9px] text-slate-500 mt-1">
-                <span>5</span><span>500</span>
-              </div>
-            </div>
-            <div className="text-left">
-              <label htmlFor="calc-bailarinos" className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                Média de bailarinos/coreografia: <span className="text-[#ff0068] font-mono">{calcMediaBailarinos}</span>
-              </label>
-              <input
-                id="calc-bailarinos"
-                type="range" min={1} max={15} step={1}
-                value={calcMediaBailarinos}
-                onChange={(e) => setCalcMediaBailarinos(Number(e.target.value))}
-                aria-label="Média de bailarinos por coreografia"
-                aria-valuetext={`${calcMediaBailarinos} bailarinos em média`}
-                className="w-full mt-2 accent-[#ff0068]"
-              />
-              <div className="hidden sm:flex justify-between text-[9px] text-slate-500 mt-1">
-                <span>1 (solo)</span><span>15 (grupão)</span>
-              </div>
-            </div>
-            <div className="text-left">
-              <label htmlFor="calc-ticket" className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                Ticket médio por bailarino: <span className="text-[#ff0068] font-mono">{fmtBRL(calcTicket)}</span>
-              </label>
-              <input
-                id="calc-ticket"
-                type="range" min={20} max={150} step={5}
-                value={calcTicket}
-                onChange={(e) => setCalcTicket(Number(e.target.value))}
-                aria-label="Ticket médio por bailarino inscrito"
-                aria-valuetext={fmtBRL(calcTicket)}
-                className="w-full mt-2 accent-[#ff0068]"
-              />
-              <div className="hidden sm:flex justify-between text-[9px] text-slate-500 mt-1">
-                <span>R$ 20</span><span>R$ 150</span>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 sm:gap-6 mb-4">
+            <SimField
+              id="calc-coreografias"
+              label="Nº de coreografias"
+              value={calcCoreografias}
+              min={5} max={500} step={5}
+              onChange={setCalcCoreografias}
+              ariaValueText={`${calcCoreografias} coreografias`}
+              minCaption="5" maxCaption="500"
+            />
+            <SimField
+              id="calc-bailarinos"
+              label="Média de bailarinos/coreografia"
+              value={calcMediaBailarinos}
+              min={1} max={15} step={1}
+              onChange={setCalcMediaBailarinos}
+              ariaValueText={`${calcMediaBailarinos} bailarinos em média`}
+              minCaption="1 (solo)" maxCaption="15 (grupão)"
+            />
+            <SimField
+              id="calc-ticket"
+              label="Ticket médio por bailarino"
+              value={calcTicket}
+              min={20} max={150} step={5}
+              onChange={setCalcTicket}
+              ariaValueText={fmtBRL(calcTicket)}
+              prefix="R$"
+              minCaption="R$ 20" maxCaption="R$ 150"
+            />
           </div>
 
           <p className="text-xs text-slate-400 text-center md:text-left" aria-live="polite">
