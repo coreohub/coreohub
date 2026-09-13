@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import { supabase } from '../services/supabase';
 import VendasTabs from '../components/VendasTabs';
-import { resolveActiveWorkshopLot } from '../utils/lotes';
 import imageCompression from 'browser-image-compression';
 import {
   Plus, Trash2, Pencil, Calendar, Clock, MapPin, Loader2, X, AlertCircle, CheckCircle,
@@ -125,6 +124,12 @@ const WorkshopsManagement: React.FC = () => {
   const [selectedScope, setSelectedScope]   = useState<string>('all'); // 'all' | event.id | 'standalone'
   const [workshops, setWorkshops]           = useState<WorkshopRow[]>([]);
   const [lots, setLots]                     = useState<Record<string, LotRow[]>>({});
+  // Lote ativo por workshop, via RPC get_workshop_stock (fonte única de
+  // verdade — considera esgotamento por quantidade além de data). Uma
+  // versão anterior resolvia isso client-side só por data/is_active e
+  // ficava desalinhada assim que um lote esgotava por quantidade (achado
+  // real 2026-09-13, ver migration 20260913b) — removida em favor do RPC.
+  const [activeLotByWorkshop, setActiveLotByWorkshop] = useState<Record<string, { nome: string; preco: number } | null>>({});
   // Inscrições das aulas visíveis (escopo atual) — alimenta a régua de KPIs
   // no topo. Agregação client-side, mesmo padrão de VendasOverview.
   const [regs, setRegs]                     = useState<RegStat[]>([]);
@@ -233,7 +238,7 @@ const WorkshopsManagement: React.FC = () => {
     // event_id direto — filtra por workshop_id das aulas visíveis).
     if (ws && ws.length > 0) {
       const ids = ws.map(w => w.id);
-      const [{ data: lotData }, { data: regData }] = await Promise.all([
+      const [{ data: lotData }, { data: regData }, stockResults] = await Promise.all([
         supabase
           .from('workshop_lots')
           .select('*')
@@ -243,6 +248,7 @@ const WorkshopsManagement: React.FC = () => {
           .from('workshop_registrations')
           .select('workshop_id, status_pagamento, preco_pago, attended')
           .in('workshop_id', ids),
+        Promise.all(ids.map(id => supabase.rpc('get_workshop_stock', { p_workshop_id: id }))),
       ]);
       const grouped: Record<string, LotRow[]> = {};
       (lotData ?? []).forEach(l => {
@@ -250,8 +256,19 @@ const WorkshopsManagement: React.FC = () => {
       });
       setLots(grouped);
       setRegs((regData ?? []) as RegStat[]);
+
+      const activeLots: Record<string, { nome: string; preco: number } | null> = {};
+      ids.forEach((id, idx) => {
+        const row = stockResults[idx]?.data;
+        const stRow = Array.isArray(row) ? row[0] : row;
+        activeLots[id] = stRow?.active_lot_id
+          ? { nome: stRow.active_lot_nome, preco: Number(stRow.active_lot_preco) }
+          : null;
+      });
+      setActiveLotByWorkshop(activeLots);
     } else {
       setLots({});
+      setActiveLotByWorkshop({});
       setRegs([]);
     }
     setLoading(false);
@@ -566,7 +583,7 @@ const WorkshopsManagement: React.FC = () => {
           <div className="grid gap-4">
             {workshops.map(w => {
               const wsLots = lots[w.id] ?? [];
-              const activeLot = resolveActiveWorkshopLot(wsLots);
+              const activeLot = activeLotByWorkshop[w.id] ?? null;
               const eventName = events.find(e => e.id === w.event_id)?.name;
               return (
                 <div key={w.id} className="rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 p-5 shadow-sm">

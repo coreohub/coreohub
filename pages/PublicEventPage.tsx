@@ -13,7 +13,7 @@ import { motion } from 'motion/react';
 import BrandIcon from '../components/BrandIcon';
 import { EventAnchorNav, HEADER_HEIGHT, type AnchorSection } from '../components/EventAnchorNav';
 import { PessoasSection, type JudgePublic, type WorkshopTeacherPublic } from '../components/PessoasSection';
-import { resolveLote, diffDias, formatDataBRComDia, todayISO, resolveActiveWorkshopLot, findNextWorkshopLot, type Lote } from '../utils/lotes';
+import { resolveLote, diffDias, formatDataBRComDia, todayISO, findNextWorkshopLot, type Lote } from '../utils/lotes';
 import { formatPrecoBR } from '../utils/masks';
 import { isEventOver } from '../utils/eventStatus';
 import AvisoViradaLote from '../components/AvisoViradaLote';
@@ -251,37 +251,44 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           });
           setPublicWorkshops(sorted as any);
 
-          // Lote vigente por workshop — mesma regra do RPC get_workshop_stock
-          // (maior ordem, is_active, dentro da janela data_inicio/data_fim).
-          // Query única em vez de 1 RPC por card (evita N round-trips).
+          // Lote vigente por workshop — via RPC get_workshop_stock, fonte
+          // única de verdade (considera esgotamento por quantidade além de
+          // data). Resolução client-side (resolveActiveWorkshopLot) ficou
+          // desalinhada assim que um lote esgota por quantidade — achado
+          // real 2026-09-13, ver migration 20260913b. workshop_lots ainda é
+          // buscado em batch só pra resolver o "próximo lote" (aviso de
+          // virada), que segue sendo cosmético e não crítico de preço.
           if (wsData.length > 0) {
-            const { data: lotsData } = await supabase
-              .from('workshop_lots')
-              .select('workshop_id, ordem, nome, preco, data_inicio, data_fim, is_active')
-              .in('workshop_id', wsData.map((w: any) => w.id))
-              .eq('is_active', true);
-            if (Array.isArray(lotsData)) {
-              const today = todayISO();
-              const byWorkshop: Record<string, {
-                nome: string; preco: number;
-                proximo: { preco: number; dataVirada: string; dias: number } | null;
-              }> = {};
-              for (const ws of wsData as any[]) {
-                const todosOsLotes = lotsData.filter((l: any) => l.workshop_id === ws.id);
-                const ativo = resolveActiveWorkshopLot(todosOsLotes as any[]);
-                if (!ativo) continue;
-                const proximoLote = findNextWorkshopLot(todosOsLotes as any[], ativo);
-                const proximo = proximoLote
-                  ? {
-                      preco: Number(proximoLote.preco),
-                      dataVirada: String(proximoLote.data_inicio).slice(0, 10),
-                      dias: diffDias(today, String(proximoLote.data_inicio).slice(0, 10)),
-                    }
-                  : null;
-                byWorkshop[ws.id] = { nome: ativo.nome, preco: Number(ativo.preco), proximo };
-              }
-              setWorkshopActiveLot(byWorkshop);
-            }
+            const [{ data: lotsData }, stockResults] = await Promise.all([
+              supabase
+                .from('workshop_lots')
+                .select('id, workshop_id, ordem, nome, preco, data_inicio, data_fim, is_active')
+                .in('workshop_id', wsData.map((w: any) => w.id))
+                .eq('is_active', true),
+              Promise.all(wsData.map((w: any) => supabase.rpc('get_workshop_stock', { p_workshop_id: w.id }))),
+            ]);
+            const today = todayISO();
+            const byWorkshop: Record<string, {
+              nome: string; preco: number;
+              proximo: { preco: number; dataVirada: string; dias: number } | null;
+            }> = {};
+            (wsData as any[]).forEach((ws, idx) => {
+              const row = stockResults[idx]?.data;
+              const stRow = Array.isArray(row) ? row[0] : row;
+              if (!stRow?.active_lot_id) return;
+              const todosOsLotes = (lotsData ?? []).filter((l: any) => l.workshop_id === ws.id);
+              const ativo = todosOsLotes.find((l: any) => l.id === stRow.active_lot_id);
+              const proximoLote = ativo ? findNextWorkshopLot(todosOsLotes as any[], ativo) : null;
+              const proximo = proximoLote
+                ? {
+                    preco: Number(proximoLote.preco),
+                    dataVirada: String(proximoLote.data_inicio).slice(0, 10),
+                    dias: diffDias(today, String(proximoLote.data_inicio).slice(0, 10)),
+                  }
+                : null;
+              byWorkshop[ws.id] = { nome: stRow.active_lot_nome, preco: Number(stRow.active_lot_preco), proximo };
+            });
+            setWorkshopActiveLot(byWorkshop);
           }
 
           // Passes publicados do evento — pacote fixo, exibido em destaque.

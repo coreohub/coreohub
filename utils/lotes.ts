@@ -88,20 +88,6 @@ export type WorkshopLot = {
   is_active?: boolean;
 };
 
-/** Lote vigente de um workshop = maior `ordem` entre os `is_active` dentro
- *  da janela `data_inicio`/`data_fim`. Mesma regra do RPC `get_workshop_stock`. */
-export function resolveActiveWorkshopLot<T extends WorkshopLot>(
-  lots: T[],
-  now: Date = new Date(),
-): T | null {
-  const candidatos = lots
-    .filter(l => l.is_active === true
-      && (!l.data_inicio || new Date(l.data_inicio) <= now)
-      && (!l.data_fim || new Date(l.data_fim) >= now))
-    .sort((a, b) => b.ordem - a.ordem);
-  return candidatos[0] ?? null;
-}
-
 /** Próximo lote de workshop após o vigente (ordem maior, com `data_inicio`
  *  conhecida, preço maior) — pra aviso "Sobe pra R$X em [data]". */
 export function findNextWorkshopLot<T extends WorkshopLot>(
