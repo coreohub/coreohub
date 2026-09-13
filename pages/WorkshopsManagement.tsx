@@ -12,7 +12,7 @@ import {
 type Nivel = 'iniciante' | 'intermediario' | 'avancado' | 'todos';
 type FeeMode = 'repassar' | 'absorver';
 
-interface EventOption { id: string; name: string }
+interface EventOption { id: string; name: string; commission_percent: number }
 
 interface WorkshopRow {
   id: string;
@@ -40,6 +40,7 @@ interface WorkshopRow {
   gratis_para_inscritos: boolean;
   auto_detect_combo: boolean;
   workshop_commission_percent: number;
+  workshop_commission_percent_manual: boolean;
   workshop_fee_mode: FeeMode;
   workshop_max_per_cpf: number;
   is_published: boolean;
@@ -172,7 +173,12 @@ const WorkshopsManagement: React.FC = () => {
     preco_inscritos_mostra: '' as string | number,
     gratis_para_inscritos: false,
     auto_detect_combo: true,
+    // Default 10 (Começo) pra workshop avulso sem evento. Com evento
+    // selecionado, openCreate()/troca de evento no form recalculam pro
+    // commission_percent real do evento (herda o plano vigente — ver
+    // migration 20260913c, gap real achado com a Lorrayne/Vicenza).
     workshop_commission_percent: 10,
+    workshop_commission_percent_manual: false,
     workshop_fee_mode: 'repassar' as FeeMode,
     workshop_max_per_cpf: 4,
     is_published: false,
@@ -196,7 +202,7 @@ const WorkshopsManagement: React.FC = () => {
       const [evRes, judgesRes] = await Promise.all([
         supabase
           .from('events')
-          .select('id, name')
+          .select('id, name, commission_percent')
           .eq('created_by', user.id)
           .order('created_at', { ascending: false }),
         // Jurados do produtor (RLS já escopa) — pra reaproveitar como professor.
@@ -284,11 +290,20 @@ const WorkshopsManagement: React.FC = () => {
   }, [feedback]);
 
   // ── Open create/edit modal ──────────────────────────────────────────────
+  // Comissão default herda o commission_percent vigente do evento (plano
+  // Começo/Essencial/Escala) — 10 só pra workshop avulso sem evento.
+  const defaultCommissionForEvent = (eventId: string) => {
+    const ev = events.find(e => e.id === eventId);
+    return ev ? Number(ev.commission_percent) : 10;
+  };
+
   const openCreate = () => {
     setEditingId(null);
+    const initialEventId = selectedScope !== 'all' && selectedScope !== 'standalone' ? selectedScope : '';
     setForm({
       ...emptyForm,
-      event_id: selectedScope !== 'all' && selectedScope !== 'standalone' ? selectedScope : '',
+      event_id: initialEventId,
+      workshop_commission_percent: defaultCommissionForEvent(initialEventId),
     });
     setFormError(null);
     setShowModal(true);
@@ -321,6 +336,7 @@ const WorkshopsManagement: React.FC = () => {
       gratis_para_inscritos: w.gratis_para_inscritos,
       auto_detect_combo: w.auto_detect_combo,
       workshop_commission_percent: w.workshop_commission_percent,
+      workshop_commission_percent_manual: w.workshop_commission_percent_manual,
       workshop_fee_mode: w.workshop_fee_mode,
       workshop_max_per_cpf: w.workshop_max_per_cpf,
       is_published: w.is_published,
@@ -399,6 +415,7 @@ const WorkshopsManagement: React.FC = () => {
       gratis_para_inscritos: form.gratis_para_inscritos,
       auto_detect_combo: form.auto_detect_combo,
       workshop_commission_percent: Number(form.workshop_commission_percent),
+      workshop_commission_percent_manual: form.workshop_commission_percent_manual,
       workshop_fee_mode: form.workshop_fee_mode,
       workshop_max_per_cpf: Number(form.workshop_max_per_cpf),
       is_published: form.is_published,
@@ -1894,7 +1911,22 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
           {/* Vínculo com evento */}
           <Section title="Vínculo">
             <Field label="Evento (opcional — deixe vazio para workshop avulso)">
-              <select value={form.event_id} onChange={e => upd('event_id', e.target.value)} className="w-full rounded-lg border border-slate-200 dark:border-white/10 dark:bg-slate-800 dark:text-white px-3 py-2 text-sm">
+              <select
+                value={form.event_id}
+                onChange={e => {
+                  const newEventId = e.target.value;
+                  // Só recalcula a comissão default na CRIAÇÃO — em edição
+                  // não mexe pra não sobrescrever o que já está salvo (campo
+                  // nem tem input próprio na UI, produtor não vê nem edita).
+                  if (!isEdit) {
+                    const ev = events.find(x => x.id === newEventId);
+                    setForm((p: any) => ({ ...p, event_id: newEventId, workshop_commission_percent: ev ? Number(ev.commission_percent) : 10 }));
+                  } else {
+                    upd('event_id', newEventId);
+                  }
+                }}
+                className="w-full rounded-lg border border-slate-200 dark:border-white/10 dark:bg-slate-800 dark:text-white px-3 py-2 text-sm"
+              >
                 <option value="">— Sem evento (avulso) —</option>
                 {events.map(ev => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
               </select>

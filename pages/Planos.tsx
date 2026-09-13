@@ -64,7 +64,7 @@ const PLANOS: Plan[] = [
 
 const PLANOS_TITLE = 'Planos e preços — CoreoHub';
 const PLANOS_DESCRIPTION =
-  'Começo (10% sobre venda, sem taxa fixa), Essencial (R$250 + 5%) ou Escala (R$1.490 + R$2/participante, teto de 4,5%). Sem mensalidade — você paga proporcional ao que o festival fatura.';
+  'Começo (10% sobre inscrições e workshops, sem taxa fixa), Essencial (R$250 + 5%) ou Escala (R$1.490 + R$2/participante, teto de 4,5%). Sem mensalidade — você paga proporcional ao que o festival fatura em inscrições e workshops. Ingresso de plateia e seletiva por vídeo têm taxa própria, configurável à parte.';
 
 const fmtBRL = (n: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(n);
@@ -202,7 +202,7 @@ const Planos: React.FC = () => {
             Preço que cresce <span className="text-[#ff0068]">junto</span> com seu festival
           </motion.h1>
           <p className="mt-3 text-slate-300 text-sm md:text-base max-w-2xl mx-auto leading-relaxed">
-            Sem mensalidade. Você paga uma taxa proporcional ao que o seu evento realmente fatura.
+            Sem mensalidade. Você paga uma taxa proporcional ao que o seu evento realmente fatura em inscrições e workshops.
           </p>
         </div>
       </section>
@@ -443,7 +443,7 @@ const Planos: React.FC = () => {
             Seu evento também vende <span className="text-[#ff0068]">ingresso</span> e <span className="text-[#ff0068]">workshop</span>
           </h2>
           <p className="text-slate-300 text-sm text-center max-w-2xl mx-auto mb-8 leading-relaxed">
-            Os planos acima cobrem a inscrição das coreografias. Se seu festival também vende ingresso de plateia, workshop ou faz seletiva por vídeo, cada frente tem sua própria taxa — configurável por evento, não travada num número fixo.
+            Os planos acima cobrem inscrição das coreografias e workshops — a mesma taxa do seu plano se aplica às duas frentes, automaticamente. Ingresso de plateia e seletiva por vídeo têm taxa própria, configurável por evento junto com nosso time.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -453,9 +453,9 @@ const Planos: React.FC = () => {
               <p className="text-xs text-slate-400 leading-relaxed">Sobre a venda de ingresso pro público que vai assistir.</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
-              <p className="text-3xl font-black text-[#ff0068] mb-2">10%</p>
+              <p className="text-3xl font-black text-[#ff0068] mb-2">Seu plano</p>
               <p className="text-sm font-bold text-white mb-1">Workshops</p>
-              <p className="text-xs text-slate-400 leading-relaxed">Sobre a venda de aulas e workshops do seu evento.</p>
+              <p className="text-xs text-slate-400 leading-relaxed">Mesma taxa da inscrição (10% / 5% / 4,5%, conforme o plano escolhido) — sem configuração extra.</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
               <p className="text-3xl font-black text-[#ff0068] mb-2">Taxa fixa</p>

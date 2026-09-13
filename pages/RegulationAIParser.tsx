@@ -197,11 +197,15 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       if (!selectedEventId) throw new Error('Selecione um evento antes de aplicar o regulamento.');
       const { data: ev } = await supabase
         .from('events')
-        .select('id, formacoes_config')
+        .select('id, formacoes_config, commission_percent')
         .eq('id', selectedEventId)
         .maybeSingle();
       const eventId = ev?.id;
       if (!eventId) throw new Error('Nenhum evento encontrado para aplicar o regulamento.');
+      // Workshop novo herda o commission_percent vigente do evento (plano
+      // Começo/Essencial/Escala) em vez de hardcoded 10 — gap real achado
+      // com a Lorrayne/Vicenza (ver migration 20260913c).
+      const eventCommissionPercent = ev?.commission_percent != null ? Number(ev.commission_percent) : 10;
 
       // ── Estado atual do evento — buscado UMA VEZ e usado pra MERGE em vez
       // de sobrescrever (achado #2, 2026-07-16). Reimportar o regulamento
@@ -686,7 +690,7 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
             preco_inscritos_mostra: null,
             gratis_para_inscritos: false,
             auto_detect_combo: true,
-            workshop_commission_percent: 10,
+            workshop_commission_percent: eventCommissionPercent,
             workshop_fee_mode: 'repassar',
             workshop_max_per_cpf: 4,
             workshop_reservation_minutes: 10,
