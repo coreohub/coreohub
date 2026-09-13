@@ -60,7 +60,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   const [publicJudges, setPublicJudges] = useState<JudgePublic[]>([]);
   // Workshops Etapa 1: lista pública dos workshops do evento (publicados)
   const [publicWorkshops, setPublicWorkshops] = useState<Array<{
-    id: string; slug: string | null; name: string; cover_url: string | null;
+    id: string; slug: string | null; name: string; description: string | null; cover_url: string | null;
     professor_name: string; professor_bio: string | null; professor_photo_url: string | null;
     professor_instagram: string | null; professor_is_public: boolean;
     modalidade: string | null; nivel: string; data_inicio: string;
@@ -232,7 +232,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         // RLS já filtra is_published=true pra anon. Carrega só campos exibidos.
         const { data: wsData } = await supabase
           .from('workshops')
-          .select('id, slug, name, cover_url, professor_name, professor_bio, professor_photo_url, professor_instagram, professor_is_public, modalidade, nivel, data_inicio, duracao_minutos, preco_padrao, gratis_para_inscritos, display_order, is_featured, featured_badge_text, hospedagem_delta')
+          .select('id, slug, name, description, cover_url, professor_name, professor_bio, professor_photo_url, professor_instagram, professor_is_public, modalidade, nivel, data_inicio, duracao_minutos, preco_padrao, gratis_para_inscritos, display_order, is_featured, featured_badge_text, hospedagem_delta')
           .eq('event_id', eventData.id)
           .eq('is_published', true)
           .order('data_inicio', { ascending: true });
@@ -1587,6 +1587,11 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                       <h3 className={featured ? 'font-black uppercase tracking-tight text-white text-xl sm:text-2xl leading-tight' : 'font-black uppercase tracking-tight text-white text-sm leading-tight line-clamp-2'}>{ws.name}</h3>
                       <p className="text-xs text-slate-400">com {ws.professor_name}</p>
                       <p className="text-[11px] text-slate-500">{dataFmt}{ws.duracao_minutos ? ` · ${ws.duracao_minutos}min` : ''}</p>
+                      {featured && ws.description && (
+                        <p className="text-xs font-bold text-amber-200/90 uppercase tracking-wide whitespace-pre-line leading-relaxed pt-1">
+                          {ws.description}
+                        </p>
+                      )}
                       {loteAtivo && (
                         <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">{loteAtivo.nome}</p>
                       )}
