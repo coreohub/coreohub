@@ -943,22 +943,27 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         sections={visibleSections}
         cta={
           <div className="flex items-center gap-2">
+            {/* Antes só aparecia a partir do breakpoint sm (`hidden sm:inline-flex`)
+                — no mobile a barra fixa mostrava só o botão "Entrar", o CTA
+                real (Inscreva-se/Ver Workshops/Comprar ingresso) sumia por
+                completo. Agora aparece sempre, com padding/texto compactos no
+                mobile pra caber ao lado do "Entrar". */}
             {primaryCta && (
               primaryCta.kind === 'link' ? (
                 <Link
                   to={primaryCta.to}
                   onClick={onInscrevaseClick}
-                  className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 bg-[#ff0068] text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all"
+                  className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2 bg-[#ff0068] text-white rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all whitespace-nowrap"
                 >
-                  {primaryCta.label} <ChevronRight size={12} />
+                  {primaryCta.label} <ChevronRight size={12} className="hidden sm:block" />
                 </Link>
               ) : (
                 <button
                   type="button"
                   onClick={() => scrollToSection(primaryCta.id)}
-                  className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 bg-[#ff0068] text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all"
+                  className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2 bg-[#ff0068] text-white rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all whitespace-nowrap"
                 >
-                  {primaryCta.label} <ChevronRight size={12} />
+                  {primaryCta.label} <ChevronRight size={12} className="hidden sm:block" />
                 </button>
               )
             )}
@@ -1092,10 +1097,15 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               <MapPin size={24} className="text-[#ff0068]" /> Local
             </h2>
             <div className="space-y-3">
-              <p className="text-slate-400 leading-relaxed">
-                {event.location && <>{event.location}<br /></>}
-                {localCidadeUf}
-              </p>
+              {/* Sem endereço específico, cidade/UF já apareceu no Hero logo
+                  acima — repetir aqui só duplicava ("Tatuí/SP" 2x na mesma
+                  tela). Só mostra texto aqui quando há algo NOVO a dizer. */}
+              {event.location && (
+                <p className="text-slate-400 leading-relaxed">
+                  {event.location}<br />
+                  {localCidadeUf}
+                </p>
+              )}
               {mapsUrl && (
                 <a
                   href={mapsUrl}

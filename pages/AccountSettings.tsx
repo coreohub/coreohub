@@ -376,12 +376,21 @@ type ScoreScale = 'BASE_10' | 'BASE_100';
 
 const DEFAULT_GENERAL = {
   eventName: 'CoreoHub Festival',
-  location: 'Concha Acústica',
-  city: 'Votuporanga, SP',
-  eventDate: '2026-07-11',
-  eventTime: '19:00',
-  regDeadline: '2026-06-30',
-  trackDeadline: '2026-07-05',
+  // Local/cidade/datas/prazos ficam vazios de propósito — eram valores fixos
+  // residuais do scaffold original ("Concha Acústica"/Votuporanga/datas de
+  // 2026) usados só pra PREENCHER a tela quando o banco vem vazio. Como o
+  // Salvar sempre regrava o payload inteiro, esse valor fantasma acabava
+  // virando dado real no banco assim que o produtor salvava qualquer outra
+  // aba — bug real achado 2026-09-13 (Vicenza Dance Camp: formações e local
+  // "voltavam sozinhos" porque nunca tinham sido de fato removidos, só
+  // reescritos pelo fallback). Campo vazio agora fica vazio de verdade.
+  location: '',
+  city: '',
+  eventDate: '',
+  endDate: '',
+  eventTime: '',
+  regDeadline: '',
+  trackDeadline: '',
   tipos_apresentacao: ['Competitiva', 'Avaliada'],
   scoreScale: 'BASE_10' as ScoreScale,
   pinInactivityMinutes: 15 as number, // 0 = nunca bloquear
@@ -1528,9 +1537,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   // Tier 2: tempo de reserva temporária (10min default)
   const [audienceReservationMinutes, setAudienceReservationMinutes] = useState<number>(10);
   const [sponsors, setSponsors]       = useState<Sponsor[]>([]);
-  const [styles,  setStyles]  = useState<string[]>(DEFAULT_MODALITIES);
-  const [formats, setFormats] = useState<any[]>(DEFAULT_FORMATS);
-  const [categories, setCategories] = useState<any[]>(DEFAULT_CATEGORIES);
+  const [styles,  setStyles]  = useState<string[]>([]);
+  const [formats, setFormats] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [nivelTecnicoEnabled,  setNivelTecnicoEnabled]  = useState<boolean>(false);
 
   /* ── Gêneros (Eixo Técnico) ── */
@@ -2061,7 +2070,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             eventName:          data.nome_evento      || evt.name        || DEFAULT_GENERAL.eventName,
             location:           data.local_evento     || evt.location    || DEFAULT_GENERAL.location,
             city:               cityFromDb,
-            eventDate:          data.data_evento      || DEFAULT_GENERAL.eventDate,
+            // data_evento (configuracoes) é o campo editado aqui; evt.start_date
+            // (events) é a fonte real usada pela vitrine pública — cai pra ele
+            // só se configuracoes nunca foi salva (evita mostrar vazio quando
+            // já existe data real só que na outra tabela).
+            eventDate:          data.data_evento      || evt.start_date  || DEFAULT_GENERAL.eventDate,
+            endDate:            evt.end_date          || data.data_evento || evt.start_date || DEFAULT_GENERAL.endDate,
             regDeadline:        data.prazo_inscricao  || DEFAULT_GENERAL.regDeadline,
             trackDeadline:      data.prazo_trilhas    || DEFAULT_GENERAL.trackDeadline,
             tipos_apresentacao: data.tipos_apresentacao?.length
@@ -2111,9 +2125,17 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           }
           if (data.url_ingressos) setUrlIngressosExterno(data.url_ingressos);
           if (Array.isArray(data.patrocinadores))     setSponsors(data.patrocinadores);
-          setStyles(data.estilos?.length    ? data.estilos    : DEFAULT_MODALITIES);
-          setFormats(data.formatos?.length ? data.formatos.map(migrateFormat) : DEFAULT_FORMATS);
-          setCategories(data.categorias?.length ? data.categorias : DEFAULT_CATEGORIES);
+          // Sem fallback pra DEFAULT_* quando o produtor já salvou config antes
+          // — banco vazio depois de um 1º save = tela vazia de verdade
+          // (produtor que apagou tudo não deve ver ressuscitar sozinho no
+          // próximo carregamento). DEFAULT_MODALITIES/FORMATS/CATEGORIES só
+          // servem de sugestão pra quem está configurando o evento pela
+          // 1ª vez (isFirstConfig — computado local, `isFirstSave` no state
+          // ainda não atualizou nesse mesmo render).
+          const isFirstConfig = !data.atualizado_em;
+          setStyles(data.estilos?.length    ? data.estilos    : (isFirstConfig ? DEFAULT_MODALITIES : []));
+          setFormats(data.formatos?.length ? data.formatos.map(migrateFormat) : (isFirstConfig ? DEFAULT_FORMATS : []));
+          setCategories(data.categorias?.length ? data.categorias : (isFirstConfig ? DEFAULT_CATEGORIES : []));
           setNivelTecnicoEnabled(!!data.nivel_tecnico_enabled);
           if (data.tolerancia) setToleranceRule(data.tolerancia);
           if (data.age_reference) setAgeReference(data.age_reference as 'EVENT_DAY' | 'YEAR_END' | 'FIXED_DATE');
@@ -2199,6 +2221,13 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     // Usualdance perdeu premios_especiais customizados desse jeito.
     if (!configLoaded) {
       setError('Configurações ainda carregando. Aguarde um momento e tente de novo.');
+      return;
+    }
+    // Sem nenhum tipo de apresentação marcado, o Wizard do inscrito cai num
+    // fallback silencioso pra 'Competitiva' (InscricaoWizard.tsx) — funciona,
+    // mas engana o produtor achando que desligou tudo. Exige pelo menos 1.
+    if (general.tipos_apresentacao.length === 0) {
+      setError('Marque pelo menos um tipo de apresentação (Competitiva ou Avaliada) em "Geral".');
       return;
     }
     saveInFlightRef.current = true;
@@ -2435,7 +2464,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           cover_url:               general.coverUrl || null,
           edition_year:            editionYear,
           start_date:              general.eventDate || null,
-          end_date:                general.eventDate || null,
+          // Camp/festival multi-dia (18-23/jan, por ex.) tem Data Final própria
+          // agora — antes essa linha sempre igualava end_date a start_date em
+          // TODO save, mesmo quando o evento durava vários dias (bug real
+          // achado 2026-09-13 no Vicenza Dance Camp: virou evento de 1 dia só
+          // na primeira vez que a Config foi salva).
+          end_date:                general.endDate || general.eventDate || null,
           location:                general.location || null,
           city:                    cityState[0] || null,
           state:                   cityState[1] || null,
@@ -2889,8 +2923,35 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     )}
                   </div>
                   <div>
-                    <label className={label}>Data do Evento</label>
-                    <input type="date" value={general.eventDate} onChange={e => setGeneral({ ...general, eventDate: e.target.value })} className={input} />
+                    <label className={label}>Data de Início</label>
+                    <input
+                      type="date"
+                      value={general.eventDate}
+                      onChange={e => setGeneral(g => ({
+                        ...g,
+                        eventDate: e.target.value,
+                        // Evento de 1 dia é o caso comum — se a Data Final
+                        // ainda não tinha sido customizada (estava vazia ou
+                        // igual à Data de Início antiga), acompanha a Início
+                        // automaticamente. Camps multi-dia (ex: Vicenza)
+                        // ajustam a Final manualmente depois.
+                        endDate: (!g.endDate || g.endDate === g.eventDate) ? e.target.value : g.endDate,
+                      }))}
+                      className={input}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className={label}>Data Final</label>
+                    <input
+                      type="date"
+                      value={general.endDate}
+                      min={general.eventDate || undefined}
+                      onChange={e => setGeneral({ ...general, endDate: e.target.value })}
+                      className={input}
+                    />
+                    <p className="text-[9px] text-slate-400 mt-1">Igual à Data de Início pra evento de 1 dia só. Camps/festivais multi-dia (ex: 18 a 23 de janeiro) preenchem uma data posterior aqui.</p>
                   </div>
                 </div>
                 <div>
