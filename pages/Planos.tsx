@@ -498,14 +498,9 @@ const Planos: React.FC = () => {
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
+            <div className="sm:col-span-2 rounded-2xl border border-white/10 bg-white/5 p-6 text-center flex flex-col items-center justify-center">
               <p className="text-3xl font-black text-[#ff0068] mb-2">Seu plano</p>
-              <p className="text-sm font-bold text-white mb-1">Ingressos de plateia</p>
-              <p className="text-xs text-slate-400 leading-relaxed">Mesma taxa da inscrição (10% / 5% / 4,5%, conforme o plano escolhido) — sem configuração extra.</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
-              <p className="text-3xl font-black text-[#ff0068] mb-2">Seu plano</p>
-              <p className="text-sm font-bold text-white mb-1">Workshops</p>
+              <p className="text-sm font-bold text-white mb-1">Ingressos de plateia <span className="text-slate-500 font-normal">e</span> Workshops</p>
               <p className="text-xs text-slate-400 leading-relaxed">Mesma taxa da inscrição (10% / 5% / 4,5%, conforme o plano escolhido) — sem configuração extra.</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
