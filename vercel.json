@@ -52,6 +52,28 @@
       "destination": "/api/og-workshop?slug=:slug"
     },
     {
+      "source": "/checkout-workshop/:slug",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Googlebot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot|GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-Web|anthropic-ai|PerplexityBot|Perplexity-User|Google-Extended|Amazonbot|Bytespider|CCBot).*)"
+        }
+      ],
+      "destination": "/api/og-workshop?slug=:slug&dest=checkout"
+    },
+    {
+      "source": "/checkout-workshop-pass/:slug",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Googlebot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot|GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-Web|anthropic-ai|PerplexityBot|Perplexity-User|Google-Extended|Amazonbot|Bytespider|CCBot).*)"
+        }
+      ],
+      "destination": "/api/og-workshop-pass?slug=:slug"
+    },
+    {
       "source": "/festivais",
       "has": [
         {

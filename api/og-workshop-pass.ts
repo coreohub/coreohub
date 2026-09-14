@@ -1,8 +1,10 @@
 /**
- * Mesma estratégia de api/og.ts, mas pra /workshop/:slug — bots de preview social
- * (WhatsApp/Telegram/etc) não executam JS, então precisam das meta tags no HTML
- * inicial. Ver api/og.ts pro fluxo completo (vercel.json detecta UA de bot e
- * rewrite pra cá).
+ * Mesma estratégia de api/og-workshop.ts, mas pra Workshop Pass — Combo/Day
+ * Pass/Single Class não tem página de vitrine própria (só existe o checkout,
+ * /checkout-workshop-pass/:slug), então esse é o ÚNICO preview de bot desse
+ * recurso. Achado 2026-09-14: não existia rewrite nenhum pra esse path em
+ * vercel.json — WhatsApp/Telegram mostravam a home genérica pra quem
+ * compartilhava o link de compra do Pass.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -33,10 +35,10 @@ const fallbackHtml = (slug: string): string => `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <title>CoreoHub — Gestão inteligente para festivais de dança</title>
-<meta property="og:title" content="CoreoHub — Workshop">
+<meta property="og:title" content="CoreoHub — Workshop Pass">
 <meta property="og:description" content="Plataforma completa para produtores de festivais de dança.">
 <meta property="og:image" content="${DEFAULT_IMAGE}">
-<meta property="og:url" content="${SITE_URL}/workshop/${esc(slug)}">
+<meta property="og:url" content="${SITE_URL}/checkout-workshop-pass/${esc(slug)}">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="CoreoHub">
 </head>
@@ -49,23 +51,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(400).send('slug missing');
     return;
   }
-  // dest=checkout: mesmo dado, mas o preview aponta pro link real que foi
-  // compartilhado (/checkout-workshop/:slug) — sem isso, quem clica no
-  // preview do link de checkout cai na vitrine do workshop em vez do
-  // checkout, e o og:url fica mentiroso (achado 2026-09-14: checkout não
-  // tinha rewrite de bot nenhum, WhatsApp mostrava a home genérica).
-  const dest = req.query.dest === 'checkout' ? 'checkout-workshop' : 'workshop';
 
   try {
     if (!SUPABASE_ANON_KEY) {
-      console.error('[api/og-workshop] SUPABASE_ANON_KEY not configured');
+      console.error('[api/og-workshop-pass] SUPABASE_ANON_KEY not configured');
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.status(200).send(fallbackHtml(slug));
       return;
     }
 
     const filterCol = UUID_REGEX.test(slug) ? 'id' : 'slug';
-    const restUrl = `${SUPABASE_URL}/rest/v1/workshops?select=id,name,slug,description,cover_url,professor_name,professor_photo_url&${filterCol}=eq.${encodeURIComponent(slug)}&is_published=eq.true&limit=1`;
+    const restUrl = `${SUPABASE_URL}/rest/v1/workshop_passes?select=id,name,slug,description,event_id&${filterCol}=eq.${encodeURIComponent(slug)}&is_published=eq.true&limit=1`;
 
     const fetchRes = await fetch(restUrl, {
       headers: {
@@ -75,47 +71,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     if (!fetchRes.ok) {
-      console.error('[api/og-workshop] supabase fetch failed:', fetchRes.status);
+      console.error('[api/og-workshop-pass] supabase fetch failed:', fetchRes.status);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.status(200).send(fallbackHtml(slug));
       return;
     }
 
-    const workshops = (await fetchRes.json()) as Array<{
+    const passes = (await fetchRes.json()) as Array<{
       id: string;
       name: string;
       slug: string | null;
       description: string | null;
-      cover_url: string | null;
-      professor_name: string;
-      professor_photo_url: string | null;
+      event_id: string;
     }>;
 
-    const ws = workshops?.[0];
-    if (!ws) {
+    const pass = passes?.[0];
+    if (!pass) {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.status(200).send(fallbackHtml(slug));
       return;
     }
 
-    // Achado 2026-09-14: nomes reais já vêm com "com <professor>" embutido
-    // (ex.: "Ballet Clássico com Marina Ricci") — apendar de novo duplicava
-    // ("... com Marina Ricci com Marina Ricci"). Só apenda se o nome ainda
-    // não menciona o professor.
-    const nameHasProfessor = ws.name.toLowerCase().includes(ws.professor_name.toLowerCase());
-    const displayName = nameHasProfessor ? ws.name : `${ws.name} com ${ws.professor_name}`;
-    const title = `${displayName} | CoreoHub`;
+    // Pass não tem capa própria — puxa a do evento (sempre URL de Storage,
+    // nunca base64 — diferente de workshop.cover_url) pra não ficar sem
+    // imagem nenhuma no preview.
+    let image = DEFAULT_IMAGE;
+    let eventName = 'CoreoHub';
+    try {
+      const evRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/events?select=name,cover_url&id=eq.${encodeURIComponent(pass.event_id)}&limit=1`,
+        { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } },
+      );
+      if (evRes.ok) {
+        const evs = (await evRes.json()) as Array<{ name: string; cover_url: string | null }>;
+        if (evs?.[0]?.cover_url) image = evs[0].cover_url;
+        if (evs?.[0]?.name) eventName = evs[0].name;
+      }
+    } catch (evErr) {
+      console.error('[api/og-workshop-pass] event fetch failed:', (evErr as Error).message);
+    }
+
+    const title = `${pass.name} — ${eventName} | CoreoHub`;
     const description =
-      (ws.description ?? '').replace(/\s+/g, ' ').trim().slice(0, 160) ||
-      `Workshop de ${displayName} — inscrições abertas no CoreoHub.`;
-    // og:image PRECISA ser URL http(s) — WhatsApp/Telegram/etc não renderizam
-    // `data:` URI. Capa/foto do professor são salvas base64 inline (decisão
-    // "sem depender de bucket", ver WorkshopsManagement.tsx), então tem que
-    // filtrar antes de usar aqui, senão o card quebra silenciosamente.
-    const isHttpUrl = (u: string | null | undefined): u is string => !!u && /^https?:\/\//i.test(u);
-    const image = (isHttpUrl(ws.cover_url) && ws.cover_url) || (isHttpUrl(ws.professor_photo_url) && ws.professor_photo_url) || DEFAULT_IMAGE;
-    const canonicalSlug = ws.slug ?? ws.id;
-    const url = `${SITE_URL}/${dest}/${canonicalSlug}`;
+      (pass.description ?? '').replace(/\s+/g, ' ').trim().slice(0, 160) ||
+      `${pass.name} — pacote de aulas do ${eventName}, inscrições abertas no CoreoHub.`;
+    const canonicalSlug = pass.slug ?? pass.id;
+    const url = `${SITE_URL}/checkout-workshop-pass/${canonicalSlug}`;
 
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -126,7 +127,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 <meta name="description" content="${esc(description)}">
 
 <!-- Open Graph (WhatsApp, Telegram, Facebook, Instagram, LinkedIn) -->
-<meta property="og:title" content="${esc(displayName)}">
+<meta property="og:title" content="${esc(pass.name)} — ${esc(eventName)}">
 <meta property="og:description" content="${esc(description)}">
 <meta property="og:image" content="${esc(image)}">
 <meta property="og:image:width" content="1200">
@@ -138,16 +139,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="${esc(displayName)}">
+<meta name="twitter:title" content="${esc(pass.name)} — ${esc(eventName)}">
 <meta name="twitter:description" content="${esc(description)}">
 <meta name="twitter:image" content="${esc(image)}">
 
 <link rel="canonical" href="${esc(url)}">
 </head>
 <body>
-<h1>${esc(ws.name)}</h1>
+<h1>${esc(pass.name)}</h1>
 <p>${esc(description)}</p>
-<p><a href="${esc(url)}">Acesse a página completa do workshop</a></p>
+<p><a href="${esc(url)}">Acesse a página completa</a></p>
 </body>
 </html>`;
 
@@ -155,7 +156,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300');
     res.status(200).send(html);
   } catch (err) {
-    console.error('[api/og-workshop] error:', (err as Error).message);
+    console.error('[api/og-workshop-pass] error:', (err as Error).message);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(200).send(fallbackHtml(slug));
   }
