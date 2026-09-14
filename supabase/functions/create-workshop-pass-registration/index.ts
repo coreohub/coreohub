@@ -17,8 +17,15 @@
  *   buyer: { name, email, cpf, phone? },
  *   user_id?: UUID,
  *   coupon_code?: string,
- *   combo_opt_in?: boolean
+ *   combo_opt_in?: boolean,
+ *   selected_workshop_ids?: UUID[]  // obrigatório quando pass.selection_mode='a_la_carte'
  * }
+ *
+ * selection_mode='a_la_carte' (aula avulsa / single class, 2026-09-14): o pass
+ * vira um POOL de workshops — comprador escolhe um subconjunto via
+ * selected_workshop_ids (respeitando min/max_selecionaveis), preço = soma do
+ * preço vigente de cada workshop escolhido (preco_inscritos_mostra quando
+ * combo, senão preco_padrao). Não usa pass.preco.
  *
  * Resposta sucesso (201):
  * {
@@ -87,12 +94,13 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}))
-    const { pass_id, buyer, user_id, coupon_code, combo_opt_in } = body as {
+    const { pass_id, buyer, user_id, coupon_code, combo_opt_in, selected_workshop_ids } = body as {
       pass_id?: string
       buyer?: { name?: string; email?: string; cpf?: string; phone?: string }
       user_id?: string
       coupon_code?: string
       combo_opt_in?: boolean
+      selected_workshop_ids?: string[]
     }
 
     if (!pass_id) throw new Error('pass_id obrigatório')
@@ -137,6 +145,7 @@ Deno.serve(async (req) => {
         id, event_id, created_by, name,
         preco, preco_inscritos_mostra, auto_detect_combo,
         pass_commission_percent, pass_fee_mode, pass_max_per_cpf, pass_reservation_minutes,
+        selection_mode, min_selecionaveis, max_selecionaveis,
         is_published
       `)
       .eq('id', pass_id)
@@ -147,17 +156,37 @@ Deno.serve(async (req) => {
 
     const { data: items, error: itemsErr } = await supabase
       .from('workshop_pass_items')
-      .select('workshop_id, workshops(id, name, data_inicio, preco_padrao, is_published)')
+      .select('workshop_id, workshops(id, name, data_inicio, preco_padrao, preco_inscritos_mostra, is_published)')
       .eq('pass_id', pass_id)
 
     if (itemsErr || !items || items.length === 0) {
       throw new Error('Pass sem workshops configurados')
     }
 
-    const workshops = items.map((it: any) => it.workshops).filter(Boolean)
-    if (workshops.length === 0) throw new Error('Pass sem workshops configurados')
+    const poolWorkshops = items.map((it: any) => it.workshops).filter(Boolean)
+    if (poolWorkshops.length === 0) throw new Error('Pass sem workshops configurados')
 
-    // Defesa em profundidade: bloqueia se algum workshop incluso já começou.
+    const isALaCarte = pass.selection_mode === 'a_la_carte'
+
+    // ── à la carte: valida subconjunto escolhido (pertence ao pool + limites) ─
+    let workshops = poolWorkshops
+    if (isALaCarte) {
+      const selectedIds = Array.isArray(selected_workshop_ids) ? [...new Set(selected_workshop_ids)] : []
+      if (selectedIds.length === 0) throw new Error('Selecione ao menos 1 aula')
+
+      const poolIds = new Set(poolWorkshops.map((w: any) => w.id))
+      const invalid = selectedIds.find(id => !poolIds.has(id))
+      if (invalid) throw new Error('Aula selecionada não pertence a este pacote')
+
+      const min = pass.min_selecionaveis ?? 1
+      const max = pass.max_selecionaveis ?? poolWorkshops.length
+      if (selectedIds.length < min) throw new Error(`Selecione pelo menos ${min} aula(s)`)
+      if (selectedIds.length > max) throw new Error(`Selecione no máximo ${max} aula(s)`)
+
+      workshops = poolWorkshops.filter((w: any) => selectedIds.includes(w.id))
+    }
+
+    // Defesa em profundidade: bloqueia se algum workshop escolhido já começou.
     const now = Date.now()
     const jaComecou = workshops.find((w: any) => w.data_inicio && new Date(w.data_inicio).getTime() < now)
     if (jaComecou) {
@@ -181,13 +210,21 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── Pricing: preço total do Pass (fixo) ──────────────────────────────────
-    const precoBaseTotal = Number(pass.preco)
+    // ── Pricing ───────────────────────────────────────────────────────────────
+    // Fixed: preço total do Pass (fixo, 1 valor pra todos os itens inclusos).
+    // À la carte: soma o preço vigente de cada workshop ESCOLHIDO (preço
+    // próprio de cada um, não a coluna preco do pass — que nem é usada aqui).
+    let precoBaseTotal: number
     let precoPagoTotal: number
-    if (isCombo && pass.preco_inscritos_mostra != null) {
-      precoPagoTotal = Number(pass.preco_inscritos_mostra)
+    if (isALaCarte) {
+      precoBaseTotal = workshops.reduce((s: number, w: any) => s + Number(w.preco_padrao ?? 0), 0)
+      precoPagoTotal = workshops.reduce((s: number, w: any) => {
+        const p = (isCombo && w.preco_inscritos_mostra != null) ? Number(w.preco_inscritos_mostra) : Number(w.preco_padrao ?? 0)
+        return s + p
+      }, 0)
     } else {
-      precoPagoTotal = precoBaseTotal
+      precoBaseTotal = Number(pass.preco)
+      precoPagoTotal = (isCombo && pass.preco_inscritos_mostra != null) ? Number(pass.preco_inscritos_mostra) : precoBaseTotal
     }
     if (precoPagoTotal < 0) throw new Error('Preço calculado negativo — config inválida')
 
@@ -230,15 +267,31 @@ Deno.serve(async (req) => {
       ? parseFloat(precoPagoTotal.toFixed(2))
       : parseFloat((precoPagoTotal - commissionTotal).toFixed(2))
 
-    // ── Rateio proporcional por workshop (só pra relatório/comissão por row) ─
-    // Base de rateio = preco_padrao de cada workshop incluso. Se todos forem 0
-    // (ou pass sem variação), cai pra divisão igual.
-    const sumPrecoPadrao = workshops.reduce((s: number, w: any) => s + Number(w.preco_padrao ?? 0), 0)
+    // ── Preço por workshop (pra relatório/comissão por row) ──────────────────
+    // À la carte: cada item já tem preço próprio exato (calculado acima) — só
+    // aplica o desconto de cupom proporcionalmente. Fixed: rateia o preço
+    // total fixo do pass proporcional ao preco_padrao de cada item incluso.
     const n = workshops.length
-    const precoPagoShares = workshops.map((w: any) => {
-      const ratio = sumPrecoPadrao > 0 ? Number(w.preco_padrao ?? 0) / sumPrecoPadrao : 1 / n
-      return parseFloat((precoPagoTotal * ratio).toFixed(2))
-    })
+    let precoPagoShares: number[]
+    if (isALaCarte) {
+      precoPagoShares = workshops.map((w: any) =>
+        (isCombo && w.preco_inscritos_mostra != null) ? Number(w.preco_inscritos_mostra) : Number(w.preco_padrao ?? 0)
+      )
+    } else {
+      // Base de rateio = preco_padrao de cada workshop incluso. Se todos forem 0
+      // (ou pass sem variação), cai pra divisão igual.
+      const sumPrecoPadrao = workshops.reduce((s: number, w: any) => s + Number(w.preco_padrao ?? 0), 0)
+      precoPagoShares = workshops.map((w: any) => {
+        const ratio = sumPrecoPadrao > 0 ? Number(w.preco_padrao ?? 0) / sumPrecoPadrao : 1 / n
+        return parseFloat((precoPagoTotal * ratio).toFixed(2))
+      })
+    }
+    // Se cupom aplicou desconto, distribui proporcionalmente entre os itens
+    // (precoPagoTotal já reflete o total com desconto quando coupon_code veio).
+    const sumShares = precoPagoShares.reduce((s, v) => s + v, 0)
+    if (sumShares > 0 && Math.abs(sumShares - precoPagoTotal) > 0.005) {
+      precoPagoShares = precoPagoShares.map(v => parseFloat((precoPagoTotal * (v / sumShares)).toFixed(2)))
+    }
     // Última row absorve o resíduo de arredondamento pra somar exatamente o total.
     const residuo = parseFloat((precoPagoTotal - precoPagoShares.reduce((s, v) => s + v, 0)).toFixed(2))
     precoPagoShares[n - 1] = parseFloat((precoPagoShares[n - 1] + residuo).toFixed(2))
@@ -363,7 +416,9 @@ Deno.serve(async (req) => {
     dueDate.setDate(dueDate.getDate() + 3)
     const dueDateStr = dueDate.toISOString().split('T')[0]
 
-    const description = `Pass: ${pass.name}`
+    const description = isALaCarte
+      ? `${pass.name}: ${workshops.map((w: any) => w.name).join(', ')}`
+      : `Pass: ${pass.name}`
 
     const basePayload = {
       customer:          customerId,

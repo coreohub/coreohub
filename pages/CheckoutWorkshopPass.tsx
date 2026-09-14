@@ -59,6 +59,23 @@ const CheckoutWorkshopPass: React.FC = () => {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
 
+  // À la carte (2026-09-14): pass vira POOL de aulas, aluno marca quais quer.
+  const isALaCarte = pass?.selection_mode === 'a_la_carte';
+  const [poolItems, setPoolItems] = useState<Array<{
+    id: string; name: string; data_inicio: string | null;
+    preco_padrao: number; preco_inscritos_mostra: number | null; esgotado: boolean;
+  }>>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const toggleSelected = (id: string) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else {
+      const max = pass?.max_selecionaveis ?? poolItems.length;
+      if (next.size >= max) return prev;
+      next.add(id);
+    }
+    return next;
+  });
+
   const [name, setName]   = useState('');
   const [email, setEmail] = useState('');
   const [cpf, setCpf]     = useState('');
@@ -104,17 +121,38 @@ const CheckoutWorkshopPass: React.FC = () => {
 
         setPass(p);
 
-        const { data: items } = await supabase
-          .from('workshop_pass_items')
-          .select('workshops(name)')
-          .eq('pass_id', id);
-        setWorkshopNames((items ?? []).map((it: any) => it.workshops?.name).filter(Boolean));
+        if (p.selection_mode === 'a_la_carte') {
+          const { data: items } = await supabase
+            .from('workshop_pass_items')
+            .select('workshops(id, name, data_inicio, preco_padrao, preco_inscritos_mostra)')
+            .eq('pass_id', id);
+          const ws = (items ?? []).map((it: any) => it.workshops).filter(Boolean);
+          setWorkshopNames(ws.map((w: any) => w.name).filter(Boolean));
 
-        const { data: stockRow } = await supabase.rpc('get_workshop_pass_stock', { p_pass_id: id });
-        const row = Array.isArray(stockRow) ? stockRow[0] : stockRow;
-        if (row?.esgotado) {
-          setEsgotado(true);
-          setError('Pass esgotado');
+          // Estoque É por aula individual aqui — sem tudo-ou-nada.
+          const withStock = await Promise.all(ws.map(async (w: any) => {
+            const { data: stockRow } = await supabase.rpc('get_workshop_stock', { p_workshop_id: w.id });
+            const row = Array.isArray(stockRow) ? stockRow[0] : stockRow;
+            return { ...w, esgotado: Boolean(row?.esgotado) };
+          }));
+          setPoolItems(withStock);
+          if (withStock.length > 0 && withStock.every(w => w.esgotado)) {
+            setEsgotado(true);
+            setError('Todas as aulas deste pacote estão esgotadas');
+          }
+        } else {
+          const { data: items } = await supabase
+            .from('workshop_pass_items')
+            .select('workshops(name)')
+            .eq('pass_id', id);
+          setWorkshopNames((items ?? []).map((it: any) => it.workshops?.name).filter(Boolean));
+
+          const { data: stockRow } = await supabase.rpc('get_workshop_pass_stock', { p_pass_id: id });
+          const row = Array.isArray(stockRow) ? stockRow[0] : stockRow;
+          if (row?.esgotado) {
+            setEsgotado(true);
+            setError('Pass esgotado');
+          }
         }
       } finally {
         setLoading(false);
@@ -169,12 +207,26 @@ const CheckoutWorkshopPass: React.FC = () => {
 
   const breakdown = useMemo(() => {
     if (!pass) return null;
-    const precoBase = Number(pass.preco);
-    let precoAposCombo = precoBase;
+    let precoBase: number;
+    let precoAposCombo: number;
     let comboApplied = false;
-    if (combo?.found && pass.preco_inscritos_mostra != null) {
-      precoAposCombo = Number(pass.preco_inscritos_mostra);
-      comboApplied = true;
+    if (isALaCarte) {
+      const selected = poolItems.filter(w => selectedIds.has(w.id));
+      precoBase = selected.reduce((s, w) => s + Number(w.preco_padrao ?? 0), 0);
+      if (combo?.found) {
+        precoAposCombo = selected.reduce((s, w) => s + (w.preco_inscritos_mostra != null ? Number(w.preco_inscritos_mostra) : Number(w.preco_padrao ?? 0)), 0);
+        comboApplied = precoAposCombo !== precoBase;
+      } else {
+        precoAposCombo = precoBase;
+      }
+    } else {
+      precoBase = Number(pass.preco);
+      if (combo?.found && pass.preco_inscritos_mostra != null) {
+        precoAposCombo = Number(pass.preco_inscritos_mostra);
+        comboApplied = true;
+      } else {
+        precoAposCombo = precoBase;
+      }
     }
     const discount = couponApplied ? Number(couponApplied.discount) : 0;
     const baseAfterCoupon = Math.max(0, Number((precoAposCombo - discount).toFixed(2)));
@@ -183,7 +235,12 @@ const CheckoutWorkshopPass: React.FC = () => {
     const feeMode = pass.pass_fee_mode ?? 'repassar';
     const charged = feeMode === 'repassar' ? Number((baseAfterCoupon + commission).toFixed(2)) : baseAfterCoupon;
     return { precoBase, precoAposCombo, comboApplied, discount, commission, feeMode, charged };
-  }, [pass, combo, couponApplied]);
+  }, [pass, combo, couponApplied, isALaCarte, poolItems, selectedIds]);
+
+  const selectionOk = !isALaCarte || (
+    selectedIds.size >= (pass?.min_selecionaveis ?? 1) &&
+    selectedIds.size <= (pass?.max_selecionaveis ?? poolItems.length)
+  );
 
   const handleApplyCoupon = async () => {
     if (!pass || couponLoading) return;
@@ -219,7 +276,7 @@ const CheckoutWorkshopPass: React.FC = () => {
   const canSubmit = !!name.trim()
     && !!email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
     && isValidCpf(cpf)
-    && !paying && !error && !comboLoading && !esgotado;
+    && !paying && !error && !comboLoading && !esgotado && selectionOk;
 
   const handlePay = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -240,6 +297,7 @@ const CheckoutWorkshopPass: React.FC = () => {
           user_id: user?.id,
           combo_opt_in: true,
           coupon_code: couponApplied?.code,
+          ...(isALaCarte ? { selected_workshop_ids: Array.from(selectedIds) } : {}),
         },
       });
       if (invokeErr) throw new Error(invokeErr.message ?? 'Erro ao criar inscrição');
@@ -286,22 +344,72 @@ const CheckoutWorkshopPass: React.FC = () => {
         </button>
 
         <div className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-[#ff0068]/20 text-[#ff0068] px-2.5 py-1 rounded-full mb-2">
-          <Ticket size={11} />Workshop Pass
+          <Ticket size={11} />{isALaCarte ? 'Single Class' : 'Workshop Pass'}
         </div>
         <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase mb-1">{pass.name}</h1>
         {pass.description && <p className="text-sm text-slate-400 mb-2">{pass.description}</p>}
-        <p className="text-xs text-slate-500 mb-6">Inclui: {workshopNames.join(', ')}</p>
+        {!isALaCarte && <p className="text-xs text-slate-500 mb-6">Inclui: {workshopNames.join(', ')}</p>}
 
         {esgotado && (
           <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 mb-4 text-sm text-rose-200 flex items-center gap-2">
             <AlertCircle size={16} className="shrink-0" />
-            <span className="font-bold">Esgotado — um dos workshops inclusos não tem mais vagas.</span>
+            <span className="font-bold">{isALaCarte ? 'Todas as aulas deste pacote estão esgotadas.' : 'Esgotado — um dos workshops inclusos não tem mais vagas.'}</span>
           </div>
         )}
         {error && !esgotado && (
           <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 mb-4 text-sm text-rose-200 flex items-center gap-2">
             <AlertCircle size={16} className="shrink-0" />
             <span className="font-bold">{error}</span>
+          </div>
+        )}
+
+        {isALaCarte && !esgotado && (
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+              Escolha suas aulas
+            </p>
+            <p className="text-xs text-slate-500 mb-3">
+              {pass.min_selecionaveis === pass.max_selecionaveis && pass.max_selecionaveis
+                ? `Escolha exatamente ${pass.max_selecionaveis} aula(s).`
+                : `Escolha de ${pass.min_selecionaveis ?? 1} a ${pass.max_selecionaveis ?? poolItems.length} aula(s).`}
+              {' '}Selecionadas: {selectedIds.size}
+            </p>
+            <div className="space-y-2">
+              {poolItems.map(w => {
+                const checked = selectedIds.has(w.id);
+                const precoW = combo?.found && w.preco_inscritos_mostra != null ? Number(w.preco_inscritos_mostra) : Number(w.preco_padrao ?? 0);
+                const dataFmt = w.data_inicio ? new Date(w.data_inicio).toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : null;
+                return (
+                  <label
+                    key={w.id}
+                    className={`flex items-center justify-between gap-3 rounded-xl border p-3 transition ${w.esgotado ? 'border-white/5 opacity-40 cursor-not-allowed' : checked ? 'border-[#ff0068] bg-[#ff0068]/10 cursor-pointer' : 'border-white/10 hover:border-white/20 cursor-pointer'}`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={w.esgotado}
+                        onChange={() => toggleSelected(w.id)}
+                        className="shrink-0 accent-[#ff0068]"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-white truncate">{w.name}</p>
+                        {dataFmt && <p className="text-[11px] text-slate-500">{dataFmt}</p>}
+                        {w.esgotado && <p className="text-[11px] text-rose-400 font-bold">Esgotada</p>}
+                      </div>
+                    </div>
+                    <span className="text-sm font-black text-white shrink-0">{formatBRL(precoW)}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {!selectionOk && selectedIds.size > 0 && (
+              <p className="mt-2 text-[11px] text-rose-300">
+                {selectedIds.size < (pass.min_selecionaveis ?? 1)
+                  ? `Selecione pelo menos ${pass.min_selecionaveis ?? 1} aula(s)`
+                  : `Selecione no máximo ${pass.max_selecionaveis ?? poolItems.length} aula(s)`}
+              </p>
+            )}
           </div>
         )}
 
@@ -394,9 +502,9 @@ const CheckoutWorkshopPass: React.FC = () => {
             </div>
           )}
 
-          {breakdown && (
+          {breakdown && (!isALaCarte || selectedIds.size > 0) && (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-2">
-              <Row label="Preço do pass" value={formatBRL(breakdown.precoBase)} />
+              <Row label={isALaCarte ? `Aulas selecionadas (${selectedIds.size})` : 'Preço do pass'} value={formatBRL(breakdown.precoBase)} />
               {breakdown.comboApplied && breakdown.precoAposCombo !== breakdown.precoBase && (
                 <Row label="Desconto inscrito" value={`−${formatBRL(breakdown.precoBase - breakdown.precoAposCombo)}`} highlight="violet" />
               )}
@@ -430,7 +538,9 @@ const CheckoutWorkshopPass: React.FC = () => {
             className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#ff0068] px-4 py-3.5 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] disabled:opacity-40 disabled:cursor-not-allowed transition"
           >
             {(paying || comboLoading) && <Loader2 size={16} className="animate-spin" />}
-            {comboLoading ? 'Verificando...' : `Comprar pass · ${formatBRL(breakdown?.charged ?? 0)}`}
+            {comboLoading ? 'Verificando...'
+              : isALaCarte && selectedIds.size === 0 ? 'Selecione ao menos 1 aula'
+              : `${isALaCarte ? 'Comprar aulas' : 'Comprar pass'} · ${formatBRL(breakdown?.charged ?? 0)}`}
           </button>
 
           <div className="flex items-center justify-center gap-2 text-[10px] text-slate-500 uppercase tracking-widest">

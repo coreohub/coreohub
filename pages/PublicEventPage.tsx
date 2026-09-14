@@ -79,7 +79,9 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   const [publicPasses, setPublicPasses] = useState<Array<{
     id: string; name: string; description: string | null;
     preco: number; preco_inscritos_mostra: number | null;
-    workshop_names: string[]; esgotado: boolean;
+    workshop_names: string[]; workshop_ids: string[]; esgotado: boolean;
+    selection_mode: 'fixed' | 'a_la_carte';
+    min_selecionaveis: number | null; max_selecionaveis: number | null;
   }>>([]);
   // Tier 2: estoque por tipo de ingresso (mapa idx → { sold, remaining, sold_out })
   const [stockByType, setStockByType] = useState<Record<string, { sold: number; remaining: number | null; sold_out: boolean }>>({});
@@ -294,7 +296,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           // Passes publicados do evento — pacote fixo, exibido em destaque.
           const { data: passesData } = await supabase
             .from('workshop_passes')
-            .select('id, name, description, preco, preco_inscritos_mostra')
+            .select('id, name, description, preco, preco_inscritos_mostra, selection_mode, min_selecionaveis, max_selecionaveis')
             .eq('event_id', eventData.id)
             .eq('is_published', true);
           if (Array.isArray(passesData) && passesData.length > 0) {
@@ -303,13 +305,20 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               .select('pass_id, workshop_id, workshops(name)')
               .in('pass_id', passesData.map((p: any) => p.id));
             const namesByPass: Record<string, string[]> = {};
+            const idsByPass: Record<string, string[]> = {};
             (itemsData ?? []).forEach((it: any) => {
               (namesByPass[it.pass_id] ??= []).push(it.workshops?.name ?? '');
+              (idsByPass[it.pass_id] ??= []).push(it.workshop_id);
             });
             const withStock = await Promise.all(passesData.map(async (p: any) => {
               const { data: stockRow } = await supabase.rpc('get_workshop_pass_stock', { p_pass_id: p.id });
               const row = Array.isArray(stockRow) ? stockRow[0] : stockRow;
-              return { ...p, workshop_names: namesByPass[p.id] ?? [], esgotado: Boolean(row?.esgotado) };
+              return {
+                ...p,
+                workshop_names: namesByPass[p.id] ?? [],
+                workshop_ids: idsByPass[p.id] ?? [],
+                esgotado: Boolean(row?.esgotado),
+              };
             }));
             setPublicPasses(withStock);
           }
@@ -474,6 +483,13 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   // de "Inscrições"/"Resultados" apareciam mesmo sem nenhuma modalidade
   // pra inscrever, apontando pro Wizard vazio.
   const hasFormacoes = Array.isArray(event.formacoes_config) && event.formacoes_config.length > 0;
+  // Aulas já agrupadas num pacote "Aluno escolhe" (à la carte) somem da grade
+  // solta de workshops — senão a mesma aula aparece 2x na vitrine (card do
+  // pacote + card individual), poluindo a página. Pedido real: Lorrayne,
+  // Vicenza Dance Camp 2027, 2026-09-14.
+  const workshopIdsInALaCartePasses = new Set(
+    publicPasses.filter(p => p.selection_mode === 'a_la_carte').flatMap(p => p.workshop_ids)
+  );
 
   // Prazo real de inscrição vem de configuracoes.prazo_inscricao (campo que o
   // produtor preenche em Configurações → Geral). `event.registration_start_date`/
@@ -1518,18 +1534,23 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 padrão de convenções de dança (NUVO/JUMP): pacote por nível de acesso. */}
             {publicPasses.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {publicPasses.map(pass => (
+                {publicPasses.map(pass => {
+                  const isALaCarte = pass.selection_mode === 'a_la_carte';
+                  // Tudo-ou-nada só se aplica ao pacote fechado — no modo à la
+                  // carte cada aula esgota individualmente (checado no checkout).
+                  const blocked = eventOver || (!isALaCarte && pass.esgotado);
+                  return (
                   <button
                     key={pass.id}
-                    onClick={() => !pass.esgotado && !eventOver && navigate(`/checkout-workshop-pass/${pass.id}`)}
-                    disabled={pass.esgotado || eventOver}
+                    onClick={() => !blocked && navigate(`/checkout-workshop-pass/${pass.id}`)}
+                    disabled={blocked}
                     className="text-left bg-gradient-to-br from-[#ff0068]/15 to-[#1de7f2]/10 border-2 border-[#ff0068]/40 hover:border-[#ff0068] rounded-2xl p-5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="flex items-center justify-between mb-2">
                       <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-[#ff0068] text-white px-2.5 py-1 rounded-full">
-                        <Ticket size={11} />Pass
+                        <Ticket size={11} />{isALaCarte ? 'Single Class' : 'Pass'}
                       </span>
-                      {pass.esgotado && !eventOver && (
+                      {!isALaCarte && pass.esgotado && !eventOver && (
                         <span className="text-[10px] font-black uppercase tracking-widest text-rose-400">Esgotado</span>
                       )}
                       {eventOver && (
@@ -1538,20 +1559,31 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                     </div>
                     <h3 className="font-black uppercase tracking-tight text-white text-base leading-tight">{pass.name}</h3>
                     {pass.description && <p className="text-xs text-slate-300 mt-1 line-clamp-2">{pass.description}</p>}
-                    <p className="text-[11px] text-slate-400 mt-2">Inclui: {pass.workshop_names.filter(Boolean).join(', ')}</p>
-                    <p className="text-lg font-black text-white pt-2">
-                      {Number(pass.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </p>
-                    {pass.preco_inscritos_mostra != null && (
-                      <p className="text-xs text-violet-300">↓ {Number(pass.preco_inscritos_mostra).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} p/ inscritos</p>
+                    {isALaCarte ? (
+                      <>
+                        <p className="text-[11px] text-slate-400 mt-2">Escolha entre: {pass.workshop_names.filter(Boolean).join(', ')}</p>
+                        <p className="text-sm font-black text-white pt-2">Você escolhe quais aulas fazer</p>
+                        <p className="text-[11px] text-slate-400">Preço soma conforme a seleção →</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-[11px] text-slate-400 mt-2">Inclui: {pass.workshop_names.filter(Boolean).join(', ')}</p>
+                        <p className="text-lg font-black text-white pt-2">
+                          {Number(pass.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </p>
+                        {pass.preco_inscritos_mostra != null && (
+                          <p className="text-xs text-violet-300">↓ {Number(pass.preco_inscritos_mostra).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} p/ inscritos</p>
+                        )}
+                      </>
                     )}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {publicWorkshops.map(ws => {
+              {publicWorkshops.filter(ws => !workshopIdsInALaCartePasses.has(ws.id)).map(ws => {
                 const dataFmt = new Date(ws.data_inicio).toLocaleString('pt-BR', {
                   weekday: 'short', day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit',
                 });

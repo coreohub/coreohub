@@ -2524,6 +2524,9 @@ interface PassRow {
   pass_max_per_cpf: number;
   is_published: boolean;
   workshop_ids: string[];
+  selection_mode: 'fixed' | 'a_la_carte';
+  min_selecionaveis: number | null;
+  max_selecionaveis: number | null;
 }
 
 const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[] }> = ({ eventId, workshopsInEvent }) => {
@@ -2552,6 +2555,9 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
     pass_max_per_cpf: 1,
     is_published: false,
     workshop_ids: [] as string[],
+    selection_mode: 'fixed' as 'fixed' | 'a_la_carte',
+    min_selecionaveis: '' as string | number,
+    max_selecionaveis: '' as string | number,
   };
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
@@ -2612,15 +2618,26 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
       pass_max_per_cpf: p.pass_max_per_cpf,
       is_published: p.is_published,
       workshop_ids: p.workshop_ids,
+      selection_mode: p.selection_mode ?? 'fixed',
+      min_selecionaveis: p.min_selecionaveis ?? '',
+      max_selecionaveis: p.max_selecionaveis ?? '',
     });
     setFormError(null);
     setShowModal(true);
   };
 
   const savePass = async () => {
+    const isALaCarte = form.selection_mode === 'a_la_carte';
     if (!form.name.trim()) return setFormError('Nome do pass é obrigatório');
-    if (Number(form.preco) <= 0) return setFormError('Preço do pass deve ser maior que zero');
-    if (form.workshop_ids.length < 2) return setFormError('Selecione pelo menos 2 workshops pro pass');
+    if (!isALaCarte && Number(form.preco) <= 0) return setFormError('Preço do pass deve ser maior que zero');
+    if (form.workshop_ids.length < 2) return setFormError(isALaCarte ? 'Selecione pelo menos 2 aulas pro pacote' : 'Selecione pelo menos 2 workshops pro pass');
+    if (isALaCarte) {
+      const min = form.min_selecionaveis === '' ? 1 : Number(form.min_selecionaveis);
+      const max = form.max_selecionaveis === '' ? form.workshop_ids.length : Number(form.max_selecionaveis);
+      if (min < 1) return setFormError('Mínimo de aulas deve ser pelo menos 1');
+      if (max > form.workshop_ids.length) return setFormError('Máximo de aulas não pode passar do total de aulas no pacote');
+      if (min > max) return setFormError('Mínimo não pode ser maior que o máximo');
+    }
 
     setSaving(true);
     setFormError(null);
@@ -2633,13 +2650,16 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
       created_by: user.id,
       name: form.name.trim(),
       description: form.description.trim() || null,
-      preco: Number(form.preco),
+      preco: isALaCarte ? 0 : Number(form.preco),
       preco_inscritos_mostra: form.preco_inscritos_mostra === '' ? null : Number(form.preco_inscritos_mostra),
       auto_detect_combo: form.auto_detect_combo,
       pass_commission_percent: Number(form.pass_commission_percent),
       pass_fee_mode: form.pass_fee_mode,
       pass_max_per_cpf: Number(form.pass_max_per_cpf),
       is_published: form.is_published,
+      selection_mode: form.selection_mode,
+      min_selecionaveis: isALaCarte ? (form.min_selecionaveis === '' ? 1 : Number(form.min_selecionaveis)) : null,
+      max_selecionaveis: isALaCarte ? (form.max_selecionaveis === '' ? null : Number(form.max_selecionaveis)) : null,
     };
 
     let passId = editingId;
@@ -2765,15 +2785,27 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
                       <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-slate-500/15 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full"><EyeOff size={10} />Rascunho</span>
                     )}
                     <span className="text-[10px] font-black uppercase tracking-wider bg-[#ff0068]/15 text-[#ff0068] px-2 py-0.5 rounded-full">Pass</span>
+                    {p.selection_mode === 'a_la_carte' && (
+                      <span className="text-[10px] font-black uppercase tracking-wider bg-violet-500/15 text-violet-600 dark:text-violet-400 px-2 py-0.5 rounded-full">Aluno escolhe</span>
+                    )}
                   </div>
                   <h3 className="text-lg font-black text-slate-900 dark:text-white">{p.name}</h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    {p.workshop_ids.length} workshops inclusos: {p.workshop_ids.map(wid => workshopsInEvent.find(w => w.id === wid)?.name ?? '?').join(', ')}
+                    {p.selection_mode === 'a_la_carte'
+                      ? `${p.workshop_ids.length} aulas no pacote · aluno escolhe ${p.min_selecionaveis ?? 1}${p.max_selecionaveis ? `–${p.max_selecionaveis}` : '+'}: `
+                      : `${p.workshop_ids.length} workshops inclusos: `}
+                    {p.workshop_ids.map(wid => workshopsInEvent.find(w => w.id === wid)?.name ?? '?').join(', ')}
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
-                    <span className="font-black text-slate-900 dark:text-white">{fmtCurrency(p.preco)}</span>
-                    {p.preco_inscritos_mostra != null && (
-                      <span className="text-xs text-violet-600 dark:text-violet-400">↓ {fmtCurrency(p.preco_inscritos_mostra)} p/ inscritos</span>
+                    {p.selection_mode === 'a_la_carte' ? (
+                      <span className="text-xs text-slate-500 dark:text-slate-400 italic">Preço soma o valor de cada aula escolhida</span>
+                    ) : (
+                      <>
+                        <span className="font-black text-slate-900 dark:text-white">{fmtCurrency(p.preco)}</span>
+                        {p.preco_inscritos_mostra != null && (
+                          <span className="text-xs text-violet-600 dark:text-violet-400">↓ {fmtCurrency(p.preco_inscritos_mostra)} p/ inscritos</span>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -2959,7 +2991,28 @@ const PassFormModal: React.FC<PassFormModalProps> = ({ form, setForm, formError,
             </Field>
           </Section>
 
-          <Section title="Workshops inclusos (mín. 2) *">
+          <Section title="Como funciona a seleção?">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => upd('selection_mode', 'fixed')}
+                className={`text-left rounded-xl border p-3 transition ${form.selection_mode === 'fixed' ? 'border-[#ff0068] bg-[#ff0068]/5' : 'border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5'}`}
+              >
+                <p className="text-sm font-bold text-slate-900 dark:text-white">Pacote fechado</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Comprador leva todos os workshops inclusos, 1 preço fixo.</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => upd('selection_mode', 'a_la_carte')}
+                className={`text-left rounded-xl border p-3 transition ${form.selection_mode === 'a_la_carte' ? 'border-[#ff0068] bg-[#ff0068]/5' : 'border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5'}`}
+              >
+                <p className="text-sm font-bold text-slate-900 dark:text-white">Aluno escolhe</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Aluno marca quais aulas quer fazer; preço soma conforme a escolha. Ideal pra aulas avulsas / single class.</p>
+              </button>
+            </div>
+          </Section>
+
+          <Section title={form.selection_mode === 'a_la_carte' ? 'Aulas disponíveis no pacote (mín. 2) *' : 'Workshops inclusos (mín. 2) *'}>
             <div className="space-y-2 max-h-48 overflow-y-auto rounded-lg border border-slate-200 dark:border-white/10 p-3">
               {workshopsInEvent.length === 0 ? (
                 <p className="text-xs text-slate-500 italic">Nenhum workshop cadastrado nesse evento ainda.</p>
@@ -2974,25 +3027,49 @@ const PassFormModal: React.FC<PassFormModalProps> = ({ form, setForm, formError,
             </div>
           </Section>
 
-          <Section title="Preços">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Preço do pass (R$) *"><input type="number" step="0.01" value={form.preco} onChange={e => upd('preco', e.target.value)} className={inputCls} /></Field>
-              <Field label="Preço para inscritos da mostra (R$)">
-                <input type="number" step="0.01" value={form.preco_inscritos_mostra} onChange={e => upd('preco_inscritos_mostra', e.target.value)} className={inputCls} placeholder="vazio = mesmo preço" />
-              </Field>
-            </div>
-            <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
-              <input type="checkbox" checked={form.auto_detect_combo} onChange={e => upd('auto_detect_combo', e.target.checked)} className="mt-1" />
-              <span>
-                Detectar combo automaticamente pelo CPF (cruza com inscrições aprovadas)
-                <span className="block text-xs text-slate-500 dark:text-slate-400">Se desligado, comprador paga o preço cheio</span>
-              </span>
-            </label>
-            <p className="text-xs text-slate-500 dark:text-slate-400 inline-flex items-start gap-1.5">
-              <Sparkles size={12} className="mt-0.5 shrink-0" />
-              Preço é fixo — o pass esgota assim que qualquer workshop incluso ficar sem vaga (tudo-ou-nada).
-            </p>
-          </Section>
+          {form.selection_mode === 'a_la_carte' ? (
+            <Section title="Quantas o aluno pode escolher?">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="Mínimo">
+                  <input type="number" min={1} value={form.min_selecionaveis} onChange={e => upd('min_selecionaveis', e.target.value)} className={inputCls} placeholder="1" />
+                </Field>
+                <Field label="Máximo">
+                  <input type="number" min={1} value={form.max_selecionaveis} onChange={e => upd('max_selecionaveis', e.target.value)} className={inputCls} placeholder={`vazio = até ${form.workshop_ids.length || 'todas'}`} />
+                </Field>
+              </div>
+              <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+                <input type="checkbox" checked={form.auto_detect_combo} onChange={e => upd('auto_detect_combo', e.target.checked)} className="mt-1" />
+                <span>
+                  Detectar combo automaticamente pelo CPF (aplica o preço de inscrito da mostra de CADA aula escolhida)
+                  <span className="block text-xs text-slate-500 dark:text-slate-400">Configure o preço de inscrito em cada workshop individual, não aqui</span>
+                </span>
+              </label>
+              <p className="text-xs text-slate-500 dark:text-slate-400 inline-flex items-start gap-1.5">
+                <Sparkles size={12} className="mt-0.5 shrink-0" />
+                Preço não é fixo aqui — soma o preço vigente de cada aula que o aluno marcar. O pool esgota por aula individual (cada uma some da lista quando lotar).
+              </p>
+            </Section>
+          ) : (
+            <Section title="Preços">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="Preço do pass (R$) *"><input type="number" step="0.01" value={form.preco} onChange={e => upd('preco', e.target.value)} className={inputCls} /></Field>
+                <Field label="Preço para inscritos da mostra (R$)">
+                  <input type="number" step="0.01" value={form.preco_inscritos_mostra} onChange={e => upd('preco_inscritos_mostra', e.target.value)} className={inputCls} placeholder="vazio = mesmo preço" />
+                </Field>
+              </div>
+              <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+                <input type="checkbox" checked={form.auto_detect_combo} onChange={e => upd('auto_detect_combo', e.target.checked)} className="mt-1" />
+                <span>
+                  Detectar combo automaticamente pelo CPF (cruza com inscrições aprovadas)
+                  <span className="block text-xs text-slate-500 dark:text-slate-400">Se desligado, comprador paga o preço cheio</span>
+                </span>
+              </label>
+              <p className="text-xs text-slate-500 dark:text-slate-400 inline-flex items-start gap-1.5">
+                <Sparkles size={12} className="mt-0.5 shrink-0" />
+                Preço é fixo — o pass esgota assim que qualquer workshop incluso ficar sem vaga (tudo-ou-nada).
+              </p>
+            </Section>
+          )}
 
           <Section title="Limites & taxas">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
