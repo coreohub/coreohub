@@ -117,7 +117,7 @@ const Festivais = () => {
         // manual aqui.
         const { data, error } = await supabase
           .from('events')
-          .select('id, slug, name, description, cover_url, start_date, end_date, location, city, state, formacoes_config, edition_year, is_public')
+          .select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, start_date, end_date, location, city, state, formacoes_config, edition_year, is_public')
           .eq('is_public', true)
           .order('start_date', { ascending: false });
         if (error) throw error;
@@ -437,6 +437,7 @@ const EventCard: React.FC<{
             src={event.cover_url}
             alt={event.name}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+            style={{ objectPosition: `${event.cover_focal_x ?? 50}% ${event.cover_focal_y ?? 50}%` }}
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-[#ff0068]/20 via-purple-900/20 to-slate-900 flex items-center justify-center">

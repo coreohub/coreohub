@@ -7,7 +7,9 @@ import {
   Plus, Trash2, Pencil, Calendar, Clock, MapPin, Loader2, X, AlertCircle, CheckCircle,
   GraduationCap, User, Tag, Layers, DollarSign, Users, Globe, EyeOff, Camera,
   ShoppingCart, Mail, RefreshCw, UserCheck, Search, Image as ImageIcon, Ticket, Sparkles,
+  Crosshair,
 } from 'lucide-react';
+import FocalPointPicker from '../components/FocalPointPicker';
 
 type Nivel = 'iniciante' | 'intermediario' | 'avancado' | 'todos';
 type FeeMode = 'repassar' | 'absorver';
@@ -21,10 +23,14 @@ interface WorkshopRow {
   slug: string | null;
   description: string | null;
   cover_url: string | null;
+  cover_focal_x: number | null;
+  cover_focal_y: number | null;
   professor_name: string;
   professor_bio: string | null;
   professor_bio_short: string | null;
   professor_photo_url: string | null;
+  professor_photo_focal_x: number | null;
+  professor_photo_focal_y: number | null;
   professor_instagram: string | null;
   professor_site_url: string | null;
   professor_is_public: boolean;
@@ -155,10 +161,14 @@ const WorkshopsManagement: React.FC = () => {
     slug: '',
     description: '',
     cover_url: '',
+    cover_focal_x: 50,
+    cover_focal_y: 50,
     professor_name: '',
     professor_bio: '',
     professor_bio_short: '',
     professor_photo_url: '',
+    professor_photo_focal_x: 50,
+    professor_photo_focal_y: 50,
     professor_instagram: '',
     professor_site_url: '',
     professor_is_public: true,
@@ -317,10 +327,14 @@ const WorkshopsManagement: React.FC = () => {
       slug: w.slug ?? '',
       description: w.description ?? '',
       cover_url: w.cover_url ?? '',
+      cover_focal_x: w.cover_focal_x ?? 50,
+      cover_focal_y: w.cover_focal_y ?? 50,
       professor_name: w.professor_name,
       professor_bio: w.professor_bio ?? '',
       professor_bio_short: w.professor_bio_short ?? '',
       professor_photo_url: w.professor_photo_url ?? '',
+      professor_photo_focal_x: w.professor_photo_focal_x ?? 50,
+      professor_photo_focal_y: w.professor_photo_focal_y ?? 50,
       professor_instagram: w.professor_instagram ?? '',
       professor_site_url: w.professor_site_url ?? '',
       professor_is_public: w.professor_is_public,
@@ -396,10 +410,14 @@ const WorkshopsManagement: React.FC = () => {
       slug: form.slug.trim() || slugify(form.name),
       description: form.description.trim() || null,
       cover_url: form.cover_url.trim() || null,
+      cover_focal_x: form.cover_focal_x ?? 50,
+      cover_focal_y: form.cover_focal_y ?? 50,
       professor_name: form.professor_name.trim(),
       professor_bio: form.professor_bio.trim() || null,
       professor_bio_short: form.professor_bio_short.trim() || null,
       professor_photo_url: form.professor_photo_url.trim() || null,
+      professor_photo_focal_x: form.professor_photo_focal_x ?? 50,
+      professor_photo_focal_y: form.professor_photo_focal_y ?? 50,
       professor_instagram: form.professor_instagram.trim() || null,
       professor_site_url: form.professor_site_url.trim() || null,
       professor_is_public: form.professor_is_public,
@@ -1786,6 +1804,7 @@ interface WorkshopFormModalProps {
 
 const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, formError, saving, isEdit, events, judges, onClose, onSave }) => {
   const upd = (k: string, v: any) => setForm((p: any) => ({ ...p, [k]: v }));
+  const [focalTarget, setFocalTarget] = useState<'cover' | 'professor' | null>(null);
 
   // "Noites cobertas"/"Dias de camp" — chips de data + input nativo, em vez de
   // texto cru separado por vírgula (frágil pro produtor digitar sem erro).
@@ -1852,6 +1871,8 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
         reader.readAsDataURL(compressed);
       });
       upd('professor_photo_url', base64);
+      upd('professor_photo_focal_x', 50);
+      upd('professor_photo_focal_y', 50);
     } catch (e) {
       console.warn('Falha ao processar foto do professor:', e);
     } finally {
@@ -1880,6 +1901,8 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
         reader.readAsDataURL(compressed);
       });
       upd('cover_url', base64);
+      upd('cover_focal_x', 50);
+      upd('cover_focal_y', 50);
     } catch (e) {
       console.warn('Falha ao processar capa do workshop:', e);
     } finally {
@@ -1887,7 +1910,9 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
     }
   };
 
-  return createPortal(
+  return (
+    <>
+    {createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -1951,7 +1976,12 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
               <div className="flex items-start gap-4">
                 <div className="relative shrink-0 w-32 aspect-video rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-white/10">
                   {form.cover_url ? (
-                    <img src={form.cover_url} alt="capa do workshop" className="w-full h-full object-cover" />
+                    <img
+                      src={form.cover_url}
+                      alt="capa do workshop"
+                      className="w-full h-full object-cover"
+                      style={{ objectPosition: `${form.cover_focal_x ?? 50}% ${form.cover_focal_y ?? 50}%` }}
+                    />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-slate-400 dark:text-slate-600">
                       <ImageIcon size={20} />
@@ -1971,6 +2001,17 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
                       : <Camera size={12} />
                     }
                   </button>
+                  {form.cover_url && (
+                    <button
+                      type="button"
+                      onClick={() => setFocalTarget('cover')}
+                      className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-white text-slate-900 flex items-center justify-center shadow-lg ring-2 ring-white dark:ring-slate-900 hover:scale-110 transition-transform"
+                      title="Ajustar enquadramento"
+                      aria-label="Ajustar enquadramento da capa"
+                    >
+                      <Crosshair size={12} />
+                    </button>
+                  )}
                   <input
                     ref={coverInputRef}
                     type="file"
@@ -2010,6 +2051,7 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
                   src={form.professor_photo_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(form.professor_name || 'professor')}`}
                   alt="avatar do professor"
                   className="w-16 h-16 rounded-2xl object-cover bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-white/10"
+                  style={form.professor_photo_url ? { objectPosition: `${form.professor_photo_focal_x ?? 50}% ${form.professor_photo_focal_y ?? 50}%` } : undefined}
                 />
                 <button
                   type="button"
@@ -2024,6 +2066,17 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
                     : <Camera size={12} />
                   }
                 </button>
+                {form.professor_photo_url && (
+                  <button
+                    type="button"
+                    onClick={() => setFocalTarget('professor')}
+                    className="absolute -bottom-1 -left-1 w-6 h-6 rounded-full bg-white text-slate-900 flex items-center justify-center shadow-lg ring-2 ring-white dark:ring-slate-900 hover:scale-110 transition-transform"
+                    title="Ajustar enquadramento"
+                    aria-label="Ajustar enquadramento da foto do professor"
+                  >
+                    <Crosshair size={12} />
+                  </button>
+                )}
                 <input
                   ref={photoInputRef}
                   type="file"
@@ -2217,6 +2270,27 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
       </div>
     </div>,
     document.body,
+    )}
+    {focalTarget === 'cover' && form.cover_url && (
+      <FocalPointPicker
+        imageUrl={form.cover_url}
+        initialX={form.cover_focal_x ?? 50}
+        initialY={form.cover_focal_y ?? 50}
+        onCancel={() => setFocalTarget(null)}
+        onConfirm={(x, y) => { upd('cover_focal_x', x); upd('cover_focal_y', y); setFocalTarget(null); }}
+      />
+    )}
+    {focalTarget === 'professor' && form.professor_photo_url && (
+      <FocalPointPicker
+        imageUrl={form.professor_photo_url}
+        initialX={form.professor_photo_focal_x ?? 50}
+        initialY={form.professor_photo_focal_y ?? 50}
+        aspectPreviews={[{ label: 'Avatar (quadrado)', ratio: 1 }]}
+        onCancel={() => setFocalTarget(null)}
+        onConfirm={(x, y) => { upd('professor_photo_focal_x', x); upd('professor_photo_focal_y', y); setFocalTarget(null); }}
+      />
+    )}
+    </>
   );
 };
 

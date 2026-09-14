@@ -137,6 +137,8 @@ export interface Event {
   category_price?: number;
   slots_limit?: number;
   cover_url?: string;
+  cover_focal_x?: number;
+  cover_focal_y?: number;
   default_penalty?: number;
 
   // Advanced SaaS Fields

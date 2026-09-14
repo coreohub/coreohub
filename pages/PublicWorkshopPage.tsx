@@ -23,10 +23,14 @@ interface Workshop {
   slug: string | null;
   description: string | null;
   cover_url: string | null;
+  cover_focal_x: number | null;
+  cover_focal_y: number | null;
   professor_name: string;
   professor_bio: string | null;
   professor_bio_short: string | null;
   professor_photo_url: string | null;
+  professor_photo_focal_x: number | null;
+  professor_photo_focal_y: number | null;
   professor_instagram: string | null;
   professor_site_url: string | null;
   professor_is_public: boolean;
@@ -282,7 +286,14 @@ const PublicWorkshopPage: React.FC = () => {
       <div className="max-w-5xl mx-auto">
         <div className="relative aspect-[16/9] sm:rounded-b-3xl overflow-hidden">
           {(workshop.cover_url || workshop.professor_photo_url) ? (
-            <img src={workshop.cover_url || workshop.professor_photo_url || ''} alt="" className="w-full h-full object-cover" />
+            <img
+              src={workshop.cover_url || workshop.professor_photo_url || ''}
+              alt=""
+              className="w-full h-full object-cover"
+              style={{ objectPosition: workshop.cover_url
+                ? `${workshop.cover_focal_x ?? 50}% ${workshop.cover_focal_y ?? 50}%`
+                : `${workshop.professor_photo_focal_x ?? 50}% ${workshop.professor_photo_focal_y ?? 50}%` }}
+            />
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-[#ff0068] via-purple-700 to-[#0b0b0f]" />
           )}
@@ -401,7 +412,12 @@ const PublicWorkshopPage: React.FC = () => {
             <h2 className="text-xs font-black uppercase tracking-widest text-[#ff0068] mb-4">Professor</h2>
             <div className="flex items-start gap-4">
               {workshop.professor_photo_url ? (
-                <img src={workshop.professor_photo_url} alt={workshop.professor_name} className="w-20 h-20 rounded-2xl object-cover" />
+                <img
+                  src={workshop.professor_photo_url}
+                  alt={workshop.professor_name}
+                  className="w-20 h-20 rounded-2xl object-cover"
+                  style={{ objectPosition: `${workshop.professor_photo_focal_x ?? 50}% ${workshop.professor_photo_focal_y ?? 50}%` }}
+                />
               ) : (
                 <div className="w-20 h-20 rounded-2xl bg-white/10 flex items-center justify-center">
                   <UserIcon size={32} className="text-slate-400" />

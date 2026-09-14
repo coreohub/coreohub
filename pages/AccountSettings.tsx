@@ -28,8 +28,9 @@ import {
   CreditCard, CheckCircle, AlertCircle, ExternalLink, Percent, Hash,
   Image as ImageIcon, Upload, Play, Pause, Volume2,
   Instagram, MessageCircle, Globe, Mail, FileText, Youtube, Smartphone,
-  RefreshCw, Facebook,
+  RefreshCw, Facebook, Crosshair,
 } from 'lucide-react';
+import FocalPointPicker from '../components/FocalPointPicker';
 import { formatEventWhatsApp, resolveEstudio, stripEstiloVertentes } from '../utils/formatters';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
 import InstallPWAButton from '../components/InstallPWAButton';
@@ -409,6 +410,8 @@ const DEFAULT_GENERAL = {
   // 'RANKING' = 1º/2º/3º lugar pela colocação (uma medalha por posição).
   premiationSystem: 'THRESHOLD' as 'THRESHOLD' | 'RANKING',
   coverUrl: '',
+  coverFocalX: 50,
+  coverFocalY: 50,
   description: '',
 };
 
@@ -1316,6 +1319,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [deleteBlockedByRegs, setDeleteBlockedByRegs] = useState(true);
   const [deleteModalOpen,     setDeleteModalOpen]     = useState(false);
   const [showImageGuide,      setShowImageGuide]      = useState(false);
+  const [showFocalPicker,     setShowFocalPicker]     = useState(false);
   const [deleteConfirmText,   setDeleteConfirmText]   = useState('');
   const [deleting,            setDeleting]            = useState(false);
   const [deleteError,         setDeleteError]         = useState<string | null>(null);
@@ -1974,7 +1978,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         let myEvent: any = null;
         if (user) {
           const evRes = await supabase
-            .from('events').select('id, slug, name, description, cover_url, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, audience_sales_enabled, audience_commission_percent, audience_commission_percent_manual, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, producer_ga4_id, producer_meta_pixel_id')
+            .from('events').select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, audience_sales_enabled, audience_commission_percent, audience_commission_percent_manual, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, producer_ga4_id, producer_meta_pixel_id')
             .eq('id', selectedEventId)
             .maybeSingle();
           // select() amplo sem checar error mascara coluna ausente como "não
@@ -2104,6 +2108,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               : 'custom',
             premiationSystem: (data.premiation_system as 'THRESHOLD' | 'RANKING') || DEFAULT_GENERAL.premiationSystem,
             coverUrl:    data.cover_url   || evt.cover_url    || DEFAULT_GENERAL.coverUrl,
+            coverFocalX: evt.cover_focal_x ?? DEFAULT_GENERAL.coverFocalX,
+            coverFocalY: evt.cover_focal_y ?? DEFAULT_GENERAL.coverFocalY,
             description: descriptionFromDb,
             eventTime:   data.hora_evento || DEFAULT_GENERAL.eventTime,
           });
@@ -2476,6 +2482,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           name:                    general.eventName,
           description:             general.description || null,
           cover_url:               general.coverUrl || null,
+          cover_focal_x:           general.coverFocalX ?? 50,
+          cover_focal_y:           general.coverFocalY ?? 50,
           edition_year:            editionYear,
           start_date:              general.eventDate || null,
           // Camp/festival multi-dia (18-23/jan, por ex.) tem Data Final própria
@@ -2687,7 +2695,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   <label className={label}>Banner do Evento (1200×630 recomendado)</label>
                   {general.coverUrl ? (
                     <div className="relative group rounded-2xl overflow-hidden aspect-[1200/630] bg-slate-100 dark:bg-slate-800">
-                      <img src={general.coverUrl} alt="Banner" className="w-full h-full object-cover" />
+                      <img
+                        src={general.coverUrl}
+                        alt="Banner"
+                        className="w-full h-full object-cover"
+                        style={{ objectPosition: `${general.coverFocalX}% ${general.coverFocalY}%` }}
+                      />
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                         <label className="cursor-pointer px-4 py-2 bg-white/90 text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white">
                           <input
@@ -2705,7 +2718,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                                   fileType: 'image/webp',
                                 });
                                 const url = await uploadEventCover('config_' + Date.now(), compressed);
-                                setGeneral(g => ({ ...g, coverUrl: url }));
+                                setGeneral(g => ({ ...g, coverUrl: url, coverFocalX: 50, coverFocalY: 50 }));
                               } catch (err: any) {
                                 setError('Erro ao subir banner: ' + err.message);
                               }
@@ -2714,7 +2727,14 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                           Trocar
                         </label>
                         <button
-                          onClick={() => setGeneral(g => ({ ...g, coverUrl: '' }))}
+                          type="button"
+                          onClick={() => setShowFocalPicker(true)}
+                          className="px-4 py-2 bg-white/90 text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white inline-flex items-center gap-1.5"
+                        >
+                          <Crosshair size={12} /> Enquadramento
+                        </button>
+                        <button
+                          onClick={() => setGeneral(g => ({ ...g, coverUrl: '', coverFocalX: 50, coverFocalY: 50 }))}
                           className="px-4 py-2 bg-red-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-600"
                         >
                           Remover
@@ -7387,6 +7407,19 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           </div>
         </div>,
         document.body
+      )}
+
+      {showFocalPicker && general.coverUrl && (
+        <FocalPointPicker
+          imageUrl={general.coverUrl}
+          initialX={general.coverFocalX}
+          initialY={general.coverFocalY}
+          onCancel={() => setShowFocalPicker(false)}
+          onConfirm={(x, y) => {
+            setGeneral(g => ({ ...g, coverFocalX: x, coverFocalY: y }));
+            setShowFocalPicker(false);
+          }}
+        />
       )}
 
       {/* Guia de Imagens — mockup dos tamanhos recomendados por slot de upload

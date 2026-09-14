@@ -61,7 +61,9 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   // Workshops Etapa 1: lista pública dos workshops do evento (publicados)
   const [publicWorkshops, setPublicWorkshops] = useState<Array<{
     id: string; slug: string | null; name: string; description: string | null; cover_url: string | null;
+    cover_focal_x: number | null; cover_focal_y: number | null;
     professor_name: string; professor_bio: string | null; professor_photo_url: string | null;
+    professor_photo_focal_x: number | null; professor_photo_focal_y: number | null;
     professor_instagram: string | null; professor_is_public: boolean;
     modalidade: string | null; nivel: string; data_inicio: string;
     duracao_minutos: number | null; preco_padrao: number; gratis_para_inscritos: boolean;
@@ -127,7 +129,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         const { data: eventData, error: eventError } = await supabase
           .from('events')
           .select(`
-            id, slug, name, description, cover_url, created_by,
+            id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, created_by,
             location, city, state,
             start_date, end_date, event_time,
             instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event,
@@ -234,7 +236,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         // RLS já filtra is_published=true pra anon. Carrega só campos exibidos.
         const { data: wsData } = await supabase
           .from('workshops')
-          .select('id, slug, name, description, cover_url, professor_name, professor_bio, professor_photo_url, professor_instagram, professor_is_public, modalidade, nivel, data_inicio, duracao_minutos, preco_padrao, gratis_para_inscritos, display_order, is_featured, featured_badge_text, hospedagem_delta')
+          .select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, professor_name, professor_bio, professor_photo_url, professor_photo_focal_x, professor_photo_focal_y, professor_instagram, professor_is_public, modalidade, nivel, data_inicio, duracao_minutos, preco_padrao, gratis_para_inscritos, display_order, is_featured, featured_badge_text, hospedagem_delta')
           .eq('event_id', eventData.id)
           .eq('is_published', true)
           .order('data_inicio', { ascending: true });
@@ -836,7 +838,12 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             {/* Coluna da foto */}
             <div>
               {event.cover_url ? (
-                <img src={event.cover_url} alt={event.name} className="w-full aspect-[1200/630] object-cover rounded-2xl border border-white/10" />
+                <img
+                  src={event.cover_url}
+                  alt={event.name}
+                  className="w-full aspect-[1200/630] object-cover rounded-2xl border border-white/10"
+                  style={{ objectPosition: `${event.cover_focal_x ?? 50}% ${event.cover_focal_y ?? 50}%` }}
+                />
               ) : (
                 <div className="w-full aspect-[1200/630] rounded-2xl bg-gradient-to-br from-[#ff0068]/10 via-slate-900 to-[#050505] border border-white/10" />
               )}
@@ -1610,7 +1617,15 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                     <div className={featured ? 'sm:flex sm:items-stretch' : ''}>
                       <div className={featured ? 'aspect-[16/9] sm:aspect-auto sm:w-2/5 bg-gradient-to-br from-amber-400/20 to-purple-500/20 relative overflow-hidden' : 'aspect-[16/9] bg-gradient-to-br from-[#ff0068]/20 to-purple-500/20 relative overflow-hidden'}>
                         {(ws.cover_url || ws.professor_photo_url) && (
-                          <img src={ws.cover_url || ws.professor_photo_url || ''} alt={ws.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                          <img
+                            src={ws.cover_url || ws.professor_photo_url || ''}
+                            alt={ws.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            loading="lazy"
+                            style={{ objectPosition: ws.cover_url
+                              ? `${ws.cover_focal_x ?? 50}% ${ws.cover_focal_y ?? 50}%`
+                              : `${ws.professor_photo_focal_x ?? 50}% ${ws.professor_photo_focal_y ?? 50}%` }}
+                          />
                         )}
                         {ws.gratis_para_inscritos && (
                           <span className="absolute top-2 right-2 inline-flex items-center text-[9px] font-black uppercase tracking-widest bg-violet-500/90 text-white px-2 py-0.5 rounded-full">
