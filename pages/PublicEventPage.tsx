@@ -1014,29 +1014,69 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           </div>
         )}
 
-        {/* Stats Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {([
+        {/* Info cards — Vagas/Inscrições até/Premiação/Documentos numa grade
+            única responsiva, em vez de 2 seções separadas (Stats Row +
+            Documentos) com layouts diferentes. Evita sobra grande de espaço
+            vazio quando o evento tem poucos itens preenchidos (ex: camp sem
+            lado competitivo, só Inscrições+Documento) — numa grade só, os
+            cards preenchem da esquerda pra direita e a única "sobra"
+            possível é o resto normal da última linha, não um buraco visível. */}
+        {(() => {
+          const statCards = ([
             // Esconde vagas se produtor não preencheu (não mostra "0" ou "∞")
             event.slots_limit
-              ? { label: 'Vagas', value: event.slots_limit, icon: Star }
+              ? { key: 'vagas', label: 'Vagas', value: String(event.slots_limit), icon: Star }
               : null,
             formatDeadline(config?.prazo_inscricao)
-              ? { label: 'Inscrições até', value: formatDeadline(config?.prazo_inscricao), icon: Clock }
+              ? { key: 'prazo', label: 'Inscrições até', value: formatDeadline(config?.prazo_inscricao), icon: Clock }
               : null,
             // Esconde premiação quando nenhum prêmio está habilitado
             // (antes mostrava "—" que parecia bug)
             enabledAwards.length > 0
-              ? { label: 'Premiação', value: `${enabledAwards.length} prêmio${enabledAwards.length !== 1 ? 's' : ''}`, icon: Trophy }
+              ? { key: 'premiacao', label: 'Premiação', value: `${enabledAwards.length} prêmio${enabledAwards.length !== 1 ? 's' : ''}`, icon: Trophy }
               : null,
-          ].filter(Boolean) as { label: string; value: any; icon: any }[]).map(({ label, value, icon: Icon }) => (
-            <div key={label} className="bg-white/5 border border-white/10 rounded-3xl p-6">
-              <Icon size={20} className="text-[#ff0068] mb-3" />
-              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{label}</p>
-              <p className="text-xl font-black text-white tracking-tighter mt-1">{String(value)}</p>
+          ].filter(Boolean) as { key: string; label: string; value: string; icon: any }[]);
+
+          const docCards = ([
+            event.regulation_pdf_url
+              ? { key: 'regulamento', title: 'Baixar regulamento', subtitle: 'PDF oficial do festival', href: event.regulation_pdf_url }
+              : null,
+            ...(event.documentos_extras ?? []).map((doc: { nome: string; url: string }, idx: number) => ({
+              key: `doc-${idx}`, title: doc.nome, subtitle: 'PDF', href: doc.url,
+            })),
+          ].filter(Boolean) as { key: string; title: string; subtitle: string; href: string }[]);
+
+          if (statCards.length === 0 && docCards.length === 0) return null;
+
+          return (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {statCards.map(({ key, label, value, icon: Icon }) => (
+                <div key={key} className="bg-white/5 border border-white/10 rounded-3xl p-6">
+                  <Icon size={20} className="text-[#ff0068] mb-3" />
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{label}</p>
+                  <p className="text-xl font-black text-white tracking-tighter mt-1">{value}</p>
+                </div>
+              ))}
+              {docCards.map(({ key, title, subtitle, href }) => (
+                <a
+                  key={key}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download
+                  className="bg-white/5 border border-white/10 hover:border-[#ff0068]/40 hover:bg-[#ff0068]/5 rounded-3xl p-6 transition-all group flex flex-col"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <FileText size={20} aria-hidden="true" className="text-[#ff0068]" />
+                    <Download size={16} className="text-slate-400 group-hover:text-[#ff0068] transition-colors" />
+                  </div>
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{subtitle}</p>
+                  <p className="text-sm font-black text-white tracking-tight mt-1">{title}</p>
+                </a>
+              ))}
             </div>
-          ))}
-        </div>
+          );
+        })()}
 
         {/* Link de destaque — CTA genérico (Voto Popular, transmissão ao
             vivo, qualquer ação externa relevante do dia). Fica logo no topo,
@@ -1057,49 +1097,6 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             </p>
             <ExternalLink size={16} aria-hidden="true" className="text-[#1de7f2]/70 group-hover:text-[#1de7f2] transition-colors" />
           </a>
-        )}
-
-        {/* Regulamento PDF — sobe antes da descrição porque é documento crítico
-            que o inscrito precisa conhecer antes de decidir se inscrever */}
-        {(event.regulation_pdf_url || (event.documentos_extras && event.documentos_extras.length > 0)) && (
-          <div className="space-y-4">
-            <h2 className="text-2xl font-black uppercase tracking-tighter">Documentos</h2>
-            <div className="flex flex-col sm:flex-row flex-wrap gap-3">
-              {event.regulation_pdf_url && (
-                <a
-                  href={event.regulation_pdf_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download
-                  className="inline-flex items-center gap-3 px-6 py-4 bg-white/5 border border-white/10 hover:border-[#ff0068]/40 hover:bg-[#ff0068]/5 rounded-2xl transition-all group"
-                >
-                  <FileText size={20} aria-hidden="true" className="text-[#ff0068]" />
-                  <div className="flex-1 text-left">
-                    <p className="text-xs font-black uppercase tracking-tight">Baixar regulamento</p>
-                    <p className="text-[10px] text-slate-400 font-bold">PDF oficial do festival</p>
-                  </div>
-                  <Download size={16} className="text-slate-400 group-hover:text-[#ff0068] transition-colors" />
-                </a>
-              )}
-              {(event.documentos_extras ?? []).map((doc: { nome: string; url: string }, idx: number) => (
-                <a
-                  key={`${doc.url}-${idx}`}
-                  href={doc.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download
-                  className="inline-flex items-center gap-3 px-6 py-4 bg-white/5 border border-white/10 hover:border-[#ff0068]/40 hover:bg-[#ff0068]/5 rounded-2xl transition-all group"
-                >
-                  <FileText size={20} aria-hidden="true" className="text-[#ff0068]" />
-                  <div className="flex-1 text-left">
-                    <p className="text-xs font-black uppercase tracking-tight">{doc.nome}</p>
-                    <p className="text-[10px] text-slate-400 font-bold">PDF</p>
-                  </div>
-                  <Download size={16} className="text-slate-400 group-hover:text-[#ff0068] transition-colors" />
-                </a>
-              ))}
-            </div>
-          </div>
         )}
 
         {/* Description */}
