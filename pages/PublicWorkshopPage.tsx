@@ -3,7 +3,7 @@
  *
  * Anon pode acessar (RLS permite SELECT em workshops com is_published=true).
  * Mostra cover, professor, modalidade, data/local, preço do lote ativo,
- * estoque restante, e botão "Inscrever-se" → /checkout-workshop/:id.
+ * estoque restante, e botão "Inscrever-se" → /checkout-workshop/:idOrSlug.
  */
 
 import { useEffect, useState } from 'react';
@@ -42,6 +42,7 @@ interface Workshop {
   gratis_para_inscritos: boolean;
   is_published: boolean;
   hospedagem_delta: number | null;
+  events: { slug: string | null; name: string } | null;
 }
 
 interface Stock {
@@ -120,7 +121,7 @@ const PublicWorkshopPage: React.FC = () => {
         const filter = isUuid ? 'id' : 'slug';
         const { data: ws, error: wsErr } = await supabase
           .from('workshops')
-          .select('*')
+          .select('*, events(slug, name)')
           .eq(filter, idOrSlug)
           .eq('is_published', true)
           .maybeSingle();
@@ -220,9 +221,16 @@ const PublicWorkshopPage: React.FC = () => {
       </div>
 
       <div className="max-w-3xl mx-auto px-4 -mt-20 relative">
-        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068] mb-4">
-          <ArrowLeft size={14} /> Voltar
-        </button>
+        <div className="flex items-center gap-4 flex-wrap mb-4">
+          <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068]">
+            <ArrowLeft size={14} /> Voltar
+          </button>
+          {workshop.events?.slug && (
+            <button onClick={() => navigate(`/evento/${workshop.events!.slug}`)} className="inline-flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068]">
+              ← {workshop.events.name}
+            </button>
+          )}
+        </div>
 
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest bg-[#ff0068]/20 text-[#ff0068] px-2.5 py-1 rounded-full">
@@ -288,7 +296,7 @@ const PublicWorkshopPage: React.FC = () => {
               esconder aqui evita o botão duplicado (mesma ação 2x na tela). */}
           <button
             disabled={!podeComprar}
-            onClick={() => navigate(`/checkout-workshop/${workshop.id}${discountToken ? `?discount_token=${discountToken}` : ''}`)}
+            onClick={() => navigate(`/checkout-workshop/${workshop.slug ?? workshop.id}${discountToken ? `?discount_token=${discountToken}` : ''}`)}
             className={`w-full items-center justify-center gap-2 rounded-xl bg-[#ff0068] px-4 py-3 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30 hover:bg-[#ff1a78] disabled:opacity-40 disabled:cursor-not-allowed transition ${podeComprar ? 'hidden sm:flex' : 'flex'}`}
           >
             {podeComprar ? 'Comprar agora' : lotEsgotado ? 'Esgotado' : 'Indisponível'}
@@ -363,7 +371,7 @@ const PublicWorkshopPage: React.FC = () => {
       {podeComprar && (
         <div className="fixed bottom-0 left-0 right-0 sm:hidden bg-[#0b0b0f]/95 backdrop-blur border-t border-white/10 p-3 z-30">
           <button
-            onClick={() => navigate(`/checkout-workshop/${workshop.id}${discountToken ? `?discount_token=${discountToken}` : ''}`)}
+            onClick={() => navigate(`/checkout-workshop/${workshop.slug ?? workshop.id}${discountToken ? `?discount_token=${discountToken}` : ''}`)}
             className="w-full rounded-xl bg-[#ff0068] px-4 py-3 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-[#ff0068]/30"
           >
             Comprar · {fmtCurrency(precoAtivo)}

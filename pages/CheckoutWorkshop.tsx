@@ -3,7 +3,7 @@
  *
  * Fluxo:
  *   /workshop/<idOrSlug> → click "Inscrever-se"
- *   /checkout-workshop/<id> ← AQUI
+ *   /checkout-workshop/<idOrSlug> ← AQUI (aceita UUID legado ou slug)
  *   form (nome+email+CPF+fone) + cupom + auto-detect combo via CPF
  *   → POST create-workshop-registration → redirect Asaas (ou direto pra voucher se GRATUITO)
  *   → comprador recebe email com link /meu-workshop/<token>
@@ -49,7 +49,7 @@ const formatPhone = (v: string) => {
 };
 
 const CheckoutWorkshop: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { idOrSlug } = useParams<{ idOrSlug: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const discountToken = searchParams.get('discount_token');
@@ -141,16 +141,19 @@ const CheckoutWorkshop: React.FC = () => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
-  // Hidrata workshop + stock
+  // Hidrata workshop + stock. Aceita UUID (link antigo, retrocompat) ou
+  // slug (URL bonita, mesmo padrão de PublicWorkshopPage).
   useEffect(() => {
-    if (!id) return;
+    if (!idOrSlug) return;
     (async () => {
       setLoading(true);
       try {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
+        const filter = isUuid ? 'id' : 'slug';
         const { data: ws, error: wsErr } = await supabase
           .from('workshops')
-          .select('*')
-          .eq('id', id)
+          .select('*, events(slug, name)')
+          .eq(filter, idOrSlug)
           .eq('is_published', true)
           .maybeSingle();
         if (wsErr || !ws) { setError('Workshop não encontrado'); return; }
@@ -163,7 +166,7 @@ const CheckoutWorkshop: React.FC = () => {
 
         setWorkshop(ws);
 
-        const { data: st } = await supabase.rpc('get_workshop_stock', { p_workshop_id: id });
+        const { data: st } = await supabase.rpc('get_workshop_stock', { p_workshop_id: ws.id });
         const stRow = Array.isArray(st) ? st[0] : st;
         setStock(stRow);
 
@@ -183,13 +186,13 @@ const CheckoutWorkshop: React.FC = () => {
 
         // Day Pass — carrega opções de dia (se houver). Sem nenhuma, o
         // workshop funciona normal (sem escolha exigida).
-        const { data: dayStock } = await supabase.rpc('get_workshop_day_stock', { p_workshop_id: id });
+        const { data: dayStock } = await supabase.rpc('get_workshop_day_stock', { p_workshop_id: ws.id });
         setDayOptions(dayStock ?? []);
       } finally {
         setLoading(false);
       }
     })();
-  }, [id]);
+  }, [idOrSlug]);
 
   // Auto-detect combo quando CPF fica válido.
   // Audit T2: debounce 400ms pra não disparar a cada tecla.
@@ -452,9 +455,16 @@ const CheckoutWorkshop: React.FC = () => {
       )}
 
       <div className={`max-w-2xl mx-auto px-4 py-6 relative ${workshop?.cover_url ? '-mt-8' : ''}`}>
-        <button onClick={() => navigate(`/workshop/${workshop?.slug ?? workshop?.id}`)} className="inline-flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068] mb-6">
-          <ArrowLeft size={14} /> Voltar pro workshop
-        </button>
+        <div className="flex items-center gap-4 flex-wrap mb-6">
+          <button onClick={() => navigate(`/workshop/${workshop?.slug ?? workshop?.id}`)} className="inline-flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068]">
+            <ArrowLeft size={14} /> Voltar pro workshop
+          </button>
+          {workshop?.events?.slug && (
+            <button onClick={() => navigate(`/evento/${workshop.events.slug}`)} className="inline-flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-[#ff0068]">
+              ← {workshop.events.name}
+            </button>
+          )}
+        </div>
 
         <div className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-[#ff0068]/20 text-[#ff0068] px-2.5 py-1 rounded-full mb-2">
           <GraduationCap size={11} />Inscrição em workshop
