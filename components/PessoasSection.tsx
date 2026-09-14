@@ -1,12 +1,12 @@
 /**
- * PessoasSection — agrupa Jurados + Professores numa seção única "Jurados".
+ * PessoasSection — agrupa Jurados + Professores numa seção única.
  *
  * Etapa 1.5: termo "Jurados" reflete realidade do mercado de dança BR (festivais
- * BR tipicamente trazem mesma pessoa pra julgar E dar workshop). Quando rolar
- * a feature de Workshops (Etapa 1), recebemos `teachers` populados e o dedup
- * mescla automaticamente.
- *
- * Hoje: só Jurados (workshops ainda não implementados).
+ * BR tipicamente trazem mesma pessoa pra julgar E dar workshop) — usado quando
+ * `judges` tem pelo menos 1 jurado real. Sem nenhum jurado cadastrado (evento
+ * só de workshop, sem mostra competitiva, ex. Vicenza Dance Camp), o título
+ * vira "Professores" — "Jurados" sozinho implicaria banca julgando, o que
+ * não existe.
  */
 
 import React, { useMemo, useState } from 'react';
@@ -129,16 +129,25 @@ export const PessoasSection: React.FC<PessoasSectionProps> = ({ judges = [], tea
 
   if (people.length === 0) return null;
 
+  // Sem NENHUM jurado real cadastrado (event_judges vazio), só professores de
+  // workshop — chamar a seção de "Jurados" aqui é enganoso (implica mostra
+  // competitiva com banca, quando não existe). Achado real: Vicenza Dance
+  // Camp 2027 (evento só com workshops, sem júri) mostrando "vão julgar a
+  // mostra" sem ter mostra nenhuma. 2026-09-14.
+  const hasJudges = judges.length > 0;
+  const title = hasJudges ? 'Jurados' : 'Professores';
+  const subtitle = hasJudges
+    ? (teachers.length > 0
+        ? 'Profissionais que vão julgar a mostra e ministrar workshops.'
+        : 'Profissionais que vão avaliar as apresentações.')
+    : 'Profissionais que vão ministrar os workshops.';
+
   return (
     <div id="jurados" className="space-y-4 scroll-mt-20">
       <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-        <Award size={24} className="text-[#ff0068]" /> Jurados
+        <Award size={24} className="text-[#ff0068]" /> {title}
       </h2>
-      <p className="text-xs text-slate-400">
-        {teachers.length > 0
-          ? 'Profissionais que vão julgar a mostra e ministrar workshops.'
-          : 'Profissionais que vão avaliar as apresentações.'}
-      </p>
+      <p className="text-xs text-slate-400">{subtitle}</p>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {people.map(p => (
           <PersonCard key={p.id} person={p} onClick={() => setSelected(p)} />
