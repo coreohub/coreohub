@@ -65,9 +65,12 @@ const CheckoutWorkshop: React.FC = () => {
   const [inclHospedagem, setInclHospedagem] = useState(false);
   const [roommatePreference, setRoommatePreference] = useState('');
   const [lodgingEsgotada, setLodgingEsgotada] = useState(false);
-  // "Chegar um dia antes" / "sair um dia depois" — diária extra opcional na
-  // ponta do período (Frente 4), preço fixo por pass, só some ao marcar
-  // hospedagem.
+  // "Chegar um dia antes" / "sair um dia depois" — continuam existindo como
+  // add-ons internos (early_arrival_delta/late_departure_delta, Frente 4),
+  // mas deixaram de ser expostos como checkbox com diária visível: viram
+  // degraus de um único seletor "quantas noites" (ver lodgingTiers abaixo),
+  // pedido explícito da Lorrayne pra não mostrar o valor da diária — prática
+  // padrão de operadora de pacote/turismo com hospedagem negociada.
   const [earlyArrival, setEarlyArrival] = useState(false);
   const [lateDeparture, setLateDeparture] = useState(false);
 
@@ -287,6 +290,41 @@ const CheckoutWorkshop: React.FC = () => {
       : feeMode === 'repassar' ? Number((baseAfterCoupon + commission).toFixed(2)) : baseAfterCoupon;
     return { precoBase, precoAposCombo, comboApplied, hospedagemDelta, discount, commission, feeMode, charged };
   }, [workshop, stock, combo, couponApplied, inclHospedagem, earlyArrival, lateDeparture]);
+
+  // Escada de "quantas noites" — monta a partir da base (hospedagem_delta) +
+  // os add-ons de ponta (early_arrival/late_departure), mostrando só o preço
+  // TOTAL de cada opção, nunca a diária isolada.
+  const lodgingTiers = useMemo(() => {
+    if (!workshop || workshop.hospedagem_delta == null) return [];
+    const baseNights = dayOptions.length > 0
+      ? 1
+      : (Array.isArray(workshop.hospedagem_noites) ? workshop.hospedagem_noites.length : 1);
+    const baseDelta = Number(workshop.hospedagem_delta);
+    const tiers: Array<{ nights: number; price: number; earlyArrival: boolean; lateDeparture: boolean }> = [
+      { nights: baseNights, price: baseDelta, earlyArrival: false, lateDeparture: false },
+    ];
+    const hasEarly = workshop.early_arrival_delta != null;
+    const hasLate = workshop.late_departure_delta != null;
+    if (hasEarly) {
+      tiers.push({ nights: baseNights + 1, price: baseDelta + Number(workshop.early_arrival_delta), earlyArrival: true, lateDeparture: false });
+      if (hasLate) {
+        tiers.push({
+          nights: baseNights + 2,
+          price: baseDelta + Number(workshop.early_arrival_delta) + Number(workshop.late_departure_delta),
+          earlyArrival: true, lateDeparture: true,
+        });
+      }
+    } else if (hasLate) {
+      tiers.push({ nights: baseNights + 1, price: baseDelta + Number(workshop.late_departure_delta), earlyArrival: false, lateDeparture: true });
+    }
+    return tiers;
+  }, [workshop, dayOptions]);
+
+  const selectLodgingTier = (tier: { earlyArrival: boolean; lateDeparture: boolean } | null) => {
+    setInclHospedagem(!!tier);
+    setEarlyArrival(tier?.earlyArrival ?? false);
+    setLateDeparture(tier?.lateDeparture ?? false);
+  };
 
   const handleApplyCoupon = async () => {
     if (!workshop || couponLoading) return;
@@ -549,65 +587,58 @@ const CheckoutWorkshop: React.FC = () => {
             </>
           )}
 
-          {/* Hospedagem (add-on) */}
+          {/* Hospedagem (add-on) — seletor de noites, sem expor diária */}
           {workshop.hospedagem_delta != null && (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={inclHospedagem}
-                  disabled={lodgingEsgotada}
-                  onChange={e => setInclHospedagem(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 accent-[#ff0068]"
-                />
-                <div>
-                  <p className="text-sm font-bold text-white">
-                    Incluir hospedagem <span className="text-[#ff0068]">+{formatBRL(Number(workshop.hospedagem_delta))}</span>
-                  </p>
-                  <p className="text-xs text-slate-400 mt-0.5">Hotel 4 estrelas, acomodação tripla compartilhada, café da manhã incluso.</p>
-                  {lodgingEsgotada && (
-                    <p className="text-xs text-rose-300 mt-1 font-bold">Vagas de hospedagem esgotadas pro período deste pass.</p>
-                  )}
-                </div>
-              </label>
+              <div>
+                <p className="text-sm font-bold text-white">Precisa de hospedagem?</p>
+                <p className="text-xs text-slate-400 mt-0.5">Hotel 4 estrelas, acomodação tripla compartilhada, café da manhã incluso.</p>
+                {lodgingEsgotada && (
+                  <p className="text-xs text-rose-300 mt-1 font-bold">Vagas de hospedagem esgotadas pro período deste pass.</p>
+                )}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2" role="radiogroup" aria-label="Quantas noites de hospedagem">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={!inclHospedagem}
+                  onClick={() => selectLodgingTier(null)}
+                  className={`rounded-xl border px-3 py-2.5 text-xs font-bold transition ${
+                    !inclHospedagem ? 'border-[#ff0068] bg-[#ff0068]/10 text-white' : 'border-white/10 text-slate-300 hover:border-white/30'
+                  }`}
+                >
+                  Não preciso
+                </button>
+                {lodgingTiers.map(tier => {
+                  const active = inclHospedagem && earlyArrival === tier.earlyArrival && lateDeparture === tier.lateDeparture;
+                  return (
+                    <button
+                      key={`${tier.earlyArrival}-${tier.lateDeparture}`}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      disabled={lodgingEsgotada}
+                      onClick={() => selectLodgingTier(tier)}
+                      className={`rounded-xl border px-3 py-2.5 text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed ${
+                        active ? 'border-[#ff0068] bg-[#ff0068]/10 text-white' : 'border-white/10 text-slate-300 hover:border-white/30'
+                      }`}
+                    >
+                      {tier.nights} noite{tier.nights > 1 ? 's' : ''}
+                      <span className="block text-[#ff0068] mt-0.5">{formatBRL(tier.price)}</span>
+                    </button>
+                  );
+                })}
+              </div>
               {inclHospedagem && (
-                <>
-                  <FieldLabel icon={UserIcon} label="Prefere compartilhar o quarto com alguém? (opcional)">
-                    <input
-                      type="text"
-                      value={roommatePreference}
-                      onChange={e => setRoommatePreference(e.target.value)}
-                      className={inputCls}
-                      placeholder="Nome de quem você quer dividir o quarto"
-                    />
-                  </FieldLabel>
-                  {workshop.early_arrival_delta != null && (
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={earlyArrival}
-                        onChange={e => setEarlyArrival(e.target.checked)}
-                        className="mt-0.5 w-4 h-4 accent-[#ff0068]"
-                      />
-                      <p className="text-sm font-bold text-white">
-                        Chegar um dia antes <span className="text-[#ff0068]">+{formatBRL(Number(workshop.early_arrival_delta))}</span>
-                      </p>
-                    </label>
-                  )}
-                  {workshop.late_departure_delta != null && (
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={lateDeparture}
-                        onChange={e => setLateDeparture(e.target.checked)}
-                        className="mt-0.5 w-4 h-4 accent-[#ff0068]"
-                      />
-                      <p className="text-sm font-bold text-white">
-                        Sair um dia depois <span className="text-[#ff0068]">+{formatBRL(Number(workshop.late_departure_delta))}</span>
-                      </p>
-                    </label>
-                  )}
-                </>
+                <FieldLabel icon={UserIcon} label="Prefere compartilhar o quarto com alguém? (opcional)">
+                  <input
+                    type="text"
+                    value={roommatePreference}
+                    onChange={e => setRoommatePreference(e.target.value)}
+                    className={inputCls}
+                    placeholder="Nome de quem você quer dividir o quarto"
+                  />
+                </FieldLabel>
               )}
             </div>
           )}

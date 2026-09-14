@@ -2145,11 +2145,14 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
                 </div>
               </Field>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              <Field label="Chegada antecipada — acréscimo (R$, opcional)">
+            <p className="text-xs text-slate-500 dark:text-slate-400 pt-1">
+              Os 2 campos abaixo (chegada/saída extra) viram degraus do seletor "quantas noites?" que o comprador vê no checkout — nunca aparecem como diária avulsa. Ex: hospedagem base + chegada antecipada = "1 noite a mais", preço total, sem discriminar.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Noite extra na chegada — acréscimo total (R$, opcional)">
                 <input type="number" step="0.01" value={form.early_arrival_delta} onChange={e => upd('early_arrival_delta', e.target.value)} className={inputCls} placeholder="vazio = opção desligada" />
               </Field>
-              <Field label="Saída estendida — acréscimo (R$, opcional)">
+              <Field label="Noite extra na saída — acréscimo total (R$, opcional)">
                 <input type="number" step="0.01" value={form.late_departure_delta} onChange={e => upd('late_departure_delta', e.target.value)} className={inputCls} placeholder="vazio = opção desligada" />
               </Field>
             </div>
