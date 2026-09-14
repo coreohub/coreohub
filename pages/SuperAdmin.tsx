@@ -1374,6 +1374,32 @@ const EventCommissionModal: React.FC<{
   const [billingPlan, setBillingPlan] = useState<'comeco' | 'essencial' | 'escala'>(event.billing_plan ?? 'comeco');
   const BILLING_PLAN_COMMISSION: Record<string, number> = { comeco: 10, essencial: 5, escala: 4.5 };
 
+  // Status real da fatura pendente do componente fixo do plano (Asaas) —
+  // evita caçar via SQL toda vez que precisar saber se o produtor já pagou
+  // ou se a fatura venceu, antes de decidir usar a concessão manual abaixo.
+  type FeeStatus =
+    | { kind: 'loading' }
+    | { kind: 'error'; error: string }
+    | { kind: 'none' }
+    | { kind: 'pending'; status: string; invoice_url: string; due_date: string; value: number; already_confirmed_locally: boolean };
+  const [feeStatus, setFeeStatus] = useState<FeeStatus>({ kind: 'loading' });
+
+  const fetchFeeStatus = () => {
+    setFeeStatus({ kind: 'loading' });
+    supabase.functions.invoke('check-plan-fee-status', { body: { event_id: event.id } })
+      .then(({ data, error }) => {
+        if (error) return setFeeStatus({ kind: 'error', error: error.message ?? 'Falha ao consultar' });
+        if (data?.error) return setFeeStatus({ kind: 'error', error: data.error });
+        if (!data?.has_pending) return setFeeStatus({ kind: 'none' });
+        setFeeStatus({
+          kind: 'pending',
+          status: data.status, invoice_url: data.invoice_url, due_date: data.due_date,
+          value: data.value, already_confirmed_locally: data.already_confirmed_locally,
+        });
+      });
+  };
+  useEffect(fetchFeeStatus, [event.id]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5">
@@ -1497,10 +1523,45 @@ const EventCommissionModal: React.FC<{
               ))}
             </div>
             {billingPlan !== event.billing_plan && (
-              <p className="text-[10px] text-amber-500 font-bold mt-1.5">
-                Troca manual — marca o componente fixo como concessão (sem cobrança), e recalcula a comissão pra {BILLING_PLAN_COMMISSION[billingPlan]}%.
+              <p className="text-[10px] text-amber-500 font-bold mt-1.5 flex items-start gap-1.5">
+                <AlertCircle size={12} className="shrink-0 mt-0.5" />
+                CONCESSÃO GRATUITA — não cobra nada da produtora, muda a comissão pra {BILLING_PLAN_COMMISSION[billingPlan]}% na hora. Se ela já pagou por fora, confirme o pagamento na Asaas (veja abaixo) em vez de usar isso aqui.
               </p>
             )}
+
+            {/* Status real da fatura pendente — poupa ter que checar via SQL */}
+            <div className="mt-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 p-3">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Cobrança do componente fixo</span>
+                <button onClick={fetchFeeStatus} className="text-slate-400 hover:text-[#ff0068]" aria-label="Verificar status novamente">
+                  <RefreshCw size={12} className={feeStatus.kind === 'loading' ? 'animate-spin' : ''} />
+                </button>
+              </div>
+              {feeStatus.kind === 'loading' ? (
+                <p className="text-xs text-slate-400 flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> Consultando na Asaas...</p>
+              ) : feeStatus.kind === 'error' ? (
+                <p className="text-xs text-rose-500">{feeStatus.error}</p>
+              ) : feeStatus.kind === 'none' ? (
+                <p className="text-xs text-slate-500">
+                  {event.billing_plan_fixed_fee_paid_at ? 'Nenhuma fatura pendente — taxa já confirmada.' : 'Nenhuma fatura gerada ainda pra esse evento.'}
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  <p className="text-xs">
+                    <span className={`font-bold ${feeStatus.status === 'RECEIVED' || feeStatus.status === 'CONFIRMED' ? 'text-emerald-500' : feeStatus.status === 'OVERDUE' ? 'text-rose-500' : 'text-amber-500'}`}>
+                      {feeStatus.status === 'RECEIVED' || feeStatus.status === 'CONFIRMED' ? 'PAGO' : feeStatus.status === 'OVERDUE' ? 'VENCIDO' : 'PENDENTE'}
+                    </span>
+                    {' '}— R$ {Number(feeStatus.value).toFixed(2)} · vence {feeStatus.due_date}
+                    {feeStatus.status !== 'RECEIVED' && feeStatus.status !== 'CONFIRMED' && !feeStatus.already_confirmed_locally && (
+                      <span className="text-slate-400"> (webhook confirma sozinho ao pagar — não precisa fazer nada aqui)</span>
+                    )}
+                  </p>
+                  <a href={feeStatus.invoice_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-[#ff0068] hover:underline">
+                    <ExternalLink size={11} /> Abrir fatura
+                  </a>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Nota de acesso liberado — motivo do acordo (contrato governo/edital/
