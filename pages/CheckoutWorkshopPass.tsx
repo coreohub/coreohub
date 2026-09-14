@@ -4,7 +4,7 @@
  *
  * Fluxo:
  *   /evento/<slug> (seção Workshops) → click no card do Pass
- *   /checkout-workshop-pass/<id> ← AQUI
+ *   /checkout-workshop-pass/<idOrSlug> ← AQUI (aceita UUID legado ou slug)
  *   form (nome+email+CPF+fone) + cupom + auto-detect combo via CPF
  *   → POST create-workshop-pass-registration → redirect Asaas
  *   → comprador recebe 1 email consolidado com voucher de cada workshop incluso
@@ -50,7 +50,7 @@ const formatPhone = (v: string) => {
 };
 
 const CheckoutWorkshopPass: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { idOrSlug } = useParams<{ idOrSlug: string }>();
   const navigate = useNavigate();
 
   const [pass, setPass]     = useState<any>(null);
@@ -97,14 +97,16 @@ const CheckoutWorkshopPass: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!id) return;
+    if (!idOrSlug) return;
     (async () => {
       setLoading(true);
       try {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
+        const filter = isUuid ? 'id' : 'slug';
         const { data: p, error: passErr } = await supabase
           .from('workshop_passes')
           .select('*')
-          .eq('id', id)
+          .eq(filter, idOrSlug)
           .eq('is_published', true)
           .maybeSingle();
         if (passErr || !p) { setError('Pass não encontrado'); return; }
@@ -125,7 +127,7 @@ const CheckoutWorkshopPass: React.FC = () => {
           const { data: items } = await supabase
             .from('workshop_pass_items')
             .select('workshops(id, name, data_inicio, preco_padrao, preco_inscritos_mostra)')
-            .eq('pass_id', id);
+            .eq('pass_id', p.id);
           const ws = (items ?? []).map((it: any) => it.workshops).filter(Boolean);
           setWorkshopNames(ws.map((w: any) => w.name).filter(Boolean));
 
@@ -144,10 +146,10 @@ const CheckoutWorkshopPass: React.FC = () => {
           const { data: items } = await supabase
             .from('workshop_pass_items')
             .select('workshops(name)')
-            .eq('pass_id', id);
+            .eq('pass_id', p.id);
           setWorkshopNames((items ?? []).map((it: any) => it.workshops?.name).filter(Boolean));
 
-          const { data: stockRow } = await supabase.rpc('get_workshop_pass_stock', { p_pass_id: id });
+          const { data: stockRow } = await supabase.rpc('get_workshop_pass_stock', { p_pass_id: p.id });
           const row = Array.isArray(stockRow) ? stockRow[0] : stockRow;
           if (row?.esgotado) {
             setEsgotado(true);
@@ -158,7 +160,7 @@ const CheckoutWorkshopPass: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [id]);
+  }, [idOrSlug]);
 
   // Auto-detect combo (debounce 400ms, exige login).
   useEffect(() => {
@@ -440,7 +442,7 @@ const CheckoutWorkshopPass: React.FC = () => {
                   <div>
                     <p className="font-bold">Tem preço de inscrito?</p>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      <button type="button" onClick={() => navigate(`/login?redirectTo=${encodeURIComponent(`/checkout-workshop-pass/${pass.id}`)}`)} className="text-[#ff0068] font-bold underline">
+                      <button type="button" onClick={() => navigate(`/login?redirectTo=${encodeURIComponent(`/checkout-workshop-pass/${pass.slug ?? pass.id}`)}`)} className="text-[#ff0068] font-bold underline">
                         Entre na sua conta
                       </button> para verificar se você tem o preço especial de inscrito da mostra.
                     </p>

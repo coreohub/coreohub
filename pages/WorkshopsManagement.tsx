@@ -2518,6 +2518,7 @@ interface PassRow {
   id: string;
   event_id: string;
   name: string;
+  slug: string | null;
   description: string | null;
   preco: number;
   preco_inscritos_mostra: number | null;
@@ -2667,10 +2668,20 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
 
     let passId = editingId;
     if (editingId) {
+      // Slug fica estável nas edições — não regenera a partir do nome, senão
+      // um link já compartilhado do pass quebraria a cada troca de título.
       const { error } = await supabase.from('workshop_passes').update(payload).eq('id', editingId);
       if (error) { setSaving(false); return setFormError(error.message); }
     } else {
-      const { data, error } = await supabase.from('workshop_passes').insert(payload).select('id').single();
+      // Slug só é gerado na criação. Colisão (2 passes com nome igual, raro)
+      // resolvida com 1 retry sufixando um trecho aleatório — mesmo padrão
+      // simples de workshops.slug, sem exigir loop de tentativas.
+      const baseSlug = slugify(form.name.trim());
+      let { data, error } = await supabase.from('workshop_passes').insert({ ...payload, slug: baseSlug || null }).select('id').single();
+      if (error?.code === '23505') {
+        const retrySlug = baseSlug ? `${baseSlug.slice(0, 43)}-${Math.random().toString(36).slice(2, 8)}` : null;
+        ({ data, error } = await supabase.from('workshop_passes').insert({ ...payload, slug: retrySlug }).select('id').single());
+      }
       if (error || !data) { setSaving(false); return setFormError(error?.message ?? 'Falha ao criar pass'); }
       passId = data.id;
     }

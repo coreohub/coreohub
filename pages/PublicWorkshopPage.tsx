@@ -193,6 +193,58 @@ const PublicWorkshopPage: React.FC = () => {
 
   const restantes = stock?.active_lot_restantes ?? stock?.restantes;
 
+  // SEO/GEO/AEO — mesmo padrão do PublicEventPage (React 19 iça <title>/<meta>/
+  // <script> pro <head> nativamente). Diferente do evento, a URL canônica é
+  // montada explícita a partir do slug (não `window.location.href`) — assim
+  // um acesso pelo UUID legado sinaliza pro Google que o slug é a versão
+  // oficial, em vez de tratar as 2 URLs como conteúdo duplicado.
+  const seoCanonicalSlug = workshop.slug ?? workshop.id;
+  const seoUrl = `https://app.coreohub.com/workshop/${seoCanonicalSlug}`;
+  const seoImage = workshop.cover_url || workshop.professor_photo_url || 'https://app.coreohub.com/coreohub-avatar.png';
+  const seoDescription = (workshop.description ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160) || `Workshop de ${workshop.name} com ${workshop.professor_name} — inscrições abertas no CoreoHub.`;
+  const seoTitle = `${workshop.name} com ${workshop.professor_name} | CoreoHub`;
+
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'CoreoHub', item: 'https://coreohub.com' },
+      ...(workshop.events?.slug
+        ? [{ '@type': 'ListItem', position: 2, name: workshop.events.name, item: `https://app.coreohub.com/evento/${workshop.events.slug}` }]
+        : []),
+      { '@type': 'ListItem', position: workshop.events?.slug ? 3 : 2, name: workshop.name, item: seoUrl },
+    ],
+  };
+
+  // EducationEvent (subtipo de Event) — mais específico que Event genérico
+  // pra uma aula/workshop, mantendo os mesmos campos ricos (offers/performer)
+  // que ajudam rich snippets e respostas de IA (GEO/AEO).
+  const workshopJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'EducationEvent',
+    name: workshop.name,
+    description: seoDescription,
+    image: seoImage,
+    startDate: workshop.data_inicio,
+    endDate: workshop.data_fim ?? workshop.data_inicio,
+    eventStatus: 'https://schema.org/EventScheduled',
+    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+    location: {
+      '@type': 'Place',
+      name: workshop.local || 'A definir',
+      address: { '@type': 'PostalAddress', addressCountry: 'BR' },
+    },
+    performer: { '@type': 'Person', name: workshop.professor_name },
+    organizer: { '@type': 'Organization', name: 'CoreoHub', url: 'https://coreohub.com' },
+    ...(precoAtivo != null
+      ? { offers: { '@type': 'Offer', price: Number(precoAtivo), priceCurrency: 'BRL', availability: podeComprar ? 'https://schema.org/InStock' : 'https://schema.org/SoldOut', url: seoUrl } }
+      : {}),
+    url: seoUrl,
+  };
+
   const handleShare = async () => {
     const url = window.location.href;
     if ((navigator as any).share) {
@@ -207,6 +259,24 @@ const PublicWorkshopPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#0b0b0f] text-white pb-24 sm:pb-12">
+      {/* Meta tags dinâmicas — React 19 nativo as iça pro <head>. */}
+      <title>{seoTitle}</title>
+      <meta name="description" content={seoDescription} />
+      <meta property="og:title" content={`${workshop.name} com ${workshop.professor_name}`} />
+      <meta property="og:description" content={seoDescription} />
+      <meta property="og:image" content={seoImage} />
+      <meta property="og:url" content={seoUrl} />
+      <meta property="og:type" content="website" />
+      <meta property="og:site_name" content="CoreoHub" />
+      <meta property="og:locale" content="pt_BR" />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content={`${workshop.name} com ${workshop.professor_name}`} />
+      <meta name="twitter:description" content={seoDescription} />
+      <meta name="twitter:image" content={seoImage} />
+      <link rel="canonical" href={seoUrl} />
+      <script type="application/ld+json">{JSON.stringify(workshopJsonLd)}</script>
+      <script type="application/ld+json">{JSON.stringify(breadcrumbJsonLd)}</script>
+
       {/* Cover — largura limitada (não full-bleed) pra não distorcer a proporção
           16:9 em telas largas; full-bleed + altura fixa cropava igual zoom. */}
       <div className="max-w-5xl mx-auto">

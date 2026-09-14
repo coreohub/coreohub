@@ -36,9 +36,12 @@ const PUBLIC_PATH_PREFIXES = [
   '/lp', '/termos', '/privacidade', '/governo',
   '/login', '/register', '/judge-login', '/entrar-juri', '/telao',
   '/convite', '/equipe-convite', '/festivais', '/evento', '/produtor',
-  '/u', '/checkout-ingresso', '/meu-ingresso', '/workshop',
-  '/checkout-workshop', '/checkout-workshop-pass', '/meu-workshop',
+  '/u', '/meu-ingresso', '/workshop',
+  '/meu-workshop',
   '/validar-certificado', '/criar-evento', '/festival', '/sitemap.xml',
+  // Checkout (ingresso/workshop/pass) NÃO entra aqui de propósito — é
+  // conteúdo transacional/thin, ganha X-Robots-Tag: noindex abaixo (achado
+  // 2026-09-14, auditoria SEO). Continua 100% acessível, só sai de índice.
 ];
 
 function isPublicAppPath(pathname: string): boolean {

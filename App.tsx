@@ -659,7 +659,7 @@ const App: React.FC = () => {
         {/* Workshops Etapa 1 — todas públicas (vitrine + guest checkout + voucher por token) */}
         <Route path="/workshop/:idOrSlug" element={<Suspense fallback={<PageLoader />}><PublicWorkshopPage /></Suspense>} />
         <Route path="/checkout-workshop/:idOrSlug" element={<Suspense fallback={<PageLoader />}><CheckoutWorkshop /></Suspense>} />
-        <Route path="/checkout-workshop-pass/:id" element={<Suspense fallback={<PageLoader />}><CheckoutWorkshopPass /></Suspense>} />
+        <Route path="/checkout-workshop-pass/:idOrSlug" element={<Suspense fallback={<PageLoader />}><CheckoutWorkshopPass /></Suspense>} />
         <Route path="/meu-workshop/:token" element={<Suspense fallback={<PageLoader />}><MeuWorkshop /></Suspense>} />
         {/* Etapa 2 Certificados — pública (validação por hash) e privada (lista do inscrito) */}
         <Route path="/validar-certificado" element={<Suspense fallback={<PageLoader />}><ValidarCertificado /></Suspense>} />

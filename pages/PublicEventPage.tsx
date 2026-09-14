@@ -77,7 +77,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   // Passes (Day Pass/Full Pass) publicados do evento — pacote fixo de N
   // workshops, exibido em destaque ao lado dos workshops individuais.
   const [publicPasses, setPublicPasses] = useState<Array<{
-    id: string; name: string; description: string | null;
+    id: string; slug: string | null; name: string; description: string | null;
     preco: number; preco_inscritos_mostra: number | null;
     workshop_names: string[]; workshop_ids: string[]; esgotado: boolean;
     selection_mode: 'fixed' | 'a_la_carte';
@@ -296,7 +296,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           // Passes publicados do evento — pacote fixo, exibido em destaque.
           const { data: passesData } = await supabase
             .from('workshop_passes')
-            .select('id, name, description, preco, preco_inscritos_mostra, selection_mode, min_selecionaveis, max_selecionaveis')
+            .select('id, slug, name, description, preco, preco_inscritos_mostra, selection_mode, min_selecionaveis, max_selecionaveis')
             .eq('event_id', eventData.id)
             .eq('is_published', true);
           if (Array.isArray(passesData) && passesData.length > 0) {
@@ -1539,7 +1539,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                   return (
                   <button
                     key={pass.id}
-                    onClick={() => !blocked && navigate(`/checkout-workshop-pass/${pass.id}`)}
+                    onClick={() => !blocked && navigate(`/checkout-workshop-pass/${pass.slug ?? pass.id}`)}
                     disabled={blocked}
                     className="text-left bg-gradient-to-br from-[#ff0068]/15 to-[#1de7f2]/10 border-2 border-[#ff0068]/40 hover:border-[#ff0068] rounded-2xl p-5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
