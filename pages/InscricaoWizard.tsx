@@ -1408,8 +1408,11 @@ const InscricaoWizard: React.FC = () => {
                     const lotes = Array.isArray(f.lotes) ? f.lotes : [];
                     const preco = lotes[0]?.preco ?? f.fee ?? 0;
                     const perMember = f.pricing_type === 'PER_MEMBER';
-                    const precoLabel = preco > 0
-                      ? `R$ ${Number(preco).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}${perMember ? '/p' : ''}`
+                    const isProgressive = f.pricing_type === 'PROGRESSIVE_PER_DANCER';
+                    const primeiroTier = Array.isArray(f.progressive_tiers) ? f.progressive_tiers[0]?.valor : undefined;
+                    const precoBase = isProgressive ? (primeiroTier ?? preco) : preco;
+                    const precoLabel = precoBase > 0
+                      ? `${isProgressive ? 'a partir de ' : ''}R$ ${Number(precoBase).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}${perMember ? '/p' : ''}`
                       : null;
                     return (
                       <button

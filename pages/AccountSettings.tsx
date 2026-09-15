@@ -2461,6 +2461,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             base_fee:     firstLote?.preco ?? 0,
             pricing_type: f.pricingType ?? 'FIXED',
             lotes:        f.lotes ?? [],
+            progressive_tiers: f.pricingType === 'PROGRESSIVE_PER_DANCER' ? (f.progressiveTiers ?? []) : undefined,
             // Tempo máximo da modalidade (MM:SS) — antes era descartado aqui, o
             // que zerava a validação de duração do Wizard e o selo da trilha.
             max_time:     (f.max_time && String(f.max_time).trim()) || null,
@@ -4580,7 +4581,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         )}
                       </p>
                       <p className="text-[10px] text-slate-500 uppercase tracking-widest">
-                        {f.pricingType === 'PER_MEMBER' ? 'por participante' : 'valor fixo'} · mín. {f.minMembers} pessoa{f.minMembers > 1 ? 's' : ''}
+                        {f.pricingType === 'PROGRESSIVE_PER_DANCER' ? 'progressivo por bailarino' : f.pricingType === 'PER_MEMBER' ? 'por participante' : 'valor fixo'} · mín. {f.minMembers} pessoa{f.minMembers > 1 ? 's' : ''}
                       </p>
                     </div>
                     {/* Actions: visível na linha 1 do mobile (sm:hidden); desktop usa a versão à direita */}
@@ -4589,9 +4590,21 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     </div>
                   </div>
 
-                  {/* Linha 2 (mobile) / direita (desktop): lotes em grid responsivo */}
+                  {/* Linha 2 (mobile) / direita (desktop): lotes em grid responsivo,
+                      ou faixas progressivas quando pricingType = PROGRESSIVE_PER_DANCER */}
                   <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center sm:gap-3 sm:mr-4 sm:flex-wrap sm:justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-white/5">
-                    {(f.lotes ?? []).map((lote: FormatLote, i: number) => (
+                    {f.pricingType === 'PROGRESSIVE_PER_DANCER'
+                      ? (f.progressiveTiers ?? []).map((tier: { ordem: number; valor: number; repete?: boolean }, i: number) => (
+                          <React.Fragment key={i}>
+                            {i > 0 && <div className="hidden sm:block w-px h-8 bg-slate-200 dark:bg-white/10" />}
+                            <div className="text-center">
+                              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{tier.ordem}ª coreo.{tier.repete ? '+' : ''}</p>
+                              <p className={`font-black text-sm ${i === 0 ? 'text-[#ff0068]' : 'text-slate-900 dark:text-white'}`}>R$ {formatPrecoBR(Number(tier.valor) || 0)}</p>
+                              <p className="text-[9px] text-slate-400 mt-0.5">por bailarino</p>
+                            </div>
+                          </React.Fragment>
+                        ))
+                      : (f.lotes ?? []).map((lote: FormatLote, i: number) => (
                       <React.Fragment key={i}>
                         {i > 0 && <div className="hidden sm:block w-px h-8 bg-slate-200 dark:bg-white/10" />}
                         <div className="text-center">
@@ -6942,6 +6955,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               </p>
             </div>
 
+            {tempValue.pricingType !== 'PROGRESSIVE_PER_DANCER' && (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className={label}>Lotes de Preço</label>
@@ -6988,6 +7002,80 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               </div>
               <p className="text-[9px] text-slate-400 mt-2">O último lote vai até o prazo de inscrição configurado em <strong>Geral</strong>.</p>
             </div>
+            )}
+
+            {tempValue.pricingType === 'PROGRESSIVE_PER_DANCER' && (() => {
+              const tiers: { ordem: number; valor: number; repete?: boolean }[] =
+                Array.isArray(tempValue.progressiveTiers) && tempValue.progressiveTiers.length > 0
+                  ? tempValue.progressiveTiers
+                  : [{ ordem: 1, valor: 0 }];
+              const updateTier = (idx: number, patch: Partial<{ ordem: number; valor: number; repete: boolean }>) => {
+                const next = tiers.map((t, i) => i === idx ? { ...t, ...patch } : t);
+                setTempValue((v: any) => ({ ...v, progressiveTiers: next }));
+              };
+              const addTier = () => {
+                const next = [...tiers, { ordem: tiers.length + 1, valor: 0 }];
+                setTempValue((v: any) => ({ ...v, progressiveTiers: next }));
+              };
+              const removeTier = (idx: number) => {
+                if (tiers.length <= 1) return;
+                const next = tiers.filter((_, i) => i !== idx).map((t, i) => ({ ...t, ordem: i + 1 }));
+                setTempValue((v: any) => ({ ...v, progressiveTiers: next }));
+              };
+              return (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className={label}>Faixas por Bailarino</label>
+                    <button onClick={addTier} className="text-[10px] font-black uppercase tracking-widest text-[#ff0068] hover:text-[#e0005c] flex items-center gap-1">
+                      <Plus size={12} /> Adicionar Faixa
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {tiers.map((tier, i) => (
+                      <div key={i} className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/8 rounded-2xl p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{tier.ordem}ª coreografia do bailarino</p>
+                          {tiers.length > 1 && (
+                            <button onClick={() => removeTier(i)} className="p-1 -mr-1 text-slate-400 hover:text-red-500 transition-colors" title="Remover faixa">
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">Valor</label>
+                            <PrecoInput
+                              value={Number(tier.valor) || 0}
+                              onChange={n => updateTier(i, { valor: n })}
+                              className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2 pl-9 pr-3 text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50 font-bold text-sm"
+                            />
+                          </div>
+                          <div className="flex items-end pb-2">
+                            <button
+                              type="button"
+                              aria-pressed={!!tier.repete}
+                              onClick={() => updateTier(i, { repete: !tier.repete })}
+                              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                tier.repete
+                                  ? 'bg-[#ff0068]/10 text-[#ff0068] border border-[#ff0068]/30'
+                                  : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10'
+                              }`}
+                              title="Essa faixa vale também pra todas as coreografias seguintes (ex: 4ª em diante)"
+                            >
+                              {tier.repete ? <ToggleRight size={12} /> : <ToggleLeft size={12} />}
+                              {tier.repete ? 'Vale daqui em diante' : 'Só essa faixa'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[9px] text-slate-400 mt-2">
+                    O preço da coreografia depende de quantas outras coreografias PAGAS esse mesmo bailarino já tem nesse evento (rastreado por CPF em Meu Elenco). Marque "Vale daqui em diante" na última faixa pra ela cobrir a 4ª, 5ª... coreografia também.
+                  </p>
+                </div>
+              );
+            })()}
 
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -6995,6 +7083,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 <select value={tempValue.pricingType || 'FIXED'} onChange={e => setTempValue((v: any) => ({ ...v, pricingType: e.target.value }))} className={input}>
                   <option value="FIXED" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Valor Fixo</option>
                   <option value="PER_MEMBER" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Por Participante</option>
+                  <option value="PROGRESSIVE_PER_DANCER" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Progressivo por Bailarino</option>
                 </select>
               </div>
               <div>

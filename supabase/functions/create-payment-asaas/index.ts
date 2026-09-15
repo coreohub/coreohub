@@ -121,13 +121,56 @@ Deno.serve(async (req) => {
     // Produtor configura por formação em AccountSettings → Formações.
     // FIXED (default legado): valor único da coreografia.
     // PER_MEMBER: valor × bailarinos_detalhes.length (Usualdance Grupo, etc.)
-    const pricingType: 'FIXED' | 'PER_MEMBER' = formacaoEscolhida?.pricing_type ?? 'FIXED'
+    const pricingType: 'FIXED' | 'PER_MEMBER' | 'PROGRESSIVE_PER_DANCER' = formacaoEscolhida?.pricing_type ?? 'FIXED'
     const bailarinosCount = Array.isArray(coreo.bailarinos_detalhes)
       ? coreo.bailarinos_detalhes.length
       : 1
     const feeUnit = baseFee
     if (pricingType === 'PER_MEMBER' && bailarinosCount > 1) {
       baseFee = parseFloat((baseFee * bailarinosCount).toFixed(2))
+    }
+
+    // ── 5c-bis. PROGRESSIVE_PER_DANCER: preço cai conforme o MESMO bailarino
+    // acumula coreografias pagas no evento (padrão real: Festival Caixa Preta
+    // 2026, Festival Adhering de Dança). O valor nunca é confiado no client —
+    // relê a contagem real via RPC no momento de gerar a cobrança. Decisão
+    // 2026-09-15: registro cancelado/estornado continua contando pra posição
+    // (sem recálculo retroativo) — a RPC já reflete isso no filtro de status.
+    if (pricingType === 'PROGRESSIVE_PER_DANCER') {
+      const tiers: { ordem: number; valor: number; repete?: boolean }[] =
+        Array.isArray(formacaoEscolhida?.progressive_tiers) ? formacaoEscolhida.progressive_tiers : []
+      const elencoIds: string[] = Array.isArray(coreo.bailarinos_detalhes)
+        ? coreo.bailarinos_detalhes.map((b: any) => b?.id).filter(Boolean)
+        : []
+
+      const tierForOrdem = (ordem: number) => {
+        const exact = tiers.find(t => t.ordem === ordem)
+        if (exact) return exact.valor
+        const repeating = tiers.filter(t => t.repete && t.ordem <= ordem).sort((a, b) => b.ordem - a.ordem)[0]
+        if (repeating) return repeating.valor
+        // Sem faixa configurada pra essa posição — usa a última cadastrada
+        // em vez de cobrar 0 por engano de configuração incompleta.
+        const last = [...tiers].sort((a, b) => b.ordem - a.ordem)[0]
+        return last ? last.valor : baseFee
+      }
+
+      if (elencoIds.length === 0) {
+        // Sem bailarinos vinculados a `elenco` (fluxo antigo/incompleto) —
+        // cai pra 1ª faixa, mesma lógica de "nunca cobrar menos do que a
+        // config prevê pra 1 coreografia nova".
+        baseFee = tierForOrdem(1)
+      } else {
+        const { data: counts, error: countErr } = await supabase
+          .rpc('count_dancer_paid_registrations', { p_event_id: event_id, p_elenco_ids: elencoIds })
+        if (countErr) console.error('[create-payment-asaas] count_dancer_paid_registrations falhou:', countErr.message)
+        const countByElenco = new Map<string, number>((counts ?? []).map((c: any) => [c.elenco_id, c.qtd ?? 0]))
+        baseFee = elencoIds.reduce((sum, id) => {
+          const jaTinha = countByElenco.get(id) ?? 0
+          return sum + tierForOrdem(jaTinha + 1)
+        }, 0)
+      }
+      baseFee = parseFloat(baseFee.toFixed(2))
+      console.log(`[create-payment-asaas] progressive_per_dancer: bailarinos=${elencoIds.length} total=${baseFee}`)
     }
 
     // baseFee=0 é válido quando a formação foi explicitamente configurada
