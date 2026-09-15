@@ -787,13 +787,26 @@ interface AccountSettingsProps {
 /** Detecta o mínimo de participantes fixo baseado no nome do formato.
  *  Convenção universal de festivais de dança — não faz sentido "Solo com 4 pessoas". */
 const detectarMinFixo = (nome: string | undefined): number | null => {
-  const n = (nome || '').toLowerCase().trim();
+  // Pega só a parte antes de "—"/"-" — permite formatos compostos tipo
+  // "Solo — Taxa Fixa"/"Solo — Pacote Progressivo" (2 formatos com o mesmo
+  // tamanho, nomes diferentes pelo modelo de cobrança) continuarem travando
+  // o tamanho certo, em vez de sempre cair no teto aberto 99.
+  const n = (nome || '').toLowerCase().split(/[—-]/)[0].trim();
   if (/^(solo|individual)$/.test(n)) return 1;
   if (/^(duo|dueto|duet[oa])$/.test(n)) return 2;
   if (/^trio$/.test(n)) return 3;
   if (/^(quarteto|quartet[oa])$/.test(n)) return 4;
   if (/^(quinteto|quintet[oa])$/.test(n)) return 5;
   if (/^(sexteto|sextet[oa])$/.test(n)) return 6;
+  return null;
+};
+
+/** Teto (max_members) pra formatos de FAIXA composta (ex: "Duo/Trio") que
+ *  detectarMinFixo não cobre (não é 1 tamanho fixo, é um intervalo). Mesma
+ *  regra de prefixo antes do "—"/"-". */
+const detectarMaxComposto = (nome: string | undefined): number | null => {
+  const n = (nome || '').toLowerCase().split(/[—-]/)[0].trim();
+  if (/^duo\s*\/\s*trio$/.test(n)) return 3;
   return null;
 };
 
@@ -2456,7 +2469,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           // 3 esperando "3 ou mais" e o sistema travava em exatamente 3,
           // porque a regra antiga (`min <= 3 ? min : 99`) decidia pelo NÚMERO
           // digitado, não pelo nome do formato.
-          const max = detectarMinFixo(f.name) !== null ? min : 99;
+          const max = detectarMinFixo(f.name) !== null ? min : (detectarMaxComposto(f.name) ?? 99);
           // Progressivo não tem lotes (o preço vem das faixas por bailarino)
           // — fee/base_fee usam o valor da 1ª faixa, senão zerava sempre que
           // a tela salvava (firstLote fica undefined pra esse pricingType).
