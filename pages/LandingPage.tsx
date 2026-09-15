@@ -7,8 +7,6 @@ import {
   CalendarClock, Globe, IdCard, QrCode,
   Smartphone, Share2, Mail, Target, Wallet,
 } from 'lucide-react';
-import { motion } from 'motion/react';
-
 const LandingPage = () => {
   const navigate = useNavigate();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -121,11 +119,8 @@ const LandingPage = () => {
 
         {/* conteúdo ancorado no rodapé do hero — mesmo padrão de PageHero (usualdance) */}
         <div className="relative z-10 flex-1 flex flex-col justify-end px-4 pb-10 pt-28 text-center sm:px-6 sm:text-left lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="mx-auto max-w-xl px-5 sm:mx-0 sm:px-0"
+          <div
+            className="mx-auto max-w-xl px-5 sm:mx-0 sm:px-0 animate-hero-in"
           >
             <p className="text-[11px] font-black uppercase tracking-[0.3em] text-white">Chega de planilha.</p>
             <h1 className="mt-2 sm:mt-3 text-[2.2rem] sm:text-[3.3rem] font-black tracking-normal uppercase leading-[1.06]">
@@ -150,7 +145,7 @@ const LandingPage = () => {
               </button>
             </div>
 
-          </motion.div>
+          </div>
         </div>
 
         {/* barra de stats */}

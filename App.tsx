@@ -2,19 +2,22 @@ import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { UserRole, Profile as UserProfile } from './types';
-import { supabase } from './services/supabase';
-import { getOrCreateProfile } from './services/profileService';
 import { identifyUser, trackAppPageView } from './services/appAnalytics';
 import { trackPageView } from './services/analytics';
-import Sidebar from './components/Sidebar';
-import DemoBanner from './components/DemoBanner';
-import InstallAppBanner from './components/InstallAppBanner';
-import EmailVerifyBanner from './components/EmailVerifyBanner';
-import ImpersonateBanner from './components/ImpersonateBanner';
-import Header from './components/Header';
-import BottomNavBar from './components/BottomNavBar';
-import CookieBanner from './components/CookieBanner';
-import RequirePermission from './components/RequirePermission';
+// Chrome do app autenticado (Sidebar/Header/BottomNavBar/banners) — lazy.
+// Vários desses componentes importam 'motion' e/ou o cliente Supabase
+// (Header, BottomNavBar, DemoBanner, EmailVerifyBanner…); eager aqui forçava
+// vendor-motion/vendor-supabase inteiros no bundle de QUALQUER rota, mesmo
+// a landing pública que nunca renderiza esse chrome (achado PSI 2026-09-15).
+const Sidebar = lazy(() => import('./components/Sidebar'));
+const DemoBanner = lazy(() => import('./components/DemoBanner'));
+const InstallAppBanner = lazy(() => import('./components/InstallAppBanner'));
+const EmailVerifyBanner = lazy(() => import('./components/EmailVerifyBanner'));
+const ImpersonateBanner = lazy(() => import('./components/ImpersonateBanner'));
+const Header = lazy(() => import('./components/Header'));
+const BottomNavBar = lazy(() => import('./components/BottomNavBar'));
+const CookieBanner = lazy(() => import('./components/CookieBanner'));
+const RequirePermission = lazy(() => import('./components/RequirePermission'));
 
 // Páginas internas (autenticadas) — lazy. Landing page é a única rota "/"
 // do domínio de marketing (coreohub.com), então fica eager: visitante da
@@ -250,11 +253,16 @@ const PrivateLayout: React.FC<{
   }, [location.pathname]);
 
   const handleLogout = async () => {
+    const { supabase } = await import('./services/supabase');
     await supabase.auth.signOut();
     navigate('/login');
   };
 
   return (
+    // Sidebar/Header/BottomNavBar/banners agora são lazy (ver imports no
+    // topo) — precisam de 1 Suspense cobrindo o layout inteiro, já que são
+    // irmãos no mesmo nível (não passam pelo Suspense de {children} abaixo).
+    <Suspense fallback={<PageLoader />}>
     <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white font-sans selection:bg-[#ff0068]/30 text-sm">
       <Sidebar
         isOpen={sidebarOpen}
@@ -312,6 +320,7 @@ const PrivateLayout: React.FC<{
 
       <BottomNavBar activeRole={activeRole} videoSelectionEnabled={videoSelectionEnabled} userId={profile.id} />
     </div>
+    </Suspense>
   );
 };
 
@@ -348,15 +357,20 @@ const App: React.FC = () => {
       setCustomDomainSlug(null);
       return;
     }
-    supabase
-      .from('events')
-      .select('slug')
-      .eq('custom_domain', hostname)
-      .maybeSingle()
-      .then(
-        ({ data }) => setCustomDomainSlug(data?.slug ?? null),
-        () => setCustomDomainSlug(null)
-      );
+    // Import dinâmico: domínio custom é caso raro (evento com domínio
+    // próprio) — hosts conhecidos (inclusive coreohub.com marketing) nunca
+    // baixam o pacote Supabase só por causa dessa checagem.
+    import('./services/supabase').then(({ supabase }) => {
+      supabase
+        .from('events')
+        .select('slug')
+        .eq('custom_domain', hostname)
+        .maybeSingle()
+        .then(
+          ({ data }) => setCustomDomainSlug(data?.slug ?? null),
+          () => setCustomDomainSlug(null)
+        );
+    });
   }, []);
 
   useEffect(() => {
@@ -367,7 +381,12 @@ const App: React.FC = () => {
 
   // Phase 5: bootstrapa o drainer de outbox uma vez por sessão. Idempotente —
   // chamadas extras são no-op. Lazy-import pra não inflar bundle inicial.
+  // Pulado no domínio de marketing: nenhum jurado opera a partir de
+  // coreohub.com, e outboxDrainer.ts importa services/judgeApi.ts (→
+  // JudgeLogin.tsx → supabase/motion), então rodar isso aí só puxava os
+  // vendor chunks inteiros pra landing sem nenhum ganho (achado PSI 2026-09-15).
   useEffect(() => {
+    if (['coreohub.com', 'www.coreohub.com'].includes(window.location.hostname)) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -383,7 +402,11 @@ const App: React.FC = () => {
   // Fase 4 parcial: captura UTM params da URL no mount inicial e persiste em
   // sessionStorage. Quando inscrição for criada, os UTMs salvos vão pra
   // registrations pra produtor saber origem da venda. Idempotente.
+  // Pulado no domínio de marketing: sessionStorage não atravessa pra
+  // app.coreohub.com (subdomínio diferente), então capturar aqui nunca
+  // teve efeito real nenhum — só custo.
   useEffect(() => {
+    if (['coreohub.com', 'www.coreohub.com'].includes(window.location.hostname)) return;
     void import('./services/utmTracking').then(mod => mod.captureUtmsFromUrl());
   }, []);
 
@@ -409,6 +432,7 @@ const App: React.FC = () => {
       const userId = session?.user?.id;
       if (!userId) { setVideoSelectionFromEvents(false); return; }
       try {
+        const { supabase } = await import('./services/supabase');
         // Como produtor: tem evento próprio com flag ON?
         const { data: ownedEvents } = await supabase
           .from('events')
@@ -449,6 +473,17 @@ const App: React.FC = () => {
   }, [session?.user?.id]);
 
   useEffect(() => {
+    // Domínio de marketing nunca usa sessão (landing/planos/termos/governo
+    // são conteúdo 100% público) — pula getSession()/onAuthStateChange por
+    // completo nesse domínio, o que evita carregar o pacote Supabase
+    // (achado PageSpeed Insights 2026-09-15: ~42 KiB de JS não usado vindo
+    // só dessa checagem que a landing nunca precisou).
+    const isMarketingHost = ['coreohub.com', 'www.coreohub.com'].includes(window.location.hostname);
+    if (isMarketingHost) {
+      setLoading(false);
+      return;
+    }
+
     // Timeout de segurança: se após 5s a autenticação ainda não resolveu, libera a UI.
     // Evita que o app fique preso em loading quando a aba é suspensa/reativada pelo navegador.
     const safetyTimeout = setTimeout(() => {
@@ -458,63 +493,78 @@ const App: React.FC = () => {
       });
     }, 5000);
 
-    const initAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setSession(session);
-        if (session?.user) {
-          const userProfile = await getOrCreateProfile(session.user);
-          if (userProfile) {
-            setProfile(userProfile);
-            setActiveRole(userProfile.role);
-          }
-        }
-        await fetchConfig();
-      } catch (err: any) {
-        console.error('Auth error:', err);
-      } finally {
-        clearTimeout(safetyTimeout);
-        setLoading(false);
-      }
-    };
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
 
-    initAuth();
+    (async () => {
+      const [{ supabase }, { getOrCreateProfile }] = await Promise.all([
+        import('./services/supabase'),
+        import('./services/profileService'),
+      ]);
+      if (cancelled) return;
 
-    // IMPORTANTE: não usar async/await direto neste callback.
-    // O Supabase mantém um lock interno de auth enquanto o callback roda; fazer await
-    // de outras queries do Supabase aqui causa DEADLOCK (login trava em "Autenticando...").
-    // Por isso adiamos o trabalho com setTimeout(..., 0).
-    // Ref: https://github.com/supabase/auth-js/issues/762
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setSession(session);
-      if (session?.user) {
-        setTimeout(async () => {
-          try {
+      const initAuth = async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          setSession(session);
+          if (session?.user) {
             const userProfile = await getOrCreateProfile(session.user);
             if (userProfile) {
               setProfile(userProfile);
-              // TOKEN_REFRESHED dispara sozinho quando a aba volta a ficar em
-              // foco (ex: usuário abriu um PDF em outra guia e voltou) — sem
-              // esse guard, resetava o dropdown "VISÃO" do super admin de
-              // volta pro role real a cada refresh silencioso, atrapalhando
-              // quem estava simulando outro papel (ex: gravando tutorial
-              // como Produtor). Só reset em evento de sign-in/sign-out real.
-              if (event !== 'TOKEN_REFRESHED') {
-                setActiveRole(userProfile.role);
-              }
+              setActiveRole(userProfile.role);
             }
-          } catch (err) {
-            console.error('[auth] erro ao carregar perfil:', err);
           }
-        }, 0);
-      } else {
-        setProfile(null);
-      }
-    });
+          await fetchConfig();
+        } catch (err: any) {
+          console.error('Auth error:', err);
+        } finally {
+          clearTimeout(safetyTimeout);
+          setLoading(false);
+        }
+      };
+
+      await initAuth();
+      if (cancelled) return;
+
+      // IMPORTANTE: não usar async/await direto neste callback.
+      // O Supabase mantém um lock interno de auth enquanto o callback roda; fazer await
+      // de outras queries do Supabase aqui causa DEADLOCK (login trava em "Autenticando...").
+      // Por isso adiamos o trabalho com setTimeout(..., 0).
+      // Ref: https://github.com/supabase/auth-js/issues/762
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        setSession(session);
+        if (session?.user) {
+          setTimeout(async () => {
+            try {
+              const userProfile = await getOrCreateProfile(session.user);
+              if (userProfile) {
+                setProfile(userProfile);
+                // TOKEN_REFRESHED dispara sozinho quando a aba volta a ficar em
+                // foco (ex: usuário abriu um PDF em outra guia e voltou) — sem
+                // esse guard, resetava o dropdown "VISÃO" do super admin de
+                // volta pro role real a cada refresh silencioso, atrapalhando
+                // quem estava simulando outro papel (ex: gravando tutorial
+                // como Produtor). Só reset em evento de sign-in/sign-out real.
+                if (event !== 'TOKEN_REFRESHED') {
+                  setActiveRole(userProfile.role);
+                }
+              }
+            } catch (err) {
+              console.error('[auth] erro ao carregar perfil:', err);
+            }
+          }, 0);
+        } else {
+          setProfile(null);
+        }
+      });
+
+      unsubscribe = () => subscription.unsubscribe();
+    })();
 
     return () => {
+      cancelled = true;
       clearTimeout(safetyTimeout);
-      subscription.unsubscribe();
+      unsubscribe?.();
     };
   }, []);
 

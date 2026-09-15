@@ -74,6 +74,18 @@
   animation: dropIn 240ms ease-out;
 }
 
+/* Fade-in-up do bloco de texto do hero da LandingPage (mesmo efeito que era
+   feito via Framer Motion — trocado por CSS puro em 2026-09-15 pra tirar o
+   vendor-motion inteiro do bundle da landing, achado PageSpeed Insights). */
+@keyframes heroIn {
+  0%   { opacity: 0; transform: translateY(24px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.animate-hero-in {
+  animation: heroIn 0.6s ease-out;
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
