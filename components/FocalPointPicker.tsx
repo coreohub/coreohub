@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check, Crosshair } from 'lucide-react';
+import { X, Check, Crosshair, AlertTriangle } from 'lucide-react';
 
 interface AspectPreview {
   label: string;
@@ -37,7 +37,16 @@ export default function FocalPointPicker({
   const [x, setX] = useState(initialX);
   const [y, setY] = useState(initialY);
   const [dragging, setDragging] = useState(false);
+  const [imgRatio, setImgRatio] = useState<number | null>(null);
   const imgAreaRef = useRef<HTMLDivElement>(null);
+
+  // Divergência de proporção em escala log — "2x mais largo" e "2x mais alto"
+  // contam igual, evita threshold assimétrico entre retrato/paisagem. Threshold
+  // 2.5x calibrado pra NUNCA disparar no próprio tamanho recomendado (banner
+  // 1200x630 vs Card 1:1 já diverge ~1.9x sozinho) — só acende pra casos
+  // realmente extremos (poster vertical vs banner bem largo).
+  const isMismatched = (ratio: number) =>
+    imgRatio != null && Math.abs(Math.log(imgRatio / ratio)) > Math.log(2.5);
 
   const updateFromPointer = useCallback((clientX: number, clientY: number) => {
     const el = imgAreaRef.current;
@@ -89,7 +98,16 @@ export default function FocalPointPicker({
             onPointerUp={handlePointerUp}
             className="relative w-full aspect-video rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 cursor-crosshair select-none touch-none"
           >
-            <img src={imageUrl} alt="" className="w-full h-full object-contain pointer-events-none" draggable={false} />
+            <img
+              src={imageUrl}
+              alt=""
+              className="w-full h-full object-contain pointer-events-none"
+              draggable={false}
+              onLoad={(e) => {
+                const el = e.currentTarget;
+                if (el.naturalWidth && el.naturalHeight) setImgRatio(el.naturalWidth / el.naturalHeight);
+              }}
+            />
             <div
               className="absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_2px_#ff0068] pointer-events-none flex items-center justify-center"
               style={{ left: `${x}%`, top: `${y}%` }}
@@ -104,6 +122,14 @@ export default function FocalPointPicker({
                 <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
                   <span className={`w-1.5 h-1.5 rounded-full bg-[#ff0068] ${dragging ? 'animate-pulse' : ''}`} />
                   {p.label}
+                  {isMismatched(p.ratio) && (
+                    <span
+                      title="Essa proporção corta bastante da imagem original — considere uma foto mais próxima dessa proporção"
+                      className="inline-flex items-center gap-1 text-amber-500 normal-case tracking-normal font-bold"
+                    >
+                      <AlertTriangle size={11} /> corte forte
+                    </span>
+                  )}
                 </p>
                 <div
                   className={`w-full rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border transition-colors ${
