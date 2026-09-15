@@ -1166,6 +1166,22 @@ const InscricaoWizard: React.FC = () => {
       }
 
       // Modelo 1 / sem seletiva — carrinho padrão Sessão 2.
+      // Formação R$0 (isFormacaoGratuita) — o Resumo já promete "ao confirmar,
+      // sua inscrição já fica aprovada, sem nenhuma cobrança" (linha ~2108),
+      // mas até aqui o insert sempre deixava PENDENTE esperando um 2º clique
+      // em /minhas-coreografias que ninguém avisa — vira pendência fantasma
+      // (achado real 2026-09-15, evento gratuito do Will Nunes: 7 inscrições
+      // paradas nesse limbo). Aprova direto, mesmo padrão client-side já usado
+      // nos branches de seletiva acima (insert PENDENTE + update pro status
+      // final). Servidor recalcula fee de novo — se a formação não for de
+      // fato R$0 (dessincronia), fica só como aprovação otimista incorreta;
+      // aceitável porque o produtor sempre revisa em Inscrições antes do evento.
+      if (isFormacaoGratuita) {
+        await supabase
+          .from('registrations')
+          .update({ status_pagamento: 'APROVADO', valor_pago: 0 })
+          .eq('id', reg.id);
+      }
       // Param `nova=<id>` permite a UI destacar/animar a inscrição recém-criada.
       navigate(`/minhas-coreografias?nova=${reg.id}`);
     } catch (e: any) {
