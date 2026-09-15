@@ -16,13 +16,16 @@ import BottomNavBar from './components/BottomNavBar';
 import CookieBanner from './components/CookieBanner';
 import RequirePermission from './components/RequirePermission';
 
-// Páginas principais — carregamento imediato (rota mais usada pelos inscritos)
-import Dashboard from './pages/Dashboard';
-import Bailarinos from './pages/Bailarinos';
-import MinhasCoreografias from './pages/MinhasCoreografias';
-import CentralDeMidia from './pages/CentralDeMidia';
-import Profile from './pages/Profile';
-import Auth from './pages/Auth';
+// Páginas internas (autenticadas) — lazy. Landing page é a única rota "/"
+// do domínio de marketing (coreohub.com), então fica eager: visitante da
+// home nunca deve baixar código de Dashboard/Bailarinos/etc que não vai usar
+// (achado PageSpeed Insights 2026-09-15: 178 KiB de JS não usado no mobile).
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Bailarinos = lazy(() => import('./pages/Bailarinos'));
+const MinhasCoreografias = lazy(() => import('./pages/MinhasCoreografias'));
+const CentralDeMidia = lazy(() => import('./pages/CentralDeMidia'));
+const Profile = lazy(() => import('./pages/Profile'));
+const Auth = lazy(() => import('./pages/Auth'));
 import LandingPage from './pages/LandingPage';
 const Planos = lazy(() => import('./pages/Planos'));
 import TermosDeUso from './pages/TermosDeUso';
@@ -569,8 +572,8 @@ const App: React.FC = () => {
         {/* Setor público: landing dedicada + PDF técnico imprimível */}
         <Route path="/governo" element={<Suspense fallback={<PageLoader />}><LandingGoverno /></Suspense>} />
         <Route path="/governo/proposta" element={<Suspense fallback={<PageLoader />}><PropostaGoverno /></Suspense>} />
-        <Route path="/login" element={<Auth />} />
-        <Route path="/register" element={<Auth />} />
+        <Route path="/login" element={<Suspense fallback={<PageLoader />}><Auth /></Suspense>} />
+        <Route path="/register" element={<Suspense fallback={<PageLoader />}><Auth /></Suspense>} />
         <Route path="/judge-login" element={<Suspense fallback={<PageLoader />}><JudgeLogin /></Suspense>} />
         <Route path="/judge-login/:token" element={<Suspense fallback={<PageLoader />}><JudgeLogin /></Suspense>} />
         <Route path="/entrar-juri" element={<Suspense fallback={<PageLoader />}><EntrarJuri /></Suspense>} />
