@@ -1532,6 +1532,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [ingressos, setIngressos]     = useState<TicketType[]>([]);
   const [politicaIngressos, setPoliticaIngressos] = useState<'NAO_DEFINIDO' | 'GRATUITO' | 'INTERNO' | 'EXTERNO'>('NAO_DEFINIDO');
   const [urlIngressosExterno, setUrlIngressosExterno] = useState<string>('');
+  // Nota livre no card "Entrada gratuita" da vitrine (ex: "1kg de alimento
+  // não perecível") — vazio cai no texto padrão "Não é necessário ingresso...".
+  const [entradaGratuitaNota, setEntradaGratuitaNota] = useState<string>('');
   // Tier 1 paid tickets (vivem em events.audience_*)
   const [audienceSalesEnabled, setAudienceSalesEnabled] = useState<boolean>(false);
   const [audienceCommissionPercent, setAudienceCommissionPercent] = useState<number>(10);
@@ -2127,6 +2130,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           }
           if (Array.isArray(data.programacao)) setProgramacao(data.programacao);
           if (Array.isArray(data.ingressos_audiencia)) setIngressos(data.ingressos_audiencia);
+          setEntradaGratuitaNota(data.entrada_gratuita_nota ?? '');
           // Politica de ingressos (#11). Se a coluna nao veio (banco sem migration ainda),
           // infere a partir dos dados pra nao quebrar UI: lista preenchida -> INTERNO,
           // url_ingressos -> EXTERNO, senao NAO_DEFINIDO.
@@ -2327,6 +2331,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         programacao:         programacao,
         ingressos_audiencia: ingressos,
         politica_ingressos:  politicaIngressos,
+        entrada_gratuita_nota: entradaGratuitaNota.trim() || null,
         url_ingressos:       politicaIngressos === 'EXTERNO' ? (urlIngressosExterno || null) : null,
         patrocinadores:      sponsors,
         estilos:             styles,
@@ -3662,9 +3667,23 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               </div>
 
               {politicaIngressos === 'GRATUITO' && (
-                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 font-bold">
-                  ✓ Vitrine pública mostrará banner verde: <em>"Entrada gratuita — não é necessário ingresso para assistir"</em>.
-                </p>
+                <div className="space-y-2">
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 font-bold">
+                    ✓ Vitrine pública mostrará banner verde com essa nota (ou o texto padrão se deixar em branco):
+                  </p>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    Nota da entrada gratuita — opcional
+                  </label>
+                  <textarea
+                    rows={2}
+                    maxLength={200}
+                    value={entradaGratuitaNota}
+                    onChange={e => setEntradaGratuitaNota(e.target.value.slice(0, 200))}
+                    placeholder='Padrão: "Não é necessário ingresso para assistir. Chegue cedo para garantir lugar." — ex: "Entrada solidária: 1kg de alimento não perecível na portaria."'
+                    className="w-full bg-transparent border border-slate-300 dark:border-white/10 rounded-xl py-2.5 px-4 text-slate-900 dark:text-white text-sm resize-none focus:outline-none focus:border-[#ff0068]/50"
+                  />
+                  <p className="text-[9px] text-slate-400 text-right">{entradaGratuitaNota.length}/200</p>
+                </div>
               )}
 
               {politicaIngressos === 'EXTERNO' && (

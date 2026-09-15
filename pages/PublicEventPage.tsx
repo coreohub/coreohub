@@ -1234,7 +1234,9 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                   </div>
                   <div>
                     <p className="font-black uppercase text-sm text-emerald-400">Entrada gratuita</p>
-                    <p className="text-xs text-slate-300 mt-1">Não é necessário ingresso para assistir. Chegue cedo para garantir lugar.</p>
+                    <p className="text-xs text-slate-300 mt-1">
+                      {config?.entrada_gratuita_nota?.trim() || 'Não é necessário ingresso para assistir. Chegue cedo para garantir lugar.'}
+                    </p>
                   </div>
                 </div>
               </div>
