@@ -1459,7 +1459,14 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 const today = todayISO();
                 const lotes: Lote[] = Array.isArray(mod.lotes) ? mod.lotes : [];
                 const r = resolveLote(lotes, today);
-                const precoExibir = r ? Number(r.lote.preco ?? 0) : (mod.fee != null ? Number(mod.fee) : null);
+                const primeiraFaixaProgressiva = mod.pricing_type === 'PROGRESSIVE_PER_DANCER'
+                  ? (Array.isArray(mod.progressive_tiers) ? mod.progressive_tiers.find((t: any) => t.ordem === 1)?.valor : undefined)
+                  : undefined;
+                const precoExibir = r
+                  ? Number(r.lote.preco ?? 0)
+                  : primeiraFaixaProgressiva != null
+                  ? Number(primeiraFaixaProgressiva)
+                  : (mod.fee != null ? Number(mod.fee) : null);
                 const nomeLote: string | null = r ? nomeDoLote(lotes, r.idx) : null;
                 const hint = r && r.proximo && r.lote.data_virada && Number(r.proximo.preco) > Number(r.lote.preco)
                   ? { proximoPreco: Number(r.proximo.preco), dataVirada: r.lote.data_virada, dias: diffDias(today, r.lote.data_virada) }

@@ -2452,13 +2452,19 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           // porque a regra antiga (`min <= 3 ? min : 99`) decidia pelo NÚMERO
           // digitado, não pelo nome do formato.
           const max = detectarMinFixo(f.name) !== null ? min : 99;
+          // Progressivo não tem lotes (o preço vem das faixas por bailarino)
+          // — fee/base_fee usam o valor da 1ª faixa, senão zerava sempre que
+          // a tela salvava (firstLote fica undefined pra esse pricingType).
+          const isProgressive = f.pricingType === 'PROGRESSIVE_PER_DANCER';
+          const primeiraFaixa = isProgressive ? (f.progressiveTiers ?? []).find((t: any) => t.ordem === 1)?.valor ?? 0 : null;
+          const feeCalculado = isProgressive ? primeiraFaixa : (firstLote?.preco ?? 0);
           return {
             id:           String(f.id),
             name:         f.name,
             min_members:  min,
             max_members:  max,
-            fee:          firstLote?.preco ?? 0,
-            base_fee:     firstLote?.preco ?? 0,
+            fee:          feeCalculado,
+            base_fee:     feeCalculado,
             pricing_type: f.pricingType ?? 'FIXED',
             lotes:        f.lotes ?? [],
             progressive_tiers: f.pricingType === 'PROGRESSIVE_PER_DANCER' ? (f.progressiveTiers ?? []) : undefined,
