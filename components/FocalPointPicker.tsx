@@ -101,9 +101,14 @@ export default function FocalPointPicker({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {aspectPreviews.map((p) => (
               <div key={p.label}>
-                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">{p.label}</p>
+                <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
+                  <span className={`w-1.5 h-1.5 rounded-full bg-[#ff0068] ${dragging ? 'animate-pulse' : ''}`} />
+                  {p.label}
+                </p>
                 <div
-                  className="w-full rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10"
+                  className={`w-full rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border transition-colors ${
+                    dragging ? 'border-[#ff0068]' : 'border-[#ff0068]/25'
+                  }`}
                   style={{ aspectRatio: p.ratio }}
                 >
                   <img
