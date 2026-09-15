@@ -518,7 +518,25 @@ const App: React.FC = () => {
     };
   }, []);
 
-  if (loading || customDomainSlug === undefined) {
+  // Phase 2B+: tablet em modo Terminal redireciona / pra /judge-login/<token>
+  // automaticamente (kiosk mode).
+  // Domínio de marketing (coreohub.com / www.coreohub.com) mostra a sales page
+  // na home; app.coreohub.com continua indo pro login/kiosk como sempre.
+  //
+  // 2026-08-23: tentativa de trocar a home pela vitrine (Festivais) revertida
+  // no mesmo dia — o produtor já tinha distribuído coreohub.com como link de
+  // vendas pra vários clientes via WhatsApp esperando a landing de pitch, não
+  // a vitrine. A vitrine sempre teve endereço próprio em /festivais, que
+  // nunca foi afetado por essa tentativa nem por essa reversão.
+  const isMarketingDomain = ['coreohub.com', 'www.coreohub.com'].includes(window.location.hostname);
+
+  // PSI 2026-09-15: domínio de marketing nunca serve rota privada (só
+  // LandingPage/planos/termos/governo), então não faz sentido segurar o
+  // primeiro paint esperando supabase.auth.getSession() resolver — isso
+  // custava ~300-500ms de LCP pra quem só queria ver a landing. initAuth()
+  // continua rodando em background (útil se o link "Entrar" apontar pra cá
+  // no futuro); só o gate de loading é pulado pra esse domínio.
+  if ((loading && !isMarketingDomain) || customDomainSlug === undefined) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center gap-6">
         <div className="w-16 h-16 border-4 border-[#ff0068] border-t-transparent rounded-full animate-spin shadow-[0_0_30px_rgba(255,0,104,0.3)]" />
@@ -531,18 +549,6 @@ const App: React.FC = () => {
   // seletiva. Mantém legacy config.video_selection_enabled como fallback OR.
   const videoSelectionEnabled = videoSelectionFromEvents || (config.video_selection_enabled ?? false);
   const privateRouteProps = { session, profile, activeRole, theme, toggleTheme, setActiveRole, videoSelectionEnabled };
-
-  // Phase 2B+: tablet em modo Terminal redireciona / pra /judge-login/<token>
-  // automaticamente (kiosk mode).
-  // Domínio de marketing (coreohub.com / www.coreohub.com) mostra a sales page
-  // na home; app.coreohub.com continua indo pro login/kiosk como sempre.
-  //
-  // 2026-08-23: tentativa de trocar a home pela vitrine (Festivais) revertida
-  // no mesmo dia — o produtor já tinha distribuído coreohub.com como link de
-  // vendas pra vários clientes via WhatsApp esperando a landing de pitch, não
-  // a vitrine. A vitrine sempre teve endereço próprio em /festivais, que
-  // nunca foi afetado por essa tentativa nem por essa reversão.
-  const isMarketingDomain = ['coreohub.com', 'www.coreohub.com'].includes(window.location.hostname);
   const RootRedirect = () => {
     try {
       const isKiosk = localStorage.getItem('coreohub_tablet_kiosk_mode') === 'true';

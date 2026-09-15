@@ -32,11 +32,17 @@
     <meta name="twitter:description" content="Inscrições, júri digital, cronograma e certificados numa plataforma só. Sem mensalidade — você paga apenas quando vende.">
     <meta name="twitter:image" content="https://coreohub.com/og-image.jpg">
     <meta name="twitter:image:alt" content="Bailarinas em vestidos vermelhos com leques dourados no palco de um festival de dança">
-    <!-- LCP da landing: puxa o hero junto com o HTML em vez de esperar o bundle React. -->
-    <link rel="preload" as="image" href="/hero-festival.webp" fetchpriority="high">
+    <!-- LCP da landing: puxa o hero junto com o HTML em vez de esperar o bundle React.
+         imagesrcset/imagesizes casam com o srcSet real do <img> em LandingPage.tsx
+         pra não baixar a versão 1920px num viewport mobile de 375px. -->
+    <link rel="preload" as="image" href="/hero-festival.webp" imagesrcset="/hero-festival-mobile.webp 960w, /hero-festival.webp 1920w" imagesizes="100vw" fetchpriority="high">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Fonte carregada async (preload+swap rel) — CSS de fonte de domínio externo
+         não bloqueia mais o primeiro paint (achado PSI 2026-09-15: ~600ms de render-blocking). -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"></noscript>
 
     <script type="application/ld+json">
     {

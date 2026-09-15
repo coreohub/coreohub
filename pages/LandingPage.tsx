@@ -106,6 +106,8 @@ const LandingPage = () => {
       <section className="relative min-h-[90vh] flex flex-col overflow-hidden bg-black">
         <img
           src="/hero-festival.webp"
+          srcSet="/hero-festival-mobile.webp 960w, /hero-festival.webp 1920w"
+          sizes="100vw"
           alt=""
           aria-hidden="true"
           width={1920}
