@@ -67,8 +67,8 @@ export default function FocalPointPicker({
       aria-modal="true"
       onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); }}
     >
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl w-full max-w-2xl max-h-[90dvh] overflow-y-auto">
-        <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-white/10">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl w-full max-w-2xl max-h-[90dvh] flex flex-col">
+        <div className="shrink-0 flex items-center justify-between p-5 border-b border-slate-200 dark:border-white/10">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Crosshair size={16} /></div>
             <div>
@@ -81,7 +81,7 @@ export default function FocalPointPicker({
           </button>
         </div>
 
-        <div className="p-5 space-y-5">
+        <div className="p-5 space-y-5 overflow-y-auto min-h-0">
           <div
             ref={imgAreaRef}
             onPointerDown={handlePointerDown}
@@ -118,7 +118,7 @@ export default function FocalPointPicker({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 p-5 border-t border-slate-200 dark:border-white/10">
+        <div className="shrink-0 flex items-center justify-end gap-2 p-5 border-t border-slate-200 dark:border-white/10">
           <button
             onClick={onCancel}
             className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10"
