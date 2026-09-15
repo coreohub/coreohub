@@ -1044,12 +1044,19 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               : null,
           ].filter(Boolean) as { key: string; label: string; value: string; icon: any }[]);
 
+          // Proxy same-origin (api/documento.ts) em vez do link direto do
+          // Supabase Storage — sem isso o `download` do <a> é ignorado por
+          // ser cross-origin e o clique abre aba nova mostrando a URL crua
+          // do supabase.co em vez de baixar o arquivo.
+          const proxyDoc = (nome: string, url: string) =>
+            `/api/documento?url=${encodeURIComponent(url)}&nome=${encodeURIComponent(nome)}`;
+
           const docCards = ([
             event.regulation_pdf_url
-              ? { key: 'regulamento', title: 'Baixar regulamento', subtitle: 'PDF oficial do festival', href: event.regulation_pdf_url }
+              ? { key: 'regulamento', title: 'Baixar regulamento', subtitle: 'PDF oficial do festival', href: proxyDoc('Regulamento.pdf', event.regulation_pdf_url) }
               : null,
             ...(event.documentos_extras ?? []).map((doc: { nome: string; url: string }, idx: number) => ({
-              key: `doc-${idx}`, title: doc.nome, subtitle: 'PDF', href: doc.url,
+              key: `doc-${idx}`, title: doc.nome, subtitle: 'PDF', href: proxyDoc(`${doc.nome}.pdf`, doc.url),
             })),
           ].filter(Boolean) as { key: string; title: string; subtitle: string; href: string }[]);
 
