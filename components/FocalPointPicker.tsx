@@ -98,7 +98,7 @@ export default function FocalPointPicker({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {aspectPreviews.map((p) => (
               <div key={p.label}>
                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">{p.label}</p>
