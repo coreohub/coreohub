@@ -360,23 +360,16 @@ const Planos: React.FC = () => {
               "Além da inscrição" abaixo dos cards). */}
           <div className="border-t border-white/10 pt-4 mb-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Seu evento também vende (opcional)</p>
-            <div className="flex flex-wrap gap-x-6 gap-y-2 mb-4">
-              <label className="inline-flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-                <input type="checkbox" checked={sellIngressos} onChange={(e) => setSellIngressos(e.target.checked)} className="w-4 h-4 accent-[#ff0068]" />
-                Ingressos de plateia
-              </label>
-              <label className="inline-flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-                <input type="checkbox" checked={sellWorkshops} onChange={(e) => setSellWorkshops(e.target.checked)} className="w-4 h-4 accent-[#ff0068]" />
-                Workshops
-              </label>
-              <label className="inline-flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-                <input type="checkbox" checked={sellSeletiva} onChange={(e) => setSellSeletiva(e.target.checked)} className="w-4 h-4 accent-[#ff0068]" />
-                Seletiva por vídeo
-              </label>
-            </div>
-
-            {(sellIngressos || sellWorkshops || sellSeletiva) && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 sm:gap-6">
+            {/* Cada checkbox mora na MESMA coluna do grid que o slider dele —
+                nunca um <div> separado sendo filtrado (isso fazia o slider
+                "escorregar" pra esquerda e desalinhar do checkbox certo
+                quando nem todos estavam marcados — achado 2026-09-16). */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 sm:gap-6">
+              <div className="text-left">
+                <label className="inline-flex items-center gap-2 text-xs text-slate-300 cursor-pointer mb-2">
+                  <input type="checkbox" checked={sellIngressos} onChange={(e) => setSellIngressos(e.target.checked)} className="w-4 h-4 accent-[#ff0068]" />
+                  Ingressos de plateia
+                </label>
                 {sellIngressos && (
                   <SimField
                     id="calc-ingressos"
@@ -389,6 +382,12 @@ const Planos: React.FC = () => {
                     minCaption="R$ 0" maxCaption="R$ 15 mil"
                   />
                 )}
+              </div>
+              <div className="text-left">
+                <label className="inline-flex items-center gap-2 text-xs text-slate-300 cursor-pointer mb-2">
+                  <input type="checkbox" checked={sellWorkshops} onChange={(e) => setSellWorkshops(e.target.checked)} className="w-4 h-4 accent-[#ff0068]" />
+                  Workshops
+                </label>
                 {sellWorkshops && (
                   <SimField
                     id="calc-workshops"
@@ -401,6 +400,12 @@ const Planos: React.FC = () => {
                     minCaption="R$ 0" maxCaption="R$ 10 mil"
                   />
                 )}
+              </div>
+              <div className="text-left">
+                <label className="inline-flex items-center gap-2 text-xs text-slate-300 cursor-pointer mb-2">
+                  <input type="checkbox" checked={sellSeletiva} onChange={(e) => setSellSeletiva(e.target.checked)} className="w-4 h-4 accent-[#ff0068]" />
+                  Seletiva por vídeo
+                </label>
                 {sellSeletiva && (
                   <SimField
                     id="calc-seletiva"
@@ -414,7 +419,7 @@ const Planos: React.FC = () => {
                   />
                 )}
               </div>
-            )}
+            </div>
           </div>
 
           <p className="text-xs text-slate-400 text-center md:text-left" aria-live="polite">
