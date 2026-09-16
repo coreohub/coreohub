@@ -59,13 +59,13 @@ const PwaUpdatePrompt: React.FC = () => {
         <button
           onClick={handleUpdate}
           disabled={updating}
-          className="shrink-0 px-3 py-1.5 bg-white text-[#ff0068] rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-white/90 transition-colors disabled:opacity-70"
+          className="shrink-0 px-3 py-1.5 bg-white text-[#ff0068] rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-white/90 transition-colors disabled:opacity-70 cursor-pointer disabled:cursor-default"
         >
           {updating ? 'Atualizando…' : 'Atualizar'}
         </button>
         <button
           onClick={() => setNeedRefresh(false)}
-          className="shrink-0 p-1 text-white/80 hover:text-white transition-colors"
+          className="shrink-0 p-1 text-white/80 hover:text-white transition-colors cursor-pointer"
           aria-label="Dispensar por agora"
           title="Dispensar por agora"
         >
