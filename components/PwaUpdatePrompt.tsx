@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { RefreshCw, X } from 'lucide-react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 
@@ -34,20 +34,34 @@ const PwaUpdatePrompt: React.FC = () => {
     },
   });
 
+  const [updating, setUpdating] = useState(false);
+
   if (!needRefresh) return null;
+
+  // updateServiceWorker manda o skipWaiting e conta com um listener interno
+  // da lib (evento 'controlling') pra recarregar sozinho — em testes com
+  // deploys em sequência rápida esse listener às vezes não dispara (worker
+  // já tinha mudado de estado). Failsafe: se em 2s não recarregou sozinho,
+  // força na mão — a essa altura já sabemos que existe versão nova de verdade.
+  const handleUpdate = () => {
+    setUpdating(true);
+    updateServiceWorker(true);
+    setTimeout(() => window.location.reload(), 2000);
+  };
 
   return (
     <div className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-4 z-[60] max-w-sm sm:ml-auto">
       <div className="flex items-center gap-3 bg-[#ff0068] text-white rounded-2xl shadow-2xl px-4 py-3">
-        <RefreshCw size={18} className="shrink-0" />
+        <RefreshCw size={18} className={`shrink-0 ${updating ? 'animate-spin' : ''}`} />
         <p className="flex-1 min-w-0 text-sm font-bold">
           Nova versão disponível
         </p>
         <button
-          onClick={() => updateServiceWorker(true)}
-          className="shrink-0 px-3 py-1.5 bg-white text-[#ff0068] rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-white/90 transition-colors"
+          onClick={handleUpdate}
+          disabled={updating}
+          className="shrink-0 px-3 py-1.5 bg-white text-[#ff0068] rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-white/90 transition-colors disabled:opacity-70"
         >
-          Atualizar
+          {updating ? 'Atualizando…' : 'Atualizar'}
         </button>
         <button
           onClick={() => setNeedRefresh(false)}
