@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
         react(),
         tailwindcss(),
         VitePWA({
-          registerType: 'autoUpdate',
+          registerType: 'prompt',
           // Em dev fica desabilitado por default pra não atrapalhar HMR.
           devOptions: { enabled: false },
           // Activos extras incluídos no precache (cobertura offline-first).

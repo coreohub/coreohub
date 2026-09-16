@@ -17,6 +17,7 @@ const ImpersonateBanner = lazy(() => import('./components/ImpersonateBanner'));
 const Header = lazy(() => import('./components/Header'));
 const BottomNavBar = lazy(() => import('./components/BottomNavBar'));
 const CookieBanner = lazy(() => import('./components/CookieBanner'));
+const PwaUpdatePrompt = lazy(() => import('./components/PwaUpdatePrompt'));
 const RequirePermission = lazy(() => import('./components/RequirePermission'));
 
 // Páginas internas (autenticadas) — lazy. Landing page é a única rota "/"
@@ -756,6 +757,7 @@ const App: React.FC = () => {
           em surface públicas (lógica interna do componente) e respeita
           consent salvo em localStorage com TTL de 12 meses. */}
       <Suspense fallback={null}><CookieBanner /></Suspense>
+      <Suspense fallback={null}><PwaUpdatePrompt /></Suspense>
     </Router>
   );
 };
