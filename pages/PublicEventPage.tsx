@@ -1223,6 +1223,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           if (politica === 'NAO_DEFINIDO') return null;
 
           if (politica === 'GRATUITO') {
+            const notaCustom = config?.entrada_gratuita_nota?.trim();
             return (
               <div id="ingressos" className="space-y-4 scroll-mt-20">
                 <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
@@ -1233,9 +1234,14 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                     <Ticket size={24} />
                   </div>
                   <div>
-                    <p className="font-black uppercase text-sm text-emerald-400">Entrada gratuita</p>
+                    {/* Produtor com nota própria (ex: entrada solidária com doação)
+                        pode não querer a palavra "gratuita" — o título neutro deixa
+                        a nota carregar a framing real, sem contradizer o texto dela. */}
+                    <p className="font-black uppercase text-sm text-emerald-400">
+                      {notaCustom ? 'Acesso ao evento' : 'Entrada gratuita'}
+                    </p>
                     <p className="text-xs text-slate-300 mt-1">
-                      {config?.entrada_gratuita_nota?.trim() || 'Não é necessário ingresso para assistir. Chegue cedo para garantir lugar.'}
+                      {notaCustom || 'Não é necessário ingresso para assistir. Chegue cedo para garantir lugar.'}
                     </p>
                   </div>
                 </div>
