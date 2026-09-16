@@ -11,6 +11,7 @@ import {
   AlertCircle, Mail, Copy, Trash2, Plus, X, Check, Lock, Unlock,
   ExternalLink, BarChart3, Download, Eye, Ticket, GraduationCap,
   Video, ShieldCheck, ShieldAlert, ShieldQuestion, Search, Calculator, RefreshCw,
+  Percent, Gift,
 } from 'lucide-react';
 import { startImpersonate } from '../services/impersonateService';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -272,13 +273,21 @@ const SuperAdmin = () => {
 
     // Comissões retidas há +14 dias (sinal de bug no cron daily-release-funds OU
     // produtor sem PIX/KYC bloqueando o sweep). release_at < cutoff14d AND released_at IS NULL.
+    // Exclui comissão 100% estornada: daily-release-funds já ignora essas de propósito
+    // (nada a repassar), então released_at fica NULL pra sempre sem ser bug real —
+    // achado real 2026-09-16 (2x R$36 do Usualdance, refund_amount === gross_amount desde maio).
     const stuckCommissions = commissions.filter(c => {
       const r = c as any;
       if (r.released_at) return false;
       if (!r.release_at) return false;
+      const netOfRefund = Number(r.net_amount ?? 0) - Number(r.refund_amount ?? 0);
+      if (netOfRefund <= 0) return false;
       return new Date(r.release_at).getTime() < cutoff14d;
     });
-    const stuckTotal  = stuckCommissions.reduce((s, c) => s + Number((c as any).net_amount ?? 0), 0);
+    const stuckTotal = stuckCommissions.reduce((s, c) => {
+      const r = c as any;
+      return s + (Number(r.net_amount ?? 0) - Number(r.refund_amount ?? 0));
+    }, 0);
 
     return {
       // All-time
@@ -569,8 +578,8 @@ const SuperAdmin = () => {
       {/* Header */}
       <header>
         <div className="flex items-center gap-2 mb-1">
-          <Crown size={12} className="text-[#e3ff0a]" />
-          <span className="text-[9px] font-black text-[#e3ff0a] uppercase tracking-[0.3em]">Painel da Plataforma</span>
+          <Crown size={12} className="text-[#a8b800] dark:text-[#e3ff0a]" />
+          <span className="text-[9px] font-black text-[#a8b800] dark:text-[#e3ff0a] uppercase tracking-[0.3em]">Painel da Plataforma</span>
         </div>
         <PageHeader
           title={<>Super <span className="text-[#ff0068]">Admin</span></>}
@@ -1033,15 +1042,15 @@ const SuperAdmin = () => {
                                     className="p-2 rounded-lg text-emerald-500 hover:bg-emerald-500/10"
                                     title="Tornar gratuito"
                                   >
-                                    <DollarSign size={14} />
+                                    <Gift size={14} />
                                   </button>
                                 )}
                                 <button
                                   onClick={() => setEventEdit(ev)}
                                   className="p-2 rounded-lg text-slate-400 hover:text-[#ff0068] hover:bg-[#ff0068]/10"
-                                  title="Editar comissão"
+                                  title="Editar comissão / plano"
                                 >
-                                  <BarChart3 size={14} />
+                                  <Percent size={14} />
                                 </button>
                                 {ev.billing_plan === 'escala' && (
                                   <button

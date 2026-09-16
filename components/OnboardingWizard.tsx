@@ -367,7 +367,7 @@ const OnboardingWizard: React.FC = () => {
                     : 'border-[#e3ff0a]/40 bg-[#e3ff0a]/5 hover:border-[#e3ff0a] hover:bg-[#e3ff0a]/10'
                 }`}
               >
-                <div className="w-12 h-12 rounded-xl bg-[#e3ff0a]/20 flex items-center justify-center text-[#e3ff0a] shrink-0">
+                <div className="w-12 h-12 rounded-xl bg-[#e3ff0a]/20 flex items-center justify-center text-[#a8b800] dark:text-[#e3ff0a] shrink-0">
                   {analyzing
                     ? <RefreshCw size={20} className="animate-spin" />
                     : <Sparkles size={20} />}

@@ -210,8 +210,8 @@ const CriarEventoGate: React.FC = () => {
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#e3ff0a]/10 border border-[#e3ff0a]/20">
-            <Sparkles size={12} className="text-[#e3ff0a]" />
-            <span className="text-[9px] font-black text-[#e3ff0a] uppercase tracking-[0.3em]">Cadastro de Produtor</span>
+            <Sparkles size={12} className="text-[#a8b800] dark:text-[#e3ff0a]" />
+            <span className="text-[9px] font-black text-[#a8b800] dark:text-[#e3ff0a] uppercase tracking-[0.3em]">Cadastro de Produtor</span>
           </div>
           <h1 className="text-3xl font-black tracking-tighter uppercase text-slate-900 dark:text-white">
             Bem-vindo à <span className="text-[#ff0068] italic">CoreoHub</span>
