@@ -11,12 +11,28 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
  *
  * Sem timeout automático de reload por decisão: forçar recarregar sozinho
  * no meio de alguém preenchendo formulário seria pior que o problema atual.
+ *
+ * `useRegisterSW` sozinho só registra o SW e detecta update via checagem
+ * nativa do browser (que pode nunca rodar numa SPA com aba parada, sem
+ * navegação/full reload) — por isso `onRegisteredSW` força `registration
+ * .update()` a cada 3min enquanto a aba fica aberta, senão o banner nunca
+ * apareceria pra quem só deixa a tela de Configurações aberta e parada
+ * (exatamente o cenário real que motivou essa feature).
  */
+const UPDATE_CHECK_INTERVAL_MS = 3 * 60 * 1000;
+
 const PwaUpdatePrompt: React.FC = () => {
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
-  } = useRegisterSW();
+  } = useRegisterSW({
+    onRegisteredSW(_swUrl, registration) {
+      if (!registration) return;
+      setInterval(() => {
+        registration.update();
+      }, UPDATE_CHECK_INTERVAL_MS);
+    },
+  });
 
   if (!needRefresh) return null;
 
