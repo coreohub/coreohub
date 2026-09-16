@@ -1826,6 +1826,31 @@ Deno.serve(async (req) => {
 
     // Se aprovado, registrar comissão e enviar emails
     if (statusInterno === 'APROVADO') {
+      // Item de baixo valor em evento com absorção de taxa (ver
+      // create-payment-asaas ── 6a): pagamento sem split, sem comissão pra
+      // registrar. Só confirma a linha de rastreio e agenda a janela de
+      // segurança antes da transferência integral sair (mesmo princípio do
+      // D+7 — protege contra estorno acontecer depois do repasse já feito).
+      const { data: lvt } = await supabase
+        .from('low_value_transfers')
+        .select('id, status')
+        .eq('asaas_payment_id', String(payment.id))
+        .maybeSingle()
+
+      if (lvt && lvt.status === 'aguardando_pagamento') {
+        const safetyReleaseAt = computeReleaseAt()
+        const { error: lvtUpdErr } = await supabase
+          .from('low_value_transfers')
+          .update({ status: 'aguardando_janela', safety_release_at: safetyReleaseAt, updated_at: new Date().toISOString() })
+          .eq('id', lvt.id)
+        if (lvtUpdErr) {
+          console.error('[asaas-webhook][low_value_transfer] erro ao confirmar pagamento:', lvtUpdErr.message)
+        } else {
+          console.log(`[asaas-webhook][low_value_transfer] confirmado id=${lvt.id} release_at=${safetyReleaseAt}`)
+        }
+      }
+      const isLowValueNoSplit = Boolean(lvt)
+
       const { data: coreo } = await supabase
         .from('registrations')
         .select('event_id, user_id, nome:nome_coreografia, formacao:formato_participacao, tipo_apresentacao')
@@ -1853,31 +1878,36 @@ Deno.serve(async (req) => {
       const commissionAmount = parseFloat((baseFee * (commissionPercent / 100)).toFixed(2))
       const producerAmount   = parseFloat((grossAmount - commissionAmount).toFixed(2))
 
-      const { error: insErr } = await supabase
-        .from('platform_commissions')
-        .insert({
-          registration_id:  registrationId,
-          event_id:         coreo?.event_id ?? null,
-          producer_id:      eventData?.created_by ?? null,
-          gross_amount:     grossAmount,
-          commission_amount: commissionAmount,
-          net_amount:       producerAmount,
-          asaas_payment_id: String(payment.id),
-          commission_type:  eventData?.commission_type ?? 'percent',
-          release_at:       computeReleaseAt(),
-        })
+      // Item sem split (low_value_transfers) não gera comissão nenhuma —
+      // 100% do valor vai pro produtor via transferência interna depois da
+      // janela de segurança (release-low-value-transfers).
+      if (!isLowValueNoSplit) {
+        const { error: insErr } = await supabase
+          .from('platform_commissions')
+          .insert({
+            registration_id:  registrationId,
+            event_id:         coreo?.event_id ?? null,
+            producer_id:      eventData?.created_by ?? null,
+            gross_amount:     grossAmount,
+            commission_amount: commissionAmount,
+            net_amount:       producerAmount,
+            asaas_payment_id: String(payment.id),
+            commission_type:  eventData?.commission_type ?? 'percent',
+            release_at:       computeReleaseAt(),
+          })
 
-      if (insErr) {
-        console.error('[asaas-webhook] erro ao inserir comissão:', insErr.message)
-      } else {
-        console.log(
-          `[asaas-webhook] APROVADO | bruto=R$${grossAmount}` +
-          ` comissao=R$${commissionAmount} produtor=R$${producerAmount}`
-        )
-        await notifySuperAdmins(supabase, {
-          eventId: coreo?.event_id, producerId: eventData?.created_by, eventName: eventData?.name,
-          grossAmount, kind: 'registration',
-        })
+        if (insErr) {
+          console.error('[asaas-webhook] erro ao inserir comissão:', insErr.message)
+        } else {
+          console.log(
+            `[asaas-webhook] APROVADO | bruto=R$${grossAmount}` +
+            ` comissao=R$${commissionAmount} produtor=R$${producerAmount}`
+          )
+          await notifySuperAdmins(supabase, {
+            eventId: coreo?.event_id, producerId: eventData?.created_by, eventName: eventData?.name,
+            grossAmount, kind: 'registration',
+          })
+        }
       }
 
       // Emails transacionais

@@ -182,6 +182,37 @@ Deno.serve(async (req) => {
 
     const commissionRefunded = commissions?.reduce((sum, c) => sum + Number(c.commission_amount ?? 0), 0) ?? 0
 
+    // Item de baixo valor sem split (evento com absorção de taxa, ver
+    // create-payment-asaas ── 6a): cancela a transferência integral pendente
+    // pra produtora, se ela ainda não saiu. Sem isso, o cron de release
+    // poderia transferir dinheiro que já voltou pro inscrito.
+    const { data: lvt } = await supabase
+      .from('low_value_transfers')
+      .select('id, status')
+      .eq('asaas_payment_id', coreo.payment_id)
+      .maybeSingle()
+    if (lvt && lvt.status !== 'transferido' && lvt.status !== 'transferencia_pedida') {
+      await supabase
+        .from('low_value_transfers')
+        .update({
+          status:        'cancelado',
+          cancelled_at:  now,
+          cancel_reason: reason ?? 'Inscrição estornada antes da transferência sair.',
+        })
+        .eq('id', lvt.id)
+      console.log(`[refund-asaas-payment] low_value_transfer cancelado id=${lvt.id}`)
+    } else if (lvt) {
+      // Já transferido (ou transferência já pedida) — dinheiro já saiu ou
+      // está saindo pra produtora. Precisa de reconciliação manual: a
+      // CoreoHub reembolsou o inscrito mas não tem mais como recuperar o
+      // valor da subconta dela via API. Loga bem alto pra não passar batido.
+      console.warn(
+        `[refund-asaas-payment] ⚠️ ATENÇÃO: registration=${registration_id} estornada mas` +
+        ` low_value_transfer=${lvt.id} já está status=${lvt.status} — dinheiro pode já ter` +
+        ` saído pra produtora sem cobertura de comissão nenhuma. Verificar manualmente.`
+      )
+    }
+
     // ─── Emails de confirmação (best-effort) ──────────────────────────────
     // Busca dados pra montar payloads. Falha aqui NÃO reverte o refund —
     // dinheiro já saiu do Asaas e voltou pro inscrito.

@@ -194,3 +194,78 @@ export async function sweepProducerBalance(opts: {
     return { swept: false, value: 0, reason: 'exception', error: (e as Error).message }
   }
 }
+
+export interface InternalTransferResult {
+  ok:           boolean
+  status?:      string    // status Asaas retornado ('PENDING' até aprovação manual, 'DONE' quando confirmado)
+  transferId?:  string
+  authorized?:  boolean   // Asaas exige aprovação manual (código/app) pra transferência interna via API — confirmado 2026-09-16
+  error?:       string
+}
+
+/** Transferência interna Asaas-a-Asaas (master → carteira de outra conta
+ *  Asaas), via /transfers com `walletId` (mesmo campo usado no split).
+ *  Gratuita (`transferFee: 0`, confirmado em teste real 2026-09-16) — bem
+ *  diferente de PIX/TED externo, que tem custo.
+ *
+ *  IMPORTANTE: exige uma API key com permissão de saque habilitada
+ *  (`ASAAS_TRANSFER_API_KEY`, chave dedicada e separada de `ASAAS_API_KEY`
+ *  — nunca reusar a chave de criação de cobrança aqui, pra não ampliar o
+ *  raio de dano se uma delas vazar). Toda transferência sai como PENDING/
+ *  authorized:false até alguém aprovar manualmente no app da Asaas (código
+ *  de autorização) — não existe hoje um jeito de pular essa aprovação sem
+ *  configurar "Validação de saque via Webhook" (decisão de produto
+ *  2026-09-16: não implementado por ora — volume baixo não justifica o
+ *  endpoint novo que autoriza saque sozinho).
+ */
+export async function transferToWallet(opts: {
+  transferApiKey: string   // ASAAS_TRANSFER_API_KEY — nunca ASAAS_API_KEY
+  asaasBaseUrl:   string
+  walletId:       string
+  value:          number
+  description?:   string
+}): Promise<InternalTransferResult> {
+  const { transferApiKey, asaasBaseUrl, walletId, value } = opts
+  if (!transferApiKey) return { ok: false, error: 'no_transfer_api_key' }
+  if (!walletId)       return { ok: false, error: 'no_wallet_id' }
+  if (!(value > 0))    return { ok: false, error: 'invalid_value' }
+
+  try {
+    const res = await fetch(`${asaasBaseUrl}/transfers`, {
+      method: 'POST',
+      headers: { 'access_token': transferApiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        value,
+        walletId,
+        description: opts.description ?? 'CoreoHub — repasse integral (evento com absorção de taxa)',
+      }),
+    })
+    const data = await res.json().catch(() => null) as any
+    if (!res.ok) {
+      return { ok: false, error: data?.errors?.[0]?.description ?? `${res.status}` }
+    }
+    return { ok: true, status: data?.status, transferId: data?.id, authorized: Boolean(data?.authorized) }
+  } catch (e) {
+    return { ok: false, error: (e as Error).message }
+  }
+}
+
+/** Consulta o status atual de uma transferência (pra reconciliar depois que
+ *  alguém aprova manualmente no app — PENDING vira DONE). */
+export async function getTransferStatus(opts: {
+  transferApiKey: string
+  asaasBaseUrl:   string
+  transferId:     string
+}): Promise<{ ok: boolean; status?: string; authorized?: boolean; error?: string }> {
+  const { transferApiKey, asaasBaseUrl, transferId } = opts
+  try {
+    const res = await fetch(`${asaasBaseUrl}/transfers/${transferId}`, {
+      headers: { 'access_token': transferApiKey, 'Content-Type': 'application/json' },
+    })
+    const data = await res.json().catch(() => null) as any
+    if (!res.ok) return { ok: false, error: data?.errors?.[0]?.description ?? `${res.status}` }
+    return { ok: true, status: data?.status, authorized: Boolean(data?.authorized) }
+  } catch (e) {
+    return { ok: false, error: (e as Error).message }
+  }
+}

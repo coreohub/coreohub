@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
     // ── 3. Evento ────────────────────────────────────────────────────────────
     const { data: event } = await supabase
       .from('events')
-      .select('id, name, created_by, commission_percent, commission_type, formacoes_config, fee_mode, event_type')
+      .select('id, name, created_by, commission_percent, commission_type, formacoes_config, fee_mode, event_type, absorve_taxa_baixo_valor')
       .eq('id', event_id)
       .single()
 
@@ -261,10 +261,37 @@ Deno.serve(async (req) => {
       producerAmount = parseFloat((baseFee - commissionAmount).toFixed(2))
     }
 
+    // ── 6a. Absorção de taxa em item de baixo valor (evento com flag) ────────
+    // A Asaas exige uma margem mínima no split (~R$1,99 a R$3+ dependendo do
+    // valor, confirmado em teste real 2026-09-16) antes de aceitar a
+    // cobrança — abaixo disso, o checkout quebra com "valor total do Split
+    // excede o valor a receber". Pra eventos com `absorve_taxa_baixo_valor`
+    // (hoje só a Tamoios — regulamento dela promete valor de inscrição
+    // fechado, sem taxa nenhuma pro inscrito, e a comissão não pode ser
+    // descontada da produtora), a cobrança sai SEM split nenhum quando a
+    // comissão calculada não cobre a margem mínima: o inscrito paga
+    // exatamente o valor anunciado (baseFee, nem 1 centavo a mais), o
+    // dinheiro cai 100% na carteira master, e uma transferência interna
+    // separada (gratuita, ver _shared/asaas-payouts.ts transferToWallet)
+    // manda o valor cheio pra produtora depois de uma janela de segurança
+    // contra estorno. A CoreoHub absorve só a taxa de processamento da
+    // Asaas nesse item — zero comissão, prejuízo consciente e restrito a
+    // esse evento (memory/opcao_c_absorcao_taxa_tamoios.md).
+    const LOW_VALUE_SPLIT_FLOOR = 3.00
+    const useNoSplitAbsorb = Boolean((event as any).absorve_taxa_baixo_valor)
+      && commissionAmount < LOW_VALUE_SPLIT_FLOOR
+      && baseFee > 0
+
+    if (useNoSplitAbsorb) {
+      chargedAmount  = baseFee
+      producerAmount = baseFee
+    }
+
     console.log(
       `[create-payment-asaas] formacao="${formacaoUsada}" pricing=${pricingType}` +
       (pricingType === 'PER_MEMBER' ? ` ${feeUnit}×${bailarinosCount}=${baseFee}` : ` base=${baseFee}`) +
-      ` mode=${feeMode} charged=${chargedAmount} producer=${producerAmount} commission=${commissionAmount}`
+      ` mode=${feeMode} charged=${chargedAmount} producer=${producerAmount} commission=${commissionAmount}` +
+      (useNoSplitAbsorb ? ' [SEM SPLIT — absorção de taxa baixo valor]' : '')
     )
 
     // ── 6b. Inscrição gratuita (chargedAmount === 0) — aprova direto, sem Asaas ──
@@ -365,19 +392,24 @@ Deno.serve(async (req) => {
     // não tem domínio cadastrado nas Informações Comerciais — nesse caso,
     // fallback automático sem callback (mantém UX antiga: inscrito pode ficar
     // na tela Asaas após pagar). Self-healing quando subconta tiver domínio.
-    const basePayload = {
+    const basePayload: Record<string, unknown> = {
       customer:          customerId,
       billingType:       'UNDEFINED', // inscrito escolhe: PIX, cartão ou boleto
       value:             chargedAmount,
       dueDate:           dueDateStr,
       description:       `Inscrição - ${coreo.nome_coreografia ?? 'Coreografia'} | ${event.name}`,
       externalReference: registration_id,
-      split: [
+    }
+    // Item de baixo valor em evento com absorção de taxa: sem split nenhum —
+    // 100% cai na master, repasse integral sai depois via transferência
+    // interna (ver low_value_transfers + release-low-value-transfers).
+    if (!useNoSplitAbsorb) {
+      basePayload.split = [
         {
           walletId:   producer.asaas_wallet_id,
           fixedValue: producerAmount,
         },
-      ],
+      ]
     }
     const callbackPayload = {
       successUrl:   `${ALLOWED_ORIGIN}/pagamento-sucesso?ref=${encodeURIComponent(registration_id)}`,
@@ -430,6 +462,24 @@ Deno.serve(async (req) => {
       delete updatePayload.coupon_id
       delete updatePayload.discount_amount
       await supabase.from('registrations').update(updatePayload).eq('id', registration_id)
+    }
+
+    // ── 10a. Rastreio de repasse integral (sem split) ────────────────────────
+    if (useNoSplitAbsorb) {
+      const { error: lvtErr } = await supabase
+        .from('low_value_transfers')
+        .insert({
+          event_id:           event_id,
+          registration_id:    registration_id,
+          producer_id:        event.created_by,
+          producer_wallet_id: producer.asaas_wallet_id,
+          value:              producerAmount,
+          asaas_payment_id:   String(payData.id),
+          status:             'aguardando_pagamento',
+        })
+      if (lvtErr) {
+        console.error('[create-payment-asaas] erro ao criar low_value_transfers:', lvtErr.message)
+      }
     }
 
     // ── 10b. Incremento de used_count MOVIDO pro webhook PAYMENT_RECEIVED ───
