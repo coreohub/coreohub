@@ -28,7 +28,6 @@ interface ProducerRow {
   events_count: number;
   total_gross: number;
   total_commission: number;
-  default_commission_percent: number;
 }
 
 interface CommissionRow {
@@ -74,6 +73,13 @@ const KIND_META: Record<string, { label: string; icon: any }> = {
   video_selection: { label: 'Seletiva de Vídeo', icon: Video },
 };
 
+// Plano comercial é dado por EVENTO (events.billing_plan), não por produtor —
+// um produtor pode ter eventos em planos diferentes ao mesmo tempo. Fonte
+// única de verdade fica na tabela de Eventos; "Planos" na tabela de Produtores
+// é só um resumo agregado pra leitura rápida (achado 2026-09-16, mesmo padrão
+// Stripe: plano vive na subscription, não no customer).
+const PLAN_LABEL: Record<string, string> = { comeco: 'Começo', essencial: 'Essencial', escala: 'Escala' };
+
 const SuperAdmin = () => {
   const navigate = useNavigate();
   const [authorized, setAuthorized] = useState<boolean | null>(null);
@@ -112,7 +118,6 @@ const SuperAdmin = () => {
   const [inviteSaving, setInviteSaving]       = useState(false);
   const [inviteError, setInviteError]         = useState<string | null>(null);
   const [copiedToken, setCopiedToken]         = useState<string | null>(null);
-  const [editingCommission, setEditingCommission] = useState<{ id: string; value: string } | null>(null);
 
   /* Impersonate ('Visualizar como Produtor') */
   const [impersonatingId, setImpersonatingId] = useState<string | null>(null);
@@ -166,7 +171,7 @@ const SuperAdmin = () => {
             .select('*')
             .order('created_at', { ascending: false }),
           supabase.from('profiles')
-            .select('id, full_name, email, is_blocked, asaas_subconta_id, default_commission_percent, asaas_kyc_status, asaas_onboarding_url'),
+            .select('id, full_name, email, is_blocked, asaas_subconta_id, asaas_kyc_status, asaas_onboarding_url'),
           supabase.from('events')
             .select('id, name, slug, created_by, start_date, event_type, commission_type, commission_percent, commission_fixed, fee_mode, is_public, is_demo, acesso_liberado_nota, setup_fee_paid_at, setup_fee_grandfathered, setup_fee_tier_chave, setup_fee_amount_paid, billing_plan, billing_plan_fixed_fee_paid_at, billing_settlement_closed_at')
             .order('start_date', { ascending: false }),
@@ -234,7 +239,6 @@ const SuperAdmin = () => {
             events_count:      eventsByProducer.get(p.id) ?? 0,
             total_gross:       grossByProducer.get(p.id) ?? 0,
             total_commission:  commissionByProducer.get(p.id) ?? 0,
-            default_commission_percent: Number(p.default_commission_percent ?? 10),
           }))
           .sort((a, b) => b.total_commission - a.total_commission);
         setProducers(enriched);
@@ -379,6 +383,19 @@ const SuperAdmin = () => {
     [eventsList]
   );
 
+  /* Planos ativos por produtor (agregado só de leitura pra tabela de
+     Produtores) — deriva dos eventos reais, nunca editável direto aqui.
+     Editar plano sempre passa pelo ícone % de cada evento (fonte única). */
+  const plansByProducer = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const ev of eventsList) {
+      if (ev.is_demo || !ev.created_by || !ev.billing_plan) continue;
+      if (!map.has(ev.created_by)) map.set(ev.created_by, new Set());
+      map.get(ev.created_by)!.add(ev.billing_plan);
+    }
+    return map;
+  }, [eventsList]);
+
   const topEvents = useMemo(() => {
     const byEvent = new Map<string, number>();
     for (const c of commissions) {
@@ -520,18 +537,6 @@ const SuperAdmin = () => {
     const { error: updErr } = await supabase.from('events').update({ is_public: next }).eq('id', ev.id);
     if (updErr) { alert('Falha: ' + updErr.message); return; }
     setEventsList(list => list.map(e => e.id === ev.id ? { ...e, is_public: next } : e));
-  };
-
-  const handleSaveProducerCommission = async (producerId: string) => {
-    if (!editingCommission || editingCommission.id !== producerId) return;
-    const percent = parseFloat(editingCommission.value);
-    if (isNaN(percent) || percent < 0 || percent > 100) { alert('Valor inválido (0–100).'); return; }
-    const { error: updErr } = await supabase.from('profiles')
-      .update({ default_commission_percent: percent })
-      .eq('id', producerId);
-    if (updErr) { alert('Falha: ' + updErr.message); return; }
-    setProducers(list => list.map(p => p.id === producerId ? { ...p, default_commission_percent: percent } : p));
-    setEditingCommission(null);
   };
 
   const handleExportCSV = () => {
@@ -1006,6 +1011,9 @@ const SuperAdmin = () => {
                                     ? `R$ ${Number(ev.commission_fixed ?? 0).toFixed(2)}`
                                     : `${Number(ev.commission_percent ?? 0)}%`
                                   }
+                                  {ev.billing_plan && (
+                                    <span className="ml-1 text-[8px] font-black uppercase text-slate-400">· {PLAN_LABEL[ev.billing_plan]}</span>
+                                  )}
                                   {ev.fee_mode === 'absorver' && <span className="ml-1 text-[8px] text-slate-400">(absorve)</span>}
                                 </span>
                               )}
@@ -1113,7 +1121,7 @@ const SuperAdmin = () => {
                       <th className="px-4 py-3">Eventos</th>
                       <th className="px-4 py-3">GMV</th>
                       <th className="px-4 py-3">Comissão</th>
-                      <th className="px-4 py-3 text-center" title="Comissão padrão aplicada aos eventos deste produtor">% Padrão</th>
+                      <th className="px-4 py-3" title="Planos dos eventos reais deste produtor — edite por evento na tabela acima">Planos</th>
                       <th className="px-4 py-3">Asaas</th>
                       <th className="px-4 py-3">KYC</th>
                       <th className="px-4 py-3">Status</th>
@@ -1136,37 +1144,25 @@ const SuperAdmin = () => {
                         <td className="px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300">{p.events_count}</td>
                         <td className="px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 tabular-nums">R$ {p.total_gross.toFixed(2)}</td>
                         <td className="px-4 py-3 text-xs font-black text-[#ff0068] tabular-nums">R$ {p.total_commission.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-center">
-                          {editingCommission?.id === p.id ? (
-                            <div className="flex items-center gap-1 justify-center">
-                              <input
-                                type="number"
-                                min={0}
-                                max={100}
-                                step={0.5}
-                                value={editingCommission.value}
-                                onChange={e => setEditingCommission({ id: p.id, value: e.target.value })}
-                                onKeyDown={e => { if (e.key === 'Enter') handleSaveProducerCommission(p.id); if (e.key === 'Escape') setEditingCommission(null); }}
-                                autoFocus
-                                className="w-14 bg-slate-100 dark:bg-white/10 border border-[#ff0068]/40 rounded-lg px-2 py-1 text-xs font-black text-center text-slate-900 dark:text-white outline-none"
-                              />
-                              <span className="text-[10px] text-slate-400 font-black">%</span>
-                              <button onClick={() => handleSaveProducerCommission(p.id)} className="p-1 rounded-lg text-emerald-500 hover:bg-emerald-500/10"><Check size={12} /></button>
-                              <button onClick={() => setEditingCommission(null)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5"><X size={12} /></button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => setEditingCommission({ id: p.id, value: String(p.default_commission_percent) })}
-                              className={`text-[10px] font-black px-2 py-0.5 rounded-full transition-colors hover:ring-1 hover:ring-[#ff0068]/40 ${
-                                p.default_commission_percent === 0
-                                  ? 'text-emerald-500 bg-emerald-500/10'
-                                  : 'text-[#ff0068] bg-[#ff0068]/10'
-                              }`}
-                              title="Clique para editar"
-                            >
-                              {p.default_commission_percent}%
-                            </button>
-                          )}
+                        <td className="px-4 py-3">
+                          {(() => {
+                            const plans = Array.from(plansByProducer.get(p.id) ?? []);
+                            if (plans.length === 0) {
+                              return <span className="text-[9px] font-black uppercase text-slate-400">—</span>;
+                            }
+                            return (
+                              <div className="flex flex-wrap gap-1">
+                                {plans.map(plan => (
+                                  <span
+                                    key={plan}
+                                    className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full text-[#ff0068] bg-[#ff0068]/10"
+                                  >
+                                    {PLAN_LABEL[plan] ?? plan}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-3">
                           {p.asaas_subconta_id
