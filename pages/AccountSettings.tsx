@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { supabase, uploadEventCover, supabaseUrl } from '../services/supabase';
-import { validateSlugInput, isSlugAvailable } from '../services/eventSlug';
+import { validateSlugInput, isSlugAvailable, buildEventSlugBase, generateEventSlug } from '../services/eventSlug';
 import { validateShortCodeInput, isShortCodeAvailable } from '../services/eventShortCode';
 import { TERMO_PRODUTOR_VERSION } from './TermoProdutor';
 import imageCompression from 'browser-image-compression';
@@ -1180,6 +1180,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   // fica sem feedback de que a alteração está de fato persistida, e o
   // produtor perde texto ao navegar de aba achando que já tinha salvo.
   const [savedDescription, setSavedDescription] = useState('');
+  // Nome como veio do banco no load — usado só pra detectar se o produtor
+  // renomeou o evento (dispara auto-regeneração de slug, ver handleSave).
+  const [savedEventName, setSavedEventName] = useState('');
   // Seletor de Cidade/UF via IBGE (antes era texto livre, gerava divergência
   // de digitação e dependia de split por vírgula pra popular events.city/state).
   // `general.city` continua sendo a fonte salva ("Cidade, UF" combinado) —
@@ -1444,6 +1447,14 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     if (slugStatus !== 'valid' || !activeEventId) return;
     setSavingSlug(true);
     try {
+      // A mensagem de sucesso sempre prometeu "links antigos continuam
+      // funcionando", mas até agora ninguém gravava o slug velho em lugar
+      // nenhum — a promessa não era cumprida (bug real achado 2026-09-15).
+      if (activeEventSlug && activeEventSlug !== slugDraft) {
+        await supabase
+          .from('event_slug_history')
+          .insert({ event_id: activeEventId, old_slug: activeEventSlug });
+      }
       const { error } = await supabase
         .from('events')
         .update({ slug: slugDraft })
@@ -2130,6 +2141,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             eventTime:   data.hora_evento || DEFAULT_GENERAL.eventTime,
           });
           setSavedDescription(descriptionFromDb);
+          setSavedEventName(data.nome_evento || evt.name || DEFAULT_GENERAL.eventName);
           // Preenche os 2 selects de Cidade/UF: prioriza evt.city/evt.state
           // (colunas já separadas em events) — só cai pro parse de texto
           // livre quando essas colunas ainda não existem pra esse evento.
@@ -2500,11 +2512,41 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             .replace(/[^a-z0-9\s-]/g, '')
             .trim().replace(/\s+/g, '-').replace(/-+/g, '-');
 
+        // Auto-regenera a URL da vitrine quando o Nome do Festival muda —
+        // SÓ se a URL atual ainda bate com o que o nome ANTIGO geraria
+        // sozinho (ou seja, nunca foi customizada manualmente por edição
+        // separada na aba "URL da vitrine"). Se o produtor já mexeu na URL
+        // na mão em algum momento, essa trava respeita e não sobrescreve —
+        // mesmo padrão "self-healing URL" do Amazon/Medium, mas sem pisar
+        // em customização deliberada. Bug real 2026-09-15: produtora digitou
+        // o nome errado na criação ("ll" em vez de "II"), a URL nasceu
+        // errada junto, e corrigir o nome depois nunca corrigiu a URL —
+        // ela ficou presa no typo original pra sempre.
+        let slugOverride: string | null = null;
+        if (
+          general.eventName.trim() !== savedEventName.trim() &&
+          activeEventId &&
+          activeEventSlug === buildEventSlugBase(savedEventName, editionYear)
+        ) {
+          try {
+            const result = await generateEventSlug(general.eventName, editionYear, activeEventId);
+            if (result.slug !== activeEventSlug) {
+              await supabase
+                .from('event_slug_history')
+                .insert({ event_id: activeEventId, old_slug: activeEventSlug });
+              slugOverride = result.slug;
+            }
+          } catch (slugErr) {
+            console.error('[AccountSettings] auto-regen de slug falhou, mantendo URL atual:', slugErr);
+          }
+        }
+
         // Payload validado contra schema real da tabela events.
         // Removidos: cover_url, registration_deadline, categories_config,
         // styles_config (não existem na tabela). 'address' renomeado pra 'location'.
         const eventPayload: Record<string, any> = {
           name:                    general.eventName,
+          ...(slugOverride ? { slug: slugOverride } : {}),
           description:             general.description || null,
           cover_url:               general.coverUrl || null,
           cover_focal_x:           general.coverFocalX ?? 50,
@@ -2551,6 +2593,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           throw updateErr;
         }
         console.log('[sync] event atualizado:', myEvent.id);
+        setSavedEventName(general.eventName);
+        if (slugOverride) {
+          setActiveEventSlug(slugOverride);
+          setSlugDraft(slugOverride);
+        }
       } catch (syncErr: any) {
         const msg = syncErr?.message ?? String(syncErr);
         console.error('[AccountSettings] Sync para events falhou:', syncErr);
