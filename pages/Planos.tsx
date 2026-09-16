@@ -178,6 +178,19 @@ const Planos: React.FC = () => {
   const [calcMediaBailarinos, setCalcMediaBailarinos] = useState(5);
   const [calcTicket, setCalcTicket] = useState(50); // por participante — mesma base usada pra calibrar as faixas dos planos
 
+  // Frentes extras opcionais — pedido 2026-09-16: evento que também vende
+  // ingresso/workshop fatura mais do que a inscrição sozinha sugere, e sem
+  // isso a recomendação de plano ficava subestimada. Ingresso/Workshop pagam
+  // a MESMA taxa do plano (10%/5%/4,5%, ver seção "Além da inscrição" logo
+  // abaixo) — por isso somam direto em calcFaturamento. Seletiva por vídeo
+  // tem taxa própria fixa (não é % do plano), fica de fora da conta de custo.
+  const [sellIngressos, setSellIngressos] = useState(false);
+  const [calcIngressoRevenue, setCalcIngressoRevenue] = useState(3000);
+  const [sellWorkshops, setSellWorkshops] = useState(false);
+  const [calcWorkshopRevenue, setCalcWorkshopRevenue] = useState(2000);
+  const [sellSeletiva, setSellSeletiva] = useState(false);
+  const [calcSeletivaRevenue, setCalcSeletivaRevenue] = useState(1000);
+
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [leadNome, setLeadNome] = useState('');
   const [leadWhatsapp, setLeadWhatsapp] = useState('');
@@ -190,17 +203,23 @@ const Planos: React.FC = () => {
   const [simExpanded, setSimExpanded] = useState(false);
 
   const calcParticipantes = Math.round(calcCoreografias * calcMediaBailarinos);
-  const calcFaturamento = calcParticipantes * calcTicket;
+  const calcExtraTaxavel = (sellIngressos ? calcIngressoRevenue : 0) + (sellWorkshops ? calcWorkshopRevenue : 0);
+  const calcFaturamento = calcParticipantes * calcTicket + calcExtraTaxavel;
+  const calcSeletivaValor = sellSeletiva ? calcSeletivaRevenue : 0;
 
   const valorComeco = calcFaturamento * 0.10;
   const valorEssencial = 250 + calcFaturamento * 0.05;
   const valorEscala = 1490 + Math.min(calcParticipantes * 2, calcFaturamento * 0.045);
   const valoresPorFaixa: Record<FaixaPlano, number> = { comeco: valorComeco, essencial: valorEssencial, escala: valorEscala };
 
-  // O cliente escolhe o plano — isso só recomenda pelo porte estimado
-  // (docs/pricing-model-spec.md, seção "Mecanismo de cobrança").
-  const faixaRecomendada: FaixaPlano =
-    calcParticipantes <= 100 ? 'comeco' : calcParticipantes <= 2500 ? 'essencial' : 'escala';
+  // Recomenda o plano de menor custo total pro faturamento simulado — bate
+  // com a copy "compensa a partir de R$X" que já existe nos cards abaixo.
+  // Antes decidia só pelo nº de participantes, então receita extra de
+  // ingresso/workshop nunca mudava a recomendação (corrigido 2026-09-16).
+  const faixaRecomendada: FaixaPlano = (['comeco', 'essencial', 'escala'] as FaixaPlano[]).reduce(
+    (best, id) => (valoresPorFaixa[id] < valoresPorFaixa[best] ? id : best),
+    'comeco' as FaixaPlano
+  );
   const nomeRecomendado = PLANOS.find((p) => p.id === faixaRecomendada)?.nome ?? '';
 
   const submitCalculatorLead = async () => {
@@ -336,9 +355,72 @@ const Planos: React.FC = () => {
             />
           </div>
 
+          {/* Frentes extras opcionais — ingresso/workshop somam na mesma taxa
+              do plano; seletiva por vídeo é taxa fixa à parte (ver seção
+              "Além da inscrição" abaixo dos cards). */}
+          <div className="border-t border-white/10 pt-4 mb-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Seu evento também vende (opcional)</p>
+            <div className="flex flex-wrap gap-x-6 gap-y-2 mb-4">
+              <label className="inline-flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={sellIngressos} onChange={(e) => setSellIngressos(e.target.checked)} className="w-4 h-4 accent-[#ff0068]" />
+                Ingressos de plateia
+              </label>
+              <label className="inline-flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={sellWorkshops} onChange={(e) => setSellWorkshops(e.target.checked)} className="w-4 h-4 accent-[#ff0068]" />
+                Workshops
+              </label>
+              <label className="inline-flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={sellSeletiva} onChange={(e) => setSellSeletiva(e.target.checked)} className="w-4 h-4 accent-[#ff0068]" />
+                Seletiva por vídeo
+              </label>
+            </div>
+
+            {(sellIngressos || sellWorkshops || sellSeletiva) && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 sm:gap-6">
+                {sellIngressos && (
+                  <SimField
+                    id="calc-ingressos"
+                    label="Faturamento c/ ingressos"
+                    value={calcIngressoRevenue}
+                    min={0} max={15000} step={500}
+                    onChange={setCalcIngressoRevenue}
+                    ariaValueText={fmtBRL(calcIngressoRevenue)}
+                    prefix="R$"
+                    minCaption="R$ 0" maxCaption="R$ 15 mil"
+                  />
+                )}
+                {sellWorkshops && (
+                  <SimField
+                    id="calc-workshops"
+                    label="Faturamento c/ workshops"
+                    value={calcWorkshopRevenue}
+                    min={0} max={10000} step={500}
+                    onChange={setCalcWorkshopRevenue}
+                    ariaValueText={fmtBRL(calcWorkshopRevenue)}
+                    prefix="R$"
+                    minCaption="R$ 0" maxCaption="R$ 10 mil"
+                  />
+                )}
+                {sellSeletiva && (
+                  <SimField
+                    id="calc-seletiva"
+                    label="Faturamento c/ seletiva"
+                    value={calcSeletivaRevenue}
+                    min={0} max={5000} step={250}
+                    onChange={setCalcSeletivaRevenue}
+                    ariaValueText={fmtBRL(calcSeletivaRevenue)}
+                    prefix="R$"
+                    minCaption="R$ 0" maxCaption="R$ 5 mil"
+                  />
+                )}
+              </div>
+            )}
+          </div>
+
           <p className="text-xs text-slate-400 text-center md:text-left" aria-live="polite">
             ≈ <span className="text-white font-bold tabular-nums">{calcParticipantes}</span> participantes estimados ·
-            faturamento estimado <span className="text-white font-bold tabular-nums">{fmtBRL(calcFaturamento)}</span> ·
+            faturamento estimado <span className="text-white font-bold tabular-nums">{fmtBRL(calcFaturamento)}</span>
+            {calcSeletivaValor > 0 && <> + <span className="text-white font-bold tabular-nums">{fmtBRL(calcSeletivaValor)}</span> de seletiva (taxa própria)</>} ·
             plano recomendado <span className="text-[#ff0068] font-black uppercase">{nomeRecomendado}</span> (destacado abaixo)
           </p>
 
