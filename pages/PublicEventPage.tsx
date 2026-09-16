@@ -1467,13 +1467,17 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 const today = todayISO();
                 const lotes: Lote[] = Array.isArray(mod.lotes) ? mod.lotes : [];
                 const r = resolveLote(lotes, today);
-                const primeiraFaixaProgressiva = mod.pricing_type === 'PROGRESSIVE_PER_DANCER'
+                const isProgressiva = mod.pricing_type === 'PROGRESSIVE_PER_DANCER';
+                // Pra tipo progressivo, `lotes[0].preco` é só placeholder (0) —
+                // o preço real vem da 1ª faixa. Mesma precedência já usada no
+                // Wizard (InscricaoWizard.tsx): faixa vence lote pra esse tipo.
+                const primeiraFaixaProgressiva = isProgressiva
                   ? (Array.isArray(mod.progressive_tiers) ? mod.progressive_tiers.find((t: any) => t.ordem === 1)?.valor : undefined)
                   : undefined;
-                const precoExibir = r
+                const precoExibir = isProgressiva
+                  ? (primeiraFaixaProgressiva != null ? Number(primeiraFaixaProgressiva) : (mod.fee != null ? Number(mod.fee) : null))
+                  : r
                   ? Number(r.lote.preco ?? 0)
-                  : primeiraFaixaProgressiva != null
-                  ? Number(primeiraFaixaProgressiva)
                   : (mod.fee != null ? Number(mod.fee) : null);
                 const nomeLote: string | null = r ? nomeDoLote(lotes, r.idx) : null;
                 const hint = r && r.proximo && r.lote.data_virada && Number(r.proximo.preco) > Number(r.lote.preco)
@@ -1505,7 +1509,9 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-[#ff0068] font-black text-sm">
-                          {precoExibir != null && precoExibir > 0 ? `R$ ${formatPrecoBR(precoExibir)}` : 'Gratuito'}
+                          {precoExibir != null && precoExibir > 0
+                            ? `${isProgressiva ? 'a partir de ' : ''}R$ ${formatPrecoBR(precoExibir)}`
+                            : 'Gratuito'}
                         </span>
                         {isRegistrationOpen && (
                           <ChevronRight size={16} className="text-slate-500 group-hover:text-[#ff0068] group-hover:translate-x-0.5 transition-all" />
