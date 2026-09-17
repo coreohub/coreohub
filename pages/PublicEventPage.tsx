@@ -39,6 +39,19 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   const { idOrSlug: paramIdOrSlug } = useParams<{ idOrSlug: string }>();
   const idOrSlug = forcedSlug ?? paramIdOrSlug;
   const navigate = useNavigate();
+  // No domínio de marketing (coreohub.com), App.tsx pula getSession()/
+  // onAuthStateChange por completo (otimização PSI 2026-09-15) — a sessão
+  // NUNCA populava nesse hostname. Qualquer PrivateRoute (ex: o Wizard de
+  // inscrição) navegado via <Link> nesse domínio via redirecionava pra
+  // /login, autenticava de verdade (supabase-js funciona standalone), e ao
+  // voltar pro path original caía de novo no PrivateRoute com session=null
+  // — loop infinito (bug real: tela piscando + "Throttling navigation to
+  // prevent hanging" no console, reportado 2026-09-16). Fix: rotas privadas
+  // clicadas a partir do domínio de marketing viram navegação de página
+  // inteira pro app.coreohub.com, onde a sessão é rastreada normalmente.
+  const isMarketingHost = typeof window !== 'undefined'
+    && ['coreohub.com', 'www.coreohub.com'].includes(window.location.hostname);
+  const authedUrl = (path: string) => isMarketingHost ? `https://app.coreohub.com${path}` : path;
   // Link de desconto por coreografia (?discount_token=) precisa sobreviver
   // o salto evento → detalhe do workshop → checkout.
   const [searchParams] = useSearchParams();
@@ -980,13 +993,23 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 mobile pra caber ao lado do "Entrar". */}
             {primaryCta && (
               primaryCta.kind === 'link' ? (
-                <Link
-                  to={primaryCta.to}
-                  onClick={onInscrevaseClick}
-                  className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2 bg-[#ff0068] text-white rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all whitespace-nowrap"
-                >
-                  {primaryCta.label} <ChevronRight size={12} className="hidden sm:block" />
-                </Link>
+                isMarketingHost ? (
+                  <a
+                    href={authedUrl(primaryCta.to)}
+                    onClick={onInscrevaseClick}
+                    className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2 bg-[#ff0068] text-white rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all whitespace-nowrap"
+                  >
+                    {primaryCta.label} <ChevronRight size={12} className="hidden sm:block" />
+                  </a>
+                ) : (
+                  <Link
+                    to={primaryCta.to}
+                    onClick={onInscrevaseClick}
+                    className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2 bg-[#ff0068] text-white rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all whitespace-nowrap"
+                  >
+                    {primaryCta.label} <ChevronRight size={12} className="hidden sm:block" />
+                  </Link>
+                )
               ) : (
                 <button
                   type="button"
@@ -998,13 +1021,25 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               )
             )}
             {/* Botão de login fixo — vitrine não tinha nenhum link de acesso
-                à conta, usuários do Usualdance relataram não achar onde entrar. */}
-            <Link
-              to={isLoggedIn ? '/inicio' : `/login?redirectTo=${encodeURIComponent(`/evento/${idOrSlug}`)}`}
-              className="inline-flex items-center px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/30 text-white hover:border-[#ff0068] hover:text-[#ff0068] transition-colors whitespace-nowrap"
-            >
-              {isLoggedIn ? 'Minha conta' : 'Entrar'}
-            </Link>
+                à conta, usuários do Usualdance relataram não achar onde entrar.
+                "Minha conta" (/inicio) é PrivateRoute — no domínio de marketing
+                precisa virar navegação de página inteira pro app.coreohub.com
+                (ver isMarketingHost/authedUrl acima), senão loop infinito. */}
+            {isMarketingHost && isLoggedIn ? (
+              <a
+                href={authedUrl('/inicio')}
+                className="inline-flex items-center px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/30 text-white hover:border-[#ff0068] hover:text-[#ff0068] transition-colors whitespace-nowrap"
+              >
+                Minha conta
+              </a>
+            ) : (
+              <Link
+                to={isLoggedIn ? '/inicio' : `/login?redirectTo=${encodeURIComponent(`/evento/${idOrSlug}`)}`}
+                className="inline-flex items-center px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/30 text-white hover:border-[#ff0068] hover:text-[#ff0068] transition-colors whitespace-nowrap"
+              >
+                {isLoggedIn ? 'Minha conta' : 'Entrar'}
+              </Link>
+            )}
           </div>
         }
       />
@@ -1487,19 +1522,13 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 // PR-B: usa rota nova do wizard de 4 passos. PrivateRoute
                 // redireciona pra login se necessário (preservando redirectTo).
                 const targetUrl = `/festival/${idOrSlug}/inscrever/${encodeURIComponent(mod.name)}`;
-
-                return (
-                  <Link
-                    key={i}
-                    to={isRegistrationOpen ? targetUrl : '#'}
-                    aria-disabled={!isRegistrationOpen}
-                    onClick={e => { if (!isRegistrationOpen) e.preventDefault(); }}
-                    className={`block bg-white/5 border border-white/10 rounded-2xl p-5 transition-all group ${
-                      isRegistrationOpen
-                        ? 'hover:border-[#ff0068]/50 hover:bg-[#ff0068]/5 cursor-pointer'
-                        : 'opacity-60 cursor-not-allowed'
-                    }`}
-                  >
+                const cardClassName = `block bg-white/5 border border-white/10 rounded-2xl p-5 transition-all group ${
+                  isRegistrationOpen
+                    ? 'hover:border-[#ff0068]/50 hover:bg-[#ff0068]/5 cursor-pointer'
+                    : 'opacity-60 cursor-not-allowed'
+                }`;
+                const cardContent = (
+                  <>
                     <div className="flex justify-between items-center">
                       <div className="min-w-0">
                         <span className="font-black uppercase text-sm">{mod.name}</span>
@@ -1533,19 +1562,53 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                         Inscrever {mod.name.toLowerCase()} →
                       </p>
                     )}
+                  </>
+                );
+
+                // Rota é PrivateRoute — no domínio de marketing (coreohub.com)
+                // a sessão nunca populava (ver comentário de isMarketingHost
+                // acima), causando loop infinito. Vira navegação de página
+                // inteira pro app.coreohub.com nesse hostname.
+                if (isMarketingHost && isRegistrationOpen) {
+                  return (
+                    <a key={i} href={authedUrl(targetUrl)} className={cardClassName}>
+                      {cardContent}
+                    </a>
+                  );
+                }
+
+                return (
+                  <Link
+                    key={i}
+                    to={isRegistrationOpen ? targetUrl : '#'}
+                    aria-disabled={!isRegistrationOpen}
+                    onClick={e => { if (!isRegistrationOpen) e.preventDefault(); }}
+                    className={cardClassName}
+                  >
+                    {cardContent}
                   </Link>
                 );
               })}
             </div>
             {/* CTA fallback — pra quem ainda não escolheu modalidade. */}
             {isRegistrationOpen && (
-              <Link
-                to={`/festival/${slugOrId}/register`}
-              onClick={onInscrevaseClick}
-                className="mt-2 inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3.5 bg-transparent border border-[#ff0068]/30 hover:bg-[#ff0068]/10 text-[#ff0068] rounded-2xl text-sm font-black uppercase tracking-widest transition-all"
-              >
-                Ver todas e escolher depois <ChevronRight size={16} />
-              </Link>
+              isMarketingHost ? (
+                <a
+                  href={authedUrl(`/festival/${slugOrId}/register`)}
+                  onClick={onInscrevaseClick}
+                  className="mt-2 inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3.5 bg-transparent border border-[#ff0068]/30 hover:bg-[#ff0068]/10 text-[#ff0068] rounded-2xl text-sm font-black uppercase tracking-widest transition-all"
+                >
+                  Ver todas e escolher depois <ChevronRight size={16} />
+                </a>
+              ) : (
+                <Link
+                  to={`/festival/${slugOrId}/register`}
+                  onClick={onInscrevaseClick}
+                  className="mt-2 inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3.5 bg-transparent border border-[#ff0068]/30 hover:bg-[#ff0068]/10 text-[#ff0068] rounded-2xl text-sm font-black uppercase tracking-widest transition-all"
+                >
+                  Ver todas e escolher depois <ChevronRight size={16} />
+                </Link>
+              )
             )}
           </div>
         )}
@@ -1792,13 +1855,23 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           </div>
           <div className="flex flex-col gap-3 min-w-[200px]">
             {isRegistrationOpen && (
-              <Link
-                to={`/festival/${slugOrId}/register`}
-              onClick={onInscrevaseClick}
-                className="px-8 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30 flex items-center justify-center gap-2"
-              >
-                Inscreva-se <ChevronRight size={16} />
-              </Link>
+              isMarketingHost ? (
+                <a
+                  href={authedUrl(`/festival/${slugOrId}/register`)}
+                  onClick={onInscrevaseClick}
+                  className="px-8 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30 flex items-center justify-center gap-2"
+                >
+                  Inscreva-se <ChevronRight size={16} />
+                </a>
+              ) : (
+                <Link
+                  to={`/festival/${slugOrId}/register`}
+                  onClick={onInscrevaseClick}
+                  className="px-8 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] text-center hover:scale-105 transition-all shadow-2xl shadow-[#ff0068]/30 flex items-center justify-center gap-2"
+                >
+                  Inscreva-se <ChevronRight size={16} />
+                </Link>
+              )
             )}
             {!hasFormacoes && hasWorkshopsSection && (
               <button
