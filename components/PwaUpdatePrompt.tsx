@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { RefreshCw, X } from 'lucide-react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 
@@ -18,6 +18,16 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
  * .update()` a cada 3min enquanto a aba fica aberta, senão o banner nunca
  * apareceria pra quem só deixa a tela de Configurações aberta e parada
  * (exatamente o cenário real que motivou essa feature).
+ *
+ * Só mostra o banner pra sessão logada (2026-09-16) — visitante anônimo na
+ * vitrine pública (coreohub.com/festival/..., app.coreohub.com/evento/...)
+ * não tem formulário em andamento pra perder num reload, e "Nova versão
+ * disponível" só confunde/assusta quem tá avaliando se cria conta. Padrão de
+ * mercado (Notion/Linear/Gmail): esse aviso vive só dentro do app
+ * autenticado, nunca na superfície pública. Checagem própria via
+ * supabase.auth (não usa o `session` do App.tsx — em coreohub.com/
+ * www.coreohub.com esse state nunca é populado por decisão de performance,
+ * ver App.tsx isMarketingHost) pra funcionar certo independente de hostname.
  */
 const UPDATE_CHECK_INTERVAL_MS = 3 * 60 * 1000;
 
@@ -35,8 +45,32 @@ const PwaUpdatePrompt: React.FC = () => {
   });
 
   const [updating, setUpdating] = useState(false);
+  // null = ainda checando (evita flash), evita mostrar/esconder errado antes
+  // da 1ª resposta do supabase-js.
+  const [hasSession, setHasSession] = useState<boolean | null>(null);
 
-  if (!needRefresh) return null;
+  useEffect(() => {
+    // Só busca a sessão quando de fato existe update pendente — evita puxar
+    // o pacote supabase-js em toda página (inclusive marketing) só pra essa
+    // checagem, quando o caso comum (sem update) nunca precisa dela. Mesmo
+    // achado de perf do PSI 2026-09-15 aplicado aqui.
+    if (!needRefresh) return;
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+    import('../services/supabase').then(({ supabase }) => {
+      if (cancelled) return;
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!cancelled) setHasSession(!!session);
+      });
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        setHasSession(!!session);
+      });
+      unsubscribe = () => subscription.unsubscribe();
+    });
+    return () => { cancelled = true; unsubscribe?.(); };
+  }, [needRefresh]);
+
+  if (!needRefresh || !hasSession) return null;
 
   // updateServiceWorker manda o skipWaiting e conta com um listener interno
   // da lib (evento 'controlling') pra recarregar sozinho — em testes com
