@@ -558,8 +558,14 @@ const InscricaoWizard: React.FC = () => {
 
       // A3: se config retorna null/vazia em both event + legacy, usuário ficaria
       // preso no Passo 1 com dropdowns vazios sem mensagem. Bloqueia explicitamente.
+      // Estilos: `event_styles` é a fonte nova (mesma que o Passo 1 usa pra
+      // popular o dropdown, linha ~669) — checar só `configuracoes.estilos`
+      // (legado) bloqueava TODA inscrição de evento configurado via gêneros
+      // estruturados sem nunca ter escrito o array legado (bug real achado
+      // 2026-09-16, Tamoios: 10 event_styles ativos + estilos=[] legado).
       const hasCategorias = Array.isArray(finalCfg?.categorias) && finalCfg.categorias.length > 0;
-      const hasEstilos    = Array.isArray(finalCfg?.estilos)    && finalCfg.estilos.length    > 0;
+      const hasEstilos    = (Array.isArray(finalCfg?.estilos) && finalCfg.estilos.length > 0)
+        || (Array.isArray(styles) && styles.length > 0);
       if (!hasCategorias || !hasEstilos) {
         setError('Este evento ainda não tem categorias ou estilos configurados. Contate o produtor antes de tentar se inscrever.');
         setLoading(false);
