@@ -24,7 +24,7 @@ import {
   ChevronLeft, ChevronRight, Loader2, Music2, User, Users, Upload,
   AlertCircle, CheckCircle, Plus, Trash2, ArrowRight, Video, ShieldCheck,
 } from 'lucide-react';
-import { maskTempo, parseTempoSegundos, formatTempo, maskedChange } from '../utils/masks';
+import { parseTempoSegundos, formatTempo } from '../utils/masks';
 import { readAudioDuration } from '../utils/audioDuration';
 import { UF_LIST, fetchMunicipios } from '../utils/ibge';
 import TrackDurationBadge from '../components/TrackDurationBadge';
@@ -769,19 +769,6 @@ const InscricaoWizard: React.FC = () => {
       }
       // Categoria etária só é obrigatória quando a modalidade NÃO é livre.
       if (!isCategoriaLivre && !data.categoria) return 'Selecione a categoria etária.';
-      if (data.duracao_minutos) {
-        const sec = parseTempoSegundos(data.duracao_minutos);
-        if (sec <= 0)        return 'Duração inválida. Use o formato MM:SS (ex: 03:45).';
-        if (sec < 30)        return 'Duração muito curta. Mínimo: 00:30.';
-        if (sec > 30 * 60)   return 'Duração muito longa. Máximo: 30:00.';
-        // Item 1 auditoria 2026-05-17, revisado 2026-07-17: tempo acima do
-        // max_time da modalidade NÃO bloqueia mais o avanço — tempo
-        // excedido em festival de dança é regra de PENALIZAÇÃO de nota
-        // (aplicada na apuração, ver backlog_penalidade_tempo_excedido),
-        // não motivo pra impedir a inscrição de competir. O aviso segue
-        // visível inline (abaixo do campo) pra avisar o inscrito antes de
-        // seguir. Ver decisão em conversa 2026-07-17.
-      }
       if (!data.coreografo_nome.trim())    return 'Informe o nome do coreógrafo.';
       // Tipo de mostra obrigatório quando há 2+ opções habilitadas pelo produtor.
       // Quando há só 1, o state já foi auto-setado no load — não cai aqui.
@@ -1537,66 +1524,23 @@ const InscricaoWizard: React.FC = () => {
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Duração (MM:SS)</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={data.duracao_minutos}
-                  onChange={e => maskedChange(e, maskTempo, v => setData(d => ({ ...d, duracao_minutos: v })))}
-                  placeholder="Ex: 03:45"
-                  maxLength={5}
-                  className={inputCls}
-                />
-                {/* Validação visual contra max_time da modalidade (item 1 da
-                    auditoria 2026-05-17, revisado 2026-07-17). Mostra ✓
-                    quando dentro do limite, ⚠️ quando excede — NÃO bloqueia
-                    mais o avanço (tempo excedido é penalização de nota na
-                    apuração, não motivo pra travar a inscrição). */}
-                {(() => {
-                  const sec = data.duracao_minutos ? parseTempoSegundos(data.duracao_minutos) : 0;
-                  const maxStr = (formacao as any)?.max_time as string | undefined;
-                  const maxSec = maxStr ? parseTempoSegundos(maxStr) : 0;
-                  if (!sec) {
-                    return (
-                      <p className="text-[9px] text-slate-400 mt-1">
-                        Formato minuto:segundo. {maxSec > 0 ? `Máx. da ${modalidade}: ${maxStr}.` : 'Sem limite definido nesta modalidade — confira o regulamento.'}
-                      </p>
-                    );
-                  }
-                  if (maxSec > 0 && sec > maxSec) {
-                    return (
-                      <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 font-bold">
-                        ⚠ Acima do máximo da modalidade {modalidade} ({maxStr}). A inscrição pode seguir, mas fica sujeita à penalização prevista no regulamento.
-                      </p>
-                    );
-                  }
-                  if (maxSec > 0) {
-                    return (
-                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1">
-                        ✓ Dentro do limite ({maxStr} é o máximo da {modalidade}).
-                      </p>
-                    );
-                  }
-                  return (
-                    <p className="text-[9px] text-slate-400 mt-1">
-                      Formato minuto:segundo. Sem limite definido nesta modalidade — confira o regulamento.
-                    </p>
-                  );
-                })()}
-              </div>
-
-              <div>
-                <label className={labelCls}>Coreógrafo(a) *</label>
-                <input
-                  type="text"
-                  value={data.coreografo_nome}
-                  onChange={e => setData(d => ({ ...d, coreografo_nome: e.target.value }))}
-                  placeholder="Quem coreografou"
-                  className={inputCls}
-                />
-              </div>
+            <div>
+              {/* Campo "Duração (MM:SS)" removido 2026-09-16 — nunca era
+                  consumido por nada (Cronograma/apuração/certificados não
+                  liam), e era sempre sobrescrito pela duração real do arquivo
+                  assim que a trilha era enviada no Passo 3 (Registrations.tsx
+                  já dava prioridade à real). O aviso de limite de tempo virou
+                  texto fixo acima da dropzone de trilha (Passo 3), visível
+                  ANTES do upload — mais útil que um campo digitado que nunca
+                  bloqueava nada. */}
+              <label className={labelCls}>Coreógrafo(a) *</label>
+              <input
+                type="text"
+                value={data.coreografo_nome}
+                onChange={e => setData(d => ({ ...d, coreografo_nome: e.target.value }))}
+                placeholder="Quem coreografou"
+                className={inputCls}
+              />
             </div>
 
             <div>
@@ -1934,6 +1878,23 @@ const InscricaoWizard: React.FC = () => {
               <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Upload size={18} /></div>
               <h2 className="font-black uppercase tracking-tight text-slate-900 dark:text-white">Trilha sonora</h2>
             </div>
+
+            {/* Aviso fixo do limite de tempo da modalidade — visível ANTES do
+                upload (substitui o campo "Duração (MM:SS)" digitado no Passo 1,
+                removido 2026-09-16 por nunca ser consumido por nada real; a
+                duração que de fato importa é a do arquivo enviado aqui). */}
+            {(() => {
+              const maxStr = (formacao as any)?.max_time as string | undefined;
+              if (!maxStr) return null;
+              return (
+                <div className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl">
+                  <AlertCircle size={14} className="text-slate-400 shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    Duração máxima da modalidade <strong className="text-slate-700 dark:text-slate-300">{modalidade}</strong>: <strong className="text-slate-700 dark:text-slate-300">{maxStr}</strong>. Ultrapassar não impede o envio, mas fica sujeito à penalização prevista no regulamento.
+                  </p>
+                </div>
+              );
+            })()}
 
             {/* Estado 1: trilha pendente (vai anexar depois) */}
             {data.trilha_pendente ? (

@@ -2444,19 +2444,18 @@ const Registrations = () => {
                       <DetailItem label="Coreógrafo(a)" value={viewingReg.coreografo_nome} />
                       <DetailItem label="Dança inclusiva (PCD)" value={viewingReg.is_pcd ? 'Sim' : 'Não'} />
                       {(() => {
-                        // duracao_minutos/duracao_segundos (duração DECLARADA da coreografia)
-                        // moram dentro de event_data JSONB, não são coluna direta — mesmo
-                        // padrão de estudio_nome/coreografo_nome já usado neste arquivo
-                        // (ver startEditing, linha ~125). duracao_trilha_segundos (duração
-                        // REAL do arquivo enviado) já é coluna direta.
+                        // duracao_minutos/duracao_segundos (event_data JSONB) só existem
+                        // hoje como espelho da duração REAL do arquivo enviado — o campo
+                        // digitado no Passo 1 do Wizard foi removido (2026-09-16, nunca
+                        // era consumido por nada além desta tela e sempre era sobrescrito
+                        // pela duração real assim que a trilha era enviada, ver
+                        // InscricaoWizard.tsx linha ~426). duracao_trilha_segundos (coluna
+                        // direta) é a fonte mais confiável quando existe.
                         const eventData = (viewingReg as any).event_data ?? {};
                         const rawMin = eventData.duracao_minutos;
-                        if (!rawMin) return null;
-                        // Duração real (trilha enviada) tem prioridade sobre a declarada
-                        // na inscrição — é a fonte de verdade uma vez que o arquivo existe.
-                        const realSec = (viewingReg as any).duracao_trilha_segundos
-                          ?? eventData.duracao_segundos
-                          ?? Math.round(Number(rawMin) * 60);
+                        const trilhaSec = (viewingReg as any).duracao_trilha_segundos;
+                        if (!rawMin && !trilhaSec) return null;
+                        const realSec = trilhaSec ?? eventData.duracao_segundos ?? Math.round(Number(rawMin) * 60);
                         // Normaliza igual todo outro lookup de formacoes_config no app
                         // (ver InscricaoWizard.tsx) — sem isso, um formato_participacao
                         // com caixa/espaço diferente do nome cadastrado no evento nunca
@@ -2469,10 +2468,7 @@ const Registrations = () => {
                           <div>
                             <dt className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Duração</dt>
                             <dd className="text-slate-900 dark:text-white break-all font-bold">
-                              {rawMin} min
-                              <div className="mt-1 font-normal">
-                                <TrackDurationBadge durationSeconds={realSec} maxSeconds={maxSec} />
-                              </div>
+                              <TrackDurationBadge durationSeconds={realSec} maxSeconds={maxSec} />
                             </dd>
                           </div>
                         );
