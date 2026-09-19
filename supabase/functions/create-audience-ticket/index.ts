@@ -408,6 +408,28 @@ Deno.serve(async (req) => {
 
     if (createdTickets.length === 0) throw new Error('Nenhum ticket reservado')
 
+    // Apaga os tickets e, se o(s) assento(s) já tinham sido CONFIRMADOS
+    // (confirm_event_seats já rodou — held_until virou NULL, não expira mais
+    // sozinho), libera de volta pra 'livre'. Chamado em todo failure path
+    // depois da confirmação (customer/payment Asaas), senão o assento fica
+    // 'reservado' pra sempre — achado real em code review, migration
+    // 20260919b criou release_event_seats mas nada chamava.
+    let seatsConfirmed = false
+    const rollbackTickets = async () => {
+      // Ordem importa: event_seats.audience_ticket_id tem ON DELETE SET NULL
+      // — se apagar o ticket ANTES, release_event_seats (que busca por
+      // audience_ticket_id = ticket_id) não encontra mais nada pra liberar
+      // e o assento fica preso em 'reservado' pra sempre (bug achado no
+      // smoke desta própria correção). Libera primeiro, apaga depois.
+      if (seatsConfirmed) {
+        const { error: relErr } = await supabase.rpc('release_event_seats', {
+          p_ticket_ids: createdTickets.map(t => t.id),
+        })
+        if (relErr) console.error('[create-audience-ticket] erro ao liberar assento no rollback:', relErr.message)
+      }
+      await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
+    }
+
     // ── Reserva de assento (Fase 2 Stage 3) ──────────────────────────────────
     // reserve_event_seats é all-or-nothing internamente (nunca comita parcial
     // — checado no SQL). Em caso de falha, apaga os tickets recém-criados
@@ -441,10 +463,14 @@ Deno.serve(async (req) => {
         p_status:     'reservado',
       })
       if (confirmErr) {
-        // Assento já está 'reservado' (a expiração vai liberar sozinha) —
-        // só o vínculo com o ticket falhou. Não vale abortar a compra por
-        // isso; loga pra investigar.
+        // Assento já está 'reservado' com held_until do reserve_event_seats
+        // (confirm nunca rodou) — a expiração vai liberar sozinha via cron.
+        // Só o vínculo com o ticket falhou. Não vale abortar a compra por
+        // isso; loga pra investigar. NÃO marca seatsConfirmed (held_until
+        // continua setado, rollback normal via TTL já cobre).
         console.error('[create-audience-ticket] erro RPC confirm_event_seats:', confirmErr.message)
+      } else {
+        seatsConfirmed = true
       }
     }
 
@@ -482,7 +508,7 @@ Deno.serve(async (req) => {
       })
       const custData = await custRes.json()
       if (!custRes.ok) {
-        await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
+        await rollbackTickets()
         console.error('[create-audience-ticket] erro customer:', custData)
         throw new Error(custData.errors?.[0]?.description ?? 'Erro ao criar customer Asaas')
       }
@@ -538,7 +564,7 @@ Deno.serve(async (req) => {
     }
 
     if (!payRes.ok) {
-      await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
+      await rollbackTickets()
       console.error('[create-audience-ticket] erro Asaas:', payData)
       throw new Error(payData.errors?.[0]?.description ?? 'Erro ao criar cobrança no Asaas')
     }

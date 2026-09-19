@@ -176,7 +176,11 @@ const VendasIngressos: React.FC = () => {
   useEffect(() => {
     if (!eventId || !seatMapEnabled) return;
     (async () => {
-      const { data } = await supabase.rpc('get_venue_layout_public', { p_event_id: eventId });
+      const { data, error: layoutErr } = await supabase.rpc('get_venue_layout_public', { p_event_id: eventId });
+      if (layoutErr) {
+        console.error('[VendasIngressos] erro get_venue_layout_public:', layoutErr.message);
+        return;
+      }
       const row = Array.isArray(data) ? data[0] : data;
       setRowsConfig(Array.isArray(row?.rows_config) ? row.rows_config : []);
     })();
@@ -186,8 +190,13 @@ const VendasIngressos: React.FC = () => {
     if (!eventId || !seatMapEnabled) return;
     let cancelled = false;
     const tick = async () => {
-      const { data } = await supabase.rpc('get_event_seats_public', { p_event_id: eventId });
-      if (cancelled || !Array.isArray(data)) return;
+      const { data, error: seatsErr } = await supabase.rpc('get_event_seats_public', { p_event_id: eventId });
+      if (cancelled) return;
+      if (seatsErr) {
+        console.error('[VendasIngressos] erro get_event_seats_public:', seatsErr.message);
+        return;
+      }
+      if (!Array.isArray(data)) return;
       const map: Record<string, SeatStatus> = {};
       for (const s of data as SeatStatus[]) map[s.seat_id] = s;
       setSeatStatuses(map);

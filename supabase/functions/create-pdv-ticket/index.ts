@@ -248,6 +248,23 @@ Deno.serve(async (req) => {
     const groupId = reserveRows.find(r => r.group_id)?.group_id ?? null
     if (createdTickets.length === 0) throw new Error('Nenhum ticket reservado')
 
+    // Mesmo padrão de rollback do create-audience-ticket: se o assento já
+    // tinha sido CONFIRMADO (held_until virou NULL, não expira mais sozinho),
+    // qualquer falha depois disso precisa liberar de volta explicitamente.
+    let seatsConfirmed = false
+    const rollbackTickets = async () => {
+      // Ordem importa: event_seats.audience_ticket_id tem ON DELETE SET NULL
+      // — libera o assento ANTES de apagar o ticket (senão release_event_seats
+      // não acha mais nada pra liberar por ticket_id).
+      if (seatsConfirmed) {
+        const { error: relErr } = await supabase.rpc('release_event_seats', {
+          p_ticket_ids: createdTickets.map(t => t.id),
+        })
+        if (relErr) console.error('[create-pdv-ticket] erro ao liberar assento no rollback:', relErr.message)
+      }
+      await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
+    }
+
     // ── Reserva de assento (Fase 2 Stage 4) — mesmo padrão do checkout
     // público: all-or-nothing, rollback dos tickets em caso de conflito.
     if (seatMapEnabled && seatIds.length > 0) {
@@ -274,6 +291,8 @@ Deno.serve(async (req) => {
       })
       if (confirmSeatErr) {
         console.error('[create-pdv-ticket] erro RPC confirm_event_seats:', confirmSeatErr.message)
+      } else {
+        seatsConfirmed = true
       }
     }
 
@@ -290,7 +309,7 @@ Deno.serve(async (req) => {
         })
         .in('id', createdTickets.map(t => t.id))
       if (confirmErr) {
-        await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
+        await rollbackTickets()
         throw new Error(`Falha ao confirmar venda presencial: ${confirmErr.message}`)
       }
       // Tap não passa pelo webhook (nenhuma cobrança Asaas foi criada) —
@@ -322,7 +341,7 @@ Deno.serve(async (req) => {
       .eq('id', event.created_by)
       .single()
     if (!producer?.asaas_wallet_id) {
-      await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
+      await rollbackTickets()
       throw new Error('Produtor não conectou conta Asaas. Venda indisponível.')
     }
 
@@ -347,7 +366,7 @@ Deno.serve(async (req) => {
       })
       const custData = await custRes.json()
       if (!custRes.ok) {
-        await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
+        await rollbackTickets()
         throw new Error(custData.errors?.[0]?.description ?? 'Erro ao criar customer Asaas')
       }
       customerId = custData.id
@@ -374,7 +393,7 @@ Deno.serve(async (req) => {
     })
     const payData = await payRes.json()
     if (!payRes.ok) {
-      await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
+      await rollbackTickets()
       console.error('[create-pdv-ticket] erro Asaas:', payData)
       throw new Error(payData.errors?.[0]?.description ?? 'Erro ao criar cobrança no Asaas')
     }

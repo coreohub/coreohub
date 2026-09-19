@@ -238,10 +238,23 @@ export default function CheckoutIngresso() {
   // ─── Assento numerado: layout (1x) + status ao vivo (polling 15s) ─────────
   const seatMapEnabled = Boolean(event?.seat_map_enabled);
 
+  // Evento mudou (navegação sem reload completo) — nunca carrega estado de
+  // assento de um evento diferente. Reseta tudo, o effect abaixo refaz o fetch.
+  useEffect(() => {
+    setRowsConfig(null);
+    setSeatStatuses({});
+    setSelectedSeats([]);
+  }, [event?.id]);
+
   useEffect(() => {
     if (!event?.id || !seatMapEnabled) return;
     (async () => {
-      const { data } = await supabase.rpc('get_venue_layout_public', { p_event_id: event.id });
+      const { data, error: layoutErr } = await supabase.rpc('get_venue_layout_public', { p_event_id: event.id });
+      if (layoutErr) {
+        console.error('[CheckoutIngresso] erro get_venue_layout_public:', layoutErr.message);
+        setError('Não foi possível carregar o mapa de assentos. Recarregue a página.');
+        return;
+      }
       const row = Array.isArray(data) ? data[0] : data;
       const cfg = row?.rows_config;
       setRowsConfig(Array.isArray(cfg) ? cfg : []);
@@ -252,8 +265,13 @@ export default function CheckoutIngresso() {
     if (!event?.id || !seatMapEnabled) return;
     let cancelled = false;
     const tick = async () => {
-      const { data } = await supabase.rpc('get_event_seats_public', { p_event_id: event.id });
-      if (cancelled || !Array.isArray(data)) return;
+      const { data, error: seatsErr } = await supabase.rpc('get_event_seats_public', { p_event_id: event.id });
+      if (cancelled) return;
+      if (seatsErr) {
+        console.error('[CheckoutIngresso] erro get_event_seats_public:', seatsErr.message);
+        return;
+      }
+      if (!Array.isArray(data)) return;
       const map: Record<string, SeatStatus> = {};
       for (const s of data as SeatStatus[]) map[s.seat_id] = s;
       setSeatStatuses(map);
