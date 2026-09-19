@@ -324,7 +324,7 @@ const PrivateLayout: React.FC<{
         </main>
       </div>
 
-      <BottomNavBar activeRole={activeRole} videoSelectionEnabled={videoSelectionEnabled} userId={profile.id} />
+      <BottomNavBar activeRole={activeRole} videoSelectionEnabled={videoSelectionEnabled} userId={profile.id} espetaculoOnlyProducer={espetaculoOnlyProducer} />
     </div>
     </Suspense>
   );
