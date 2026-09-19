@@ -56,6 +56,7 @@ const ProducerInviteLanding    = lazy(() => import('./pages/ProducerInvite'));
 const TeamInviteLanding        = lazy(() => import('./pages/TeamInvite'));
 const CreateEvent              = lazy(() => import('./pages/CreateEvent'));
 const CriarEventoGate          = lazy(() => import('./pages/CriarEventoGate'));
+const EspetaculoWizard         = lazy(() => import('./components/EspetaculoWizard'));
 const PublicEventPage          = lazy(() => import('./pages/PublicEventPage'));
 const Festivais                = lazy(() => import('./pages/Festivais'));
 const ProducerPublicPage       = lazy(() => import('./pages/ProducerPublicPage'));
@@ -696,6 +697,16 @@ const App: React.FC = () => {
         <Route path="/importar-regulamento" element={<PrivateRoute {...privateRouteProps}><RegulationAIParser /></PrivateRoute>} />
 
         <Route path="/criar-evento" element={<Suspense fallback={<PageLoader />}><CriarEventoGate /></Suspense>} />
+        {/* Plano Espetáculo (docs/mostra-pricing-spec.md) — funil dedicado, fora
+            de /planos, pra estúdio de dança sem júri/apuração/cronograma competitivo. */}
+        <Route path="/criar-espetaculo" element={<Suspense fallback={<PageLoader />}>
+          <CriarEventoGate
+            wizard={EspetaculoWizard}
+            oauthRedirectPath="/criar-espetaculo"
+            signupCopy={'Crie sua conta de produtor para cadastrar seu espetáculo.\nBilheteria de plateia, cupom, credenciamento — 7,9% sobre o vendido, sem mensalidade.'}
+            stepsCopy="Ao criar a conta, você preenche 1 formulário rápido pra colocar seu espetáculo no ar."
+          />
+        </Suspense>} />
         <Route path="/event-config" element={<PrivateRoute {...privateRouteProps}><RegistrationGradeConfig /></PrivateRoute>} />
         <Route path="/ai-analysis" element={<PrivateRoute {...privateRouteProps}><AIAnalysis /></PrivateRoute>} />
         <Route path="/super-admin" element={<PrivateRoute {...privateRouteProps}><SuperAdminDashboard /></PrivateRoute>} />
