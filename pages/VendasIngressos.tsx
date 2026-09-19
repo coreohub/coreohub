@@ -12,10 +12,12 @@ import { createPortal } from 'react-dom';
 import { supabase, resolveActiveEventId } from '../services/supabase';
 import {
   Ticket, Loader2, Search, Download, ExternalLink, CheckCircle2, Clock, XCircle, RotateCcw,
-  Users, DollarSign, AlertCircle, Undo2, X, Store, Copy, QrCode, Printer, Armchair, Accessibility,
+  Users, DollarSign, AlertCircle, Undo2, X, Store, Copy, QrCode, Printer, Armchair,
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 import VendasTabs from '../components/VendasTabs';
+import SeatGrid from '../components/SeatGrid';
+import { useSeatMap } from '../hooks/useSeatMap';
 import { maskCpfCnpj, unmaskCpfCnpj } from '../utils/masks';
 
 interface TicketTypeConfig {
@@ -100,11 +102,7 @@ const VendasIngressos: React.FC = () => {
   const [pdvCopied, setPdvCopied] = useState(false);
 
   // Assento numerado (Fase 2 Stage 4) — mini-mapa read-only + seletor no PDV
-  type SeatRow = { codigo: string; assentos: number; pcd?: number[]; corredor_apos?: number };
-  type SeatStatus = { seat_id: string; status: 'livre' | 'reservado' | 'vendido' | 'cortesia'; is_pcd: boolean };
   const [seatMapEnabled, setSeatMapEnabled] = useState(false);
-  const [rowsConfig, setRowsConfig] = useState<SeatRow[] | null>(null);
-  const [seatStatuses, setSeatStatuses] = useState<Record<string, SeatStatus>>({});
   const [pdvSelectedSeats, setPdvSelectedSeats] = useState<string[]>([]);
 
   const load = async () => {
@@ -173,38 +171,11 @@ const VendasIngressos: React.FC = () => {
   }, []);
 
   // ─── Assento numerado: layout (1x) + status (30s parado, 10s com PDV aberto) ─
-  useEffect(() => {
-    if (!eventId || !seatMapEnabled) return;
-    (async () => {
-      const { data, error: layoutErr } = await supabase.rpc('get_venue_layout_public', { p_event_id: eventId });
-      if (layoutErr) {
-        console.error('[VendasIngressos] erro get_venue_layout_public:', layoutErr.message);
-        return;
-      }
-      const row = Array.isArray(data) ? data[0] : data;
-      setRowsConfig(Array.isArray(row?.rows_config) ? row.rows_config : []);
-    })();
-  }, [eventId, seatMapEnabled]);
-
-  useEffect(() => {
-    if (!eventId || !seatMapEnabled) return;
-    let cancelled = false;
-    const tick = async () => {
-      const { data, error: seatsErr } = await supabase.rpc('get_event_seats_public', { p_event_id: eventId });
-      if (cancelled) return;
-      if (seatsErr) {
-        console.error('[VendasIngressos] erro get_event_seats_public:', seatsErr.message);
-        return;
-      }
-      if (!Array.isArray(data)) return;
-      const map: Record<string, SeatStatus> = {};
-      for (const s of data as SeatStatus[]) map[s.seat_id] = s;
-      setSeatStatuses(map);
-    };
-    void tick();
-    const interval = setInterval(tick, pdvOpen ? 10_000 : 30_000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [eventId, seatMapEnabled, pdvOpen]);
+  const { rowsConfig, seatStatuses } = useSeatMap({
+    eventId,
+    enabled: seatMapEnabled,
+    pollMs: pdvOpen ? 10_000 : 30_000,
+  });
 
   const seatSummary = useMemo(() => {
     const all = Object.values(seatStatuses);
@@ -844,47 +815,16 @@ const VendasIngressos: React.FC = () => {
                         </span>
                         <span className="text-[10px] text-slate-500">{pdvSelectedSeats.length}/{pdvQuantity}</span>
                       </div>
-                      {rowsConfig === null ? (
-                        <div className="flex items-center justify-center py-4">
-                          <Loader2 className="animate-spin text-slate-400" size={16} />
-                        </div>
-                      ) : (
-                        <div className="space-y-1.5 overflow-x-auto pb-1 border border-slate-200 dark:border-white/10 rounded-xl p-2">
-                          {rowsConfig.map(row => (
-                            <div key={row.codigo} className="flex items-center gap-1.5 min-w-max">
-                              <span className="text-[9px] font-black text-slate-500 w-4 shrink-0">{row.codigo}</span>
-                              <div className="flex items-center gap-1">
-                                {Array.from({ length: row.assentos }, (_, i) => i + 1).map(n => {
-                                  const seatId = `${row.codigo}-${n}`;
-                                  const st = seatStatuses[seatId]?.status ?? 'livre';
-                                  const isPcd = row.pcd?.includes(n) ?? false;
-                                  const isSelected = pdvSelectedSeats.includes(seatId);
-                                  const isTaken = st !== 'livre';
-                                  return (
-                                    <span key={seatId} className="flex items-center">
-                                      {row.corredor_apos === n - 1 && <span className="w-2 shrink-0" />}
-                                      <button
-                                        type="button"
-                                        onClick={() => togglePdvSeat(seatId)}
-                                        disabled={isTaken && !isSelected}
-                                        title={`${seatId}${isPcd ? ' · PCD' : ''}${isTaken ? ' · ocupado' : ''}`}
-                                        aria-pressed={isSelected}
-                                        className={`w-5 h-5 shrink-0 rounded text-[7px] font-black flex items-center justify-center
-                                          ${isSelected ? 'bg-[#ff0068] text-white' : ''}
-                                          ${!isSelected && isTaken ? 'bg-slate-200 dark:bg-white/5 text-slate-400 dark:text-slate-700 cursor-not-allowed' : ''}
-                                          ${!isSelected && !isTaken ? 'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/20' : ''}
-                                        `}
-                                      >
-                                        {isPcd ? <Accessibility size={9} /> : n}
-                                      </button>
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      <div className="border border-slate-200 dark:border-white/10 rounded-xl p-2">
+                        <SeatGrid
+                          rowsConfig={rowsConfig}
+                          seatStatuses={seatStatuses}
+                          selectedSeats={pdvSelectedSeats}
+                          onToggle={togglePdvSeat}
+                          size="sm"
+                          variant="auto"
+                        />
+                      </div>
                     </div>
                   )}
 

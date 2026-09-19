@@ -19,10 +19,12 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import {
   Ticket, Loader2, AlertCircle, ArrowLeft, ShieldCheck, User as UserIcon, Mail, Phone, FileText, Minus, Plus,
-  Tag, X, Check, Trash2, Accessibility, Armchair,
+  Tag, X, Check, Trash2, Armchair,
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
+import SeatGrid from '../components/SeatGrid';
+import { useSeatMap } from '../hooks/useSeatMap';
 import { resolveLote, todayISO, type Lote } from '../utils/lotes';
 import { isEventOver } from '../utils/eventStatus';
 // Fonte única da matemática de comissão/split (compartilhada com a edge
@@ -113,10 +115,6 @@ export default function CheckoutIngresso() {
   const [refundAccepted, setRefundAccepted] = useState(false);
 
   // Assento numerado (Fase 2 Stage 3) — layout do venue + status ao vivo
-  type SeatRow = { codigo: string; assentos: number; pcd?: number[]; corredor_apos?: number };
-  type SeatStatus = { seat_id: string; status: 'livre' | 'reservado' | 'vendido' | 'cortesia'; is_pcd: boolean };
-  const [rowsConfig, setRowsConfig] = useState<SeatRow[] | null>(null);
-  const [seatStatuses, setSeatStatuses] = useState<Record<string, SeatStatus>>({});
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
 
   // Estoque por idx + cupom
@@ -238,51 +236,21 @@ export default function CheckoutIngresso() {
   // ─── Assento numerado: layout (1x) + status ao vivo (polling 15s) ─────────
   const seatMapEnabled = Boolean(event?.seat_map_enabled);
 
-  // Evento mudou (navegação sem reload completo) — nunca carrega estado de
-  // assento de um evento diferente. Reseta tudo, o effect abaixo refaz o fetch.
+  // Evento mudou (navegação sem reload completo) — nunca carrega assento
+  // selecionado de um evento diferente (o hook já reseta layout/status).
   useEffect(() => {
-    setRowsConfig(null);
-    setSeatStatuses({});
     setSelectedSeats([]);
   }, [event?.id]);
 
-  useEffect(() => {
-    if (!event?.id || !seatMapEnabled) return;
-    (async () => {
-      const { data, error: layoutErr } = await supabase.rpc('get_venue_layout_public', { p_event_id: event.id });
-      if (layoutErr) {
-        console.error('[CheckoutIngresso] erro get_venue_layout_public:', layoutErr.message);
-        setError('Não foi possível carregar o mapa de assentos. Recarregue a página.');
-        return;
-      }
-      const row = Array.isArray(data) ? data[0] : data;
-      const cfg = row?.rows_config;
-      setRowsConfig(Array.isArray(cfg) ? cfg : []);
-    })();
-  }, [event?.id, seatMapEnabled]);
-
-  useEffect(() => {
-    if (!event?.id || !seatMapEnabled) return;
-    let cancelled = false;
-    const tick = async () => {
-      const { data, error: seatsErr } = await supabase.rpc('get_event_seats_public', { p_event_id: event.id });
-      if (cancelled) return;
-      if (seatsErr) {
-        console.error('[CheckoutIngresso] erro get_event_seats_public:', seatsErr.message);
-        return;
-      }
-      if (!Array.isArray(data)) return;
-      const map: Record<string, SeatStatus> = {};
-      for (const s of data as SeatStatus[]) map[s.seat_id] = s;
-      setSeatStatuses(map);
-      // Assento que o comprador tinha escolhido pode ter sido pego por outro
-      // enquanto ele preenchia o form — descarta da seleção automaticamente.
-      setSelectedSeats(prev => prev.filter(id => map[id]?.status === 'livre'));
-    };
-    void tick();
-    const interval = setInterval(tick, 15_000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [event?.id, seatMapEnabled]);
+  const { rowsConfig, seatStatuses, markSeatsOccupied } = useSeatMap({
+    eventId: event?.id,
+    enabled: seatMapEnabled,
+    pollMs: 15_000,
+    onLayoutError: setError,
+    // Assento que o comprador tinha escolhido pode ter sido pego por outro
+    // enquanto ele preenchia o form — descarta da seleção automaticamente.
+    onStatusUpdate: map => setSelectedSeats(prev => prev.filter(id => map[id]?.status === 'livre')),
+  });
 
   const toggleSeat = (seatId: string) => {
     setSelectedSeats(prev => {
@@ -422,13 +390,7 @@ export default function CheckoutIngresso() {
         // seleção e o clique em pagar — limpa só esses e deixa escolher de novo.
         if (Array.isArray(data.occupied_seats) && data.occupied_seats.length > 0) {
           setSelectedSeats(prev => prev.filter(id => !data.occupied_seats.includes(id)));
-          setSeatStatuses(prev => {
-            const next = { ...prev };
-            for (const id of data.occupied_seats as string[]) {
-              next[id] = { ...(next[id] ?? { seat_id: id, is_pcd: false }), status: 'reservado' };
-            }
-            return next;
-          });
+          markSeatsOccupied(data.occupied_seats);
         }
         throw new Error(data.error);
       }
@@ -618,48 +580,14 @@ export default function CheckoutIngresso() {
               </p>
             </div>
 
-            {rowsConfig === null ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="animate-spin text-slate-500" size={20} />
-              </div>
-            ) : (
-              <div className="space-y-2 overflow-x-auto pb-1">
-                {rowsConfig.map(row => (
-                  <div key={row.codigo} className="flex items-center gap-2 min-w-max">
-                    <span className="text-[10px] font-black text-slate-500 w-5 shrink-0">{row.codigo}</span>
-                    <div className="flex items-center gap-1">
-                      {Array.from({ length: row.assentos }, (_, i) => i + 1).map(n => {
-                        const seatId = `${row.codigo}-${n}`;
-                        const st = seatStatuses[seatId]?.status ?? 'livre';
-                        const isPcd = row.pcd?.includes(n) ?? false;
-                        const isSelected = selectedSeats.includes(seatId);
-                        const isTaken = st !== 'livre';
-                        return (
-                          <span key={seatId} className="flex items-center">
-                            {row.corredor_apos === n - 1 && <span className="w-3 shrink-0" />}
-                            <button
-                              type="button"
-                              onClick={() => toggleSeat(seatId)}
-                              disabled={isTaken && !isSelected}
-                              title={`${seatId}${isPcd ? ' · PCD' : ''}${isTaken ? ' · ocupado' : ''}`}
-                              aria-label={`Assento ${seatId}${isPcd ? ', PCD' : ''}${isTaken ? ', ocupado' : ', disponível'}`}
-                              aria-pressed={isSelected}
-                              className={`w-6 h-6 shrink-0 rounded-md text-[8px] font-black flex items-center justify-center transition-colors
-                                ${isSelected ? 'bg-[#ff0068] text-white' : ''}
-                                ${!isSelected && isTaken ? 'bg-white/5 text-slate-700 cursor-not-allowed' : ''}
-                                ${!isSelected && !isTaken ? 'bg-white/10 text-slate-400 hover:bg-white/20' : ''}
-                              `}
-                            >
-                              {isPcd ? <Accessibility size={11} /> : n}
-                            </button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <SeatGrid
+              rowsConfig={rowsConfig}
+              seatStatuses={seatStatuses}
+              selectedSeats={selectedSeats}
+              onToggle={toggleSeat}
+              size="md"
+              variant="dark"
+            />
 
             <div className="flex items-center gap-4 mt-3 text-[10px] text-slate-500">
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-white/10 inline-block" /> Disponível</span>
