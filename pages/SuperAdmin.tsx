@@ -59,7 +59,7 @@ interface EventRow {
   setup_fee_grandfathered: boolean | null;
   setup_fee_tier_chave: string | null;
   setup_fee_amount_paid: number | null;
-  billing_plan: 'comeco' | 'essencial' | 'escala' | null;
+  billing_plan: 'comeco' | 'essencial' | 'escala' | 'espetaculo' | null;
   billing_plan_fixed_fee_paid_at: string | null;
   billing_settlement_closed_at: string | null;
 }
@@ -78,7 +78,7 @@ const KIND_META: Record<string, { label: string; icon: any }> = {
 // única de verdade fica na tabela de Eventos; "Planos" na tabela de Produtores
 // é só um resumo agregado pra leitura rápida (achado 2026-09-16, mesmo padrão
 // Stripe: plano vive na subscription, não no customer).
-const PLAN_LABEL: Record<string, string> = { comeco: 'Começo', essencial: 'Essencial', escala: 'Escala' };
+const PLAN_LABEL: Record<string, string> = { comeco: 'Começo', essencial: 'Essencial', escala: 'Escala', espetaculo: 'Espetáculo' };
 
 const SuperAdmin = () => {
   const navigate = useNavigate();
@@ -486,10 +486,12 @@ const SuperAdmin = () => {
     // sync_commission_percent_from_billing_plan. Marca o fixo como "pago"
     // pra não ficar pendurado esperando um pagamento que não vai vir (é
     // concessão manual, não fluxo de cobrança); volta a NULL se voltar
-    // pro Começo.
+    // pro Começo ou pro Espetáculo (nenhum dos dois tem componente fixo —
+    // docs/mostra-pricing-spec.md, Plano Espetáculo é só % sobre GMV).
     if (patch.billing_plan !== undefined && patch.billing_plan !== eventEdit.billing_plan) {
       update.billing_plan = patch.billing_plan;
-      update.billing_plan_fixed_fee_paid_at = patch.billing_plan === 'comeco' ? null : new Date().toISOString();
+      update.billing_plan_fixed_fee_paid_at =
+        (patch.billing_plan === 'comeco' || patch.billing_plan === 'espetaculo') ? null : new Date().toISOString();
     }
 
     const { error: updErr } = await supabase.from('events').update(update).eq('id', eventEdit.id);
@@ -1376,8 +1378,9 @@ const EventCommissionModal: React.FC<{
   const [feeMode, setFeeMode]   = useState<'repassar' | 'absorver'>(event.fee_mode ?? 'repassar');
   const [eventType, setEventType] = useState<'private' | 'government'>(event.event_type ?? 'private');
   const [nota, setNota]         = useState<string>(event.acesso_liberado_nota ?? '');
-  const [billingPlan, setBillingPlan] = useState<'comeco' | 'essencial' | 'escala'>(event.billing_plan ?? 'comeco');
-  const BILLING_PLAN_COMMISSION: Record<string, number> = { comeco: 10, essencial: 5, escala: 4.5 };
+  const [billingPlan, setBillingPlan] = useState<'comeco' | 'essencial' | 'escala' | 'espetaculo'>(event.billing_plan ?? 'comeco');
+  const BILLING_PLAN_COMMISSION: Record<string, number> = { comeco: 10, essencial: 5, escala: 4.5, espetaculo: 7.9 };
+  const BILLING_PLAN_LABEL: Record<string, string> = { comeco: 'Começo', essencial: 'Essencial', escala: 'Escala', espetaculo: 'Espetáculo' };
 
   // Status real da fatura pendente do componente fixo do plano (Asaas) —
   // evita caçar via SQL toda vez que precisar saber se o produtor já pagou
@@ -1511,9 +1514,9 @@ const EventCommissionModal: React.FC<{
               direta. commission_percent deriva sozinho via trigger no banco
               quando este campo muda. */}
           <div>
-            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Plano (docs/pricing-model-spec.md)</label>
-            <div className="grid grid-cols-3 gap-2">
-              {(['comeco', 'essencial', 'escala'] as const).map(p => (
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Plano (pricing-model-spec.md / mostra-pricing-spec.md)</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['comeco', 'essencial', 'escala', 'espetaculo'] as const).map(p => (
                 <button
                   key={p}
                   onClick={() => setBillingPlan(p)}
@@ -1523,50 +1526,56 @@ const EventCommissionModal: React.FC<{
                       : 'bg-slate-50 dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'
                   }`}
                 >
-                  {p === 'comeco' ? 'Começo' : p === 'essencial' ? 'Essencial' : 'Escala'}
+                  {BILLING_PLAN_LABEL[p]}
                 </button>
               ))}
             </div>
             {billingPlan !== event.billing_plan && (
               <p className="text-[10px] text-amber-500 font-bold mt-1.5 flex items-start gap-1.5">
                 <AlertCircle size={12} className="shrink-0 mt-0.5" />
-                CONCESSÃO GRATUITA — não cobra nada da produtora, muda a comissão pra {BILLING_PLAN_COMMISSION[billingPlan]}% na hora. Se ela já pagou por fora, confirme o pagamento na Asaas (veja abaixo) em vez de usar isso aqui.
+                {billingPlan === 'espetaculo'
+                  ? `Muda a comissão pra ${BILLING_PLAN_COMMISSION[billingPlan]}% na hora — Plano Espetáculo é só % sobre GMV, sem componente fixo (docs/mostra-pricing-spec.md). Escopo desse plano é só bilheteria de plateia; o evento continua com acesso a Júri/Cronograma/etc por enquanto (Fase 1 não esconde menu).`
+                  : `CONCESSÃO GRATUITA — não cobra nada da produtora, muda a comissão pra ${BILLING_PLAN_COMMISSION[billingPlan]}% na hora. Se ela já pagou por fora, confirme o pagamento na Asaas (veja abaixo) em vez de usar isso aqui.`}
               </p>
             )}
 
-            {/* Status real da fatura pendente — poupa ter que checar via SQL */}
-            <div className="mt-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 p-3">
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Cobrança do componente fixo</span>
-                <button onClick={fetchFeeStatus} className="text-slate-400 hover:text-[#ff0068]" aria-label="Verificar status novamente">
-                  <RefreshCw size={12} className={feeStatus.kind === 'loading' ? 'animate-spin' : ''} />
-                </button>
-              </div>
-              {feeStatus.kind === 'loading' ? (
-                <p className="text-xs text-slate-400 flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> Consultando na Asaas...</p>
-              ) : feeStatus.kind === 'error' ? (
-                <p className="text-xs text-rose-500">{feeStatus.error}</p>
-              ) : feeStatus.kind === 'none' ? (
-                <p className="text-xs text-slate-500">
-                  {event.billing_plan_fixed_fee_paid_at ? 'Nenhuma fatura pendente — taxa já confirmada.' : 'Nenhuma fatura gerada ainda pra esse evento.'}
-                </p>
-              ) : (
-                <div className="space-y-1">
-                  <p className="text-xs">
-                    <span className={`font-bold ${feeStatus.status === 'RECEIVED' || feeStatus.status === 'CONFIRMED' ? 'text-emerald-500' : feeStatus.status === 'OVERDUE' ? 'text-rose-500' : 'text-amber-500'}`}>
-                      {feeStatus.status === 'RECEIVED' || feeStatus.status === 'CONFIRMED' ? 'PAGO' : feeStatus.status === 'OVERDUE' ? 'VENCIDO' : 'PENDENTE'}
-                    </span>
-                    {' '}— R$ {Number(feeStatus.value).toFixed(2)} · vence {feeStatus.due_date}
-                    {feeStatus.status !== 'RECEIVED' && feeStatus.status !== 'CONFIRMED' && !feeStatus.already_confirmed_locally && (
-                      <span className="text-slate-400"> (webhook confirma sozinho ao pagar — não precisa fazer nada aqui)</span>
-                    )}
-                  </p>
-                  <a href={feeStatus.invoice_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-[#ff0068] hover:underline">
-                    <ExternalLink size={11} /> Abrir fatura
-                  </a>
+            {/* Status real da fatura pendente do componente fixo — não existe
+                pro Plano Espetáculo (é só % sobre GMV, sem fixo adiantado),
+                então o bloco inteiro não faz sentido pra esse plano. */}
+            {billingPlan !== 'espetaculo' && (
+              <div className="mt-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 p-3">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Cobrança do componente fixo</span>
+                  <button onClick={fetchFeeStatus} className="text-slate-400 hover:text-[#ff0068]" aria-label="Verificar status novamente">
+                    <RefreshCw size={12} className={feeStatus.kind === 'loading' ? 'animate-spin' : ''} />
+                  </button>
                 </div>
-              )}
-            </div>
+                {feeStatus.kind === 'loading' ? (
+                  <p className="text-xs text-slate-400 flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> Consultando na Asaas...</p>
+                ) : feeStatus.kind === 'error' ? (
+                  <p className="text-xs text-rose-500">{feeStatus.error}</p>
+                ) : feeStatus.kind === 'none' ? (
+                  <p className="text-xs text-slate-500">
+                    {event.billing_plan_fixed_fee_paid_at ? 'Nenhuma fatura pendente — taxa já confirmada.' : 'Nenhuma fatura gerada ainda pra esse evento.'}
+                  </p>
+                ) : (
+                  <div className="space-y-1">
+                    <p className="text-xs">
+                      <span className={`font-bold ${feeStatus.status === 'RECEIVED' || feeStatus.status === 'CONFIRMED' ? 'text-emerald-500' : feeStatus.status === 'OVERDUE' ? 'text-rose-500' : 'text-amber-500'}`}>
+                        {feeStatus.status === 'RECEIVED' || feeStatus.status === 'CONFIRMED' ? 'PAGO' : feeStatus.status === 'OVERDUE' ? 'VENCIDO' : 'PENDENTE'}
+                      </span>
+                      {' '}— R$ {Number(feeStatus.value).toFixed(2)} · vence {feeStatus.due_date}
+                      {feeStatus.status !== 'RECEIVED' && feeStatus.status !== 'CONFIRMED' && !feeStatus.already_confirmed_locally && (
+                        <span className="text-slate-400"> (webhook confirma sozinho ao pagar — não precisa fazer nada aqui)</span>
+                      )}
+                    </p>
+                    <a href={feeStatus.invoice_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-[#ff0068] hover:underline">
+                      <ExternalLink size={11} /> Abrir fatura
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Nota de acesso liberado — motivo do acordo (contrato governo/edital/
