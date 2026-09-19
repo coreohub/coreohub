@@ -138,11 +138,12 @@ interface PrivateRouteProps {
   toggleTheme: () => void;
   setActiveRole: (role: UserRole) => void;
   videoSelectionEnabled: boolean;
+  espetaculoOnlyProducer: boolean;
   children: React.ReactNode;
 }
 
 const PrivateRoute: React.FC<PrivateRouteProps> = ({
-  session, profile, activeRole, theme, toggleTheme, setActiveRole, videoSelectionEnabled, children,
+  session, profile, activeRole, theme, toggleTheme, setActiveRole, videoSelectionEnabled, espetaculoOnlyProducer, children,
 }) => {
   const location = useLocation();
   if (!session) {
@@ -159,6 +160,7 @@ const PrivateRoute: React.FC<PrivateRouteProps> = ({
       activeRole={activeRole}
       setActiveRole={setActiveRole}
       videoSelectionEnabled={videoSelectionEnabled}
+      espetaculoOnlyProducer={espetaculoOnlyProducer}
     >
       {children}
     </PrivateLayout>
@@ -231,7 +233,8 @@ const PrivateLayout: React.FC<{
   activeRole: UserRole | null,
   setActiveRole: (role: UserRole) => void,
   videoSelectionEnabled: boolean,
-}>  = ({ children, profile, theme, toggleTheme, activeRole, setActiveRole, videoSelectionEnabled }) => {
+  espetaculoOnlyProducer: boolean,
+}>  = ({ children, profile, theme, toggleTheme, activeRole, setActiveRole, videoSelectionEnabled, espetaculoOnlyProducer }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -275,6 +278,7 @@ const PrivateLayout: React.FC<{
         activeRole={activeRole}
         profile={profile}
         videoSelectionEnabled={videoSelectionEnabled}
+        espetaculoOnlyProducer={espetaculoOnlyProducer}
       />
       <div className="flex-1 flex flex-col min-w-0 relative">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-20%,#3b0764,transparent)] pointer-events-none opacity-5 dark:opacity-20" />
@@ -474,6 +478,35 @@ const App: React.FC = () => {
     void checkVideoSelection();
   }, [session?.user?.id]);
 
+  // Plano Espetáculo (docs/mostra-pricing-spec.md, Parte B): produtor cujos
+  // eventos REAIS são todos billing_plan='espetaculo' não usa nada de
+  // festival competitivo (júri/cronograma/telão/workshops/apuração/
+  // premiação/certificados/regulamento IA) — o Sidebar esconde esses itens
+  // pra reduzir ruído. Produtor misto (tem pelo menos 1 evento Festival)
+  // mantém o menu completo — nunca perde acesso a nada que já usa.
+  // Mesmo padrão de derivação de videoSelectionFromEvents acima: consulta
+  // os eventos do produtor sob demanda, sem persistir estado global.
+  const [espetaculoOnlyProducer, setEspetaculoOnlyProducer] = useState(false);
+  useEffect(() => {
+    const checkBillingPlan = async () => {
+      const userId = session?.user?.id;
+      if (!userId) { setEspetaculoOnlyProducer(false); return; }
+      try {
+        const { supabase } = await import('./services/supabase');
+        const { data: ownedEvents } = await supabase
+          .from('events')
+          .select('billing_plan')
+          .eq('created_by', userId)
+          .eq('is_demo', false);
+        if (!ownedEvents || ownedEvents.length === 0) { setEspetaculoOnlyProducer(false); return; }
+        setEspetaculoOnlyProducer(ownedEvents.every((e: any) => e.billing_plan === 'espetaculo'));
+      } catch {
+        setEspetaculoOnlyProducer(false);
+      }
+    };
+    void checkBillingPlan();
+  }, [session?.user?.id]);
+
   useEffect(() => {
     // Domínio de marketing nunca usa sessão (landing/planos/termos/governo
     // são conteúdo 100% público) — pula getSession()/onAuthStateChange por
@@ -600,7 +633,7 @@ const App: React.FC = () => {
   // Flag derivada: produtor com evento de seletiva OU inscrito em evento de
   // seletiva. Mantém legacy config.video_selection_enabled como fallback OR.
   const videoSelectionEnabled = videoSelectionFromEvents || (config.video_selection_enabled ?? false);
-  const privateRouteProps = { session, profile, activeRole, theme, toggleTheme, setActiveRole, videoSelectionEnabled };
+  const privateRouteProps = { session, profile, activeRole, theme, toggleTheme, setActiveRole, videoSelectionEnabled, espetaculoOnlyProducer };
   const RootRedirect = () => {
     try {
       const isKiosk = localStorage.getItem('coreohub_tablet_kiosk_mode') === 'true';

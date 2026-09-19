@@ -24,7 +24,29 @@ interface SidebarProps {
   activeRole: UserRole | null;
   profile: UserProfile | null;
   videoSelectionEnabled: boolean;
+  /** Plano Espetáculo (docs/mostra-pricing-spec.md) — produtor cujos eventos
+   * reais são todos billing_plan='espetaculo' não vê itens exclusivos de
+   * festival competitivo. Ver ESPETACULO_HIDDEN_PATHS abaixo. */
+  espetaculoOnlyProducer?: boolean;
 }
+
+// Itens de menu do produtor exclusivos de festival competitivo — sem uso no
+// Plano Espetáculo (bilheteria de plateia simples, sem júri/cronograma
+// competitivo, ver "Escopo confirmado" em docs/mostra-pricing-spec.md).
+// Inscrições (/inscricoes) fica de fora de propósito — decisão do produtor
+// 2026-09-19, mantém visível mesmo pro Plano Espetáculo.
+const ESPETACULO_HIDDEN_PATHS = new Set([
+  '/equipe-jurados',
+  '/importar-regulamento',
+  '/seletiva-video',
+  '/cronograma',
+  '/telao-palco',
+  '/workshops-do-evento',
+  '/apuracao',
+  '/premiacao',
+  '/certificados',
+  '/suporte-juri',
+]);
 
 type MenuItem = {
   path: string;
@@ -189,7 +211,7 @@ const menuSections: MenuSection[] = [
   },
 ];
 
-const Sidebar = ({ isOpen, toggle, onLogout, activeRole, profile, videoSelectionEnabled }: SidebarProps) => {
+const Sidebar = ({ isOpen, toggle, onLogout, activeRole, profile, videoSelectionEnabled, espetaculoOnlyProducer }: SidebarProps) => {
   const location = useLocation();
 
   // Build equipe section dynamically when the member has permissoes_custom
@@ -223,7 +245,17 @@ const Sidebar = ({ isOpen, toggle, onLogout, activeRole, profile, videoSelection
       .map(sec => ({
         ...sec,
         items: sec.items.filter((item, idx, arr) => arr.findIndex(x => x.path === item.path) === idx),
-      }));
+      }))
+      // Plano Espetáculo — esconde itens de festival competitivo (ver
+      // ESPETACULO_HIDDEN_PATHS acima). Só aplica pro produtor/admin
+      // (ALL_ORGANIZER); seções de Inscrito/Júri/Equipe não usam esses paths.
+      .map(sec => ({
+        ...sec,
+        items: espetaculoOnlyProducer
+          ? sec.items.filter(item => !ESPETACULO_HIDDEN_PATHS.has(item.path))
+          : sec.items,
+      }))
+      .filter(sec => sec.items.length > 0);
       // Seletiva de Vídeo NÃO ganha item próprio no sidebar — coreografias em
       // fluxo de seletiva ficam dentro de "Minhas Inscrições" com badge/aba
       // dedicada (padrão Sympla/Eventbrite). Remove poluição de menu.
