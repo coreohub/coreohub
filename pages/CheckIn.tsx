@@ -169,7 +169,7 @@ const CheckIn = () => {
     const { data: ticket } = canScan('INGRESSO')
       ? await supabase
           .from('audience_tickets')
-          .select('id, ticket_type_nome, ticket_type_kind, buyer_name, status_pagamento, check_in_status, check_in_at')
+          .select('id, ticket_type_nome, ticket_type_kind, buyer_name, status_pagamento, check_in_status, check_in_at, seat_id')
           .eq('id', id)
           .maybeSingle()
       : { data: null };
@@ -216,9 +216,10 @@ const CheckIn = () => {
         return;
       }
       const meiaSuffix = ticket.ticket_type_kind === 'meia' ? ' (verificar documento de meia)' : '';
+      const seatSuffix = (ticket as any).seat_id ? ` — Assento ${(ticket as any).seat_id}` : '';
       setScanResult({
         type: 'success',
-        message: `Ingresso ${ticket.ticket_type_nome} liberado${meiaSuffix}!`,
+        message: `Ingresso ${ticket.ticket_type_nome} liberado${meiaSuffix}${seatSuffix}!`,
         name: ticket.buyer_name,
         kind: 'INGRESSO',
       });

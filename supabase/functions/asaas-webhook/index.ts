@@ -229,9 +229,22 @@ async function handleAudienceTicket(opts: {
 
   const { data: eventData } = await supabase
     .from('events')
-    .select('created_by, name, location, event_date, audience_commission_percent')
+    .select('created_by, name, location, event_date, audience_commission_percent, seat_map_enabled')
     .eq('id', eventId)
     .single()
+
+  // Assento numerado (Fase 2 Stage 3): pagamento aprovado vira venda
+  // definitiva — assento sai de 'reservado' (expira via cron) pra 'vendido'
+  // (permanente). Service role bypassa RLS, update direto sem RPC nova.
+  if ((eventData as any)?.seat_map_enabled) {
+    const { error: seatErr } = await supabase
+      .from('event_seats')
+      .update({ status: 'vendido', held_until: null })
+      .in('audience_ticket_id', tickets.map((t: any) => t.id))
+    if (seatErr) {
+      console.error('[asaas-webhook][audience] erro ao marcar assentos vendidos:', seatErr.message)
+    }
+  }
 
   const audiencePaidAt = (updatePayload.paid_at as string | undefined) ?? new Date().toISOString()
   const { error: commErr } = await supabase

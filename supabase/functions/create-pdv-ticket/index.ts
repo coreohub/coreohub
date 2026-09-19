@@ -28,7 +28,10 @@
  *   ticket_type_idx: number,
  *   quantity?: number,          // default 1
  *   buyer: { name, email, cpf, phone? },
- *   payment_method: 'pix' | 'cartao_tap'
+ *   payment_method: 'pix' | 'cartao_tap',
+ *   seat_ids?: string[]         // obrigatório quando event.seat_map_enabled,
+ *                               // tamanho = quantity. Mesmo mecanismo do
+ *                               // checkout público (Fase 2 Stage 3/4).
  * }
  */
 
@@ -115,11 +118,13 @@ Deno.serve(async (req) => {
       ticket_type_idx,
       buyer,
       payment_method,
+      seat_ids: seatIdsRaw,
     } = body as {
       event_id?: string
       ticket_type_idx?: number
       buyer?: { name?: string; email?: string; cpf?: string; phone?: string }
       payment_method?: 'pix' | 'cartao_tap'
+      seat_ids?: string[]
     }
     const quantity = Math.max(1, Math.min(20, Number(body.quantity ?? 1)))
 
@@ -141,7 +146,7 @@ Deno.serve(async (req) => {
         id, name, created_by, ingressos_config,
         audience_commission_percent, audience_fee_mode,
         audience_max_per_cpf, audience_max_per_purchase, audience_sales_enabled,
-        politica_ingressos
+        politica_ingressos, seat_map_enabled
       `)
       .eq('id', event_id)
       .single()
@@ -178,6 +183,13 @@ Deno.serve(async (req) => {
     const maxPerCpf = Number(event.audience_max_per_cpf ?? 6)
     if (quantity > maxPerPurchase) throw new Error(`Limite de ${maxPerPurchase} ingressos por venda`)
     if (kind === 'meia' && quantity > 1) throw new Error('Lei 12.933: meia-entrada limitada a 1 por CPF')
+
+    const seatMapEnabled = Boolean((event as any).seat_map_enabled)
+    const seatIds = Array.isArray(seatIdsRaw) ? seatIdsRaw.filter(s => typeof s === 'string' && s.trim()) : []
+    if (seatMapEnabled) {
+      if (seatIds.length !== quantity) throw new Error(`Selecione exatamente ${quantity} assento(s)`)
+      if (new Set(seatIds).size !== seatIds.length) throw new Error('Assento selecionado mais de uma vez')
+    }
 
     // ── Comissão: normal no PIX (processa via Asaas de verdade), zero no Tap
     // (dinheiro/cartão presencial não passa pelo split — decisão de produto
@@ -236,6 +248,35 @@ Deno.serve(async (req) => {
     const groupId = reserveRows.find(r => r.group_id)?.group_id ?? null
     if (createdTickets.length === 0) throw new Error('Nenhum ticket reservado')
 
+    // ── Reserva de assento (Fase 2 Stage 4) — mesmo padrão do checkout
+    // público: all-or-nothing, rollback dos tickets em caso de conflito.
+    if (seatMapEnabled && seatIds.length > 0) {
+      const { data: seatData, error: seatErr } = await supabase.rpc('reserve_event_seats', {
+        p_event_id: event_id, p_seat_ids: seatIds, p_hold_minutes: 10,
+      })
+      if (seatErr) {
+        await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
+        throw new Error('Falha ao reservar assento')
+      }
+      const seatRows = (Array.isArray(seatData) ? seatData : []) as Array<{ seat_id: string; reserved: boolean }>
+      const occupied = seatRows.filter(r => !r.reserved).map(r => r.seat_id)
+      if (occupied.length > 0) {
+        await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
+        const err: any = new Error('Um ou mais assentos escolhidos já foram reservados')
+        err.occupied_seats = occupied
+        throw err
+      }
+      const { error: confirmSeatErr } = await supabase.rpc('confirm_event_seats', {
+        p_event_id: event_id,
+        p_seat_ids: seatIds,
+        p_ticket_ids: createdTickets.map(t => t.id),
+        p_status: 'reservado',
+      })
+      if (confirmSeatErr) {
+        console.error('[create-pdv-ticket] erro RPC confirm_event_seats:', confirmSeatErr.message)
+      }
+    }
+
     // ═══ Caminho 1: cartão via Asaas Tap (ou equivalente) — já pago fisicamente,
     // confirma direto sem Asaas, comissão 0% ══════════════════════════════════
     if (payment_method === 'cartao_tap') {
@@ -251,6 +292,14 @@ Deno.serve(async (req) => {
       if (confirmErr) {
         await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
         throw new Error(`Falha ao confirmar venda presencial: ${confirmErr.message}`)
+      }
+      // Tap não passa pelo webhook (nenhuma cobrança Asaas foi criada) —
+      // precisa marcar o assento vendido aqui mesmo, na hora.
+      if (seatMapEnabled) {
+        await supabase
+          .from('event_seats')
+          .update({ status: 'vendido', held_until: null })
+          .in('audience_ticket_id', createdTickets.map(t => t.id))
       }
       console.log(`[create-pdv-ticket] ok(tap) event=${event_id} qty=${quantity} type=${t.nome} operator=${user.id}`)
       return json({
@@ -367,6 +416,7 @@ Deno.serve(async (req) => {
     }, 201)
   } catch (error: any) {
     console.error('[create-pdv-ticket] erro:', error.message)
-    return json({ error: error.message }, 400)
+    const extra = error.occupied_seats ? { occupied_seats: error.occupied_seats } : {}
+    return json({ error: error.message, ...extra }, 400)
   }
 })
