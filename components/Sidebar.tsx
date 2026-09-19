@@ -10,7 +10,7 @@ import {
   Clapperboard, Music2,
   PersonStanding, Headphones,
   Video, FileSearch, Tag, GraduationCap, MonitorPlay, Megaphone,
-  Calculator,
+  Calculator, MapPin,
 } from 'lucide-react';
 import { UserRole, Profile as UserProfile } from '../types';
 import { PERM_MENU, EQUIPE_OPERACIONAL_ROLES } from '../utils/permMenu';
@@ -135,6 +135,7 @@ const menuSections: MenuSection[] = [
       { path: '/vendas',              label: 'Visão Geral', icon: LayoutDashboard },
       { path: '/inscricoes',       label: 'Inscrições', icon: ClipboardList },
       { path: '/vendas-ingressos',    label: 'Ingressos',  icon: Ticket        },
+      { path: '/locais',              label: 'Locais',     icon: MapPin        },
       { path: '/workshops-do-evento', label: 'Workshops',  icon: GraduationCap },
       { path: '/seletiva-video',      label: 'Seletiva',   icon: Video         },
       { path: '/cupons',              label: 'Cupons',     icon: Tag           },

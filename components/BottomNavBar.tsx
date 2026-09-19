@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, Clapperboard, Music2, UserRound,
   Gavel, ClipboardList, Calendar, Settings, Video,
   MoreHorizontal, X, Mic2, PersonStanding, Ticket,
-  GraduationCap, Tag, Trophy, Award, Star, Shield, FileText,
+  GraduationCap, Tag, Trophy, Award, Star, Shield, FileText, MapPin,
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { supabase } from '../services/supabase';
@@ -97,6 +97,7 @@ const MORE_GROUPS: MoreGroup[] = [
     label: 'Bilheteria', tone: 'text-orange-500',
     items: [
       { path: '/vendas-ingressos',    label: 'Vendas',     icon: Ticket        },
+      { path: '/locais',              label: 'Locais',     icon: MapPin        },
       { path: '/workshops-do-evento', label: 'Workshops',  icon: GraduationCap },
       { path: '/cupons',              label: 'Cupons',     icon: Tag           },
     ],

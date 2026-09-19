@@ -67,6 +67,7 @@ const CheckoutIngresso         = lazy(() => import('./pages/CheckoutIngresso'));
 const MeuIngresso              = lazy(() => import('./pages/MeuIngresso'));
 const VendasIngressos          = lazy(() => import('./pages/VendasIngressos'));
 const VendasOverview           = lazy(() => import('./pages/VendasOverview'));
+const Venues                   = lazy(() => import('./pages/Venues'));
 const Coupons                  = lazy(() => import('./pages/Coupons'));
 const Avisos                   = lazy(() => import('./pages/Avisos'));
 const WorkshopsManagement      = lazy(() => import('./pages/WorkshopsManagement'));
@@ -771,6 +772,11 @@ const App: React.FC = () => {
         <Route path="/meus-certificados" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><MeusCertificados /></Suspense></PrivateRoute>} />
         <Route path="/vendas"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><VendasOverview /></Suspense></PrivateRoute>} />
         <Route path="/vendas-ingressos" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="vendas_ingressos"><VendasIngressos /></RequirePermission></Suspense></PrivateRoute>} />
+        {/* Locais — Fase 2 assento numerado (docs/mostra-pricing-spec.md).
+            Feature compartilhada entre planos, não exclusiva do Espetáculo —
+            mesma permissão de Ingressos, já que o mapa vive dentro da
+            configuração de bilheteria. */}
+        <Route path="/locais" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="vendas_ingressos"><Venues /></RequirePermission></Suspense></PrivateRoute>} />
         <Route path="/workshops-do-evento" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="gerenciar_workshops"><WorkshopsManagement /></RequirePermission></Suspense></PrivateRoute>} />
         <Route path="/cupons"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="gerenciar_cupons"><Coupons /></RequirePermission></Suspense></PrivateRoute>} />
         <Route path="/avisos"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="gerenciar_avisos"><Avisos /></RequirePermission></Suspense></PrivateRoute>} />
