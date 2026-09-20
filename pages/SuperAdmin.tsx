@@ -28,6 +28,7 @@ interface ProducerRow {
   events_count: number;
   total_gross: number;
   total_commission: number;
+  last_sign_in_at: string | null;
 }
 
 interface CommissionRow {
@@ -79,6 +80,23 @@ const KIND_META: Record<string, { label: string; icon: any }> = {
 // é só um resumo agregado pra leitura rápida (achado 2026-09-16, mesmo padrão
 // Stripe: plano vive na subscription, não no customer).
 const PLAN_LABEL: Record<string, string> = { comeco: 'Começo', essencial: 'Essencial', escala: 'Escala', espetaculo: 'Espetáculo' };
+
+// "Último acesso" da tabela de Produtores — disparado pelo caso real da
+// Lorrayne (logou mas não pagou a taxa fixa do plano). Formato relativo
+// curto pro admin bater o olho sem contar dias na cabeça.
+function formatLastSignIn(iso: string | null): string {
+  if (!iso) return '—';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const diffMin = Math.floor(diffMs / 60_000);
+  if (diffMin < 1) return 'agora';
+  if (diffMin < 60) return `há ${diffMin} min`;
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return `há ${diffH}h`;
+  const diffD = Math.floor(diffH / 24);
+  if (diffD < 30) return `há ${diffD}d`;
+  const diffMonth = Math.floor(diffD / 30);
+  return `há ${diffMonth}m`;
+}
 
 const SuperAdmin = () => {
   const navigate = useNavigate();
@@ -166,6 +184,7 @@ const SuperAdmin = () => {
           { data: evs },
           inviteList,
           { data: unattribProfs },
+          { data: lastSignIns },
         ] = await Promise.all([
           supabase.from('platform_commissions')
             .select('*')
@@ -183,6 +202,10 @@ const SuperAdmin = () => {
             .select('created_at, entry_source')
             .is('entry_event_id', null)
             .neq('role', 'COREOHUB_ADMIN'),
+          // Último login (auth.users.last_sign_in_at) via RPC — PostgREST
+          // nunca expõe o schema auth direto. Best-effort: se falhar (ex.
+          // 2FA ainda não confirmada), segue sem essa coluna.
+          supabase.rpc('get_producers_last_sign_in'),
         ]);
 
         // Bloco 1: agrega métricas de leads sem atribuição.
@@ -225,6 +248,11 @@ const SuperAdmin = () => {
           commissionByProducer.set(c.producer_id, (commissionByProducer.get(c.producer_id) ?? 0) + Number(c.commission_amount ?? 0));
         }
 
+        const lastSignInById = new Map<string, string | null>();
+        for (const row of (lastSignIns ?? []) as Array<{ id: string; last_sign_in_at: string | null }>) {
+          lastSignInById.set(row.id, row.last_sign_in_at);
+        }
+
         // Só exibe produtores que têm evento OU subconta Asaas configurada
         const enriched = (profs ?? [])
           .filter(p => eventsByProducer.has(p.id) || p.asaas_subconta_id)
@@ -239,6 +267,7 @@ const SuperAdmin = () => {
             events_count:      eventsByProducer.get(p.id) ?? 0,
             total_gross:       grossByProducer.get(p.id) ?? 0,
             total_commission:  commissionByProducer.get(p.id) ?? 0,
+            last_sign_in_at:   lastSignInById.get(p.id) ?? null,
           }))
           .sort((a, b) => b.total_commission - a.total_commission);
         setProducers(enriched);
@@ -1126,6 +1155,7 @@ const SuperAdmin = () => {
                       <th className="px-4 py-3" title="Planos dos eventos reais deste produtor — edite por evento na tabela acima">Planos</th>
                       <th className="px-4 py-3">Asaas</th>
                       <th className="px-4 py-3">KYC</th>
+                      <th className="px-4 py-3">Último acesso</th>
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3 text-right" />
                     </tr>
@@ -1174,6 +1204,9 @@ const SuperAdmin = () => {
                         </td>
                         <td className="px-4 py-3">
                           <KycBadge status={p.asaas_kyc_status} onboardingUrl={p.asaas_onboarding_url} hasSubconta={Boolean(p.asaas_subconta_id)} />
+                        </td>
+                        <td className="px-4 py-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap" title={p.last_sign_in_at ? new Date(p.last_sign_in_at).toLocaleString('pt-BR') : undefined}>
+                          {formatLastSignIn(p.last_sign_in_at)}
                         </td>
                         <td className="px-4 py-3">
                           {p.is_blocked
