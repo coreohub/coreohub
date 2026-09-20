@@ -19,10 +19,12 @@ function seenKey(eventId: string) {
 
 interface Props {
   producerId: string;
-  /** Suprime a checagem inteira — usado durante impersonation (super admin
-   *  "visualizando como Produtor" não deve disparar ação financeira real
-   *  em nome de outro produtor sem ele estar na sessão). */
-  suppressed?: boolean;
+  /** true quando o super admin está "Ver como" esse produtor. O gate
+   *  continua aparecendo (pedido explícito 2026-09-20, pra inspeção/teste),
+   *  mas ganha um 3º caminho — "Fechar" — que só existe nesse contexto:
+   *  admin não deveria ser forçado a tomar (ou fingir que tomou) uma decisão
+   *  financeira em nome de outra pessoa só pra conseguir sair da tela. */
+  isImpersonating?: boolean;
 }
 
 /**
@@ -44,14 +46,14 @@ interface Props {
  * PrivateLayout (lição já documentada no projeto — z-index direto não
  * basta, fica preso atrás de outros elementos).
  */
-const PlanFeeGateModal: React.FC<Props> = ({ producerId, suppressed }) => {
+const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
   const [pendingEvents, setPendingEvents] = useState<PendingPlanFeeEvent[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [resultMsg, setResultMsg] = useState<{ kind: 'ok' | 'pending' | 'err'; text: string } | null>(null);
 
   useEffect(() => {
-    if (suppressed || !producerId) { setLoaded(true); return; }
+    if (!producerId) { setLoaded(true); return; }
     let cancelled = false;
     (async () => {
       const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
@@ -83,11 +85,20 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, suppressed }) => {
       setLoaded(true);
     })();
     return () => { cancelled = true; };
-  }, [producerId, suppressed]);
+  }, [producerId]);
 
   const markSeenAndAdvance = useCallback((eventId: string) => {
     try { sessionStorage.setItem(seenKey(eventId), '1'); } catch { /* storage bloqueado/privado — segue sem persistir */ }
     setPendingEvents(prev => prev.filter(ev => ev.id !== eventId));
+    setResultMsg(null);
+  }, []);
+
+  // Fecha SEM marcar como visto — só existe durante impersonate (ver Props).
+  // Reabre normalmente da próxima vez (recarregar a página, ou o produtor
+  // de verdade logando), porque não escreve em sessionStorage. Não é uma
+  // 3ª opção pro produtor decidir por si — é só a saída do admin inspecionando.
+  const handleAdminDismiss = useCallback(() => {
+    setPendingEvents(prev => prev.slice(1));
     setResultMsg(null);
   }, []);
 
@@ -130,7 +141,7 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, suppressed }) => {
     }
   };
 
-  if (!loaded || suppressed || !current) return null;
+  if (!loaded || !current) return null;
 
   const valor = PLAN_FIXED_FEE[current.billing_plan];
   const planoLabel = PLAN_LABEL[current.billing_plan];
@@ -199,6 +210,16 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, suppressed }) => {
           <p className="text-xs text-slate-400">
             Fatura ainda não gerada pra este evento — use "Descontar do meu saldo" ou fale com o suporte.
           </p>
+        )}
+
+        {isImpersonating && (
+          <button
+            onClick={handleAdminDismiss}
+            disabled={actionLoading}
+            className="w-full text-center text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:underline pt-1"
+          >
+            Fechar (só inspeção via "Ver como" — não resolve nada pro produtor)
+          </button>
         )}
       </div>
     </div>,

@@ -322,10 +322,12 @@ const PrivateLayout: React.FC<{
               fica fora do fluxo visual daqui — só precisa estar montado.
               NÃO suprimido durante impersonation por pedido explícito do
               produtor (2026-09-20) pra poder testar/inspecionar o modal via
-              "Ver como" — super admin decide clicar em "Descontar do meu
-              saldo" com o mesmo nível de confiança que já tem pra editar
-              billing_plan/comissão direto no /super-admin. */}
-          <PlanFeeGateModal producerId={profile.id} suppressed={false} />
+              "Ver como" — mas ganha um "Fechar" que só existe nesse
+              contexto (isImpersonating), pra admin não ficar preso na tela
+              tendo que fingir uma decisão financeira que não é dele pra
+              tomar (achado ao vivo: evento sem fatura deixava "Pagar
+              agora" morto e "Descontar" era o único jeito de sair). */}
+          <PlanFeeGateModal producerId={profile.id} isImpersonating={isImpersonating} />
           <div className="p-3 lg:p-4">
             <Suspense fallback={<PageLoader />}>
               {children}
