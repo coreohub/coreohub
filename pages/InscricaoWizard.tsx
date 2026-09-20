@@ -908,29 +908,59 @@ const InscricaoWizard: React.FC = () => {
     }
 
     try {
-      // 1) Cria entries de elenco em batch (uma por bailarino).
-      //    RLS: user só insere com user_id próprio.
-      const elencoRows = data.bailarinos.map(b => ({
-        user_id:         userId,
-        nome:            b.nome.trim(),
-        cpf:             onlyDigits(b.cpf),
-        data_nascimento: b.data_nascimento,
-      }));
-      const { data: elencoCreated, error: elencoErr } = await supabase
-        .from('elenco')
-        .insert(elencoRows)
-        .select('id, nome');
-      if (elencoErr) throw new Error('Erro ao criar elenco: ' + elencoErr.message);
+      // 1) Resolve elenco por bailarino — reaproveita o registro existente
+      // (mesmo user_id + CPF) em vez de sempre criar um novo. Sem isso, cada
+      // nova coreografia do MESMO bailarino virava um elenco.id diferente,
+      // e qualquer contagem "quantas coreografias esse bailarino já tem no
+      // evento" (ex: preço PROGRESSIVE_PER_DANCER via
+      // count_dancer_paid_registrations) nunca reconhecia a pessoa repetida
+      // — achado real 2026-09-20 (Tamoios): mesmo CPF gerou 2 elenco.id
+      // diferentes em 84 segundos, e o levantamento no banco mostrou dezenas
+      // de contas com o mesmo padrão em toda a plataforma.
+      const cpfsBailarinos = data.bailarinos.map(b => onlyDigits(b.cpf)).filter(Boolean);
+      const { data: elencoExistente } = cpfsBailarinos.length > 0
+        ? await supabase.from('elenco').select('id, nome, cpf').eq('user_id', userId).in('cpf', cpfsBailarinos)
+        : { data: [] as { id: string; nome: string; cpf: string }[] };
+      const existentePorCpf = new Map((elencoExistente ?? []).map(e => [e.cpf, e]));
 
-      // Faz join entre o que o Supabase retornou (id + nome) e o input local
-      // pra capturar o @ Instagram informado no wizard. Solo/Duo/Trio usam
-      // bailarinos_detalhes[].instagram_handle; grupo usa instagram_principal.
-      const bailarinosDetalhes = (elencoCreated ?? []).map((b, idx) => ({
+      const bailarinosNovos = data.bailarinos.filter(b => !existentePorCpf.has(onlyDigits(b.cpf)));
+      let elencoNovoCriado: { id: string; nome: string }[] = [];
+      if (bailarinosNovos.length > 0) {
+        const elencoRows = bailarinosNovos.map(b => ({
+          user_id:         userId,
+          nome:            b.nome.trim(),
+          cpf:             onlyDigits(b.cpf),
+          data_nascimento: b.data_nascimento,
+        }));
+        const { data: elencoCreated, error: elencoErr } = await supabase
+          .from('elenco')
+          .insert(elencoRows)
+          .select('id, nome');
+        if (elencoErr) throw new Error('Erro ao criar elenco: ' + elencoErr.message);
+        elencoNovoCriado = elencoCreated ?? [];
+      }
+
+      // Reconcilia na ordem original de data.bailarinos: reaproveitado (por
+      // CPF) ou recém-criado (consumido em ordem, mesmo tamanho de bailarinosNovos).
+      let cursorNovo = 0;
+      const bailarinosResolvidos = data.bailarinos.map(b => {
+        const existente = existentePorCpf.get(onlyDigits(b.cpf));
+        if (existente) return { id: existente.id, nome: existente.nome };
+        return elencoNovoCriado[cursorNovo++];
+      });
+
+      // Faz join com o input local pra capturar o @ Instagram informado no
+      // wizard. Solo/Duo/Trio usam bailarinos_detalhes[].instagram_handle;
+      // grupo usa instagram_principal.
+      const bailarinosDetalhes = bailarinosResolvidos.map((b, idx) => ({
         id:               b.id,
         nome:             b.nome,
         instagram_handle: data.bailarinos[idx]?.instagram_handle?.trim() || null,
       }));
-      const createdElencoIds   = (elencoCreated ?? []).map(b => b.id);
+      // Só os REALMENTE criados agora entram no rollback de erro — elenco
+      // reaproveitado é de outra coreografia e não deve ser apagado se essa
+      // inscrição falhar.
+      const createdElencoIds   = elencoNovoCriado.map(b => b.id);
 
       // 1.5) Autorização de responsável legal — pra cada bailarino menor de
       // idade, grava via RPC que captura IP+user-agent no servidor (mesmo
@@ -938,7 +968,7 @@ const InscricaoWizard: React.FC = () => {
       // Falha aqui reverte o elenco recém-criado, mesmo padrão do rollback
       // de registration logo abaixo.
       for (const i of minorIndices) {
-        const elencoId = elencoCreated?.[i]?.id;
+        const elencoId = bailarinosResolvidos[i]?.id;
         const b = data.bailarinos[i];
         if (!elencoId) continue;
         const { error: consentErr } = await supabase.rpc('accept_minor_guardian_consent', {
