@@ -62,7 +62,14 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, suppressed }) => {
         .eq('is_demo', false)
         .in('billing_plan', ['essencial', 'escala'])
         .is('billing_plan_fixed_fee_paid_at', null)
-        .lt('billing_plan_set_at', oneHourAgo);
+        .lt('billing_plan_set_at', oneHourAgo)
+        // Sem ordenação explícita, Postgres não garante ordem estável —
+        // produtor com 2+ eventos pendentes pode ver primeiro o que ainda
+        // nem tem fatura gerada (achado real 2026-09-20). Prioriza quem já
+        // tem fatura (billing_plan_asaas_payment_id preenchido) — é o único
+        // caminho acionável com os 2 botões de imediato.
+        .order('billing_plan_asaas_payment_id', { ascending: true, nullsFirst: false })
+        .order('billing_plan_set_at', { ascending: true });
       if (cancelled) return;
       if (error) {
         console.error('[PlanFeeGateModal] erro ao consultar eventos pendentes:', error);
