@@ -107,6 +107,17 @@
       "destination": "/api/og-marketing?page=planos"
     },
     {
+      "source": "/espetaculo",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(.*(WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Googlebot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot|GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-Web|anthropic-ai|PerplexityBot|Perplexity-User|Google-Extended|Amazonbot|Bytespider|CCBot).*)"
+        }
+      ],
+      "destination": "/api/og-marketing?page=espetaculo"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
