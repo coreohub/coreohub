@@ -1288,8 +1288,16 @@ const InscricaoWizard: React.FC = () => {
               {formacoes.map((f: any) => {
                 const min = Number(f.min_members ?? 1);
                 const max = Number(f.max_members ?? min);
+                const isProgressive = f.pricing_type === 'PROGRESSIVE_PER_DANCER';
                 const lotes = Array.isArray(f.lotes) ? f.lotes : [];
-                const preco = lotes[0]?.preco ?? f.fee ?? 0;
+                // PROGRESSIVE_PER_DANCER nunca usa `lotes` — lotes[0].preco=0 é só
+                // placeholder estrutural, o preço real vive em progressive_tiers[0].
+                // Ler o 0 aqui fazia esse card mostrar "R$ 0,00" pra Pacote
+                // Progressivo (achado real 2026-09-20, tela "Como você vai se
+                // apresentar?" do evento Tamoios).
+                const preco = isProgressive
+                  ? (Array.isArray(f.progressive_tiers) ? f.progressive_tiers.find((t: any) => t?.ordem === 1)?.valor : undefined) ?? f.fee ?? 0
+                  : lotes[0]?.preco ?? f.fee ?? 0;
                 const perMember = f.pricing_type === 'PER_MEMBER';
                 const peopleLabel = min === max
                   ? `${min} ${min === 1 ? 'pessoa' : 'pessoas'}`
@@ -1311,6 +1319,9 @@ const InscricaoWizard: React.FC = () => {
                       {f.name}
                     </p>
                     <div className="flex items-baseline gap-1">
+                      {isProgressive && (
+                        <span className="text-[9px] font-bold text-slate-400 uppercase">a partir de</span>
+                      )}
                       <span className="text-[#ff0068] font-black text-xl">
                         R$ {Number(preco).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </span>
@@ -2059,8 +2070,16 @@ const InscricaoWizard: React.FC = () => {
                   Bug Grazieli/Usualdance (2026-05-19): inscrita não via que Grupo
                   de 18 bailarinos × R$ 35 = R$ 630 antes de confirmar. */}
               {(() => {
-                const firstLote = ((formacao as any)?.lotes ?? [])[0];
-                const feeUnit = Number(firstLote?.preco ?? (formacao as any)?.fee ?? (formacao as any)?.base_fee ?? 0);
+                const isProgressive = (formacao as any)?.pricing_type === 'PROGRESSIVE_PER_DANCER';
+                let feeUnit: number;
+                if (isProgressive) {
+                  const tiers = Array.isArray((formacao as any)?.progressive_tiers) ? (formacao as any).progressive_tiers : [];
+                  const primeiroTier = tiers.find((t: any) => t?.ordem === 1)?.valor;
+                  feeUnit = Number(primeiroTier ?? (formacao as any)?.fee ?? (formacao as any)?.base_fee ?? 0);
+                } else {
+                  const firstLote = ((formacao as any)?.lotes ?? [])[0];
+                  feeUnit = Number(firstLote?.preco ?? (formacao as any)?.fee ?? (formacao as any)?.base_fee ?? 0);
+                }
                 if (feeUnit <= 0) return null;
                 const perMember = (formacao as any)?.pricing_type === 'PER_MEMBER';
                 const total = perMember ? feeUnit * data.bailarinos.length : feeUnit;
@@ -2068,7 +2087,9 @@ const InscricaoWizard: React.FC = () => {
                   <div className="flex justify-between gap-3">
                     <span className="text-slate-500 dark:text-slate-400">Valor estimado</span>
                     <span className="font-black text-[#ff0068] text-right">
-                      {perMember && data.bailarinos.length > 1 ? (
+                      {isProgressive ? (
+                        <>a partir de R$ {feeUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (cai a cada coreografia do mesmo bailarino no evento)</>
+                      ) : perMember && data.bailarinos.length > 1 ? (
                         <>R$ {feeUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} × {data.bailarinos.length} = R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</>
                       ) : (
                         <>R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</>
