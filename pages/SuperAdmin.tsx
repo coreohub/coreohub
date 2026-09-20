@@ -99,23 +99,6 @@ function formatLastSignIn(iso: string | null): string {
   return `há ${diffMonth}m`;
 }
 
-// "Último acesso" da tabela de Produtores — disparado pelo caso real da
-// Lorrayne (logou mas não pagou a taxa fixa do plano). Formato relativo
-// curto pro admin bater o olho sem contar dias na cabeça.
-function formatLastSignIn(iso: string | null): string {
-  if (!iso) return '—';
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1) return 'agora';
-  if (diffMin < 60) return `há ${diffMin} min`;
-  const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return `há ${diffH}h`;
-  const diffD = Math.floor(diffH / 24);
-  if (diffD < 30) return `há ${diffD}d`;
-  const diffMonth = Math.floor(diffD / 30);
-  return `há ${diffMonth}m`;
-}
-
 const SuperAdmin = () => {
   const navigate = useNavigate();
   const [authorized, setAuthorized] = useState<boolean | null>(null);
