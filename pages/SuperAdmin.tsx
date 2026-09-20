@@ -11,7 +11,7 @@ import {
   AlertCircle, Mail, Copy, Trash2, Plus, X, Check, Lock, Unlock,
   ExternalLink, BarChart3, Download, Eye, Ticket, GraduationCap,
   Video, ShieldCheck, ShieldAlert, ShieldQuestion, Search, Calculator, RefreshCw,
-  Percent, Gift,
+  Percent, Gift, Wallet,
 } from 'lucide-react';
 import { startImpersonate } from '../services/impersonateService';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -62,6 +62,7 @@ interface EventRow {
   setup_fee_amount_paid: number | null;
   billing_plan: 'comeco' | 'essencial' | 'escala' | 'espetaculo' | null;
   billing_plan_fixed_fee_paid_at: string | null;
+  billing_plan_fee_deduction_transfer_id: string | null;
   billing_settlement_closed_at: string | null;
 }
 
@@ -192,7 +193,7 @@ const SuperAdmin = () => {
           supabase.from('profiles')
             .select('id, full_name, email, is_blocked, asaas_subconta_id, asaas_kyc_status, asaas_onboarding_url'),
           supabase.from('events')
-            .select('id, name, slug, created_by, start_date, event_type, commission_type, commission_percent, commission_fixed, fee_mode, is_public, is_demo, acesso_liberado_nota, setup_fee_paid_at, setup_fee_grandfathered, setup_fee_tier_chave, setup_fee_amount_paid, billing_plan, billing_plan_fixed_fee_paid_at, billing_settlement_closed_at')
+            .select('id, name, slug, created_by, start_date, event_type, commission_type, commission_percent, commission_fixed, fee_mode, is_public, is_demo, acesso_liberado_nota, setup_fee_paid_at, setup_fee_grandfathered, setup_fee_tier_chave, setup_fee_amount_paid, billing_plan, billing_plan_fixed_fee_paid_at, billing_plan_fee_deduction_transfer_id, billing_settlement_closed_at')
             .order('start_date', { ascending: false }),
           listInvites(),
           // Bloco 1: leads sem atribuição. Filtros: role != COREOHUB_ADMIN
@@ -278,6 +279,17 @@ const SuperAdmin = () => {
       }
     })();
   }, [authorized]);
+
+  /* Eventos com transferência interna de taxa fixa de plano (Essencial/Escala)
+     criada via "Descontar do meu saldo" (PlanFeeGateModal → deduct-plan-fee-now)
+     mas ainda aguardando aprovação manual no app da Asaas — toda transferência
+     via API sai PENDING/authorized:false, precisa de alguém aprovar por lá.
+     O cron em daily-release-funds reconcilia sozinho quando confirma, mas
+     enquanto isso não acontece, este card avisa o super admin. */
+  const pendingPlanFeeDeductions = useMemo(
+    () => eventsList.filter(ev => ev.billing_plan_fee_deduction_transfer_id && !ev.billing_plan_fixed_fee_paid_at),
+    [eventsList]
+  );
 
   /* Métricas globais — totais + janela 30d (padrão B2B SaaS: dashboards acionáveis
      mostram período recente, não all-time desde sempre). */
@@ -745,9 +757,24 @@ const SuperAdmin = () => {
 
           {/* Alertas operacionais — sinais que exigem ação. Só renderiza se houver
               algum sinal positivo, pra não poluir o painel quando tá tudo ok. */}
-          {(stats.stuckCommissions > 0 || kycAttention > 0) && (
+          {(stats.stuckCommissions > 0 || kycAttention > 0 || pendingPlanFeeDeductions.length > 0) && (
             <Section icon={AlertCircle} title="Alertas Operacionais" sub="Itens que precisam da sua atenção">
               <div className="divide-y divide-slate-100 dark:divide-white/5">
+                {pendingPlanFeeDeductions.length > 0 && (
+                  <div className="px-6 py-4 flex items-center gap-4">
+                    <div className="w-9 h-9 rounded-xl bg-violet-500/10 text-violet-500 border border-violet-500/20 flex items-center justify-center shrink-0">
+                      <Wallet size={14} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                        {pendingPlanFeeDeductions.length} taxa{pendingPlanFeeDeductions.length !== 1 ? 's' : ''} de plano aguardando aprovação na Asaas
+                      </h3>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {pendingPlanFeeDeductions.map(ev => ev.name).join(', ')} — produtor escolheu "Descontar do meu saldo"; aprove a transferência interna no app da Asaas (Transferências) pra concluir. O cron diário confirma sozinho depois de aprovado.
+                      </p>
+                    </div>
+                  </div>
+                )}
                 {stats.stuckCommissions > 0 && (
                   <div className="px-6 py-4 flex items-center gap-4">
                     <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center justify-center shrink-0">

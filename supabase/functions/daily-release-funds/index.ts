@@ -15,7 +15,7 @@
 // Manual run pra debug: POST direto com service-role.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { sweepProducerBalance } from '../_shared/asaas-payouts.ts'
+import { sweepProducerBalance, getTransferStatus } from '../_shared/asaas-payouts.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin':  '*',
@@ -238,9 +238,71 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── Reconciliação — transferências de TAXA FIXA DE PLANO (Essencial/
+    //    Escala) criadas via "Descontar do meu saldo" (PlanFeeGateModal →
+    //    deduct-plan-fee-now), que ficaram PENDING/authorized:false
+    //    aguardando aprovação manual no app da Asaas. Diferente do sweep de
+    //    comissão acima, essas transferências saíram da conta do PRÓPRIO
+    //    PRODUTOR (não da master) — então a checagem de status precisa da
+    //    api_key do produtor, não de ASAAS_TRANSFER_API_KEY. Best-effort,
+    //    nunca bloqueia o resto do cron.
+    let planFeeReconciled = 0
+    let planFeeStillPending = 0
+    try {
+      const { data: pendingPlanFeeEvents, error: pfErr } = await supabase
+        .from('events')
+        .select('id, name, created_by, billing_plan_fee_deduction_transfer_id')
+        .not('billing_plan_fee_deduction_transfer_id', 'is', null)
+        .is('billing_plan_fixed_fee_paid_at', null)
+
+      if (pfErr) {
+        console.error('[daily-release-funds] erro query pending plan fee transfers:', pfErr.message)
+      } else if (pendingPlanFeeEvents && pendingPlanFeeEvents.length > 0) {
+        const creatorIds = Array.from(new Set(pendingPlanFeeEvents.map(e => e.created_by).filter(Boolean)))
+        const { data: creatorProfiles } = await supabase
+          .from('profiles')
+          .select('id, asaas_api_key')
+          .in('id', creatorIds as string[])
+        const apiKeyByProducer = new Map<string, string | null>(
+          (creatorProfiles ?? []).map((p: any) => [p.id, p.asaas_api_key ?? null])
+        )
+
+        for (const ev of pendingPlanFeeEvents) {
+          const apiKey = apiKeyByProducer.get(ev.created_by as string)
+          if (!apiKey) {
+            console.warn(`[daily-release-funds] plan_fee event=${ev.id} sem api_key do produtor — skip reconciliação`)
+            planFeeStillPending++
+            continue
+          }
+          const check = await getTransferStatus({
+            transferApiKey: apiKey,
+            asaasBaseUrl,
+            transferId: ev.billing_plan_fee_deduction_transfer_id as string,
+          })
+          if (check.ok && check.status === 'DONE') {
+            const { error: confirmErr } = await supabase
+              .from('events')
+              .update({ billing_plan_fixed_fee_paid_at: new Date().toISOString() })
+              .eq('id', ev.id)
+            if (confirmErr) {
+              console.error(`[daily-release-funds] erro ao confirmar plan_fee event=${ev.id}:`, confirmErr.message)
+            } else {
+              console.log(`[daily-release-funds] plan_fee reconciliado event=${ev.id} (${ev.name}) transfer=${ev.billing_plan_fee_deduction_transfer_id}`)
+              planFeeReconciled++
+            }
+          } else {
+            planFeeStillPending++
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[daily-release-funds] exception na reconciliação de plan_fee:', (e as Error).message)
+    }
+
     console.log(
       `[daily-release-funds] FIM | produtores OK=${producersOk} skip=${producersSkip}` +
-      ` total liberado=R$${totalReleased.toFixed(2)} comissões processadas=${commissions.length}`
+      ` total liberado=R$${totalReleased.toFixed(2)} comissões processadas=${commissions.length}` +
+      ` | plan_fee reconciliadas=${planFeeReconciled} ainda pendentes=${planFeeStillPending}`
     )
     return jsonResp({
       status:          'ok',
@@ -248,6 +310,8 @@ Deno.serve(async (req) => {
       producers_skip:  producersSkip,
       total_released:  parseFloat(totalReleased.toFixed(2)),
       commissions_seen: commissions.length,
+      plan_fee_reconciled: planFeeReconciled,
+      plan_fee_still_pending: planFeeStillPending,
     })
   } catch (e) {
     console.error('[daily-release-funds] exception:', (e as Error).message)

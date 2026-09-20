@@ -19,6 +19,7 @@ const BottomNavBar = lazy(() => import('./components/BottomNavBar'));
 const CookieBanner = lazy(() => import('./components/CookieBanner'));
 const PwaUpdatePrompt = lazy(() => import('./components/PwaUpdatePrompt'));
 const RequirePermission = lazy(() => import('./components/RequirePermission'));
+const PlanFeeGateModal = lazy(() => import('./components/PlanFeeGateModal'));
 
 // Páginas internas (autenticadas) — lazy. Landing page é a única rota "/"
 // do domínio de marketing (coreohub.com), então fica eager: visitante da
@@ -314,6 +315,13 @@ const PrivateLayout: React.FC<{
               é a única puramente promocional, então é ela que cede espaço
               (nunca compete por atenção com impersonation/demo/email). */}
           <InstallAppBanner suppressed={anyStatusBannerActive} />
+          {/* Gate obrigatório de taxa fixa de plano (Essencial/Escala) não
+              paga — decisão de produto 2026-09-20. Renderiza via
+              createPortal(document.body) dentro do próprio componente, então
+              fica fora do fluxo visual daqui — só precisa estar montado.
+              Suprimido durante impersonation (ação financeira real não deve
+              disparar em nome de outro produtor fora da sessão dele). */}
+          <PlanFeeGateModal producerId={profile.id} suppressed={isImpersonating} />
           <div className="p-3 lg:p-4">
             <Suspense fallback={<PageLoader />}>
               {children}
