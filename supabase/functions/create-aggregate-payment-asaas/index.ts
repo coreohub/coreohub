@@ -18,6 +18,7 @@ type RegistrationRow = {
   status_pagamento:      string
   payment_group_id:      string | null
   mod_fee:               number | null
+  created_at:            string
   // Schema atual usa formato_participacao / tipo_apresentacao. Colunas
   // antigas (formacao/modalidade) sumiram em renames — não selecionamos
   // mais (select com coluna inexistente quebra a query inteira).
@@ -97,7 +98,7 @@ Deno.serve(async (req) => {
         id, user_id, event_id,
         nome_coreografia, formato_participacao, tipo_apresentacao,
         mod_fee, status_pagamento, payment_group_id,
-        bailarinos_detalhes
+        bailarinos_detalhes, created_at
       `)
       .in('id', registration_ids)
 
@@ -241,7 +242,30 @@ Deno.serve(async (req) => {
     }
     const priced: Priced[] = []
 
-    for (const r of regs) {
+    // PROGRESSIVE_PER_DANCER — contador de posição por bailarino que
+    // sobrevive ao LOTE INTEIRO desta fatura, não só a 1 registration.
+    // count_dancer_paid_registrations só enxerga coreografias JÁ APROVADAS
+    // — sem isso, 2 coreografias do MESMO bailarino ainda PENDENTES (cenário
+    // real: inscrito cadastra tudo e paga 1x no fim) eram cobradas as duas
+    // como 1ª faixa (achado real 2026-09-20, Tamoios: "Pagar Tudo" cobrava
+    // 20+20 em vez de 20+15). Seed vem da RPC (histórico já aprovado),
+    // depois incrementa conforme processa os registros desta fatura em
+    // ordem de criação — qualquer formação consome 1 posição pro bailarino
+    // (mesmo escopo sem filtro de formação que a própria RPC já usa),
+    // mesmo que só PROGRESSIVE_PER_DANCER realmente precifique pela faixa.
+    const todosElencoIds = Array.from(new Set(
+      regs.flatMap(r => Array.isArray(r.bailarinos_detalhes) ? r.bailarinos_detalhes.map((b: any) => b?.id).filter(Boolean) : [])
+    ))
+    const posicaoAtualPorElenco = new Map<string, number>()
+    if (todosElencoIds.length > 0) {
+      const { data: countsIniciais, error: countErr } = await supabase
+        .rpc('count_dancer_paid_registrations', { p_event_id: event_id, p_elenco_ids: todosElencoIds })
+      if (countErr) console.error('[create-aggregate-payment-asaas] count_dancer_paid_registrations falhou:', countErr.message)
+      for (const c of (countsIniciais ?? [])) posicaoAtualPorElenco.set(c.elenco_id, c.qtd ?? 0)
+    }
+    const regsOrdenados = [...regs].sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''))
+
+    for (const r of regsOrdenados) {
       const formacaoNome = pickFormacao(r)
       const formatoConfig = formacaoNome
         ? formatosCfg.find((f: any) => f.nome?.toLowerCase() === formacaoNome.toLowerCase())
@@ -286,15 +310,17 @@ Deno.serve(async (req) => {
       }
 
       // PROGRESSIVE_PER_DANCER: preço cai conforme o MESMO bailarino acumula
-      // coreografias PAGAS no evento (espelha create-payment-asaas linha
-      // ~139) — sem isso, quem paga via "Pagar Tudo" era cobrado sempre pelo
-      // valor cheio da 1ª faixa, nunca recebendo o desconto por posição.
+      // coreografias no evento (espelha create-payment-asaas linha ~139) —
+      // posição vem do contador da fatura inteira (posicaoAtualPorElenco),
+      // não de uma RPC isolada por registro, pra reconhecer irmãs ainda
+      // PENDENTES sendo pagas juntas nesta mesma fatura.
+      const elencoIds: string[] = Array.isArray((r as any).bailarinos_detalhes)
+        ? (r as any).bailarinos_detalhes.map((b: any) => b?.id).filter(Boolean)
+        : []
+
       if (pricingType === 'PROGRESSIVE_PER_DANCER') {
         const tiers: { ordem: number; valor: number; repete?: boolean }[] =
           Array.isArray(formacaoEscolhida?.progressive_tiers) ? formacaoEscolhida.progressive_tiers : []
-        const elencoIds: string[] = Array.isArray((r as any).bailarinos_detalhes)
-          ? (r as any).bailarinos_detalhes.map((b: any) => b?.id).filter(Boolean)
-          : []
 
         const tierForOrdem = (ordem: number) => {
           const exact = tiers.find(t => t.ordem === ordem)
@@ -308,16 +334,19 @@ Deno.serve(async (req) => {
         if (elencoIds.length === 0) {
           baseFee = tierForOrdem(1)
         } else {
-          const { data: counts, error: countErr } = await supabase
-            .rpc('count_dancer_paid_registrations', { p_event_id: r.event_id, p_elenco_ids: elencoIds })
-          if (countErr) console.error('[create-aggregate-payment-asaas] count_dancer_paid_registrations falhou:', countErr.message)
-          const countByElenco = new Map<string, number>((counts ?? []).map((c: any) => [c.elenco_id, c.qtd ?? 0]))
           baseFee = elencoIds.reduce((sum: number, id: string) => {
-            const jaTinha = countByElenco.get(id) ?? 0
+            const jaTinha = posicaoAtualPorElenco.get(id) ?? 0
             return sum + tierForOrdem(jaTinha + 1)
           }, 0)
         }
         baseFee = parseFloat(baseFee.toFixed(2))
+      }
+
+      // Qualquer formação consome 1 posição pro bailarino nesta fatura —
+      // mesmo escopo sem filtro de pricing_type que count_dancer_paid_registrations
+      // já usa pra coreografias historicamente aprovadas.
+      for (const id of elencoIds) {
+        posicaoAtualPorElenco.set(id, (posicaoAtualPorElenco.get(id) ?? 0) + 1)
       }
 
       // baseFee=0 é válido quando a formação foi explicitamente configurada
