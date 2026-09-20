@@ -863,14 +863,41 @@ const MinhasCoreografias = () => {
     setPayingEvent(grupo.eventId);
     setError(null);
     try {
-      // Se já existe fatura agregada PENDENTE pra esse evento, abre a URL existente.
-      if (grupo.payment?.payment_url) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada. Faça login novamente.');
+
+      // Se já existe fatura agregada PENDENTE pra esse evento, só reusa a URL
+      // se ela cobrir TODAS as coreografias pendentes atuais. Se o inscrito
+      // criou uma inscrição nova (ou cancelou/mudou algo) depois da fatura ter
+      // sido gerada, a fatura antiga ficou desatualizada — reusá-la deixaria a
+      // coreografia nova de fora silenciosamente, cobrando um valor menor do
+      // que o "N coreografias em 1 PIX" mostrado na tela promete. Bug real
+      // reportado pela Daniele/Tamoios 2026-09-20: "saiu por R$20 duas
+      // inscrições" — a 2ª nunca entrou na fatura reaproveitada.
+      const faturaCobreTudo = !!grupo.payment?.id &&
+        grupo.pendentes.every(r => r.payment_group_id === grupo.payment!.id);
+      if (faturaCobreTudo && grupo.payment?.payment_url) {
         window.location.href = grupo.payment.payment_url;
         return;
       }
-
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Sessão expirada. Faça login novamente.');
+      if (grupo.payment?.id && !faturaCobreTudo) {
+        try {
+          await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cancel-aggregate-payment`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type':  'application/json',
+              },
+              body: JSON.stringify({ payment_id: grupo.payment.id }),
+            }
+          );
+        } catch (cancelErr) {
+          console.warn('[pagar tudo] falha cancelar fatura desatualizada:', (cancelErr as Error).message);
+          // Não bloqueia — segue pra gerar fatura nova mesmo assim.
+        }
+      }
 
       const body: Record<string, any> = {
         event_id:         grupo.eventId,
