@@ -185,13 +185,16 @@ const SuperAdmin = () => {
           { data: evs },
           inviteList,
           { data: unattribProfs },
-          { data: lastSignIns },
         ] = await Promise.all([
           supabase.from('platform_commissions')
             .select('*')
             .order('created_at', { ascending: false }),
+          // producer_last_login_at: gravado por App.tsx no SIGNED_IN real —
+          // imune ao impersonate ("Ver como"), que também dispara SIGNED_IN
+          // pro usuário alvo mas nunca escreve nessa coluna (ver App.tsx +
+          // services/impersonateService.ts). Coluna normal, sem RPC.
           supabase.from('profiles')
-            .select('id, full_name, email, is_blocked, asaas_subconta_id, asaas_kyc_status, asaas_onboarding_url'),
+            .select('id, full_name, email, is_blocked, asaas_subconta_id, asaas_kyc_status, asaas_onboarding_url, producer_last_login_at'),
           supabase.from('events')
             .select('id, name, slug, created_by, start_date, event_type, commission_type, commission_percent, commission_fixed, fee_mode, is_public, is_demo, acesso_liberado_nota, setup_fee_paid_at, setup_fee_grandfathered, setup_fee_tier_chave, setup_fee_amount_paid, billing_plan, billing_plan_fixed_fee_paid_at, billing_plan_fee_deduction_transfer_id, billing_settlement_closed_at')
             .order('start_date', { ascending: false }),
@@ -203,10 +206,6 @@ const SuperAdmin = () => {
             .select('created_at, entry_source')
             .is('entry_event_id', null)
             .neq('role', 'COREOHUB_ADMIN'),
-          // Último login (auth.users.last_sign_in_at) via RPC — PostgREST
-          // nunca expõe o schema auth direto. Best-effort: se falhar (ex.
-          // 2FA ainda não confirmada), segue sem essa coluna.
-          supabase.rpc('get_producers_last_sign_in'),
         ]);
 
         // Bloco 1: agrega métricas de leads sem atribuição.
@@ -249,11 +248,6 @@ const SuperAdmin = () => {
           commissionByProducer.set(c.producer_id, (commissionByProducer.get(c.producer_id) ?? 0) + Number(c.commission_amount ?? 0));
         }
 
-        const lastSignInById = new Map<string, string | null>();
-        for (const row of (lastSignIns ?? []) as Array<{ id: string; last_sign_in_at: string | null }>) {
-          lastSignInById.set(row.id, row.last_sign_in_at);
-        }
-
         // Só exibe produtores que têm evento OU subconta Asaas configurada
         const enriched = (profs ?? [])
           .filter(p => eventsByProducer.has(p.id) || p.asaas_subconta_id)
@@ -268,7 +262,7 @@ const SuperAdmin = () => {
             events_count:      eventsByProducer.get(p.id) ?? 0,
             total_gross:       grossByProducer.get(p.id) ?? 0,
             total_commission:  commissionByProducer.get(p.id) ?? 0,
-            last_sign_in_at:   lastSignInById.get(p.id) ?? null,
+            last_sign_in_at:   (p as any).producer_last_login_at ?? null,
           }))
           .sort((a, b) => b.total_commission - a.total_commission);
         setProducers(enriched);

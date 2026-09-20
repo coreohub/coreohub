@@ -43,6 +43,22 @@ export async function startImpersonate(
     }),
   );
 
+  const ctx: ImpersonationContext = {
+    target_id: target.id,
+    target_email: target.email,
+    target_name: target.full_name,
+    target_role: target.role,
+    started_at: new Date().toISOString(),
+  };
+  // IMPORTANTE: grava a flag ANTES do verifyOtp, não depois. O evento
+  // SIGNED_IN do listener global (App.tsx) dispara DE DENTRO da chamada
+  // verifyOtp (síncrono ao setSession interno do supabase-js) — se a flag
+  // só fosse setada depois do await retornar, o listener já teria rodado
+  // sem ela, gravando profiles.producer_last_login_at do ALVO como se
+  // fosse login real dele. Isso quebraria a proteção contra impersonate
+  // inflar o "Último acesso" no /super-admin.
+  localStorage.setItem(IMPERSONATING_KEY, JSON.stringify(ctx));
+
   // Troca o hashed_token (gerado via admin.generateLink no backend) pelo
   // session do target. supabase-js v2 espera 'token_hash' (não 'token')
   // pra hash de magic link admin-generated. Formato com 'token' é só pra
@@ -53,17 +69,10 @@ export async function startImpersonate(
   });
   if (verifyErr) {
     localStorage.removeItem(ORIGINAL_SESSION_KEY);
+    localStorage.removeItem(IMPERSONATING_KEY);
     throw verifyErr;
   }
 
-  const ctx: ImpersonationContext = {
-    target_id: target.id,
-    target_email: target.email,
-    target_name: target.full_name,
-    target_role: target.role,
-    started_at: new Date().toISOString(),
-  };
-  localStorage.setItem(IMPERSONATING_KEY, JSON.stringify(ctx));
   return ctx;
 }
 

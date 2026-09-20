@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { UserRole, Profile as UserProfile } from './types';
 import { identifyUser, trackAppPageView } from './services/appAnalytics';
 import { trackPageView } from './services/analytics';
+import { isImpersonating as isImpersonatingSession } from './services/impersonateService';
 // Chrome do app autenticado (Sidebar/Header/BottomNavBar/banners) — lazy.
 // Vários desses componentes importam 'motion' e/ou o cliente Supabase
 // (Header, BottomNavBar, DemoBanner, EmailVerifyBanner…); eager aqui forçava
@@ -593,6 +594,21 @@ const App: React.FC = () => {
                 if (event !== 'TOKEN_REFRESHED') {
                   setActiveRole(userProfile.role);
                 }
+              }
+              // "Último acesso" (/super-admin) — grava só em login REAL, nunca
+              // no verifyOtp do impersonate ("Ver como"), que também dispara
+              // SIGNED_IN pro usuário alvo. isImpersonatingSession() lê a flag
+              // gravada em localStorage ANTES do verifyOtp do impersonate
+              // (services/impersonateService.ts) — sem essa ordem, o "Ver
+              // como" sobrescreveria o último acesso real do produtor.
+              if (event === 'SIGNED_IN' && !isImpersonatingSession()) {
+                supabase
+                  .from('profiles')
+                  .update({ producer_last_login_at: new Date().toISOString() })
+                  .eq('id', session.user.id)
+                  .then(({ error }) => {
+                    if (error) console.error('[auth] falha ao gravar producer_last_login_at:', error.message);
+                  });
               }
             } catch (err) {
               console.error('[auth] erro ao carregar perfil:', err);
