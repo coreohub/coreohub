@@ -175,7 +175,7 @@ Deno.serve(async (req) => {
     const [{ data: inscritoProfile }, { data: event }, { data: config }] = await Promise.all([
       supabase.from('profiles').select('full_name, email, cpf_cnpj').eq('id', user.id).single(),
       supabase.from('events')
-        .select('id, name, created_by, commission_percent, commission_type, formacoes_config, fee_mode, event_type')
+        .select('id, name, created_by, commission_percent, commission_type, formacoes_config, fee_mode, event_type, absorve_taxa_baixo_valor')
         .eq('id', event_id).single(),
       supabase.from('configuracoes')
         .select('event_id, formatos_precos, prazo_inscricao')
@@ -459,15 +459,41 @@ Deno.serve(async (req) => {
       discountTotal = totalDiscount
     }
 
-    const valueTotal      = parseFloat(priced.reduce((s, p) => s + p.charged,    0).toFixed(2))
-    const producerTotal   = parseFloat(priced.reduce((s, p) => s + p.producer,   0).toFixed(2))
-    const commissionTotal = parseFloat(priced.reduce((s, p) => s + p.commission, 0).toFixed(2))
+    const valueTotal        = parseFloat(priced.reduce((s, p) => s + p.charged,    0).toFixed(2))
+    let   producerTotal     = parseFloat(priced.reduce((s, p) => s + p.producer,   0).toFixed(2))
+    let   commissionTotal   = parseFloat(priced.reduce((s, p) => s + p.commission, 0).toFixed(2))
 
     console.log(
       `[create-aggregate-payment-asaas] user=${user.id} event=${event_id} N=${priced.length}` +
       ` valueTotal=${valueTotal} producerTotal=${producerTotal} commissionTotal=${commissionTotal} mode=${feeMode}` +
       (validatedCoupon ? ` coupon=${validatedCoupon.code} discount=${discountTotal}` : '')
     )
+
+    // ── 5b-bis. Absorção de taxa em fatura de baixo valor (evento com flag) ──
+    // Mesmo mecanismo do create-payment-asaas (fluxo single) ── 6a, agora
+    // também pro carrinho agregado ("Pagar Tudo"). A Asaas exige uma margem
+    // mínima no split (~R$1,99 a R$3+, confirmado empiricamente 2026-09-16)
+    // — sem isso, qualquer fatura com comissão total abaixo do piso quebra
+    // com "valor total do Split excede o valor a receber da cobrança" (achado
+    // real 2026-09-20, Tamoios: "Pagar Tudo" de R$35 com 5% de comissão
+    // rejeitado pela Asaas — ver memory/pacote_progressivo_bugs_reais_shipado_2026_09_20.md).
+    // Cobrança sai sem split nenhum: inscrito paga o valor cheio, 100% cai
+    // na master, e uma transferência interna (low_value_transfers +
+    // release-low-value-transfers) manda o valor integral pra produtora
+    // depois da janela de segurança. Escopo: só eventos com a flag.
+    const LOW_VALUE_SPLIT_FLOOR = 3.00
+    const useNoSplitAbsorb = Boolean((event as any).absorve_taxa_baixo_valor)
+      && commissionTotal < LOW_VALUE_SPLIT_FLOOR
+      && valueTotal > 0
+
+    if (useNoSplitAbsorb) {
+      producerTotal   = valueTotal
+      commissionTotal = 0
+      console.log(
+        `[create-aggregate-payment-asaas] fatura de baixo valor SEM SPLIT — absorção de taxa` +
+        ` (valueTotal=${valueTotal} producerTotal=${producerTotal} commissionTotal=0)`
+      )
+    }
 
     // ── 5c. Carrinho gratuito (valueTotal === 0) — aprova direto, sem Asaas ──
     // Evento com todas as formações a R$0 (contrato fechado com a CoreoHub,
@@ -646,16 +672,21 @@ Deno.serve(async (req) => {
       ? `${priced.length} coreografia(s): ${descricaoCoreos} | ${event.name}`
       : `${priced.length} coreografias: ${descricaoCoreos}... | ${event.name}`
 
-    const basePayload = {
+    const basePayload: Record<string, unknown> = {
       customer:          customerId,
       billingType:       'UNDEFINED',
       value:             valueTotal,
       dueDate:           dueDateStr,
       description,
       externalReference: `AGG:${paymentId}`,
-      split: [
+    }
+    // Item de baixo valor em evento com absorção de taxa: sem split nenhum —
+    // 100% cai na master, repasse integral sai depois via transferência
+    // interna (ver low_value_transfers + release-low-value-transfers).
+    if (!useNoSplitAbsorb) {
+      basePayload.split = [
         { walletId: producer.asaas_wallet_id, fixedValue: producerTotal },
-      ],
+      ]
     }
     const callbackPayload = {
       successUrl:   `${ALLOWED_ORIGIN}/pagamento-sucesso?ref=${encodeURIComponent(paymentId)}`,
@@ -706,6 +737,27 @@ Deno.serve(async (req) => {
       .eq('id', paymentId)
     if (updPayErr) {
       console.warn('[create-aggregate-payment-asaas] update payment parcial:', updPayErr.message)
+    }
+
+    // ── 10a. Rastreio de repasse integral (sem split) ────────────────────────
+    // Mesmo padrão do create-payment-asaas ── 10a, referenciando o payment
+    // agregado (payment_group_id) em vez de 1 registration_id só — 1 linha
+    // cobre a fatura inteira, não 1 por coreografia.
+    if (useNoSplitAbsorb) {
+      const { error: lvtErr } = await supabase
+        .from('low_value_transfers')
+        .insert({
+          event_id:           event_id,
+          payment_group_id:   paymentId,
+          producer_id:        event.created_by,
+          producer_wallet_id: producer.asaas_wallet_id,
+          value:              producerTotal,
+          asaas_payment_id:   String(payData.id),
+          status:             'aguardando_pagamento',
+        })
+      if (lvtErr) {
+        console.error('[create-aggregate-payment-asaas] erro ao criar low_value_transfers:', lvtErr.message)
+      }
     }
 
     // Também espelha a url/preference no registrations (UI existente lê dali pra

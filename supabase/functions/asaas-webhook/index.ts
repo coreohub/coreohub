@@ -878,6 +878,31 @@ async function handleAggregatePayment(opts: {
     })
   }
 
+  // Item de baixo valor em evento com absorção de taxa (ver
+  // create-aggregate-payment-asaas ── 5b-bis): fatura sem split, sem
+  // comissão pra registrar. Só confirma a linha de rastreio e agenda a
+  // janela de segurança antes da transferência integral sair (mesmo
+  // princípio do fluxo single, ver handleSingle acima ~linha 1847).
+  const { data: lvt } = await supabase
+    .from('low_value_transfers')
+    .select('id, status')
+    .eq('asaas_payment_id', String(payment.id))
+    .maybeSingle()
+
+  if (lvt && lvt.status === 'aguardando_pagamento') {
+    const safetyReleaseAt = computeReleaseAt(paidAtReal)
+    const { error: lvtUpdErr } = await supabase
+      .from('low_value_transfers')
+      .update({ status: 'aguardando_janela', safety_release_at: safetyReleaseAt, updated_at: new Date().toISOString() })
+      .eq('id', lvt.id)
+    if (lvtUpdErr) {
+      console.error('[asaas-webhook][aggregate][low_value_transfer] erro ao confirmar pagamento:', lvtUpdErr.message)
+    } else {
+      console.log(`[asaas-webhook][aggregate][low_value_transfer] confirmado id=${lvt.id} release_at=${safetyReleaseAt}`)
+    }
+  }
+  const isLowValueNoSplit = Boolean(lvt)
+
   // ── APROVADO: inserir N rows em platform_commissions ─────────────────────
   // A6 (audit): distribuição PROPORCIONAL ao charged_amount snapshot.
   // Se a inscrição não tem snapshot (legacy), cai no fallback uniforme.
@@ -901,37 +926,12 @@ async function handleAggregatePayment(opts: {
   const hasFullSnapshot = sumCharged > 0 &&
     registrations.every((r: any) => r.charged_amount != null && Number(r.charged_amount) > 0)
 
-  const commissionRows = registrations.map((r: any) => {
-    let grossR: number, commR: number, prodR: number
-    if (hasFullSnapshot) {
-      const ratio = Number(r.charged_amount) / sumCharged
-      grossR = parseFloat((grossTotal       * ratio).toFixed(2))
-      commR  = parseFloat((commissionTotal  * ratio).toFixed(2))
-      prodR  = parseFloat((producerTotalRow * ratio).toFixed(2))
-    } else {
-      // Fallback uniforme pra payments criados antes da migration de
-      // 2026-05-31 (sem charged_amount snapshot).
-      grossR = parseFloat((grossTotal       / n).toFixed(2))
-      commR  = parseFloat((commissionTotal  / n).toFixed(2))
-      prodR  = parseFloat((producerTotalRow / n).toFixed(2))
-    }
-    return {
-      registration_id:   r.id,
-      event_id:          r.event_id,
-      producer_id:       eventData?.created_by ?? null,
-      gross_amount:      grossR,
-      commission_amount: commR,
-      net_amount:        prodR,
-      asaas_payment_id:  String(payment.id),
-      commission_type:   eventData?.commission_type ?? 'percent',
-      kind:              'registration',  // carrinho = inscrição cheia
-      release_at:        computeReleaseAt(paidAtReal),
-    }
-  })
-  // Para o email consolidado abaixo, mantemos referência ao gross por reg.
+  // gross por registration sempre calculado (email consolidado + valor_pago),
+  // independente de ser item de baixo valor sem split.
   const grossPerReg: Record<string, number> = {}
-  commissionRows.forEach((row, i) => {
-    grossPerReg[registrations[i].id] = row.gross_amount
+  registrations.forEach((r: any) => {
+    const ratio = hasFullSnapshot ? Number(r.charged_amount) / sumCharged : 1 / n
+    grossPerReg[r.id] = parseFloat((grossTotal * ratio).toFixed(2))
   })
   // Atualiza valor_pago em cada registration com o gross proporcional, pra
   // queries de relatório lerem direto da coluna.
@@ -942,23 +942,63 @@ async function handleAggregatePayment(opts: {
       .eq('id', r.id)
   }
 
-  // A7 (audit): upsert idempotente. Unique constraint
-  // (asaas_payment_id, registration_id) garante que retry de webhook não
-  // duplica rows mesmo se idempotency outer falhar por timing.
-  const { error: commErr } = await supabase
-    .from('platform_commissions')
-    .upsert(commissionRows, { onConflict: 'asaas_payment_id,registration_id', ignoreDuplicates: true })
-  if (commErr) {
-    console.error('[asaas-webhook][aggregate] erro inserir comissões:', commErr.message)
+  // Item de baixo valor sem split: dinheiro NUNCA passa pela subconta do
+  // produtor (fica 100% na master até a transferência interna sair via
+  // low_value_transfers) — inserir platform_commissions aqui faria o D+7
+  // (daily-release-funds) achar que há saldo pra liberar na subconta que na
+  // verdade não existe lá, duplicando o valor no ProducerBalanceCard. Email
+  // de confirmação continua saindo normal logo abaixo — só a comissão que
+  // não é registrada.
+  if (!isLowValueNoSplit) {
+    const commissionRows = registrations.map((r: any) => {
+      let commR: number, prodR: number
+      if (hasFullSnapshot) {
+        const ratio = Number(r.charged_amount) / sumCharged
+        commR  = parseFloat((commissionTotal  * ratio).toFixed(2))
+        prodR  = parseFloat((producerTotalRow * ratio).toFixed(2))
+      } else {
+        // Fallback uniforme pra payments criados antes da migration de
+        // 2026-05-31 (sem charged_amount snapshot).
+        commR  = parseFloat((commissionTotal  / n).toFixed(2))
+        prodR  = parseFloat((producerTotalRow / n).toFixed(2))
+      }
+      return {
+        registration_id:   r.id,
+        event_id:          r.event_id,
+        producer_id:       eventData?.created_by ?? null,
+        gross_amount:      grossPerReg[r.id] ?? 0,
+        commission_amount: commR,
+        net_amount:        prodR,
+        asaas_payment_id:  String(payment.id),
+        commission_type:   eventData?.commission_type ?? 'percent',
+        kind:              'registration',  // carrinho = inscrição cheia
+        release_at:        computeReleaseAt(paidAtReal),
+      }
+    })
+
+    // A7 (audit): upsert idempotente. Unique constraint
+    // (asaas_payment_id, registration_id) garante que retry de webhook não
+    // duplica rows mesmo se idempotency outer falhar por timing.
+    const { error: commErr } = await supabase
+      .from('platform_commissions')
+      .upsert(commissionRows, { onConflict: 'asaas_payment_id,registration_id', ignoreDuplicates: true })
+    if (commErr) {
+      console.error('[asaas-webhook][aggregate] erro inserir comissões:', commErr.message)
+    } else {
+      console.log(
+        `[asaas-webhook][aggregate] APROVADO payment=${paymentId} N=${n}` +
+        ` bruto=R$${grossTotal} comissao=R$${commissionTotal} produtor=R$${producerTotalRow}`
+      )
+      await notifySuperAdmins(supabase, {
+        eventId: paymentRow.event_id, producerId: eventData?.created_by, eventName: eventData?.name,
+        grossAmount: grossTotal, kind: 'aggregate',
+      })
+    }
   } else {
     console.log(
-      `[asaas-webhook][aggregate] APROVADO payment=${paymentId} N=${n}` +
-      ` bruto=R$${grossTotal} comissao=R$${commissionTotal} produtor=R$${producerTotalRow}`
+      `[asaas-webhook][aggregate] payment=${paymentId} item de baixo valor SEM SPLIT —` +
+      ` comissão não registrada, repasse integral via low_value_transfers`
     )
-    await notifySuperAdmins(supabase, {
-      eventId: paymentRow.event_id, producerId: eventData?.created_by, eventName: eventData?.name,
-      grossAmount: grossTotal, kind: 'aggregate',
-    })
   }
 
   // ── Emails de confirmação ──────────────────────────────────────────────

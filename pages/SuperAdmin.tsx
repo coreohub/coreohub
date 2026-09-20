@@ -49,7 +49,7 @@ interface EventRow {
   created_by: string | null;
   start_date: string | null;
   event_type: 'private' | 'government' | null;
-  commission_type: 'PERCENT' | 'FIXED' | null;
+  commission_type: 'percent' | 'fixed' | null;
   commission_percent: number | null;
   commission_fixed: number | null;
   fee_mode: 'repassar' | 'absorver' | null;
@@ -1059,7 +1059,7 @@ const SuperAdmin = () => {
                                 </span>
                               ) : (
                                 <span className="text-slate-700 dark:text-slate-300">
-                                  {ev.commission_type === 'FIXED'
+                                  {ev.commission_type === 'fixed'
                                     ? `R$ ${Number(ev.commission_fixed ?? 0).toFixed(2)}`
                                     : `${Number(ev.commission_percent ?? 0)}%`
                                   }
@@ -1426,7 +1426,14 @@ const EventCommissionModal: React.FC<{
   onClose: () => void;
   onSave: (patch: Partial<EventRow>) => void;
 }> = ({ event, onClose, onSave }) => {
-  const [type, setType]         = useState<'PERCENT' | 'FIXED'>(event.commission_type ?? 'PERCENT');
+  // Literais minúsculos batendo com o que o banco sempre guarda em
+  // commission_type ('percent'/'fixed') — antes eram 'PERCENT'/'FIXED'
+  // maiúsculo, e como o valor lido do banco já vem minúsculo, a comparação
+  // `type === 'PERCENT'` no save nunca batia e zerava commission_percent
+  // silenciosamente (bug real, ver memory/backlog_fix_commission_type_case_sensitivity.md).
+  const [type, setType]         = useState<'percent' | 'fixed'>(
+    (event.commission_type ?? 'percent').toLowerCase() as 'percent' | 'fixed'
+  );
   const [percent, setPercent]   = useState<number>(Number(event.commission_percent ?? 10));
   const [fixed, setFixed]       = useState<number>(Number(event.commission_fixed ?? 0));
   const [feeMode, setFeeMode]   = useState<'repassar' | 'absorver'>(event.fee_mode ?? 'repassar');
@@ -1500,7 +1507,7 @@ const EventCommissionModal: React.FC<{
           <div>
             <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Modelo</label>
             <div className="grid grid-cols-2 gap-2">
-              {(['PERCENT','FIXED'] as const).map(t => (
+              {(['percent','fixed'] as const).map(t => (
                 <button
                   key={t}
                   onClick={() => setType(t)}
@@ -1510,14 +1517,14 @@ const EventCommissionModal: React.FC<{
                       : 'bg-slate-50 dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'
                   }`}
                 >
-                  {t === 'PERCENT' ? 'Percentual' : 'Valor Fixo'}
+                  {t === 'percent' ? 'Percentual' : 'Valor Fixo'}
                 </button>
               ))}
             </div>
           </div>
 
           {/* Valor */}
-          {type === 'PERCENT' ? (
+          {type === 'percent' ? (
             <div>
               <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Percentual (%)</label>
               <input
@@ -1649,8 +1656,8 @@ const EventCommissionModal: React.FC<{
           <button
             onClick={() => onSave({
               commission_type:    type,
-              commission_percent: billingPlan !== event.billing_plan ? BILLING_PLAN_COMMISSION[billingPlan] : (type === 'PERCENT' ? percent : 0),
-              commission_fixed:   type === 'FIXED'   ? fixed   : 0,
+              commission_percent: billingPlan !== event.billing_plan ? BILLING_PLAN_COMMISSION[billingPlan] : (type === 'percent' ? percent : 0),
+              commission_fixed:   type === 'fixed'    ? fixed   : 0,
               fee_mode:           feeMode,
               event_type:         eventType,
               acesso_liberado_nota: nota,

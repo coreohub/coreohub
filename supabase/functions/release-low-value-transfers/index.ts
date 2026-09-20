@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
     // ── 2) Cria transferência pra linhas que já passaram da janela ──────
     const { data: ready, error: readyErr } = await supabase
       .from('low_value_transfers')
-      .select('id, value, producer_wallet_id, registration_id')
+      .select('id, value, producer_wallet_id, registration_id, payment_group_id')
       .eq('status', 'aguardando_janela')
       .lte('safety_release_at', new Date().toISOString())
 
@@ -123,12 +123,17 @@ Deno.serve(async (req) => {
         console.warn(`[release-low-value-transfers] ASAAS_TRANSFER_API_KEY ausente — ${ready.length} transferências pendentes de config`)
       } else {
         for (const row of ready) {
+          // Fatura agregada ("Pagar Tudo") referencia payment_group_id em vez
+          // de 1 registration_id só (ver 20260920b_low_value_transfers_aggregate.sql).
+          const label = row.registration_id
+            ? `inscrição ${row.registration_id}`
+            : `fatura agregada ${row.payment_group_id}`
           const result = await transferToWallet({
             transferApiKey,
             asaasBaseUrl,
             walletId:    row.producer_wallet_id as string,
             value:       Number(row.value),
-            description: `CoreoHub — repasse integral (inscrição ${row.registration_id})`,
+            description: `CoreoHub — repasse integral (${label})`,
           })
 
           if (result.ok) {
