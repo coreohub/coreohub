@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import SystemErrorBanner from '../components/SystemErrorBanner';
@@ -580,10 +580,19 @@ const MinhasCoreografias = () => {
      ACTIONS
   ══════════════════════════════════════════════════════════ */
 
+  // Guarda a ação de pagamento que estava em andamento quando o modal de CPF
+  // abriu, pra retomar sozinha depois que o pagador confirma/salva — sem
+  // isso, o pagador precisava clicar "Pagar Tudo"/"Pagar Só Esta" 2x na 1ª
+  // compra (achado real testando o fix de baixo valor da Tamoios, 2026-09-20).
+  const cpfPendingActionRef = useRef<(() => void) | null>(null);
+
   /** Valida CPF antes de pagar. Sempre consulta fresh do banco (não usa
    *  estado cacheado) porque o produtor pode ter completado o perfil em
-   *  outra aba/sessão. Evita falso-positivo após UPDATE direto no banco. */
-  const requireCpf = async (): Promise<boolean> => {
+   *  outra aba/sessão. Evita falso-positivo após UPDATE direto no banco.
+   *  `onConfirmed` (opcional) é a própria ação de pagamento que chamou isto —
+   *  retomada sozinha por handleSaveCpfFromModal quando o modal fecha com
+   *  sucesso, sem exigir um 2º clique do pagador. */
+  const requireCpf = async (onConfirmed?: () => void): Promise<boolean> => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       navigate('/auth');
@@ -611,6 +620,7 @@ const MinhasCoreografias = () => {
       // (Modal contextual de 1 campo, padrão Stripe/Sympla — refator 2026-05-25.)
       setCpfDraft(cpf ? maskCpfCnpj(cpf) : '');
       setCpfError(null);
+      cpfPendingActionRef.current = onConfirmed ?? null;
       setCpfModalOpen(true);
       return false;
     }
@@ -646,6 +656,11 @@ const MinhasCoreografias = () => {
       // compras (a captura automática do wizard já foi revisada por um humano).
       try { localStorage.setItem(`coreohub_cpf_confirmado_${user.id}`, '1'); } catch { /* noop */ }
       setCpfModalOpen(false);
+      // Retoma sozinho a ação de pagamento que abriu este modal (Pagar Tudo/
+      // Pagar Só Esta/Pagar Taxa) — sem isso o pagador precisava clicar 2x.
+      const pending = cpfPendingActionRef.current;
+      cpfPendingActionRef.current = null;
+      pending?.();
     } catch (e: any) {
       setCpfError(e.message ?? 'Erro ao salvar CPF.');
     } finally {
@@ -843,7 +858,7 @@ const MinhasCoreografias = () => {
 
   const handlePagarAgregado = async (grupo: Grupo) => {
     if (!(await requireFullName())) return;
-    if (!(await requireCpf())) return;
+    if (!(await requireCpf(() => handlePagarAgregado(grupo)))) return;
     if (grupo.pendentes.length === 0) return;
     setPayingEvent(grupo.eventId);
     setError(null);
@@ -904,7 +919,7 @@ const MinhasCoreografias = () => {
 
   const handlePagarSingle = async (reg: Registration) => {
     if (!(await requireFullName())) return;
-    if (!(await requireCpf())) return;
+    if (!(await requireCpf(() => handlePagarSingle(reg)))) return;
     // Se a registration já tem payment_url (gerada anteriormente — ou pelo
     // create-payment-asaas legacy, ou pela create-aggregate), reusa.
     if (reg.payment_url) {
@@ -959,7 +974,7 @@ const MinhasCoreografias = () => {
   // refactor "Minhas Inscrições" (2026-05-19) — uma página única.
   const handlePagarTaxa = async (reg: Registration, couponCode?: string) => {
     if (!(await requireFullName())) return;
-    if (!(await requireCpf())) return;
+    if (!(await requireCpf(() => handlePagarTaxa(reg, couponCode)))) return;
     setPayingTaxa(reg.id);
     setActionError(p => ({ ...p, [reg.id]: '' }));
     try {
