@@ -28,6 +28,23 @@ const Auth = () => {
     } catch { /* noop */ }
   }, [navigate]);
 
+  // iOS Safari bfcache: trocar de app (WhatsApp/Instagram) durante
+  // "Autenticando..." e voltar restaura a página congelada — o
+  // requestAnimationFrame que a Framer Motion usa pro fade-in fica suspenso
+  // pelo navegador enquanto a página está em bfcache e nem sempre retoma
+  // sozinho ao voltar, deixando a tela "lavada"/piscando em opacidade baixa
+  // (achado real 2026-09-20, produtora Tamoios em iPhone). Mesmo princípio
+  // do fix de spinner travado em MinhasCoreografias.tsx — aqui um reload
+  // completo é mais seguro que tentar reconciliar manualmente o estado de
+  // auth/animação numa tela de login.
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) window.location.reload();
+    };
+    window.addEventListener('pageshow', handlePageShow);
+    return () => window.removeEventListener('pageshow', handlePageShow);
+  }, []);
+
   const [isLoading, setIsLoading] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
