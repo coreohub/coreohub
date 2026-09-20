@@ -33,12 +33,12 @@ const CUSTOM_DOMAIN_SLUGS: Record<string, string> = {
 // NÃO está dentro de <PrivateRoute>). Qualquer coisa fora dessa lista nesse
 // hostname é área logada e ganha noindex.
 const PUBLIC_PATH_PREFIXES = [
-  '/lp', '/termos', '/privacidade', '/governo',
+  '/lp', '/termos', '/privacidade', '/governo', '/espetaculo',
   '/login', '/register', '/judge-login', '/entrar-juri', '/telao',
   '/convite', '/equipe-convite', '/festivais', '/evento', '/produtor',
   '/u', '/meu-ingresso', '/workshop',
   '/meu-workshop',
-  '/validar-certificado', '/criar-evento', '/festival', '/sitemap.xml',
+  '/validar-certificado', '/criar-evento', '/criar-espetaculo', '/festival', '/sitemap.xml',
   // Checkout (ingresso/workshop/pass) NÃO entra aqui de propósito — é
   // conteúdo transacional/thin, ganha X-Robots-Tag: noindex abaixo (achado
   // 2026-09-14, auditoria SEO). Continua 100% acessível, só sai de índice.

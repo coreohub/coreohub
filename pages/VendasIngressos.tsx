@@ -12,10 +12,12 @@ import { createPortal } from 'react-dom';
 import { supabase, resolveActiveEventId } from '../services/supabase';
 import {
   Ticket, Loader2, Search, Download, ExternalLink, CheckCircle2, Clock, XCircle, RotateCcw,
-  Users, DollarSign, AlertCircle, Undo2, X, Store, Copy, QrCode, Printer,
+  Users, DollarSign, AlertCircle, Undo2, X, Store, Copy, QrCode, Printer, Armchair,
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 import VendasTabs from '../components/VendasTabs';
+import SeatGrid from '../components/SeatGrid';
+import { useSeatMap } from '../hooks/useSeatMap';
 import { maskCpfCnpj, unmaskCpfCnpj } from '../utils/masks';
 
 interface TicketTypeConfig {
@@ -99,6 +101,10 @@ const VendasIngressos: React.FC = () => {
   } | null>(null);
   const [pdvCopied, setPdvCopied] = useState(false);
 
+  // Assento numerado (Fase 2 Stage 4) — mini-mapa read-only + seletor no PDV
+  const [seatMapEnabled, setSeatMapEnabled] = useState(false);
+  const [pdvSelectedSeats, setPdvSelectedSeats] = useState<string[]>([]);
+
   const load = async () => {
     setLoading(true);
     setErr(null);
@@ -106,9 +112,10 @@ const VendasIngressos: React.FC = () => {
       const eventId = await resolveActiveEventId();
       if (!eventId) { setErr('Nenhum evento ativo encontrado.'); setLoading(false); return; }
       setEventId(eventId);
-      const { data: ev } = await supabase.from('events').select('name, ingressos_config').eq('id', eventId).maybeSingle();
+      const { data: ev } = await supabase.from('events').select('name, ingressos_config, seat_map_enabled').eq('id', eventId).maybeSingle();
       setEventName(ev?.name ?? '');
       setTicketTypes(Array.isArray(ev?.ingressos_config) ? (ev!.ingressos_config as TicketTypeConfig[]).filter(t => t?.nome) : []);
+      setSeatMapEnabled(Boolean((ev as any)?.seat_map_enabled));
       const { data, error } = await supabase
         .from('audience_tickets')
         .select('*')
@@ -162,6 +169,32 @@ const VendasIngressos: React.FC = () => {
     document.addEventListener('visibilitychange', onFocus);
     return () => document.removeEventListener('visibilitychange', onFocus);
   }, []);
+
+  // ─── Assento numerado: layout (1x) + status (30s parado, 10s com PDV aberto) ─
+  const { rowsConfig, seatStatuses } = useSeatMap({
+    eventId,
+    enabled: seatMapEnabled,
+    pollMs: pdvOpen ? 10_000 : 30_000,
+  });
+
+  const seatSummary = useMemo(() => {
+    const all = Object.values(seatStatuses);
+    return {
+      total: all.length,
+      vendido: all.filter(s => s.status === 'vendido' || s.status === 'cortesia').length,
+      reservado: all.filter(s => s.status === 'reservado').length,
+      livre: all.filter(s => s.status === 'livre').length,
+    };
+  }, [seatStatuses]);
+
+  const togglePdvSeat = (seatId: string) => {
+    setPdvSelectedSeats(prev => {
+      if (prev.includes(seatId)) return prev.filter(id => id !== seatId);
+      if (seatStatuses[seatId]?.status !== 'livre') return prev;
+      if (prev.length >= pdvQuantity) return prev;
+      return [...prev, seatId];
+    });
+  };
 
   // ─── Métricas ─────────────────────────────────────────────────────────────
   const metrics = useMemo(() => {
@@ -294,6 +327,10 @@ const VendasIngressos: React.FC = () => {
       setPdvError('Preencha nome, e-mail e CPF válido.');
       return;
     }
+    if (seatMapEnabled && pdvSelectedSeats.length !== pdvQuantity) {
+      setPdvError(`Escolha exatamente ${pdvQuantity} assento(s).`);
+      return;
+    }
     setPdvSaving(true);
     try {
       const { data, error: invokeErr } = await supabase.functions.invoke('create-pdv-ticket', {
@@ -308,6 +345,7 @@ const VendasIngressos: React.FC = () => {
             phone: pdvForm.phone.trim() || undefined,
           },
           payment_method: pdvMethod,
+          ...(seatMapEnabled ? { seat_ids: pdvSelectedSeats } : {}),
         },
       });
       if (invokeErr) {
@@ -318,7 +356,12 @@ const VendasIngressos: React.FC = () => {
         } catch { /* ignore */ }
         throw new Error(serverMsg ?? invokeErr.message ?? 'Falha ao vender ingresso');
       }
-      if (data?.error) throw new Error(data.error);
+      if (data?.error) {
+        if (Array.isArray(data.occupied_seats) && data.occupied_seats.length > 0) {
+          setPdvSelectedSeats(prev => prev.filter((id: string) => !data.occupied_seats.includes(id)));
+        }
+        throw new Error(data.error);
+      }
       const ticket = data.tickets?.[0];
       setPdvResult({
         ticketId: ticket.id,
@@ -343,6 +386,7 @@ const VendasIngressos: React.FC = () => {
     setPdvTypeIdx(0);
     setPdvQuantity(1);
     setPdvMethod('pix');
+    setPdvSelectedSeats([]);
   };
 
   // Enquanto o PIX no balcão está PENDENTE, o realtime (assinatura já
@@ -447,6 +491,26 @@ const VendasIngressos: React.FC = () => {
         <Metric icon={Users} label="Check-ins" value={`${metrics.checkedIn} / ${metrics.aprovados}`} sub="presenças confirmadas" tone="neutral" />
         <Metric icon={Clock} label="Pendentes" value={String(metrics.pendentes)} sub="aguardando pagamento" tone="warn" />
       </div>
+
+      {/* Mapa de assentos (Fase 2 — só eventos com seat_map_enabled) */}
+      {seatMapEnabled && (
+        <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 flex flex-wrap items-center gap-3">
+          <Armchair size={18} className="text-slate-400 shrink-0" />
+          <p className="text-xs font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">Assentos</p>
+          <div className="flex-1 flex flex-wrap items-center gap-4 text-xs">
+            <span className="text-slate-500">
+              <strong className="text-slate-900 dark:text-white">{seatSummary.vendido}</strong> vendidos
+            </span>
+            <span className="text-slate-500">
+              <strong className="text-amber-600 dark:text-amber-400">{seatSummary.reservado}</strong> reservados
+            </span>
+            <span className="text-slate-500">
+              <strong className="text-emerald-600 dark:text-emerald-400">{seatSummary.livre}</strong> livres
+            </span>
+            <span className="text-slate-400">de {seatSummary.total} no total</span>
+          </div>
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 flex flex-wrap items-center gap-3">
@@ -734,10 +798,36 @@ const VendasIngressos: React.FC = () => {
                       min={1}
                       max={20}
                       value={pdvQuantity}
-                      onChange={e => setPdvQuantity(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+                      onChange={e => {
+                        const q = Math.max(1, Math.min(20, Number(e.target.value) || 1));
+                        setPdvQuantity(q);
+                        setPdvSelectedSeats(prev => prev.slice(0, q));
+                      }}
                       className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
                     />
                   </div>
+
+                  {seatMapEnabled && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="block text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+                          <Armchair size={12} /> Escolher lugar
+                        </span>
+                        <span className="text-[10px] text-slate-500">{pdvSelectedSeats.length}/{pdvQuantity}</span>
+                      </div>
+                      <div className="border border-slate-200 dark:border-white/10 rounded-xl p-2">
+                        <SeatGrid
+                          rowsConfig={rowsConfig}
+                          seatStatuses={seatStatuses}
+                          selectedSeats={pdvSelectedSeats}
+                          onToggle={togglePdvSeat}
+                          size="sm"
+                          variant="auto"
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <label htmlFor="pdv-name" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Nome do comprador</label>
                     <input
@@ -830,7 +920,7 @@ const VendasIngressos: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleSellPdv}
-                    disabled={pdvSaving || ticketTypes.length === 0}
+                    disabled={pdvSaving || ticketTypes.length === 0 || (seatMapEnabled && pdvSelectedSeats.length !== pdvQuantity)}
                     className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-xl text-[11px] font-black uppercase tracking-widest inline-flex items-center justify-center gap-2"
                   >
                     {pdvSaving ? <Loader2 size={14} className="animate-spin" /> : <Store size={14} />}

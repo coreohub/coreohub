@@ -20,6 +20,7 @@ const BottomNavBar = lazy(() => import('./components/BottomNavBar'));
 const CookieBanner = lazy(() => import('./components/CookieBanner'));
 const PwaUpdatePrompt = lazy(() => import('./components/PwaUpdatePrompt'));
 const RequirePermission = lazy(() => import('./components/RequirePermission'));
+const PlanFeeGateModal = lazy(() => import('./components/PlanFeeGateModal'));
 
 // Páginas internas (autenticadas) — lazy. Landing page é a única rota "/"
 // do domínio de marketing (coreohub.com), então fica eager: visitante da
@@ -36,6 +37,7 @@ const Planos = lazy(() => import('./pages/Planos'));
 import TermosDeUso from './pages/TermosDeUso';
 import PoliticaDePrivacidade from './pages/PoliticaDePrivacidade';
 const LandingGoverno  = lazy(() => import('./pages/LandingGoverno'));
+const LandingEspetaculo = lazy(() => import('./pages/LandingEspetaculo'));
 const PropostaGoverno = lazy(() => import('./pages/PropostaGoverno'));
 
 // Páginas secundárias — lazy loading para reduzir bundle inicial
@@ -57,6 +59,7 @@ const ProducerInviteLanding    = lazy(() => import('./pages/ProducerInvite'));
 const TeamInviteLanding        = lazy(() => import('./pages/TeamInvite'));
 const CreateEvent              = lazy(() => import('./pages/CreateEvent'));
 const CriarEventoGate          = lazy(() => import('./pages/CriarEventoGate'));
+const EspetaculoWizard         = lazy(() => import('./components/EspetaculoWizard'));
 const PublicEventPage          = lazy(() => import('./pages/PublicEventPage'));
 const Festivais                = lazy(() => import('./pages/Festivais'));
 const ProducerPublicPage       = lazy(() => import('./pages/ProducerPublicPage'));
@@ -67,6 +70,7 @@ const CheckoutIngresso         = lazy(() => import('./pages/CheckoutIngresso'));
 const MeuIngresso              = lazy(() => import('./pages/MeuIngresso'));
 const VendasIngressos          = lazy(() => import('./pages/VendasIngressos'));
 const VendasOverview           = lazy(() => import('./pages/VendasOverview'));
+const Venues                   = lazy(() => import('./pages/Venues'));
 const Coupons                  = lazy(() => import('./pages/Coupons'));
 const Avisos                   = lazy(() => import('./pages/Avisos'));
 const WorkshopsManagement      = lazy(() => import('./pages/WorkshopsManagement'));
@@ -138,11 +142,12 @@ interface PrivateRouteProps {
   toggleTheme: () => void;
   setActiveRole: (role: UserRole) => void;
   videoSelectionEnabled: boolean;
+  espetaculoOnlyProducer: boolean;
   children: React.ReactNode;
 }
 
 const PrivateRoute: React.FC<PrivateRouteProps> = ({
-  session, profile, activeRole, theme, toggleTheme, setActiveRole, videoSelectionEnabled, children,
+  session, profile, activeRole, theme, toggleTheme, setActiveRole, videoSelectionEnabled, espetaculoOnlyProducer, children,
 }) => {
   const location = useLocation();
   if (!session) {
@@ -159,6 +164,7 @@ const PrivateRoute: React.FC<PrivateRouteProps> = ({
       activeRole={activeRole}
       setActiveRole={setActiveRole}
       videoSelectionEnabled={videoSelectionEnabled}
+      espetaculoOnlyProducer={espetaculoOnlyProducer}
     >
       {children}
     </PrivateLayout>
@@ -231,7 +237,8 @@ const PrivateLayout: React.FC<{
   activeRole: UserRole | null,
   setActiveRole: (role: UserRole) => void,
   videoSelectionEnabled: boolean,
-}>  = ({ children, profile, theme, toggleTheme, activeRole, setActiveRole, videoSelectionEnabled }) => {
+  espetaculoOnlyProducer: boolean,
+}>  = ({ children, profile, theme, toggleTheme, activeRole, setActiveRole, videoSelectionEnabled, espetaculoOnlyProducer }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -275,6 +282,7 @@ const PrivateLayout: React.FC<{
         activeRole={activeRole}
         profile={profile}
         videoSelectionEnabled={videoSelectionEnabled}
+        espetaculoOnlyProducer={espetaculoOnlyProducer}
       />
       <div className="flex-1 flex flex-col min-w-0 relative">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-20%,#3b0764,transparent)] pointer-events-none opacity-5 dark:opacity-20" />
@@ -308,6 +316,13 @@ const PrivateLayout: React.FC<{
               é a única puramente promocional, então é ela que cede espaço
               (nunca compete por atenção com impersonation/demo/email). */}
           <InstallAppBanner suppressed={anyStatusBannerActive} />
+          {/* Gate obrigatório de taxa fixa de plano (Essencial/Escala) não
+              paga — decisão de produto 2026-09-20. Renderiza via
+              createPortal(document.body) dentro do próprio componente, então
+              fica fora do fluxo visual daqui — só precisa estar montado.
+              Suprimido durante impersonation (ação financeira real não deve
+              disparar em nome de outro produtor fora da sessão dele). */}
+          <PlanFeeGateModal producerId={profile.id} suppressed={isImpersonating} />
           <div className="p-3 lg:p-4">
             <Suspense fallback={<PageLoader />}>
               {children}
@@ -320,7 +335,7 @@ const PrivateLayout: React.FC<{
         </main>
       </div>
 
-      <BottomNavBar activeRole={activeRole} videoSelectionEnabled={videoSelectionEnabled} userId={profile.id} />
+      <BottomNavBar activeRole={activeRole} videoSelectionEnabled={videoSelectionEnabled} userId={profile.id} espetaculoOnlyProducer={espetaculoOnlyProducer} />
     </div>
     </Suspense>
   );
@@ -474,6 +489,35 @@ const App: React.FC = () => {
     void checkVideoSelection();
   }, [session?.user?.id]);
 
+  // Plano Espetáculo (docs/mostra-pricing-spec.md, Parte B): produtor cujos
+  // eventos REAIS são todos billing_plan='espetaculo' não usa nada de
+  // festival competitivo (júri/cronograma/telão/workshops/apuração/
+  // premiação/certificados/regulamento IA) — o Sidebar esconde esses itens
+  // pra reduzir ruído. Produtor misto (tem pelo menos 1 evento Festival)
+  // mantém o menu completo — nunca perde acesso a nada que já usa.
+  // Mesmo padrão de derivação de videoSelectionFromEvents acima: consulta
+  // os eventos do produtor sob demanda, sem persistir estado global.
+  const [espetaculoOnlyProducer, setEspetaculoOnlyProducer] = useState(false);
+  useEffect(() => {
+    const checkBillingPlan = async () => {
+      const userId = session?.user?.id;
+      if (!userId) { setEspetaculoOnlyProducer(false); return; }
+      try {
+        const { supabase } = await import('./services/supabase');
+        const { data: ownedEvents } = await supabase
+          .from('events')
+          .select('billing_plan')
+          .eq('created_by', userId)
+          .eq('is_demo', false);
+        if (!ownedEvents || ownedEvents.length === 0) { setEspetaculoOnlyProducer(false); return; }
+        setEspetaculoOnlyProducer(ownedEvents.every((e: any) => e.billing_plan === 'espetaculo'));
+      } catch {
+        setEspetaculoOnlyProducer(false);
+      }
+    };
+    void checkBillingPlan();
+  }, [session?.user?.id]);
+
   useEffect(() => {
     // Domínio de marketing nunca usa sessão (landing/planos/termos/governo
     // são conteúdo 100% público) — pula getSession()/onAuthStateChange por
@@ -615,7 +659,7 @@ const App: React.FC = () => {
   // Flag derivada: produtor com evento de seletiva OU inscrito em evento de
   // seletiva. Mantém legacy config.video_selection_enabled como fallback OR.
   const videoSelectionEnabled = videoSelectionFromEvents || (config.video_selection_enabled ?? false);
-  const privateRouteProps = { session, profile, activeRole, theme, toggleTheme, setActiveRole, videoSelectionEnabled };
+  const privateRouteProps = { session, profile, activeRole, theme, toggleTheme, setActiveRole, videoSelectionEnabled, espetaculoOnlyProducer };
   const RootRedirect = () => {
     try {
       const isKiosk = localStorage.getItem('coreohub_tablet_kiosk_mode') === 'true';
@@ -645,6 +689,9 @@ const App: React.FC = () => {
         {/* Setor público: landing dedicada + PDF técnico imprimível */}
         <Route path="/governo" element={<Suspense fallback={<PageLoader />}><LandingGoverno /></Suspense>} />
         <Route path="/governo/proposta" element={<Suspense fallback={<PageLoader />}><PropostaGoverno /></Suspense>} />
+        {/* Plano Espetáculo (docs/mostra-pricing-spec.md) — landing dedicada,
+            fora de /planos, isolada sem link cruzado por ora (decisão 2026-09-20). */}
+        <Route path="/espetaculo" element={<Suspense fallback={<PageLoader />}><LandingEspetaculo /></Suspense>} />
         <Route path="/login" element={<Suspense fallback={<PageLoader />}><Auth /></Suspense>} />
         <Route path="/register" element={<Suspense fallback={<PageLoader />}><Auth /></Suspense>} />
         <Route path="/judge-login" element={<Suspense fallback={<PageLoader />}><JudgeLogin /></Suspense>} />
@@ -712,6 +759,16 @@ const App: React.FC = () => {
         <Route path="/importar-regulamento" element={<PrivateRoute {...privateRouteProps}><RegulationAIParser /></PrivateRoute>} />
 
         <Route path="/criar-evento" element={<Suspense fallback={<PageLoader />}><CriarEventoGate /></Suspense>} />
+        {/* Plano Espetáculo (docs/mostra-pricing-spec.md) — funil dedicado, fora
+            de /planos, pra estúdio de dança sem júri/apuração/cronograma competitivo. */}
+        <Route path="/criar-espetaculo" element={<Suspense fallback={<PageLoader />}>
+          <CriarEventoGate
+            wizard={EspetaculoWizard}
+            oauthRedirectPath="/criar-espetaculo"
+            signupCopy={'Crie sua conta de produtor para cadastrar seu espetáculo.\nBilheteria de plateia, cupom, credenciamento — 7,9% sobre o vendido, sem mensalidade.'}
+            stepsCopy="Ao criar a conta, você preenche 1 formulário rápido pra colocar seu espetáculo no ar."
+          />
+        </Suspense>} />
         <Route path="/event-config" element={<PrivateRoute {...privateRouteProps}><RegistrationGradeConfig /></PrivateRoute>} />
         <Route path="/ai-analysis" element={<PrivateRoute {...privateRouteProps}><AIAnalysis /></PrivateRoute>} />
         <Route path="/super-admin" element={<PrivateRoute {...privateRouteProps}><SuperAdminDashboard /></PrivateRoute>} />
@@ -743,6 +800,11 @@ const App: React.FC = () => {
         <Route path="/meus-certificados" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><MeusCertificados /></Suspense></PrivateRoute>} />
         <Route path="/vendas"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><VendasOverview /></Suspense></PrivateRoute>} />
         <Route path="/vendas-ingressos" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="vendas_ingressos"><VendasIngressos /></RequirePermission></Suspense></PrivateRoute>} />
+        {/* Locais — Fase 2 assento numerado (docs/mostra-pricing-spec.md).
+            Feature compartilhada entre planos, não exclusiva do Espetáculo —
+            mesma permissão de Ingressos, já que o mapa vive dentro da
+            configuração de bilheteria. */}
+        <Route path="/locais" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="vendas_ingressos"><Venues /></RequirePermission></Suspense></PrivateRoute>} />
         <Route path="/workshops-do-evento" element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="gerenciar_workshops"><WorkshopsManagement /></RequirePermission></Suspense></PrivateRoute>} />
         <Route path="/cupons"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="gerenciar_cupons"><Coupons /></RequirePermission></Suspense></PrivateRoute>} />
         <Route path="/avisos"           element={<PrivateRoute {...privateRouteProps}><Suspense fallback={<PageLoader />}><RequirePermission perm="gerenciar_avisos"><Avisos /></RequirePermission></Suspense></PrivateRoute>} />

@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, Clapperboard, Music2, UserRound,
   Gavel, ClipboardList, Calendar, Settings, Video,
   MoreHorizontal, X, Mic2, PersonStanding, Ticket,
-  GraduationCap, Tag, Trophy, Award, Star, Shield, FileText,
+  GraduationCap, Tag, Trophy, Award, Star, Shield, FileText, MapPin,
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { supabase } from '../services/supabase';
@@ -39,13 +39,36 @@ const PRODUTOR_ROLES = new Set([
 // do Produtor, Mercado Pago). 'QG' era jargão interno, fora do mercado e
 // inconsistente com o título "DASHBOARD ADMINISTRATIVO" na tela. Pesquisa
 // 2026-05-25.
-const buildProdutorNav = () => [
+//
+// Plano Espetáculo (docs/mostra-pricing-spec.md, Parte B): o slot fixo
+// "Crono" não existe pra esse plano (sem cronograma competitivo) — vira
+// "Ingressos", o núcleo da bilheteria de plateia que é o produto em si.
+const buildProdutorNav = (espetaculoOnlyProducer: boolean) => [
   { path: '/qg-organizador',   label: 'Painel',    icon: LayoutDashboard },
   { path: '/inscricoes',       label: 'Inscrições', icon: ClipboardList },
-  { path: '/cronograma',       label: 'Crono',     icon: Calendar      },
+  espetaculoOnlyProducer
+    ? { path: '/vendas-ingressos', label: 'Ingressos', icon: Ticket }
+    : { path: '/cronograma',       label: 'Crono',     icon: Calendar },
   { path: '__more__',          label: 'Mais',      icon: MoreHorizontal },
   { path: '/account-settings', label: 'Config',    icon: Settings      },
 ];
+
+// Mesmos 10 itens escondidos do Sidebar.tsx (ESPETACULO_HIDDEN_PATHS), só
+// que mapeados pros paths literais usados NESTE arquivo — 3 deles (Regulamento,
+// Jurados, Apuração) já divergem da rota canônica por um bug pré-existente
+// não relacionado a esta feature (paths em inglês nunca migrados, ver
+// auditoria 2026-08-23) — filtrar pelo path literal aqui ainda funciona
+// porque o Link renderizado usa exatamente essa string, mesmo estando errada.
+const ESPETACULO_HIDDEN_PATHS_BOTTOMNAV = new Set([
+  '/regulation-ai',      // Regulamento IA (rota real: /importar-regulamento)
+  '/judges',             // Jurados (rota real: /equipe-jurados)
+  '/seletiva-video',     // Seletiva de Vídeo
+  '/workshops-do-evento',// Workshops
+  '/results',            // Apuração (rota real: /apuracao)
+  '/premiacao',          // Premiação
+  '/certificados',       // Certificados
+  '/suporte-juri',       // Coordenador do Júri
+]);
 
 // Features secundárias agrupadas — espelha grupos do sidebar pra consistência.
 // Padrão Instagram/LinkedIn/App Store: bottom nav com 5 atalhos top + Mais
@@ -74,6 +97,7 @@ const MORE_GROUPS: MoreGroup[] = [
     label: 'Bilheteria', tone: 'text-orange-500',
     items: [
       { path: '/vendas-ingressos',    label: 'Vendas',     icon: Ticket        },
+      { path: '/locais',              label: 'Locais',     icon: MapPin        },
       { path: '/workshops-do-evento', label: 'Workshops',  icon: GraduationCap },
       { path: '/cupons',              label: 'Cupons',     icon: Tag           },
     ],
@@ -127,9 +151,11 @@ interface Props {
   /** @deprecated mantido só por compat — Seletiva agora vive no Mais sheet */
   videoSelectionEnabled?: boolean;
   userId?: string;
+  /** Plano Espetáculo (docs/mostra-pricing-spec.md) — ver Sidebar.tsx. */
+  espetaculoOnlyProducer?: boolean;
 }
 
-const BottomNavBar: React.FC<Props> = ({ activeRole, userId }) => {
+const BottomNavBar: React.FC<Props> = ({ activeRole, userId, espetaculoOnlyProducer }) => {
   const location = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
   // Badge de pendências no ícone "Inscrições" (padrão Instagram/WhatsApp/
@@ -170,8 +196,14 @@ const BottomNavBar: React.FC<Props> = ({ activeRole, userId }) => {
   if (!isProdutor && !isInscrito) return null;
 
   const items = isProdutor
-    ? buildProdutorNav()
+    ? buildProdutorNav(!!espetaculoOnlyProducer)
     : INSCRITO_NAV;
+
+  const moreGroups = espetaculoOnlyProducer
+    ? MORE_GROUPS
+        .map(group => ({ ...group, items: group.items.filter(it => !ESPETACULO_HIDDEN_PATHS_BOTTOMNAV.has(it.path)) }))
+        .filter(group => group.items.length > 0)
+    : MORE_GROUPS;
 
   return (
     <>
@@ -232,7 +264,7 @@ const BottomNavBar: React.FC<Props> = ({ activeRole, userId }) => {
               </button>
             </div>
             <div className="px-5 py-5 space-y-5">
-              {MORE_GROUPS.map(group => (
+              {moreGroups.map(group => (
                 <div key={group.label}>
                   <p className={`text-[9px] font-black uppercase tracking-widest mb-2.5 ${group.tone}`}>
                     {group.label}

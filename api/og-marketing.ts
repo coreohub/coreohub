@@ -65,6 +65,12 @@ const PAGES: Record<string, PageMeta> = {
     // nenhuma com preço/comercial. Achado 2026-09-13.
     image: `${SITE_URL}/og-planos.jpg`,
   },
+  espetaculo: {
+    path: '/espetaculo',
+    title: 'Bilheteria para espetáculo de fim de ano de dança — Plano Espetáculo | CoreoHub',
+    description:
+      'Venda ingresso do espetáculo de fim de ano do seu estúdio de dança sem planilha: 7,9% sobre o vendido, sem mensalidade, taxa pública. Cupom, cortesia e credenciamento por QR Code incluídos.',
+  },
 };
 
 const html = (meta: PageMeta): string => {

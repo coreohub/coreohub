@@ -10,7 +10,28 @@ const OnboardingWizard = lazy(() => import('../components/OnboardingWizard'));
 
 type AuthStatus = 'loading' | 'anon' | 'ready' | 'promote_error';
 
-const CriarEventoGate: React.FC = () => {
+/**
+ * Gate reaproveitado por qualquer funil de criação de evento (Festival e
+ * Plano Espetáculo, docs/mostra-pricing-spec.md) — a parte de auth/promoção
+ * pra ORGANIZER é idêntica nos dois, só o wizard renderizado no final muda.
+ * `wizard` default mantém o comportamento original (Festival/OnboardingWizard).
+ */
+interface CriarEventoGateProps {
+  wizard?: React.LazyExoticComponent<React.ComponentType<any>>;
+  /** Pra onde o OAuth do Google redireciona de volta após login social. */
+  oauthRedirectPath?: string;
+  /** Copy da tela de cadastro — default é o funil de Festival. */
+  signupCopy?: string;
+  stepsCopy?: string;
+}
+
+const CriarEventoGate: React.FC<CriarEventoGateProps> = ({
+  wizard,
+  oauthRedirectPath = '/criar-evento',
+  signupCopy = 'Crie sua conta de produtor para cadastrar seu festival.\nInscrições, pagamentos com split automático e muito mais.',
+  stepsCopy = 'Ao criar a conta, você passa por 4 passos rápidos pra colocar sua mostra no ar.',
+}) => {
+  const Wizard = wizard ?? OnboardingWizard;
   const navigate = useNavigate();
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [form, setForm] = useState({ full_name: '', email: '', password: '' });
@@ -156,7 +177,7 @@ const CriarEventoGate: React.FC = () => {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: `${window.location.origin}/criar-evento` },
+        options: { redirectTo: `${window.location.origin}${oauthRedirectPath}` },
       });
       if (error) throw error;
     } catch (e: any) {
@@ -200,7 +221,7 @@ const CriarEventoGate: React.FC = () => {
           <Loader2 size={32} className="animate-spin text-[#ff0068]" />
         </div>
       }>
-        <OnboardingWizard />
+        <Wizard />
       </Suspense>
     );
   }
@@ -216,9 +237,8 @@ const CriarEventoGate: React.FC = () => {
           <h1 className="text-3xl font-black tracking-tighter uppercase text-slate-900 dark:text-white">
             Bem-vindo à <span className="text-[#ff0068] italic">CoreoHub</span>
           </h1>
-          <p className="text-xs text-slate-500 font-bold leading-relaxed">
-            Crie sua conta de produtor para cadastrar seu festival.<br />
-            Inscrições, pagamentos com split automático e muito mais.
+          <p className="text-xs text-slate-500 font-bold leading-relaxed whitespace-pre-line">
+            {signupCopy}
           </p>
         </div>
 
@@ -290,7 +310,7 @@ const CriarEventoGate: React.FC = () => {
           </button>
 
           <p className="text-[10px] text-center text-slate-400 leading-relaxed">
-            Ao criar a conta, você passa por 4 passos rápidos pra colocar sua mostra no ar.
+            {stepsCopy}
           </p>
 
           {/* Selo BaaS Asaas — playbook pág. 3 exige em telas de cadastro/login */}

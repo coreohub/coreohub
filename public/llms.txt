@@ -9,6 +9,7 @@
 - [Festivais](https://coreohub.com/festivais): vitrine pública com os festivais e mostras de dança ativos na plataforma, abertos pra inscrição.
 - Cada festival/mostra/camp tem página própria em `https://app.coreohub.com/evento/<slug-do-evento>` (ex: `vicenza-dance-camp-2027`), com datas, local, modalidades, workshops/passes com preço e link de inscrição. Lista completa e sempre atualizada de eventos ativos: [sitemap.xml](https://app.coreohub.com/sitemap.xml).
 - [Governo](https://coreohub.com/governo): página específica para editais públicos e mostras municipais/governamentais.
+- [Plano Espetáculo](https://coreohub.com/espetaculo): bilheteria de plateia para espetáculo de fim de ano de estúdio/escola de dança, sem competição — 7,9% sobre o vendido, sem mensalidade.
 - [Termos de Uso](https://coreohub.com/termos): termos de uso da plataforma.
 - [Política de Privacidade](https://coreohub.com/privacidade): política de privacidade e tratamento de dados (LGPD).
 

@@ -16,7 +16,13 @@
  *   ticket_type_idx: number,
  *   quantity?: number,
  *   buyer: { name, email, cpf, phone? },
- *   coupon_code?: string    // cupom aplicado no carrinho inteiro (cart-level)
+ *   coupon_code?: string,   // cupom aplicado no carrinho inteiro (cart-level)
+ *   seat_ids?: string[]     // obrigatório quando event.seat_map_enabled — array
+ *                           // plano, tamanho = soma das quantities do carrinho.
+ *                           // Identidade do assento não carrega significado de
+ *                           // tipo de ingresso (Inteira/Meia), então não precisa
+ *                           // agrupar por item — qualquer assento serve pra
+ *                           // qualquer ticket do carrinho.
  * }
  *
  * Resposta sucesso (201):
@@ -121,6 +127,7 @@ Deno.serve(async (req) => {
       buyer,
       quantity: qtyRaw,
       coupon_code,
+      seat_ids: seatIdsRaw,
     } = body as {
       event_id?: string
       ticket_type_idx?: number
@@ -128,6 +135,7 @@ Deno.serve(async (req) => {
       buyer?: { name?: string; email?: string; cpf?: string; phone?: string }
       quantity?: number
       coupon_code?: string
+      seat_ids?: string[]
     }
 
     // ── Validações básicas ───────────────────────────────────────────────────
@@ -190,7 +198,7 @@ Deno.serve(async (req) => {
         id, name, created_by, ingressos_config, event_date,
         audience_commission_percent, audience_fee_mode,
         audience_max_per_cpf, audience_max_per_purchase, audience_sales_enabled,
-        audience_reservation_minutes, politica_ingressos
+        audience_reservation_minutes, politica_ingressos, seat_map_enabled
       `)
       .eq('id', event_id)
       .single()
@@ -236,6 +244,18 @@ Deno.serve(async (req) => {
       totalBase += precoUnit * quantity
     }
     totalBase = round2(totalBase)
+
+    // ── Assento numerado (Fase 2 Stage 3) ────────────────────────────────────
+    const seatMapEnabled = Boolean((event as any).seat_map_enabled)
+    const seatIds = Array.isArray(seatIdsRaw) ? seatIdsRaw.filter(s => typeof s === 'string' && s.trim()) : []
+    if (seatMapEnabled) {
+      if (seatIds.length !== totalQty) {
+        throw new Error(`Selecione exatamente ${totalQty} assento(s)`)
+      }
+      if (new Set(seatIds).size !== seatIds.length) {
+        throw new Error('Assento selecionado mais de uma vez')
+      }
+    }
 
     // ── Limites antifraude (max por compra, somando o carrinho) ──────────────
     const maxPerPurchase = Number(event.audience_max_per_purchase ?? 6)
@@ -388,6 +408,72 @@ Deno.serve(async (req) => {
 
     if (createdTickets.length === 0) throw new Error('Nenhum ticket reservado')
 
+    // Apaga os tickets e, se o(s) assento(s) já tinham sido CONFIRMADOS
+    // (confirm_event_seats já rodou — held_until virou NULL, não expira mais
+    // sozinho), libera de volta pra 'livre'. Chamado em todo failure path
+    // depois da confirmação (customer/payment Asaas), senão o assento fica
+    // 'reservado' pra sempre — achado real em code review, migration
+    // 20260919b criou release_event_seats mas nada chamava.
+    let seatsConfirmed = false
+    const rollbackTickets = async () => {
+      // Ordem importa: event_seats.audience_ticket_id tem ON DELETE SET NULL
+      // — se apagar o ticket ANTES, release_event_seats (que busca por
+      // audience_ticket_id = ticket_id) não encontra mais nada pra liberar
+      // e o assento fica preso em 'reservado' pra sempre (bug achado no
+      // smoke desta própria correção). Libera primeiro, apaga depois.
+      if (seatsConfirmed) {
+        const { error: relErr } = await supabase.rpc('release_event_seats', {
+          p_ticket_ids: createdTickets.map(t => t.id),
+        })
+        if (relErr) console.error('[create-audience-ticket] erro ao liberar assento no rollback:', relErr.message)
+      }
+      await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
+    }
+
+    // ── Reserva de assento (Fase 2 Stage 3) ──────────────────────────────────
+    // reserve_event_seats é all-or-nothing internamente (nunca comita parcial
+    // — checado no SQL). Em caso de falha, apaga os tickets recém-criados
+    // (mesmo padrão de rollback já usado abaixo pra falha do Asaas) e devolve
+    // quais seat_ids já estavam ocupados, pro frontend re-renderizar só esses.
+    if (seatMapEnabled && seatIds.length > 0) {
+      const { data: seatData, error: seatErr } = await supabase.rpc('reserve_event_seats', {
+        p_event_id:     event_id,
+        p_seat_ids:     seatIds,
+        p_hold_minutes: reservedMinutes,
+      })
+      if (seatErr) {
+        await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
+        console.error('[create-audience-ticket] erro RPC reserve_event_seats:', seatErr.message)
+        throw new Error('Falha ao reservar assento')
+      }
+      const seatRows = (Array.isArray(seatData) ? seatData : []) as Array<{ seat_id: string; reserved: boolean }>
+      const occupied = seatRows.filter(r => !r.reserved).map(r => r.seat_id)
+      if (occupied.length > 0) {
+        await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
+        console.warn(`[create-audience-ticket] assento(s) já ocupado(s): ${occupied.join(', ')}`)
+        const err: any = new Error('Um ou mais assentos escolhidos já foram reservados por outro comprador')
+        err.occupied_seats = occupied
+        throw err
+      }
+
+      const { error: confirmErr } = await supabase.rpc('confirm_event_seats', {
+        p_event_id:   event_id,
+        p_seat_ids:   seatIds,
+        p_ticket_ids: createdTickets.map(t => t.id),
+        p_status:     'reservado',
+      })
+      if (confirmErr) {
+        // Assento já está 'reservado' com held_until do reserve_event_seats
+        // (confirm nunca rodou) — a expiração vai liberar sozinha via cron.
+        // Só o vínculo com o ticket falhou. Não vale abortar a compra por
+        // isso; loga pra investigar. NÃO marca seatsConfirmed (held_until
+        // continua setado, rollback normal via TTL já cobre).
+        console.error('[create-audience-ticket] erro RPC confirm_event_seats:', confirmErr.message)
+      } else {
+        seatsConfirmed = true
+      }
+    }
+
     // externalReference: prefix "AT:" pro webhook discriminar. Usa o id do
     // PRIMEIRO ticket — webhook propaga status pros demais via payment_id.
     const externalRefId = createdTickets[0].id
@@ -422,7 +508,7 @@ Deno.serve(async (req) => {
       })
       const custData = await custRes.json()
       if (!custRes.ok) {
-        await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
+        await rollbackTickets()
         console.error('[create-audience-ticket] erro customer:', custData)
         throw new Error(custData.errors?.[0]?.description ?? 'Erro ao criar customer Asaas')
       }
@@ -478,7 +564,7 @@ Deno.serve(async (req) => {
     }
 
     if (!payRes.ok) {
-      await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
+      await rollbackTickets()
       console.error('[create-audience-ticket] erro Asaas:', payData)
       throw new Error(payData.errors?.[0]?.description ?? 'Erro ao criar cobrança no Asaas')
     }
@@ -514,6 +600,7 @@ Deno.serve(async (req) => {
     }, 201)
   } catch (error: any) {
     console.error('[create-audience-ticket] erro:', error.message)
-    return json({ error: error.message }, 400)
+    const extra = error.occupied_seats ? { occupied_seats: error.occupied_seats } : {}
+    return json({ error: error.message, ...extra }, 400)
   }
 })

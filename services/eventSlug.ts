@@ -45,7 +45,7 @@ export const RESERVED_SLUGS = new Set<string>([
   'meu-perfil', 'perfil', 'meu-elenco', 'minhas-coreografias',
   'feedbacks', 'resultados', 'meus-certificados',
   'comprar-ingressos', 'central-de-midia',
-  'estudios', 'lp', 'governo',
+  'estudios', 'lp', 'governo', 'espetaculo', 'criar-espetaculo',
   'leaderboard', 'placar',
   'termo-produtor', 'termo',
   // Áreas técnicas

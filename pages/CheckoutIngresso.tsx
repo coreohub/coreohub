@@ -19,10 +19,12 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import {
   Ticket, Loader2, AlertCircle, ArrowLeft, ShieldCheck, User as UserIcon, Mail, Phone, FileText, Minus, Plus,
-  Tag, X, Check, Trash2,
+  Tag, X, Check, Trash2, Armchair,
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
+import SeatGrid from '../components/SeatGrid';
+import { useSeatMap } from '../hooks/useSeatMap';
 import { resolveLote, todayISO, type Lote } from '../utils/lotes';
 import { isEventOver } from '../utils/eventStatus';
 // Fonte única da matemática de comissão/split (compartilhada com a edge
@@ -112,6 +114,9 @@ export default function CheckoutIngresso() {
   const [paying, setPaying] = useState(false);
   const [refundAccepted, setRefundAccepted] = useState(false);
 
+  // Assento numerado (Fase 2 Stage 3) — layout do venue + status ao vivo
+  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
+
   // Estoque por idx + cupom
   const [stockByIdx, setStockByIdx] = useState<Record<string, { remaining: number | null; sold_out: boolean }>>({});
   const [couponInput, setCouponInput] = useState('');
@@ -130,7 +135,7 @@ export default function CheckoutIngresso() {
         const filterCol = isUuid ? 'id' : 'slug';
         const { data: ev, error: evErr } = await supabase
           .from('events')
-          .select('id, name, slug, start_date, end_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos')
+          .select('id, name, slug, start_date, end_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos, seat_map_enabled')
           .eq(filterCol, idOrSlug)
           .maybeSingle();
         if (evErr || !ev) { setError('Evento não encontrado.'); return; }
@@ -197,6 +202,11 @@ export default function CheckoutIngresso() {
   ));
   const totalQty = lines.reduce((s, l) => s + l.qty, 0);
 
+  // Carrinho encolheu depois de já ter assento(s) escolhido(s) → corta o excesso.
+  useEffect(() => {
+    setSelectedSeats(prev => prev.length > totalQty ? prev.slice(0, totalQty) : prev);
+  }, [totalQty]);
+
   // ─── Estoque: carrega + faz polling 30s pros tipos do carrinho ────────────
   useEffect(() => {
     if (!event?.id) return;
@@ -222,6 +232,34 @@ export default function CheckoutIngresso() {
     return () => { cancelled = true; clearInterval(interval); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event?.id, JSON.stringify(lines.map(l => [l.idx, l.quantidadeTotal]))]);
+
+  // ─── Assento numerado: layout (1x) + status ao vivo (polling 15s) ─────────
+  const seatMapEnabled = Boolean(event?.seat_map_enabled);
+
+  // Evento mudou (navegação sem reload completo) — nunca carrega assento
+  // selecionado de um evento diferente (o hook já reseta layout/status).
+  useEffect(() => {
+    setSelectedSeats([]);
+  }, [event?.id]);
+
+  const { rowsConfig, seatStatuses, markSeatsOccupied } = useSeatMap({
+    eventId: event?.id,
+    enabled: seatMapEnabled,
+    pollMs: 15_000,
+    onLayoutError: setError,
+    // Assento que o comprador tinha escolhido pode ter sido pego por outro
+    // enquanto ele preenchia o form — descarta da seleção automaticamente.
+    onStatusUpdate: map => setSelectedSeats(prev => prev.filter(id => map[id]?.status === 'livre')),
+  });
+
+  const toggleSeat = (seatId: string) => {
+    setSelectedSeats(prev => {
+      if (prev.includes(seatId)) return prev.filter(id => id !== seatId);
+      if (seatStatuses[seatId]?.status !== 'livre') return prev;
+      if (prev.length >= totalQty) return prev; // já escolheu a quantidade do carrinho
+      return [...prev, seatId];
+    });
+  };
 
   // ─── Edição de quantidade (respeita meia=1, estoque, máx por compra) ──────
   const setLineQty = (idx: number, nextQty: number) => {
@@ -322,8 +360,9 @@ export default function CheckoutIngresso() {
 
   // ─── Submit ────────────────────────────────────────────────────────────────
   const anySoldOut = lines.some(l => stockByIdx[String(l.idx)]?.sold_out === true);
+  const seatsReady = !seatMapEnabled || selectedSeats.length === totalQty;
   const canSubmit = !!name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-    && isValidCpf(cpf) && totalQty >= 1 && !paying && !anySoldOut;
+    && isValidCpf(cpf) && totalQty >= 1 && !paying && !anySoldOut && seatsReady;
 
   const handlePay = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -342,10 +381,19 @@ export default function CheckoutIngresso() {
             phone: phone.replace(/\D/g, '') || undefined,
           },
           coupon_code: appliedCouponCode ?? undefined,
+          ...(seatMapEnabled ? { seat_ids: selectedSeats } : {}),
         },
       });
       if (invokeErr) throw new Error(invokeErr.message ?? 'Erro ao gerar pagamento. Tente novamente.');
-      if (data?.error) throw new Error(data.error);
+      if (data?.error) {
+        // Assento(s) escolhido(s) foram pegos por outro comprador entre a
+        // seleção e o clique em pagar — limpa só esses e deixa escolher de novo.
+        if (Array.isArray(data.occupied_seats) && data.occupied_seats.length > 0) {
+          setSelectedSeats(prev => prev.filter(id => !data.occupied_seats.includes(id)));
+          markSeatsOccupied(data.occupied_seats);
+        }
+        throw new Error(data.error);
+      }
       if (!data?.invoice_url) throw new Error('URL de pagamento não retornada.');
       window.location.href = data.invoice_url;
     } catch (err: any) {
@@ -520,6 +568,35 @@ export default function CheckoutIngresso() {
           )}
         </div>
 
+        {/* Escolher lugar (Fase 2 — assento numerado, só quando o evento liga o mapa) */}
+        {seatMapEnabled && (
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                <Armchair size={14} /> Escolher lugar
+              </p>
+              <p className="text-[10px] text-slate-500">
+                {selectedSeats.length}/{totalQty} selecionado{totalQty === 1 ? '' : 's'}
+              </p>
+            </div>
+
+            <SeatGrid
+              rowsConfig={rowsConfig}
+              seatStatuses={seatStatuses}
+              selectedSeats={selectedSeats}
+              onToggle={toggleSeat}
+              size="md"
+              variant="dark"
+            />
+
+            <div className="flex items-center gap-4 mt-3 text-[10px] text-slate-500">
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-white/10 inline-block" /> Disponível</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-[#ff0068] inline-block" /> Selecionado</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-white/5 inline-block" /> Ocupado</span>
+            </div>
+          </div>
+        )}
+
         {/* Form do comprador */}
         <form onSubmit={handlePay} noValidate>
         <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4 space-y-3">
@@ -591,7 +668,11 @@ export default function CheckoutIngresso() {
         <button
           type="submit"
           disabled={!canSubmit || !refundAccepted}
-          title={!refundAccepted ? 'Aceite a política de reembolso para prosseguir' : undefined}
+          title={
+            !seatsReady ? 'Escolha seu(s) lugar(es) antes de continuar'
+              : !refundAccepted ? 'Aceite a política de reembolso para prosseguir'
+              : undefined
+          }
           className="w-full py-4 bg-[#ff0068] hover:bg-[#ff0068]/90 disabled:bg-white/10 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#ff0068]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0068] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0f]"
         >
           {paying ? <Loader2 className="animate-spin" size={16} /> : <Ticket size={16} />}
