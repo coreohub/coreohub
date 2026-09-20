@@ -636,8 +636,18 @@ const InscricaoWizard: React.FC = () => {
   // Formação com preço R$0 (lote vigente ou fee/base_fee) — evento gratuito
   // por qualquer motivo (contrato fechado, governo, etc). Usado só pra copy
   // do Resumo/botão final; o cálculo real de novo acontece no servidor.
+  // PROGRESSIVE_PER_DANCER nunca usa `lotes` pra preço (lotes[0].preco=0 é só
+  // placeholder estrutural, o valor real vive em progressive_tiers) — ler
+  // esse 0 aqui fazia QUALQUER inscrição em Pacote Progressivo ser aprovada
+  // sem cobrar nada, pulando o Asaas (bug real, achado 2026-09-20 no evento
+  // Tamoios: "Teste 2" aprovado com R$0 mesmo a 1ª faixa sendo R$20).
   const isFormacaoGratuita = useMemo(() => {
     if (!formacao) return false;
+    if ((formacao as any)?.pricing_type === 'PROGRESSIVE_PER_DANCER') {
+      const tiers = Array.isArray((formacao as any)?.progressive_tiers) ? (formacao as any).progressive_tiers : [];
+      const primeiroTier = tiers.find((t: any) => t?.ordem === 1)?.valor;
+      return Number(primeiroTier ?? (formacao as any)?.fee ?? (formacao as any)?.base_fee ?? 0) <= 0;
+    }
     const firstLote = ((formacao as any)?.lotes ?? [])[0];
     const feeUnit = Number(firstLote?.preco ?? (formacao as any)?.fee ?? (formacao as any)?.base_fee ?? 0);
     return feeUnit <= 0;

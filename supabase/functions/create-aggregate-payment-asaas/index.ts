@@ -276,13 +276,48 @@ Deno.serve(async (req) => {
       }
 
       // pricing_type PER_MEMBER → fee × bailarinos. Default FIXED preserva legado.
-      const pricingType: 'FIXED' | 'PER_MEMBER' = formacaoEscolhida?.pricing_type ?? 'FIXED'
+      const pricingType: 'FIXED' | 'PER_MEMBER' | 'PROGRESSIVE_PER_DANCER' = formacaoEscolhida?.pricing_type ?? 'FIXED'
       const bailarinosCount = Array.isArray((r as any).bailarinos_detalhes)
         ? (r as any).bailarinos_detalhes.length
         : 1
       const feeUnit = baseFee
       if (pricingType === 'PER_MEMBER' && bailarinosCount > 1) {
         baseFee = parseFloat((baseFee * bailarinosCount).toFixed(2))
+      }
+
+      // PROGRESSIVE_PER_DANCER: preço cai conforme o MESMO bailarino acumula
+      // coreografias PAGAS no evento (espelha create-payment-asaas linha
+      // ~139) — sem isso, quem paga via "Pagar Tudo" era cobrado sempre pelo
+      // valor cheio da 1ª faixa, nunca recebendo o desconto por posição.
+      if (pricingType === 'PROGRESSIVE_PER_DANCER') {
+        const tiers: { ordem: number; valor: number; repete?: boolean }[] =
+          Array.isArray(formacaoEscolhida?.progressive_tiers) ? formacaoEscolhida.progressive_tiers : []
+        const elencoIds: string[] = Array.isArray((r as any).bailarinos_detalhes)
+          ? (r as any).bailarinos_detalhes.map((b: any) => b?.id).filter(Boolean)
+          : []
+
+        const tierForOrdem = (ordem: number) => {
+          const exact = tiers.find(t => t.ordem === ordem)
+          if (exact) return exact.valor
+          const repeating = tiers.filter(t => t.repete && t.ordem <= ordem).sort((a, b) => b.ordem - a.ordem)[0]
+          if (repeating) return repeating.valor
+          const last = [...tiers].sort((a, b) => b.ordem - a.ordem)[0]
+          return last ? last.valor : baseFee
+        }
+
+        if (elencoIds.length === 0) {
+          baseFee = tierForOrdem(1)
+        } else {
+          const { data: counts, error: countErr } = await supabase
+            .rpc('count_dancer_paid_registrations', { p_event_id: r.event_id, p_elenco_ids: elencoIds })
+          if (countErr) console.error('[create-aggregate-payment-asaas] count_dancer_paid_registrations falhou:', countErr.message)
+          const countByElenco = new Map<string, number>((counts ?? []).map((c: any) => [c.elenco_id, c.qtd ?? 0]))
+          baseFee = elencoIds.reduce((sum: number, id: string) => {
+            const jaTinha = countByElenco.get(id) ?? 0
+            return sum + tierForOrdem(jaTinha + 1)
+          }, 0)
+        }
+        baseFee = parseFloat(baseFee.toFixed(2))
       }
 
       // baseFee=0 é válido quando a formação foi explicitamente configurada

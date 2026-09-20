@@ -133,13 +133,26 @@ const Checkout = () => {
       const mod = formacoes.find((m: any) => m.name === reg.formato_participacao);
       const feeFromFormacao = mod?.fee ?? mod?.base_fee ?? 0;
 
-      // Lotes vêm da própria formação (cada formação tem seus lotes).
-      const { lot, allExpired } = getActiveLotFromFormacao(mod?.lotes);
-      setActiveLot(lot);
-      setAllLotsExpired(allExpired);
+      // PROGRESSIVE_PER_DANCER nunca usa `lotes` pra preço — lotes[0].preco=0
+      // é só placeholder estrutural (preço real vive em progressive_tiers).
+      // Ler esse 0 aqui zerava o valor de qualquer Pacote Progressivo que
+      // caísse nesta tela (achado 2026-09-20, evento Tamoios).
+      const isProgressivo = mod?.pricing_type === 'PROGRESSIVE_PER_DANCER';
+      if (isProgressivo) {
+        const tiers = Array.isArray(mod?.progressive_tiers) ? mod.progressive_tiers : [];
+        const primeiroTier = tiers.find((t: any) => t?.ordem === 1)?.valor;
+        setActiveLot(null);
+        setAllLotsExpired(false);
+        setBaseFee(Number(primeiroTier ?? feeFromFormacao));
+      } else {
+        // Lotes vêm da própria formação (cada formação tem seus lotes).
+        const { lot, allExpired } = getActiveLotFromFormacao(mod?.lotes);
+        setActiveLot(lot);
+        setAllLotsExpired(allExpired);
 
-      // Preço do lote ativo substitui o preço base da formação
-      setBaseFee(lot?.preco ?? feeFromFormacao);
+        // Preço do lote ativo substitui o preço base da formação
+        setBaseFee(lot?.preco ?? feeFromFormacao);
+      }
 
       setLoading(false);
     };
