@@ -320,9 +320,12 @@ const PrivateLayout: React.FC<{
               paga — decisão de produto 2026-09-20. Renderiza via
               createPortal(document.body) dentro do próprio componente, então
               fica fora do fluxo visual daqui — só precisa estar montado.
-              Suprimido durante impersonation (ação financeira real não deve
-              disparar em nome de outro produtor fora da sessão dele). */}
-          <PlanFeeGateModal producerId={profile.id} suppressed={isImpersonating} />
+              NÃO suprimido durante impersonation por pedido explícito do
+              produtor (2026-09-20) pra poder testar/inspecionar o modal via
+              "Ver como" — super admin decide clicar em "Descontar do meu
+              saldo" com o mesmo nível de confiança que já tem pra editar
+              billing_plan/comissão direto no /super-admin. */}
+          <PlanFeeGateModal producerId={profile.id} suppressed={false} />
           <div className="p-3 lg:p-4">
             <Suspense fallback={<PageLoader />}>
               {children}
