@@ -310,10 +310,96 @@ const MinhasCoreografias = () => {
         setEventsWithWorkshops(wsMap);
       }
 
+      // PROGRESSIVE_PER_DANCER — replica client-side o mesmo algoritmo de
+      // posição-por-bailarino do create-aggregate-payment-asaas, pra "Pagar
+      // Tudo" mostrar ANTES de gerar a fatura o valor real que será cobrado.
+      // Sem isso, calcPrecoDisplay caía no fallback fmEvent.fee (base_fee
+      // fixo, ex. R$20) pra toda inscrição progressiva — bug real reportado
+      // pela Daniele/Tamoios 2026-09-21: tela mostrava R$60 (3× R$20 "chutado")
+      // pra um carrinho que a fatura real cobrou R$65 (20+15+30, faixas
+      // corretas). Só recalcula PENDENTE (não-invoicadas ainda são as únicas
+      // que podem estar desatualizadas; já pagas/aprovadas usam charged_amount
+      // real, que é definitivo).
+      const tierForOrdem = (
+        tiers: { ordem: number; valor: number; repete?: boolean }[],
+        ordem: number,
+        fallback: number
+      ): number => {
+        const exact = tiers.find(t => t.ordem === ordem);
+        if (exact) return exact.valor;
+        const repeating = tiers.filter(t => t.repete && t.ordem <= ordem).sort((a, b) => b.ordem - a.ordem)[0];
+        if (repeating) return repeating.valor;
+        const last = [...tiers].sort((a, b) => b.ordem - a.ordem)[0];
+        return last ? last.valor : fallback;
+      };
+
+      const pendentesPorEvento = new Map<string, any[]>();
+      for (const r of regsRaw) {
+        if (!r.event_id || r.status_pagamento !== 'PENDENTE') continue;
+        if (!pendentesPorEvento.has(r.event_id)) pendentesPorEvento.set(r.event_id, []);
+        pendentesPorEvento.get(r.event_id)!.push(r);
+      }
+
+      // Seed de posição por bailarino: conta coreografias JÁ APROVADAS (mesma
+      // RPC que o servidor usa) — não inclui as PENDENTE, que são incrementadas
+      // abaixo em ordem de criação.
+      const posicaoSeedPorEvento = new Map<string, Map<string, number>>();
+      for (const [eventId, regsDoEvento] of pendentesPorEvento) {
+        const elencoIds = Array.from(new Set(
+          regsDoEvento.flatMap((r: any) =>
+            Array.isArray(r.bailarinos_detalhes) ? r.bailarinos_detalhes.map((b: any) => b?.id).filter(Boolean) : []
+          )
+        ));
+        const seed = new Map<string, number>();
+        if (elencoIds.length > 0) {
+          const { data: counts } = await supabase.rpc('count_dancer_paid_registrations', {
+            p_event_id: eventId,
+            p_elenco_ids: elencoIds,
+          });
+          for (const c of (counts ?? [])) seed.set(c.elenco_id, c.qtd ?? 0);
+        }
+        posicaoSeedPorEvento.set(eventId, seed);
+      }
+
+      // Preço progressivo por registration PENDENTE, processado em ordem de
+      // criação por evento (mesmo critério do servidor) — qualquer formação
+      // (progressiva ou não) consome 1 posição pro bailarino.
+      const precoProgressivoPorRegId = new Map<string, number>();
+      for (const [eventId, regsDoEvento] of pendentesPorEvento) {
+        const seed = posicaoSeedPorEvento.get(eventId)!;
+        const ev = eventsMap[eventId];
+        const eventFormacoes: any[] = ev?.formacoes_config ?? [];
+        const feeMode = ev?.fee_mode ?? 'repassar';
+        const commissionPct = Number(ev?.commission_percent ?? 10);
+        const ordenados = [...regsDoEvento].sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''));
+        for (const r of ordenados) {
+          const formacaoNome: string = (r.formato_participacao ?? r.tipo_apresentacao ?? '').toLowerCase();
+          const formacao = formacaoNome
+            ? eventFormacoes.find((m: any) => m.name?.toLowerCase() === formacaoNome)
+            : undefined;
+          const elencoIds: string[] = Array.isArray(r.bailarinos_detalhes)
+            ? r.bailarinos_detalhes.map((b: any) => b?.id).filter(Boolean)
+            : [];
+          if (formacao?.pricing_type === 'PROGRESSIVE_PER_DANCER') {
+            const tiers = Array.isArray(formacao.progressive_tiers) ? formacao.progressive_tiers : [];
+            const fallback = Number(formacao.fee ?? formacao.base_fee ?? 0);
+            const baseFee = elencoIds.length === 0
+              ? tierForOrdem(tiers, 1, fallback)
+              : elencoIds.reduce((sum, id) => sum + tierForOrdem(tiers, (seed.get(id) ?? 0) + 1, fallback), 0);
+            const commission = parseFloat((baseFee * (commissionPct / 100)).toFixed(2));
+            const charged = feeMode === 'repassar' ? parseFloat((baseFee + commission).toFixed(2)) : parseFloat(baseFee.toFixed(2));
+            precoProgressivoPorRegId.set(r.id, charged);
+          }
+          // Qualquer formação consome 1 posição — mesmo escopo do servidor.
+          for (const id of elencoIds) seed.set(id, (seed.get(id) ?? 0) + 1);
+        }
+      }
+
       // Helper: calcula o preço a mostrar pra uma inscrição. Espelha a lógica
       // de create-aggregate-payment-asaas (sem o passo de lote — pra simples
       // exibição usamos o preço base da formação).
       const calcPrecoDisplay = (r: any): number | null => {
+        if (precoProgressivoPorRegId.has(r.id)) return precoProgressivoPorRegId.get(r.id)!;
         if (r.charged_amount != null && r.charged_amount > 0) return Number(r.charged_amount);
         if (r.valor_pago     != null && r.valor_pago     > 0) return Number(r.valor_pago);
         // mod_fee é UNIT — se PER_MEMBER, precisa multiplicar. Não retorna direto.
@@ -1451,13 +1537,21 @@ const MinhasCoreografias = () => {
 
           {/* CTA agregado quando há pendentes */}
           {grupo.pendentes.length > 0 && (() => {
-            // Se já tem fatura PENDENTE no Asaas, usa o valor dela (já tem
-            // cupom embutido se foi aplicado). Senão, soma estimada client-side.
+            // Se já tem fatura PENDENTE no Asaas E ela cobre TODAS as pendentes
+            // atuais, usa o valor dela (já tem cupom embutido se foi aplicado).
+            // Senão (fatura desatualizada — sobrou pendente nova de fora — ou
+            // nenhuma fatura ainda), usa a soma estimada client-side
+            // (grupo.totalPendente, que já calcula faixa progressiva certa) —
+            // é exatamente o valor que "Pagar Tudo" vai gerar ao clicar (fix
+            // 2026-09-20 cancela a fatura velha e recria com o total certo).
             const faturaPendente = grupo.payment;
-            const faturaTemCupom = !!(faturaPendente?.coupon_id && (faturaPendente?.discount_total ?? 0) > 0);
+            const faturaCobreTudo = !!faturaPendente?.id &&
+              grupo.pendentes.every(r => r.payment_group_id === faturaPendente!.id);
+            const faturaTemCupom = faturaCobreTudo &&
+              !!(faturaPendente?.coupon_id && (faturaPendente?.discount_total ?? 0) > 0);
             const faturaSubtotal = faturaTemCupom
               ? (faturaPendente!.value_total + (faturaPendente!.discount_total ?? 0))
-              : (faturaPendente?.value_total ?? grupo.totalPendente);
+              : (faturaCobreTudo ? faturaPendente!.value_total : grupo.totalPendente);
             const subtotal   = faturaSubtotal;
             const expiraDias = faturaPendente?.expires_at ? diasAte(faturaPendente.expires_at) : null;
             // "Tem cupom?" SEMPRE disponível. Se fatura PENDENTE existe sem
