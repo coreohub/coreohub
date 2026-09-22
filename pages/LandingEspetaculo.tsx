@@ -383,36 +383,7 @@ export default function LandingEspetaculo() {
         </div>
       </section>
 
-      {/* ─── 8. PROVA SOCIAL (escuro, placeholder) ──────────────────────────────────────────────── */}
-      <section className="px-6 py-24 lg:py-32 border-t border-white/5">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-12">
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Depoimentos</p>
-            <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase">
-              Quem já usou,<br />
-              <span className="text-[#ff0068]">aprova.</span>
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col gap-4 min-h-[180px]">
-                <div className="flex-1 flex items-center justify-center">
-                  <p className="text-slate-500 text-xs uppercase tracking-widest font-bold text-center">Depoimento em breve</p>
-                </div>
-                <div className="flex items-center gap-3 border-t border-white/10 pt-4">
-                  <div className="w-10 h-10 rounded-full bg-white/10 shrink-0" />
-                  <div>
-                    <p className="text-slate-500 text-sm font-black">Estúdio parceiro</p>
-                    <p className="text-slate-600 text-[10px] font-bold uppercase tracking-widest">Em validação</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── 9. FAQ (claro) ──────────────────────────────────────────────── */}
+      {/* ─── 8. FAQ (claro) ──────────────────────────────────────────────── */}
       <section className="bg-white text-slate-900 px-6 py-24 lg:py-32 border-t border-slate-200">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-12">
@@ -450,7 +421,7 @@ export default function LandingEspetaculo() {
         </div>
       </section>
 
-      {/* ─── 10. CTA FINAL (escuro) ──────────────────────────────────────────────── */}
+      {/* ─── 9. CTA FINAL (escuro) ──────────────────────────────────────────────── */}
       <section className="relative px-6 py-24 lg:py-32 overflow-hidden border-t border-white/5">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,0,104,0.18),transparent_70%)]" />
         <div className="relative max-w-4xl mx-auto text-center">
