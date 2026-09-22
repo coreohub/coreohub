@@ -130,6 +130,7 @@ const judgePt = {
 
   // Avaliada (showcase, no scoring)
   'avaliada.badgeSuffix': 'sem pontuação',
+  'avaliada.criteriaGuideLabel': 'Guia de critérios (referência, sem nota)',
   'avaliada.feedbackLabel': 'Observações técnicas escritas (opcional)',
   'avaliada.feedbackPlaceholder': 'Escreva suas observações técnicas para a coreografia...',
   'avaliada.audioNote': 'O áudio técnico (botão Gravar no topo da tela) é o principal canal de feedback neste modo.',

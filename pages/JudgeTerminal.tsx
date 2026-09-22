@@ -2580,6 +2580,30 @@ const JudgeTerminal = () => {
               </p>
             </div>
 
+            {/* Guia de critérios — só referência, sem nota/input. Mesmos
+                critérios já configurados pro estilo (Avaliação → Critério),
+                reaproveitados aqui como lembrete do que comentar — pesquisa
+                de mercado (RAD) mostra que feedback qualitativo sem nota
+                ainda costuma manter as dimensões de avaliação como esqueleto,
+                em vez de virar campo livre sem guia nenhum (2026-09-22). */}
+            {activeCriteria.length > 0 && (
+              <div className="w-full max-w-md space-y-1.5">
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                  {t('avaliada.criteriaGuideLabel')}
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {activeCriteria.map(c => (
+                    <span
+                      key={c.name}
+                      className="px-2.5 py-1 bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 rounded-full text-[9px] font-bold uppercase tracking-widest"
+                    >
+                      {criterionLabel(c)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Text feedback area */}
             <div className="w-full max-w-md space-y-2">
               <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">

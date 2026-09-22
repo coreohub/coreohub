@@ -128,6 +128,7 @@ const judgeEn: Record<JudgeDictKey, string> = {
 
   // Avaliada (showcase, no scoring)
   'avaliada.badgeSuffix': 'no scoring',
+  'avaliada.criteriaGuideLabel': 'Criteria guide (reference, no scoring)',
   'avaliada.feedbackLabel': 'Written technical notes (optional)',
   'avaliada.feedbackPlaceholder': 'Write your technical notes for the choreography...',
   'avaliada.audioNote': 'The technical audio (Record button at the top) is the main feedback channel in this mode.',

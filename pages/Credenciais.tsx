@@ -9,6 +9,7 @@ import PageHeader from '../components/PageHeader';
 import { supabase } from '../services/supabase';
 import { resolveEstudio } from '../utils/formatters';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
+import { resolveAvaliadaLabel } from '../utils/formatoParticipacao';
 import {
   CredentialItem,
   CredentialType,
@@ -98,6 +99,21 @@ const Credenciais: React.FC = () => {
           .eq('event_id', selectedEventId);
         const linkedJudgeIds = (judgeLinks ?? []).map(l => l.judge_id);
 
+        const { fetchActiveEventConfig } = await import('../services/supabase');
+        const cfg = await fetchActiveEventConfig(
+          'formato_avaliada_label_mode, formato_avaliada_label_custom',
+          selectedEventId
+        );
+        const avaliadaLabel = resolveAvaliadaLabel(cfg as any);
+        // Dado real tem jurados com literal legado "Mostra Competitiva"/
+        // "Mostra Avaliada" (ver pages/JudgesManagement.tsx) — normaliza.
+        const formatDisplayLabel = (value: string): string => {
+          const normalized = value.replace(/^Mostra\s+/i, '');
+          if (normalized === 'Avaliada') return avaliadaLabel;
+          if (normalized.startsWith('Ambas')) return `Ambas (Competitiva + ${avaliadaLabel})`;
+          return normalized;
+        };
+
         const [regsRes, wsRes, judgesRes] = await Promise.all([
           supabase
             .from('registrations')
@@ -172,7 +188,9 @@ const Credenciais: React.FC = () => {
             type: 'JURADO' as CredentialType,
             name: j.name || 'Jurado',
             subtitle: 'Corpo de Jurados',
-            category: Array.isArray(j.competencias_formatos) && j.competencias_formatos[0] || undefined,
+            category: Array.isArray(j.competencias_formatos) && j.competencias_formatos[0]
+              ? formatDisplayLabel(j.competencias_formatos[0])
+              : undefined,
             qrValue: j.id,
           }));
 

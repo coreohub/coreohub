@@ -17,6 +17,7 @@ import { normalizeStyleName, isStyleInList } from '../utils/styleMatch';
 import { resolveEstudio, toTitleCase } from '../utils/formatters';
 import { formatDataBRComDia } from '../utils/lotes';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
+import { resolveAvaliadaLabel } from '../utils/formatoParticipacao';
 import { EventStyle } from '../types';
 import EventPickerSheet from '../components/EventPickerSheet';
 
@@ -52,8 +53,12 @@ interface Judge {
 }
 
 // "Batalhas" removido 2026-09-22 (Torneio de Batalhas nunca teve mecânica
-// implementada na plataforma, ver CLAUDE.md). Tags livres do jurado — não
-// dependem do rótulo escolhido pelo produtor pro formato "Avaliada".
+// implementada na plataforma, ver CLAUDE.md). Valor interno gravado em
+// `judges.competencias_formatos` continua fixo ('Avaliada' etc, nunca
+// comparado em lógica nenhuma — é só tag de exibição) — o TEXTO mostrado
+// pro produtor/público usa `formatDisplayLabel()` abaixo, resolvendo
+// "Avaliada" pro rótulo escolhido no evento (Não Competitiva/Avaliativa/
+// Comentada/custom, ver utils/formatoParticipacao.ts).
 const FORMATS = [
   'Competitiva',
   'Avaliada',
@@ -126,6 +131,10 @@ const JudgesManagement = () => {
   // banco) — produtor desmarca quem não participa desta edição.
   const [assignedJudgeIds, setAssignedJudgeIds] = useState<Set<string>>(new Set());
   const [togglingAssignment, setTogglingAssignment] = useState<string | null>(null);
+  // Rótulo escolhido pelo produtor pro formato "Avaliada" (Não Competitiva/
+  // Avaliativa/Comentada/custom) — resolve exibição dos tags
+  // competencias_formatos sem tocar no valor gravado no banco.
+  const [avaliadaLabel, setAvaliadaLabel] = useState('Não Competitiva');
   const [saving, setSaving] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -320,6 +329,32 @@ const JudgesManagement = () => {
       }
     })();
   }, []);
+
+  /* ── rótulo do formato "Avaliada" do evento selecionado ── */
+  useEffect(() => {
+    if (!selectedEventId) return;
+    (async () => {
+      const { fetchActiveEventConfig } = await import('../services/supabase');
+      const cfg = await fetchActiveEventConfig(
+        'formato_avaliada_label_mode, formato_avaliada_label_custom',
+        selectedEventId
+      );
+      setAvaliadaLabel(resolveAvaliadaLabel(cfg as any));
+    })();
+  }, [selectedEventId]);
+
+  /** Texto exibido pro tag interno de competencias_formatos — valor gravado
+   *  no banco não muda, só a exibição. Dado real de produção tem jurados
+   *  com o literal legado "Mostra Competitiva"/"Mostra Avaliada" (prefixo
+   *  removido do array FORMATS em versão anterior, nunca migrado no banco
+   *  — confirmado via SELECT DISTINCT em 2026-09-22), por isso normaliza
+   *  o prefixo antes de comparar. */
+  const formatDisplayLabel = (value: string): string => {
+    const normalized = value.replace(/^Mostra\s+/i, '');
+    if (normalized === 'Avaliada') return avaliadaLabel;
+    if (normalized.startsWith('Ambas')) return `Ambas (Competitiva + ${avaliadaLabel})`;
+    return normalized;
+  };
 
   /* ── fetch ── */
   const fetchAll = useCallback(async () => {
@@ -1766,7 +1801,7 @@ const JudgesManagement = () => {
                     })}
                     {judge.competencias_formatos.map(f => (
                       <span key={f} className="px-2 py-0.5 bg-slate-200 dark:bg-white/5 text-slate-500 rounded-full text-[8px] font-black uppercase tracking-widest">
-                        {f}
+                        {formatDisplayLabel(f)}
                       </span>
                     ))}
                   </div>
@@ -1878,7 +1913,7 @@ const JudgesManagement = () => {
                             );
                           })}
                           {judge.competencias_formatos.map(f => (
-                            <span key={f} className="px-2 py-1 bg-violet-500/10 text-violet-500 rounded-xl text-[9px] font-black uppercase tracking-widest">{f}</span>
+                            <span key={f} className="px-2 py-1 bg-violet-500/10 text-violet-500 rounded-xl text-[9px] font-black uppercase tracking-widest">{formatDisplayLabel(f)}</span>
                           ))}
                         </div>
                         {judge.mini_bio && (
@@ -2227,7 +2262,7 @@ const JudgesManagement = () => {
                       <div className="flex flex-wrap gap-2">
                         {FORMATS.map(f => (
                           <TagToggle
-                            key={f} item={f}
+                            key={f} item={formatDisplayLabel(f)}
                             selected={form.competencias_formatos.includes(f)}
                             onToggle={() => toggleList('competencias_formatos', f)}
                             color="bg-violet-600"
