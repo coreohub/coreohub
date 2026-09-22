@@ -67,9 +67,9 @@ export const resolveFormat = async (
  */
 export const formatLabel = (format: EventFormat): string => {
   const labels: Record<EventFormat, string> = {
-    [EventFormat.RANKING]: 'Mostra Competitiva',
-    [EventFormat.PEDAGOGICAL]: 'Mostra Avaliada',
-    [EventFormat.GRADUATED]: 'Mostra por Médias',
+    [EventFormat.RANKING]: 'Competitiva',
+    [EventFormat.PEDAGOGICAL]: 'Não Competitiva',
+    [EventFormat.GRADUATED]: 'Por Médias',
     [EventFormat.BATTLE]: 'Batalha'
   };
   return labels[format] ?? format;

@@ -127,7 +127,7 @@ const judgeEs: Record<JudgeDictKey, string> = {
   'empty.demoNote': 'Ningún dato se guarda en la base',
 
   // Avaliada (showcase, no scoring)
-  'avaliada.badge': 'Muestra Evaluada — sin puntuación',
+  'avaliada.badgeSuffix': 'sin puntuación',
   'avaliada.feedbackLabel': 'Observaciones técnicas escritas (opcional)',
   'avaliada.feedbackPlaceholder': 'Escribe tus observaciones técnicas para la coreografía...',
   'avaliada.audioNote': 'El audio técnico (botón Grabar arriba) es el canal principal de feedback en este modo.',

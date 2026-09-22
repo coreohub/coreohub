@@ -114,6 +114,23 @@ Deno.serve(async (req) => {
       ev = data
     }
 
+    // Rótulo do formato "Avaliada" escolhido pelo produtor (Não Competitiva/
+    // Avaliada/Comentada/Personalizada — ver utils/formatoParticipacao.ts no
+    // frontend, mesma regra replicada aqui pq edge function Deno não importa
+    // TS do frontend). Resolvido 1x por lote, não por certificado.
+    let formatoAvaliadaLabel = 'Não Competitiva'
+    if (event_id) {
+      const { data: labelCfg } = await supabase
+        .from('configuracoes')
+        .select('formato_avaliada_label_mode, formato_avaliada_label_custom')
+        .eq('id', event_id)
+        .maybeSingle()
+      const mode = labelCfg?.formato_avaliada_label_mode
+      if (mode === 'custom') formatoAvaliadaLabel = (labelCfg?.formato_avaliada_label_custom || '').trim() || 'Não Competitiva'
+      else if (mode === 'avaliada') formatoAvaliadaLabel = 'Avaliada'
+      else if (mode === 'comentada') formatoAvaliadaLabel = 'Comentada'
+    }
+
     // Resolve owner: se workshop standalone, owner é workshops.created_by
     let ownerId: string | null = ev?.created_by ?? null
     if (!ownerId && workshop_id) {
@@ -243,6 +260,7 @@ Deno.serve(async (req) => {
               estudio: r.estudio,
               classificacao: r.classificacao_final,
               tipo_apresentacao: r.tipo_apresentacao, // Avaliada usa corpo de texto diferente
+              formato_avaliada_label: formatoAvaliadaLabel, // texto literal já resolvido, ver acima
             },
           }
         })

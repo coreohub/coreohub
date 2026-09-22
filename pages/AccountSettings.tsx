@@ -33,6 +33,7 @@ import {
 import FocalPointPicker from '../components/FocalPointPicker';
 import { formatEventWhatsApp, resolveEstudio, stripEstiloVertentes } from '../utils/formatters';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
+import { resolveAvaliadaLabel } from '../utils/formatoParticipacao';
 import InstallPWAButton from '../components/InstallPWAButton';
 import { previewNarration, fetchNarrationAudios, type NarrationKind } from '../services/narrationApi';
 import { fetchUfList, fetchCitiesByUf, parseCityUf, type UfOption } from '../services/ibgeLocation';
@@ -345,31 +346,25 @@ const TABS: { label: TabType; icon: React.ElementType }[] = [
   { label: 'Demo',              icon: Sparkles },        // 7. Sandbox (avançado)
 ];
 
+// Só os 2 formatos com mecânica real implementada (nota+ranking+prêmio vs
+// feedback sem nota/prêmio). "Ranking por Médias", "Torneio de Batalhas" e
+// "Espetáculo de Dança" foram removidos daqui 2026-09-22 — nenhum tinha
+// lógica por trás (checkbox decorativo, 0 uso real em produção); "Espetáculo
+// de Dança" em especial era facilmente confundido com o Plano Espetáculo de
+// verdade (events.billing_plan='espetaculo', fluxo próprio em /criar-espetaculo),
+// que não passa por aqui. O rótulo do formato "Avaliada" é dinâmico — o
+// produtor escolhe o termo do próprio regulamento (ver seletor logo abaixo,
+// resolveAvaliadaLabel em utils/formatoParticipacao.ts).
 const TIPOS_APRESENTACAO_OPTIONS = [
   {
     id: 'Competitiva',
-    label: 'Mostra Competitiva',
-    description: 'Festival com prêmios e ranking final por categoria.',
+    label: 'Competitiva',
+    description: 'Jurados dão nota, gera ranking e premiação por categoria.',
   },
   {
     id: 'Avaliada',
-    label: 'Mostra Avaliada',
-    description: 'Avaliação técnica com feedback dos jurados, sem competição.',
-  },
-  {
-    id: 'Ranking',
-    label: 'Ranking por Médias',
-    description: 'Soma de médias premia melhor escola/coreógrafo do festival.',
-  },
-  {
-    id: 'Batalhas',
-    label: 'Torneio de Batalhas',
-    description: 'Hip-hop, breaking ou freestyle em formato eliminatório 1v1.',
-  },
-  {
-    id: 'Espetaculo',
-    label: 'Espetáculo de Dança',
-    description: 'Recital, mostra de fim de ano ou apresentação de estúdio sem competição.',
+    label: null as string | null, // resolvido em tempo real via resolveAvaliadaLabel(general)
+    description: 'Jurados dão feedback (texto/áudio), sem nota, sem ranking e sem premiação.',
   },
 ];
 
@@ -393,6 +388,9 @@ const DEFAULT_GENERAL = {
   regDeadline: '',
   trackDeadline: '',
   tipos_apresentacao: ['Competitiva', 'Avaliada'],
+  // Termo escolhido pro formato "Avaliada" — ver utils/formatoParticipacao.ts.
+  formatoAvaliadaLabelMode: 'nao_competitiva' as 'nao_competitiva' | 'avaliada' | 'comentada' | 'custom',
+  formatoAvaliadaLabelCustom: '',
   scoreScale: 'BASE_10' as ScoreScale,
   pinInactivityMinutes: 15 as number, // 0 = nunca bloquear
   medalThresholds: { gold: 9.0, silver: 8.0, bronze: 7.0 },
@@ -2134,6 +2132,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               ? 'lugar'
               : 'custom',
             premiationSystem: (data.premiation_system as 'THRESHOLD' | 'RANKING') || DEFAULT_GENERAL.premiationSystem,
+            formatoAvaliadaLabelMode: (data.formato_avaliada_label_mode as typeof DEFAULT_GENERAL.formatoAvaliadaLabelMode) || DEFAULT_GENERAL.formatoAvaliadaLabelMode,
+            formatoAvaliadaLabelCustom: data.formato_avaliada_label_custom ?? '',
             coverUrl:    data.cover_url   || evt.cover_url    || DEFAULT_GENERAL.coverUrl,
             coverFocalX: evt.cover_focal_x ?? DEFAULT_GENERAL.coverFocalX,
             coverFocalY: evt.cover_focal_y ?? DEFAULT_GENERAL.coverFocalY,
@@ -2350,6 +2350,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           bronze: general.medalLabels.bronze.trim() || null,
         },
         premiation_system:   general.premiationSystem,
+        formato_avaliada_label_mode:   general.formatoAvaliadaLabelMode,
+        formato_avaliada_label_custom: general.formatoAvaliadaLabelMode === 'custom' ? (general.formatoAvaliadaLabelCustom.trim() || null) : null,
         cover_url:           general.coverUrl || null,
         descricao:           general.description || null,
         hora_evento:         general.eventTime || null,
@@ -4221,6 +4223,10 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {TIPOS_APRESENTACAO_OPTIONS.map(opt => {
                   const active = general.tipos_apresentacao.includes(opt.id);
+                  const label = opt.label ?? resolveAvaliadaLabel({
+                    formato_avaliada_label_mode: general.formatoAvaliadaLabelMode,
+                    formato_avaliada_label_custom: general.formatoAvaliadaLabelCustom,
+                  });
                   return (
                     <button
                       key={opt.id}
@@ -4238,7 +4244,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         <p className={`text-[11px] font-black uppercase tracking-widest ${
                           active ? 'text-[#ff0068]' : 'text-slate-700 dark:text-slate-200'
                         }`}>
-                          {opt.label}
+                          {label}
                         </p>
                         <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
                           {opt.description}
@@ -4248,6 +4254,58 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   );
                 })}
               </div>
+
+              {/* Rótulo do formato "Avaliada" — 3 termos de mercado (sinônimos
+                  do mesmo mecanismo em regulamentos diferentes, pesquisa
+                  2026-09-22) + Personalizado. Valor interno gravado no banco
+                  continua sempre 'Avaliada'; só o texto exibido muda. Mesmo
+                  padrão de "Faixas de medalha" (medalLabelMode) já usado
+                  abaixo, em Avaliação. */}
+              {general.tipos_apresentacao.includes('Avaliada') && (
+                <div className="mt-5 pt-5 border-t border-slate-200 dark:border-white/10">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">
+                    Como chamar o formato não competitivo
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {([
+                      { id: 'nao_competitiva' as const, title: 'Não Competitiva' },
+                      { id: 'avaliada'        as const, title: 'Avaliada' },
+                      { id: 'comentada'       as const, title: 'Comentada' },
+                      { id: 'custom'          as const, title: 'Personalizada' },
+                    ]).map(opt => {
+                      const mode = general.formatoAvaliadaLabelMode ?? 'nao_competitiva';
+                      const isActive = mode === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setGeneral(g => ({ ...g, formatoAvaliadaLabelMode: opt.id }))}
+                          aria-pressed={isActive}
+                          className={`text-left p-3 rounded-2xl border-2 transition-colors ${
+                            isActive
+                              ? 'border-[#ff0068] bg-[#ff0068]/5'
+                              : 'border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 hover:border-[#ff0068]/30'
+                          }`}
+                        >
+                          <p className={`text-[11px] font-black uppercase tracking-widest ${isActive ? 'text-[#ff0068]' : 'text-slate-700 dark:text-slate-200'}`}>
+                            {opt.title}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {general.formatoAvaliadaLabelMode === 'custom' && (
+                    <input
+                      type="text"
+                      value={general.formatoAvaliadaLabelCustom}
+                      onChange={e => setGeneral(g => ({ ...g, formatoAvaliadaLabelCustom: e.target.value }))}
+                      placeholder="Ex: Avaliativa, Recreativa, Pedagógica..."
+                      maxLength={40}
+                      className="w-full mt-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-[#ff0068]/30"
+                    />
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Eixos opcionais — Nível Técnico (4 níveis fixos quando ON).

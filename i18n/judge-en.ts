@@ -127,7 +127,7 @@ const judgeEn: Record<JudgeDictKey, string> = {
   'empty.demoNote': 'No data is saved to the database',
 
   // Avaliada (showcase, no scoring)
-  'avaliada.badge': 'Reviewed Showcase — no scoring',
+  'avaliada.badgeSuffix': 'no scoring',
   'avaliada.feedbackLabel': 'Written technical notes (optional)',
   'avaliada.feedbackPlaceholder': 'Write your technical notes for the choreography...',
   'avaliada.audioNote': 'The technical audio (Record button at the top) is the main feedback channel in this mode.',

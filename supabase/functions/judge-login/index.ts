@@ -335,13 +335,13 @@ Deno.serve(async (req) => {
         : Promise.resolve({ data: [] } as any),
       event?.id
         ? supa.from('configuracoes')
-            .select('regras_avaliacao, escala_notas, premios_especiais, pin_inactivity_minutes')
+            .select('regras_avaliacao, escala_notas, premios_especiais, pin_inactivity_minutes, formato_avaliada_label_mode, formato_avaliada_label_custom')
             .eq('event_id', event.id)
             .maybeSingle()
         : Promise.resolve({ data: null } as any),
       // Fallback legacy id='1'
       supa.from('configuracoes')
-        .select('regras_avaliacao, escala_notas, premios_especiais, pin_inactivity_minutes')
+        .select('regras_avaliacao, escala_notas, premios_especiais, pin_inactivity_minutes, formato_avaliada_label_mode, formato_avaliada_label_custom')
         .eq('id', '1')
         .maybeSingle(),
       // Mesmo critério do Cronograma (Schedule.tsx): mostra automaticamente

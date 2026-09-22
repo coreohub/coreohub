@@ -20,11 +20,14 @@ export enum UserRole {
   APOIO_WORKSHOP = 'APOIO_WORKSHOP', // só escaneia QR de presença em workshops
 }
 
+// Legado de services/format_resolver.ts — confirmado 2026-09-22 que nada no
+// app real lê esses valores (o formato de verdade é configuracoes.
+// tipos_apresentacao: 'Competitiva'/'Avaliada', ver utils/formatoParticipacao.ts).
 export enum EventFormat {
-  RANKING = 'RANKING',       // Mostra Competitiva
-  PEDAGOGICAL = 'PEDAGOGICAL', // Mostra Avaliada
-  GRADUATED = 'GRADUATED',    // Mostra por Médias
-  BATTLE = 'BATTLE'          // Torneio de Batalhas
+  RANKING = 'RANKING',       // Competitiva
+  PEDAGOGICAL = 'PEDAGOGICAL', // Não Competitiva (Avaliada/Comentada)
+  GRADUATED = 'GRADUATED',    // Por Médias — nunca implementado
+  BATTLE = 'BATTLE'          // Torneio de Batalhas — nunca implementado
 }
 
 export enum AgeReference {

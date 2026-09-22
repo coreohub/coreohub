@@ -38,7 +38,7 @@ const baseStyles = () => [
 export const eventTemplates: EventTemplate[] = [
   {
     id: 'COMPETITIVA',
-    label: 'Mostra Competitiva',
+    label: 'Competitiva',
     tagline: 'Com ranking + pontuação',
     description: 'Jurados dão notas de 0 a 10. Sistema gera ranking automático por gênero e categoria, premiação com Ouro/Prata/Bronze (ou 1º/2º/3º) e certificados de classificação. Indicado pra festivais profissionais e seletivas.',
     default_format: EventFormat.RANKING,
@@ -54,9 +54,12 @@ export const eventTemplates: EventTemplate[] = [
   },
   {
     id: 'AVALIADA',
-    label: 'Mostra Avaliada',
+    // "Avaliada" é o valor interno (ver utils/formatoParticipacao.ts) — o
+    // produtor escolhe o termo (Não Competitiva/Avaliada/Comentada) já
+    // dentro de Configurações, depois de criar o evento.
+    label: 'Não Competitiva',
     tagline: 'Feedback técnico, sem ranking',
-    description: 'Jurados gravam áudio + escrevem feedback técnico, sem dar nota nem classificar. Não tem premiação. Cada bailarino recebe feedback individual no painel. Indicado pra mostras escolares, pedagógicas ou recital de fim de ano.',
+    description: 'Jurados gravam áudio + escrevem feedback técnico, sem dar nota nem classificar. Não tem premiação. Cada bailarino recebe feedback individual no painel. Indicado pra mostras escolares, pedagógicas ou recital de fim de ano. Também chamada de Avaliada ou Comentada em outros regulamentos.',
     default_format: EventFormat.PEDAGOGICAL,
     score_scale: 10,
     formacoes_config: baseFormacoes().map(f => ({ ...f, format: EventFormat.PEDAGOGICAL })),

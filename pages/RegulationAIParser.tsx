@@ -415,7 +415,25 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
       // Auditoria 2026-05-12: 14 campos antes não capturados pela IA ─────────
       // a) Campos que vivem em configuracoes
       if (edited.event_time)         updates.hora_evento         = edited.event_time;
-      if (edited.tipos_apresentacao?.length) updates.tipos_apresentacao = edited.tipos_apresentacao;
+      // A IA extrai no próprio vocabulário (MOSTRA_AVALIADA/COMPETITIVA/
+      // NAO_COMPETITIVA/PARTICIPATIVA) — precisa mapear pros 2 valores
+      // internos reais ('Competitiva'/'Avaliada') antes de gravar na mesma
+      // coluna que o Wizard/Terminal/Apuração leem. Gravar o valor cru da
+      // IA direto quebrava tudo silenciosamente (achado 2026-09-22, evento
+      // "Lyris Dance Competition" duplicado com array corrompido). NAO_
+      // COMPETITIVA mapeia pra 'Avaliada' (mecanismo mais próximo hoje —
+      // feedback sem nota/prêmio; não existe ainda um formato "zero
+      // avaliação" selecionável por inscrição). PARTICIPATIVA (workshops/
+      // coletivos) não é um formato de apresentação — descartado.
+      if (edited.tipos_apresentacao?.length) {
+        const mapped = new Set<'Competitiva' | 'Avaliada'>();
+        for (const t of edited.tipos_apresentacao) {
+          if (t === 'COMPETITIVA') mapped.add('Competitiva');
+          else if (t === 'MOSTRA_AVALIADA' || t === 'NAO_COMPETITIVA') mapped.add('Avaliada');
+          // PARTICIPATIVA e qualquer outro valor desconhecido: ignorado.
+        }
+        if (mapped.size > 0) updates.tipos_apresentacao = [...mapped];
+      }
       if (edited.premiation_system)  updates.premiation_system   = edited.premiation_system;
       if (edited.medal_thresholds)   updates.medal_thresholds    = edited.medal_thresholds;
       if (edited.politica_ingressos) updates.politica_ingressos  = edited.politica_ingressos;
@@ -945,12 +963,16 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
                     </span>
                   )}
                 </label>
+                <p className="text-[9px] text-slate-400 -mt-1">
+                  "Avaliada"/"Não Competitiva" viram o mesmo formato na plataforma
+                  (feedback sem nota/prêmio) — marque o que o regulamento cita,
+                  o termo exibido é escolhido depois em Configurações.
+                </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl">
                   {([
-                    { id: 'MOSTRA_AVALIADA',  label: 'Mostra Avaliada' },
-                    { id: 'COMPETITIVA',      label: 'Mostra Competitiva' },
-                    { id: 'NAO_COMPETITIVA',  label: 'Mostra Não Competitiva' },
-                    { id: 'PARTICIPATIVA',    label: 'Mostra Participativa' },
+                    { id: 'COMPETITIVA',      label: 'Competitiva' },
+                    { id: 'MOSTRA_AVALIADA',  label: 'Avaliada' },
+                    { id: 'NAO_COMPETITIVA',  label: 'Não Competitiva' },
                   ] as const).map(opt => {
                     const arr = edited.tipos_apresentacao ?? [];
                     const checked = arr.includes(opt.id);
@@ -1087,9 +1109,14 @@ const RegulationAIParser: React.FC<{ onApply?: (data: RegulationExtract) => void
                     <input className="bg-transparent text-sm font-black text-slate-900 dark:text-white focus:outline-none uppercase" value={mod.name} onChange={e => { const mods = [...edited.formacoes]; mods[i] = { ...mods[i], name: e.target.value }; setField('formacoes', mods); }} />
                     <div className="flex items-center gap-1 text-[9px] text-slate-400"><Clock size={10} /><input type="text" className="w-16 bg-transparent focus:outline-none text-slate-900 dark:text-white text-xs" value={mod.max_time} onChange={e => { const mods = [...edited.formacoes]; mods[i] = { ...mods[i], max_time: e.target.value }; setField('formacoes', mods); }} placeholder="MM:SS" /></div>
                     <div className="flex items-center gap-1 text-[9px] text-slate-400"><DollarSign size={10} /><input type="number" className="w-20 bg-transparent focus:outline-none text-slate-900 dark:text-white text-xs" value={mod.fee} onChange={e => { const mods = [...edited.formacoes]; mods[i] = { ...mods[i], fee: parseFloat(e.target.value) || 0 }; setField('formacoes', mods); }} /></div>
+                    {/* `mod.format` (EventFormat: RANKING/PEDAGOGICAL/GRADUATED) é campo
+                        legado de `services/format_resolver.ts` — confirmado 2026-09-22
+                        que nada no app real (Wizard/Terminal/Apuração) lê esse valor por
+                        formação; o formato de verdade é `configuracoes.tipos_apresentacao`
+                        (seção acima). Mantido só pra não perder o dropdown existente. */}
                     <select className="bg-transparent text-[9px] font-black text-slate-500 focus:outline-none uppercase" value={mod.format} onChange={e => { const mods = [...edited.formacoes]; mods[i] = { ...mods[i], format: e.target.value as any }; setField('formacoes', mods); }}>
                       <option value="RANKING">Competitivo</option>
-                      <option value="PEDAGOGICAL">Avaliado</option>
+                      <option value="PEDAGOGICAL">Não Competitivo</option>
                       <option value="GRADUATED">Por Médias</option>
                     </select>
                   </div>

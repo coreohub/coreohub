@@ -27,6 +27,7 @@ import {
   type ElencoById,
   type ElencoRow,
 } from '../utils/bailarinos';
+import { resolveTipoApresentacaoLabel, type FormatoLabelConfig } from '../utils/formatoParticipacao';
 
 // Resolve a URL pública da fatura Asaas pra uma inscrição, com fallback pro
 // pagamento agregado ("Pagar Tudo"). Usado tanto no botão "Abrir fatura"
@@ -52,6 +53,9 @@ const Registrations = () => {
   // RLS `producer_reads_event_elenco` (migration 20260601) libera o produtor
   // a ler elenco dos bailarinos referenciados nas inscrições do evento dele.
   const [elencoById, setElencoById] = useState<ElencoById>({});
+  // Termo escolhido pelo produtor pro formato "Avaliada" (Não Competitiva/
+  // Avaliada/Comentada/Personalizada) — ver utils/formatoParticipacao.ts.
+  const [formatoLabelConfig, setFormatoLabelConfig] = useState<FormatoLabelConfig>({});
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('ALL');
@@ -451,7 +455,7 @@ const Registrations = () => {
         cfg,
       ] = await Promise.all([
         regsQuery,
-        fetchActiveEventConfig('tolerancia,age_reference,age_reference_date,data_evento'),
+        fetchActiveEventConfig('tolerancia,age_reference,age_reference_date,data_evento,formato_avaliada_label_mode,formato_avaliada_label_custom'),
       ]);
       if (error) throw error;
 
@@ -546,6 +550,10 @@ const Registrations = () => {
       if (cfg?.age_reference) setAgeRefMode(cfg.age_reference as 'EVENT_DAY' | 'YEAR_END' | 'FIXED_DATE');
       if (cfg?.age_reference_date) setAgeRefFixed(cfg.age_reference_date);
       if (cfg?.data_evento) setEventDate(cfg.data_evento);
+      setFormatoLabelConfig({
+        formato_avaliada_label_mode: cfg?.formato_avaliada_label_mode ?? null,
+        formato_avaliada_label_custom: cfg?.formato_avaliada_label_custom ?? null,
+      });
 
       // P5 backlog painel produtor — comparativo edição anterior. Procura no
       // próprio dropdown (mesmo produtor) o evento com maior edition_year que
@@ -1056,6 +1064,13 @@ const Registrations = () => {
 
   /* Listas únicas pros dropdowns de filtro. Derivadas do dataset bruto pra
      não sumir opções quando o user já filtrou. */
+  // Formatos (Competitiva/Avaliada) realmente presentes nas inscrições
+  // carregadas. Tag de formato por linha só faz sentido (e só aparece)
+  // quando o evento é MISTO — repetir a mesma tag em toda linha de um
+  // evento 100% Não Competitivo (ou 100% Competitivo) é ruído puro.
+  const tiposApresentacaoAtivos = useMemo(() => {
+    return [...new Set(registrations.map(r => r.tipo_apresentacao).filter(Boolean))];
+  }, [registrations]);
   const categoriasDisponiveis = useMemo(() => {
     return [...new Set(registrations.map(r => r.categoria).filter(Boolean))].sort();
   }, [registrations]);
@@ -1600,7 +1615,7 @@ const Registrations = () => {
                   <ActiveFilterChip label={`Estilo: ${estiloFilter}`} onRemove={() => setEstiloFilter('ALL')} />
                 )}
                 {tipoApresentacaoFilter !== 'ALL' && (
-                  <ActiveFilterChip label={`Mostra: ${tipoApresentacaoFilter}`} onRemove={() => setTipoApresentacaoFilter('ALL')} />
+                  <ActiveFilterChip label={`Formato: ${resolveTipoApresentacaoLabel(tipoApresentacaoFilter, formatoLabelConfig)}`} onRemove={() => setTipoApresentacaoFilter('ALL')} />
                 )}
                 {inscritoFilter !== 'ALL' && (
                   <ActiveFilterChip label={`Inscrito: ${inscritoFilter}`} onRemove={() => setInscritoFilter('ALL')} />
@@ -1891,7 +1906,11 @@ const Registrations = () => {
                           <span className="px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 whitespace-nowrap" title="Dança inclusiva (PCD)">PCD</span>
                         )}
                       </div>
-                      <p className="text-[9px] text-[#ff0068] font-bold uppercase tracking-widest">{reg.tipo_apresentacao}</p>
+                      {tiposApresentacaoAtivos.length > 1 && (
+                        <p className={`text-[9px] font-bold uppercase tracking-widest ${reg.tipo_apresentacao === 'Competitiva' ? 'text-[#ff0068]' : 'text-slate-400 dark:text-slate-500'}`}>
+                          {resolveTipoApresentacaoLabel(reg.tipo_apresentacao, formatoLabelConfig)}
+                        </p>
+                      )}
                       {/* Mostra estúdio + formação + categoria em mobile (colunas escondidas em <md/<lg) */}
                       <p className="text-[10px] text-slate-500 mt-1 md:hidden">{toTitleCase(reg.estudio)}{reg.formato_participacao ? ` · ${reg.formato_participacao}` : ''}{reg.categoria ? ` · ${formatCategoriaAbbrev(reg.categoria)}` : ''}</p>
                     </td>
@@ -2908,11 +2927,11 @@ const Registrations = () => {
                     {estilosDisponiveis.map(e => <option key={e} value={e}>{e}</option>)}
                   </select>
                 </FilterSelectLabel>
-                <FilterSelectLabel label="Tipo de Mostra">
+                <FilterSelectLabel label="Formato">
                   <select value={tipoApresentacaoFilter} onChange={e => setTipoApresentacaoFilter(e.target.value as 'ALL' | 'Competitiva' | 'Avaliada')} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-[12px] font-bold text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]">
-                    <option value="ALL">Todas</option>
-                    <option value="Competitiva">Mostra Competitiva</option>
-                    <option value="Avaliada">Mostra Avaliada</option>
+                    <option value="ALL">Todos</option>
+                    <option value="Competitiva">{resolveTipoApresentacaoLabel('Competitiva', formatoLabelConfig)}</option>
+                    <option value="Avaliada">{resolveTipoApresentacaoLabel('Avaliada', formatoLabelConfig)}</option>
                   </select>
                 </FilterSelectLabel>
                 <FilterSelectLabel label="Inscrito">

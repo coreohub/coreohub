@@ -27,6 +27,7 @@ import {
 import { parseTempoSegundos, formatTempo } from '../utils/masks';
 import { readAudioDuration } from '../utils/audioDuration';
 import { UF_LIST, fetchMunicipios } from '../utils/ibge';
+import { resolveTipoApresentacaoLabel } from '../utils/formatoParticipacao';
 import TrackDurationBadge from '../components/TrackDurationBadge';
 import CitySearchSelect from '../components/CitySearchSelect';
 import StaffTecnicoEditor, { StaffTecnicoValue } from '../components/StaffTecnicoEditor';
@@ -522,8 +523,8 @@ const InscricaoWizard: React.FC = () => {
       setProfileNeedsName(!profile?.full_name?.trim());
 
       const [{ data: cfg }, { data: legacy }, { data: styles }] = await Promise.all([
-        supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date, tipos_apresentacao, prazo_inscricao').eq('event_id', ev.id).maybeSingle(),
-        supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date, tipos_apresentacao, prazo_inscricao').eq('id', '1').maybeSingle(),
+        supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date, tipos_apresentacao, prazo_inscricao, formato_avaliada_label_mode, formato_avaliada_label_custom').eq('event_id', ev.id).maybeSingle(),
+        supabase.from('configuracoes').select('categorias, estilos, tolerancia, age_reference, age_reference_date, tipos_apresentacao, prazo_inscricao, formato_avaliada_label_mode, formato_avaliada_label_custom').eq('id', '1').maybeSingle(),
         // Gêneros estruturados (com sub_types/modalidades). Source of truth nova.
         supabase.from('event_styles').select('id, name, is_active, sub_types').eq('event_id', ev.id).eq('is_active', true).order('name'),
       ]);
@@ -783,7 +784,7 @@ const InscricaoWizard: React.FC = () => {
       // Tipo de mostra obrigatório quando há 2+ opções habilitadas pelo produtor.
       // Quando há só 1, o state já foi auto-setado no load — não cai aqui.
       if (tiposApresentacao.length > 1 && !data.tipo_apresentacao) {
-        return 'Selecione o tipo de mostra (Competitiva ou Avaliada).';
+        return `Selecione o formato (${resolveTipoApresentacaoLabel('Competitiva', config)} ou ${resolveTipoApresentacaoLabel('Avaliada', config)}).`;
       }
     }
     if (s === 1) {
@@ -1666,15 +1667,16 @@ const InscricaoWizard: React.FC = () => {
                 Se for só 1, já foi forçado no state pelo load do config. */}
             {tiposApresentacao.length > 1 && (
               <div>
-                <label className={labelCls}>Tipo de mostra</label>
+                <label className={labelCls}>Formato</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
                   {tiposApresentacao.map(tipo => {
                     const selected = data.tipo_apresentacao === tipo;
                     const isCompetitiva = tipo === 'Competitiva';
-                    // Nome completo "Mostra Competitiva" / "Mostra Avaliada" —
-                    // padrão do mercado de festivais BR. Estado interno mantém
+                    // Rótulo é dinâmico — produtor escolhe o termo do próprio
+                    // regulamento pro formato "Avaliada" (Não Competitiva/
+                    // Avaliada/Comentada/Personalizada). Estado interno mantém
                     // só "Competitiva"/"Avaliada" pra compat com banco/lógica.
-                    const fullName = isCompetitiva ? 'Mostra Competitiva' : 'Mostra Avaliada';
+                    const fullName = resolveTipoApresentacaoLabel(tipo, config);
                     return (
                       <button
                         key={tipo}
@@ -2086,9 +2088,9 @@ const InscricaoWizard: React.FC = () => {
               )}
               {data.tipo_apresentacao && (
                 <div className="flex justify-between gap-3">
-                  <span className="text-slate-500 dark:text-slate-400">Tipo de mostra</span>
+                  <span className="text-slate-500 dark:text-slate-400">Formato</span>
                   <span className="font-black text-slate-900 dark:text-white text-right">
-                    {data.tipo_apresentacao === 'Competitiva' ? 'Mostra Competitiva' : 'Mostra Avaliada'}
+                    {resolveTipoApresentacaoLabel(data.tipo_apresentacao, config)}
                   </span>
                 </div>
               )}

@@ -26,6 +26,7 @@ import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus
 import { resolveEstudio, toTitleCase, resolveTrilhaUrl, stripEstiloVertentes } from '../utils/formatters';
 import { formatDataBRComDia } from '../utils/lotes';
 import { isStyleInList } from '../utils/styleMatch';
+import { resolveAvaliadaLabel } from '../utils/formatoParticipacao';
 
 type AudioSlot = { audio_url: string; duration_seconds: number; voice_id?: string };
 type AudioMap = Record<string, { entrada?: AudioSlot; saida?: AudioSlot }>;
@@ -315,6 +316,7 @@ interface SortableRowProps {
   blocos: Bloco[];
   matchesSearch: boolean;
   recentlyMoved: boolean;
+  avaliadaLabel: string;
   onOpenBlocoPicker: (reg: Registration) => void;
   onGenerateOne: (reg: Registration) => void;
   onAnnounce: (reg: Registration) => void;
@@ -326,7 +328,7 @@ interface SortableRowProps {
 const SortableRow: React.FC<SortableRowProps> = ({
   reg, index, conflicts, judgeNames,
   audioSet, trackDuration, saidaAtiva, isLive, isLastPlayed, isGenerating, batchInProgress, updatingLive, currentVoice,
-  blocos, matchesSearch, recentlyMoved, onOpenBlocoPicker,
+  blocos, matchesSearch, recentlyMoved, avaliadaLabel, onOpenBlocoPicker,
   onGenerateOne, onAnnounce, onPrepare, onMarkLiveOnly, onExclude,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -400,12 +402,13 @@ const SortableRow: React.FC<SortableRowProps> = ({
               </span>
             </span>
           )}
-          {/* Badge discreto pra Avaliada — produtor identifica visualmente no
-              cronograma e o jurado sabe que vai entrar em modo feedback. */}
+          {/* Badge discreto pra formato não competitivo — produtor identifica
+              visualmente no cronograma e o jurado sabe que vai entrar em modo
+              feedback. */}
           {(reg as any).tipo_apresentacao === 'Avaliada' && (
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-slate-200 dark:bg-white/10 border border-slate-300 dark:border-white/15 shrink-0">
               <span className="text-[8px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">
-                Avaliada
+                {avaliadaLabel}
               </span>
             </span>
           )}
@@ -2939,6 +2942,7 @@ const Schedule = () => {
               );
             };
 
+            const avaliadaLabel = resolveAvaliadaLabel(config);
             const renderRows = (regs: Registration[], startIdx: number) =>
               regs.map((reg, localIdx) => (
                 <SortableRow
@@ -2959,6 +2963,7 @@ const Schedule = () => {
                   blocos={blocos}
                   matchesSearch={matches(reg)}
                   recentlyMoved={recentlyMovedId === reg.id}
+                  avaliadaLabel={avaliadaLabel}
                   onOpenBlocoPicker={setBlocoPickerForReg}
                   onGenerateOne={handleGenerateOne}
                   onAnnounce={handleAnnounce}

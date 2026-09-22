@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { isStyleInList } from '../utils/styleMatch';
 import { classifyAward as classifyAwardShared, resolveMedalLabel, type MedalLabels } from '../utils/awardClassification';
+import { resolveAvaliadaLabel, type FormatoLabelConfig } from '../utils/formatoParticipacao';
 import {
   BarChart3, Download, RefreshCw, Loader2, Search,
   ChevronDown, ChevronUp, ChevronRight, Trophy, CheckCircle2, AlertCircle,
@@ -131,6 +132,7 @@ const ResultsPanel = () => {
   const [thresholds, setThresholds] = useState<MedalThresholds>(DEFAULT_THRESHOLDS);
   const [premiationSystem, setPremiationSystem] = useState<PremiationSystem>('THRESHOLD');
   const [medalLabels, setMedalLabels] = useState<MedalLabels | null>(null);
+  const [formatoLabelConfig, setFormatoLabelConfig] = useState<FormatoLabelConfig>({});
   /** id da coreografia sendo limpa, ou 'all' — null = nada em andamento.
    *  Usado pro botão "Limpar avaliações de teste" (por linha + geral). */
   const [clearing, setClearing] = useState<string | null>(null);
@@ -178,10 +180,14 @@ const ResultsPanel = () => {
     setLoading(true);
     try {
       const { fetchActiveEventConfig, resolveActiveEventId } = await import('../services/supabase');
-      const cfg = await fetchActiveEventConfig('medal_thresholds, premiation_system, medal_labels, regras_avaliacao, premios_especiais');
+      const cfg = await fetchActiveEventConfig('medal_thresholds, premiation_system, medal_labels, regras_avaliacao, premios_especiais, formato_avaliada_label_mode, formato_avaliada_label_custom');
       setThresholds(cfg?.medal_thresholds ?? DEFAULT_THRESHOLDS);
       setPremiationSystem(cfg?.premiation_system === 'RANKING' ? 'RANKING' : 'THRESHOLD');
       setMedalLabels(cfg?.medal_labels ?? null);
+      setFormatoLabelConfig({
+        formato_avaliada_label_mode: cfg?.formato_avaliada_label_mode ?? null,
+        formato_avaliada_label_custom: cfg?.formato_avaliada_label_custom ?? null,
+      });
       const regras: any = cfg?.regras_avaliacao ?? {};
 
       // Premiação (mesma fonte que Telão/PDF) — lê os prêmios salvos +
@@ -1046,7 +1052,7 @@ const ResultsPanel = () => {
             Apuração <span className="text-[#ff0068]">Final</span>
           </h1>
           <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">
-            Ranking por gênero e categoria · Feedbacks da Mostra Avaliada
+            Ranking por gênero e categoria · Feedbacks da Mostra {resolveAvaliadaLabel(formatoLabelConfig)}
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -1151,8 +1157,8 @@ const ResultsPanel = () => {
       {/* Tabs */}
       <div className="flex gap-1 border-b border-slate-200 dark:border-white/10">
         {([
-          { id: 'competitiva', label: `Mostra Competitiva (${competitiva.length})` },
-          { id: 'avaliada',    label: `Mostra Avaliada — Feedbacks (${avaliada.length})` },
+          { id: 'competitiva', label: `Competitiva (${competitiva.length})` },
+          { id: 'avaliada',    label: `${resolveAvaliadaLabel(formatoLabelConfig)} — Feedbacks (${avaliada.length})` },
         ] as const).map(tab => (
           <button
             key={tab.id}
@@ -1212,7 +1218,7 @@ const ResultsPanel = () => {
                 <>
                   <p className="text-sm font-black uppercase tracking-widest text-slate-400">Festival sem competição</p>
                   <p className="text-xs text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
-                    Este festival é exclusivo Mostra Avaliada — não há ranking ou premiação. Veja os feedbacks dos jurados na aba <strong>Mostra Avaliada</strong>.
+                    Este festival é exclusivo {resolveAvaliadaLabel(formatoLabelConfig)} — não há ranking ou premiação. Veja os feedbacks dos jurados na aba <strong>{resolveAvaliadaLabel(formatoLabelConfig)}</strong>.
                   </p>
                 </>
               ) : (

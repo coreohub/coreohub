@@ -51,11 +51,13 @@ interface Judge {
   competencias_artisticas: string[];
 }
 
+// "Batalhas" removido 2026-09-22 (Torneio de Batalhas nunca teve mecânica
+// implementada na plataforma, ver CLAUDE.md). Tags livres do jurado — não
+// dependem do rótulo escolhido pelo produtor pro formato "Avaliada".
 const FORMATS = [
-  'Mostra Competitiva',
-  'Mostra Avaliada',
+  'Competitiva',
+  'Avaliada',
   'Ambas (Competitiva + Avaliada)',
-  'Batalhas',
 ];
 
 const EMPTY_JUDGE: Omit<Judge, 'id'> = {

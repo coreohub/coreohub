@@ -13,6 +13,7 @@ import { motion } from 'motion/react';
 import BrandIcon from '../components/BrandIcon';
 import { EventAnchorNav, HEADER_HEIGHT, type AnchorSection } from '../components/EventAnchorNav';
 import { PessoasSection, type JudgePublic, type WorkshopTeacherPublic } from '../components/PessoasSection';
+import { resolveAvaliadaLabel } from '../utils/formatoParticipacao';
 import { resolveLote, diffDias, formatDataBRComDia, todayISO, findNextWorkshopLot, type Lote } from '../utils/lotes';
 import { formatPrecoBR } from '../utils/masks';
 import { isEventOver } from '../utils/eventStatus';
@@ -1485,13 +1486,13 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                   {aceitaCompetitiva && (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-300">
                       <Trophy size={12} className="text-[#ff0068]" />
-                      Mostra Competitiva
+                      Competitiva
                     </span>
                   )}
                   {aceitaAvaliada && (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-300">
                       <GraduationCap size={12} className="text-violet-300" />
-                      Mostra Avaliada
+                      {resolveAvaliadaLabel(config)}
                     </span>
                   )}
                 </div>

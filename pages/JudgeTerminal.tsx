@@ -13,6 +13,7 @@ import {
 import { supabase } from '../services/supabase';
 import { isStyleInList } from '../utils/styleMatch';
 import { stripEstiloVertentes } from '../utils/formatters';
+import { resolveAvaliadaLabel, type FormatoLabelConfig } from '../utils/formatoParticipacao';
 import { useT, useLocale, setLocale } from '../hooks/useT';
 import type { JudgeDictKey } from '../i18n/judge-pt';
 import { readJudgeSession, clearJudgeSession, needsMicCheck, readMicCheckState, writeMicCheckState } from './JudgeLogin';
@@ -467,6 +468,7 @@ const JudgeTerminal = () => {
 
   /* ── Score scale ── */
   const [scoreScale,    setScoreScale]    = useState<ScoreScale>('BASE_10');
+  const [formatoLabelConfig, setFormatoLabelConfig] = useState<FormatoLabelConfig>({});
   const [flashInvalid,  setFlashInvalid]  = useState(false);
   const flashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -735,7 +737,7 @@ const JudgeTerminal = () => {
           const { fetchActiveEventConfig } = await import('../services/supabase');
           const [judgesRes, cfgRes, schedRes, gRes, evRes] = await Promise.all([
             supabase.from('judges').select('*'),
-            fetchActiveEventConfig('regras_avaliacao, escala_notas, premios_especiais, pin_inactivity_minutes'),
+            fetchActiveEventConfig('regras_avaliacao, escala_notas, premios_especiais, pin_inactivity_minutes, formato_avaliada_label_mode, formato_avaliada_label_custom'),
             supabase.from('registrations').select('*').eq('status', 'APROVADA').order('ordem_apresentacao', { ascending: true }),
             supabase.from('event_styles').select('id, name'),
             // Phase 4: lê live_registration_id do evento ativo
@@ -768,6 +770,10 @@ const JudgeTerminal = () => {
 
         // Score scale
         if (cfg?.escala_notas) setScoreScale(cfg.escala_notas as ScoreScale);
+        setFormatoLabelConfig({
+          formato_avaliada_label_mode: cfg?.formato_avaliada_label_mode ?? null,
+          formato_avaliada_label_custom: cfg?.formato_avaliada_label_custom ?? null,
+        });
 
         // PIN inactivity timeout (0 = nunca)
         if (cfg?.pin_inactivity_minutes != null) {
@@ -2558,7 +2564,7 @@ const JudgeTerminal = () => {
             <div className="flex items-center gap-2 px-3 py-1.5 bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/30 rounded-full">
               <Music size={12} className="text-violet-500" />
               <span className="text-[9px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-400">
-                {t('avaliada.badge')}
+                {resolveAvaliadaLabel(formatoLabelConfig)} — {t('avaliada.badgeSuffix')}
               </span>
             </div>
 

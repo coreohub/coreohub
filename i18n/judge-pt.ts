@@ -129,7 +129,7 @@ const judgePt = {
   'empty.demoNote': 'Nenhum dado é salvo no banco',
 
   // Avaliada (showcase, no scoring)
-  'avaliada.badge': 'Mostra Avaliada — sem pontuação',
+  'avaliada.badgeSuffix': 'sem pontuação',
   'avaliada.feedbackLabel': 'Observações técnicas escritas (opcional)',
   'avaliada.feedbackPlaceholder': 'Escreva suas observações técnicas para a coreografia...',
   'avaliada.audioNote': 'O áudio técnico (botão Gravar no topo da tela) é o principal canal de feedback neste modo.',

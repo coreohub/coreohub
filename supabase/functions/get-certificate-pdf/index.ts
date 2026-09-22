@@ -257,10 +257,13 @@ function resolveTag(tag: string, ctx: any): string {
     CORPO: ctx.template_type === 'workshop'
       ? `participou do workshop ministrado por ${data.professor_nome ?? '—'}, com duração de ${data.duracao_minutos ?? '—'} minutos, durante o evento`
       : (() => {
-          // Avaliada não tem classificação/prêmio — texto adaptado.
+          // Avaliada não tem classificação/prêmio — texto adaptado. Rótulo
+          // já vem resolvido de emit-certificates-batch (produtor escolhe o
+          // termo — Não Competitiva/Avaliada/Comentada/Personalizada).
           const isAvaliada = String(data.tipo_apresentacao ?? '').toLowerCase() === 'avaliada';
           if (isAvaliada) {
-            return `participou com a apresentação "${data.coreografia ?? '—'}" na modalidade ${data.modalidade ?? '—'}, na Mostra Avaliada do evento`;
+            const label = data.formato_avaliada_label || 'Não Competitiva';
+            return `participou com a apresentação "${data.coreografia ?? '—'}" na modalidade ${data.modalidade ?? '—'}, na Mostra ${label} do evento`;
           }
           return `participou da apresentação "${data.coreografia ?? '—'}" na modalidade ${data.modalidade ?? '—'}${data.classificacao ? `, obtendo ${data.classificacao}` : ''}, durante o evento`;
         })(),
@@ -285,9 +288,10 @@ function resolveTag(tag: string, ctx: any): string {
     // Pra templates customizados que querem mencionar explicitamente.
     // Mostra Competitiva, Mostra Avaliada, etc. (capitaliza primeira letra).
     TIPO_APRESENTACAO: (() => {
-      const t = data.tipo_apresentacao;
+      const t = String(data.tipo_apresentacao ?? '').toLowerCase();
       if (!t) return '';
-      return `Mostra ${String(t).charAt(0).toUpperCase()}${String(t).slice(1).toLowerCase()}`;
+      if (t === 'avaliada') return `Mostra ${data.formato_avaliada_label || 'Não Competitiva'}`;
+      return `Mostra ${t.charAt(0).toUpperCase()}${t.slice(1)}`;
     })(),
   }
   return tags[tag] ?? ''
