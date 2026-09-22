@@ -51,7 +51,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'Tem júri, apuração ou cronograma competitivo?',
-    a: 'Não. O Plano Espetáculo é feito pra mostra/espetáculo de fim de ano sem competição — só bilheteria de plateia, cupom de desconto, cortesia e credenciamento por QR Code no dia. Se seu evento tem júri e premiação, o produto certo é o plano de Festival (veja em coreohub.com/planos).',
+    a: 'Não. Essa bilheteria é feita pra espetáculo de fim de ano sem competição — só ingresso de plateia, cupom de desconto, cortesia e credenciamento por QR Code no dia. Se seu evento tem júri e premiação, o produto certo é o plano de Festival (veja em coreohub.com/planos).',
   },
   {
     q: 'Como recebo o dinheiro das vendas?',
@@ -59,7 +59,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'Quem já compra ingresso paga alguma taxa a mais?',
-    a: 'Por padrão, sim — o valor da taxa fica embutido no preço final mostrado, sem linha "+taxa" separada no checkout. O produtor pode configurar pra absorver a taxa em vez de repassar, se preferir.',
+    a: 'Por padrão, sim — o valor da taxa fica embutido no preço final mostrado, sem linha "+taxa" separada no checkout. O estúdio pode configurar pra absorver a taxa em vez de repassar, se preferir.',
   },
 ];
 
@@ -159,13 +159,13 @@ export default function LandingEspetaculo() {
       {/* ─── 1. HERO (escuro, foto) ──────────────────────────────────────────────── */}
       <section className="relative min-h-[80vh] flex flex-col overflow-hidden bg-black">
         <img
-          src="/hero-festival.webp"
-          srcSet="/hero-festival-mobile.webp 960w, /hero-festival.webp 1920w"
+          src="/hero-espetaculo.webp"
+          srcSet="/hero-espetaculo-mobile.webp 960w, /hero-espetaculo.webp 1376w"
           sizes="100vw"
           alt=""
           aria-hidden="true"
-          width={1920}
-          height={1072}
+          width={1376}
+          height={768}
           fetchPriority="high"
           decoding="async"
           className="absolute inset-0 w-full h-full object-cover object-[50%_35%]"
@@ -177,7 +177,7 @@ export default function LandingEspetaculo() {
           <div className="mx-auto max-w-xl px-5 sm:mx-0 sm:px-0">
             <p className="text-[11px] font-black uppercase tracking-[0.3em] text-white">Pra estúdio e escola de dança</p>
             <h1 className="mt-2 sm:mt-3 text-[2.1rem] sm:text-[3.1rem] font-black tracking-normal uppercase leading-[1.06]">
-              A plateia lotada que seu espetáculo merece.
+              Venda o ingresso do seu espetáculo de fim de ano.
             </h1>
             <p className="mt-3 sm:mt-4 text-slate-200 text-sm sm:text-base font-medium leading-snug">
               Convite de papel e grupo de WhatsApp que ninguém lê viram ingresso digital que os pais realmente compram.
@@ -198,7 +198,7 @@ export default function LandingEspetaculo() {
 
         <div className="relative z-10 max-w-4xl mx-auto w-full grid grid-cols-3 gap-4 border-t border-white/10 px-6 pt-6 pb-8">
           {[
-            { val: '7,9%', label: 'sobre o vendido, sem mínimo', icon: Tag },
+            { val: '7,9%', label: 'sobre a venda', icon: Tag },
             { val: 'R$ 0', label: 'de mensalidade', icon: Ticket },
             { val: 'QR Code', label: 'no credenciamento do dia', icon: QrCode },
           ].map((s, i) => {
@@ -218,8 +218,8 @@ export default function LandingEspetaculo() {
       <section className="bg-white text-slate-900 px-6 py-16 border-t border-slate-200">
         <div className="max-w-3xl mx-auto text-center">
           <p className="text-slate-700 text-base leading-relaxed">
-            O <strong className="text-slate-950">Plano Espetáculo</strong> é a bilheteria da CoreoHub pra
-            espetáculo de fim de ano de estúdio de dança: substitui o convite de papel e o grupo de WhatsApp
+            A <strong className="text-slate-950">CoreoHub</strong> é a bilheteria pra espetáculo de fim de ano
+            de estúdio de dança: substitui o convite de papel e o grupo de WhatsApp
             por <strong className="text-slate-950">ingresso digital que os pais compram e usam de verdade</strong>,
             com credenciamento por QR Code na porta — cobrando 7,9% sobre cada venda, sem mensalidade.
           </p>
@@ -232,10 +232,10 @@ export default function LandingEspetaculo() {
           <p className="text-[10px] font-black uppercase tracking-[0.3em] text-rose-400 mb-3">Reconhece a semana antes do espetáculo?</p>
           <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase mb-8">
             Você passou o ano montando a coreografia.<br />
-            <span className="text-rose-400">Agora passa a semana implorando presença.</span>
+            <span className="text-rose-400">Agora passa a semana implorando confirmação de presença.</span>
           </h2>
           <div className="space-y-4 text-slate-300 text-lg leading-relaxed">
-            <p>Convite espalhado no grupo de WhatsApp que ninguém lê — no dia, metade da plateia nem sabia que tinha espetáculo.</p>
+            <p>Convite espalhado no grupo de WhatsApp que ninguém lê — no dia, metade da plateia nem sabe que tem espetáculo.</p>
             <p>Convite de papel controlado numa planilha, comprovante de Pix conferido um por um.</p>
             <p>Fila na porta do teatro porque ninguém sabe direito quem já confirmou.</p>
             <p className="text-white font-bold pt-2">
@@ -280,8 +280,7 @@ export default function LandingEspetaculo() {
               <span className="text-[#ff0068]">A CoreoHub cuida do resto.</span>
             </h2>
             <p className="text-slate-600 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
-              Sem júri, sem apuração, sem cronograma competitivo — só o que um espetáculo de fim de ano
-              precisa pra ter a plateia que o seu trabalho merece.
+              Só o que um espetáculo de fim de ano precisa pra ter a plateia que o seu trabalho merece.
             </p>
           </div>
 
@@ -330,11 +329,11 @@ export default function LandingEspetaculo() {
           </h2>
           <div className="max-w-2xl mx-auto bg-gradient-to-br from-[#ff0068]/10 via-white/5 to-purple-700/10 border border-white/10 rounded-3xl p-8 md:p-10 backdrop-blur-xl">
             <p className="text-5xl font-black tracking-tighter text-white">7,9%</p>
-            <p className="text-slate-300 text-sm mt-2">sobre o total vendido — sem mínimo, sem taxa fixa, tudo incluso</p>
+            <p className="text-slate-300 text-sm mt-2">sobre cada ingresso vendido — sem mínimo, sem taxa fixa, tudo incluso</p>
             <ul className="mt-6 space-y-2 text-left max-w-sm mx-auto">
               {[
                 'Não vendeu, não pagou — sem estoque mínimo, sem risco',
-                'CoreoHub absorve 100% do processamento (PIX, cartão, boleto)',
+                'A CoreoHub absorve 100% do processamento (PIX, cartão, boleto)',
                 'Repasse automático via Pix, sem fechamento de caixa manual',
               ].map((item, i) => (
                 <li key={i} className="flex items-start gap-3 text-slate-300">
@@ -470,7 +469,7 @@ export default function LandingEspetaculo() {
             Criar meu espetáculo <ArrowRight size={18} />
           </button>
           <p className="text-xs text-slate-500 mt-5">
-            Sem mensalidade · Você só paga quando vende · Sem contrato de fidelidade
+            Sem mensalidade · Você só paga quando vende
           </p>
         </div>
       </section>
