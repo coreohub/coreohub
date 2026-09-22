@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 import VendasTabs from '../components/VendasTabs';
+import EventPickerSheet from '../components/EventPickerSheet';
 import SeatGrid from '../components/SeatGrid';
 import { useSeatMap } from '../hooks/useSeatMap';
 import { maskCpfCnpj, unmaskCpfCnpj } from '../utils/masks';
@@ -68,6 +69,14 @@ const VendasIngressos: React.FC = () => {
   const [rows, setRows] = useState<Row[]>([]);
   const [eventName, setEventName] = useState<string>('');
   const [eventId, setEventId] = useState<string | null>(null);
+  // Seletor de evento (mesmo padrão de Registrations.tsx/Venues.tsx) — sem
+  // isso, esta tela nunca tinha jeito nenhum de mostrar um evento is_demo=true
+  // (resolveActiveEventId() sem hint sempre prioriza evento real, ver
+  // CLAUDE.md 2026-07-12). Default continua resolvendo o evento real como
+  // sempre; o picker só existe pra permitir override manual (ex: testar
+  // assento numerado/PDV num evento de teste sem mexer no evento real).
+  const [allEvents, setAllEvents] = useState<{ id: string; name: string; edition_year?: number | null; is_demo?: boolean | null }[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -105,21 +114,19 @@ const VendasIngressos: React.FC = () => {
   const [seatMapEnabled, setSeatMapEnabled] = useState(false);
   const [pdvSelectedSeats, setPdvSelectedSeats] = useState<string[]>([]);
 
-  const load = async () => {
+  const load = async (targetEventId: string) => {
     setLoading(true);
     setErr(null);
     try {
-      const eventId = await resolveActiveEventId();
-      if (!eventId) { setErr('Nenhum evento ativo encontrado.'); setLoading(false); return; }
-      setEventId(eventId);
-      const { data: ev } = await supabase.from('events').select('name, ingressos_config, seat_map_enabled').eq('id', eventId).maybeSingle();
+      setEventId(targetEventId);
+      const { data: ev } = await supabase.from('events').select('name, ingressos_config, seat_map_enabled').eq('id', targetEventId).maybeSingle();
       setEventName(ev?.name ?? '');
       setTicketTypes(Array.isArray(ev?.ingressos_config) ? (ev!.ingressos_config as TicketTypeConfig[]).filter(t => t?.nome) : []);
       setSeatMapEnabled(Boolean((ev as any)?.seat_map_enabled));
       const { data, error } = await supabase
         .from('audience_tickets')
         .select('*')
-        .eq('event_id', eventId)
+        .eq('event_id', targetEventId)
         .order('created_at', { ascending: false });
       if (error) throw error;
       setRows((data ?? []) as Row[]);
@@ -130,45 +137,63 @@ const VendasIngressos: React.FC = () => {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  // Init: lista completa de eventos do produtor (pro picker, inclui demo com
+  // badge) + resolve o padrão inicial via resolveActiveEventId() (evento real
+  // sempre ganha de um demo mais recente — comportamento inalterado pra quem
+  // nunca usa o picker).
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const [{ data: events }, defaultId] = await Promise.all([
+        supabase
+          .from('events')
+          .select('id,name,edition_year,is_demo,created_at')
+          .eq('created_by', user.id)
+          .order('created_at', { ascending: false }),
+        resolveActiveEventId(),
+      ]);
+      if (events) setAllEvents(events);
+      if (!defaultId) { setErr('Nenhum evento ativo encontrado.'); setLoading(false); return; }
+      setSelectedEventId(prev => prev ?? defaultId);
+    })();
+  }, []);
 
-  // Realtime: assina mudanças em audience_tickets do evento ativo.
+  useEffect(() => { if (selectedEventId) load(selectedEventId); }, [selectedEventId]);
+
+  // Realtime: assina mudanças em audience_tickets do evento selecionado.
   // RLS já garante que producer só recebe eventos do próprio evento.
   useEffect(() => {
-    let channel: any = null;
-    (async () => {
-      const eventId = await resolveActiveEventId();
-      if (!eventId) return;
-      channel = supabase
-        .channel(`audience-tickets-${eventId}`)
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'audience_tickets',
-          filter: `event_id=eq.${eventId}`,
-        }, () => {
-          // Reload silencioso (sem flicker do Loader)
-          supabase
-            .from('audience_tickets')
-            .select('*')
-            .eq('event_id', eventId)
-            .order('created_at', { ascending: false })
-            .then(({ data }) => {
-              if (data) setRows(data as Row[]);
-            });
-        })
-        .subscribe();
-    })();
-    return () => { if (channel) supabase.removeChannel(channel); };
-  }, []);
+    if (!selectedEventId) return;
+    const channel = supabase
+      .channel(`audience-tickets-${selectedEventId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'audience_tickets',
+        filter: `event_id=eq.${selectedEventId}`,
+      }, () => {
+        // Reload silencioso (sem flicker do Loader)
+        supabase
+          .from('audience_tickets')
+          .select('*')
+          .eq('event_id', selectedEventId)
+          .order('created_at', { ascending: false })
+          .then(({ data }) => {
+            if (data) setRows(data as Row[]);
+          });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [selectedEventId]);
 
   // Recarrega quando aba volta a ficar visível (ex: produtor confere após
   // teste de pagamento em outra aba)
   useEffect(() => {
-    const onFocus = () => { if (document.visibilityState === 'visible') load(); };
+    const onFocus = () => { if (document.visibilityState === 'visible' && selectedEventId) load(selectedEventId); };
     document.addEventListener('visibilitychange', onFocus);
     return () => document.removeEventListener('visibilitychange', onFocus);
-  }, []);
+  }, [selectedEventId]);
 
   // ─── Assento numerado: layout (1x) + status (30s parado, 10s com PDV aberto) ─
   const { rowsConfig, seatStatuses } = useSeatMap({
@@ -260,7 +285,7 @@ const VendasIngressos: React.FC = () => {
       if (data?.error) throw new Error(data.error);
       setRefundTarget(null);
       setRefundReason('');
-      await load();
+      if (eventId) await load(eventId);
     } catch (e: any) {
       setRefundError(e.message ?? String(e));
     } finally {
@@ -300,7 +325,7 @@ const VendasIngressos: React.FC = () => {
       if (data?.error) throw new Error(data.error);
       setCourtesyOpen(false);
       setCourtesyForm({ name: '', email: '', cpf: '', phone: '' });
-      await load();
+      if (eventId) await load(eventId);
     } catch (e: any) {
       setCourtesyError(e.message ?? String(e));
     } finally {
@@ -370,7 +395,7 @@ const VendasIngressos: React.FC = () => {
         status: data.status_pagamento,
         pix: data.pix,
       });
-      await load();
+      if (eventId) await load(eventId);
     } catch (e: any) {
       setPdvError(e.message ?? String(e));
     } finally {
@@ -448,8 +473,16 @@ const VendasIngressos: React.FC = () => {
           {eventName && <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mt-1">{eventName}</p>}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {allEvents.length > 0 && (
+            <EventPickerSheet
+              events={allEvents}
+              selectedEventId={selectedEventId}
+              onSelect={setSelectedEventId}
+              className="w-full sm:w-auto"
+            />
+          )}
           <button
-            onClick={load}
+            onClick={() => selectedEventId && load(selectedEventId)}
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10"
           >
             <RotateCcw size={12} /> Atualizar
