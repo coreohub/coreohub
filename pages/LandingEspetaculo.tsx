@@ -5,8 +5,12 @@
  * workshops). Irmã comercial do Festival, fora de /planos por decisão de produto
  * (funil dedicado, não confunde estúdio com linguagem de festival competitivo).
  *
- * Estrutura espelha o framework PAS de LandingPage.tsx (Problema → Agitação →
- * Solução), com copy e ângulo próprios pro público de estúdio de dança.
+ * Copy reescrita 2026-09-22 com ângulo emocional (pesquisa de mercado: o medo
+ * real do dono de estúdio não é "quanto custa a taxa", é "plateia vazia" e
+ * "pais não rematricularem" — convite de WhatsApp que ninguém lê e fila
+ * bagunçada na porta são dores reais confirmadas em pesquisa BR e global).
+ * Sessões alternam fundo claro/escuro — diferencia visualmente da
+ * LandingPage.tsx/LandingGoverno.tsx, que são 100% escuras.
  *
  * SEO/AEO/GEO seguindo o checklist salvo em
  * D:\Documentos\CoreoHub Site\blog-seo-standard\site-seo-checklist.md +
@@ -19,19 +23,27 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   ChevronRight, Ticket, QrCode, Tag, Check, X, ChevronDown,
-  ArrowRight, Menu, Users, ShieldCheck,
+  ArrowRight, Menu, Users, ShieldCheck, HeartHandshake,
 } from 'lucide-react';
 
 const SITE_URL = 'https://coreohub.com';
 const CANONICAL_URL = `${SITE_URL}/espetaculo`;
 
 const PAGE_TITLE = 'Bilheteria para espetáculo de fim de ano de dança — Plano Espetáculo | CoreoHub';
-const PAGE_DESCRIPTION = 'Venda ingresso do espetáculo de fim de ano do seu estúdio de dança sem planilha: 7,9% sobre o vendido, sem mensalidade, taxa pública. Cupom, cortesia e credenciamento por QR Code incluídos.';
+const PAGE_DESCRIPTION = 'Venda ingresso do espetáculo de fim de ano do seu estúdio de dança sem grupo de WhatsApp nem planilha: 7,9% sobre o vendido, sem mensalidade, taxa pública. Cupom, cortesia e credenciamento por QR Code incluídos.';
 
 const FAQ_ITEMS = [
   {
     q: 'Quanto custa vender ingresso pro espetáculo de fim de ano?',
     a: 'A CoreoHub cobra 7,9% sobre o valor total vendido (GMV), sem mínimo e com tudo incluso — a CoreoHub absorve 100% da taxa de processamento de PIX, cartão e boleto. Não tem mensalidade, não tem taxa de adesão, não tem contrato. Esse número é público e fixo: não muda por negociação caso a caso, é o mesmo pra qualquer estúdio.',
+  },
+  {
+    q: 'E se a plateia não lotar e sobrar ingresso?',
+    a: 'Não tem risco pra você. Você não paga nada adiantado, não se compromete com estoque mínimo e não perde dinheiro se não vender tudo — a taxa de 7,9% incide só sobre o que for vendido de verdade. Ingresso que não sai não custa nada.',
+  },
+  {
+    q: 'Dá pra ativar a bilheteria perto da data do espetáculo? Ainda dá tempo?',
+    a: 'Sim. O cadastro leva minutos e o link já sai vendendo na hora. Muitos estúdios ativam a bilheteria poucos dias antes do espetáculo e ainda conseguem vender pra maior parte da plateia — mas quanto antes você compartilhar o link, mais tempo a família tem pra organizar a ida.',
   },
   {
     q: 'Preciso ter assento numerado pra usar?',
@@ -44,10 +56,6 @@ const FAQ_ITEMS = [
   {
     q: 'Como recebo o dinheiro das vendas?',
     a: 'Cada ingresso vendido já sai com o split automático — a comissão de 7,9% fica com a CoreoHub, o resto fica retido na sua conta por até 7 dias (mesma janela de segurança usada por Stripe e Sympla) e depois é transferido via Pix direto pra você, sem precisar fazer nada. Quer o dinheiro antes? O botão "Transferir agora" antecipa a qualquer momento, sem taxa extra.',
-  },
-  {
-    q: 'Dá pra vender ingresso de mais de uma sessão/elenco?',
-    a: 'Sim — cada sessão ou elenco vira um tipo de ingresso dentro do mesmo evento (ex: "Inteira — 1º Elenco Sábado 19h" e "Inteira — 2º Elenco Domingo 20h"), com estoque e lote próprios pra cada um, ou eventos separados por sessão se preferir vitrines independentes.',
   },
   {
     q: 'Quem já compra ingresso paga alguma taxa a mais?',
@@ -148,7 +156,7 @@ export default function LandingEspetaculo() {
         )}
       </header>
 
-      {/* ─── 1. HERO ──────────────────────────────────────────────── */}
+      {/* ─── 1. HERO (escuro, foto) ──────────────────────────────────────────────── */}
       <section className="relative min-h-[80vh] flex flex-col overflow-hidden bg-black">
         <img
           src="/hero-festival.webp"
@@ -169,11 +177,11 @@ export default function LandingEspetaculo() {
           <div className="mx-auto max-w-xl px-5 sm:mx-0 sm:px-0">
             <p className="text-[11px] font-black uppercase tracking-[0.3em] text-white">Pra estúdio e escola de dança</p>
             <h1 className="mt-2 sm:mt-3 text-[2.1rem] sm:text-[3.1rem] font-black tracking-normal uppercase leading-[1.06]">
-              Venda o ingresso do espetáculo de fim de ano sem planilha, sem fila e sem fraude.
+              A plateia lotada que seu espetáculo merece.
             </h1>
             <p className="mt-3 sm:mt-4 text-slate-200 text-sm sm:text-base font-medium leading-snug">
-              7,9% sobre o vendido, sem mínimo, tudo incluso — taxa pública, sem negociação escondida.
-              Sem mensalidade, sem contrato.
+              Convite de papel e grupo de WhatsApp que ninguém lê viram ingresso digital que os pais realmente compram.
+              7,9% sobre o vendido, sem mensalidade.
             </p>
             <div className="mt-5 sm:mt-6 flex flex-col sm:flex-row items-center justify-center gap-4 sm:justify-start">
               <button
@@ -206,73 +214,74 @@ export default function LandingEspetaculo() {
         </div>
       </section>
 
-      {/* ─── 2. RESPOSTA DIRETA (AEO/GEO) ──────────────────────────────────────────────── */}
-      <section className="px-6 py-16 border-t border-white/5">
+      {/* ─── 2. RESPOSTA DIRETA (AEO/GEO, claro) ──────────────────────────────────────────────── */}
+      <section className="bg-white text-slate-900 px-6 py-16 border-t border-slate-200">
         <div className="max-w-3xl mx-auto text-center">
-          <p className="text-slate-300 text-base leading-relaxed">
-            O <strong className="text-white">Plano Espetáculo</strong> é a bilheteria da CoreoHub pra
-            espetáculo de fim de ano de estúdio de dança: o estúdio cadastra o evento, escolhe se vende
-            por setor ou com assento numerado, e a plataforma cuida do checkout, cupom, cortesia e
-            credenciamento por QR Code no dia — cobrando <strong className="text-white">7,9% sobre cada
-            venda</strong>, sem mensalidade e sem negociação escondida.
+          <p className="text-slate-700 text-base leading-relaxed">
+            O <strong className="text-slate-950">Plano Espetáculo</strong> é a bilheteria da CoreoHub pra
+            espetáculo de fim de ano de estúdio de dança: substitui o convite de papel e o grupo de WhatsApp
+            por <strong className="text-slate-950">ingresso digital que os pais compram e usam de verdade</strong>,
+            com credenciamento por QR Code na porta — cobrando 7,9% sobre cada venda, sem mensalidade.
           </p>
         </div>
       </section>
 
-      {/* ─── 3. PROBLEMA ──────────────────────────────────────────────── */}
+      {/* ─── 3. PROBLEMA (escuro) ──────────────────────────────────────────────── */}
       <section className="px-6 py-24 lg:py-32 border-t border-white/5">
         <div className="max-w-3xl mx-auto">
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-rose-400 mb-3">Reconhece a véspera do espetáculo?</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-rose-400 mb-3">Reconhece a semana antes do espetáculo?</p>
           <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase mb-8">
-            Você monta a coreografia.<br />
-            <span className="text-rose-400">Vira produtor de bilheteria.</span>
+            Você passou o ano montando a coreografia.<br />
+            <span className="text-rose-400">Agora passa a semana implorando presença.</span>
           </h2>
           <div className="space-y-4 text-slate-300 text-lg leading-relaxed">
-            <p>Convite físico controlado numa planilha, comprovante de Pix conferido um por um no grupo de WhatsApp.</p>
-            <p>Fila na porta do teatro porque não tem como confirmar quem já pagou.</p>
-            <p>Família reclamando de assento duplicado ou ingresso repassado sem controle.</p>
+            <p>Convite espalhado no grupo de WhatsApp que ninguém lê — no dia, metade da plateia nem sabia que tinha espetáculo.</p>
+            <p>Convite de papel controlado numa planilha, comprovante de Pix conferido um por um.</p>
+            <p>Fila na porta do teatro porque ninguém sabe direito quem já confirmou.</p>
             <p className="text-white font-bold pt-2">
-              Cada noite organizando planilha de ingresso é uma noite longe do ensaio final. E é o palco que importa.
+              Seu trabalho do ano inteiro merece uma plateia cheia — não uma torcida pra dar certo.
             </p>
           </div>
         </div>
       </section>
 
-      {/* ─── 4. AGITAÇÃO ──────────────────────────────────────────────── */}
+      {/* ─── 4. AGITAÇÃO (escuro) ──────────────────────────────────────────────── */}
       <section className="px-6 py-24 lg:py-32 border-t border-white/5">
         <div className="max-w-3xl mx-auto">
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-400 mb-3">E cresce a cada edição</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-400 mb-3">E o que está em jogo é maior que 1 noite</p>
           <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase mb-8">
-            Mais alunos.<br />
-            <span className="text-amber-400">Mais família na plateia. Mais confusão.</span>
+            O espetáculo é a prova<br />
+            <span className="text-amber-400">que os pais esperam o ano inteiro.</span>
           </h2>
           <div className="space-y-5 text-slate-300 text-lg leading-relaxed">
             <p>
-              Um espetáculo de fim de ano médio precisa de várias sessões pra escoar a plateia — cada sessão
-              é um novo controle manual de quem comprou o quê. Sem um sistema de verdade, isso não escala:
-              vira mais gente ajudando na planilha, mais chance de erro, mais reclamação no dia.
+              Pra família, é ali que se vê se a mensalidade valeu a pena — é o momento que confirma que o filho
+              evoluiu, que o estúdio é sério, que vale continuar no ano que vem.
+            </p>
+            <p>
+              Plateia vazia ou fila bagunçada na entrada não é só um detalhe incômodo: é a diferença entre
+              "ano que vem eu matriculo de novo" e "vamos procurar outro lugar".
             </p>
             <p className="text-white font-bold">
-              Concorrente que cobra taxa de bilheteria sem avisar o valor não é vantagem — é falta de transparência
-              que você pode usar a seu favor.
+              Quanto mais alunos você tem, maior o risco — e menos tempo sobra pra cuidar de convite na mão.
             </p>
           </div>
         </div>
       </section>
 
-      {/* ─── 5. SOLUÇÃO ──────────────────────────────────────────────── */}
-      <section className="relative px-6 py-24 lg:py-32 border-t border-white/5 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,0,104,0.08),transparent_70%)]" />
+      {/* ─── 5. SOLUÇÃO (claro) ──────────────────────────────────────────────── */}
+      <section className="relative bg-white text-slate-900 px-6 py-24 lg:py-32 border-t border-slate-200 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,0,104,0.05),transparent_70%)]" />
         <div className="relative max-w-5xl mx-auto">
           <div className="text-center mb-16">
             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">A solução</p>
-            <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase mb-6">
-              Bilheteria completa,<br />
-              <span className="text-[#ff0068]">sem burocracia de festival.</span>
+            <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase mb-6 text-slate-950">
+              Você já fez a parte difícil.<br />
+              <span className="text-[#ff0068]">A CoreoHub cuida do resto.</span>
             </h2>
-            <p className="text-slate-300 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
-              Sem júri, sem apuração, sem cronograma competitivo — só o que um espetáculo de fim de ano precisa
-              de verdade pra vender ingresso.
+            <p className="text-slate-600 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
+              Sem júri, sem apuração, sem cronograma competitivo — só o que um espetáculo de fim de ano
+              precisa pra ter a plateia que o seu trabalho merece.
             </p>
           </div>
 
@@ -288,22 +297,22 @@ export default function LandingEspetaculo() {
                 num: '02',
                 icon: Tag,
                 title: 'Compartilhe o link e venda',
-                body: 'Cupom de desconto, cortesia direta pro elenco e checkout com PIX, cartão e boleto — a taxa fica clara desde o início.',
+                body: 'Cupom de desconto, cortesia direta pro elenco e checkout com PIX, cartão e boleto — nada de comprovante conferido na mão.',
               },
               {
                 num: '03',
                 icon: QrCode,
                 title: 'Credenciamento por QR no dia',
-                body: 'Cada comprador entra com QR Code escaneado na porta — sem fila de conferência manual, sem ingresso duplicado.',
+                body: 'Cada comprador entra com QR Code escaneado na porta — sem fila de conferência manual, sem "quem já confirmou mesmo?".',
               },
             ].map((step, i) => {
               const Icon = step.icon;
               return (
-                <div key={i} className="bg-white/5 border border-white/10 rounded-3xl p-6 hover:border-[#ff0068]/30 transition-all">
-                  <p className="text-5xl font-black tracking-tighter text-[#ff0068]/30 mb-4">{step.num}</p>
+                <div key={i} className="bg-slate-50 border border-slate-200 rounded-3xl p-6 hover:border-[#ff0068]/30 transition-all">
+                  <p className="text-5xl font-black tracking-tighter text-[#ff0068]/20 mb-4">{step.num}</p>
                   <Icon size={24} className="text-[#ff0068] mb-3" />
-                  <h3 className="text-xl font-black uppercase tracking-tight text-white">{step.title}</h3>
-                  <p className="text-sm text-slate-400 mt-2 leading-relaxed">{step.body}</p>
+                  <h3 className="text-xl font-black uppercase tracking-tight text-slate-950">{step.title}</h3>
+                  <p className="text-sm text-slate-600 mt-2 leading-relaxed">{step.body}</p>
                 </div>
               );
             })}
@@ -311,10 +320,10 @@ export default function LandingEspetaculo() {
         </div>
       </section>
 
-      {/* ─── 6. TAXA / TRANSPARÊNCIA ──────────────────────────────────────────────── */}
+      {/* ─── 6. TAXA / TRANSPARÊNCIA (escuro) ──────────────────────────────────────────────── */}
       <section className="px-6 py-24 lg:py-32 border-t border-white/5">
         <div className="max-w-4xl mx-auto text-center">
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Modelo transparente</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Sem letra miúda</p>
           <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase mb-6">
             Quanto custa vender ingresso<br />
             pro seu espetáculo?
@@ -324,8 +333,8 @@ export default function LandingEspetaculo() {
             <p className="text-slate-300 text-sm mt-2">sobre o total vendido — sem mínimo, sem taxa fixa, tudo incluso</p>
             <ul className="mt-6 space-y-2 text-left max-w-sm mx-auto">
               {[
+                'Não vendeu, não pagou — sem estoque mínimo, sem risco',
                 'CoreoHub absorve 100% do processamento (PIX, cartão, boleto)',
-                'Taxa é a mesma pra todo mundo — não muda por negociação',
                 'Repasse automático via Pix, sem fechamento de caixa manual',
               ].map((item, i) => (
                 <li key={i} className="flex items-start gap-3 text-slate-300">
@@ -344,12 +353,12 @@ export default function LandingEspetaculo() {
         </div>
       </section>
 
-      {/* ─── 7. FEATURES INCLUÍDAS ──────────────────────────────────────────────── */}
-      <section className="px-6 py-24 lg:py-32 border-t border-white/5">
+      {/* ─── 7. FEATURES INCLUÍDAS (claro) ──────────────────────────────────────────────── */}
+      <section className="bg-white text-slate-900 px-6 py-24 lg:py-32 border-t border-slate-200">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">O que já vem incluído</p>
-            <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase">
+            <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase text-slate-950">
               Tudo isso, na mesma taxa.
             </h2>
           </div>
@@ -362,11 +371,11 @@ export default function LandingEspetaculo() {
             ].map((f, i) => {
               const Icon = f.icon;
               return (
-                <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-6 flex gap-4">
+                <div key={i} className="bg-slate-50 border border-slate-200 rounded-2xl p-6 flex gap-4">
                   <Icon size={22} className="text-[#ff0068] shrink-0 mt-1" aria-hidden="true" />
                   <div>
-                    <h3 className="text-sm font-black uppercase tracking-tight text-white">{f.title}</h3>
-                    <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">{f.body}</p>
+                    <h3 className="text-sm font-black uppercase tracking-tight text-slate-950">{f.title}</h3>
+                    <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">{f.body}</p>
                   </div>
                 </div>
               );
@@ -375,7 +384,7 @@ export default function LandingEspetaculo() {
         </div>
       </section>
 
-      {/* ─── 8. PROVA SOCIAL (placeholder) ──────────────────────────────────────────────── */}
+      {/* ─── 8. PROVA SOCIAL (escuro, placeholder) ──────────────────────────────────────────────── */}
       <section className="px-6 py-24 lg:py-32 border-t border-white/5">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-12">
@@ -404,34 +413,34 @@ export default function LandingEspetaculo() {
         </div>
       </section>
 
-      {/* ─── 9. FAQ ──────────────────────────────────────────────── */}
-      <section className="px-6 py-24 lg:py-32 border-t border-white/5">
+      {/* ─── 9. FAQ (claro) ──────────────────────────────────────────────── */}
+      <section className="bg-white text-slate-900 px-6 py-24 lg:py-32 border-t border-slate-200">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-12">
             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3">Dúvidas frequentes</p>
-            <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase">
+            <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase text-slate-950">
               Tudo o que você quer<br />perguntar.
             </h2>
           </div>
           <div className="space-y-2">
             {FAQ_ITEMS.map((item, i) => (
-              <div key={i} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+              <div key={i} className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden">
                 <button
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                   aria-expanded={openFaq === i}
                   aria-controls={`espetaculo-faq-panel-${i}`}
                   id={`espetaculo-faq-trigger-${i}`}
-                  className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-white/[0.03] transition-colors"
+                  className="w-full flex items-center justify-between gap-4 p-5 text-left hover:bg-slate-100 transition-colors"
                 >
-                  <span className="text-base font-black uppercase tracking-tight text-white">{item.q}</span>
-                  <ChevronDown size={18} className={`shrink-0 text-slate-400 transition-transform ${openFaq === i ? 'rotate-180' : ''}`} />
+                  <span className="text-base font-black uppercase tracking-tight text-slate-950">{item.q}</span>
+                  <ChevronDown size={18} className={`shrink-0 text-slate-500 transition-transform ${openFaq === i ? 'rotate-180' : ''}`} />
                 </button>
                 {openFaq === i && (
                   <div
                     id={`espetaculo-faq-panel-${i}`}
                     role="region"
                     aria-labelledby={`espetaculo-faq-trigger-${i}`}
-                    className="px-5 pb-5 -mt-1 text-sm text-slate-300 leading-relaxed"
+                    className="px-5 pb-5 -mt-1 text-sm text-slate-600 leading-relaxed"
                   >
                     {item.a}
                   </div>
@@ -442,13 +451,14 @@ export default function LandingEspetaculo() {
         </div>
       </section>
 
-      {/* ─── 10. CTA FINAL ──────────────────────────────────────────────── */}
+      {/* ─── 10. CTA FINAL (escuro) ──────────────────────────────────────────────── */}
       <section className="relative px-6 py-24 lg:py-32 overflow-hidden border-t border-white/5">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,0,104,0.18),transparent_70%)]" />
         <div className="relative max-w-4xl mx-auto text-center">
+          <HeartHandshake size={36} className="text-[#ff0068] mx-auto mb-6" aria-hidden="true" />
           <h2 className="text-5xl md:text-7xl font-black tracking-tighter uppercase leading-[0.95] mb-6">
-            Chega de planilha de ingresso<br />
-            <span className="text-[#ff0068]">antes do espetáculo.</span>
+            Chega de plateia incerta<br />
+            <span className="text-[#ff0068]">no espetáculo mais importante do ano.</span>
           </h2>
           <p className="text-slate-300 text-xl md:text-2xl max-w-2xl mx-auto leading-relaxed mb-10">
             Cadastre o espetáculo agora. Compartilhe o link hoje à noite. Receba a primeira venda amanhã.
