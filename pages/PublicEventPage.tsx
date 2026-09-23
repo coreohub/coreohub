@@ -149,7 +149,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event,
             regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label,
             programacao_config, ingressos_config, formacoes_config, patrocinadores_config,
-            politica_ingressos, audience_sales_enabled,
+            politica_ingressos, audience_sales_enabled, billing_plan,
             audience_max_per_purchase, audience_max_per_cpf,
             producer_ga4_id, producer_meta_pixel_id
           `)
@@ -498,7 +498,11 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   // puros (ex: colônia de férias) não têm formações — sem isso, badge/CTA
   // de "Inscrições"/"Resultados" apareciam mesmo sem nenhuma modalidade
   // pra inscrever, apontando pro Wizard vazio.
-  const hasFormacoes = Array.isArray(event.formacoes_config) && event.formacoes_config.length > 0;
+  // Plano Espetáculo (bilheteria de estúdio): sem competição — nunca mostra
+  // premiação/jurados/inscrições/workshops, mesmo que sobre dado de festival
+  // gravado por padrão em configuracoes.
+  const isEspetaculo = (event as any).billing_plan === 'espetaculo';
+  const hasFormacoes = !isEspetaculo && Array.isArray(event.formacoes_config) && event.formacoes_config.length > 0;
   // Aulas já agrupadas num pacote "Aluno escolhe" (à la carte) somem da grade
   // solta de workshops — senão a mesma aula aparece 2x na vitrine (card do
   // pacote + card individual), poluindo a página. Pedido real: Lorrayne,
@@ -622,7 +626,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   const hasSocial = Object.values(social).some(Boolean);
 
   // Prêmios habilitados (vêm de configuracoes.premios_especiais como array de SpecialAward)
-  const enabledAwards: any[] = Array.isArray(config?.premios_especiais)
+  const enabledAwards: any[] = !isEspetaculo && Array.isArray(config?.premios_especiais)
     ? config.premios_especiais.filter((a: any) => a?.enabled)
     : [];
 
@@ -745,11 +749,11 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
     // com o prazo encerrado (usuário que volta pelo link precisa achar a
     // seção e ver o estado "Inscrições encerradas"); só o CTA flutuante
     // "INSCREVA-SE" some quando !isRegistrationOpen.
-    Array.isArray(event.formacoes_config) && event.formacoes_config.length > 0
+    !isEspetaculo && Array.isArray(event.formacoes_config) && event.formacoes_config.length > 0
       ? { id: 'inscricoes', label: 'Inscrições', priority: REVENUE_SECTION_PRIORITY }
       : null,
-    publicWorkshops.length > 0 ? { id: 'workshops', label: 'Workshops', priority: REVENUE_SECTION_PRIORITY } : null,
-    publicJudges.length > 0 ? { id: 'jurados', label: 'Jurados' } : null,
+    !isEspetaculo && publicWorkshops.length > 0 ? { id: 'workshops', label: 'Workshops', priority: REVENUE_SECTION_PRIORITY } : null,
+    !isEspetaculo && publicJudges.length > 0 ? { id: 'jurados', label: 'Jurados' } : null,
     enabledAwards.length > 0 ? { id: 'premiacao', label: 'Premiação' } : null,
   ].filter(Boolean) as AnchorSection[];
 

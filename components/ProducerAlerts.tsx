@@ -59,7 +59,7 @@ const ProducerAlerts: React.FC<Props> = ({ profile }) => {
       const [eventsRes, profileRes] = await Promise.all([
         supabase
           .from('events')
-          .select('id, name, formacoes_config, created_at, is_demo, cover_url, description, is_public')
+          .select('id, name, formacoes_config, created_at, is_demo, cover_url, description, is_public, billing_plan')
           .eq('created_by', profile.id)
           .order('created_at', { ascending: false }),
         supabase
@@ -113,7 +113,8 @@ const ProducerAlerts: React.FC<Props> = ({ profile }) => {
       }
 
       // ── AVISO: Critérios de avaliação não configurados ────────────────
-      if (events.length > 0 && !hasCriterios) {
+      // Espetáculo não tem júri/terminal de nota — esse aviso seria ruído.
+      if (events.length > 0 && !hasCriterios && (activeEvent as any)?.billing_plan !== 'espetaculo') {
         newAlerts.push({
           id: 'criterios-missing',
           severity: 'warning',

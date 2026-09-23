@@ -333,6 +333,9 @@ type TabType =
 // 1) Identidade do evento → 2) Eixo técnico (gêneros) → 3) Eixo de inscrição
 // (categorias por idade + formações com preços) → 4) Avaliação + prêmios →
 // 5) Operação (tolerância + fluxo) → 6) Financeiro → 7) Avançado/Demo.
+// Abas visíveis no Plano Espetáculo (venda de ingresso, sem competição/júri).
+const ESPETACULO_TABS: TabType[] = ['Geral', 'Pagamentos'];
+
 const TABS: { label: TabType; icon: React.ElementType }[] = [
   { label: 'Geral',             icon: Settings },        // 1. Nome, data, local, identidade
   { label: 'Gêneros',           icon: Music2 },          // 2. Estilos aceitos
@@ -1307,6 +1310,13 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   // Slug do evento ativo — usado pra montar URL da vitrine como smart default
   // do campo "Site oficial"
   const [activeEventSlug, setActiveEventSlug] = useState<string | null>(null);
+  // Plano Espetáculo (events.billing_plan): Configurações mostra só o que faz sentido pra
+  // venda de ingresso (sem gêneros/categorias/formações/avaliação/prêmios/fluxo de palco).
+  const [isEspetaculo, setIsEspetaculo] = useState(false);
+  useEffect(() => {
+    if (isEspetaculo && !ESPETACULO_TABS.includes(activeTab)) setActiveTab('Geral');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEspetaculo]);
   const [activeEventId,   setActiveEventId]   = useState<string | null>(null);
   // Picker de evento (achado #5, 2026-07-17) — antes esta tela sempre
   // resolvia "o evento mais recente" sozinha, sem escolha. Produtor com 2+
@@ -2003,7 +2013,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         let myEvent: any = null;
         if (user) {
           const evRes = await supabase
-            .from('events').select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, audience_sales_enabled, audience_commission_percent, audience_commission_percent_manual, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, producer_ga4_id, producer_meta_pixel_id, start_date, end_date, event_time, programacao_config, ingressos_config, politica_ingressos')
+            .from('events').select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, audience_sales_enabled, audience_commission_percent, audience_commission_percent_manual, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, producer_ga4_id, producer_meta_pixel_id, start_date, end_date, event_time, programacao_config, ingressos_config, politica_ingressos, billing_plan')
             .eq('id', selectedEventId)
             .maybeSingle();
           // select() amplo sem checar error mascara coluna ausente como "não
@@ -2018,6 +2028,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             // Captura slug pra suggerir URL da vitrine no campo Site oficial
             setActiveEventSlug((myEvent as any).slug ?? myEvent.id);
             setActiveEventId(myEvent.id);
+            setIsEspetaculo((myEvent as any).billing_plan === 'espetaculo');
             // Inicializa draft de edição do slug com o valor atual.
             setSlugDraft((myEvent as any).slug ?? '');
             // Identidade pública: campos diretos da tabela events
@@ -2397,7 +2408,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         // se foi carregado do banco OU se o user tocou na lista. Sem isso, save
         // com state ainda nos defaults (race condition entre fetch e clique
         // de "Salvar") sobrescrevia o JSONB do banco com 5 templates desabilitados.
-        ...(awardsTouched ? { premios_especiais: premiosToSave } : {}),
+        ...(awardsTouched && !isEspetaculo ? { premios_especiais: premiosToSave } : {}),
         atualizado_em:       new Date().toISOString(),
       };
 
@@ -3099,6 +3110,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               </div>
 
               {/* Prazos */}
+              {!isEspetaculo && (
               <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-5">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Clock size={18} /></div>
@@ -3113,6 +3125,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   <input type="date" value={general.trackDeadline} onChange={e => setGeneral({ ...general, trackDeadline: e.target.value })} className={input} />
                 </div>
               </div>
+              )}
             </div>
 
             {/* Identidade & Contato — exibido na vitrine pública */}
@@ -3614,6 +3627,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             </div>
 
             {/* Programação Detalhada */}
+            {!isEspetaculo && (
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
               <div className="flex items-center justify-between gap-3 mb-2">
                 <div className="flex items-center gap-3">
@@ -3689,6 +3703,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 )}
               </div>
             </div>
+            )}
 
             {/* Ingressos para Audiência (#11) */}
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
@@ -4235,6 +4250,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             </div>
 
             {/* Formato do Evento */}
+            {!isEspetaculo && (
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
               <div className="flex items-center gap-3 mb-2">
                 <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Clapperboard size={18} /></div>
@@ -4330,6 +4346,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 </div>
               )}
             </div>
+            )}
 
             {/* Eixos opcionais — Nível Técnico (4 níveis fixos quando ON).
                 Auditoria de mercado 2026-05-06: FAD/YAGP NÃO usam nível
@@ -4340,6 +4357,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 de Solo/Duo/Trio/Grupo), não como toggle transversal por cima
                 de qualquer estilo. Configura em Formações (toggle "Dança
                 Inclusiva (PCD)" no editor de cada formato). */}
+            {!isEspetaculo && (
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-5">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Award size={18} /></div>
@@ -4386,6 +4404,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 </div>
               </button>
             </div>
+            )}
 
             {/* Instalar como app — sempre disponível pro produtor (Linear/Figma pattern) */}
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-6 rounded-3xl">
@@ -7351,7 +7370,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
       {!forcedTab && (
       <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden backdrop-blur-xl shadow-sm sticky top-0 z-20">
         <div className="flex overflow-x-auto no-scrollbar">
-          {TABS.map(({ label: tab }) => (
+          {TABS.filter(t => !isEspetaculo || ESPETACULO_TABS.includes(t.label)).map(({ label: tab }) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}

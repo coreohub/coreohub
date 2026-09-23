@@ -18,6 +18,9 @@ import { generateEventSlug } from '../services/eventSlug';
  * próprio produtor já nasce com o plano certo, sem gate de admin).
  */
 
+// Piso de valor do ingresso aceito pelo checkout com split (Asaas).
+const MIN_PRECO_INGRESSO = 20;
+
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 
 const EspetaculoWizard: React.FC = () => {
@@ -29,6 +32,12 @@ const EspetaculoWizard: React.FC = () => {
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
+  const [description, setDescription] = useState('');
+  // Ingresso inicial — sem isso o botão "Comprar" nunca funcionava logo após criar.
+  // R$ 20 é o piso que o checkout com split aceita (valores de R$ 5 a R$ 19 são
+  // recusados pelo Asaas, achado empírico 2026-09-23).
+  const [precoInteira, setPrecoInteira] = useState('');
+  const [oferecerMeia, setOferecerMeia] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +61,14 @@ const EspetaculoWizard: React.FC = () => {
 
   const handleCreate = async () => {
     if (!name.trim()) { setError('Informe o nome do espetáculo.'); return; }
+    if (!startDate) { setError('Informe a data do espetáculo.'); return; }
+    const precoNum = Number(String(precoInteira).replace(',', '.'));
+    if (!Number.isFinite(precoNum) || precoNum < MIN_PRECO_INGRESSO) {
+      setError(`O valor do ingresso deve ser de pelo menos R$ ${MIN_PRECO_INGRESSO}.`);
+      return;
+    }
+    const precoMeia = Math.round((precoNum / 2) * 100) / 100;
+    const meiaOk = oferecerMeia && precoMeia >= MIN_PRECO_INGRESSO;
     if (createInFlightRef.current) return;
     createInFlightRef.current = true;
     setSaving(true);
@@ -87,6 +104,7 @@ const EspetaculoWizard: React.FC = () => {
         state,
         location:     city + (state ? `, ${state}` : ''),
         cover_url:    coverUrl || undefined,
+        description:  description.trim() || undefined,
         edition_year: editionYear,
         is_public:    true,
         event_type:   'private',
@@ -94,12 +112,14 @@ const EspetaculoWizard: React.FC = () => {
         // e audience_commission_percent derivam sozinhos (7,9%) via trigger
         // já existente no banco.
         billing_plan: 'espetaculo',
-        // Liga a bilheteria de plateia — mesma infra do Festival, já testada.
-        // Sem tipo de ingresso configurado ainda, então o botão "Comprar" só
-        // vira funcional depois que o produtor cadastrar os tipos em
-        // Configurações → Ingressos.
+        // Liga a bilheteria de plateia com o tipo de ingresso já criado, então o
+        // "Comprar" funciona logo após criar (mesma infra do Festival, já testada).
         politica_ingressos:     'INTERNO',
-        audience_sales_enabled: false,
+        audience_sales_enabled: true,
+        ingressos_config: [
+          { kind: 'inteira', nome: 'Inteira', preco: precoNum },
+          ...(meiaOk ? [{ kind: 'meia', nome: 'Meia-entrada', preco: precoMeia }] : []),
+        ],
       };
 
       const result: any = await createEvent(payload);
@@ -222,6 +242,29 @@ const EspetaculoWizard: React.FC = () => {
                   className="min-w-0 text-[10px] text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-full file:border-0 file:text-[10px] file:font-black file:bg-[#ff0068] file:text-white file:cursor-pointer"
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className={labelCls}>Descrição (aparece na vitrine)</label>
+              <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} maxLength={1500} className={inputCls} placeholder="Conte em poucas linhas o que o público vai ver." />
+            </div>
+
+            <div className="space-y-2">
+              <label className={labelCls}>Valor do ingresso (R$)</label>
+              <input type="number" inputMode="decimal" min={MIN_PRECO_INGRESSO} step="0.01" value={precoInteira} onChange={e => setPrecoInteira(e.target.value)} className={inputCls} placeholder={`Mínimo R$ ${MIN_PRECO_INGRESSO}`} />
+              <label className="flex items-center gap-2 text-[11px] font-bold text-slate-600 dark:text-slate-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={oferecerMeia}
+                  onChange={e => setOferecerMeia(e.target.checked)}
+                  disabled={!(Number(String(precoInteira).replace(',', '.')) / 2 >= MIN_PRECO_INGRESSO)}
+                  className="accent-[#ff0068]"
+                />
+                Oferecer meia-entrada (50%)
+              </label>
+              <p className="text-[10px] text-slate-400 leading-relaxed">
+                A meia-entrada só fica disponível quando metade do valor é de pelo menos R$ {MIN_PRECO_INGRESSO}. Você pode ajustar os tipos depois em Configurações.
+              </p>
             </div>
 
             <p className="text-[10px] text-slate-400 leading-relaxed">
