@@ -2003,7 +2003,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         let myEvent: any = null;
         if (user) {
           const evRes = await supabase
-            .from('events').select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, audience_sales_enabled, audience_commission_percent, audience_commission_percent_manual, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, producer_ga4_id, producer_meta_pixel_id')
+            .from('events').select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, audience_sales_enabled, audience_commission_percent, audience_commission_percent_manual, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, producer_ga4_id, producer_meta_pixel_id, start_date, end_date, event_time, programacao_config, ingressos_config, politica_ingressos')
             .eq('id', selectedEventId)
             .maybeSingle();
           // select() amplo sem checar error mascara coluna ausente como "não
@@ -2138,7 +2138,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             coverFocalX: evt.cover_focal_x ?? DEFAULT_GENERAL.coverFocalX,
             coverFocalY: evt.cover_focal_y ?? DEFAULT_GENERAL.coverFocalY,
             description: descriptionFromDb,
-            eventTime:   data.hora_evento || DEFAULT_GENERAL.eventTime,
+            eventTime:   data.hora_evento || evt.event_time || DEFAULT_GENERAL.eventTime,
           });
           setSavedDescription(descriptionFromDb);
           setSavedEventName(data.nome_evento || evt.name || DEFAULT_GENERAL.eventName);
@@ -2153,13 +2153,26 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             setSelectedCity(parsedCityUf.city);
             setSelectedUf(parsedCityUf.uf);
           }
-          if (Array.isArray(data.programacao)) setProgramacao(data.programacao);
-          if (Array.isArray(data.ingressos_audiencia)) setIngressos(data.ingressos_audiencia);
+          // events é a fonte real da vitrine; configuracoes (legado dual-row) pode
+          // estar vazio pra evento criado fora do fluxo normal (SQL, seed, wizard
+          // do Espetáculo). Sem esse fallback o save gravava "vazio" por cima do
+          // que estava certo em events (incidente real 2026-09-23: evento de teste
+          // perdeu data, tipos de ingresso e venda ligada ao salvar Configurações).
+          if (Array.isArray(data.programacao) && data.programacao.length > 0) setProgramacao(data.programacao);
+          else if (Array.isArray(evt.programacao_config)) setProgramacao(evt.programacao_config);
+          else if (Array.isArray(data.programacao)) setProgramacao(data.programacao);
+          if (Array.isArray(data.ingressos_audiencia) && data.ingressos_audiencia.length > 0) setIngressos(data.ingressos_audiencia);
+          else if (Array.isArray(evt.ingressos_config)) setIngressos(evt.ingressos_config);
+          else if (Array.isArray(data.ingressos_audiencia)) setIngressos(data.ingressos_audiencia);
           setEntradaGratuitaNota(data.entrada_gratuita_nota ?? '');
           // Politica de ingressos (#11). Se a coluna nao veio (banco sem migration ainda),
           // infere a partir dos dados pra nao quebrar UI: lista preenchida -> INTERNO,
           // url_ingressos -> EXTERNO, senao NAO_DEFINIDO.
-          if (data.politica_ingressos) {
+          if (data.politica_ingressos && data.politica_ingressos !== 'NAO_DEFINIDO') {
+            setPoliticaIngressos(data.politica_ingressos);
+          } else if (evt.politica_ingressos && evt.politica_ingressos !== 'NAO_DEFINIDO') {
+            setPoliticaIngressos(evt.politica_ingressos);
+          } else if (data.politica_ingressos) {
             setPoliticaIngressos(data.politica_ingressos);
           } else if (Array.isArray(data.ingressos_audiencia) && data.ingressos_audiencia.length > 0) {
             setPoliticaIngressos('INTERNO');
