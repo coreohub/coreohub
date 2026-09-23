@@ -19,7 +19,7 @@ import VendasTabs from '../components/VendasTabs';
 import EventPickerSheet from '../components/EventPickerSheet';
 import SeatGrid from '../components/SeatGrid';
 import { useSeatMap } from '../hooks/useSeatMap';
-import { maskCpfCnpj, unmaskCpfCnpj } from '../utils/masks';
+import { maskCpfCnpj, unmaskCpfCnpj, maskTelefoneBR, unmaskTelefoneBR } from '../utils/masks';
 
 interface TicketTypeConfig {
   nome: string;
@@ -311,7 +311,7 @@ const VendasIngressos: React.FC = () => {
           buyer_name: courtesyForm.name.trim(),
           buyer_email: courtesyForm.email.trim(),
           buyer_cpf: cpf,
-          buyer_phone: courtesyForm.phone.trim() || undefined,
+          buyer_phone: unmaskTelefoneBR(courtesyForm.phone) || undefined,
         },
       });
       if (invokeErr) {
@@ -367,7 +367,7 @@ const VendasIngressos: React.FC = () => {
             name: pdvForm.name.trim(),
             email: pdvForm.email.trim(),
             cpf,
-            phone: pdvForm.phone.trim() || undefined,
+            phone: unmaskTelefoneBR(pdvForm.phone) || undefined,
           },
           payment_method: pdvMethod,
           ...(seatMapEnabled ? { seat_ids: pdvSelectedSeats } : {}),
@@ -742,11 +742,12 @@ const VendasIngressos: React.FC = () => {
                 />
               </div>
               <div>
-                <label htmlFor="courtesy-phone" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Telefone (opcional)</label>
+                <label htmlFor="courtesy-phone" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">WhatsApp (opcional)</label>
                 <input
                   id="courtesy-phone"
                   value={courtesyForm.phone}
-                  onChange={e => setCourtesyForm(f => ({ ...f, phone: e.target.value }))}
+                  onChange={e => setCourtesyForm(f => ({ ...f, phone: maskTelefoneBR(e.target.value) }))}
+                  placeholder="(00) 00000-0000"
                   className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
                 />
               </div>
@@ -892,11 +893,12 @@ const VendasIngressos: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label htmlFor="pdv-phone" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Telefone (opcional)</label>
+                    <label htmlFor="pdv-phone" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">WhatsApp (opcional)</label>
                     <input
                       id="pdv-phone"
                       value={pdvForm.phone}
-                      onChange={e => setPdvForm(f => ({ ...f, phone: e.target.value }))}
+                      onChange={e => setPdvForm(f => ({ ...f, phone: maskTelefoneBR(e.target.value) }))}
+                      placeholder="(00) 00000-0000"
                       className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
                     />
                   </div>
