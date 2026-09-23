@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  CreditCard, Scale, Clock, AlertCircle,
+  CreditCard, Scale, Clock, AlertCircle, Eye,
   ArrowRight, X,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
@@ -59,7 +59,7 @@ const ProducerAlerts: React.FC<Props> = ({ profile }) => {
       const [eventsRes, profileRes] = await Promise.all([
         supabase
           .from('events')
-          .select('id, name, formacoes_config, created_at, is_demo')
+          .select('id, name, formacoes_config, created_at, is_demo, cover_url, description, is_public')
           .eq('created_by', profile.id)
           .order('created_at', { ascending: false }),
         supabase
@@ -124,6 +124,29 @@ const ProducerAlerts: React.FC<Props> = ({ profile }) => {
           onCta: () => navigate('/account-settings?tab=Avaliação'),
           dismissable: true,
         });
+      }
+
+      // ── AVISO: evento não aparece na vitrine pública ──────────────────
+      // Festivais.tsx só lista evento público com capa E descrição preenchidas.
+      // Sem esse aviso o produtor (festival, mostra ou espetáculo) não sabe por
+      // que o evento dele não aparece — some silenciosamente.
+      if (activeEvent) {
+        const faltas: string[] = [];
+        if (!(activeEvent as any).is_public) faltas.push('está como privado');
+        if (!(activeEvent as any).cover_url) faltas.push('sem foto de capa');
+        if (!String((activeEvent as any).description ?? '').trim()) faltas.push('sem descrição');
+        if (faltas.length > 0) {
+          newAlerts.push({
+            id: `vitrine-${activeEvent.id}`,
+            severity: 'warning',
+            icon: Eye,
+            title: 'Seu evento não aparece na vitrine',
+            description: `${activeEvent.name}: ${faltas.join(', ')}. Complete em Configurações → Geral para aparecer no site.`,
+            ctaLabel: 'Completar',
+            onCta: () => navigate('/account-settings?tab=Geral'),
+            dismissable: true,
+          });
+        }
       }
 
       // ── INFO: Prazo crítico de inscrição (vem de configuracoes) ───────

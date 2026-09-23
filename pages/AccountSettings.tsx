@@ -2525,7 +2525,17 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         // errada junto, e corrigir o nome depois nunca corrigiu a URL —
         // ela ficou presa no typo original pra sempre.
         let slugOverride: string | null = null;
-        if (
+        // Evento sem slug (criado fora dos wizards, ex. SQL/seed): o link público
+        // cai no UUID cru. Gera pelo nome no primeiro save, sem histórico (não
+        // havia URL antiga pra redirecionar).
+        if (activeEventId && !activeEventSlug && general.eventName.trim()) {
+          try {
+            const result = await generateEventSlug(general.eventName, editionYear, activeEventId);
+            slugOverride = result.slug;
+          } catch (slugErr) {
+            console.error('[AccountSettings] geração de slug inicial falhou:', slugErr);
+          }
+        } else if (
           general.eventName.trim() !== savedEventName.trim() &&
           activeEventId &&
           activeEventSlug === buildEventSlugBase(savedEventName, editionYear)

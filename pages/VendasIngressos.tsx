@@ -680,8 +680,8 @@ const VendasIngressos: React.FC = () => {
 
           {/* Selo Asaas — listagem de cobrança/extrato é ponto obrigatório
               conforme Playbook Asaas (Resolução Conjunta nº 16/2025 BCB). */}
-          <div className="px-4 py-4 border-t border-slate-200 dark:border-white/10 flex items-center justify-center">
-            <AsaasBadge variant="compact" />
+          <div className="px-4 py-2 border-t border-slate-200 dark:border-white/10 flex items-center justify-center">
+            <AsaasBadge variant="compact" width={100} height={30} />
           </div>
         </div>
       )}

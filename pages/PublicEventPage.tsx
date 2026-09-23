@@ -859,7 +859,10 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                   style={{ objectPosition: `${event.cover_focal_x ?? 50}% ${event.cover_focal_y ?? 50}%` }}
                 />
               ) : (
-                <div className="w-full aspect-[1200/630] rounded-2xl bg-gradient-to-br from-[#ff0068]/10 via-slate-900 to-[#050505] border border-white/10" />
+                <div className="w-full aspect-[1200/630] rounded-2xl bg-gradient-to-br from-[#ff0068]/25 via-slate-900 to-[#050505] border border-white/10 flex flex-col items-center justify-center gap-3 p-6 text-center">
+                  <img src="/coreohub-avatar.png" alt="" aria-hidden="true" width={56} height={56} className="w-14 h-14 rounded-2xl opacity-90" />
+                  <p className="text-sm font-black uppercase tracking-tighter italic text-white/80 line-clamp-2">{event.name}</p>
+                </div>
               )}
               {/* Redes sociais compactas — só desktop (lg+). No mobile a versão
                   completa ("Siga o evento") já existe mais abaixo na página;
@@ -1368,6 +1371,20 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                             </p>
                           </div>
                           {t.obs && <p className="text-[10px] text-slate-400">{t.obs}</p>}
+
+                          {/* Meia-entrada (Lei 12.933): sinaliza tipo + exigência de comprovação na entrada. */}
+                          {(t.kind === 'meia' || String(t.nome).toLowerCase().includes('meia')) && (
+                            <p className="text-[10px] font-bold text-sky-400">
+                              Meia-entrada · apresente o comprovante do benefício na portaria
+                            </p>
+                          )}
+
+                          {/* Fim do lote sem virada de preço pra maior (aviso de virada cobre o caso contrário). */}
+                          {!hint && !soldOut && r?.lote.data_virada && (
+                            <p className="text-[10px] font-bold text-slate-400">
+                              Vendas neste lote até {new Date(r.lote.data_virada + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                            </p>
+                          )}
 
                           {hint && !soldOut && (
                             <p className="text-[10px] font-bold text-[#ff0068]">
