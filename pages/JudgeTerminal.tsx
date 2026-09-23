@@ -734,18 +734,20 @@ const JudgeTerminal = () => {
           setDeliberationStatus(td.event?.deliberation_status ?? null);
         } else {
           // Fluxo legado: produtor/admin logado no device, queries diretas via RLS.
-          const { fetchActiveEventConfig } = await import('../services/supabase');
+          const { fetchActiveEventConfig, resolveActiveEventId } = await import('../services/supabase');
+          const legacyEventId = await resolveActiveEventId();
           const [judgesRes, cfgRes, schedRes, gRes, evRes] = await Promise.all([
             supabase.from('judges').select('*'),
             fetchActiveEventConfig('regras_avaliacao, escala_notas, premios_especiais, pin_inactivity_minutes, formato_avaliada_label_mode, formato_avaliada_label_custom'),
             supabase.from('registrations').select('*').eq('status', 'APROVADA').order('ordem_apresentacao', { ascending: true }),
             supabase.from('event_styles').select('id, name'),
             // Phase 4: lê live_registration_id do evento ativo
-            supabase.from('events')
-              .select('live_registration_id, deliberation_status')
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle(),
+            legacyEventId
+              ? supabase.from('events')
+                  .select('live_registration_id, deliberation_status')
+                  .eq('id', legacyEventId)
+                  .maybeSingle()
+              : Promise.resolve({ data: null } as any),
           ]);
           jData = judgesRes.data;
           cfg = cfgRes;

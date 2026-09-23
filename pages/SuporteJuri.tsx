@@ -91,12 +91,14 @@ const SuporteJuri = () => {
   // Phase 4: busca apresentacao ao vivo + quais jurados ja submeteram nota
   const fetchLiveStatus = useCallback(async () => {
     try {
-      const { data: ev } = await supabase
-        .from('events')
-        .select('id, live_registration_id, live_started_at')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const activeEventId = await resolveActiveEventId();
+      const { data: ev } = activeEventId
+        ? await supabase
+            .from('events')
+            .select('id, live_registration_id, live_started_at')
+            .eq('id', activeEventId)
+            .maybeSingle()
+        : { data: null };
 
       if (!ev?.live_registration_id) {
         setLiveStatus(null);

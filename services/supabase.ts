@@ -350,7 +350,14 @@ export const resolveActiveEventId = async (eventIdHint?: string | null): Promise
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
-  return ev?.id ?? null;
+  if (ev?.id) return ev.id;
+  // Membro de equipe não é dono de nenhum evento: cai no evento vinculado.
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('team_event_id')
+    .eq('id', user.id)
+    .maybeSingle();
+  return profile?.team_event_id ?? null;
 };
 
 /**

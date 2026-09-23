@@ -14,7 +14,7 @@
  *   tudo e recomenda liberação
  */
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { supabase } from '../services/supabase';
+import { supabase, resolveActiveEventId } from '../services/supabase';
 import {
   Trophy, Loader2, RefreshCw, AlertCircle, CheckCircle2, Clock, Users,
   Star, Lock, Unlock, ChevronRight, Send,
@@ -91,12 +91,16 @@ const Deliberacoes: React.FC = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('not_authenticated');
 
-      const { data: ev } = await supabase
+      // Nunca "o evento mais recente visível": events é legível por qualquer
+      // usuário quando is_public, então isso pegava evento de outro produtor.
+      const activeEventId = await resolveActiveEventId();
+      if (!activeEventId) throw new Error('no_event');
+      const { data: ev, error: evErr } = await supabase
         .from('events')
         .select('id, name, deliberation_status, conferencia_started_at, conferencia_duration_seconds, deliberation_released_at, created_by')
-        .order('created_at', { ascending: false })
-        .limit(1)
+        .eq('id', activeEventId)
         .maybeSingle();
+      if (evErr) console.error('fetchData: events', evErr);
 
       if (!ev) throw new Error('no_event');
       setEvent(ev);
