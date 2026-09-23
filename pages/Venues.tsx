@@ -29,6 +29,8 @@ interface RowConfig {
   assentos: number;
   pcd: number[];
   corredor_apos?: number;
+  espaco_antes?: boolean;
+  palco_apos?: boolean;
 }
 
 interface Venue {
@@ -68,10 +70,11 @@ const SeatGridPreview: React.FC<{
   rows: RowConfig[];
   onTogglePcd: (rowIdx: number, seatNum: number) => void;
   onChangeAssentos: (rowIdx: number, value: number) => void;
-}> = ({ rows, onTogglePcd, onChangeAssentos }) => (
+  onToggleBloco: (rowIdx: number) => void;
+}> = ({ rows, onTogglePcd, onChangeAssentos, onToggleBloco }) => (
   <div className="space-y-2 max-h-80 overflow-y-auto p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-white/10">
     {rows.map((row, rowIdx) => (
-      <div key={row.codigo} className="flex items-center gap-2">
+      <div key={row.codigo} className={`flex items-center gap-2 ${row.espaco_antes ? 'mt-5' : ''}`}>
         <span className="w-8 shrink-0 text-[10px] font-black text-slate-500 text-center">{row.codigo}</span>
         <input
           type="number"
@@ -81,7 +84,18 @@ const SeatGridPreview: React.FC<{
           className="w-14 shrink-0 p-1 text-[10px] text-center bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-white/10 font-bold"
           aria-label={`Assentos na fileira ${row.codigo}`}
         />
-        <div className="flex flex-wrap gap-1">
+        {rowIdx > 0 ? (
+          <button
+            type="button"
+            onClick={() => onToggleBloco(rowIdx)}
+            aria-pressed={!!row.espaco_antes}
+            title="Iniciar um novo bloco (espaço visual) a partir desta fileira"
+            className={`shrink-0 px-1.5 py-1 rounded-lg text-[9px] font-black uppercase ${row.espaco_antes ? 'bg-[#ff0068] text-white' : 'bg-white dark:bg-slate-900 text-slate-400 border border-slate-200 dark:border-white/10'}`}
+          >
+            Bloco
+          </button>
+        ) : <span className="w-[46px] shrink-0" aria-hidden="true" />}
+        <div className="flex flex-wrap gap-1 flex-1 justify-center">
           {Array.from({ length: row.assentos }, (_, i) => i + 1).map(n => {
             const isPcd = row.pcd.includes(n);
             const isAisle = row.corredor_apos === n;
@@ -140,6 +154,15 @@ const VenueFormModal: React.FC<{
 
   const handleChangeAssentos = (rowIdx: number, value: number) => {
     setRows(prev => prev.map((r, i) => (i === rowIdx ? { ...r, assentos: value, pcd: r.pcd.filter(n => n <= value) } : r)));
+  };
+
+  const handleToggleBloco = (rowIdx: number) => {
+    setRows(prev => prev.map((r, i) => (i === rowIdx ? { ...r, espaco_antes: r.espaco_antes ? undefined : true } : r)));
+  };
+
+  const temPalco = rows.length > 0 && !!rows[rows.length - 1].palco_apos;
+  const handleTogglePalco = () => {
+    setRows(prev => prev.map((r, i) => (i === prev.length - 1 ? { ...r, palco_apos: r.palco_apos ? undefined : true } : r)));
   };
 
   const totalSeats = rows.reduce((sum, r) => sum + r.assentos, 0);
@@ -244,7 +267,11 @@ const VenueFormModal: React.FC<{
               <p className={labelCls}>Prévia — clique num assento pra marcar PCD</p>
               <span className="text-[10px] font-black text-slate-500">{totalSeats} assentos</span>
             </div>
-            <SeatGridPreview rows={rows} onTogglePcd={handleTogglePcd} onChangeAssentos={handleChangeAssentos} />
+            <SeatGridPreview rows={rows} onTogglePcd={handleTogglePcd} onChangeAssentos={handleChangeAssentos} onToggleBloco={handleToggleBloco} />
+            <label className="flex items-center gap-2 px-1 text-[11px] font-bold text-slate-600 dark:text-slate-300 cursor-pointer">
+              <input type="checkbox" checked={temPalco} onChange={handleTogglePalco} className="accent-[#ff0068]" />
+              Desenhar o palco abaixo da última fileira
+            </label>
           </div>
         )}
 

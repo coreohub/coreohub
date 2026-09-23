@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 
-export type SeatRow = { codigo: string; assentos: number; pcd?: number[]; corredor_apos?: number };
+export type SeatRow = {
+  codigo: string;
+  assentos: number;
+  pcd?: number[];
+  corredor_apos?: number;
+  /** Marca o início de um novo bloco (só afeta o espaçamento visual, nunca a geração de assentos). */
+  espaco_antes?: boolean;
+  /** Na última fileira: desenha a barra "Palco" logo abaixo da grade. */
+  palco_apos?: boolean;
+};
 export type SeatStatus = { seat_id: string; status: 'livre' | 'reservado' | 'vendido' | 'cortesia'; is_pcd: boolean };
 
 interface UseSeatMapOptions {

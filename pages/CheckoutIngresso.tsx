@@ -570,7 +570,7 @@ export default function CheckoutIngresso() {
 
         {/* Escolher lugar (Fase 2 — assento numerado, só quando o evento liga o mapa) */}
         {seatMapEnabled && (
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4 lg:w-[min(1040px,calc(100vw-2rem))] lg:relative lg:left-1/2 lg:-translate-x-1/2">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
                 <Armchair size={14} /> Escolher lugar

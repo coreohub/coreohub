@@ -13,8 +13,8 @@ interface SeatGridProps {
 }
 
 const SIZES = {
-  md: { btn: 'w-6 h-6', rounded: 'rounded-md', text: 'text-[8px]', icon: 11, codeText: 'text-[10px]', codeWidth: 'w-5', rowGap: 'gap-2', spacer: 'w-3', spinnerBox: 'py-8', spinner: 20 },
-  sm: { btn: 'w-5 h-5', rounded: 'rounded', text: 'text-[7px]', icon: 9, codeText: 'text-[9px]', codeWidth: 'w-4', rowGap: 'gap-1.5', spacer: 'w-2', spinnerBox: 'py-4', spinner: 16 },
+  md: { btn: 'w-6 h-6', rounded: 'rounded-md', text: 'text-[8px]', icon: 11, codeText: 'text-[10px]', codeWidth: 'w-5', rowGap: 'gap-2', blockGap: 'mt-5', pad: 'px-8', labelPos: '-left-6', spacer: 'w-3', spinnerBox: 'py-8', spinner: 20 },
+  sm: { btn: 'w-5 h-5', rounded: 'rounded', text: 'text-[7px]', icon: 9, codeText: 'text-[9px]', codeWidth: 'w-4', rowGap: 'gap-1.5', blockGap: 'mt-4', pad: 'px-7', labelPos: '-left-5', spacer: 'w-2', spinnerBox: 'py-4', spinner: 16 },
 };
 
 /**
@@ -42,10 +42,13 @@ export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onTo
     : 'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/20';
 
   return (
-    <div className="space-y-1.5 overflow-x-auto pb-1">
+    // w-max + mx-auto: a grade centraliza quando cabe na tela e rola quando não cabe.
+    // Fileiras com menos assentos ficam centralizadas (recuo natural nas pontas do teatro).
+    <div className="overflow-x-auto pb-1">
+     <div className={`space-y-1.5 w-max min-w-full mx-auto ${s.pad}`}>
       {rowsConfig.map(row => (
-        <div key={row.codigo} className={`flex items-center ${s.rowGap} min-w-max`}>
-          <span className={`font-black ${s.codeText} ${s.codeWidth} shrink-0 text-slate-500`}>{row.codigo}</span>
+        <div key={row.codigo} className={`relative flex items-center justify-center min-w-max ${row.espaco_antes ? s.blockGap : ''}`}>
+          <span className={`absolute ${s.labelPos} font-black ${s.codeText} text-slate-500`}>{row.codigo}</span>
           <div className="flex items-center gap-1">
             {Array.from({ length: row.assentos }, (_, i) => i + 1).map(n => {
               const seatId = `${row.codigo}-${n}`;
@@ -74,6 +77,12 @@ export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onTo
           </div>
         </div>
       ))}
+      {rowsConfig.some(r => r.palco_apos) && (
+        <div className={`mx-auto mt-4 h-6 w-2/3 rounded-b-3xl flex items-center justify-center text-[9px] font-black uppercase tracking-[0.4em] ${variant === 'dark' ? 'bg-white/10 text-slate-400' : 'bg-slate-200 dark:bg-white/10 text-slate-500 dark:text-slate-400'}`}>
+          Palco
+        </div>
+      )}
+     </div>
     </div>
   );
 }
