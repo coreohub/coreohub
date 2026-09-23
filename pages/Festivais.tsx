@@ -117,7 +117,7 @@ const Festivais = () => {
         // manual aqui.
         const { data, error } = await supabase
           .from('events')
-          .select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, start_date, end_date, location, city, state, formacoes_config, edition_year, is_public')
+          .select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, start_date, end_date, location, city, state, formacoes_config, ingressos_config, audience_sales_enabled, politica_ingressos, edition_year, is_public')
           .eq('is_public', true)
           .order('start_date', { ascending: false });
         if (error) throw error;
@@ -186,6 +186,19 @@ const Festivais = () => {
       .filter((n: number) => n > 0);
     if (!prices.length) return 0;
     return Math.min(...prices);
+  };
+
+  // Evento que vende ingresso e NÃO tem inscrição (ex.: Plano Espetáculo) não pode
+  // mostrar "Inscrições em breve" — o público quer saber que dá pra comprar.
+  // null = sem venda de ingresso (mantém o texto de inscrição de sempre).
+  const ticketLabel = (e: Event): string | null => {
+    const ev = e as any;
+    const selling = ev.audience_sales_enabled === true && ev.politica_ingressos === 'INTERNO';
+    const tipos: any[] = Array.isArray(ev.ingressos_config) ? ev.ingressos_config.filter((t: any) => t?.nome) : [];
+    if (!selling || tipos.length === 0) return null;
+    const prices = tipos.map((t: any) => precoVigente(t)).filter((n: number) => n > 0);
+    if (!prices.length) return 'Ingressos disponíveis';
+    return `Ingressos a partir de R$ ${Math.min(...prices).toFixed(2)}`;
   };
 
   const formatDateRange = (start?: string, end?: string) => {
@@ -365,7 +378,7 @@ const Festivais = () => {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {proximos.map(event => (
-                    <EventCard key={event.id} event={event} minPrice={minPrice(event)} dateLabel={formatDateRange(event.start_date, event.end_date)} />
+                    <EventCard key={event.id} event={event} minPrice={minPrice(event)} ticketLabel={ticketLabel(event)} dateLabel={formatDateRange(event.start_date, event.end_date)} />
                   ))}
                 </div>
               </div>
@@ -381,7 +394,7 @@ const Festivais = () => {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {passados.map(event => (
-                    <EventCard key={event.id} event={event} minPrice={minPrice(event)} dateLabel={formatDateRange(event.start_date, event.end_date)} muted />
+                    <EventCard key={event.id} event={event} minPrice={minPrice(event)} ticketLabel={ticketLabel(event)} dateLabel={formatDateRange(event.start_date, event.end_date)} muted />
                   ))}
                 </div>
               </div>
@@ -420,9 +433,10 @@ const Festivais = () => {
 const EventCard: React.FC<{
   event: Event;
   minPrice: number | null;
+  ticketLabel?: string | null;
   dateLabel: string;
   muted?: boolean;
-}> = ({ event, minPrice, dateLabel, muted }) => {
+}> = ({ event, minPrice, ticketLabel, dateLabel, muted }) => {
   const localizacao = [event.city, event.state].filter(Boolean).join(' / ') || (event as any).location;
   const target = `/evento/${event.slug ?? event.id}`;
 
@@ -471,7 +485,10 @@ const EventCard: React.FC<{
         )}
         <div className="mt-auto flex items-center justify-between pt-4 border-t border-white/5">
           <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-            {minPrice === null
+            {/* Só ingresso (sem formações): mostra o preço do ingresso; com formações, inscrição vale. */}
+            {minPrice === null && ticketLabel
+              ? ticketLabel
+              : minPrice === null
               ? 'Inscrições em breve'
               : minPrice === 0
               ? 'Inscrição gratuita'
