@@ -128,7 +128,9 @@ Deno.serve(async (req) => {
       quantity: qtyRaw,
       coupon_code,
       seat_ids: seatIdsRaw,
+      hold_token: holdTokenRaw,
     } = body as {
+      hold_token?: string
       event_id?: string
       ticket_type_idx?: number
       items?: Array<{ ticket_type_idx?: number; quantity?: number }>
@@ -436,14 +438,21 @@ Deno.serve(async (req) => {
     // (mesmo padrão de rollback já usado abaixo pra falha do Asaas) e devolve
     // quais seat_ids já estavam ocupados, pro frontend re-renderizar só esses.
     if (seatMapEnabled && seatIds.length > 0) {
-      const { data: seatData, error: seatErr } = await supabase.rpc('reserve_event_seats', {
+      // hold_event_seats reaproveita o hold que o checkout já fez ao escolher o
+      // assento (mesmo hold_token) e reserva os que faltarem. Cliente antigo
+      // (PWA em cache) não manda token: gera um novo, comportamento de sempre.
+      const holdToken = typeof holdTokenRaw === 'string' && holdTokenRaw.length >= 16
+        ? holdTokenRaw
+        : crypto.randomUUID()
+      const { data: seatData, error: seatErr } = await supabase.rpc('hold_event_seats', {
         p_event_id:     event_id,
         p_seat_ids:     seatIds,
+        p_hold_token:   holdToken,
         p_hold_minutes: reservedMinutes,
       })
       if (seatErr) {
         await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
-        console.error('[create-audience-ticket] erro RPC reserve_event_seats:', seatErr.message)
+        console.error('[create-audience-ticket] erro RPC hold_event_seats:', seatErr.message)
         throw new Error('Falha ao reservar assento')
       }
       const seatRows = (Array.isArray(seatData) ? seatData : []) as Array<{ seat_id: string; reserved: boolean }>

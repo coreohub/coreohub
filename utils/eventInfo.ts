@@ -16,14 +16,18 @@ export const INFO_SECTIONS = [
 export type InfoSectionKey = typeof INFO_SECTIONS[number]['key'];
 
 export type InfoFaq = { pergunta: string; resposta: string };
-export type InfoConfig = { secoes: Partial<Record<InfoSectionKey, string>>; faq: InfoFaq[] };
+/** Ponto de venda fisico (divulgado ao publico, padrao Guiche Web: nome, endereco, telefone, cidade). */
+export type InfoPdv = { nome: string; endereco: string; cidade: string; telefone: string; horario: string };
+export type InfoConfig = { secoes: Partial<Record<InfoSectionKey, string>>; faq: InfoFaq[]; pdvs: InfoPdv[] };
 
 export const INFO_SECTION_MAX = 1000;
 export const INFO_FAQ_MAX_ITEMS = 12;
 export const INFO_FAQ_Q_MAX = 150;
 export const INFO_FAQ_A_MAX = 600;
+export const INFO_PDV_MAX_ITEMS = 10;
+export const INFO_PDV_FIELD_MAX = 200;
 
-export const EMPTY_INFO: InfoConfig = { secoes: {}, faq: [] };
+export const EMPTY_INFO: InfoConfig = { secoes: {}, faq: [], pdvs: [] };
 
 /** Normaliza o JSONB vindo do banco (pode ser null, formato antigo ou lixo). */
 export function parseInfoConfig(raw: unknown): InfoConfig {
@@ -38,7 +42,13 @@ export function parseInfoConfig(raw: unknown): InfoConfig {
         .filter((f: any) => f && typeof f.pergunta === 'string' && typeof f.resposta === 'string')
         .map((f: any) => ({ pergunta: f.pergunta, resposta: f.resposta }))
     : [];
-  return { secoes, faq };
+  const str = (v: unknown) => (typeof v === 'string' ? v : '');
+  const pdvs: InfoPdv[] = Array.isArray(r?.pdvs)
+    ? r.pdvs
+        .filter((p: any) => p && typeof p === 'object')
+        .map((p: any) => ({ nome: str(p.nome), endereco: str(p.endereco), cidade: str(p.cidade), telefone: str(p.telefone), horario: str(p.horario) }))
+    : [];
+  return { secoes, faq, pdvs };
 }
 
 /** Limpa antes de gravar: descarta seções e perguntas vazias; null se nada sobrou. */
@@ -52,10 +62,15 @@ export function serializeInfoConfig(cfg: InfoConfig): InfoConfig | null {
     .map(f => ({ pergunta: f.pergunta.trim().slice(0, INFO_FAQ_Q_MAX), resposta: f.resposta.trim().slice(0, INFO_FAQ_A_MAX) }))
     .filter(f => f.pergunta && f.resposta)
     .slice(0, INFO_FAQ_MAX_ITEMS);
-  if (Object.keys(secoes).length === 0 && faq.length === 0) return null;
-  return { secoes, faq };
+  const cut = (v: string) => v.trim().slice(0, INFO_PDV_FIELD_MAX);
+  const pdvs = cfg.pdvs
+    .map(p => ({ nome: cut(p.nome), endereco: cut(p.endereco), cidade: cut(p.cidade), telefone: cut(p.telefone), horario: cut(p.horario) }))
+    .filter(p => p.nome && p.endereco)
+    .slice(0, INFO_PDV_MAX_ITEMS);
+  if (Object.keys(secoes).length === 0 && faq.length === 0 && pdvs.length === 0) return null;
+  return { secoes, faq, pdvs };
 }
 
 export function hasInfoContent(cfg: InfoConfig): boolean {
-  return INFO_SECTIONS.some(s => (cfg.secoes[s.key] ?? '').trim()) || cfg.faq.length > 0;
+  return INFO_SECTIONS.some(s => (cfg.secoes[s.key] ?? '').trim()) || cfg.faq.length > 0 || cfg.pdvs.length > 0;
 }

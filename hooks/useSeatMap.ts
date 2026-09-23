@@ -21,6 +21,12 @@ interface UseSeatMapOptions {
   onLayoutError?: (message: string) => void;
   /** Chamado a cada tick com o mapa atualizado — útil pra descartar seleção que ficou obsoleta (assento pego por outro comprador). */
   onStatusUpdate?: (map: Record<string, SeatStatus>) => void;
+  /**
+   * Token de hold do comprador (checkout público). Com ele o status vem da v2:
+   * assentos que o próprio comprador está segurando chegam como 'livre'
+   * (nunca aparecem como ocupados pra ele). Sem token = v1 (PDV do produtor).
+   */
+  holdToken?: string | null;
 }
 
 /**
@@ -28,7 +34,7 @@ interface UseSeatMapOptions {
  * (Fase 2 — assento numerado). Compartilhado entre checkout público
  * (CheckoutIngresso.tsx) e PDV do produtor (VendasIngressos.tsx).
  */
-export function useSeatMap({ eventId, enabled, pollMs = 15_000, onLayoutError, onStatusUpdate }: UseSeatMapOptions) {
+export function useSeatMap({ eventId, enabled, pollMs = 15_000, onLayoutError, onStatusUpdate, holdToken }: UseSeatMapOptions) {
   const [rowsConfig, setRowsConfig] = useState<SeatRow[] | null>(null);
   const [seatStatuses, setSeatStatuses] = useState<Record<string, SeatStatus>>({});
 
@@ -59,10 +65,12 @@ export function useSeatMap({ eventId, enabled, pollMs = 15_000, onLayoutError, o
     if (!eventId || !enabled) return;
     let cancelled = false;
     const tick = async () => {
-      const { data, error } = await supabase.rpc('get_event_seats_public', { p_event_id: eventId });
+      const { data, error } = holdToken
+        ? await supabase.rpc('get_event_seats_public_v2', { p_event_id: eventId, p_hold_token: holdToken })
+        : await supabase.rpc('get_event_seats_public', { p_event_id: eventId });
       if (cancelled) return;
       if (error) {
-        console.error('[useSeatMap] erro get_event_seats_public:', error.message);
+        console.error('[useSeatMap] erro ao ler status dos assentos:', error.message);
         return;
       }
       if (!Array.isArray(data)) return;
@@ -75,7 +83,7 @@ export function useSeatMap({ eventId, enabled, pollMs = 15_000, onLayoutError, o
     const interval = setInterval(tick, pollMs);
     return () => { cancelled = true; clearInterval(interval); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId, enabled, pollMs]);
+  }, [eventId, enabled, pollMs, holdToken]);
 
   // Atualização otimista local (ex: RPC de reserva devolveu "esses assentos
   // já foram pegos" — marca na hora, sem esperar o próximo tick do polling).

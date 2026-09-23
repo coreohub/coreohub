@@ -19,7 +19,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import {
   Ticket, Loader2, AlertCircle, ArrowLeft, ShieldCheck, User as UserIcon, Mail, Phone, FileText, Minus, Plus,
-  Tag, X, Check, Trash2, Armchair,
+  Tag, X, Check, Trash2, Armchair, Clock,
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
@@ -120,6 +120,12 @@ export default function CheckoutIngresso() {
   const selectedSeatsRef = useRef<string[]>([]);
   selectedSeatsRef.current = selectedSeats;
   const [seatLostNotice, setSeatLostNotice] = useState<string | null>(null);
+  // Hold ao escolher o assento (A2): token de sessão + prazo da reserva.
+  const [holdToken, setHoldToken] = useState<string | null>(null);
+  const [holdExpiresAt, setHoldExpiresAt] = useState<number | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const heldSeatsRef = useRef<string[]>([]);   // último conjunto que o servidor confirmou
+  const holdVersionRef = useRef(0);
 
   // Estoque por idx + cupom
   const [stockByIdx, setStockByIdx] = useState<Record<string, { remaining: number | null; sold_out: boolean }>>({});
@@ -250,6 +256,7 @@ export default function CheckoutIngresso() {
     eventId: event?.id,
     enabled: seatMapEnabled,
     pollMs: 15_000,
+    holdToken,
     onLayoutError: setError,
     // Assento que o comprador tinha escolhido pode ter sido pego por outro
     // enquanto ele preenchia o form — descarta da seleção automaticamente.
@@ -260,6 +267,78 @@ export default function CheckoutIngresso() {
       setSeatLostNotice(`${lost.length === 1 ? 'O lugar' : 'Os lugares'} ${lost.join(', ')} ${lost.length === 1 ? 'não está mais disponível' : 'não estão mais disponíveis'}. Escolha outro no mapa.`);
     },
   });
+
+  // Token do hold: persiste na aba (sessionStorage) pra sobreviver a um reload;
+  // um reload dentro dos 10 min ainda reconhece os assentos como "meus".
+  useEffect(() => {
+    if (!event?.id || !seatMapEnabled) { setHoldToken(null); return; }
+    const key = `coreohub:seat-hold:${event.id}`;
+    let tok: string | null = null;
+    try { tok = sessionStorage.getItem(key); } catch { /* sessionStorage indisponível */ }
+    if (!tok || tok.length < 16) {
+      tok = crypto.randomUUID();
+      try { sessionStorage.setItem(key, tok); } catch { /* segue só em memória */ }
+    }
+    heldSeatsRef.current = [];
+    setHoldExpiresAt(null);
+    setHoldToken(tok);
+  }, [event?.id, seatMapEnabled]);
+
+  // Reserva no servidor a cada mudança de seleção (debounce curto). Só a última
+  // resposta vale (versão). Falha = volta pro último conjunto confirmado.
+  useEffect(() => {
+    if (!event?.id || !holdToken || !seatMapEnabled) return;
+    if (selectedSeats.length === 0 && heldSeatsRef.current.length === 0) return;
+    const same = selectedSeats.length === heldSeatsRef.current.length
+      && selectedSeats.every(id => heldSeatsRef.current.includes(id));
+    if (same) return;
+    const version = ++holdVersionRef.current;
+    const timer = setTimeout(async () => {
+      const wanted = [...selectedSeats];
+      const { data, error: holdErr } = await supabase.rpc('hold_event_seats', {
+        p_event_id: event.id, p_seat_ids: wanted, p_hold_token: holdToken, p_hold_minutes: 10,
+      });
+      if (version !== holdVersionRef.current) return; // mudou de novo enquanto esperava
+      if (holdErr) {
+        console.error('[CheckoutIngresso] erro hold_event_seats:', holdErr.message);
+        setSeatLostNotice('Não foi possível reservar o lugar agora. Tente de novo.');
+        setSelectedSeats(heldSeatsRef.current);
+        return;
+      }
+      const rows = (Array.isArray(data) ? data : []) as Array<{ seat_id: string; reserved: boolean; seconds_left: number | null }>;
+      const failed = rows.filter(r => !r.reserved).map(r => r.seat_id);
+      if (failed.length > 0) {
+        markSeatsOccupied(failed);
+        setSeatLostNotice(`${failed.length === 1 ? 'O lugar' : 'Os lugares'} ${failed.join(', ')} ${failed.length === 1 ? 'acabou de ser reservado' : 'acabaram de ser reservados'} por outra pessoa. Escolha outro.`);
+        setSelectedSeats(heldSeatsRef.current);
+        return;
+      }
+      heldSeatsRef.current = wanted;
+      // Prazo pelo relógio do BANCO (segundos restantes), nunca pelo do aparelho.
+      const left = rows.find(r => r.seconds_left != null)?.seconds_left;
+      const now = Date.now();
+      setNowMs(now);
+      setHoldExpiresAt(wanted.length > 0 && left != null ? now + left * 1000 : null);
+    }, 250);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSeats, holdToken, event?.id, seatMapEnabled]);
+
+  // Relógio da reserva: 1 tick/s só enquanto há hold. Zerou = solta a seleção.
+  useEffect(() => {
+    if (!holdExpiresAt) return;
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [holdExpiresAt]);
+  useEffect(() => {
+    if (!holdExpiresAt || nowMs < holdExpiresAt) return;
+    heldSeatsRef.current = [];
+    holdVersionRef.current++;
+    setHoldExpiresAt(null);
+    setSelectedSeats([]);
+    setSeatLostNotice('Sua reserva expirou e os lugares foram liberados. Escolha novamente.');
+  }, [nowMs, holdExpiresAt]);
+  const holdRemainingSec = holdExpiresAt ? Math.max(0, Math.ceil((holdExpiresAt - nowMs) / 1000)) : null;
 
   const toggleSeat = (seatId: string) => {
     setSeatLostNotice(null);
@@ -391,7 +470,7 @@ export default function CheckoutIngresso() {
             phone: phone.replace(/\D/g, '') || undefined,
           },
           coupon_code: appliedCouponCode ?? undefined,
-          ...(seatMapEnabled ? { seat_ids: selectedSeats } : {}),
+          ...(seatMapEnabled ? { seat_ids: selectedSeats, hold_token: holdToken ?? undefined } : {}),
         },
       });
       if (invokeErr) throw new Error(invokeErr.message ?? 'Erro ao gerar pagamento. Tente novamente.');
@@ -600,9 +679,22 @@ export default function CheckoutIngresso() {
               </div>
             )}
 
-            <p className="text-[10px] text-slate-500 mb-3">
-              Seu lugar só fica garantido quando você clica em pagar; até lá outra pessoa pode reservá-lo.
-            </p>
+            {holdRemainingSec != null ? (
+              <p
+                role="timer"
+                aria-live="off"
+                className={`mb-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[11px] font-black tabular-nums ${
+                  holdRemainingSec <= 60 ? 'bg-rose-500/10 border-rose-500/30 text-rose-300' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                }`}
+              >
+                <Clock size={12} aria-hidden="true" />
+                Lugares reservados por {String(Math.floor(holdRemainingSec / 60)).padStart(2, '0')}:{String(holdRemainingSec % 60).padStart(2, '0')}
+              </p>
+            ) : (
+              <p className="text-[10px] text-slate-500 mb-3">
+                Ao escolher um lugar, ele fica reservado para você por 10 minutos.
+              </p>
+            )}
 
             <SeatGrid
               rowsConfig={rowsConfig}
