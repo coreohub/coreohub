@@ -13,7 +13,7 @@ interface SeatGridProps {
 }
 
 const SIZES = {
-  md: { btn: 'w-6 h-6', rounded: 'rounded-md', text: 'text-[8px]', icon: 11, codeText: 'text-[10px]', codeWidth: 'w-5', rowGap: 'gap-2', blockGap: 'mt-5', pad: 'px-8', labelPos: '-left-6', spacer: 'w-3', spinnerBox: 'py-8', spinner: 20 },
+  md: { btn: 'w-6 h-6', rounded: 'rounded-md', text: 'text-[8px]', icon: 11, codeText: 'text-[10px]', codeWidth: 'w-5', rowGap: 'gap-2', blockGap: 'mt-5', pad: 'px-7', labelPos: '-left-5', spacer: 'w-3', spinnerBox: 'py-8', spinner: 20 },
   sm: { btn: 'w-5 h-5', rounded: 'rounded', text: 'text-[7px]', icon: 9, codeText: 'text-[9px]', codeWidth: 'w-4', rowGap: 'gap-1.5', blockGap: 'mt-4', pad: 'px-7', labelPos: '-left-5', spacer: 'w-2', spinnerBox: 'py-4', spinner: 16 },
 };
 
