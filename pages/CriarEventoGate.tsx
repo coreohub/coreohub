@@ -315,7 +315,7 @@ const CriarEventoGate: React.FC<CriarEventoGateProps> = ({
 
           {/* Selo BaaS Asaas — playbook pág. 3 exige em telas de cadastro/login */}
           <div className="flex justify-center pt-2">
-            <AsaasBadge variant="compact" />
+            <AsaasBadge variant="compact" width={100} height={30} />
           </div>
         </div>
 

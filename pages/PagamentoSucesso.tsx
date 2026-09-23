@@ -218,7 +218,7 @@ const PagamentoSucesso = () => {
 
         {/* Selo BaaS Asaas — playbook pág. 3 exige em comprovantes de pagamento */}
         <div className="pt-4 flex justify-center">
-          <AsaasBadge variant="compact" />
+          <AsaasBadge variant="compact" width={100} height={30} />
         </div>
       </div>
     </div>

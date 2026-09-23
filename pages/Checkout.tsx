@@ -492,7 +492,7 @@ const Checkout = () => {
               Ao clicar em "Pagar", você será redirecionado para o checkout seguro do Asaas. Sua inscrição será confirmada automaticamente após a aprovação do pagamento.
             </p>
             <div className="flex justify-center pt-2">
-              <AsaasBadge variant="compact" />
+              <AsaasBadge variant="compact" width={100} height={30} />
             </div>
           </>
         )}

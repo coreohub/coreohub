@@ -550,7 +550,7 @@ const CheckoutWorkshopPass: React.FC = () => {
           </div>
 
           <div className="flex justify-center pt-2">
-            <AsaasBadge variant="compact" theme="negative" />
+            <AsaasBadge variant="compact" theme="negative" width={100} height={30} />
           </div>
         </form>
       </div>

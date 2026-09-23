@@ -268,7 +268,7 @@ const MeuWorkshop: React.FC = () => {
         {/* Selo Asaas — comprovante de pagamento de workshop é ponto obrigatório
             conforme Playbook Asaas (Resolução Conjunta nº 16/2025 BCB). */}
         <div className="mt-4 pt-4 border-t border-white/10 flex flex-col items-center gap-2">
-          <AsaasBadge variant="compact" theme="negative" />
+          <AsaasBadge variant="compact" theme="negative" width={100} height={30} />
           <p className="text-[9px] text-slate-400 text-center max-w-md leading-relaxed">
             Pagamento processado pelo ASAAS GESTÃO FINANCEIRA S.A., instituição de pagamento
             autorizada pelo Banco Central do Brasil.

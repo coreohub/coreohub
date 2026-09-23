@@ -803,7 +803,7 @@ export default function CheckoutIngresso() {
         <div className="mt-4 flex items-center justify-center gap-2 text-[10px] text-slate-500">
           <ShieldCheck size={12} className="text-emerald-400" />
           Pagamento seguro processado por
-          <AsaasBadge theme="negative" />
+          <AsaasBadge variant="compact" theme="negative" width={100} height={30} />
         </div>
 
         <p className="text-[10px] text-slate-500 text-center mt-3 leading-relaxed">

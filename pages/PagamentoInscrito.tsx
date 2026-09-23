@@ -429,7 +429,7 @@ const PagamentoInscrito = () => {
             </p>
           </div>
           <div className="flex justify-center">
-            <AsaasBadge variant="compact" />
+            <AsaasBadge variant="compact" width={100} height={30} />
           </div>
         </div>
       )}
