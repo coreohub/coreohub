@@ -7,7 +7,7 @@ import {
   Calendar, MapPin, Music, Ticket, ExternalLink,
   ChevronRight, Trophy, Clock, Star, Loader2, ArrowLeft, Youtube, Radio,
   Share2, Copy, Check, Instagram, Facebook, Globe, MessageCircle, Mail, FileText, Download,
-  GraduationCap, Video, Plus, Minus,
+  GraduationCap, Video, Plus, Minus, Armchair,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import BrandIcon from '../components/BrandIcon';
@@ -18,6 +18,8 @@ import { resolveLote, diffDias, formatDataBRComDia, todayISO, findNextWorkshopLo
 import { formatPrecoBR } from '../utils/masks';
 import { isEventOver } from '../utils/eventStatus';
 import AvisoViradaLote from '../components/AvisoViradaLote';
+import EventInfoSection from '../components/EventInfoSection';
+import { parseInfoConfig, hasInfoContent } from '../utils/eventInfo';
 
 /** Deriva nome do lote pelo índice/posição. Lote único → null (não mostra label).
  *  Múltiplos lotes → "Lote N" para intermediários, "Último Lote" pro final. */
@@ -147,9 +149,9 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             location, city, state,
             start_date, end_date, event_time,
             instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event,
-            regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label,
+            regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, info_config,
             programacao_config, ingressos_config, formacoes_config, patrocinadores_config,
-            politica_ingressos, audience_sales_enabled, billing_plan,
+            politica_ingressos, audience_sales_enabled, billing_plan, seat_map_enabled,
             audience_max_per_purchase, audience_max_per_cpf,
             producer_ga4_id, producer_meta_pixel_id
           `)
@@ -706,6 +708,22 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
     url: seoUrl,
   };
 
+  // Informações e regras + FAQ. O FAQPage JSON-LD vai só quando há perguntas
+  // (ajuda a citação por IAs, mesmo padrão do FAQ da landing).
+  const infoConfig = parseInfoConfig(event.info_config);
+  const showInfo = hasInfoContent(infoConfig);
+  const faqJsonLd = infoConfig.faq.length > 0
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        mainEntity: infoConfig.faq.map(f => ({
+          '@type': 'Question',
+          name: f.pergunta,
+          acceptedAnswer: { '@type': 'Answer', text: f.resposta },
+        })),
+      }
+    : null;
+
   // Tem informação útil de local? (endereço completo OU mapa OU local específico)
   const hasLocalInfo = !!(event.location || localCidadeUf);
 
@@ -755,6 +773,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
     !isEspetaculo && publicWorkshops.length > 0 ? { id: 'workshops', label: 'Workshops', priority: REVENUE_SECTION_PRIORITY } : null,
     !isEspetaculo && publicJudges.length > 0 ? { id: 'jurados', label: 'Jurados' } : null,
     enabledAwards.length > 0 ? { id: 'premiacao', label: 'Premiação' } : null,
+    showInfo ? { id: 'informacoes', label: 'Informações' } : null,
   ].filter(Boolean) as AnchorSection[];
 
   // CTA fixo do topo é dinâmico — aponta pra ação mais relevante DESSE
@@ -815,6 +834,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
       <link rel="canonical" href={seoUrl} />
       <script type="application/ld+json">{JSON.stringify(eventJsonLd)}</script>
       <script type="application/ld+json">{JSON.stringify(breadcrumbJsonLd)}</script>
+      {faqJsonLd && <script type="application/ld+json">{JSON.stringify(faqJsonLd)}</script>}
 
       {/* Breadcrumb visual — sinaliza hierarquia pro user E refleja o
           BreadcrumbList que injetamos pro Google. URL canônica continua
@@ -1340,6 +1360,12 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                   <Ticket size={24} className="text-[#ff0068]" /> Ingressos
                 </h2>
                 <p className="text-xs text-slate-400">Para o público que vai assistir. Bailarinos inscritos não precisam comprar.</p>
+                {salesEnabled && event.seat_map_enabled && (
+                  <p className="text-xs text-slate-300 flex items-center gap-2">
+                    <Armchair size={14} className="text-[#ff0068] shrink-0" aria-hidden="true" />
+                    Lugar marcado: escolha a quantidade e depois marque seus assentos no mapa.
+                  </p>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {visibleTypes
                     .map((t: any) => {
@@ -2042,6 +2068,9 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
           </div>
         )}
 
+        {/* Informações e regras + FAQ — fim da página (padrão Guichê Web/Eventbrite) */}
+        {showInfo && <EventInfoSection info={infoConfig} />}
+
         {/* Link redundante removido — politica_ingressos=EXTERNO acima ja
             renderiza o botao "Comprar Ingressos" quando aplicavel (#11) */}
 
@@ -2067,7 +2096,8 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
               onClick={() => navigate(`/checkout-ingresso/${slugOrId}`, { state: { cart } })}
               className="inline-flex items-center gap-2 px-5 sm:px-7 py-3 bg-[#ff0068] text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0f] shrink-0 shadow-lg shadow-[#ff0068]/20"
             >
-              <Ticket size={14} /> Ir pro carrinho <ChevronRight size={14} />
+              {event.seat_map_enabled ? <Armchair size={14} /> : <Ticket size={14} />}
+              {event.seat_map_enabled ? 'Escolher lugares' : 'Ir pro carrinho'} <ChevronRight size={14} />
             </button>
           </div>
         </div>

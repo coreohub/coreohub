@@ -14,7 +14,7 @@
  *   → comprador recebe email com 1 link /meu-ingresso/<token> por ingresso.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import {
@@ -116,6 +116,10 @@ export default function CheckoutIngresso() {
 
   // Assento numerado (Fase 2 Stage 3) — layout do venue + status ao vivo
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
+  // Ref espelha a seleção pro callback do polling (fecha sobre o valor atual, não o do render antigo).
+  const selectedSeatsRef = useRef<string[]>([]);
+  selectedSeatsRef.current = selectedSeats;
+  const [seatLostNotice, setSeatLostNotice] = useState<string | null>(null);
 
   // Estoque por idx + cupom
   const [stockByIdx, setStockByIdx] = useState<Record<string, { remaining: number | null; sold_out: boolean }>>({});
@@ -249,10 +253,16 @@ export default function CheckoutIngresso() {
     onLayoutError: setError,
     // Assento que o comprador tinha escolhido pode ter sido pego por outro
     // enquanto ele preenchia o form — descarta da seleção automaticamente.
-    onStatusUpdate: map => setSelectedSeats(prev => prev.filter(id => map[id]?.status === 'livre')),
+    onStatusUpdate: map => {
+      const lost = selectedSeatsRef.current.filter(id => map[id]?.status !== 'livre');
+      if (lost.length === 0) return;
+      setSelectedSeats(prev => prev.filter(id => !lost.includes(id)));
+      setSeatLostNotice(`${lost.length === 1 ? 'O lugar' : 'Os lugares'} ${lost.join(', ')} ${lost.length === 1 ? 'não está mais disponível' : 'não estão mais disponíveis'}. Escolha outro no mapa.`);
+    },
   });
 
   const toggleSeat = (seatId: string) => {
+    setSeatLostNotice(null);
     setSelectedSeats(prev => {
       if (prev.includes(seatId)) return prev.filter(id => id !== seatId);
       if (seatStatuses[seatId]?.status !== 'livre') return prev;
@@ -579,6 +589,20 @@ export default function CheckoutIngresso() {
                 {selectedSeats.length}/{totalQty} selecionado{totalQty === 1 ? '' : 's'}
               </p>
             </div>
+
+            {seatLostNotice && (
+              <div role="alert" aria-live="polite" className="mb-3 flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200">
+                <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                <span className="flex-1">{seatLostNotice}</span>
+                <button type="button" aria-label="Fechar aviso" onClick={() => setSeatLostNotice(null)} className="text-amber-300/70 hover:text-amber-200 cursor-pointer">
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
+            <p className="text-[10px] text-slate-500 mb-3">
+              Seu lugar só fica garantido quando você clica em pagar; até lá outra pessoa pode reservá-lo.
+            </p>
 
             <SeatGrid
               rowsConfig={rowsConfig}

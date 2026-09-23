@@ -246,7 +246,7 @@ const EspetaculoWizard: React.FC = () => {
 
             <div className="space-y-2">
               <label className={labelCls}>Descrição (aparece na vitrine)</label>
-              <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} maxLength={1500} className={inputCls} placeholder="Conte em poucas linhas o que o público vai ver." />
+              <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} maxLength={4000} className={inputCls} placeholder="Conte em poucas linhas o que o público vai ver." />
             </div>
 
             <div className="space-y-2">

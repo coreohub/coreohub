@@ -34,6 +34,8 @@ import FocalPointPicker from '../components/FocalPointPicker';
 import { formatEventWhatsApp, resolveEstudio, stripEstiloVertentes } from '../utils/formatters';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
 import { resolveAvaliadaLabel } from '../utils/formatoParticipacao';
+import { parseInfoConfig, serializeInfoConfig, EMPTY_INFO, type InfoConfig } from '../utils/eventInfo';
+import EventInfoEditor from '../components/EventInfoEditor';
 import InstallPWAButton from '../components/InstallPWAButton';
 import { previewNarration, fetchNarrationAudios, type NarrationKind } from '../services/narrationApi';
 import { fetchUfList, fetchCitiesByUf, parseCityUf, type UfOption } from '../services/ibgeLocation';
@@ -1242,6 +1244,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   }, [selectedCity, selectedUf]);
 
   // Identidade pública do evento (vem da tabela events, não configuracoes)
+  const [infoConfig, setInfoConfig] = useState<InfoConfig>(EMPTY_INFO);
   const [identity, setIdentity] = useState({
     instagram_event:    '',
     facebook_event:     '',
@@ -2013,7 +2016,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         let myEvent: any = null;
         if (user) {
           const evRes = await supabase
-            .from('events').select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, audience_sales_enabled, audience_commission_percent, audience_commission_percent_manual, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, producer_ga4_id, producer_meta_pixel_id, start_date, end_date, event_time, programacao_config, ingressos_config, politica_ingressos, billing_plan')
+            .from('events').select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, info_config, audience_sales_enabled, audience_commission_percent, audience_commission_percent_manual, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, producer_ga4_id, producer_meta_pixel_id, start_date, end_date, event_time, programacao_config, ingressos_config, politica_ingressos, billing_plan')
             .eq('id', selectedEventId)
             .maybeSingle();
           // select() amplo sem checar error mascara coluna ausente como "não
@@ -2031,6 +2034,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             setIsEspetaculo((myEvent as any).billing_plan === 'espetaculo');
             // Inicializa draft de edição do slug com o valor atual.
             setSlugDraft((myEvent as any).slug ?? '');
+            setInfoConfig(parseInfoConfig(myEvent.info_config));
             // Identidade pública: campos diretos da tabela events
             setIdentity({
               instagram_event:    myEvent.instagram_event ?? '',
@@ -2450,7 +2454,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
           documentos_extras:   identity.documentos_extras,
           destaque_link_url:   identity.destaque_link_url || null,
           destaque_link_label: identity.destaque_link_label || null,
-          producer_ga4_id:        marketing.producer_ga4_id.trim() || null,
+          info_config:         serializeInfoConfig(infoConfig),
+          producer_ga4_id:       marketing.producer_ga4_id.trim() || null,
           producer_meta_pixel_id: marketing.producer_meta_pixel_id.trim() || null,
         })
         .eq('id', myEvent.id);
@@ -2889,9 +2894,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                   </div>
                   <textarea
                     rows={8}
-                    maxLength={1500}
+                    maxLength={4000}
                     value={general.description}
-                    onChange={e => setGeneral({ ...general, description: e.target.value.slice(0, 1500) })}
+                    onChange={e => setGeneral({ ...general, description: e.target.value.slice(0, 4000) })}
                     placeholder="Conte sobre seu festival: história, modalidades, público, premiações..."
                     className={`${input} resize-none h-full`}
                   />
@@ -2901,13 +2906,18 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       {general.description !== savedDescription && ' Clique em "Salvar Configurações" no rodapé pra confirmar.'}
                     </p>
                     <span className={`shrink-0 text-[9px] font-bold tabular-nums ${
-                      general.description.length >= 1500 ? 'text-amber-500' : 'text-slate-400'
+                      general.description.length >= 4000 ? 'text-amber-500' : 'text-slate-400'
                     }`}>
-                      {general.description.length}/1500
+                      {general.description.length}/4000
                     </span>
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Informações e regras (seções fixas + FAQ) — seção pública no fim da vitrine */}
+            <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
+              <EventInfoEditor value={infoConfig} onChange={setInfoConfig} inputClass={input} labelClass={label} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
