@@ -5,13 +5,25 @@ export type SeatRow = {
   codigo: string;
   assentos: number;
   pcd?: number[];
+  /** Tipo por número do assento: "8": "cadeirante" | "pcd_largo" (Fase 3). */
+  tipos?: Record<string, 'cadeirante' | 'pcd_largo'>;
+  /** Vizinho de acompanhante -> assento especial que ele acompanha: {"7": 8}. */
+  acompanhante?: Record<string, number>;
   corredor_apos?: number;
   /** Marca o início de um novo bloco (só afeta o espaçamento visual, nunca a geração de assentos). */
   espaco_antes?: boolean;
   /** Na última fileira: desenha a barra "Palco" logo abaixo da grade. */
   palco_apos?: boolean;
 };
-export type SeatStatus = { seat_id: string; status: 'livre' | 'reservado' | 'vendido' | 'cortesia'; is_pcd: boolean };
+export type SeatStatus = {
+  seat_id: string;
+  status: 'livre' | 'reservado' | 'vendido' | 'cortesia';
+  is_pcd: boolean;
+  /** Fase 3 (get_event_seats_public_v2): tipo do assento e se já está liberado para venda geral. */
+  seat_tipo?: 'comum' | 'cadeirante' | 'pcd_largo' | 'acompanhante';
+  companion_of?: string | null;
+  liberado?: boolean;
+};
 
 interface UseSeatMapOptions {
   eventId: string | null | undefined;
@@ -65,9 +77,8 @@ export function useSeatMap({ eventId, enabled, pollMs = 15_000, onLayoutError, o
     if (!eventId || !enabled) return;
     let cancelled = false;
     const tick = async () => {
-      const { data, error } = holdToken
-        ? await supabase.rpc('get_event_seats_public_v2', { p_event_id: eventId, p_hold_token: holdToken })
-        : await supabase.rpc('get_event_seats_public', { p_event_id: eventId });
+      // v2 sempre: devolve tipo/liberado (Fase 3). Sem token, nada aparece como "meu".
+      const { data, error } = await supabase.rpc('get_event_seats_public_v2', { p_event_id: eventId, p_hold_token: holdToken ?? null });
       if (cancelled) return;
       if (error) {
         console.error('[useSeatMap] erro ao ler status dos assentos:', error.message);

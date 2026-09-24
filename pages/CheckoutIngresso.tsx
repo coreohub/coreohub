@@ -21,12 +21,15 @@ import { edgeErrorBody, edgeErrorMessage } from '../utils/edgeError';
 import SandboxBanner from '../components/SandboxBanner';
 import {
   Ticket, Loader2, AlertCircle, ArrowLeft, ShieldCheck, User as UserIcon, Mail, Phone, FileText, Minus, Plus,
-  Tag, X, Check, Trash2, Armchair, Clock,
+  Tag, X, Check, Trash2, Armchair, Clock, Users,
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
 import SeatGrid from '../components/SeatGrid';
+import SeatLegend from '../components/SeatLegend';
 import { useSeatMap } from '../hooks/useSeatMap';
+import { companionBySpecial, isSpecialTipo, seatsSatisfyRules, tipoFromRow, type SeatTipo } from '../utils/seatSelection';
+import { ticketSeatKind, type TicketSeatKind } from '../supabase/functions/_shared/seat-rules';
 import { resolveLote, todayISO, type Lote } from '../utils/lotes';
 import { isEventOver } from '../utils/eventStatus';
 // Fonte única da matemática de comissão/split (compartilhada com a edge
@@ -79,6 +82,8 @@ type LineItem = {
   qty: number;
   loteNome: string | null;
   quantidadeTotal: number | null;
+  /** comum | pcd | acompanhante — regras de assento (Fase 3). */
+  seatKind: TicketSeatKind;
 };
 
 export default function CheckoutIngresso() {
@@ -202,6 +207,7 @@ export default function CheckoutIngresso() {
           qty,
           loteNome: (r?.lote as any)?.nome ?? null,
           quantidadeTotal,
+          seatKind: ticketSeatKind(t),
         } as LineItem;
       })
       .filter(Boolean)
@@ -213,6 +219,15 @@ export default function CheckoutIngresso() {
     Number(event?.audience_max_per_cpf ?? 6),
   ));
   const totalQty = lines.reduce((s, l) => s + l.qty, 0);
+  const pcdQty = lines.reduce((s, l) => s + (l.seatKind === 'pcd' ? l.qty : 0), 0);
+  const compQty = lines.reduce((s, l) => s + (l.seatKind === 'acompanhante' ? l.qty : 0), 0);
+  const comumQty = totalQty - pcdQty - compQty;
+  // Ingresso "Acompanhante de PCD" configurado no evento (quando existir).
+  const companionTypeIdx = useMemo(() => {
+    const ing: any[] = Array.isArray(event?.ingressos_config) ? event.ingressos_config : [];
+    const i = ing.findIndex(t => t?.nome && ticketSeatKind(t) === 'acompanhante');
+    return i >= 0 ? i : null;
+  }, [event]);
 
   // Carrinho encolheu depois de já ter assento(s) escolhido(s) → corta o excesso.
   useEffect(() => {
@@ -299,11 +314,13 @@ export default function CheckoutIngresso() {
       const wanted = [...selectedSeats];
       const { data, error: holdErr } = await supabase.rpc('hold_event_seats', {
         p_event_id: event.id, p_seat_ids: wanted, p_hold_token: holdToken, p_hold_minutes: 10,
+        p_pcd_qty: pcdQty, p_comp_qty: compQty,
       });
       if (version !== holdVersionRef.current) return; // mudou de novo enquanto esperava
       if (holdErr) {
         console.error('[CheckoutIngresso] erro hold_event_seats:', holdErr.message);
-        setSeatLostNotice('Não foi possível reservar o lugar agora. Tente de novo.');
+        // P0001 = regra de negócio do servidor (mensagem já é para o comprador).
+        setSeatLostNotice(holdErr.code === 'P0001' ? holdErr.message : 'Não foi possível reservar o lugar agora. Tente de novo.');
         setSelectedSeats(heldSeatsRef.current);
         return;
       }
@@ -324,7 +341,7 @@ export default function CheckoutIngresso() {
     }, 250);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSeats, holdToken, event?.id, seatMapEnabled]);
+  }, [selectedSeats, holdToken, event?.id, seatMapEnabled, pcdQty, compQty]);
 
   // Relógio da reserva: 1 tick/s só enquanto há hold. Zerou = solta a seleção.
   useEffect(() => {
@@ -342,14 +359,68 @@ export default function CheckoutIngresso() {
   }, [nowMs, holdExpiresAt]);
   const holdRemainingSec = holdExpiresAt ? Math.max(0, Math.ceil((holdExpiresAt - nowMs) / 1000)) : null;
 
+  // ── Fase 3: assento PCD/cadeirante + acompanhante ─────────────────────────
+  const companionOfSpecial = useMemo(() => companionBySpecial(rowsConfig), [rowsConfig]);
+  const tipoOfSeat = (id: string): SeatTipo => {
+    const st = seatStatuses[id]?.seat_tipo as SeatTipo | undefined;
+    if (st) return st;
+    const cut = id.lastIndexOf('-');
+    const row = rowsConfig?.find(r => r.codigo === id.slice(0, cut));
+    return row ? tipoFromRow(row, Number(id.slice(cut + 1))) : 'comum';
+  };
+  const isReleased = (id: string) => seatStatuses[id]?.liberado ?? tipoOfSeat(id) === 'comum';
+
   const toggleSeat = (seatId: string) => {
     setSeatLostNotice(null);
+    const prev = selectedSeatsRef.current;
+    if (prev.includes(seatId)) {
+      // Tirar o assento PCD leva junto o acompanhante dele (e o ingresso dele do carrinho).
+      const comp = companionOfSpecial[seatId];
+      const dropComp = !!comp && prev.includes(comp);
+      setSelectedSeats(prev.filter(id => id !== seatId && !(dropComp && id === comp)));
+      if (dropComp && companionTypeIdx != null) setLineQty(companionTypeIdx, (cart[String(companionTypeIdx)] ?? 0) - 1);
+      return;
+    }
+    if (seatStatuses[seatId]?.status !== 'livre') return;
+    if (prev.length >= totalQty) return; // já escolheu a quantidade do carrinho
+    setSelectedSeats([...prev, seatId]);
+  };
+
+  // Ingresso PCD/acompanhante removido do carrinho: solta os lugares que sobraram.
+  useEffect(() => {
+    if (!seatMapEnabled) return;
     setSelectedSeats(prev => {
-      if (prev.includes(seatId)) return prev.filter(id => id !== seatId);
-      if (seatStatuses[seatId]?.status !== 'livre') return prev;
-      if (prev.length >= totalQty) return prev; // já escolheu a quantidade do carrinho
-      return [...prev, seatId];
+      let esp = 0, ac = 0;
+      const out: string[] = [];
+      for (const id of prev) {
+        const t = tipoOfSeat(id);
+        if (!isReleased(id) && isSpecialTipo(t)) { if (esp >= pcdQty) continue; esp++; }
+        else if (!isReleased(id) && t === 'acompanhante') { if (ac >= compQty) continue; ac++; }
+        out.push(id);
+      }
+      return out.length === prev.length ? prev : out;
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pcdQty, compQty, seatMapEnabled]);
+
+  // Oferta "Vai com acompanhante?": assento PCD escolhido, sem acompanhante ainda, com vizinho livre.
+  const companionOffer = useMemo(() => {
+    if (!seatMapEnabled || companionTypeIdx == null || totalQty >= maxPurchase) return null;
+    for (const id of selectedSeats) {
+      if (!isSpecialTipo(tipoOfSeat(id))) continue;
+      const comp = companionOfSpecial[id];
+      if (!comp || selectedSeats.includes(comp)) continue;
+      if (seatStatuses[comp]?.status !== 'livre') continue;
+      return { special: id, comp };
+    }
+    return null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seatMapEnabled, companionTypeIdx, totalQty, maxPurchase, selectedSeats, companionOfSpecial, seatStatuses, rowsConfig]);
+
+  const addCompanion = () => {
+    if (!companionOffer || companionTypeIdx == null) return;
+    setLineQty(companionTypeIdx, (cart[String(companionTypeIdx)] ?? 0) + 1);
+    setSelectedSeats(prev => (prev.includes(companionOffer.comp) ? prev : [...prev, companionOffer.comp]));
   };
 
   // ─── Edição de quantidade (respeita meia=1, estoque, máx por compra) ──────
@@ -451,7 +522,9 @@ export default function CheckoutIngresso() {
 
   // ─── Submit ────────────────────────────────────────────────────────────────
   const anySoldOut = lines.some(l => stockByIdx[String(l.idx)]?.sold_out === true);
-  const seatsReady = !seatMapEnabled || selectedSeats.length === totalQty;
+  const specialSelected = selectedSeats.filter(id => isSpecialTipo(tipoOfSeat(id))).length;
+  const compSelected = selectedSeats.filter(id => tipoOfSeat(id) === 'acompanhante').length;
+  const seatsReady = !seatMapEnabled || (selectedSeats.length === totalQty && seatsSatisfyRules(specialSelected, compSelected, pcdQty, compQty));
   const canSubmit = !!name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
     && isValidCpf(cpf) && totalQty >= 1 && !paying && !anySoldOut && seatsReady;
 
@@ -715,13 +788,33 @@ export default function CheckoutIngresso() {
               onToggle={toggleSeat}
               size="md"
               variant="dark"
+              pcdQty={pcdQty}
+              compQty={compQty}
+              comumQty={comumQty}
+              onBlocked={setSeatLostNotice}
             />
 
-            <div className="flex items-center gap-4 mt-3 text-[10px] text-slate-500">
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-white/10 inline-block" /> Disponível</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-[#ff0068] inline-block" /> Selecionado</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-white/5 inline-block" /> Ocupado</span>
-            </div>
+            {companionOffer && (
+              <div className="mt-3 flex items-center gap-3 bg-sky-500/10 border border-sky-500/30 rounded-xl p-3 text-xs text-sky-200">
+                <Users size={16} className="shrink-0" aria-hidden="true" />
+                <p className="flex-1">
+                  <strong>Vai com acompanhante?</strong> O lugar {companionOffer.comp}, ao lado do {companionOffer.special}, está reservado para ele.
+                </p>
+                <button type="button" onClick={addCompanion}
+                  className="px-3 py-2 rounded-lg bg-sky-500/30 hover:bg-sky-500/50 text-[10px] font-black uppercase tracking-widest cursor-pointer">
+                  Adicionar acompanhante
+                </button>
+              </div>
+            )}
+
+            {pcdQty > 0 && specialSelected < pcdQty && (
+              <p className="mt-3 text-[11px] text-sky-300">Escolha {pcdQty - specialSelected} lugar{pcdQty - specialSelected === 1 ? '' : 'es'} PCD (azul) para o seu pedido.</p>
+            )}
+            {compQty > 0 && compSelected < compQty && (
+              <p className="mt-2 text-[11px] text-sky-300">Escolha o lugar do acompanhante, ao lado do lugar PCD.</p>
+            )}
+
+            <SeatLegend rowsConfig={rowsConfig} variant="dark" />
           </div>
         )}
 

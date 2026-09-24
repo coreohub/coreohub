@@ -90,3 +90,48 @@ describe('venue Nelson Camargo == planta', () => {
     expect(sql).toContain(JSON.stringify(rows))
   })
 })
+
+// ── Regra de seleção no mapa (espelho do servidor) ───────────────────────────
+import { seatBlockReason, tipoFromRow, companionBySpecial, seatsSatisfyRules, type SeatSelectionCtx } from '../utils/seatSelection'
+
+const base: SeatSelectionCtx = {
+  tipo: 'comum', liberado: true, generalOpen: false, pcdQty: 0, compQty: 0, comumQty: 2,
+  selectedSpecial: 0, selectedComp: 0, selectedComum: 0, companionOk: false,
+}
+
+describe('seatBlockReason', () => {
+  it('comum: livre até o limite de ingressos comuns', () => {
+    expect(seatBlockReason(base)).toBeNull()
+    expect(seatBlockReason({ ...base, selectedComum: 2 })).toMatch(/ingressos comuns/)
+  })
+  it('especial: só com ingresso PCD, até a quantidade', () => {
+    const esp = { ...base, tipo: 'cadeirante' as const, liberado: false }
+    expect(seatBlockReason(esp)).toMatch(/pessoas com deficiência/)
+    expect(seatBlockReason({ ...esp, pcdQty: 1 })).toBeNull()
+    expect(seatBlockReason({ ...esp, pcdQty: 1, selectedSpecial: 1 })).toMatch(/já escolheu/)
+  })
+  it('acompanhante: exige ingresso, e o assento PCD ao lado escolhido ou vendido', () => {
+    const ac = { ...base, tipo: 'acompanhante' as const, liberado: false }
+    expect(seatBlockReason(ac)).toMatch(/acompanhante/)
+    expect(seatBlockReason({ ...ac, compQty: 1 })).toMatch(/primeiro/)
+    expect(seatBlockReason({ ...ac, compQty: 1, companionOk: true })).toBeNull()
+  })
+  it('liberação geral abre tudo', () => {
+    expect(seatBlockReason({ ...base, tipo: 'pcd_largo', liberado: true, generalOpen: true, selectedComum: 9 })).toBeNull()
+  })
+})
+
+describe('layout -> tipo', () => {
+  const row = { codigo: 'M', assentos: 31, pcd: [1], tipos: { '8': 'cadeirante' as const }, acompanhante: { '2': 1, '7': 8 } }
+  it('resolve tipo e vizinho', () => {
+    expect(tipoFromRow(row, 1)).toBe('cadeirante')   // legado pcd
+    expect(tipoFromRow(row, 8)).toBe('cadeirante')
+    expect(tipoFromRow(row, 7)).toBe('acompanhante')
+    expect(tipoFromRow(row, 5)).toBe('comum')
+    expect(companionBySpecial([row])).toEqual({ 'M-1': 'M-2', 'M-8': 'M-7' })
+  })
+  it('pedido satisfaz as regras do servidor', () => {
+    expect(seatsSatisfyRules(1, 1, 1, 1)).toBe(true)
+    expect(seatsSatisfyRules(0, 1, 1, 1)).toBe(false)
+  })
+})

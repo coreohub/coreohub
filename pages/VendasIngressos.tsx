@@ -18,6 +18,8 @@ import AsaasBadge from '../components/AsaasBadge';
 import VendasTabs from '../components/VendasTabs';
 import EventPickerSheet from '../components/EventPickerSheet';
 import SeatGrid from '../components/SeatGrid';
+import SeatLegend from '../components/SeatLegend';
+import { ticketSeatKind } from '../supabase/functions/_shared/seat-rules';
 import { useSeatMap } from '../hooks/useSeatMap';
 import { maskCpfCnpj, unmaskCpfCnpj, maskTelefoneBR, unmaskTelefoneBR } from '../utils/masks';
 
@@ -211,6 +213,12 @@ const VendasIngressos: React.FC = () => {
       livre: all.filter(s => s.status === 'livre').length,
     };
   }, [seatStatuses]);
+
+  // Balcão vende 1 tipo por venda: o tipo escolhido define as regras de assento (Fase 3).
+  const pdvSeatKind = ticketSeatKind(ticketTypes[pdvTypeIdx] as any);
+  const pdvPcdQty = pdvSeatKind === 'pcd' ? pdvQuantity : 0;
+  const pdvCompQty = pdvSeatKind === 'acompanhante' ? pdvQuantity : 0;
+  const pdvComumQty = pdvSeatKind === 'comum' ? pdvQuantity : 0;
 
   const togglePdvSeat = (seatId: string) => {
     setPdvSelectedSeats(prev => {
@@ -816,7 +824,7 @@ const VendasIngressos: React.FC = () => {
                     <select
                       id="pdv-type"
                       value={pdvTypeIdx}
-                      onChange={e => setPdvTypeIdx(Number(e.target.value))}
+                      onChange={e => { setPdvTypeIdx(Number(e.target.value)); setPdvSelectedSeats([]); }}
                       className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white dark:[color-scheme:dark] focus:outline-none focus:border-[#ff0068]/50"
                     >
                       {ticketTypes.map((t, idx) => (
@@ -857,7 +865,12 @@ const VendasIngressos: React.FC = () => {
                           onToggle={togglePdvSeat}
                           size="sm"
                           variant="auto"
+                          pcdQty={pdvPcdQty}
+                          compQty={pdvCompQty}
+                          comumQty={pdvComumQty}
+                          onBlocked={setPdvError}
                         />
+                        <SeatLegend rowsConfig={rowsConfig} variant="auto" />
                       </div>
                     </div>
                   )}
