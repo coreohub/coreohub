@@ -401,7 +401,7 @@ const MeuIngresso: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleSaveImage}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
+                      className="flex-1 min-w-0 flex items-center justify-center gap-1 py-2 px-2 whitespace-nowrap bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-tight transition-colors"
                       aria-label="Salvar imagem do QR"
                     >
                       <Download size={12} /> Salvar
@@ -409,7 +409,7 @@ const MeuIngresso: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => window.print()}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
+                      className="flex-1 min-w-0 flex items-center justify-center gap-1 py-2 px-2 whitespace-nowrap bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-tight transition-colors"
                       aria-label="Imprimir ingresso"
                     >
                       <Printer size={12} /> Imprimir
@@ -417,7 +417,7 @@ const MeuIngresso: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleShare}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-[#ff0068]/10 hover:bg-[#ff0068]/20 text-[#ff0068] rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
+                      className="flex-1 min-w-0 flex items-center justify-center gap-1 py-2 px-2 whitespace-nowrap bg-[#ff0068]/10 hover:bg-[#ff0068]/20 text-[#ff0068] rounded-xl text-[10px] font-black uppercase tracking-tight transition-colors"
                       aria-label="Compartilhar ingresso"
                     >
                       <Share2 size={12} /> Compartilhar
