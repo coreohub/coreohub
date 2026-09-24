@@ -1504,8 +1504,15 @@ Deno.serve(async (req) => {
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
       )
-      const { data: tk, error: tkErr } = await envGuard
-        .from('audience_tickets').select('event_id').eq('group_id', audienceGroupId).limit(1).maybeSingle()
+      // Acha o evento pelo payment_id (mesma chave do handler abaixo); o id do
+      // externalReference (AT:<id>) é o de um ticket, não o group_id.
+      let { data: tk, error: tkErr } = await envGuard
+        .from('audience_tickets').select('event_id').eq('payment_id', String(payment.id)).limit(1).maybeSingle()
+      if (!tk && !tkErr) {
+        // Corrida: payment_id ainda não gravado no ticket — cai no id do externalReference.
+        ;({ data: tk, error: tkErr } = await envGuard
+          .from('audience_tickets').select('event_id').eq('id', audienceGroupId).limit(1).maybeSingle())
+      }
       const { data: evEnv, error: evEnvErr } = tk?.event_id
         ? await envGuard.from('events').select('payment_sandbox').eq('id', tk.event_id).maybeSingle()
         : { data: null, error: null }

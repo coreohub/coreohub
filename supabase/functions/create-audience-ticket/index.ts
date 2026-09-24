@@ -542,6 +542,9 @@ Deno.serve(async (req) => {
       ? `${itemsDesc} - ${event.name}`
       : `${resolved[0].nome} - ${event.name}`
 
+    const skipSplit = asaasEnv.isSandbox && (Deno.env.get('ASAAS_SANDBOX_SKIP_SPLIT') ?? '') === 'true'
+    if (skipSplit) console.warn('[create-audience-ticket] SANDBOX sem split (ASAAS_SANDBOX_SKIP_SPLIT=true)')
+
     const basePayload = {
       customer:          customerId,
       billingType:       'UNDEFINED',
@@ -549,12 +552,17 @@ Deno.serve(async (req) => {
       dueDate:           dueDateStr,
       description,
       externalReference: externalRef,
-      split: [
-        {
-          walletId:   producer.asaas_wallet_id,
-          fixedValue: producerTotal,
-        },
-      ],
+      // Sandbox: a subconta de teste da Asaas pode estar bloqueada (limite do teste
+      // controlado de BaaS). ASAAS_SANDBOX_SKIP_SPLIT=true cobra sem split — SÓ no
+      // sandbox; em produção o split é sempre enviado.
+      ...(skipSplit ? {} : {
+        split: [
+          {
+            walletId:   producer.asaas_wallet_id,
+            fixedValue: producerTotal,
+          },
+        ],
+      }),
     }
     const callbackPayload = {
       successUrl:   `${ALLOWED_ORIGIN}/pagamento-sucesso?ref=${encodeURIComponent(externalRef)}`,
