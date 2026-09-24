@@ -38,6 +38,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { computeAudienceCart, round2 } from '../_shared/audience-pricing.ts'
 import { buildCorsHeaders } from '../_shared/cors.ts'
+import { ticketSeatKind } from '../_shared/seat-rules.ts'
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 
@@ -190,6 +191,20 @@ Deno.serve(async (req) => {
     if (seatMapEnabled) {
       if (seatIds.length !== quantity) throw new Error(`Selecione exatamente ${quantity} assento(s)`)
       if (new Set(seatIds).size !== seatIds.length) throw new Error('Assento selecionado mais de uma vez')
+
+      // Mesmas regras do checkout público (Decreto 9.404/2018): o balcão também
+      // respeita a reserva de assentos PCD/cadeirante/acompanhante.
+      const { data: seatRuleMsg, error: seatRuleErr } = await supabase.rpc('validate_seat_cart', {
+        p_event_id:    event_id,
+        p_seat_ids:    seatIds,
+        p_pcd_qty:     ticketSeatKind(t) === 'pcd' ? quantity : 0,
+        p_require_pcd: true,
+      })
+      if (seatRuleErr) {
+        console.error('[create-pdv-ticket] erro validate_seat_cart:', seatRuleErr.message)
+        throw new Error('Falha ao validar os assentos')
+      }
+      if (seatRuleMsg) throw new Error(String(seatRuleMsg))
     }
 
     // ── Comissão: normal no PIX (processa via Asaas de verdade), zero no Tap

@@ -38,6 +38,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { computeAudienceCart, round2 } from '../_shared/audience-pricing.ts'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
+import { ticketSeatKind, countPcdTickets, type TicketSeatKind } from '../_shared/seat-rules.ts'
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 
@@ -236,6 +237,7 @@ Deno.serve(async (req) => {
       quantity: number
       precoUnit: number          // preço de face vigente (sem desconto)
       quantidadeTotal: number | null
+      seatKind: TicketSeatKind   // 'pcd' => exige assento PCD/cadeirante
     }
     const resolved: ResolvedItem[] = []
     let totalQty = 0
@@ -248,7 +250,7 @@ Deno.serve(async (req) => {
       const kind = detectKind(t.nome, t.kind)
       const quantidadeTotal: number | null =
         t.quantidade_total != null && Number(t.quantidade_total) > 0 ? Number(t.quantidade_total) : null
-      resolved.push({ idx, nome: String(t.nome), kind, quantity, precoUnit, quantidadeTotal })
+      resolved.push({ idx, nome: String(t.nome), kind, quantity, precoUnit, quantidadeTotal, seatKind: ticketSeatKind(t) })
       totalQty += quantity
       totalBase += precoUnit * quantity
     }
@@ -256,6 +258,7 @@ Deno.serve(async (req) => {
 
     // ── Assento numerado (Fase 2 Stage 3) ────────────────────────────────────
     const seatMapEnabled = Boolean((event as any).seat_map_enabled)
+    const pcdQty = countPcdTickets(resolved)
     const seatIds = Array.isArray(seatIdsRaw) ? seatIdsRaw.filter(s => typeof s === 'string' && s.trim()) : []
     if (seatMapEnabled) {
       if (seatIds.length !== totalQty) {
@@ -264,6 +267,20 @@ Deno.serve(async (req) => {
       if (new Set(seatIds).size !== seatIds.length) {
         throw new Error('Assento selecionado mais de uma vez')
       }
+
+      // Regras de assento PCD/cadeirante/acompanhante (Decreto 9.404/2018) —
+      // autoridade no banco (validate_seat_cart); aqui só propaga a mensagem.
+      const { data: seatRuleMsg, error: seatRuleErr } = await supabase.rpc('validate_seat_cart', {
+        p_event_id:    event_id,
+        p_seat_ids:    seatIds,
+        p_pcd_qty:     pcdQty,
+        p_require_pcd: true,
+      })
+      if (seatRuleErr) {
+        console.error('[create-audience-ticket] erro validate_seat_cart:', seatRuleErr.message)
+        throw new Error('Falha ao validar os assentos')
+      }
+      if (seatRuleMsg) throw new Error(String(seatRuleMsg))
     }
 
     // ── Limites antifraude (max por compra, somando o carrinho) ──────────────
@@ -456,6 +473,7 @@ Deno.serve(async (req) => {
         p_seat_ids:     seatIds,
         p_hold_token:   holdToken,
         p_hold_minutes: reservedMinutes,
+        p_pcd_qty:      pcdQty,
       })
       if (seatErr) {
         await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))

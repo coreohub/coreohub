@@ -1,0 +1,13 @@
+{
+  "_fonte": "Mapa do Guichê Web enviado pelo produtor em 2026-09-24 (medido por visão computacional, overlay conferido). Fileira N (40 lugares) NÃO é vendida e fica de fora.",
+  "capacidade": 373,
+  "fileiras": {
+    "M": { "esq": 15, "dir": 16 }, "L": { "esq": 17, "dir": 17 }, "K": { "esq": 17, "dir": 17 },
+    "J": { "esq": 16, "dir": 16 }, "I": { "esq": 16, "dir": 16 }, "H": { "esq": 15, "dir": 15 },
+    "G": { "esq": 14, "dir": 14 }, "F": { "esq": 14, "dir": 14 }, "E": { "esq": 13, "dir": 13 },
+    "D": { "esq": 13, "dir": 13 }, "C": { "esq": 12, "dir": 12 }, "B": { "esq": 12, "dir": 12 },
+    "A": { "esq": 12, "dir": 12 }
+  },
+  "cadeirante": { "M": [1, 8, 15, 16, 31], "G": [14, 15] },
+  "pcd_largo": { "L": [1, 34], "E": [1, 26], "C": [1, 24] }
+}
