@@ -41,6 +41,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders } from '../_shared/cors.ts'
+import { findProtectedDemoEventIds } from '../_shared/demo-protection.ts'
 
 // ─── Dados realistas brasileiros ─────────────────────────────────────────
 
@@ -610,6 +611,8 @@ Deno.serve(async (req) => {
       .select('id, name, created_at')
       .eq('created_by', user.id)
       .eq('is_demo', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle()
     return json({ ok: true, has_demo: !!existing, demo: existing ?? null })
   }
@@ -725,8 +728,23 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Recusa apagar/recriar se algum demo do usuário tem pagamento Asaas real
+  // (incidente 2026-09-24: evento de teste com compra real apagado em cascata).
+  const guardRealPayments = async (): Promise<Response | null> => {
+    const { data: mine } = await supa.from('events').select('id').eq('created_by', user.id).eq('is_demo', true)
+    const prot = await findProtectedDemoEventIds(supa, (mine ?? []).map((e: { id: string }) => e.id))
+    if (prot.length === 0) return null
+    return json({
+      error: 'demo_has_real_payments',
+      detail: 'Este evento demo tem pagamento real registrado e não pode ser apagado/recriado. Desmarque o modo demo ou trate o estorno antes.',
+      event_ids: prot,
+    }, 409)
+  }
+
   // ─── action: delete ────────────────────────────────────────────────────
   if (action === 'delete') {
+    const blocked = await guardRealPayments()
+    if (blocked) return blocked
     // CASCADE em events vai pegar registrations, configuracoes, etc — mas
     // judges nao tem event_id, entao precisa ser apagado à parte (via
     // event_judges, não PIN — ver deleteDemoJudges acima). Roda ANTES do
@@ -744,6 +762,8 @@ Deno.serve(async (req) => {
 
   // ─── action: create ────────────────────────────────────────────────────
   if (action === 'create') {
+    const blockedCreate = await guardRealPayments()
+    if (blockedCreate) return blockedCreate
     // 1) Deleta demo anterior se houver (regerar) — judges + event. Jurados
     // primeiro (via event_judges, não PIN — ver deleteDemoJudges acima),
     // antes do evento sumir e o vínculo junto com ele.

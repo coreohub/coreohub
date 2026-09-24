@@ -31,6 +31,7 @@
  *     -H "Authorization: Bearer <SERVICE_ROLE_KEY>"
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { findProtectedDemoEventIds } from '../_shared/demo-protection.ts'
 
 const MAX_AGE_HOURS = 24
 
@@ -60,15 +61,22 @@ Deno.serve(async (req) => {
 
     const cutoffIso = new Date(Date.now() - MAX_AGE_HOURS * 60 * 60 * 1000).toISOString()
 
-    const { data: expired, error: expiredErr } = await supa
+    const { data: candidates, error: expiredErr } = await supa
       .from('events')
       .select('id, created_by, name, created_at')
       .eq('is_demo', true)
       .lt('created_at', cutoffIso)
     if (expiredErr) throw new Error('Erro ao listar demos expirados: ' + expiredErr.message)
 
+    // Nunca apaga demo com pagamento Asaas real (incidente 2026-09-24).
+    const protectedIds = new Set(await findProtectedDemoEventIds(supa, (candidates ?? []).map((e) => e.id)))
+    if (protectedIds.size > 0) {
+      console.warn(`[cleanup-expired-demo-events] PULADOS (movimento financeiro real): ${JSON.stringify([...protectedIds])}`)
+    }
+    const expired = (candidates ?? []).filter((e) => !protectedIds.has(e.id))
+
     if (!expired || expired.length === 0) {
-      return new Response(JSON.stringify({ success: true, expired: 0, deleted_events: [] }), {
+      return new Response(JSON.stringify({ success: true, expired: 0, deleted_events: [], skipped_protected: [...protectedIds] }), {
         headers: { 'Content-Type': 'application/json' },
       })
     }
