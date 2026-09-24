@@ -195,7 +195,7 @@ Deno.serve(async (req) => {
     const { data: event, error: evErr } = await supabase
       .from('events')
       .select(`
-        id, name, created_by, ingressos_config, event_date,
+        id, name, created_by, ingressos_config, start_date, end_date,
         audience_commission_percent, audience_fee_mode,
         audience_max_per_cpf, audience_max_per_purchase, audience_sales_enabled,
         audience_reservation_minutes, politica_ingressos, seat_map_enabled, payment_sandbox
@@ -214,8 +214,13 @@ Deno.serve(async (req) => {
     if (event.politica_ingressos !== 'INTERNO') {
       throw new Error('Este evento não vende ingressos pela plataforma')
     }
-    if (event.event_date) {
-      const deadline = new Date(event.event_date + 'T23:59:59')
+
+    // events.event_date é coluna legada (sempre NULL): o fim das vendas usa a data
+    // real do evento (end_date, ou start_date). Fuso do Brasil (-03:00), fim do dia.
+    const lastDay = (event as { end_date?: string | null; start_date?: string | null }).end_date
+      ?? (event as { start_date?: string | null }).start_date
+    if (lastDay) {
+      const deadline = new Date(lastDay + 'T23:59:59-03:00')
       if (deadline.getTime() < Date.now()) {
         throw new Error('Vendas encerradas: este evento já aconteceu')
       }
