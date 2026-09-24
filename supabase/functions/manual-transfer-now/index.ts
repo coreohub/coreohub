@@ -89,6 +89,7 @@ Deno.serve(async (req) => {
       .eq('producer_id', producerId)
       .is('released_at', null)
       .is('refunded_at', null)
+      .eq('is_sandbox', false)   // dinheiro de sandbox nunca é repassado
       .gt('net_amount', 0)
 
     if (cErr) {

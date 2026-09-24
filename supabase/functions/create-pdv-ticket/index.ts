@@ -38,6 +38,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { computeAudienceCart, round2 } from '../_shared/audience-pricing.ts'
 import { buildCorsHeaders } from '../_shared/cors.ts'
+import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 
 function isValidCpf(cpf: string): boolean {
@@ -146,7 +147,7 @@ Deno.serve(async (req) => {
         id, name, created_by, ingressos_config,
         audience_commission_percent, audience_fee_mode,
         audience_max_per_cpf, audience_max_per_purchase, audience_sales_enabled,
-        politica_ingressos, seat_map_enabled
+        politica_ingressos, seat_map_enabled, payment_sandbox
       `)
       .eq('id', event_id)
       .single()
@@ -331,8 +332,9 @@ Deno.serve(async (req) => {
     }
 
     // ═══ Caminho 2: PIX no balcão — cobrança Asaas normal, devolve QR pra tela ══
-    const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY') ?? ''
-    const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+    const asaasEnv = await loadAsaasEnvForEvent(supabase, event, 'create-pdv-ticket')
+    const ASAAS_API_KEY = asaasEnv.apiKey
+    const ASAAS_BASE_URL = asaasEnv.baseUrl
     const asaasHeaders = { 'access_token': ASAAS_API_KEY, 'Content-Type': 'application/json' }
 
     const { data: producer } = await supabase

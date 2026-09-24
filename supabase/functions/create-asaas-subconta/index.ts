@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders } from '../_shared/cors.ts'
+import { loadAsaasEnvForProducer } from '../_shared/asaas-env-loader.ts'
 
 Deno.serve(async (req) => {
   const corsHeaders = buildCorsHeaders(req)
@@ -40,8 +41,10 @@ Deno.serve(async (req) => {
     const { cpf_cnpj, pix_key, company_type, income_value, birth_date, action } = body
     console.log('[create-asaas-subconta] STEP 5: body parseado, action=', action, 'cpf_len=', String(cpf_cnpj ?? '').length)
 
-    const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
-    const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+    // Conta de teste (profiles.is_test_account) => sandbox; demais => produção.
+    const asaasEnv = await loadAsaasEnvForProducer(supabase, user.id, 'create-asaas-subconta')
+    const ASAAS_API_KEY  = asaasEnv.apiKey
+    const ASAAS_BASE_URL = asaasEnv.baseUrl
     console.log('[create-asaas-subconta] STEP 6: env vars carregadas, base_url=', ASAAS_BASE_URL, 'api_key_len=', ASAAS_API_KEY.length)
 
     // ─── ACTION: update_pix — trocar apenas a chave PIX, sem mexer no KYC ───

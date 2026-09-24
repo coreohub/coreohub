@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
     // Confere autorização + busca dados do evento pra email
     const { data: event } = await supabase
       .from('events')
-      .select('created_by, name')
+      .select('created_by, name, payment_sandbox')
       .eq('id', coreo.event_id)
       .single()
 
@@ -49,6 +49,11 @@ Deno.serve(async (req) => {
     const isProducer    = event?.created_by === user.id
     const isSuperAdmin  = Boolean(profile?.is_super_admin)
     if (!isProducer && !isSuperAdmin) throw new Error('Sem permissão para reembolsar esta inscrição.')
+
+    // Sandbox (Fase 2) por ora só existe para ingressos de plateia (refund-audience-ticket).
+    if ((event as { payment_sandbox?: boolean } | null)?.payment_sandbox === true) {
+      throw new Error('Evento em modo sandbox: estorno de inscrição não é suportado no ambiente de teste')
+    }
 
     // Chama API Asaas para reembolso
     const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''

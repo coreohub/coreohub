@@ -91,6 +91,7 @@ Deno.serve(async (req) => {
       .lte('release_at', new Date().toISOString())
       .is('released_at', null)
       .is('refunded_at', null)
+      .eq('is_sandbox', false)   // dinheiro de sandbox nunca é repassado
       .not('producer_id', 'is', null)
       .gt('net_amount', 0)
 

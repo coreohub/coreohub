@@ -23,6 +23,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders } from '../_shared/cors.ts'
+import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
 
 Deno.serve(async (req) => {
   const corsHeaders = buildCorsHeaders(req)
@@ -61,7 +62,7 @@ Deno.serve(async (req) => {
 
     const { data: event } = await supabase
       .from('events')
-      .select('created_by, name')
+      .select('id, created_by, name, payment_sandbox')
       .eq('id', ticket.event_id)
       .single()
 
@@ -76,8 +77,9 @@ Deno.serve(async (req) => {
     if (!isProducer && !isSuperAdmin) throw new Error('Sem permissão para reembolsar este ingresso')
 
     // ── Asaas API: refund da cobrança ───────────────────────────────────────
-    const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
-    const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+    const asaasEnv = await loadAsaasEnvForEvent(supabase, event ?? { id: ticket.event_id }, 'refund-audience-ticket')
+    const ASAAS_API_KEY  = asaasEnv.apiKey
+    const ASAAS_BASE_URL = asaasEnv.baseUrl
 
     const refundBody: Record<string, unknown> = {}
     if (amount && Number(amount) > 0) refundBody.value = Number(amount)

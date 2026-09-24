@@ -26,6 +26,7 @@
 // service_role). Quando chamado fora do cron, retorna 401.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { resolveAsaasEnv } from '../_shared/asaas-env.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin':  '*',
@@ -77,7 +78,7 @@ Deno.serve(async (req) => {
   // houver >200 vencidos acumulados.
   const { data: expiredPayments, error } = await supabase
     .from('payments')
-    .select('id, asaas_payment_id, expires_at, value_total')
+    .select('id, asaas_payment_id, expires_at, value_total, is_sandbox')
     .eq('status', 'PENDENTE')
     .not('expires_at', 'is', null)
     .lt('expires_at', new Date().toISOString())
@@ -101,11 +102,25 @@ Deno.serve(async (req) => {
 
     // Cancela no Asaas (DELETE /payments/{id}). Mesmo se falhar (404 = já
     // não existe, 400 = já paga, etc), seguimos com a marcação local.
-    if (p.asaas_payment_id && ASAAS_API_KEY) {
+    // Cobrança de evento sandbox (is_sandbox carimbado pelo banco) é cancelada no
+    // sandbox da Asaas, nunca na produção; as demais seguem exatamente como antes.
+    let cancelKey = ASAAS_API_KEY
+    let cancelBase = ASAAS_BASE_URL
+    if (p.is_sandbox === true) {
       try {
-        const cancelRes = await fetch(`${ASAAS_BASE_URL}/payments/${p.asaas_payment_id}`, {
+        const sb = resolveAsaasEnv({ paymentSandbox: true, producerIsTestAccount: true }, Deno.env)
+        cancelKey = sb.apiKey
+        cancelBase = sb.baseUrl
+      } catch (e) {
+        console.warn('[expire-pending-payments] sandbox sem credencial, pulando cancelamento Asaas:', (e as Error).message)
+        cancelKey = ''
+      }
+    }
+    if (p.asaas_payment_id && cancelKey) {
+      try {
+        const cancelRes = await fetch(`${cancelBase}/payments/${p.asaas_payment_id}`, {
           method: 'DELETE',
-          headers: { 'access_token': ASAAS_API_KEY, 'Content-Type': 'application/json' },
+          headers: { 'access_token': cancelKey, 'Content-Type': 'application/json' },
         })
         if (!cancelRes.ok && cancelRes.status !== 404) {
           asaasOk = false

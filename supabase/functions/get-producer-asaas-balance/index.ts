@@ -11,6 +11,7 @@
 // próprio saldo.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { resolveAsaasEnv, logAsaasEnv } from '../_shared/asaas-env.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin':  '*',
@@ -48,7 +49,7 @@ Deno.serve(async (req) => {
   // user ler suas linhas, então passa pelo userClient.
   const { data: profile, error: profErr } = await userClient
     .from('profiles')
-    .select('asaas_api_key, full_name')
+    .select('asaas_api_key, full_name, is_test_account')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -59,8 +60,19 @@ Deno.serve(async (req) => {
     return jsonResp({ status: 'error', reason: 'no_asaas_account', message: 'Conta Asaas não conectada ainda.' }, 404)
   }
 
+  // Conta de teste => sandbox; qualquer outra => produção (comportamento de sempre).
+  const isTest = (profile as { is_test_account?: boolean }).is_test_account === true
+  let asaasEnv
   try {
-    const balRes = await fetch(`${asaasBaseUrl}/finance/balance`, {
+    asaasEnv = resolveAsaasEnv({ paymentSandbox: isTest, producerIsTestAccount: isTest }, Deno.env)
+  } catch (e) {
+    console.error('[get-producer-asaas-balance]', (e as Error).message)
+    return jsonResp({ status: 'error', reason: 'misconfigured' }, 500)
+  }
+  logAsaasEnv('get-producer-asaas-balance', asaasEnv, null)
+
+  try {
+    const balRes = await fetch(`${asaasEnv.baseUrl}/finance/balance`, {
       headers: {
         'access_token': profile.asaas_api_key,
         'Content-Type': 'application/json',

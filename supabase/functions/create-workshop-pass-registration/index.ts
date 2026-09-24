@@ -152,6 +152,15 @@ Deno.serve(async (req) => {
       .single()
 
     if (!pass || passErr) throw new Error('Pass não encontrado')
+
+    // Sandbox (Fase 2) por ora só existe para ingressos de plateia: recusa cobrança
+    // de workshop em evento sandbox para nunca usar a chave de produção.
+    if (pass.event_id) {
+      const { data: evSb } = await supabase.from('events').select('payment_sandbox').eq('id', pass.event_id).maybeSingle()
+      if (evSb?.payment_sandbox === true) {
+        throw new Error('Evento em modo sandbox: este tipo de cobrança ainda não é suportado no ambiente de teste')
+      }
+    }
     if (!pass.is_published) throw new Error('Pass não está publicado')
 
     const { data: items, error: itemsErr } = await supabase

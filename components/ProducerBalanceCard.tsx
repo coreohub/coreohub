@@ -69,6 +69,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
       .eq('producer_id', targetId)
       .is('released_at', null)
       .is('refunded_at', null)
+      .eq('is_sandbox', false)   // comissão de teste (sandbox) nunca entra no saldo
       .gt('net_amount', 0);
 
     // Decide se chama a API Asaas: força (refresh manual) ou cache miss.

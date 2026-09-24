@@ -77,10 +77,15 @@ Deno.serve(async (req) => {
     // ── 3. Evento (precisa ter seletiva ativa e cobrar taxa) ────────────────
     const { data: event } = await supabase
       .from('events')
-      .select('id, name, created_by, commission_percent, fee_mode, event_type, video_selection_enabled, video_selection_fee, video_selection_fee_required')
+      .select('id, name, created_by, commission_percent, fee_mode, event_type, video_selection_enabled, video_selection_fee, video_selection_fee_required, payment_sandbox')
       .eq('id', event_id)
       .single()
     if (!event) throw new Error('Evento não encontrado.')
+    // Sandbox (Fase 2) por ora só existe para ingressos de plateia: recusa evento
+    // em modo sandbox para nunca cobrar com a chave de produção.
+    if ((event as { payment_sandbox?: boolean }).payment_sandbox === true) {
+      throw new Error('Evento em modo sandbox: este tipo de cobrança ainda não é suportado no ambiente de teste')
+    }
     if (event.event_type === 'government') {
       throw new Error('Eventos governamentais não usam pagamento.')
     }

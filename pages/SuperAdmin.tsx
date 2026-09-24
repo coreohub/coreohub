@@ -188,6 +188,7 @@ const SuperAdmin = () => {
         ] = await Promise.all([
           supabase.from('platform_commissions')
             .select('*')
+            .eq('is_sandbox', false)   // receita de sandbox (teste) fora dos KPIs
             .order('created_at', { ascending: false }),
           // producer_last_login_at: gravado por App.tsx no SIGNED_IN real —
           // imune ao impersonate ("Ver como"), que também dispara SIGNED_IN

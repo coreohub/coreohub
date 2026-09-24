@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { resolveAsaasEnv, resolveWebhookEnvName, webhookMatchesEvent } from '../_shared/asaas-env.ts'
 import {
   dispatchPurchaseConversions,
   type MetaCapiTarget,
@@ -1361,7 +1362,10 @@ Deno.serve(async (req) => {
     })
   }
   const receivedToken = req.headers.get('asaas-access-token') ?? ''
-  if (receivedToken !== expectedToken) {
+  // O token identifica o ambiente: ASAAS_WEBHOOK_TOKEN = produção,
+  // ASAAS_SANDBOX_WEBHOOK_TOKEN = sandbox (Fase 2). Token desconhecido = 401.
+  const webhookEnv = resolveWebhookEnvName(receivedToken, Deno.env)
+  if (!webhookEnv) {
     console.warn('[asaas-webhook] token inválido recebido')
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
@@ -1442,8 +1446,22 @@ Deno.serve(async (req) => {
     //
     // Pagamentos sao criados no master Asaas com split pra subconta do
     // produtor, entao master enxerga tudo via /payments/{id}.
-    const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
-    const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+    let ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
+    let ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+    if (webhookEnv === 'sandbox') {
+      // Webhook do sandbox: confere na API do SANDBOX com a chave do sandbox.
+      try {
+        const sb = resolveAsaasEnv({ paymentSandbox: true, producerIsTestAccount: true }, Deno.env)
+        ASAAS_API_KEY  = sb.apiKey
+        ASAAS_BASE_URL = sb.baseUrl
+      } catch (e) {
+        console.error('[asaas-webhook] sandbox sem credencial:', (e as Error).message)
+        return new Response(JSON.stringify({ error: 'Misconfigured' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    }
     if (ASAAS_API_KEY) {
       try {
         const verifyRes = await fetch(`${ASAAS_BASE_URL}/payments/${payment.id}`, {
@@ -1473,6 +1491,36 @@ Deno.serve(async (req) => {
       }
     } else {
       console.warn('[asaas-webhook] ASAAS_API_KEY nao configurada — cross-check pulado')
+    }
+
+    // ── Ambiente x evento (Fase 2): pagamento sandbox só toca evento sandbox,
+    // e o inverso. Por ora o sandbox só existe para ingressos (AT:).
+    if (webhookEnv === 'sandbox' && !isAudienceTicket) {
+      console.warn(`[asaas-webhook] sandbox com ref nao suportada (${externalRef.slice(0, 4)}) — ignorando`)
+      return ok({ status: 'ignored', reason: 'sandbox_ref_not_supported' })
+    }
+    if (isAudienceTicket && audienceGroupId) {
+      const envGuard = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+      )
+      const { data: tk, error: tkErr } = await envGuard
+        .from('audience_tickets').select('event_id').eq('group_id', audienceGroupId).limit(1).maybeSingle()
+      const { data: evEnv, error: evEnvErr } = tk?.event_id
+        ? await envGuard.from('events').select('payment_sandbox').eq('id', tk.event_id).maybeSingle()
+        : { data: null, error: null }
+      const lookupOk = !tkErr && !evEnvErr && evEnv !== null
+      if (lookupOk) {
+        if (!webhookMatchesEvent(webhookEnv, evEnv!.payment_sandbox)) {
+          console.error(`[asaas-webhook] AMBIENTE INCOMPATIVEL env=${webhookEnv} event_sandbox=${evEnv!.payment_sandbox} group=${audienceGroupId} — rejeitando`)
+          return ok({ status: 'rejected', reason: 'env_mismatch' })
+        }
+      } else if (webhookEnv === 'sandbox') {
+        // Sandbox nunca segue sem confirmar que o evento é sandbox.
+        console.error('[asaas-webhook] sandbox: nao foi possivel confirmar o evento — rejeitando')
+        return ok({ status: 'rejected', reason: 'env_lookup_failed' })
+      }
+      // Produção com falha de leitura segue como antes (não bloqueia pagamento real).
     }
 
     const refType = isAudienceTicket ? 'audience'

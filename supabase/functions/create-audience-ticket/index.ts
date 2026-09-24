@@ -38,6 +38,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { computeAudienceCart, round2 } from '../_shared/audience-pricing.ts'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
+import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 
 // Valida CPF formato + dígito verificador (mod-11)
@@ -165,9 +166,6 @@ Deno.serve(async (req) => {
       mergedQty.set(it.ticket_type_idx, (mergedQty.get(it.ticket_type_idx) ?? 0) + q)
     }
 
-    const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
-    const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
-
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
@@ -200,12 +198,16 @@ Deno.serve(async (req) => {
         id, name, created_by, ingressos_config, event_date,
         audience_commission_percent, audience_fee_mode,
         audience_max_per_cpf, audience_max_per_purchase, audience_sales_enabled,
-        audience_reservation_minutes, politica_ingressos, seat_map_enabled
+        audience_reservation_minutes, politica_ingressos, seat_map_enabled, payment_sandbox
       `)
       .eq('id', event_id)
       .single()
 
     if (!event || evErr) throw new Error('Evento não encontrado')
+    // Ambiente Asaas (produção por padrão; sandbox só com flag + produtor de teste).
+    const asaasEnv = await loadAsaasEnvForEvent(supabase, event, 'create-audience-ticket')
+    const ASAAS_API_KEY  = asaasEnv.apiKey
+    const ASAAS_BASE_URL = asaasEnv.baseUrl
     if (!event.audience_sales_enabled) {
       throw new Error('Venda de ingressos não está ativa para este evento')
     }

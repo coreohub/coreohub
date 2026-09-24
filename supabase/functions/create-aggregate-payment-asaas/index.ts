@@ -175,7 +175,7 @@ Deno.serve(async (req) => {
     const [{ data: inscritoProfile }, { data: event }, { data: config }] = await Promise.all([
       supabase.from('profiles').select('full_name, email, cpf_cnpj').eq('id', user.id).single(),
       supabase.from('events')
-        .select('id, name, created_by, commission_percent, commission_type, formacoes_config, fee_mode, event_type, absorve_taxa_baixo_valor')
+        .select('id, name, created_by, commission_percent, commission_type, formacoes_config, fee_mode, event_type, absorve_taxa_baixo_valor, payment_sandbox')
         .eq('id', event_id).single(),
       supabase.from('configuracoes')
         .select('event_id, formatos_precos, prazo_inscricao')
@@ -183,6 +183,11 @@ Deno.serve(async (req) => {
     ])
 
     if (!event) throw new Error('Evento não encontrado.')
+    // Sandbox (Fase 2) por ora só existe para ingressos de plateia: recusa evento
+    // em modo sandbox para nunca cobrar com a chave de produção.
+    if ((event as { payment_sandbox?: boolean }).payment_sandbox === true) {
+      throw new Error('Evento em modo sandbox: este tipo de cobrança ainda não é suportado no ambiente de teste')
+    }
     if (event.event_type === 'government') {
       throw new Error('Eventos governamentais não usam pagamento.')
     }

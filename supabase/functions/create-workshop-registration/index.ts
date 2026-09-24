@@ -168,6 +168,15 @@ Deno.serve(async (req) => {
       .single()
 
     if (!workshop || wsErr) throw new Error('Workshop não encontrado')
+
+    // Sandbox (Fase 2) por ora só existe para ingressos de plateia: recusa cobrança
+    // de workshop em evento sandbox para nunca usar a chave de produção.
+    if (workshop.event_id) {
+      const { data: evSb } = await supabase.from('events').select('payment_sandbox').eq('id', workshop.event_id).maybeSingle()
+      if (evSb?.payment_sandbox === true) {
+        throw new Error('Evento em modo sandbox: este tipo de cobrança ainda não é suportado no ambiente de teste')
+      }
+    }
     if (!workshop.is_published) {
       throw new Error('Workshop não está publicado')
     }

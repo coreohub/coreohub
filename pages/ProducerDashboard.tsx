@@ -287,7 +287,7 @@ const ProducerDashboard: React.FC<ProducerDashboardProps> = ({ profile }) => {
           supabase.from('registrations').select('id,check_in_status').eq('event_id', selectedEventId),
           // refunded_at IS NULL pra não inflar receita histórica com comissões
           // já estornadas (espelha filtro do daily-release-funds + ProducerBalanceCard).
-          supabase.from('platform_commissions').select('gross_amount,net_amount,commission_amount,refund_amount,created_at').eq('event_id', selectedEventId).is('refunded_at', null).order('created_at', { ascending: true }),
+          supabase.from('platform_commissions').select('gross_amount,net_amount,commission_amount,refund_amount,created_at').eq('event_id', selectedEventId).is('refunded_at', null).eq('is_sandbox', false).order('created_at', { ascending: true }),
         ]);
         setCommissions(comms ?? []);
 
