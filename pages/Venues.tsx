@@ -5,8 +5,9 @@ import PageHeader from '../components/PageHeader';
 import EventPickerSheet, { EventPickerOption } from '../components/EventPickerSheet';
 import {
   MapPin, Plus, Loader2, X, AlertCircle, CheckCircle2, Trash2, Pencil,
-  Armchair, LayoutGrid, Link2, Link2Off, Accessibility,
+  Armchair, LayoutGrid, Link2, Link2Off, Accessibility, ArrowLeftRight, Users,
 } from 'lucide-react';
+import { countTipos, normalizeRow, paintSeat, serializeRow, type RowConfig, type VenuePaintTool } from '../utils/venueRows';
 
 /**
  * Biblioteca de locais + gerador de grade (Fase 2 — assento numerado,
@@ -23,15 +24,6 @@ import {
  * events.venue_id + seat_map_enabled=true e materializa event_seats via
  * RPC generate_event_seats (idempotente).
  */
-
-interface RowConfig {
-  codigo: string;
-  assentos: number;
-  pcd: number[];
-  corredor_apos?: number;
-  espaco_antes?: boolean;
-  palco_apos?: boolean;
-}
 
 interface Venue {
   id: string;
@@ -65,13 +57,20 @@ const buildRows = (numFileiras: number, nomenclatura: 'letras' | 'numeros', asse
 const inputCls = 'w-full p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-[#ff0068]';
 const labelCls = 'text-[10px] font-black text-slate-500 uppercase tracking-widest px-1';
 
-// ── Prévia da grade — clicar num assento alterna PCD ──────────────────────
+// ── Prévia da grade — a ferramenta escolhida pinta o assento clicado ──────
+const TOOLS: { id: VenuePaintTool; label: string; icon: React.ReactNode; hint: string }[] = [
+  { id: 'comum', label: 'Comum', icon: <Armchair size={13} />, hint: 'Assento comum (apaga o tipo)' },
+  { id: 'cadeirante', label: 'Cadeirante', icon: <Accessibility size={13} />, hint: 'Espaço de cadeirante' },
+  { id: 'pcd_largo', label: 'PCD largo', icon: <ArrowLeftRight size={13} />, hint: 'Assento PCD largo (pessoa obesa/mobilidade reduzida)' },
+  { id: 'acompanhante', label: 'Acompanhante', icon: <Users size={13} />, hint: 'Assento ao lado de um lugar PCD, reservado ao acompanhante' },
+];
+
 const SeatGridPreview: React.FC<{
   rows: RowConfig[];
-  onTogglePcd: (rowIdx: number, seatNum: number) => void;
+  onPaint: (rowIdx: number, seatNum: number) => void;
   onChangeAssentos: (rowIdx: number, value: number) => void;
   onToggleBloco: (rowIdx: number) => void;
-}> = ({ rows, onTogglePcd, onChangeAssentos, onToggleBloco }) => (
+}> = ({ rows, onPaint, onChangeAssentos, onToggleBloco }) => (
   <div className="space-y-2 max-h-80 overflow-y-auto p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-white/10">
     {rows.map((row, rowIdx) => (
       <div key={row.codigo} className={`flex items-center gap-2 ${row.espaco_antes ? 'mt-5' : ''}`}>
@@ -97,21 +96,30 @@ const SeatGridPreview: React.FC<{
         ) : <span className="w-[46px] shrink-0" aria-hidden="true" />}
         <div className="flex flex-wrap gap-1 flex-1 justify-center">
           {Array.from({ length: row.assentos }, (_, i) => i + 1).map(n => {
-            const isPcd = row.pcd.includes(n);
+            const tipo = row.tipos?.[String(n)];
+            const isComp = row.acompanhante?.[String(n)] != null;
             const isAisle = row.corredor_apos === n;
+            const label = tipo === 'cadeirante'
+              ? 'espaço de cadeirante'
+              : tipo === 'pcd_largo'
+                ? 'assento PCD largo'
+                : isComp ? `acompanhante de ${row.codigo}-${row.acompanhante![String(n)]}` : '';
             return (
               <React.Fragment key={n}>
                 <button
                   type="button"
-                  onClick={() => onTogglePcd(rowIdx, n)}
-                  title={`${row.codigo}-${n}${isPcd ? ' (PCD)' : ''}`}
+                  onClick={() => onPaint(rowIdx, n)}
+                  title={`${row.codigo}-${n}${label ? ` (${label})` : ''}`}
+                  aria-label={`Assento ${row.codigo}-${n}${label ? `, ${label}` : ', comum'}`}
                   className={`w-6 h-6 rounded text-[8px] font-black flex items-center justify-center transition-colors ${
-                    isPcd
+                    tipo
                       ? 'bg-sky-500 text-white'
-                      : 'bg-white dark:bg-slate-900 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-white/10 hover:border-[#ff0068]/50'
+                      : isComp
+                        ? 'bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-300 ring-1 ring-sky-400/60'
+                        : 'bg-white dark:bg-slate-900 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-white/10 hover:border-[#ff0068]/50'
                   }`}
                 >
-                  {isPcd ? <Accessibility size={11} /> : n}
+                  {tipo === 'cadeirante' ? <Accessibility size={11} /> : tipo === 'pcd_largo' ? <ArrowLeftRight size={11} /> : isComp ? <Users size={11} /> : n}
                 </button>
                 {isAisle && <span className="w-3" aria-hidden="true" />}
               </React.Fragment>
@@ -127,7 +135,7 @@ const SeatGridPreview: React.FC<{
 const VenueFormModal: React.FC<{
   editing: Venue | null;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (note?: string) => void;
 }> = ({ editing, onClose, onSaved }) => {
   const [name, setName] = useState(editing?.name ?? '');
   const [city, setCity] = useState(editing?.city ?? '');
@@ -136,24 +144,27 @@ const VenueFormModal: React.FC<{
   const [nomenclatura, setNomenclatura] = useState<'letras' | 'numeros'>('letras');
   const [assentosPadrao, setAssentosPadrao] = useState(20);
   const [corredorApos, setCorredorApos] = useState<number | ''>('');
-  const [rows, setRows] = useState<RowConfig[]>(editing?.rows_config ?? []);
+  const [rows, setRows] = useState<RowConfig[]>((editing?.rows_config ?? []).map(normalizeRow));
+  const [tool, setTool] = useState<VenuePaintTool>('cadeirante');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleGerar = () => {
+    const marcados = countTipos(rows);
+    if (marcados.cadeirante + marcados.pcd_largo + marcados.acompanhante > 0
+      && !window.confirm('Gerar uma nova grade apaga os lugares PCD, largos e de acompanhante já marcados. Continuar?')) return;
     setRows(buildRows(numFileiras, nomenclatura, assentosPadrao, corredorApos === '' ? null : corredorApos));
   };
 
-  const handleTogglePcd = (rowIdx: number, seatNum: number) => {
-    setRows(prev => prev.map((r, i) => {
-      if (i !== rowIdx) return r;
-      const pcd = r.pcd.includes(seatNum) ? r.pcd.filter(n => n !== seatNum) : [...r.pcd, seatNum];
-      return { ...r, pcd };
-    }));
+  const handlePaint = (rowIdx: number, seatNum: number) => {
+    const res = paintSeat(rows[rowIdx], seatNum, tool);
+    if (res.error) { setError(res.error); return; }
+    setError(null);
+    setRows(prev => prev.map((r, i) => (i === rowIdx ? res.row : r)));
   };
 
   const handleChangeAssentos = (rowIdx: number, value: number) => {
-    setRows(prev => prev.map((r, i) => (i === rowIdx ? { ...r, assentos: value, pcd: r.pcd.filter(n => n <= value) } : r)));
+    setRows(prev => prev.map((r, i) => (i === rowIdx ? { ...r, assentos: value } : r)));
   };
 
   const handleToggleBloco = (rowIdx: number) => {
@@ -176,11 +187,21 @@ const VenueFormModal: React.FC<{
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Sessão expirada.');
 
-      const payload = { name: name.trim(), city: city.trim() || null, state: state || null, rows_config: rows };
+      const payload = { name: name.trim(), city: city.trim() || null, state: state || null, rows_config: rows.map(serializeRow) };
 
       if (editing) {
         const { error: err } = await supabase.from('venues').update(payload).eq('id', editing.id).select('id');
         if (err) throw err;
+        // Sincroniza os tipos nos eventos do produtor que já usam este local (idempotente).
+        const { data: linked } = await supabase.from('events').select('id').eq('venue_id', editing.id).eq('seat_map_enabled', true).eq('created_by', user.id);
+        let synced = 0;
+        for (const ev of linked ?? []) {
+          const { error: genErr } = await supabase.rpc('generate_event_seats', { p_event_id: ev.id });
+          if (genErr) throw new Error(`Local salvo, mas não foi possível atualizar um evento: ${genErr.message}`);
+          synced++;
+        }
+        onSaved(synced > 0 ? `Local salvo e aplicado em ${synced} evento${synced === 1 ? '' : 's'} vinculado${synced === 1 ? '' : 's'}.` : undefined);
+        return;
       } else {
         const { error: err } = await supabase.from('venues').insert({ ...payload, created_by: user.id });
         if (err) throw err;
@@ -264,10 +285,31 @@ const VenueFormModal: React.FC<{
         {rows.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
-              <p className={labelCls}>Prévia — clique num assento pra marcar PCD</p>
+              <p className={labelCls}>Prévia — escolha uma ferramenta e clique nos assentos</p>
               <span className="text-[10px] font-black text-slate-500">{totalSeats} assentos</span>
             </div>
-            <SeatGridPreview rows={rows} onTogglePcd={handleTogglePcd} onChangeAssentos={handleChangeAssentos} onToggleBloco={handleToggleBloco} />
+            <div role="radiogroup" aria-label="Ferramenta de marcação" className="flex flex-wrap gap-1.5">
+              {TOOLS.map(t => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={tool === t.id}
+                  title={t.hint}
+                  onClick={() => setTool(t.id)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide cursor-pointer transition-colors ${
+                    tool === t.id ? 'bg-sky-500 text-white' : 'bg-white dark:bg-slate-900 text-slate-500 border border-slate-200 dark:border-white/10 hover:border-sky-400/60'
+                  }`}
+                >
+                  {t.icon} {t.label}
+                </button>
+              ))}
+            </div>
+            <SeatGridPreview rows={rows} onPaint={handlePaint} onChangeAssentos={handleChangeAssentos} onToggleBloco={handleToggleBloco} />
+            <p className="px-1 text-[10px] text-slate-500">
+              {(() => { const c = countTipos(rows); return `${c.cadeirante} cadeirante · ${c.pcd_largo} PCD largo · ${c.acompanhante} acompanhante`; })()}
+              {' — '}ao marcar um lugar PCD, o vizinho comum mais próximo (mesmo lado do corredor) vira o assento de acompanhante; ajuste com a ferramenta Acompanhante.
+            </p>
             <label className="flex items-center gap-2 px-1 text-[11px] font-bold text-slate-600 dark:text-slate-300 cursor-pointer">
               <input type="checkbox" checked={temPalco} onChange={handleTogglePalco} className="accent-[#ff0068]" />
               Desenhar o palco abaixo da última fileira
@@ -409,6 +451,7 @@ const Venues: React.FC = () => {
   const [editingVenue, setEditingVenue] = useState<Venue | null>(null);
   const [linkingVenue, setLinkingVenue] = useState<Venue | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -463,6 +506,13 @@ const Venues: React.FC = () => {
       <p className="text-xs text-slate-500 leading-relaxed max-w-2xl">
         Cadastre um local com poltronas numeradas de verdade (teatro, auditório, centro de convenções) UMA VEZ e reaproveite em quantos eventos precisar — o mapa fica salvo aqui, não por evento. Locais sem assento fixo (salão, tatame, plateia em pé) não precisam de nada disso: continuam vendendo por setor/quantidade normalmente.
       </p>
+
+      {notice && (
+        <div role="status" className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-600 dark:text-emerald-400 text-[11px] font-bold flex items-center gap-2">
+          <CheckCircle2 size={14} className="shrink-0" /> <span className="flex-1">{notice}</span>
+          <button type="button" onClick={() => setNotice(null)} aria-label="Fechar aviso" className="cursor-pointer"><X size={14} /></button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-20"><Loader2 size={28} className="animate-spin text-[#ff0068]" /></div>
@@ -525,7 +575,7 @@ const Venues: React.FC = () => {
         <VenueFormModal
           editing={editingVenue}
           onClose={() => setShowForm(false)}
-          onSaved={() => { setShowForm(false); void refresh(); }}
+          onSaved={note => { setShowForm(false); setNotice(note ?? null); void refresh(); }}
         />
       )}
       {linkingVenue && (

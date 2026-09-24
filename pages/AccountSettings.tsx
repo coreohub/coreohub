@@ -431,6 +431,8 @@ interface TicketType {
   lotes?: TicketLote[];
   /** Estoque total (Tier 2). null/undefined = ilimitado. */
   quantidade_total?: number | null;
+  /** Assento que o ingresso aceita (mapa numerado): comum (padrão), PCD/cadeirante ou acompanhante de PCD. */
+  assento_tipo?: 'comum' | 'pcd' | 'acompanhante';
 }
 interface Sponsor    { nome: string; logo_url: string; link?: string }
 
@@ -1584,7 +1586,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
   const [audienceMaxPerCpf, setAudienceMaxPerCpf] = useState<number>(6);
   const [audienceMaxPerPurchase, setAudienceMaxPerPurchase] = useState<number>(6);
   // Tier 2: tempo de reserva temporária (10min default)
-  const [audienceReservationMinutes, setAudienceReservationMinutes] = useState<number>(10);
+  const [audienceReservationMinutes, setAudienceReservationMinutes] = useState<number>(15);
+  const [eventSeatMap, setEventSeatMap] = useState(false);
   const [sponsors, setSponsors]       = useState<Sponsor[]>([]);
   const [styles,  setStyles]  = useState<string[]>([]);
   const [formats, setFormats] = useState<any[]>([]);
@@ -2016,7 +2019,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
         let myEvent: any = null;
         if (user) {
           const evRes = await supabase
-            .from('events').select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, info_config, audience_sales_enabled, audience_commission_percent, audience_commission_percent_manual, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, producer_ga4_id, producer_meta_pixel_id, start_date, end_date, event_time, programacao_config, ingressos_config, politica_ingressos, billing_plan')
+            .from('events').select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, location, city, state, instagram_event, facebook_event, tiktok_event, youtube_event, whatsapp_event, website_event, email_event, regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, info_config, audience_sales_enabled, audience_commission_percent, audience_commission_percent_manual, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, audience_reservation_minutes, seat_map_enabled, producer_ga4_id, producer_meta_pixel_id, start_date, end_date, event_time, programacao_config, ingressos_config, politica_ingressos, billing_plan')
             .eq('id', selectedEventId)
             .maybeSingle();
           // select() amplo sem checar error mascara coluna ausente como "não
@@ -2096,6 +2099,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             if ((myEvent as any).audience_max_per_purchase != null) {
               setAudienceMaxPerPurchase(Number((myEvent as any).audience_max_per_purchase));
             }
+            setEventSeatMap(Boolean((myEvent as any).seat_map_enabled));
             if ((myEvent as any).audience_reservation_minutes != null) {
               setAudienceReservationMinutes(Number((myEvent as any).audience_reservation_minutes));
             }
@@ -3901,6 +3905,31 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                             <span className="sm:hidden">Remover</span>
                           </button>
                         </div>
+
+                        {/* Tipo de assento (só com mapa numerado) */}
+                        {eventSeatMap && (
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                            <label htmlFor={`assento-tipo-${i}`} className="text-[10px] font-black uppercase tracking-widest text-slate-500 sm:w-32 shrink-0">Tipo de assento</label>
+                            <select
+                              id={`assento-tipo-${i}`}
+                              value={item.assento_tipo ?? 'comum'}
+                              onChange={e => {
+                                const v = e.target.value as 'comum' | 'pcd' | 'acompanhante';
+                                const dica = v === 'pcd'
+                                  ? 'Assentos exclusivos para pessoas com deficiência, em área com acessibilidade ampliada.'
+                                  : v === 'acompanhante'
+                                    ? 'Um acompanhante por pessoa com deficiência, no assento ao lado.'
+                                    : undefined;
+                                updateField({ assento_tipo: v === 'comum' ? undefined : v, ...(dica && !item.obs?.trim() ? { obs: dica } : {}) });
+                              }}
+                              className="flex-1 bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-slate-900 dark:text-white text-sm font-bold dark:[color-scheme:dark] focus:outline-none focus:border-[#ff0068]/50"
+                            >
+                              <option value="comum">Comum — assentos comuns do mapa</option>
+                              <option value="pcd">PCD — espaço de cadeirante / assento PCD</option>
+                              <option value="acompanhante">Acompanhante de PCD — assento ao lado do PCD (mesmo pedido)</option>
+                            </select>
+                          </div>
+                        )}
 
                         {/* Linha 2: preço (modo simples) OU editor de lotes */}
                         {!isMultiLote ? (

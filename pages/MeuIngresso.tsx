@@ -7,6 +7,8 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { fetchSeatTipo, SEAT_TIPO_LABEL } from '../utils/seatTipo';
+import type { SeatTipo } from '../utils/seatSelection';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { QRCodeCanvas } from 'qrcode.react';
 import { ArrowLeft, Loader2, AlertCircle, Sun, Calendar, MapPin, ExternalLink, Download, Share2, ChevronLeft, ChevronRight, Users, Printer } from 'lucide-react';
@@ -212,6 +214,15 @@ const MeuIngresso: React.FC = () => {
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`
     : null;
   // Assento "A-1" -> Fileira A · Nº 1
+  const [seatTipo, setSeatTipo] = useState<SeatTipo>('comum');
+  useEffect(() => {
+    if (!ticket?.event_id || !ticket.seat_id) { setSeatTipo('comum'); return; }
+    let cancel = false;
+    void fetchSeatTipo(ticket.event_id, ticket.seat_id).then(t => { if (!cancel) setSeatTipo(t); });
+    return () => { cancel = true; };
+  }, [ticket?.event_id, ticket?.seat_id]);
+  const seatTipoLabel = SEAT_TIPO_LABEL[seatTipo];
+
   const seatLabel = (() => {
     if (!ticket.seat_id) return null;
     const i = ticket.seat_id.lastIndexOf('-');
@@ -477,6 +488,11 @@ const MeuIngresso: React.FC = () => {
                 <div className="mt-1 rounded-xl bg-slate-900 text-white px-3 py-2">
                   <p className="text-[8px] font-black uppercase tracking-[0.3em] text-slate-400">Seu lugar</p>
                   <p className="text-sm font-black uppercase tracking-tight">{seatLabel}</p>
+                  {seatTipoLabel && (
+                    <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-sky-300">
+                      {seatTipoLabel} · comprovação na portaria
+                    </p>
+                  )}
                 </div>
               )}
               {eventDate && (

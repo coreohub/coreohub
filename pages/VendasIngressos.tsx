@@ -20,6 +20,7 @@ import EventPickerSheet from '../components/EventPickerSheet';
 import SeatGrid from '../components/SeatGrid';
 import SeatLegend from '../components/SeatLegend';
 import { ticketSeatKind } from '../supabase/functions/_shared/seat-rules';
+import { SEAT_TIPO_LABEL, seatTipoFromLayout } from '../utils/seatTipo';
 import { useSeatMap } from '../hooks/useSeatMap';
 import { maskCpfCnpj, unmaskCpfCnpj, maskTelefoneBR, unmaskTelefoneBR } from '../utils/masks';
 
@@ -35,6 +36,7 @@ interface Row {
   event_id: string;
   ticket_type_nome: string;
   ticket_type_kind: string;
+  seat_id?: string | null;
   preco: number;
   buyer_name: string;
   buyer_email: string;
@@ -631,6 +633,16 @@ const VendasIngressos: React.FC = () => {
                       {r.ticket_type_kind === 'meia' && (
                         <p className="text-[9px] uppercase tracking-widest text-amber-600 dark:text-amber-400 font-black">Meia</p>
                       )}
+                      {r.seat_id && (
+                        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                          Lugar {r.seat_id}
+                          {SEAT_TIPO_LABEL[seatTipoFromLayout(rowsConfig, r.seat_id)] && (
+                            <span className="px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-600 dark:text-sky-300 text-[9px] uppercase tracking-widest">
+                              {seatTipoFromLayout(rowsConfig, r.seat_id) === 'acompanhante' ? 'Acompanhante' : 'PCD'}
+                            </span>
+                          )}
+                        </p>
+                      )}
                     </Td>
                     <Td>
                       <p className="font-black tabular-nums text-slate-900 dark:text-white">{formatBRL(r.preco)}</p>
@@ -1169,6 +1181,12 @@ const VendasIngressos: React.FC = () => {
 
               <Section title="Ingresso">
                 <Field label="Tipo" value={detailRow.ticket_type_nome + (detailRow.ticket_type_kind === 'meia' ? ' (meia)' : '')} />
+                {detailRow.seat_id && (
+                  <Field
+                    label="Lugar"
+                    value={`${detailRow.seat_id}${SEAT_TIPO_LABEL[seatTipoFromLayout(rowsConfig, detailRow.seat_id)] ? ` — ${SEAT_TIPO_LABEL[seatTipoFromLayout(rowsConfig, detailRow.seat_id)]}` : ''}`}
+                  />
+                )}
                 <Field label="Valor pago" value={formatBRL(detailRow.preco)} highlight />
                 {detailRow.producer_amount != null && (
                   <Field label="Líquido (você)" value={formatBRL(Number(detailRow.producer_amount))} />

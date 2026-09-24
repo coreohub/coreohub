@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { fetchSeatTipo, SEAT_TIPO_LABEL } from '../utils/seatTipo';
 import {
   Search, CheckCircle2, User, QrCode, RefreshCw,
   X, AlertCircle, Clock, DollarSign, Music2,
@@ -169,7 +170,7 @@ const CheckIn = () => {
     const { data: ticket } = canScan('INGRESSO')
       ? await supabase
           .from('audience_tickets')
-          .select('id, ticket_type_nome, ticket_type_kind, buyer_name, status_pagamento, check_in_status, check_in_at, seat_id')
+          .select('id, event_id, ticket_type_nome, ticket_type_kind, buyer_name, status_pagamento, check_in_status, check_in_at, seat_id')
           .eq('id', id)
           .maybeSingle()
       : { data: null };
@@ -216,7 +217,10 @@ const CheckIn = () => {
         return;
       }
       const meiaSuffix = ticket.ticket_type_kind === 'meia' ? ' (verificar documento de meia)' : '';
-      const seatSuffix = (ticket as any).seat_id ? ` — Assento ${(ticket as any).seat_id}` : '';
+      const seatTipo = await fetchSeatTipo((ticket as any).event_id, (ticket as any).seat_id);
+      const tipoLabel = SEAT_TIPO_LABEL[seatTipo];
+      const pcdNote = seatTipo === 'acompanhante' ? ' (acompanhante de PCD)' : tipoLabel ? ` (${tipoLabel.toLowerCase()} — verificar comprovação PCD)` : '';
+      const seatSuffix = (ticket as any).seat_id ? ` — Assento ${(ticket as any).seat_id}${pcdNote}` : '';
       setScanResult({
         type: 'success',
         message: `Ingresso ${ticket.ticket_type_nome} liberado${meiaSuffix}${seatSuffix}!`,
