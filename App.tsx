@@ -606,7 +606,21 @@ const App: React.FC = () => {
               // gravada em localStorage ANTES do verifyOtp do impersonate
               // (services/impersonateService.ts) — sem essa ordem, o "Ver
               // como" sobrescreveria o último acesso real do produtor.
-              if (event === 'SIGNED_IN' && !isImpersonatingSession()) {
+              // INITIAL_SESSION cobre quem reabre o app com sessão já salva (caso
+              // mais comum de "voltou hoje"): não dispara SIGNED_IN, então o
+              // último acesso ficava preso no dia do login de verdade. Throttle
+              // de 30min em localStorage pra não gravar a cada reload.
+              const isRealAccess = event === 'SIGNED_IN' || event === 'INITIAL_SESSION';
+              let throttled = false;
+              if (event === 'INITIAL_SESSION') {
+                try {
+                  const key = `coreohub_last_access_ping_${session.user.id}`;
+                  const last = Number(localStorage.getItem(key) ?? 0);
+                  if (Date.now() - last < 30 * 60 * 1000) throttled = true;
+                  else localStorage.setItem(key, String(Date.now()));
+                } catch { /* storage bloqueado: segue sem throttle */ }
+              }
+              if (isRealAccess && !throttled && !isImpersonatingSession()) {
                 supabase
                   .from('profiles')
                   .update({ producer_last_login_at: new Date().toISOString() })
