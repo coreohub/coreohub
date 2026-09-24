@@ -342,7 +342,7 @@ Deno.serve(async (req) => {
       throw new Error('Produtor não conectou conta Asaas. Venda indisponível.')
     }
 
-    const reservedMinutes = Number((event as any).audience_reservation_minutes ?? 10)
+    const reservedMinutes = Number((event as any).audience_reservation_minutes ?? 15)
 
     // ── Reserva atômica via RPC ──────────────────────────────────────────────
     // Carrinho de 1 tipo → RPC v1 (try_reserve_audience_tickets, sempre presente
@@ -538,9 +538,11 @@ Deno.serve(async (req) => {
 
     // Descrição: "2x Inteira, 1x Meia - Evento" (multi) ou "Inteira - Evento" (1)
     const itemsDesc = resolved.map(r => `${r.quantity}x ${r.nome}`).join(', ')
-    const description = totalQty > 1
+    const baseDescription = totalQty > 1
       ? `${itemsDesc} - ${event.name}`
       : `${resolved[0].nome} - ${event.name}`
+    // Avisa a janela de pagamento: a cobrança é cancelada quando a reserva expira.
+    const description = `${baseDescription} (reserva válida por ${reservedMinutes} min)`
 
     const skipSplit = asaasEnv.isSandbox && (Deno.env.get('ASAAS_SANDBOX_SKIP_SPLIT') ?? '') === 'true'
     if (skipSplit) console.warn('[create-audience-ticket] SANDBOX sem split (ASAAS_SANDBOX_SKIP_SPLIT=true)')

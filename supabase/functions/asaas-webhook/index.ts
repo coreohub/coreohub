@@ -109,6 +109,8 @@ async function dispararEmail(
     | 'payment_confirmed_producer'
     | 'audience_ticket_confirmed'
     | 'audience_ticket_producer'
+    | 'audience_ticket_late_refund'
+    | 'audience_ticket_late_refund_producer'
     | 'workshop_registration_confirmed'
     | 'workshop_registration_producer'
     | 'aggregate_invoice_created'
@@ -144,8 +146,10 @@ async function handleAudienceTicket(opts: {
   payment: any
   statusInterno: string
   groupId: string
+  asaasBaseUrl: string
+  asaasApiKey: string
 }): Promise<Response> {
-  const { supabase, payment, statusInterno, groupId } = opts
+  const { supabase, payment, statusInterno, groupId, asaasBaseUrl, asaasApiKey } = opts
 
   const respHeaders = { ...corsHeaders, 'Content-Type': 'application/json' }
   const respond = (body: Record<string, unknown>) =>
@@ -161,6 +165,109 @@ async function handleAudienceTicket(opts: {
     if (existing) {
       console.log(`[asaas-webhook][audience] payment=${payment.id} já processado`)
       return respond({ status: 'already_processed' })
+    }
+  }
+
+  // Reentrega de PAYMENT_RECEIVED depois do estorno automático: nunca reaprovar
+  // um ticket já estornado (o valor voltou ao comprador).
+  if (statusInterno === 'APROVADO') {
+    const { data: refundedRow } = await supabase
+      .from('audience_tickets')
+      .select('id')
+      .eq('payment_id', String(payment.id))
+      .eq('status_pagamento', 'ESTORNADO')
+      .not('refund_id', 'is', null)
+      .limit(1)
+      .maybeSingle()
+    if (refundedRow) {
+      console.warn(`[asaas-webhook][audience] APROVADO após estorno ignorado — payment=${payment.id}`)
+      return respond({ status: 'ignored_already_refunded', payment_id: String(payment.id) })
+    }
+  }
+
+  // ── Pagamento TARDIO: chegou com o ticket já CANCELADO/VENCIDO (reserva expirou) ──
+  // Tenta religar assento/estoque; se não der (assento vendido a outro / esgotou),
+  // estorna a cobrança inteira na Asaas em vez de aprovar uma venda sem lugar.
+  if (statusInterno === 'APROVADO') {
+    const { data: lateTickets } = await supabase
+      .from('audience_tickets')
+      .select('id, event_id, ticket_type_id, ticket_type_nome, buyer_name, buyer_email, preco')
+      .eq('payment_id', String(payment.id))
+      .in('status_pagamento', ['CANCELADO', 'VENCIDO'])
+    if (lateTickets?.length) {
+      const eventId = lateTickets[0].event_id
+      const { data: ev } = await supabase
+        .from('events')
+        .select('name, created_by, ingressos_config')
+        .eq('id', eventId)
+        .maybeSingle()
+      const cfg: any[] = Array.isArray((ev as any)?.ingressos_config) ? (ev as any).ingressos_config : []
+      const totals: Record<string, number> = {}
+      for (const t of lateTickets) {
+        const c = cfg.find((x: any) => String(x?.nome) === String(t.ticket_type_nome))
+        const q = c?.quantidade_total != null && Number(c.quantidade_total) > 0 ? Number(c.quantidade_total) : null
+        if (q != null && t.ticket_type_id) totals[String(t.ticket_type_id)] = q
+      }
+      const { data: reclaim, error: reclaimErr } = await supabase.rpc('reclaim_late_audience_payment', {
+        p_payment_id: String(payment.id),
+        p_totals: totals,
+      })
+      if (reclaimErr) {
+        // Falha inesperada: não aprova nem estorna às cegas — pede reprocessamento.
+        console.error('[asaas-webhook][audience] erro reclaim pagamento tardio:', reclaimErr.message)
+        return new Response(JSON.stringify({ status: 'error', reason: 'reclaim_failed' }), { status: 500, headers: respHeaders })
+      }
+      if (reclaim?.ok === true) {
+        console.warn(`[asaas-webhook][audience] PAGAMENTO TARDIO religado payment=${payment.id} tickets=${reclaim.reclaimed}`)
+        // segue o fluxo normal: tickets voltaram a PENDENTE e viram APROVADO abaixo
+      } else {
+        const motivo = String(reclaim?.reason ?? 'unknown')
+        console.warn(`[asaas-webhook][audience] PAGAMENTO TARDIO sem lugar (${motivo}) payment=${payment.id} — estornando`)
+        const refundRes = await fetch(`${asaasBaseUrl}/payments/${payment.id}/refund`, {
+          method: 'POST',
+          headers: { 'access_token': asaasApiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ description: 'Pagamento após o prazo da reserva; ingresso indisponível' }),
+        })
+        const refundData = await refundRes.json().catch(() => ({}))
+        if (!refundRes.ok) {
+          console.error('[asaas-webhook][audience] estorno automático FALHOU:', refundData)
+          // 500 => Asaas reenvia o webhook e tentamos de novo.
+          return new Response(JSON.stringify({ status: 'error', reason: 'auto_refund_failed' }), { status: 500, headers: respHeaders })
+        }
+        const valor = Number(payment.value ?? 0)
+        await supabase
+          .from('audience_tickets')
+          .update({
+            status_pagamento: 'ESTORNADO',
+            refunded_at: new Date().toISOString(),
+            refund_amount: valor,
+            refund_reason: `Pagamento tardio (${motivo}) — estorno automático`,
+            refund_id: String(refundData.id ?? ''),
+            payment_method: payment.billingType ?? null,
+          })
+          .eq('payment_id', String(payment.id))
+          .in('status_pagamento', ['CANCELADO', 'VENCIDO'])
+
+        const { data: prod } = (ev as any)?.created_by
+          ? await supabase.from('profiles').select('full_name, email').eq('id', (ev as any).created_by).maybeSingle()
+          : { data: null } as any
+        const appUrl = Deno.env.get('FRONTEND_URL') ?? 'https://app.coreohub.com'
+        const jobs: Promise<void>[] = []
+        if (lateTickets[0].buyer_email) {
+          jobs.push(dispararEmail('audience_ticket_late_refund', {
+            buyerName: lateTickets[0].buyer_name, buyerEmail: lateTickets[0].buyer_email,
+            produtorEmail: prod?.email, eventoNome: (ev as any)?.name, valor, motivo, appUrl,
+          }))
+        }
+        if (prod?.email) {
+          jobs.push(dispararEmail('audience_ticket_late_refund_producer', {
+            produtorNome: prod.full_name, produtorEmail: prod.email, eventoNome: (ev as any)?.name,
+            buyerName: lateTickets[0].buyer_name, buyerEmail: lateTickets[0].buyer_email, valor, motivo, appUrl,
+          }))
+        }
+        await Promise.all(jobs)
+        return respond({ status: 'late_payment_refunded', reason: motivo, payment_id: String(payment.id) })
+      }
     }
   }
 
@@ -1693,6 +1800,8 @@ Deno.serve(async (req) => {
         payment,
         statusInterno,
         groupId: audienceGroupId,
+        asaasBaseUrl: ASAAS_BASE_URL,
+        asaasApiKey:  ASAAS_API_KEY,
       })
     }
 

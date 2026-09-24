@@ -604,6 +604,62 @@ function buildAudienceProducerNotification(p: AudienceProducerPayload) {
   }
 }
 
+interface AudienceLateRefundPayload {
+  buyerName?: string
+  buyerEmail?: string
+  produtorNome?: string
+  produtorEmail?: string
+  eventoNome?: string
+  valor?: number
+  /** 'seat_taken' | 'sold_out' */
+  motivo?: string
+  appUrl?: string
+}
+
+function lateRefundMotivo(m?: string) {
+  return m === 'seat_taken'
+    ? 'o pagamento chegou depois do prazo da reserva e o assento já tinha sido escolhido por outra pessoa'
+    : 'o pagamento chegou depois do prazo da reserva e os ingressos já tinham se esgotado'
+}
+
+function buildAudienceLateRefundBuyer(p: AudienceLateRefundPayload) {
+  const linhas = [
+    p.eventoNome ? infoRow('Evento', escape(p.eventoNome)) : '',
+    typeof p.valor === 'number' ? infoRow('Valor estornado', escape(money(p.valor))) : '',
+  ].filter(Boolean).join('')
+  return {
+    subject: `Estorno do seu pagamento — ${p.eventoNome ?? 'CoreoHub'}`,
+    html: baseLayout({
+      preheader: 'Não conseguimos confirmar seu ingresso e estornamos o valor integral.',
+      title: 'Pagamento estornado',
+      intro: `Olá ${escape(p.buyerName ?? 'comprador(a)')}, ${lateRefundMotivo(p.motivo)}. Por isso não foi possível confirmar seu ingresso e estornamos o valor integral, sem custo.`,
+      contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>`,
+      ctaLabel: 'Comprar novamente',
+      ctaUrl: p.appUrl ?? 'https://app.coreohub.com',
+      footerNote: 'O estorno pode levar alguns dias úteis para aparecer, conforme o meio de pagamento. Em caso de dúvidas, responda este email.',
+    }),
+  }
+}
+
+function buildAudienceLateRefundProducer(p: AudienceLateRefundPayload) {
+  const linhas = [
+    p.eventoNome ? infoRow('Evento', escape(p.eventoNome)) : '',
+    p.buyerName ? infoRow('Comprador', escape(p.buyerName)) : '',
+    p.buyerEmail ? infoRow('Email', escape(p.buyerEmail)) : '',
+    typeof p.valor === 'number' ? infoRow('Valor estornado', escape(money(p.valor))) : '',
+  ].filter(Boolean).join('')
+  return {
+    subject: `Pagamento tardio estornado — ${p.eventoNome ?? 'CoreoHub'}`,
+    html: baseLayout({
+      preheader: 'Um pagamento chegou depois da reserva e foi estornado automaticamente.',
+      title: 'Pagamento tardio estornado',
+      intro: `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, ${lateRefundMotivo(p.motivo)}. Estornamos o valor integral ao comprador e nenhuma venda foi registrada.`,
+      contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>`,
+      footerNote: 'Você está recebendo este email por ser o produtor responsável pelo evento.',
+    }),
+  }
+}
+
 // ─── Templates: workshop_registration_confirmed + workshop_registration_producer
 // Backlog item: faltava implementação. Webhook já disparava, edge function só
 // logava warning. Workshops ja existem como entidade desde Etapa 1 (2026-05-04).
@@ -1561,6 +1617,8 @@ interface SendEmailRequest {
     | 'producer_welcome'
     | 'audience_ticket_confirmed'
     | 'audience_ticket_producer'
+    | 'audience_ticket_late_refund'
+    | 'audience_ticket_late_refund_producer'
     | 'workshop_registration_confirmed'
     | 'workshop_registration_producer'
     | 'workshop_pass_confirmed'
@@ -1722,6 +1780,26 @@ Deno.serve(async (req) => {
         const p = payload as unknown as AudienceProducerPayload
         if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
         const tpl = buildAudienceProducerNotification(p)
+        to = p.produtorEmail
+        subject = tpl.subject
+        html = tpl.html
+        break
+      }
+      case 'audience_ticket_late_refund': {
+        const p = payload as unknown as AudienceLateRefundPayload
+        if (!p.buyerEmail) throw new Error('buyerEmail é obrigatório')
+        const tpl = buildAudienceLateRefundBuyer(p)
+        to = p.buyerEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        replyTo = p.produtorEmail
+        break
+      }
+      case 'audience_ticket_late_refund_producer': {
+        const p = payload as unknown as AudienceLateRefundPayload
+        if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
+        const tpl = buildAudienceLateRefundProducer(p)
         to = p.produtorEmail
         subject = tpl.subject
         html = tpl.html
