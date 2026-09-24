@@ -38,7 +38,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { computeAudienceCart, round2 } from '../_shared/audience-pricing.ts'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
-import { ticketSeatKind, countPcdTickets, type TicketSeatKind } from '../_shared/seat-rules.ts'
+import { ticketSeatKind, countPcdTickets, countCompanionTickets, effectiveTicketKind, type TicketSeatKind } from '../_shared/seat-rules.ts'
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 
@@ -247,10 +247,12 @@ Deno.serve(async (req) => {
       if (!t?.nome) throw new Error('Tipo de ingresso inválido')
       const precoUnit = resolvePreco(t)
       if (precoUnit <= 0) throw new Error(`Preço inválido para "${t.nome}"`)
-      const kind = detectKind(t.nome, t.kind)
+      const seatKind = ticketSeatKind(t)
+      // PCD/acompanhante ficam fora do limite de 1 meia por carrinho (base legal própria).
+      const kind = effectiveTicketKind(detectKind(t.nome, t.kind), seatKind)
       const quantidadeTotal: number | null =
         t.quantidade_total != null && Number(t.quantidade_total) > 0 ? Number(t.quantidade_total) : null
-      resolved.push({ idx, nome: String(t.nome), kind, quantity, precoUnit, quantidadeTotal, seatKind: ticketSeatKind(t) })
+      resolved.push({ idx, nome: String(t.nome), kind, quantity, precoUnit, quantidadeTotal, seatKind })
       totalQty += quantity
       totalBase += precoUnit * quantity
     }
@@ -259,6 +261,7 @@ Deno.serve(async (req) => {
     // ── Assento numerado (Fase 2 Stage 3) ────────────────────────────────────
     const seatMapEnabled = Boolean((event as any).seat_map_enabled)
     const pcdQty = countPcdTickets(resolved)
+    const compQty = countCompanionTickets(resolved)
     const seatIds = Array.isArray(seatIdsRaw) ? seatIdsRaw.filter(s => typeof s === 'string' && s.trim()) : []
     if (seatMapEnabled) {
       if (seatIds.length !== totalQty) {
@@ -275,6 +278,7 @@ Deno.serve(async (req) => {
         p_seat_ids:    seatIds,
         p_pcd_qty:     pcdQty,
         p_require_pcd: true,
+        p_comp_qty:    compQty,
       })
       if (seatRuleErr) {
         console.error('[create-audience-ticket] erro validate_seat_cart:', seatRuleErr.message)
@@ -474,6 +478,7 @@ Deno.serve(async (req) => {
         p_hold_token:   holdToken,
         p_hold_minutes: reservedMinutes,
         p_pcd_qty:      pcdQty,
+        p_comp_qty:     compQty,
       })
       if (seatErr) {
         await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))

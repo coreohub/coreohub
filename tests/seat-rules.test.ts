@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { ticketSeatKind, countPcdTickets } from '../supabase/functions/_shared/seat-rules'
+import { ticketSeatKind, countPcdTickets, countCompanionTickets, effectiveTicketKind } from '../supabase/functions/_shared/seat-rules'
 
 describe('ticketSeatKind', () => {
   it('campo explícito vence o nome', () => {
@@ -18,6 +18,21 @@ describe('ticketSeatKind', () => {
     expect(ticketSeatKind({ nome: 'Meia-entrada' })).toBe('comum')
     expect(ticketSeatKind({ nome: 'Camarote VIP' })).toBe('comum')
     expect(ticketSeatKind(null)).toBe('comum')
+  })
+})
+
+describe('ingresso de acompanhante', () => {
+  it('detecta acompanhante antes de PCD', () => {
+    expect(ticketSeatKind({ nome: 'Acompanhante de PCD' })).toBe('acompanhante')
+    expect(ticketSeatKind({ nome: 'Acompanhante PCD', assento_tipo: 'pcd' })).toBe('pcd')
+    expect(ticketSeatKind({ nome: 'Plateia', assento_tipo: 'acompanhante' })).toBe('acompanhante')
+  })
+  it('conta acompanhantes e exclui PCD/acompanhante do limite de meia', () => {
+    expect(countCompanionTickets([{ seatKind: 'acompanhante', quantity: 1 }, { seatKind: 'pcd', quantity: 1 }])).toBe(1)
+    expect(effectiveTicketKind('meia', 'comum')).toBe('meia')
+    expect(effectiveTicketKind('meia', 'pcd')).toBe('outro')
+    expect(effectiveTicketKind('meia', 'acompanhante')).toBe('outro')
+    expect(effectiveTicketKind('inteira', 'comum')).toBe('inteira')
   })
 })
 

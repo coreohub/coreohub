@@ -38,7 +38,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { computeAudienceCart, round2 } from '../_shared/audience-pricing.ts'
 import { buildCorsHeaders } from '../_shared/cors.ts'
-import { ticketSeatKind } from '../_shared/seat-rules.ts'
+import { ticketSeatKind, effectiveTicketKind } from '../_shared/seat-rules.ts'
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 
@@ -177,7 +177,7 @@ Deno.serve(async (req) => {
     if (!t?.nome) throw new Error('Tipo de ingresso inválido')
     const precoUnit = resolvePreco(t)
     if (precoUnit <= 0) throw new Error(`Preço inválido para "${t.nome}"`)
-    const kind = detectKind(t.nome, t.kind)
+    const kind = effectiveTicketKind(detectKind(t.nome, t.kind), ticketSeatKind(t))
     const quantidadeTotal: number | null =
       t.quantidade_total != null && Number(t.quantidade_total) > 0 ? Number(t.quantidade_total) : null
 
@@ -199,6 +199,7 @@ Deno.serve(async (req) => {
         p_seat_ids:    seatIds,
         p_pcd_qty:     ticketSeatKind(t) === 'pcd' ? quantity : 0,
         p_require_pcd: true,
+        p_comp_qty:    ticketSeatKind(t) === 'acompanhante' ? quantity : 0,
       })
       if (seatRuleErr) {
         console.error('[create-pdv-ticket] erro validate_seat_cart:', seatRuleErr.message)
