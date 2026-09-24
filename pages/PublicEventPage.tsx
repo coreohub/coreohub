@@ -16,6 +16,7 @@ import { PessoasSection, type JudgePublic, type WorkshopTeacherPublic } from '..
 import { resolveAvaliadaLabel } from '../utils/formatoParticipacao';
 import { resolveLote, diffDias, formatDataBRComDia, todayISO, findNextWorkshopLot, type Lote } from '../utils/lotes';
 import { formatPrecoBR } from '../utils/masks';
+import SandboxBanner from '../components/SandboxBanner';
 
 // Fuso do Brasil por UF (sem horário de verão desde 2019). Padrão -03:00.
 const ufUtcOffset = (uf?: string | null): string => {
@@ -160,7 +161,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, info_config,
             programacao_config, ingressos_config, formacoes_config, patrocinadores_config,
             politica_ingressos, audience_sales_enabled, billing_plan, seat_map_enabled,
-            audience_max_per_purchase, audience_max_per_cpf, audience_fee_mode, audience_commission_percent,
+            audience_max_per_purchase, audience_max_per_cpf, audience_fee_mode, audience_commission_percent, payment_sandbox,
             producer_ga4_id, producer_meta_pixel_id
           `)
           .eq(filterCol, idOrSlug)
@@ -838,6 +839,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white">
+      {(event as any).payment_sandbox && <SandboxBanner />}
       {/* Pixels do produtor — Fase 4B. Carrega GA4+Pixel do dono do festival
           em paralelo aos pixels master da CoreoHub. Idempotente (não re-init).
           `onReady` libera o disparo do view_event abaixo. */}
@@ -850,6 +852,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
       {/* Meta tags dinâmicas — React 19 nativo as iça pro <head> (Fase 3 — SEO). */}
       <title>{seoTitle}</title>
       <meta name="description" content={seoDescription} />
+      {(event as any).payment_sandbox && <meta name="robots" content="noindex, nofollow" />}
       <meta property="og:title" content={event.name} />
       <meta property="og:description" content={seoDescription} />
       <meta property="og:image" content={seoImage} />

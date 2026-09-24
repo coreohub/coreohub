@@ -108,7 +108,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // UUID vs slug — bota filter correto. PublicEventPage usa mesma lógica.
     const filterCol = UUID_REGEX.test(slug) ? 'id' : 'slug';
-    const restUrl = `${SUPABASE_URL}/rest/v1/events?select=id,name,slug,description,cover_url,start_date,end_date,event_time,city,state,location,formacoes_config,ingressos_config,audience_sales_enabled&${filterCol}=eq.${encodeURIComponent(slug)}&limit=1`;
+    const restUrl = `${SUPABASE_URL}/rest/v1/events?select=id,name,slug,description,cover_url,start_date,end_date,event_time,city,state,location,formacoes_config,ingressos_config,audience_sales_enabled,payment_sandbox&${filterCol}=eq.${encodeURIComponent(slug)}&limit=1`;
 
     const fetchRes = await fetch(restUrl, {
       headers: {
@@ -139,6 +139,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       formacoes_config: Array<{ name: string; is_active?: boolean }> | null;
       ingressos_config: Array<{ nome?: string; preco?: number | string; lotes?: Array<{ preco?: number | string; data_inicio?: string | null; data_virada?: string | null }> }> | null;
       audience_sales_enabled: boolean | null;
+      payment_sandbox: boolean | null;
     }>;
 
     const ev = events?.[0];
@@ -298,7 +299,7 @@ ${workshops.map((w) => {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(shortDescription)}">
-<meta name="robots" content="${isCheckout ? 'noindex, nofollow' : 'index, follow'}">
+<meta name="robots" content="${isCheckout || ev.payment_sandbox ? 'noindex, nofollow' : 'index, follow'}">
 
 <!-- Open Graph (WhatsApp, Telegram, Facebook, Instagram, LinkedIn) -->
 <meta property="og:title" content="${esc(ev.name)}">

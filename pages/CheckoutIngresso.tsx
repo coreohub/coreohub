@@ -18,6 +18,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { edgeErrorBody, edgeErrorMessage } from '../utils/edgeError';
+import SandboxBanner from '../components/SandboxBanner';
 import {
   Ticket, Loader2, AlertCircle, ArrowLeft, ShieldCheck, User as UserIcon, Mail, Phone, FileText, Minus, Plus,
   Tag, X, Check, Trash2, Armchair, Clock,
@@ -146,7 +147,7 @@ export default function CheckoutIngresso() {
         const filterCol = isUuid ? 'id' : 'slug';
         const { data: ev, error: evErr } = await supabase
           .from('events')
-          .select('id, name, slug, start_date, end_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos, seat_map_enabled')
+          .select('id, name, slug, start_date, end_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos, seat_map_enabled, payment_sandbox')
           .eq(filterCol, idOrSlug)
           .maybeSingle();
         if (evErr || !ev) { setError('Evento não encontrado.'); return; }
@@ -546,6 +547,7 @@ export default function CheckoutIngresso() {
     <div className="min-h-screen bg-[#0b0b0f] text-white">
       {/* Página transacional/pessoal: fora do índice de busca (também via X-Robots-Tag no vercel.json). */}
       <meta name="robots" content="noindex, nofollow" />
+      {(event as any)?.payment_sandbox && <SandboxBanner />}
       {event?.cover_url && (
         <div className="relative h-32 md:h-48 overflow-hidden">
           <img src={event.cover_url} alt="" className="w-full h-full object-cover opacity-30" />

@@ -119,6 +119,7 @@ const Festivais = () => {
           .from('events')
           .select('id, slug, name, description, cover_url, cover_focal_x, cover_focal_y, start_date, end_date, location, city, state, formacoes_config, ingressos_config, audience_sales_enabled, politica_ingressos, edition_year, is_public')
           .eq('is_public', true)
+          .eq('payment_sandbox', false)   // evento de teste (sandbox) nunca aparece na vitrine
           .order('start_date', { ascending: false });
         if (error) throw error;
         // Achado do produtor (2026-07-17): todo evento nasce is_public=true

@@ -28,6 +28,7 @@ Deno.serve(async () => {
       .from('events')
       .select('slug, id, created_at, custom_domain')
       .eq('is_public', true)
+      .eq('payment_sandbox', false)   // evento de teste (sandbox) fora do sitemap
       .order('start_date', { ascending: false });
 
     if (eventsError) {
