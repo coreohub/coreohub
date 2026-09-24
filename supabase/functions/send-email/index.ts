@@ -515,7 +515,7 @@ interface AudienceTicketPayload {
   eventoData?: string
   eventoLocal?: string
   valorPago?: number
-  tickets?: Array<{ tipo: string; url: string }>
+  tickets?: Array<{ tipo: string; url: string; assento?: string | null }>
   appUrl?: string
 }
 
@@ -531,7 +531,10 @@ function buildAudienceTicketConfirmation(p: AudienceTicketPayload) {
   ].filter(Boolean).join('')
 
   const ticketBlocks = tickets.map((t, i) => {
-    const label = isMulti ? `Ingresso ${i + 1} de ${tickets.length} — ${t.tipo}` : t.tipo
+    const seat = t.assento
+      ? (() => { const k = t.assento.lastIndexOf('-'); return k < 0 ? t.assento : `Fileira ${t.assento.slice(0, k)} · Nº ${t.assento.slice(k + 1)}` })()
+      : ''
+    const label = `${isMulti ? `Ingresso ${i + 1} de ${tickets.length} — ` : ''}${t.tipo}${seat ? ` · ${seat}` : ''}`
     return `
       <div style="margin-top:${i === 0 ? 24 : 12}px;padding:18px;border:2px solid ${BRAND_COLOR};border-radius:14px;background:#fff5f8;">
         <p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:${BRAND_COLOR};">${escape(label)}</p>

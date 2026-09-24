@@ -17,6 +17,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import { edgeErrorBody, edgeErrorMessage } from '../utils/edgeError';
 import {
   Ticket, Loader2, AlertCircle, ArrowLeft, ShieldCheck, User as UserIcon, Mail, Phone, FileText, Minus, Plus,
   Tag, X, Check, Trash2, Armchair, Clock,
@@ -375,7 +376,7 @@ export default function CheckoutIngresso() {
     const { data, error: invokeErr } = await supabase.functions.invoke('validate-audience-coupon', {
       body: { event_id: event.id, code, base_value: totalBase },
     });
-    if (invokeErr) return { error: invokeErr.message ?? 'Cupom inválido' };
+    if (invokeErr) return { error: await edgeErrorMessage(invokeErr, 'Cupom inválido') };
     if (data?.error) return { error: data.error };
     if (!data?.code) return { error: 'Cupom inválido' };
     return { discount: Number(data.discount) };
@@ -473,7 +474,14 @@ export default function CheckoutIngresso() {
           ...(seatMapEnabled ? { seat_ids: selectedSeats, hold_token: holdToken ?? undefined } : {}),
         },
       });
-      if (invokeErr) throw new Error(invokeErr.message ?? 'Erro ao gerar pagamento. Tente novamente.');
+      if (invokeErr) {
+        const body = await edgeErrorBody(invokeErr);
+        if (Array.isArray(body?.occupied_seats) && body.occupied_seats.length > 0) {
+          setSelectedSeats(prev => prev.filter(id => !body.occupied_seats.includes(id)));
+          markSeatsOccupied(body.occupied_seats);
+        }
+        throw new Error(await edgeErrorMessage(invokeErr, 'Erro ao gerar pagamento. Tente novamente.'));
+      }
       if (data?.error) {
         // Assento(s) escolhido(s) foram pegos por outro comprador entre a
         // seleção e o clique em pagar — limpa só esses e deixa escolher de novo.
@@ -536,6 +544,8 @@ export default function CheckoutIngresso() {
 
   return (
     <div className="min-h-screen bg-[#0b0b0f] text-white">
+      {/* Página transacional/pessoal: fora do índice de busca (também via X-Robots-Tag no vercel.json). */}
+      <meta name="robots" content="noindex, nofollow" />
       {event?.cover_url && (
         <div className="relative h-32 md:h-48 overflow-hidden">
           <img src={event.cover_url} alt="" className="w-full h-full object-cover opacity-30" />

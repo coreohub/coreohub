@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import { edgeErrorMessage } from '../utils/edgeError';
 import AsaasBadge from '../components/AsaasBadge';
 import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
 import {
@@ -402,7 +403,7 @@ const CheckoutWorkshop: React.FC = () => {
             : {}),
         },
       });
-      if (invokeErr) throw new Error(invokeErr.message ?? 'Erro ao criar inscrição');
+      if (invokeErr) throw new Error(await edgeErrorMessage(invokeErr, 'Erro ao criar inscrição'));
       if (data?.error) throw new Error(data.error);
 
       // GRATUITO: vai direto pro voucher

@@ -3,7 +3,7 @@
  * Acessada por link no email pós-pagamento: /meu-ingresso/<access_token>
  *
  * Tier 1 paid tickets. Reaproveita layout de Credencial.tsx (QR + info).
- * Lookup via RPC `get_audience_ticket_by_token` (security definer, mascara CPF/email).
+ * Lookup via RPC `get_audience_ticket_by_token_v2` (security definer, mascara CPF/email).
  */
 
 import React, { useEffect, useState } from 'react';
@@ -28,8 +28,14 @@ interface Ticket {
   id: string;
   event_id: string;
   event_name: string;
-  event_date: string | null;
+  event_slug: string | null;
+  event_start_date: string | null;
+  event_end_date: string | null;
+  event_time: string | null;
   event_location: string | null;
+  event_city: string | null;
+  event_uf: string | null;
+  seat_id: string | null;
   event_cover_url: string | null;
   ticket_type_nome: string;
   ticket_type_kind: string;
@@ -60,7 +66,7 @@ const MeuIngresso: React.FC = () => {
     let active = true;
     const fetchTicket = async () => {
       const [{ data, error: rpcErr }, sibRes] = await Promise.all([
-        supabase.rpc('get_audience_ticket_by_token', { p_token: token }),
+        supabase.rpc('get_audience_ticket_by_token_v2', { p_token: token }),
         supabase.rpc('get_audience_ticket_siblings', { p_token: token }),
       ]);
       if (!active) return;
@@ -92,7 +98,7 @@ const MeuIngresso: React.FC = () => {
     const interval = isPendente ? 5_000 : 30_000;
     const t = setInterval(async () => {
       // Re-fetch silencioso
-      const { data } = await supabase.rpc('get_audience_ticket_by_token', { p_token: token });
+      const { data } = await supabase.rpc('get_audience_ticket_by_token_v2', { p_token: token });
       const row = Array.isArray(data) ? data[0] : data;
       if (row) setTicket(row as Ticket);
     }, interval);
@@ -186,17 +192,64 @@ const MeuIngresso: React.FC = () => {
 
   // Bug clássico: Date('YYYY-MM-DD') interpreta como UTC e em pt-BR mostra 1 dia atras.
   // Adicionando T12:00:00 forçamos meio-dia local, neutralizando offset de timezone.
-  const eventDate = (() => {
-    if (!ticket.event_date) return null;
-    const d = new Date(ticket.event_date + 'T12:00:00');
+  const fmtDay = (iso: string) => {
+    const d = new Date(iso + 'T12:00:00');
     const wd = new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(d).replace('.', '');
     const cap = wd.charAt(0).toUpperCase() + wd.slice(1);
-    const date = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-    return `${cap}, ${date}`;
+    return `${cap}, ${d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`;
+  };
+  const eventDate = ticket.event_start_date
+    ? (ticket.event_end_date && ticket.event_end_date !== ticket.event_start_date
+        ? `${fmtDay(ticket.event_start_date)} a ${fmtDay(ticket.event_end_date)}`
+        : fmtDay(ticket.event_start_date))
+    : null;
+  const eventTime = ticket.event_time ? ticket.event_time.slice(0, 5) : null;
+  // Endereço completo + link do Maps (busca por texto, sem depender de lat/lng).
+  const fullAddress = [ticket.event_location, [ticket.event_city?.trim(), ticket.event_uf].filter(Boolean).join('/')]
+    .filter(Boolean)
+    .join(' — ');
+  const mapsUrl = fullAddress
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`
+    : null;
+  // Assento "A-1" -> Fileira A · Nº 1
+  const seatLabel = (() => {
+    if (!ticket.seat_id) return null;
+    const i = ticket.seat_id.lastIndexOf('-');
+    if (i < 0) return ticket.seat_id;
+    return `Fileira ${ticket.seat_id.slice(0, i)} · Nº ${ticket.seat_id.slice(i + 1)}`;
   })();
+  // "Adicionar ao calendário": .ics gerado no cliente (sem lat/lng nem fuso próprio;
+  // horário local flutuante, o que é o correto pra evento presencial).
+  const handleAddToCalendar = () => {
+    if (!ticket.event_start_date) return;
+    const day = ticket.event_start_date.replace(/-/g, '');
+    const endDay = (ticket.event_end_date ?? ticket.event_start_date).replace(/-/g, '');
+    const hhmm = eventTime ? eventTime.replace(':', '') + '00' : null;
+    const esc = (v: string) => v.replace(/([,;\\])/g, '\\$1').replace(/\n/g, '\\n');
+    const lines = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//CoreoHub//Ingresso//PT-BR', 'BEGIN:VEVENT',
+      `UID:${ticket.id}@coreohub.com`,
+      `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '')}`,
+      hhmm ? `DTSTART:${day}T${hhmm}` : `DTSTART;VALUE=DATE:${day}`,
+      // Sem horário de término no cadastro: assume 2h de duração; sem horário nenhum, dia inteiro (DTEND omitido).
+      hhmm ? `DTEND:${endDay}T${String(Math.min(23, parseInt(hhmm.slice(0, 2), 10) + 2)).padStart(2, '0')}${hhmm.slice(2)}` : '',
+      `SUMMARY:${esc(ticket.event_name)}`,
+      fullAddress ? `LOCATION:${esc(fullAddress)}` : '',
+      `DESCRIPTION:${esc(`${ticket.ticket_type_nome}${seatLabel ? ' - ' + seatLabel : ''}. Ingresso: ${window.location.href}`)}`,
+      'END:VEVENT', 'END:VCALENDAR',
+    ].filter(Boolean);
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `ingresso-${(ticket.event_slug ?? 'evento')}.ics`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex flex-col print:min-h-0 print:bg-white">
+      {/* Página transacional/pessoal: fora do índice de busca (também via X-Robots-Tag no vercel.json). */}
+      <meta name="robots" content="noindex, nofollow" />
       {/* Header */}
       <div className="px-4 py-3 flex items-center justify-between print:hidden">
         <a
@@ -397,18 +450,43 @@ const MeuIngresso: React.FC = () => {
               {ticket.ticket_type_nome}
             </p>
 
-            <div className="space-y-1 pt-2">
+            <div className="space-y-1.5 pt-2">
               {eventDate && (
-                <div className="flex items-center gap-2 text-[10px] text-slate-600">
-                  <Calendar size={12} className="text-[#ff0068]" />
-                  <span>{eventDate}</span>
+                <div className="flex items-start gap-2 text-[11px] text-slate-600">
+                  <Calendar size={12} className="text-[#ff0068] mt-0.5 shrink-0" />
+                  <span>{eventDate}{eventTime ? ` · ${eventTime}h` : ''}</span>
                 </div>
               )}
-              {ticket.event_location && (
-                <div className="flex items-center gap-2 text-[10px] text-slate-600">
-                  <MapPin size={12} className="text-[#ff0068]" />
-                  <span>{ticket.event_location}</span>
+              {fullAddress && (
+                <div className="flex items-start gap-2 text-[11px] text-slate-600">
+                  <MapPin size={12} className="text-[#ff0068] mt-0.5 shrink-0" />
+                  <span>
+                    {fullAddress}
+                    {mapsUrl && (
+                      <>
+                        {' '}
+                        <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="text-[#ff0068] font-bold underline print:hidden">
+                          Ver no mapa
+                        </a>
+                      </>
+                    )}
+                  </span>
                 </div>
+              )}
+              {seatLabel && (
+                <div className="mt-1 rounded-xl bg-slate-900 text-white px-3 py-2">
+                  <p className="text-[8px] font-black uppercase tracking-[0.3em] text-slate-400">Seu lugar</p>
+                  <p className="text-sm font-black uppercase tracking-tight">{seatLabel}</p>
+                </div>
+              )}
+              {eventDate && (
+                <button
+                  type="button"
+                  onClick={handleAddToCalendar}
+                  className="cursor-pointer mt-1 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-[#ff0068] print:hidden"
+                >
+                  <Calendar size={12} /> Adicionar ao calendário
+                </button>
               )}
             </div>
 

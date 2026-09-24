@@ -80,8 +80,19 @@ const fallbackHtml = (slug: string): string => `<!DOCTYPE html>
 <body><p>Carregando…</p></body>
 </html>`;
 
+// Fuso do Brasil por UF (sem horário de verão desde 2019). Padrão -03:00.
+const ufUtcOffset = (uf?: string | null): string => {
+  const u = (uf ?? '').toUpperCase();
+  if (u === 'AC') return '-05:00';
+  if (['AM', 'RO', 'RR', 'MT', 'MS'].includes(u)) return '-04:00';
+  return '-03:00';
+};
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const slug = String(req.query.slug ?? '').trim();
+  // dest=checkout: rota de compra (/checkout-ingresso/...). O preview do
+  // WhatsApp mostra o evento, mas a página não deve ser indexada.
+  const isCheckout = String(req.query.dest ?? '') === 'checkout';
   if (!slug) {
     res.status(400).send('slug missing');
     return;
@@ -97,7 +108,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // UUID vs slug — bota filter correto. PublicEventPage usa mesma lógica.
     const filterCol = UUID_REGEX.test(slug) ? 'id' : 'slug';
-    const restUrl = `${SUPABASE_URL}/rest/v1/events?select=id,name,slug,description,cover_url,start_date,end_date,city,state,location,formacoes_config&${filterCol}=eq.${encodeURIComponent(slug)}&limit=1`;
+    const restUrl = `${SUPABASE_URL}/rest/v1/events?select=id,name,slug,description,cover_url,start_date,end_date,event_time,city,state,location,formacoes_config,ingressos_config,audience_sales_enabled&${filterCol}=eq.${encodeURIComponent(slug)}&limit=1`;
 
     const fetchRes = await fetch(restUrl, {
       headers: {
@@ -121,10 +132,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       cover_url: string | null;
       start_date: string | null;
       end_date: string | null;
+      event_time: string | null;
       city: string | null;
       state: string | null;
       location: string | null;
       formacoes_config: Array<{ name: string; is_active?: boolean }> | null;
+      ingressos_config: Array<{ nome?: string; preco?: number | string; lotes?: Array<{ preco?: number | string; data_inicio?: string | null; data_virada?: string | null }> }> | null;
+      audience_sales_enabled: boolean | null;
     }>;
 
     const ev = events?.[0];
@@ -194,13 +208,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // bot (Googlebot incluso — ver comentário no topo do arquivo) recebia
     // dado estruturado pra este evento, já que todos são redirecionados
     // pra esta função em vez de rodar o React de verdade.
+    // Ingressos de plateia (só com venda pelo CoreoHub ligada): preço vigente
+    // do lote de hoje, com URL do checkout — Google exige offers.url crawleável.
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const ticketOffers = (ev.audience_sales_enabled && Array.isArray(ev.ingressos_config) ? ev.ingressos_config : [])
+      .map((t, idx) => {
+        const lotes = Array.isArray(t.lotes) ? t.lotes : [];
+        const vigente = lotes.find((l) => (!l.data_inicio || l.data_inicio <= todayIso) && (!l.data_virada || l.data_virada >= todayIso));
+        const price = Number(vigente?.preco ?? t.preco ?? 0);
+        return { nome: t.nome, price, idx };
+      })
+      .filter((t) => t.nome && t.price > 0)
+      .map((t) => ({
+        '@type': 'Offer',
+        name: t.nome,
+        price: t.price.toFixed(2),
+        priceCurrency: 'BRL',
+        availability: 'https://schema.org/InStock',
+        url: `${SITE_URL}/checkout-ingresso/${canonicalSlug}/${t.idx}`,
+      }));
+    const workshopOffers = workshops
+      .filter((w) => w.preco_padrao != null || w.gratis_para_inscritos)
+      .map((w) => ({
+        '@type': 'Offer',
+        name: w.name,
+        price: w.gratis_para_inscritos ? '0' : String(w.preco_padrao ?? '0'),
+        priceCurrency: 'BRL',
+        availability: 'https://schema.org/InStock',
+        url,
+      }));
+    const allOffers = [...ticketOffers, ...workshopOffers];
+
     const eventJsonLd = {
       '@context': 'https://schema.org',
       '@type': 'Event',
       name: ev.name,
       description: fullDescription || shortDescription,
-      image,
-      startDate: ev.start_date ?? undefined,
+      image: [image],
+      // startDate com hora e fuso (Google Events); sem hora cai só na data.
+      startDate: ev.start_date && ev.event_time && /^\d{1,2}:\d{2}/.test(ev.event_time)
+        ? `${ev.start_date}T${ev.event_time.slice(0, 5).padStart(5, '0')}:00${ufUtcOffset(ev.state)}`
+        : (ev.start_date ?? undefined),
       endDate: ev.end_date ?? ev.start_date ?? undefined,
       eventStatus: 'https://schema.org/EventScheduled',
       eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
@@ -209,6 +257,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         name: ev.location || locationParts.join(', ') || 'Brasil',
         address: {
           '@type': 'PostalAddress',
+          streetAddress: ev.location ?? undefined,
           addressLocality: ev.city ?? undefined,
           addressRegion: ev.state ?? undefined,
           addressCountry: 'BR',
@@ -216,20 +265,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
       organizer: { '@type': 'Organization', name: 'CoreoHub', url: 'https://coreohub.com' },
       url,
-      ...(workshops.length > 0
-        ? {
-            offers: workshops
-              .filter((w) => w.preco_padrao != null || w.gratis_para_inscritos)
-              .map((w) => ({
-                '@type': 'Offer',
-                name: w.name,
-                price: w.gratis_para_inscritos ? '0' : String(w.preco_padrao ?? '0'),
-                priceCurrency: 'BRL',
-                availability: 'https://schema.org/InStock',
-                url,
-              })),
-          }
-        : {}),
+      ...(allOffers.length > 0 ? { offers: allOffers } : {}),
     };
 
     const formacoesAtivas = (ev.formacoes_config ?? [])
@@ -262,14 +298,12 @@ ${workshops.map((w) => {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(shortDescription)}">
-<meta name="robots" content="index, follow">
+<meta name="robots" content="${isCheckout ? 'noindex, nofollow' : 'index, follow'}">
 
 <!-- Open Graph (WhatsApp, Telegram, Facebook, Instagram, LinkedIn) -->
 <meta property="og:title" content="${esc(ev.name)}">
 <meta property="og:description" content="${esc(shortDescription)}">
 <meta property="og:image" content="${esc(image)}">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
 <meta property="og:url" content="${esc(url)}">
 <meta property="og:type" content="event">
 <meta property="og:site_name" content="CoreoHub">

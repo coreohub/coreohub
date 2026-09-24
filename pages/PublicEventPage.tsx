@@ -16,6 +16,14 @@ import { PessoasSection, type JudgePublic, type WorkshopTeacherPublic } from '..
 import { resolveAvaliadaLabel } from '../utils/formatoParticipacao';
 import { resolveLote, diffDias, formatDataBRComDia, todayISO, findNextWorkshopLot, type Lote } from '../utils/lotes';
 import { formatPrecoBR } from '../utils/masks';
+
+// Fuso do Brasil por UF (sem horário de verão desde 2019). Padrão -03:00.
+const ufUtcOffset = (uf?: string | null): string => {
+  const u = (uf ?? '').toUpperCase();
+  if (u === 'AC') return '-05:00';
+  if (['AM', 'RO', 'RR', 'MT', 'MS'].includes(u)) return '-04:00';
+  return '-03:00';
+};
 import { isEventOver } from '../utils/eventStatus';
 import AvisoViradaLote from '../components/AvisoViradaLote';
 import EventInfoSection from '../components/EventInfoSection';
@@ -152,7 +160,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, info_config,
             programacao_config, ingressos_config, formacoes_config, patrocinadores_config,
             politica_ingressos, audience_sales_enabled, billing_plan, seat_map_enabled,
-            audience_max_per_purchase, audience_max_per_cpf,
+            audience_max_per_purchase, audience_max_per_cpf, audience_fee_mode, audience_commission_percent,
             producer_ga4_id, producer_meta_pixel_id
           `)
           .eq(filterCol, idOrSlug)
@@ -679,14 +687,34 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
     ],
   };
 
+  // Offers do JSON-LD: um por tipo de ingresso vendável (preço vigente, com URL do checkout).
+  const jsonLdOffers = (event.audience_sales_enabled && Array.isArray(event.ingressos_config)
+    ? (event.ingressos_config as any[]).map((t: any, idx: number) => ({ t, idx })).filter(({ t }) => t.nome)
+    : []
+  ).map(({ t, idx }) => {
+    const r = resolveLote(Array.isArray(t.lotes) ? t.lotes : null, todayISO());
+    const price = r ? Number(r.lote.preco ?? 0) : Number(t.preco ?? 0);
+    return {
+      '@type': 'Offer',
+      name: t.nome,
+      price: price.toFixed(2),
+      priceCurrency: 'BRL',
+      availability: 'https://schema.org/InStock',
+      url: `https://app.coreohub.com/checkout-ingresso/${event.slug ?? event.id}/${idx}`,
+    };
+  }).filter(o => Number(o.price) > 0);
+
   // Schema.org Event pra rich snippets do Google (data, local, organizador).
   const eventJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Event',
     name: event.name,
     description: seoDescription,
-    image: seoImage,
-    startDate: event.start_date,
+    image: [seoImage],
+    // startDate com hora e fuso (Google Events): sem hora cai só na data.
+    startDate: event.start_date && event.event_time && /^\d{1,2}:\d{2}/.test(event.event_time)
+      ? `${event.start_date}T${event.event_time.slice(0, 5).padStart(5, '0')}:00${ufUtcOffset(event.state)}`
+      : event.start_date,
     endDate: event.end_date ?? event.start_date,
     eventStatus: 'https://schema.org/EventScheduled',
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
@@ -695,6 +723,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
       name: event.location || (localCidadeUf || 'Brasil'),
       address: {
         '@type': 'PostalAddress',
+        streetAddress: event.location ?? undefined,
         addressLocality: event.city ?? undefined,
         addressRegion: event.state ?? undefined,
         addressCountry: 'BR',
@@ -702,9 +731,10 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
     },
     organizer: {
       '@type': 'Organization',
-      name: 'CoreoHub',
+      name: publicProducer?.full_name ?? 'CoreoHub',
       url: 'https://coreohub.com',
     },
+    ...(jsonLdOffers.length > 0 ? { offers: jsonLdOffers } : {}),
     url: seoUrl,
   };
 
@@ -1396,9 +1426,21 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                                 <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">{nomeLote}</p>
                               )}
                             </div>
-                            <p className={`font-black text-lg ${soldOut ? 'text-slate-500 line-through' : 'text-[#ff0068]'}`}>
-                              {preco > 0 ? `R$ ${formatPrecoBR(preco)}` : 'Grátis'}
-                            </p>
+                            <div className="text-right">
+                              <p className={`font-black text-lg ${soldOut ? 'text-slate-500 line-through' : 'text-[#ff0068]'}`}>
+                                {preco > 0 ? `R$ ${formatPrecoBR(preco)}` : 'Grátis'}
+                              </p>
+                              {/* Taxa de serviço discriminada desde a oferta (Decreto 13.108/2026):
+                                  mesma conta do checkout (computeAudienceCart, repassar = base + comissão). */}
+                              {preco > 0 && salesEnabled && (event.audience_fee_mode ?? 'repassar') === 'repassar' && (() => {
+                                const taxa = Math.round(preco * Number(event.audience_commission_percent ?? 10)) / 100;
+                                return taxa > 0 ? (
+                                  <p className="text-[10px] font-bold text-slate-400">
+                                    + taxa R$ {formatPrecoBR(taxa)} · total R$ {formatPrecoBR(preco + taxa)}
+                                  </p>
+                                ) : null;
+                              })()}
+                            </div>
                           </div>
                           {t.obs && <p className="text-[10px] text-slate-400">{t.obs}</p>}
 

@@ -189,7 +189,7 @@ async function handleAudienceTicket(opts: {
     .from('audience_tickets')
     .update(updatePayload)
     .eq('payment_id', String(payment.id))
-    .select('id, event_id, ticket_type_nome, ticket_type_kind, preco, buyer_name, buyer_email, access_token, commission_amount, producer_amount, fee_mode')
+    .select('id, event_id, ticket_type_nome, ticket_type_kind, preco, buyer_name, buyer_email, access_token, seat_id, commission_amount, producer_amount, fee_mode')
 
   if (updErr) {
     console.error('[asaas-webhook][audience] erro update:', updErr.message)
@@ -202,7 +202,7 @@ async function handleAudienceTicket(opts: {
       .from('audience_tickets')
       .update(updatePayload)
       .eq('id', groupId)
-      .select('id, event_id, ticket_type_nome, ticket_type_kind, preco, buyer_name, buyer_email, access_token, commission_amount, producer_amount, fee_mode')
+      .select('id, event_id, ticket_type_nome, ticket_type_kind, preco, buyer_name, buyer_email, access_token, seat_id, commission_amount, producer_amount, fee_mode')
     if (fallback?.length) {
       console.log(`[asaas-webhook][audience] fallback group_id atualizou ${fallback.length} ticket(s)`)
     } else {
@@ -229,7 +229,7 @@ async function handleAudienceTicket(opts: {
 
   const { data: eventData } = await supabase
     .from('events')
-    .select('created_by, name, location, event_date, audience_commission_percent, seat_map_enabled')
+    .select('created_by, name, location, city, state, start_date, end_date, event_time, audience_commission_percent, seat_map_enabled')
     .eq('id', eventId)
     .single()
 
@@ -287,7 +287,22 @@ async function handleAudienceTicket(opts: {
     const ticketLinks = tickets.map((t: any) => ({
       tipo: t.ticket_type_nome,
       url: `${appUrl}/meu-ingresso/${t.access_token}`,
+      assento: t.seat_id ?? null,
     }))
+    // events.event_date é coluna legada (sempre NULL) — a data real é start_date/end_date.
+    const fmtDay = (iso: string) => {
+      const d = new Date(iso + 'T12:00:00')
+      const wd = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', timeZone: 'America/Sao_Paulo' }).format(d).replace('.', '')
+      return `${wd.charAt(0).toUpperCase() + wd.slice(1)}, ${d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Sao_Paulo' })}`
+    }
+    const evStart = (eventData as any)?.start_date as string | null
+    const evEnd = (eventData as any)?.end_date as string | null
+    const evTime = (eventData as any)?.event_time as string | null
+    const eventoDataFmt = evStart
+      ? `${evEnd && evEnd !== evStart ? `${fmtDay(evStart)} a ${fmtDay(evEnd)}` : fmtDay(evStart)}${evTime ? ` · ${String(evTime).slice(0, 5)}h` : ''}`
+      : null
+    const cidadeUf = [String((eventData as any)?.city ?? '').trim(), (eventData as any)?.state].filter(Boolean).join('/')
+    const eventoLocalFmt = [eventData?.location, cidadeUf].filter(Boolean).join(' — ') || null
 
     const emailJobs: Promise<void>[] = []
 
@@ -297,10 +312,8 @@ async function handleAudienceTicket(opts: {
         buyerEmail,
         produtorEmail: produtorProfile?.email,  // pra reply-to (comprador responde, produtor recebe)
         eventoNome:  eventData?.name,
-        eventoLocal: eventData?.location,
-        eventoData:  eventData?.event_date
-          ? new Date(eventData.event_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
-          : null,
+        eventoLocal: eventoLocalFmt,
+        eventoData:  eventoDataFmt,
         valorPago:   grossAmount,
         tickets:     ticketLinks,
         appUrl,
