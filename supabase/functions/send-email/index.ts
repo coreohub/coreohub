@@ -864,6 +864,77 @@ function buildAudienceSessionCredit(p: AudienceSessionCreditPayload) {
   }
 }
 
+// ─── Templates: audience_ticket_transferred_from / _to ───────────────────────
+// Transferência gratuita de titularidade (Decreto 13.108/2026, arts. 17-19).
+// _from: titular anterior (confirmação + QR antigo invalidado).
+// _to: novo titular (o ingresso, com o link novo). Sem selo Asaas.
+
+interface AudienceTicketTransferPayload {
+  /** Quem recebe o e-mail. */
+  toEmail?: string
+  recipientName?: string
+  fromName?: string
+  toName?: string
+  eventoNome?: string
+  ingressoNome?: string
+  assento?: string | null
+  /** Data/hora já formatada pelo caller. */
+  sessao?: string
+  produtorEmail?: string
+  /** _to: link /meu-ingresso/<token novo>. */
+  ingressoUrl?: string
+  meia?: boolean
+  assentoEspecial?: boolean
+}
+
+function buildAudienceTicketTransferredFrom(p: AudienceTicketTransferPayload) {
+  const linhas = [
+    p.eventoNome ? infoRow('Evento', escape(p.eventoNome)) : '',
+    p.sessao ? infoRow('Data', escape(p.sessao)) : '',
+    p.ingressoNome ? infoRow('Ingresso', escape(p.assento ? `${p.ingressoNome} — lugar ${p.assento}` : p.ingressoNome)) : '',
+    p.toName ? infoRow('Novo titular', escape(p.toName)) : '',
+  ].filter(Boolean).join('')
+  return {
+    subject: `Ingresso transferido — ${p.eventoNome ?? 'CoreoHub'}`,
+    html: baseLayout({
+      preheader: 'A transferência foi concluída e o seu QR deixou de valer.',
+      title: 'Ingresso transferido',
+      intro: `Olá ${escape(p.recipientName ?? 'titular')}, a transferência do seu ingresso de ${escape(p.eventoNome ?? 'o evento')} foi concluída. O ingresso agora pertence ao novo titular.`,
+      contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>
+        <p style="margin:12px 0 0;font-size:13px;color:#334155;line-height:1.6;"><strong>O QR e o link que você tinha deixaram de funcionar.</strong> Não é possível entrar no evento com eles. A transferência é gratuita e não altera valores pagos. Se você não fez esta transferência, responda este e-mail agora.</p>`,
+      footerNote: 'Transferência de titularidade conforme arts. 17 a 19 do Decreto nº 13.108/2026.',
+      includeAsaasSeal: false,
+    }),
+  }
+}
+
+function buildAudienceTicketTransferredTo(p: AudienceTicketTransferPayload) {
+  const linhas = [
+    p.eventoNome ? infoRow('Evento', escape(p.eventoNome)) : '',
+    p.sessao ? infoRow('Data', escape(p.sessao)) : '',
+    p.ingressoNome ? infoRow('Ingresso', escape(p.assento ? `${p.ingressoNome} — lugar ${p.assento}` : p.ingressoNome)) : '',
+    p.fromName ? infoRow('Transferido por', escape(p.fromName)) : '',
+  ].filter(Boolean).join('')
+  const avisos = [
+    p.meia ? '<li><strong>Meia-entrada:</strong> na portaria você precisa comprovar que tem direito ao benefício. Sem a comprovação, será cobrada a diferença para o valor inteiro.</li>' : '',
+    p.assentoEspecial ? '<li><strong>Assento reservado (PCD, mobilidade reduzida ou acompanhante):</strong> confira as regras do local com o organizador.</li>' : '',
+  ].filter(Boolean).join('')
+  return {
+    subject: `Você recebeu um ingresso — ${p.eventoNome ?? 'CoreoHub'}`,
+    html: baseLayout({
+      preheader: 'Um ingresso foi transferido para você. Abra o link para ver o QR.',
+      title: 'Você recebeu um ingresso',
+      intro: `Olá ${escape(p.recipientName ?? 'titular')}, ${escape(p.fromName ?? 'alguém')} transferiu para você um ingresso de ${escape(p.eventoNome ?? 'o evento')}. O ingresso está no seu nome e o QR novo está na página abaixo.`,
+      contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>${avisos ? `<ul style="margin:12px 0 0;padding-left:18px;font-size:13px;color:#334155;line-height:1.6;">${avisos}</ul>` : ''}
+        <p style="margin:12px 0 0;font-size:13px;color:#334155;line-height:1.6;">Guarde este e-mail: o link é a sua chave de acesso ao ingresso. Não compartilhe.</p>`,
+      ctaLabel: p.ingressoUrl ? 'Ver meu ingresso' : undefined,
+      ctaUrl: p.ingressoUrl,
+      footerNote: 'Transferência de titularidade conforme arts. 17 a 19 do Decreto nº 13.108/2026.',
+      includeAsaasSeal: false,
+    }),
+  }
+}
+
 // ─── Templates: workshop_registration_confirmed + workshop_registration_producer
 // Backlog item: faltava implementação. Webhook já disparava, edge function só
 // logava warning. Workshops ja existem como entidade desde Etapa 1 (2026-05-04).
@@ -1922,6 +1993,8 @@ interface SendEmailRequest {
     | 'audience_ticket_refunded_producer'
     | 'audience_session_changed'
     | 'audience_session_credit'
+    | 'audience_ticket_transferred_from'
+    | 'audience_ticket_transferred_to'
     | 'workshop_registration_confirmed'
     | 'workshop_registration_producer'
     | 'workshop_pass_confirmed'
@@ -2118,6 +2191,20 @@ Deno.serve(async (req) => {
         if (typeof p.refundAmount !== 'number') throw new Error('refundAmount é obrigatório')
         const tpl = buildAudienceRefundBuyer(p)
         to = p.buyerEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        replyTo = p.produtorEmail
+        break
+      }
+      case 'audience_ticket_transferred_from':
+      case 'audience_ticket_transferred_to': {
+        const p = payload as unknown as AudienceTicketTransferPayload
+        if (!p.toEmail) throw new Error('toEmail é obrigatório')
+        const tpl = type === 'audience_ticket_transferred_from'
+          ? buildAudienceTicketTransferredFrom(p)
+          : buildAudienceTicketTransferredTo(p)
+        to = p.toEmail
         subject = tpl.subject
         html = tpl.html
         festivalName = p.eventoNome

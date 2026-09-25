@@ -578,3 +578,11 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/refund-session-orders/deno.json"
 entrypoint = "./functions/refund-session-orders/index.ts"
+
+# Fase 5 item 3: transferência gratuita de titularidade do ingresso (Decreto 13.108, arts. 17-19).
+# verify_jwt=false: autentica pelo access_token do ingresso; rate-limited por IP (10/dia) no código.
+[functions.transfer-ticket]
+enabled = true
+verify_jwt = false
+import_map = "./functions/transfer-ticket/deno.json"
+entrypoint = "./functions/transfer-ticket/index.ts"

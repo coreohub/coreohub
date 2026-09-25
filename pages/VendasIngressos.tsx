@@ -59,6 +59,19 @@ interface Row {
   payment_id?: string | null;
   sessao_escolha?: 'manter' | 'credito' | 'restituicao' | null;
   sessao_escolha_erro?: string | null;
+  transfer_count?: number | null;
+  transferred_at?: string | null;
+  created_at: string;
+}
+
+interface TransferHistoryRow {
+  id: string;
+  from_name: string | null;
+  from_email: string | null;
+  from_cpf_masked: string | null;
+  to_name: string;
+  to_email: string;
+  to_cpf_masked: string;
   created_at: string;
 }
 
@@ -111,6 +124,23 @@ const VendasIngressos: React.FC = () => {
   const [refundError, setRefundError] = useState<string | null>(null);
   // Detail drawer (Stripe Dashboard pattern: row click → side sheet com detalhes)
   const [detailRow, setDetailRow] = useState<Row | null>(null);
+  // Histórico de titulares do ingresso aberto no drawer (Decreto 13.108/2026, art. 17 §1º)
+  const [transferHistory, setTransferHistory] = useState<TransferHistoryRow[] | null>(null);
+  useEffect(() => {
+    if (!detailRow || !(Number(detailRow.transfer_count ?? 0) > 0)) { setTransferHistory(null); return; }
+    let cancel = false;
+    setTransferHistory(null);
+    void supabase
+      .from('audience_ticket_transfers')
+      .select('id, from_name, from_email, from_cpf_masked, to_name, to_email, to_cpf_masked, created_at')
+      .eq('ticket_id', detailRow.id)
+      .order('created_at', { ascending: true })
+      .then(({ data, error: hErr }) => {
+        if (hErr) console.error('[VendasIngressos] histórico de titulares:', hErr.message);
+        if (!cancel) setTransferHistory((data ?? []) as TransferHistoryRow[]);
+      });
+    return () => { cancel = true; };
+  }, [detailRow]);
   // Cortesia (convite gratuito direto, sem cupom — padrão Sympla/Eventbrite)
   const [courtesyOpen, setCourtesyOpen] = useState(false);
   const [courtesyForm, setCourtesyForm] = useState({ name: '', email: '', cpf: '', phone: '' });
@@ -877,6 +907,9 @@ const VendasIngressos: React.FC = () => {
                       <p className="font-bold text-slate-900 dark:text-white hover:text-[#ff0068]">{r.buyer_name}</p>
                       <p className="text-[10px] text-slate-500">{r.buyer_email}</p>
                       <p className="text-[10px] text-slate-400 font-mono">{formatCpf(r.buyer_cpf)}</p>
+                      {Number(r.transfer_count ?? 0) > 0 && (
+                        <p className="mt-0.5 inline-block px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-600 dark:text-violet-300 text-[9px] font-black uppercase tracking-widest">Transferido</p>
+                      )}
                     </Td>
                     <Td>
                       <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{r.ticket_type_nome}</p>
@@ -1586,6 +1619,28 @@ const VendasIngressos: React.FC = () => {
                   }
                 />
               </Section>
+
+              {Number(detailRow.transfer_count ?? 0) > 0 && (
+                <Section title="Histórico de titulares">
+                  {transferHistory === null ? (
+                    <p className="text-[11px] text-slate-500 py-1.5">Carregando histórico...</p>
+                  ) : transferHistory.length === 0 ? (
+                    <p className="text-[11px] text-slate-500 py-1.5">Ingresso transferido {detailRow.transfer_count}x, sem detalhes disponíveis.</p>
+                  ) : (
+                    transferHistory.map(t => (
+                      <div key={t.id} className="px-3 py-1.5 border-b border-slate-100 dark:border-white/5 last:border-b-0">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{new Date(t.created_at).toLocaleString('pt-BR')}</p>
+                        <p className="text-xs text-slate-700 dark:text-slate-300">
+                          {t.from_name ?? '—'} <span className="text-slate-400">({t.from_cpf_masked ?? '—'})</span>
+                          {' → '}
+                          <strong>{t.to_name}</strong> <span className="text-slate-400">({t.to_cpf_masked})</span>
+                        </p>
+                        <p className="text-[10px] text-slate-500 font-mono">{t.to_email}</p>
+                      </div>
+                    ))
+                  )}
+                </Section>
+              )}
 
               {detailRow.refunded_at && (
                 <Section title="Estorno">

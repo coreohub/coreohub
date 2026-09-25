@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
 
     const { data: ticket } = await supabase
       .from('audience_tickets')
-      .select('id, event_id, group_id, status_pagamento, check_in_status, refunded_at, sessao_escolha, buyer_email, buyer_name')
+      .select('id, event_id, group_id, status_pagamento, check_in_status, refunded_at, sessao_escolha, buyer_email, buyer_name, transfer_count')
       .eq('access_token', access_token)
       .maybeSingle()
     if (!ticket) throw new Error('Ingresso não encontrado')
@@ -86,6 +86,11 @@ Deno.serve(async (req) => {
     }
 
     if (ticket.status_pagamento !== 'APROVADO') throw new Error('Este ingresso não está ativo')
+    // Ingresso transferido: quem pagou é o comprador original (o estorno/crédito vale pro PEDIDO inteiro),
+    // então a escolha financeira é dele, pelos ingressos que ainda estão com ele.
+    if (Number(ticket.transfer_count ?? 0) > 0 && option !== 'manter') {
+      throw new Error('Este ingresso foi transferido. O crédito ou a restituição é escolhido por quem fez a compra, pelo ingresso que continua com essa pessoa.')
+    }
     if (ticket.sessao_escolha === 'credito' || ticket.sessao_escolha === 'restituicao') {
       throw new Error('Você já fez a sua escolha para este ingresso')
     }
