@@ -4,6 +4,16 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-25 (continuação 5) — 🚨 Auditoria dos triggers protect_*: brecha de escalada de privilégio CORRIGIDA em produção (migration `20260929b`, commit `e9e075b`) + telas da equipe com sessões irmãs (`4a84950`) — pendente merge em main
+
+Detalhes em `memory/seguranca_triggers_protect_bypass_current_user_2026_09_25.md`.
+
+- **Brecha:** as funções `protect_*` usavam `current_user IN ('postgres', ...)` como bypass pra SQL Editor, mas são SECURITY DEFINER com dono postgres — dentro delas `current_user` é sempre o dono, então o bypass valia pra todo mundo. Provado em rollback: usuário comum virou `is_super_admin=true` (e ganhou `team_event_id`/`permissoes_custom`) por UPDATE direto no próprio perfil; produtor mudou `coupons.used_count`. Aberta em `profiles` desde `20260702_team_event_scoping`. Sem sinal de exploração (1 super admin legítimo, 1 admin, nenhum vínculo de equipe anômalo).
+- **Correção:** bypass agora é `service_role`, super admin ou `auth.uid() IS NULL` (SQL Editor/CLI/cron não têm JWT). `profiles` também protege `is_test_account`. Aplicada em `profiles`, `coupons` e `notifications` (o frontend só grava colunas não protegidas nelas). Reteste em produção: escalada bloqueada, super admin/service_role/SQL direto continuam passando.
+- **Frontend:** `CriarEventoGate`/`ProducerInvite` promovem via `promote-to-organizer` se a role for revertida; botão "Remover" do Asaas em Configurações agora só para admin (colunas `asaas_*` são protegidas; antes zerava `cpf_cnpj`/`pix_key` e deixava o perfil inconsistente).
+- **🚧 NÃO tratado (risco aberto):** `registrations`, `workshop_registrations` e `audience_tickets`. O app depende de UPDATE direto do cliente em `status`/`status_pagamento` (`Checkout.tsx:232`, `Registrations.tsx:596`, Wizard `AGUARDANDO_VIDEO`), então religar a proteção real quebraria fluxos ao vivo. Hoje um inscrito consegue se marcar como `APROVADO`. Precisa migrar essas escritas pra edge functions ANTES de corrigir o bypass nesses triggers. Além disso o trigger `protect_audience_tickets_columns_trigger` (criado em 20260610) não existe mais no banco; causa desconhecida.
+- **Telas da equipe:** Registrations, Credenciais, Avisos, Cupons e Certificados agora listam as sessões irmãs (mesmo helper de `VendasIngressos`); validado no sandbox com operador vinculado à sessão 2 (5/5 telas).
+
 ### 2026-09-25 (continuação 4) — Plano C: equipe (operadores) vale para todas as sessões do mesmo espetáculo ✅ DEV (commit `bb8d6c8`); migration e 3 edge functions JÁ EM PRODUÇÃO — 🚧 pendente merge em main
 
 Detalhes em `memory/plano_c_equipe_por_grupo_de_sessoes_shipado_2026_09_25.md`.
