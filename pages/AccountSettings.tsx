@@ -1385,6 +1385,20 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
     return () => { cancelled = true; };
   }, [activeEventId]);
 
+  // Evento com workshops (ex: camp) também vende algo ao público e precisa das
+  // "Informações e regras" mesmo sem ingresso de plateia.
+  const [hasWorkshops, setHasWorkshops] = useState(false);
+  useEffect(() => {
+    if (!activeEventId) { setHasWorkshops(false); return; }
+    let cancelled = false;
+    (async () => {
+      const { count, error } = await supabase.from('workshops').select('id', { count: 'exact', head: true }).eq('event_id', activeEventId);
+      if (error) console.error('[AccountSettings] checar workshops do evento:', error);
+      if (!cancelled) setHasWorkshops((count ?? 0) > 0);
+    })();
+    return () => { cancelled = true; };
+  }, [activeEventId]);
+
   const activeEventName = pickerEvents.find(e => e.id === activeEventId)?.name ?? '';
 
   const handleDeleteEvent = async () => {
@@ -2928,9 +2942,10 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             </div>
 
             {/* Informações e regras (seções fixas + FAQ) — seção pública no fim da vitrine */}
-            {/* Só pra evento com ingresso (Espetáculo ou venda interna/externa); quem já
-                tem conteúdo salvo continua vendo, pra não perder acesso ao que escreveu. */}
-            {(isEspetaculo || politicaIngressos === 'INTERNO' || politicaIngressos === 'EXTERNO' || hasInfoContent(infoConfig)) && (
+            {/* Só pra evento que vende ao público (Espetáculo, ingresso interno/externo ou
+                workshops); quem já tem conteúdo salvo continua vendo, pra não perder
+                acesso ao que escreveu. */}
+            {(isEspetaculo || politicaIngressos === 'INTERNO' || politicaIngressos === 'EXTERNO' || hasWorkshops || hasInfoContent(infoConfig)) && (
               <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
                 <EventInfoEditor value={infoConfig} onChange={setInfoConfig} inputClass={input} labelClass={label} />
               </div>
