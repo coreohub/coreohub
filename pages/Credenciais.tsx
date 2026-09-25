@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import EventPickerSheet from '../components/EventPickerSheet';
 import PageHeader from '../components/PageHeader';
-import { supabase } from '../services/supabase';
+import { supabase, fetchMyTeamEventIds, ownedOrTeamEventsFilter } from '../services/supabase';
 import { resolveEstudio } from '../utils/formatters';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
 import { resolveAvaliadaLabel } from '../utils/formatoParticipacao';
@@ -68,10 +68,11 @@ const Credenciais: React.FC = () => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      const teamEventIds = await fetchMyTeamEventIds();
       const { data } = await supabase
         .from('events')
         .select('id,name,edition_year,is_demo,created_at')
-        .eq('created_by', user.id)
+        .or(ownedOrTeamEventsFilter(user.id, teamEventIds))
         .order('created_at', { ascending: false });
       if (data && data.length > 0) {
         setEvents(data as EventOption[]);

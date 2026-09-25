@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { supabase } from '../services/supabase';
+import { supabase, fetchMyTeamEventIds, ownedOrTeamEventsFilter } from '../services/supabase';
 import {
   Megaphone, Plus, Trash2, Pencil, Power, X, AlertCircle, Loader2, Calendar,
 } from 'lucide-react';
@@ -52,10 +52,11 @@ const Avisos: React.FC = () => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      const teamEventIds = await fetchMyTeamEventIds();
       const { data } = await supabase
         .from('events')
         .select('id, name')
-        .eq('created_by', user.id)
+        .or(ownedOrTeamEventsFilter(user.id, teamEventIds))
         .order('created_at', { ascending: false });
       if (data && data.length > 0) {
         setEvents(data);
