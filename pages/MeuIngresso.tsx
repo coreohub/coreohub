@@ -158,6 +158,18 @@ const MeuIngresso: React.FC = () => {
     window.open(waUrl, '_blank', 'noopener,noreferrer');
   };
 
+  // Hooks SEMPRE antes dos return antecipados (loading/erro): mudar a ordem de hooks entre
+  // renders derruba a página com "Rendered more hooks than during the previous render".
+  // Tipo do assento (etiqueta PCD/acompanhante).
+  const [seatTipo, setSeatTipo] = useState<SeatTipo>('comum');
+  useEffect(() => {
+    if (!ticket?.event_id || !ticket.seat_id) { setSeatTipo('comum'); return; }
+    let cancel = false;
+    void fetchSeatTipo(ticket.event_id, ticket.seat_id).then(t => { if (!cancel) setSeatTipo(t); });
+    return () => { cancel = true; };
+  }, [ticket?.event_id, ticket?.seat_id]);
+  const seatTipoLabel = SEAT_TIPO_LABEL[seatTipo];
+
   if (loading) {
     return (
       <div role="status" aria-live="polite" aria-label="Carregando ingresso" className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-950">
@@ -213,16 +225,8 @@ const MeuIngresso: React.FC = () => {
   const mapsUrl = fullAddress
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`
     : null;
-  // Assento "A-1" -> Fileira A · Nº 1
-  const [seatTipo, setSeatTipo] = useState<SeatTipo>('comum');
-  useEffect(() => {
-    if (!ticket?.event_id || !ticket.seat_id) { setSeatTipo('comum'); return; }
-    let cancel = false;
-    void fetchSeatTipo(ticket.event_id, ticket.seat_id).then(t => { if (!cancel) setSeatTipo(t); });
-    return () => { cancel = true; };
-  }, [ticket?.event_id, ticket?.seat_id]);
-  const seatTipoLabel = SEAT_TIPO_LABEL[seatTipo];
 
+  // Assento "A-1" -> Fileira A · Nº 1
   const seatLabel = (() => {
     if (!ticket.seat_id) return null;
     const i = ticket.seat_id.lastIndexOf('-');
