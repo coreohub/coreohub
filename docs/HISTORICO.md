@@ -4,6 +4,17 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-25 (continuação 6) — 🔒 Proteção real de registrations/workshop_registrations/audience_tickets + edge function `registration-status` ✅ EM PRODUÇÃO (main 9427906 via cherry-pick; migration `20260929c` aplicada)
+
+Detalhes em `memory/seguranca_triggers_protect_bypass_current_user_2026_09_25.md`.
+
+- **Fecha o risco aberto da entrada anterior:** o cliente gravava `status`/`status_pagamento` direto (aprovação gratuita em `Checkout.tsx`/Wizard, `AGUARDANDO_VIDEO` da seletiva, aprovar/desclassificar em `Registrations.tsx`), então o bypass dos triggers não podia ser corrigido sem quebrar esses fluxos. Agora todos passam pela edge function `registration-status` (JWT; ações `approve_free`, `set_awaiting_video`, `producer_approve`, `producer_disqualify`).
+- **`approve_free`** só aprova quando a inscrição é comprovadamente gratuita (`_shared/registration-free.ts`: evento governamental, ou formação/lotes/faixas todos a R$0, sem `mod_fee`); caso contrário 409 e a inscrição segue o fluxo normal (`create-payment-asaas` já aprova sozinha em valor 0). Conferido só em leitura: o Extreme Festival (Will Nunes, evento gratuito) tem todas as formações a R$0, então a aprovação automática segue funcionando. 11 testes novos (149 no total).
+- **Migration `20260929c`:** bypass = service_role, super admin ou `auth.uid() IS NULL` nos 3 triggers; trigger de `audience_tickets` recriado (não existia mais no banco). Aplicada DEPOIS do frontend novo estar no ar (bundle conferido na Vercel).
+- **Validação em produção (rollback):** inscrito e produtor não conseguem aprovar nem mexer em `valor_pago`/`charged_amount`/`refunded_at` por UPDATE direto; nome da coreografia (coluna livre) edita; service_role e SQL Editor passam; ticket: status/preço/estorno protegidos e check-in livre. Sandbox: função 9/9. Baseline de produção idêntico (49/21/125/0/0).
+- **Como subiu:** o `dev` tinha 4 commits de outras sessões não aprovados (tela cheia da taxa de plano, editor de Informações e regras); só os 3 commits de código foram para `main` por cherry-pick em worktree (dev segue com os originais + esses 4).
+- **Atenção pós-deploy:** abas com o bundle antigo em cache (PWA) ainda gravam status direto e a gravação é revertida em silêncio até o prompt de "Nova versão" ser aceito; efeito prático pequeno (inscrição gratuita fica PENDENTE e o pagamento a aprova; aprovação manual do produtor precisa recarregar a página).
+
 ### 2026-09-25 (continuação 5) — 🚨 Auditoria dos triggers protect_*: brecha de escalada de privilégio CORRIGIDA em produção (migration `20260929b`, commit `e9e075b`) + telas da equipe com sessões irmãs (`4a84950`) — pendente merge em main
 
 Detalhes em `memory/seguranca_triggers_protect_bypass_current_user_2026_09_25.md`.
