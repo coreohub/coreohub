@@ -1901,14 +1901,22 @@ Deno.serve(async (req) => {
       }
       const { data: ev } = await supabase
         .from('events')
-        .select('billing_plan_asaas_payment_id')
+        .select('billing_plan_asaas_payment_id, billing_plan_fixed_fee_paid_at')
         .eq('id', planFeeEventId)
         .maybeSingle()
 
-      // Idempotência: retry de webhook não reprocessa o mesmo payment_id.
+      // Idempotência: taxa já confirmada → retry de webhook não reprocessa.
+      if (ev?.billing_plan_fixed_fee_paid_at) {
+        console.log(`[asaas-webhook] plan_fee já confirmado (event=${planFeeEventId}) — ignorando retry/segundo pagamento payment=${payment.id}.`)
+        return ok({ status: 'noop', reason: 'already_confirmed', kind: refType })
+      }
+      // O evento vem do externalReference (PLANFEE:<event>:<plano>), não do id
+      // da fatura salva: produtor pode ter 2 links válidos pro mesmo evento
+      // (fatura reaberta/refeita, link antigo já compartilhado) e pagar o que
+      // não é o "atual" NÃO pode deixar o dinheiro entrar sem liberar o plano
+      // (caso real Lorrayne, 2026-09-25). Só loga a divergência.
       if (ev?.billing_plan_asaas_payment_id !== String(payment.id)) {
-        console.log(`[asaas-webhook] plan_fee payment_id não bate com o pendente salvo — ignorando (possível retry antigo).`)
-        return ok({ status: 'noop', reason: 'payment_id_mismatch', kind: refType })
+        console.warn(`[asaas-webhook] plan_fee payment_id (${payment.id}) difere do salvo (${ev?.billing_plan_asaas_payment_id}) — confirmando pelo externalReference (event=${planFeeEventId}).`)
       }
 
       const { error: planErr } = await supabase

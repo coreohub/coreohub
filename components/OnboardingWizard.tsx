@@ -257,11 +257,13 @@ const OnboardingWizard: React.FC = () => {
       setCreatedEvent({ id: ev.id, slug: ev.slug ?? slug });
       setStep(3);
 
-      // billing_plan NÃO entra no payload de createEvent — evento sempre
-      // nasce em Começo (default do banco). Se o plano escolhido for outro,
+      // billing_plan NÃO entra no payload de createEvent (a coluna é protegida
+      // — produtor não escreve). Se o plano escolhido for outro que Começo,
       // dispara a cobrança do componente fixo AGORA (adiantado, não no
-      // fechamento — docs/pricing-model-spec.md). Só o webhook promove o
-      // evento pro plano pago, depois de confirmado.
+      // fechamento — docs/pricing-model-spec.md). A própria edge function
+      // grava o plano no evento (service role) junto com a fatura de 7 dias:
+      // o evento já vale como Essencial/Escala, com a taxa pendente; passado o
+      // prazo o painel trava (PlanFeeGateModal). Só o webhook marca como paga.
       if (selectedPlan !== 'comeco') {
         try {
           const { data: feeData, error: fnError } = await supabase.functions.invoke('create-plan-fixed-fee-payment', {

@@ -1,46 +1,49 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Wallet, Receipt, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Receipt, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
 interface PendingPlanFeeEvent {
   id: string;
   name: string;
   billing_plan: 'essencial' | 'escala';
-  billing_plan_asaas_payment_id: string | null;
+  /** Fim da tolerância pra pagar (events.billing_plan_fee_due_at). */
+  lockAt: number;
 }
 
 const PLAN_FIXED_FEE: Record<string, number> = { essencial: 250, escala: 1490 };
 const PLAN_LABEL: Record<string, string> = { essencial: 'Essencial', escala: 'Escala' };
-
-function seenKey(eventId: string) {
-  return `coreohub_plan_fee_modal_seen_${eventId}`;
-}
+/** Mesma tolerância de create-plan-fixed-fee-payment (GRACE_DAYS). Só é usada
+ *  como fallback pra evento pendente sem billing_plan_fee_due_at. */
+const GRACE_DAYS = 7;
+/** Reconsulta a cada N ms pra destravar sozinho quando o webhook confirmar. */
+const POLL_MS = 6000;
 
 interface Props {
   producerId: string;
   /** true quando o super admin está "Ver como" esse produtor. O gate
    *  continua aparecendo (pedido explícito 2026-09-20, pra inspeção/teste),
-   *  mas ganha um 3º caminho — "Fechar" — que só existe nesse contexto:
+   *  mas ganha um caminho — "Fechar" — que só existe nesse contexto:
    *  admin não deveria ser forçado a tomar (ou fingir que tomou) uma decisão
    *  financeira em nome de outra pessoa só pra conseguir sair da tela. */
   isImpersonating?: boolean;
 }
 
 /**
- * Gate obrigatório (sem X, sem "lembrar depois") pra taxa fixa de plano
- * (Essencial R$250 / Escala R$1.490) não paga — decisão de produto fechada
- * 2026-09-20. Aparece 1x por sessão de login (sessionStorage por evento)
- * quando o produtor tem evento real com billing_plan essencial/escala,
- * billing_plan_fixed_fee_paid_at ainda NULL, e o plano foi setado há mais
- * de 1h (billing_plan_set_at — exclui quem está no meio do fluxo normal de
- * pagamento na criação do evento, que ainda não teve tempo de confirmar via
- * webhook).
+ * Trava do painel quando a taxa fixa do plano (Essencial R$250 / Escala
+ * R$1.490) não foi paga dentro da tolerância — decisão de produto 2026-09-25.
  *
- * 2 caminhos, sem 3ª opção: "Pagar agora" abre a fatura Asaas existente
- * (billing_plan_asaas_payment_id); "Descontar do meu saldo" desconta na
- * hora do saldo já disponível na subconta via transferência interna
- * (deduct-plan-fee-now) — sem esperar D+7.
+ * O evento nasce já no plano escolhido, com a taxa pendente
+ * (billing_plan_fixed_fee_paid_at NULL) e 7 dias pra configurar tudo
+ * (billing_plan_fee_due_at). Só DEPOIS desse prazo este modal aparece — sem X,
+ * sem "lembrar depois", sem marcar como visto na sessão: continua travando o
+ * painel até o webhook confirmar o pagamento. Um caminho só: "Pagar agora".
+ *
+ * "Pagar agora" chama create-plan-fixed-fee-payment, que é idempotente: se a
+ * fatura ainda está em aberto devolve a mesma; se venceu (boleto cancelado no
+ * vencimento) apaga e gera outra na hora — o link nunca fica morto. A opção
+ * "Descontar do meu saldo" (deduct-plan-fee-now) saiu da UI: dependia de
+ * aprovação manual no app da Asaas e não era confiável.
  *
  * createPortal pra escapar do stacking context de <main z-10> do
  * PrivateLayout (lição já documentada no projeto — z-index direto não
@@ -50,92 +53,100 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
   const [pendingEvents, setPendingEvents] = useState<PendingPlanFeeEvent[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-  const [resultMsg, setResultMsg] = useState<{ kind: 'ok' | 'pending' | 'err'; text: string } | null>(null);
+  const [waitingPayment, setWaitingPayment] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Eventos que o admin fechou via "Ver como" — a reconsulta periódica não
+  // pode trazê-los de volta na mesma sessão.
+  const adminDismissedRef = useRef<Set<string>>(new Set());
 
+  const fetchPending = useCallback(async (): Promise<PendingPlanFeeEvent[] | null> => {
+    const { data, error } = await supabase
+      .from('events')
+      .select('id, name, billing_plan, billing_plan_set_at, billing_plan_fee_due_at')
+      .eq('created_by', producerId)
+      .eq('is_demo', false)
+      .in('billing_plan', ['essencial', 'escala'])
+      .is('billing_plan_fixed_fee_paid_at', null);
+    if (error) {
+      console.error('[PlanFeeGateModal] erro ao consultar eventos pendentes:', error);
+      return null;
+    }
+    const now = Date.now();
+    return (data ?? [])
+      .map((ev: any) => {
+        const due = ev.billing_plan_fee_due_at
+          ? new Date(ev.billing_plan_fee_due_at).getTime()
+          : ev.billing_plan_set_at
+          ? new Date(ev.billing_plan_set_at).getTime() + GRACE_DAYS * 86_400_000
+          : Number.POSITIVE_INFINITY; // sem nenhuma data: nunca trava por engano
+        return { id: ev.id, name: ev.name, billing_plan: ev.billing_plan, lockAt: due } as PendingPlanFeeEvent;
+      })
+      .filter(ev => ev.lockAt <= now)
+      .sort((a, b) => a.lockAt - b.lockAt);
+  }, [producerId]);
+
+  // Carga inicial + reconsulta periódica: quando o webhook grava
+  // billing_plan_fixed_fee_paid_at o evento some da lista e a tela destrava
+  // sozinha, sem o produtor precisar recarregar.
   useEffect(() => {
     if (!producerId) { setLoaded(true); return; }
     let cancelled = false;
-    (async () => {
-      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-      const { data, error } = await supabase
-        .from('events')
-        .select('id, name, billing_plan, billing_plan_asaas_payment_id')
-        .eq('created_by', producerId)
-        .eq('is_demo', false)
-        .in('billing_plan', ['essencial', 'escala'])
-        .is('billing_plan_fixed_fee_paid_at', null)
-        .lt('billing_plan_set_at', oneHourAgo)
-        // Sem ordenação explícita, Postgres não garante ordem estável —
-        // produtor com 2+ eventos pendentes pode ver primeiro o que ainda
-        // nem tem fatura gerada (achado real 2026-09-20). Prioriza quem já
-        // tem fatura (billing_plan_asaas_payment_id preenchido) — é o único
-        // caminho acionável com os 2 botões de imediato.
-        .order('billing_plan_asaas_payment_id', { ascending: true, nullsFirst: false })
-        .order('billing_plan_set_at', { ascending: true });
+    const run = async () => {
+      const list = await fetchPending();
       if (cancelled) return;
-      if (error) {
-        console.error('[PlanFeeGateModal] erro ao consultar eventos pendentes:', error);
-        setLoaded(true);
-        return;
-      }
-      const unseen = (data ?? []).filter((ev: any) => {
-        try { return sessionStorage.getItem(seenKey(ev.id)) !== '1'; } catch { return true; }
-      }) as PendingPlanFeeEvent[];
-      setPendingEvents(unseen);
+      if (list) setPendingEvents(list.filter(ev => !adminDismissedRef.current.has(ev.id)));
       setLoaded(true);
-    })();
-    return () => { cancelled = true; };
-  }, [producerId]);
+    };
+    run();
+    const t = setInterval(run, POLL_MS);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [producerId, fetchPending]);
 
-  const markSeenAndAdvance = useCallback((eventId: string) => {
-    try { sessionStorage.setItem(seenKey(eventId), '1'); } catch { /* storage bloqueado/privado — segue sem persistir */ }
-    setPendingEvents(prev => prev.filter(ev => ev.id !== eventId));
-    setResultMsg(null);
-  }, []);
-
-  // Fecha SEM marcar como visto — só existe durante impersonate (ver Props).
-  // Reabre normalmente da próxima vez (recarregar a página, ou o produtor
-  // de verdade logando), porque não escreve em sessionStorage. Não é uma
-  // 3ª opção pro produtor decidir por si — é só a saída do admin inspecionando.
+  // Fecha SEM resolver nada — só existe durante impersonate (ver Props).
+  // Reabre normalmente ao recarregar, porque não persiste nada.
   const handleAdminDismiss = useCallback(() => {
-    setPendingEvents(prev => prev.slice(1));
-    setResultMsg(null);
+    setPendingEvents(prev => {
+      if (prev[0]) adminDismissedRef.current.add(prev[0].id);
+      return prev.slice(1);
+    });
+    setErrorMsg(null);
+    setWaitingPayment(false);
   }, []);
 
   const current = pendingEvents[0];
 
-  const handlePayInvoice = () => {
-    if (!current?.billing_plan_asaas_payment_id) return;
-    // Mesmo padrão de construção de link já usado em pages/Registrations.tsx
-    // — invoice do Asaas é sempre https://www.asaas.com/i/<id sem prefixo pay_>.
-    const url = `https://www.asaas.com/i/${current.billing_plan_asaas_payment_id.replace(/^pay_/, '')}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
-    markSeenAndAdvance(current.id);
-  };
-
-  const handleDeductFromBalance = async () => {
+  const handlePayNow = async () => {
     if (!current) return;
     setActionLoading(true);
-    setResultMsg(null);
+    setErrorMsg(null);
+    // Abre a aba ANTES do await: popup aberto depois de uma chamada assíncrona
+    // costuma ser bloqueado pelo navegador (perde o "gesto do usuário").
+    const win = window.open('', '_blank');
     try {
-      const { data, error } = await supabase.functions.invoke('deduct-plan-fee-now', {
-        body: { event_id: current.id },
+      const { data, error } = await supabase.functions.invoke('create-plan-fixed-fee-payment', {
+        body: { event_id: current.id, plano: current.billing_plan },
       });
-      if (error || data?.status === 'error') {
-        setResultMsg({ kind: 'err', text: data?.message ?? error?.message ?? 'Não foi possível descontar agora.' });
-        return;
+      if (error || data?.error || !data?.invoice_url) {
+        // A edge devolve o motivo real no corpo (status 400 + { error }); o
+        // supabase-js só expõe uma frase genérica em inglês em error.message.
+        let serverMsg: string | undefined = data?.error;
+        if (!serverMsg && (error as any)?.context?.json) {
+          try { serverMsg = (await (error as any).context.json())?.error; } catch { /* corpo não-JSON */ }
+        }
+        throw new Error(serverMsg ?? 'Não foi possível abrir a fatura agora. Tente de novo em instantes ou fale com o suporte.');
       }
-      const eventId = current.id;
-      if (data?.confirmed) {
-        setResultMsg({ kind: 'ok', text: data?.message ?? 'Taxa descontada com sucesso.' });
-      } else if (data?.pending) {
-        setResultMsg({ kind: 'pending', text: data?.message ?? 'Transferência criada — aguardando aprovação no app da Asaas.' });
+      if (win) {
+        win.opener = null;
+        win.location.href = data.invoice_url;
       } else {
-        setResultMsg({ kind: 'ok', text: data?.message ?? 'Tudo certo.' });
+        window.location.href = data.invoice_url;
       }
-      setTimeout(() => markSeenAndAdvance(eventId), 2200);
+      setWaitingPayment(true);
     } catch (e: any) {
-      setResultMsg({ kind: 'err', text: e?.message ?? 'Erro inesperado ao processar o desconto.' });
+      win?.close();
+      setErrorMsg(e?.message && !/Edge Function/i.test(e.message)
+        ? e.message
+        : 'Não foi possível abrir a fatura agora. Tente de novo em instantes ou fale com o suporte.');
     } finally {
       setActionLoading(false);
     }
@@ -145,6 +156,9 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
 
   const valor = PLAN_FIXED_FEE[current.billing_plan];
   const planoLabel = PLAN_LABEL[current.billing_plan];
+  const venceuEm = new Date(current.lockAt).toLocaleDateString('pt-BR', {
+    weekday: 'short', day: '2-digit', month: 'long', year: 'numeric',
+  });
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -162,55 +176,41 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
         </div>
 
         <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          O evento <strong className="text-slate-900 dark:text-white">{current.name}</strong> está no plano{' '}
-          <strong>{planoLabel}</strong>, mas a taxa única de ativação (<strong>R$ {valor.toFixed(2)}</strong>) ainda
-          não foi confirmada. Escolha como quitar agora:
+          O prazo pra pagar a taxa única de ativação (<strong>R$ {valor.toFixed(2)}</strong>) do evento{' '}
+          <strong className="text-slate-900 dark:text-white">{current.name}</strong> no plano{' '}
+          <strong>{planoLabel}</strong> venceu em <strong>{venceuEm}</strong>. O painel volta ao normal
+          assim que o pagamento for confirmado.
         </p>
 
-        {resultMsg && (
-          <div
-            className={`flex items-start gap-2 p-3 rounded-xl text-sm ${
-              resultMsg.kind === 'ok'
-                ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                : resultMsg.kind === 'pending'
-                ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300'
-                : 'bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300'
-            }`}
-            role="status"
-          >
-            {resultMsg.kind === 'err' ? (
-              <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
-            ) : (
-              <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
-            )}
-            <span>{resultMsg.text}</span>
+        {errorMsg && (
+          <div className="flex items-start gap-2 p-3 rounded-xl text-sm bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300" role="alert">
+            <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+            <span>{errorMsg}</span>
           </div>
         )}
 
-        <div className="space-y-2.5">
-          <button
-            onClick={handlePayInvoice}
-            disabled={actionLoading || !current.billing_plan_asaas_payment_id}
-            className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#ff0068] hover:bg-[#e0005c] disabled:bg-slate-200 dark:disabled:bg-white/10 disabled:text-slate-400 text-white rounded-xl font-black text-sm uppercase tracking-widest transition-colors"
-          >
-            <Receipt size={16} />
-            Pagar agora (fatura)
-          </button>
-          <button
-            onClick={handleDeductFromBalance}
-            disabled={actionLoading}
-            className="w-full flex items-center justify-center gap-2 py-3.5 bg-slate-900 hover:bg-slate-800 dark:bg-white/10 dark:hover:bg-white/15 disabled:opacity-60 text-white rounded-xl font-black text-sm uppercase tracking-widest transition-colors"
-          >
-            {actionLoading ? <Loader2 size={16} className="animate-spin" /> : <Wallet size={16} />}
-            Descontar do meu saldo
-          </button>
-        </div>
-
-        {!current.billing_plan_asaas_payment_id && (
-          <p className="text-xs text-slate-400">
-            Fatura ainda não gerada pra este evento — use "Descontar do meu saldo" ou fale com o suporte.
-          </p>
+        {waitingPayment && !errorMsg && (
+          <div className="flex items-start gap-2 p-3 rounded-xl text-sm bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300" role="status">
+            <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
+            <span>
+              Fatura aberta em outra aba. Depois de pagar, esta tela libera sozinha em alguns instantes
+              (Pix é quase imediato; boleto pode levar até 3 dias úteis).
+            </span>
+          </div>
         )}
+
+        <button
+          onClick={handlePayNow}
+          disabled={actionLoading}
+          className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#ff0068] hover:bg-[#e0005c] disabled:bg-slate-200 dark:disabled:bg-white/10 disabled:text-slate-400 text-white rounded-xl font-black text-sm uppercase tracking-widest transition-colors"
+        >
+          {actionLoading ? <Loader2 size={16} className="animate-spin" /> : <Receipt size={16} />}
+          Pagar agora
+        </button>
+
+        <p className="text-xs text-slate-400 text-center">
+          Dúvida sobre a cobrança? Fale com o suporte da CoreoHub.
+        </p>
 
         {isImpersonating && (
           <button

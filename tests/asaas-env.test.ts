@@ -90,7 +90,7 @@ describe('webhook — ambiente pelo token', () => {
 // ENCOLHER (ao migrar uma function, remova-a daqui).
 const LEGACY_DIRECT_READERS = new Set([
   'asaas-webhook', 'cancel-aggregate-payment', 'check-plan-fee-status', 'check-producer-kyc',
-  'close-event-billing-settlement', 'create-aggregate-payment-asaas', 'create-payment-asaas', 'create-plan-fixed-fee-payment',
+  'close-event-billing-settlement', 'create-aggregate-payment-asaas', 'create-payment-asaas',
   'create-setup-fee-payment', 'create-video-selection-payment', 'create-workshop-pass-registration',
   'create-workshop-registration', 'daily-release-funds', 'deduct-plan-fee-now', 'disable-asaas-notifications',
   'expire-pending-payments', 'get-producer-asaas-balance', 'manual-transfer-now', 'process-video-refund',
