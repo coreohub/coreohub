@@ -15,6 +15,7 @@ interface Choice {
   sessao_escolha_erro: string | null;
   credito_codigo: string | null;
   credito_valor: number | null;
+  credito_saldo: number | null;
   credito_valido_ate: string | null;
   pode_credito: boolean;
 }
@@ -85,7 +86,7 @@ const SessionChoicePanel: React.FC<Props> = ({ token, sessaoStatus, statusPagame
             <Copy size={12} /> {copied ? 'Copiado' : 'Copiar'}
           </button>
         </div>
-        <p className="text-xs">Valor: <strong>{brl(choice.credito_valor)}</strong>{choice.credito_valido_ate && <> · válido até {new Date(choice.credito_valido_ate + 'T12:00:00').toLocaleDateString('pt-BR')}</>} · uso único.</p>
+        <p className="text-xs">Valor: <strong>{brl(choice.credito_valor)}</strong> · saldo: <strong>{brl(choice.credito_saldo ?? choice.credito_valor)}</strong>{choice.credito_valido_ate && <> · válido até {new Date(choice.credito_valido_ate + 'T12:00:00').toLocaleDateString('pt-BR')}</>}. Pode ser usado em mais de uma compra até acabar o saldo (cada compra precisa passar de R$ 20,00 depois do desconto).</p>
       </div>
     );
   }
@@ -114,7 +115,7 @@ const SessionChoicePanel: React.FC<Props> = ({ token, sessaoStatus, statusPagame
           <p className="text-xs leading-relaxed">
             {confirming === 'restituicao'
               ? 'Confirmar restituição integral? O valor pago, com as taxas, será estornado e este ingresso deixará de valer. Não dá para desfazer.'
-              : 'Confirmar conversão em crédito? Você recebe um cupom de uso único no valor pago e este ingresso deixará de valer. Não dá para desfazer.'}
+              : 'Confirmar conversão em crédito? Você recebe um cupom com o valor pago (com saldo, válido por 12 meses) e este ingresso deixará de valer. Não dá para desfazer.'}
           </p>
           <div className="flex gap-2">
             <button type="button" disabled={busy} onClick={() => setConfirming(null)} className="flex-1 py-2.5 rounded-xl border border-slate-300 text-[11px] font-black uppercase tracking-widest">Voltar</button>

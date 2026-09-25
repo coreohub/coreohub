@@ -855,7 +855,7 @@ function buildAudienceSessionCredit(p: AudienceSessionCreditPayload) {
       title: 'Seu crédito está pronto',
       intro: `Olá ${escape(p.buyerName ?? 'comprador(a)')}, o seu ingresso de ${escape(p.eventoNome ?? 'o evento')} foi convertido em crédito, como você pediu. Use o código abaixo no campo de cupom do checkout de outra sessão do mesmo espetáculo.`,
       contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>
-        <p style="margin:12px 0 0;font-size:13px;color:#334155;line-height:1.6;">O crédito é de uso único. Se o valor da nova compra for menor, a diferença não é devolvida; se for maior, você paga só o restante. Se preferir a restituição em dinheiro, responda este e-mail antes de usar o código.</p>`,
+        <p style="margin:12px 0 0;font-size:13px;color:#334155;line-height:1.6;">O crédito tem saldo: você pode usá-lo em mais de uma compra até acabar, e o que não for usado continua disponível até a data de validade. Cada compra precisa passar de R$ 20,00 depois do desconto. Se preferir a restituição em dinheiro, responda este e-mail antes de usar o código.</p>`,
       ctaLabel: p.eventoUrl ? 'Ver o espetáculo' : undefined,
       ctaUrl: p.eventoUrl,
       footerNote: 'Este crédito decorre dos arts. 20 a 22 do Decreto nº 13.108/2026. Em caso de dúvidas, responda este e-mail.',

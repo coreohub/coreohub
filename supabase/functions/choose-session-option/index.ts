@@ -9,9 +9,10 @@
  *
  *   manter      — só sessão adiada; o ingresso vale pra nova data.
  *   credito     — o pedido inteiro vira status 'CREDITO' (nada reativa: o
- *                 webhook tardio só religa CANCELADO/VENCIDO) + cupom de uso
- *                 único no valor pago, válido nas sessões do mesmo espetáculo
- *                 (ou no próprio evento, se adiado). Assentos liberados.
+ *                 webhook tardio só religa CANCELADO/VENCIDO) + cupom COM SALDO
+ *                 no valor pago (validade 12 meses; o que não for usado continua
+ *                 disponível), válido nas sessões do mesmo espetáculo (ou no
+ *                 próprio evento, se adiado). Assentos liberados.
  *   restituicao — estorno integral (com taxas) pelo Asaas, na hora. Se o Asaas
  *                 falhar, a escolha fica registrada com o erro e o produtor
  *                 reprocessa pelo painel (refund-session-orders): o comprador
