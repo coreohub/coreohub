@@ -418,7 +418,7 @@ const Registrations = () => {
       if (!user) return;
       const { data } = await supabase
         .from('events')
-        .select('id,name,edition_year,start_date,is_demo,created_at')
+        .select('id,name,edition_year,start_date,event_time,is_demo,created_at')
         .eq('created_by', user.id)
         .order('created_at', { ascending: false });
       if (data && data.length > 0) {

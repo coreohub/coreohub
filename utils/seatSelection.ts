@@ -59,6 +59,7 @@ export function seatBlockReason(c: SeatSelectionCtx): string | null {
     if (!c.companionOk) return 'Escolha primeiro o lugar PCD ao lado deste.';
     return null;
   }
+  if (c.comumQty <= 0) return 'Este pedido é de ingresso PCD ou de acompanhante. Escolha um lugar marcado em azul no mapa.';
   if (c.selectedComum >= c.comumQty) return 'Você já escolheu os lugares dos ingressos comuns. Ajuste a quantidade ou remova um lugar.';
   return null;
 }

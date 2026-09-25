@@ -152,7 +152,7 @@ const VendasIngressos: React.FC = () => {
       const [{ data: events }, defaultId] = await Promise.all([
         supabase
           .from('events')
-          .select('id,name,edition_year,is_demo,created_at')
+          .select('id,name,edition_year,is_demo,created_at,start_date,event_time')
           .eq('created_by', user.id)
           .order('created_at', { ascending: false }),
         resolveActiveEventId(),

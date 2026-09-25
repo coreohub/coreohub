@@ -104,6 +104,9 @@ describe('seatBlockReason', () => {
     expect(seatBlockReason(base)).toBeNull()
     expect(seatBlockReason({ ...base, selectedComum: 2 })).toMatch(/ingressos comuns/)
   })
+  it('pedido só de PCD/acompanhante: assento comum recusado com mensagem própria', () => {
+    expect(seatBlockReason({ ...base, comumQty: 0, pcdQty: 1 })).toMatch(/PCD ou de acompanhante/)
+  })
   it('especial: só com ingresso PCD, até a quantidade', () => {
     const esp = { ...base, tipo: 'cadeirante' as const, liberado: false }
     expect(seatBlockReason(esp)).toMatch(/pessoas com deficiência/)

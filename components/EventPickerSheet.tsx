@@ -20,6 +20,8 @@ export interface EventPickerOption {
   edition_year?: number | null;
   is_demo?: boolean | null;
   start_date?: string | null;
+  /** Horário da sessão (HH:MM). Só entra no rótulo quando há nomes repetidos. */
+  event_time?: string | null;
 }
 
 interface Props {
@@ -34,8 +36,22 @@ interface Props {
   onCreateNew?: () => void;
 }
 
-const formatLabel = (ev: EventPickerOption) =>
+const baseLabel = (ev: EventPickerOption) =>
   `${ev.edition_year ? `${ev.edition_year} — ` : ''}${ev.name}`;
+
+/** Sessões do mesmo espetáculo costumam ter o mesmo nome: quando o rótulo se
+ *  repete na lista, acrescenta "· dd/mm HH:MM" pra distinguir uma da outra. */
+const buildLabeler = (events: EventPickerOption[]) => {
+  const counts = new Map<string, number>();
+  for (const e of events) counts.set(baseLabel(e), (counts.get(baseLabel(e)) ?? 0) + 1);
+  return (ev: EventPickerOption) => {
+    const base = baseLabel(ev);
+    if ((counts.get(base) ?? 0) < 2 || !ev.start_date) return base;
+    const [y, m, d] = ev.start_date.slice(0, 10).split('-');
+    const hora = ev.event_time && /^\d{1,2}:\d{2}/.test(ev.event_time) ? ` ${ev.event_time.slice(0, 5)}` : '';
+    return `${base} · ${d}/${m}/${y}${hora}`;
+  };
+};
 
 const EventPickerSheet: React.FC<Props> = ({
   events,
@@ -49,6 +65,7 @@ const EventPickerSheet: React.FC<Props> = ({
   const [search, setSearch] = useState('');
   const triggerRef = useRef<HTMLButtonElement>(null);
 
+  const formatLabel = buildLabeler(events);
   const selected = events.find(e => e.id === selectedEventId) ?? null;
   const showSearch = events.length >= 6;
 
