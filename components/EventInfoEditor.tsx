@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import {
   INFO_SECTIONS, INFO_SECTION_MAX, INFO_FAQ_MAX_ITEMS, INFO_FAQ_Q_MAX, INFO_FAQ_A_MAX,
@@ -18,6 +19,12 @@ interface Props {
  * frequentes. Renderizado sempre (empty state = campos vazios, nunca esconde).
  */
 export default function EventInfoEditor({ value, onChange, inputClass, labelClass }: Props) {
+  // Seções abertas pelo produtor (padrão Eventbrite "Good to know": só aparece o que se aplica).
+  // Seção com texto salvo sempre aparece; as demais ficam atrás de um botão "+".
+  const [opened, setOpened] = useState<string[]>([]);
+  const visiveis = INFO_SECTIONS.filter(s => (value.secoes[s.key] ?? '').trim() || opened.includes(s.key));
+  const disponiveis = INFO_SECTIONS.filter(s => !visiveis.some(v => v.key === s.key));
+
   const setSecao = (key: string, text: string) =>
     onChange({ ...value, secoes: { ...value.secoes, [key]: text.slice(0, INFO_SECTION_MAX) } });
 
@@ -32,11 +39,11 @@ export default function EventInfoEditor({ value, onChange, inputClass, labelClas
       <div>
         <p className={`${labelClass} mb-1`}>Informações e regras</p>
         <p className="text-[10px] text-slate-400">
-          Aparecem no fim da página pública, com o nome de cada seção. Deixe em branco o que não se aplica.
+          Aparecem no fim da página pública, com o nome de cada seção. Adicione só as que se aplicam ao seu evento.
         </p>
       </div>
 
-      {INFO_SECTIONS.map(s => {
+      {visiveis.map(s => {
         const text = value.secoes[s.key] ?? '';
         return (
           <div key={s.key}>
@@ -56,6 +63,21 @@ export default function EventInfoEditor({ value, onChange, inputClass, labelClas
           </div>
         );
       })}
+
+      {disponiveis.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {disponiveis.map(s => (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => setOpened(o => [...o, s.key])}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:border-[#ff0068]/50 cursor-pointer"
+            >
+              <Plus size={12} /> {s.titulo}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="border-t border-slate-200 dark:border-white/10 pt-5">
         <div className="flex items-center justify-between gap-2 mb-2">
