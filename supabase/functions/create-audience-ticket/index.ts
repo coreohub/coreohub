@@ -202,7 +202,7 @@ Deno.serve(async (req) => {
         id, name, created_by, ingressos_config, start_date, end_date,
         audience_commission_percent, audience_fee_mode,
         audience_max_per_cpf, audience_max_per_purchase, audience_sales_enabled,
-        audience_reservation_minutes, politica_ingressos, seat_map_enabled, payment_sandbox
+        audience_reservation_minutes, politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status
       `)
       .eq('id', event_id)
       .single()
@@ -213,6 +213,7 @@ Deno.serve(async (req) => {
     const asaasEnv = await loadAsaasEnvForEvent(supabase, event, 'create-audience-ticket')
     const ASAAS_API_KEY  = asaasEnv.apiKey
     const ASAAS_BASE_URL = asaasEnv.baseUrl
+    if ((event as any).sessao_status === 'cancelada') throw new Error('Esta sessão foi cancelada pelo organizador. As vendas estão encerradas.')
     if (!event.audience_sales_enabled) {
       throw new Error('Venda de ingressos não está ativa para este evento')
     }

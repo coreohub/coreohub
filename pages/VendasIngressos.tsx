@@ -9,10 +9,11 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { edgeErrorMessage } from '../utils/edgeError';
 import { supabase, resolveActiveEventId, fetchMyTeamEventIds, ownedOrTeamEventsFilter } from '../services/supabase';
 import {
   Ticket, Loader2, Search, Download, ExternalLink, CheckCircle2, Clock, XCircle, RotateCcw,
-  Users, DollarSign, AlertCircle, Undo2, X, Store, Copy, QrCode, Printer, Armchair,
+  Users, DollarSign, AlertCircle, Undo2, X, Store, Copy, QrCode, Printer, Armchair, CalendarClock,
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 import VendasTabs from '../components/VendasTabs';
@@ -86,6 +87,14 @@ const VendasIngressos: React.FC = () => {
   const [err, setErr] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
+  // Cancelar/adiar sessão (Decreto 13.108 arts. 20-22)
+  const [sessionInfo, setSessionInfo] = useState<{ status: string; motivo: string | null; start_date: string | null; event_time: string | null }>({ status: 'agendada', motivo: null, start_date: null, event_time: null });
+  const [sessionOpen, setSessionOpen] = useState(false);
+  const [sessionForm, setSessionForm] = useState<{ status: 'adiada' | 'cancelada' | 'agendada'; nova_data: string; nova_hora: string; motivo: string }>({ status: 'adiada', nova_data: '', nova_hora: '', motivo: '' });
+  const [sessionConfirmed, setSessionConfirmed] = useState(false);
+  const [sessionSaving, setSessionSaving] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const [sessionResult, setSessionResult] = useState<{ notified: number; failed: number; no_email: number } | null>(null);
   // Refund modal (Tier 2)
   const [refundTarget, setRefundTarget] = useState<Row | null>(null);
   const [refundReason, setRefundReason] = useState('');
@@ -126,10 +135,11 @@ const VendasIngressos: React.FC = () => {
     setErr(null);
     try {
       setEventId(targetEventId);
-      const { data: ev } = await supabase.from('events').select('name, ingressos_config, seat_map_enabled').eq('id', targetEventId).maybeSingle();
+      const { data: ev } = await supabase.from('events').select('name, ingressos_config, seat_map_enabled, sessao_status, sessao_motivo, start_date, event_time').eq('id', targetEventId).maybeSingle();
       setEventName(ev?.name ?? '');
       setTicketTypes(Array.isArray(ev?.ingressos_config) ? (ev!.ingressos_config as TicketTypeConfig[]).filter(t => t?.nome) : []);
       setSeatMapEnabled(Boolean((ev as any)?.seat_map_enabled));
+      setSessionInfo({ status: (ev as any)?.sessao_status ?? 'agendada', motivo: (ev as any)?.sessao_motivo ?? null, start_date: (ev as any)?.start_date ?? null, event_time: (ev as any)?.event_time ?? null });
       const { data, error } = await supabase
         .from('audience_tickets')
         .select('*')
@@ -472,6 +482,49 @@ const VendasIngressos: React.FC = () => {
     }
   };
 
+  // Pedidos com ingresso confirmado (1 e-mail por pedido, igual à edge function).
+  const sessionBuyers = useMemo(() => {
+    const orders = new Set<string>();
+    for (const r of rows) {
+      if (r.status_pagamento !== 'APROVADO' || r.refunded_at || !r.buyer_email) continue;
+      orders.add(r.group_id ?? `solo:${r.id}`);
+    }
+    return orders.size;
+  }, [rows]);
+
+  const openSessionModal = () => {
+    setSessionError(null);
+    setSessionResult(null);
+    setSessionConfirmed(false);
+    setSessionForm({ status: 'adiada', nova_data: '', nova_hora: sessionInfo.event_time?.slice(0, 5) ?? '', motivo: '' });
+    setSessionOpen(true);
+  };
+
+  const handleSessionChange = async () => {
+    if (!eventId || sessionSaving) return;
+    setSessionSaving(true);
+    setSessionError(null);
+    try {
+      const { data, error: invokeErr } = await supabase.functions.invoke('update-session-status', {
+        body: {
+          event_id: eventId,
+          status: sessionForm.status,
+          nova_data: sessionForm.status === 'adiada' ? sessionForm.nova_data : undefined,
+          nova_hora: sessionForm.status === 'adiada' ? (sessionForm.nova_hora || undefined) : undefined,
+          motivo: sessionForm.status === 'agendada' ? undefined : sessionForm.motivo,
+        },
+      });
+      if (invokeErr) throw new Error(await edgeErrorMessage(invokeErr, 'Não foi possível atualizar a sessão.'));
+      if (data?.error) throw new Error(data.error);
+      setSessionResult({ notified: data?.notified ?? 0, failed: data?.failed ?? 0, no_email: data?.no_email ?? 0 });
+      if (selectedEventId) void load(selectedEventId);
+    } catch (e: any) {
+      setSessionError(e.message ?? String(e));
+    } finally {
+      setSessionSaving(false);
+    }
+  };
+
   const closePdvModal = () => {
     setPdvOpen(false);
     setPdvResult(null);
@@ -561,6 +614,13 @@ const VendasIngressos: React.FC = () => {
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-violet-500/10 border border-violet-500/30 text-violet-600 dark:text-violet-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-500/20"
           >
             <Users size={12} /> Adicionar cortesia
+          </button>
+          <button
+            onClick={openSessionModal}
+            disabled={!eventId}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-500/20 disabled:opacity-40"
+          >
+            <CalendarClock size={12} /> {sessionInfo.status === 'agendada' ? 'Cancelar ou adiar sessão' : 'Alterar aviso da sessão'}
           </button>
           <button
             onClick={() => { setPdvError(null); setPdvOpen(true); }}
@@ -1128,6 +1188,103 @@ const VendasIngressos: React.FC = () => {
                   {pdvConfirmed ? 'Fechar' : 'Fechar (continua aguardando em segundo plano)'}
                 </button>
               </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Cancelar / adiar sessão (Decreto 13.108 arts. 20-22): grava por edge function e avisa os compradores por e-mail */}
+      {sessionOpen && createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" role="dialog" aria-modal="true" aria-labelledby="session-modal-title">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4 max-h-[92dvh] overflow-y-auto">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 id="session-modal-title" className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white italic">
+                  Cancelar ou adiar sessão
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">{eventName}</p>
+              </div>
+              <button type="button" onClick={() => setSessionOpen(false)} disabled={sessionSaving} aria-label="Fechar" className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5">
+                <X size={18} />
+              </button>
+            </div>
+
+            {sessionResult ? (
+              <div className="space-y-4">
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 text-sm text-emerald-700 dark:text-emerald-300 space-y-1">
+                  <p className="font-bold">Sessão atualizada.</p>
+                  <p>Avisos enviados: <strong>{sessionResult.notified}</strong>{sessionResult.failed > 0 && <> · falharam: <strong>{sessionResult.failed}</strong></>}{sessionResult.no_email > 0 && <> · ingressos sem e-mail: <strong>{sessionResult.no_email}</strong></>}</p>
+                  {sessionResult.failed > 0 && <p className="text-xs">Os avisos que falharam precisam ser reenviados: fale com o suporte.</p>}
+                </div>
+                <button type="button" onClick={() => setSessionOpen(false)} className="w-full py-3 bg-[#ff0068] text-white rounded-xl text-[11px] font-black uppercase tracking-widest">Fechar</button>
+              </div>
+            ) : (
+              <>
+                <fieldset className="space-y-2">
+                  <legend className="sr-only">O que aconteceu com a sessão</legend>
+                  {([
+                    ['adiada', 'Adiar para outra data'],
+                    ['cancelada', 'Cancelar a sessão'],
+                    ...(sessionInfo.status !== 'agendada' ? [['agendada', 'Desfazer: a sessão está mantida']] : []),
+                  ] as Array<[string, string]>).map(([value, label]) => (
+                    <label key={value} className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer text-sm font-bold ${sessionForm.status === value ? 'border-[#ff0068] bg-[#ff0068]/10 text-slate-900 dark:text-white' : 'border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300'}`}>
+                      <input type="radio" name="session-status" checked={sessionForm.status === value} onChange={() => setSessionForm(f => ({ ...f, status: value as any }))} className="accent-[#ff0068]" />
+                      {label}
+                    </label>
+                  ))}
+                </fieldset>
+
+                {sessionForm.status === 'adiada' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="session-date" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Nova data</label>
+                      <input id="session-date" type="date" value={sessionForm.nova_data} onChange={e => setSessionForm(f => ({ ...f, nova_data: e.target.value }))}
+                        className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white dark:[color-scheme:dark] focus:outline-none focus:border-[#ff0068]/50" />
+                    </div>
+                    <div>
+                      <label htmlFor="session-time" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Horário</label>
+                      <input id="session-time" type="time" value={sessionForm.nova_hora} onChange={e => setSessionForm(f => ({ ...f, nova_hora: e.target.value }))}
+                        className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white dark:[color-scheme:dark] focus:outline-none focus:border-[#ff0068]/50" />
+                    </div>
+                  </div>
+                )}
+
+                {sessionForm.status !== 'agendada' && (
+                  <div>
+                    <label htmlFor="session-motivo" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Motivo (vai no aviso aos compradores)</label>
+                    <textarea id="session-motivo" rows={3} maxLength={500} value={sessionForm.motivo} onChange={e => setSessionForm(f => ({ ...f, motivo: e.target.value }))}
+                      placeholder="Ex.: indisponibilidade do teatro na data original"
+                      className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50" />
+                  </div>
+                )}
+
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-300 space-y-1">
+                  <p><strong>{sessionBuyers}</strong> pedido{sessionBuyers === 1 ? '' : 's'} com ingresso confirmado {sessionBuyers === 1 ? 'receberá' : 'receberão'} um e-mail agora.</p>
+                  {sessionForm.status === 'cancelada' && <p>As vendas desta sessão serão encerradas. Os compradores têm direito à restituição integral, com as taxas (Decreto 13.108/2026, arts. 20 a 22); as escolhas chegam por e-mail e você as processa pelo botão de estorno de cada ingresso.</p>}
+                  {sessionForm.status === 'adiada' && <p>Os ingressos continuam valendo para a nova data. Quem preferir crédito ou restituição integral, com as taxas, responderá o e-mail.</p>}
+                </div>
+
+                <label className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
+                  <input type="checkbox" checked={sessionConfirmed} onChange={e => setSessionConfirmed(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#ff0068]" />
+                  Entendo que os compradores serão avisados por e-mail agora.
+                </label>
+
+                {sessionError && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm text-red-600 dark:text-red-300 flex items-start gap-2">
+                    <AlertCircle size={14} className="shrink-0 mt-0.5" /><span>{sessionError}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setSessionOpen(false)} disabled={sessionSaving} className="flex-1 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 rounded-xl text-[11px] font-black uppercase tracking-widest">Voltar</button>
+                  <button type="button" onClick={handleSessionChange} disabled={sessionSaving || !sessionConfirmed}
+                    className="flex-1 py-3 bg-rose-500 hover:bg-rose-600 disabled:bg-slate-200 dark:disabled:bg-white/10 disabled:text-slate-400 text-white rounded-xl text-[11px] font-black uppercase tracking-widest inline-flex items-center justify-center gap-2">
+                    {sessionSaving ? <Loader2 size={14} className="animate-spin" /> : <CalendarClock size={14} />}
+                    {sessionSaving ? 'Enviando avisos...' : 'Confirmar e avisar'}
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </div>,

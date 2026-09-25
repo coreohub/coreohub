@@ -15,6 +15,7 @@ import { ArrowLeft, Loader2, AlertCircle, Sun, Calendar, MapPin, ExternalLink, D
 import { supabase } from '../services/supabase';
 import InstallPWAButton from '../components/InstallPWAButton';
 import AsaasBadge from '../components/AsaasBadge';
+import SessionStatusBanner, { type SessionStatusInfo } from '../components/SessionStatusBanner';
 
 interface Sibling {
   id: string;
@@ -158,6 +159,31 @@ const MeuIngresso: React.FC = () => {
     window.open(waUrl, '_blank', 'noopener,noreferrer');
   };
 
+  // ── Hooks SEMPRE antes dos return antecipados (loading/erro): mudar a ordem de hooks
+  // entre renders derruba a página com "Rendered more hooks than during the previous render".
+  // Sessão adiada/cancelada (Decreto 13.108 arts. 20-22): busca o status público do evento.
+  const [sessionInfo, setSessionInfo] = useState<SessionStatusInfo | null>(null);
+  useEffect(() => {
+    if (!ticket?.event_id) return;
+    let cancel = false;
+    void supabase.rpc('get_event_session_status', { p_event_id: ticket.event_id }).then(({ data, error: sErr }) => {
+      if (sErr) { console.warn('[MeuIngresso] get_event_session_status:', sErr.message); return; }
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!cancel && row) setSessionInfo(row as SessionStatusInfo);
+    });
+    return () => { cancel = true; };
+  }, [ticket?.event_id]);
+
+  // Tipo do assento (etiqueta PCD/acompanhante).
+  const [seatTipo, setSeatTipo] = useState<SeatTipo>('comum');
+  useEffect(() => {
+    if (!ticket?.event_id || !ticket.seat_id) { setSeatTipo('comum'); return; }
+    let cancel = false;
+    void fetchSeatTipo(ticket.event_id, ticket.seat_id).then(t => { if (!cancel) setSeatTipo(t); });
+    return () => { cancel = true; };
+  }, [ticket?.event_id, ticket?.seat_id]);
+  const seatTipoLabel = SEAT_TIPO_LABEL[seatTipo];
+
   if (loading) {
     return (
       <div role="status" aria-live="polite" aria-label="Carregando ingresso" className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-950">
@@ -213,16 +239,8 @@ const MeuIngresso: React.FC = () => {
   const mapsUrl = fullAddress
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`
     : null;
-  // Assento "A-1" -> Fileira A · Nº 1
-  const [seatTipo, setSeatTipo] = useState<SeatTipo>('comum');
-  useEffect(() => {
-    if (!ticket?.event_id || !ticket.seat_id) { setSeatTipo('comum'); return; }
-    let cancel = false;
-    void fetchSeatTipo(ticket.event_id, ticket.seat_id).then(t => { if (!cancel) setSeatTipo(t); });
-    return () => { cancel = true; };
-  }, [ticket?.event_id, ticket?.seat_id]);
-  const seatTipoLabel = SEAT_TIPO_LABEL[seatTipo];
 
+  // Assento "A-1" -> Fileira A · Nº 1
   const seatLabel = (() => {
     if (!ticket.seat_id) return null;
     const i = ticket.seat_id.lastIndexOf('-');
@@ -278,6 +296,11 @@ const MeuIngresso: React.FC = () => {
 
       <div className="flex-1 flex items-center justify-center px-4 pb-6 print:block print:p-0">
         <div className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl overflow-hidden print:max-w-full print:rounded-none print:shadow-none print:mx-auto">
+          {sessionInfo && (sessionInfo.sessao_status === 'adiada' || sessionInfo.sessao_status === 'cancelada') && (
+            <div className="p-3 print:hidden">
+              <SessionStatusBanner {...sessionInfo} dataAtual={ticket.event_start_date} horaAtual={ticket.event_time} context="ingresso" theme="light" />
+            </div>
+          )}
           {/* Family ticket nav (Tier 2): aparece quando há múltiplos tickets na compra */}
           {siblings.length > 1 && (() => {
             const current = siblings.find(s => s.access_token === token);

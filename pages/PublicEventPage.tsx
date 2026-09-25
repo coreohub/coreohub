@@ -28,6 +28,7 @@ const ufUtcOffset = (uf?: string | null): string => {
 import { isEventOver } from '../utils/eventStatus';
 import AvisoViradaLote from '../components/AvisoViradaLote';
 import MeiaEntradaInfo from '../components/MeiaEntradaInfo';
+import SessionStatusBanner from '../components/SessionStatusBanner';
 import { ticketCategory } from '../utils/meiaEntrada';
 import EventInfoSection from '../components/EventInfoSection';
 import { parseInfoConfig, hasInfoContent } from '../utils/eventInfo';
@@ -168,6 +169,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             regulation_pdf_url, documentos_extras, destaque_link_url, destaque_link_label, info_config,
             programacao_config, ingressos_config, formacoes_config, patrocinadores_config,
             politica_ingressos, audience_sales_enabled, billing_plan, seat_map_enabled,
+            sessao_status, sessao_motivo, sessao_data_original, sessao_hora_original,
             audience_max_per_purchase, audience_max_per_cpf, audience_fee_mode, audience_commission_percent, payment_sandbox,
             producer_ga4_id, producer_meta_pixel_id
           `)
@@ -733,7 +735,10 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
       ? `${event.start_date}T${event.event_time.slice(0, 5).padStart(5, '0')}:00${ufUtcOffset(event.state)}`
       : event.start_date,
     endDate: event.end_date ?? event.start_date,
-    eventStatus: 'https://schema.org/EventScheduled',
+    eventStatus: event.sessao_status === 'cancelada'
+      ? 'https://schema.org/EventCancelled'
+      : event.sessao_status === 'adiada' ? 'https://schema.org/EventRescheduled' : 'https://schema.org/EventScheduled',
+    ...(event.sessao_status === 'adiada' && event.sessao_data_original ? { previousStartDate: event.sessao_data_original } : {}),
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
     location: {
       '@type': 'Place',
@@ -857,6 +862,11 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   return (
     <div className="min-h-screen bg-[#050505] text-white">
       {(event as any).payment_sandbox && <SandboxBanner />}
+      {(event.sessao_status === 'adiada' || event.sessao_status === 'cancelada') && (
+        <div className="max-w-5xl mx-auto px-4 pt-4">
+          <SessionStatusBanner {...event} dataAtual={event.start_date} horaAtual={event.event_time} context="vitrine" />
+        </div>
+      )}
       {/* Pixels do produtor — Fase 4B. Carrega GA4+Pixel do dono do festival
           em paralelo aos pixels master da CoreoHub. Idempotente (não re-init).
           `onReady` libera o disparo do view_event abaixo. */}
@@ -1422,7 +1432,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             // Tier 1: se audience_sales_enabled = true, vendemos pelo CoreoHub
             // (botão "Comprar" leva pra /checkout-ingresso). Senão, exibe só os
             // tipos como informativo (ou link externo legado se cadastrado).
-            const salesEnabled = !!event.audience_sales_enabled;
+            const salesEnabled = !!event.audience_sales_enabled && event.sessao_status !== 'cancelada';
             // Quando sales habilitado, esconde tipos com preço 0 (não tem como
             // comprar) — produtor que quer cortesia/RSVP usa Tier 2 ou GRATUITO.
             // Quando sales desabilitado, mostra tudo (informativo).

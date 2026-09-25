@@ -555,3 +555,11 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/quote-audience-ticket/deno.json"
 entrypoint = "./functions/quote-audience-ticket/index.ts"
+
+# Fase 5 item 4: produtor cancela/adia sessão e avisa compradores. verify_jwt=true
+# (só dono do evento / super admin; checado no código).
+[functions.update-session-status]
+enabled = true
+verify_jwt = true
+import_map = "./functions/update-session-status/deno.json"
+entrypoint = "./functions/update-session-status/index.ts"

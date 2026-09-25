@@ -95,10 +95,11 @@ Deno.serve(async (req) => {
 
     const { data: event } = await supabase
       .from('events')
-      .select('id, ingressos_config, audience_commission_percent, audience_fee_mode, audience_sales_enabled, politica_ingressos, audience_reservation_minutes')
+      .select('id, ingressos_config, audience_commission_percent, audience_fee_mode, audience_sales_enabled, politica_ingressos, audience_reservation_minutes, sessao_status')
       .eq('id', event_id)
       .maybeSingle()
     if (!event) throw new Error('Evento não encontrado')
+    if ((event as any).sessao_status === 'cancelada') throw new Error('Esta sessão foi cancelada pelo organizador. As vendas estão encerradas.')
     if (!event.audience_sales_enabled || event.politica_ingressos !== 'INTERNO') {
       throw new Error('Este evento não vende ingressos pela plataforma')
     }

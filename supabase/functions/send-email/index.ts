@@ -742,6 +742,86 @@ function buildAudienceRefundProducer(p: AudienceRefundPayload, opts?: { adminCop
   }
 }
 
+// ─── Template: audience_session_changed (comprador) ──────────────────────────
+// Sessão cancelada / adiada / mantida (Decreto 13.108/2026 arts. 20-22). Disparado
+// pela edge function update-session-status, um e-mail por pedido. Sem selo Asaas:
+// é aviso operacional (a restituição em si tem o e-mail de estorno próprio).
+
+interface AudienceSessionChangedPayload {
+  buyerName?: string
+  buyerEmail?: string
+  produtorEmail?: string
+  eventoNome?: string
+  status: 'adiada' | 'cancelada' | 'agendada'
+  /** Datas já formatadas pelo caller, ex.: "Sáb, 19 de dezembro de 2026 · 19:30". */
+  sessaoAntiga?: string
+  sessaoNova?: string
+  motivo?: string | null
+  ingressos?: Array<{ nome: string; assento?: string | null }>
+  /** Link /meu-ingresso/<token> do pedido. */
+  ingressoUrl?: string
+  eventoUrl?: string
+}
+
+function buildAudienceSessionChanged(p: AudienceSessionChangedPayload) {
+  const nome = escape(p.eventoNome ?? 'o evento')
+  const lista = (p.ingressos ?? []).filter(i => i?.nome)
+  const ingressosHtml = lista.length > 0
+    ? infoRow(lista.length > 1 ? 'Seus ingressos' : 'Seu ingresso', lista.map(i => escape(i.assento ? `${i.nome} — lugar ${i.assento}` : i.nome)).join('<br>'))
+    : ''
+  const motivoHtml = p.motivo ? infoRow('Motivo informado pelo organizador', escape(p.motivo)) : ''
+  const opcoes = `
+    <p style="margin:16px 0 6px;font-size:13px;color:#0b0b0f;font-weight:700;">O que você pode fazer</p>
+    <ul style="margin:0;padding-left:18px;font-size:13px;color:#334155;line-height:1.6;">
+      ${p.status === 'adiada' ? '<li><strong>Manter</strong> o ingresso: ele continua valendo para a nova data (não precisa fazer nada).</li>' : ''}
+      <li><strong>Crédito</strong> no valor pago para usar em outra sessão.</li>
+      <li><strong>Restituição integral</strong> do valor pago, <strong>incluindo as taxas</strong>, sem multa nem retenção.</li>
+    </ul>
+    <p style="margin:12px 0 0;font-size:13px;color:#334155;line-height:1.6;">Para escolher crédito ou restituição, responda este e-mail informando o seu nome e o e-mail da compra.</p>`
+
+  if (p.status === 'agendada') {
+    return {
+      subject: `Sessão mantida — ${p.eventoNome ?? 'CoreoHub'}`,
+      html: baseLayout({
+        preheader: 'O aviso anterior foi desfeito: a sessão está mantida.',
+        title: 'Sessão mantida',
+        intro: `Olá ${escape(p.buyerName ?? 'comprador(a)')}, o organizador de ${nome} desfez o aviso anterior: a sessão está mantida e o seu ingresso continua valendo normalmente.`,
+        contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${[
+          p.sessaoNova ? infoRow('Sessão', escape(p.sessaoNova)) : '',
+          ingressosHtml,
+        ].filter(Boolean).join('')}</table>`,
+        ctaLabel: p.ingressoUrl ? 'Ver meu ingresso' : undefined,
+        ctaUrl: p.ingressoUrl,
+        includeAsaasSeal: false,
+      }),
+    }
+  }
+
+  const cancelada = p.status === 'cancelada'
+  const linhas = [
+    p.eventoNome ? infoRow('Evento', escape(p.eventoNome)) : '',
+    p.sessaoAntiga ? infoRow(cancelada ? 'Sessão cancelada' : 'Data anterior', escape(p.sessaoAntiga)) : '',
+    !cancelada && p.sessaoNova ? infoRow('Nova data', escape(p.sessaoNova)) : '',
+    motivoHtml,
+    ingressosHtml,
+  ].filter(Boolean).join('')
+  return {
+    subject: `${cancelada ? 'Sessão cancelada' : 'Sessão adiada'} — ${p.eventoNome ?? 'CoreoHub'}`,
+    html: baseLayout({
+      preheader: cancelada ? 'A sessão foi cancelada. Veja como receber o seu dinheiro de volta.' : 'A sessão foi adiada. Veja as suas opções.',
+      title: cancelada ? 'Sessão cancelada' : 'Sessão adiada',
+      intro: cancelada
+        ? `Olá ${escape(p.buyerName ?? 'comprador(a)')}, o organizador de ${nome} cancelou a sessão para a qual você comprou ingresso. Você tem direito à restituição integral, com as taxas.`
+        : `Olá ${escape(p.buyerName ?? 'comprador(a)')}, o organizador de ${nome} adiou a sessão para a qual você comprou ingresso. Você escolhe o que fazer.`,
+      contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>${opcoes}`,
+      ctaLabel: p.ingressoUrl ? 'Ver meu ingresso' : undefined,
+      ctaUrl: p.ingressoUrl,
+      footerNote: 'Este aviso é enviado por determinação dos arts. 20 a 22 do Decreto nº 13.108/2026. Em caso de dúvidas, responda este e-mail.',
+      includeAsaasSeal: false,
+    }),
+  }
+}
+
 // ─── Templates: workshop_registration_confirmed + workshop_registration_producer
 // Backlog item: faltava implementação. Webhook já disparava, edge function só
 // logava warning. Workshops ja existem como entidade desde Etapa 1 (2026-05-04).
@@ -1798,6 +1878,7 @@ interface SendEmailRequest {
     | 'audience_ticket_late_refund_producer'
     | 'audience_ticket_refunded'
     | 'audience_ticket_refunded_producer'
+    | 'audience_session_changed'
     | 'workshop_registration_confirmed'
     | 'workshop_registration_producer'
     | 'workshop_pass_confirmed'
@@ -1993,6 +2074,18 @@ Deno.serve(async (req) => {
         if (!p.buyerEmail) throw new Error('buyerEmail é obrigatório')
         if (typeof p.refundAmount !== 'number') throw new Error('refundAmount é obrigatório')
         const tpl = buildAudienceRefundBuyer(p)
+        to = p.buyerEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        replyTo = p.produtorEmail
+        break
+      }
+      case 'audience_session_changed': {
+        const p = payload as unknown as AudienceSessionChangedPayload
+        if (!p.buyerEmail) throw new Error('buyerEmail é obrigatório')
+        if (!['adiada', 'cancelada', 'agendada'].includes(p.status)) throw new Error('status inválido')
+        const tpl = buildAudienceSessionChanged(p)
         to = p.buyerEmail
         subject = tpl.subject
         html = tpl.html

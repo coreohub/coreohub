@@ -26,6 +26,7 @@ import {
 import AsaasBadge from '../components/AsaasBadge';
 import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
 import MeiaEntradaInfo from '../components/MeiaEntradaInfo';
+import SessionStatusBanner from '../components/SessionStatusBanner';
 import SeatGrid from '../components/SeatGrid';
 import SeatLegend from '../components/SeatLegend';
 import { useSeatMap } from '../hooks/useSeatMap';
@@ -168,7 +169,7 @@ export default function CheckoutIngresso() {
         const filterCol = isUuid ? 'id' : 'slug';
         const { data: ev, error: evErr } = await supabase
           .from('events')
-          .select('id, name, slug, start_date, end_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos, seat_map_enabled, payment_sandbox')
+          .select('id, name, slug, start_date, end_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status, sessao_motivo, sessao_data_original, sessao_hora_original')
           .eq(filterCol, idOrSlug)
           .maybeSingle();
         if (evErr || !ev) { setError('Evento não encontrado.'); return; }
@@ -179,6 +180,10 @@ export default function CheckoutIngresso() {
         // Fix 2026-06-28: checava `event_date`, coluna legada sempre NULL nos
         // eventos reais — esse bloqueio nunca disparava. Fonte real é
         // start_date/end_date (preenchidas pelo painel).
+        if (ev.sessao_status === 'cancelada') {
+          setError('Esta sessão foi cancelada pelo organizador. As vendas estão encerradas.');
+          return;
+        }
         if (isEventOver(ev)) {
           setError('Este evento já aconteceu. Vendas de ingressos encerradas.');
           return;
@@ -712,6 +717,10 @@ export default function CheckoutIngresso() {
         >
           <ArrowLeft size={14} /> Voltar pro evento
         </button>
+
+        {event.sessao_status === 'adiada' && (
+          <SessionStatusBanner {...event} dataAtual={event.start_date} horaAtual={event.event_time} context="checkout" className="mb-4" />
+        )}
 
         <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter mb-1">
           Seu carrinho
