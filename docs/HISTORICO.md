@@ -4,6 +4,13 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-25 (continuação 10) — Fase 5 item 4b: comprador escolhe manter/crédito/restituição e produtor restitui em lote ✅ (dev; banco/functions em produção)
+
+- **Fluxo:** na sessão adiada/cancelada, a página do ingresso (`SessionChoicePanel`) deixa o comprador manter (só adiada), converter em crédito (cupom `CRED-…` de uso único, valor pago com taxa, 12 meses, válido nas sessões do mesmo espetáculo) ou pedir restituição integral. O produtor ganha painel de escolhas e restituição em lote em Vendas de Ingressos. Edges `choose-session-option` (pública, por token) e `refund-session-orders`; estorno extraído para `_shared/audience-refund.ts`. Migrations `20260930c` e `20260930d`.
+- **Decisão técnica:** ingresso convertido vira status `CREDITO` (não `CANCELADO`): o webhook tardio do Asaas religa CANCELADO/VENCIDO e reviveria o ingresso com o crédito já emitido. O CHECK de `status_pagamento` precisou aceitar o valor novo (achado no teste).
+- **Sandbox (alvo travado):** compra + pagamento de teste, estorno manual refatorado, manter→crédito, crédito usado na sessão irmã (uso único), restituição pelo comprador REFUNDED, lote com pulo de cortesia/balcão. Três bugs achados e corrigidos no próprio teste (CHECK, ordem de liberar assento, cortesia como falha).
+- **Limitações:** crédito que cobre 100% da nova compra não emite (checkout recusa valor zero); estorno real em produção ainda com o bug "saldo insuficiente" sem chamado na Asaas; receita de ingresso em crédito sai dos relatórios como estorno. Detalhes em `memory/fase5_cotacao_travada_shipado_2026_09_25.md`.
+
 ### 2026-09-25 (continuação 9) — Fase 5 item 4a: cancelar/adiar sessão + 🚨 página do ingresso quebrada na main (fix na dev) ✅ (banco/functions em produção)
 
 - **Cancelar/adiar (9399b8f):** migration `20260930b_event_session_status.sql` (aplicada), edge `update-session-status`, template `audience_session_changed` no `send-email`, banner na vitrine/checkout/`MeuIngresso`, botão e modal em Vendas de Ingressos, venda bloqueada em sessão cancelada (`create-audience-ticket`, `quote-audience-ticket`, `create-pdv-ticket`). Adiar move a data do evento (a original fica guardada); vendas seguem abertas. Validado no sandbox (adiar, cancelar, desfazer, e-mails, compra recusada).
