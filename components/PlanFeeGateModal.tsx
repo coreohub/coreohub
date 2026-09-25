@@ -15,14 +15,17 @@ interface Props {
 }
 
 /**
- * Trava do painel quando a taxa fixa do plano (Essencial R$250 / Escala
- * R$1.490) não foi paga dentro da tolerância — decisão de produto 2026-09-25.
+ * Cartão em tela cheia da taxa fixa do plano (Essencial R$250 / Escala R$1.490)
+ * — decisão de produto 2026-09-25.
  *
  * O evento nasce já no plano escolhido, com a taxa pendente
  * (billing_plan_fixed_fee_paid_at NULL) e 7 dias pra configurar tudo
- * (billing_plan_fee_due_at). Só DEPOIS desse prazo este modal aparece — sem X,
- * sem "lembrar depois", sem marcar como visto na sessão: continua travando o
- * painel até o webhook confirmar o pagamento. Um caminho só: "Pagar agora".
+ * (billing_plan_fee_due_at). Dois modos, mesmo cartão:
+ *   - DENTRO do prazo ("suave"): aparece 1x por login (sessionStorage por
+ *     evento) com "Pagar agora" e "Continuar configurando" — ela ainda tem os 7
+ *     dias pra configurar; o PlanFeeReminderBanner segue como lembrete fixo.
+ *   - DEPOIS do prazo ("trava"): sem X, sem "continuar", sem marcar como visto —
+ *     trava o painel até o webhook confirmar o pagamento.
  *
  * "Pagar agora" chama create-plan-fixed-fee-payment, que é idempotente: se a
  * fatura ainda está em aberto devolve a mesma; se venceu (boleto cancelado no
@@ -55,9 +58,22 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
     forceRender(n => n + 1);
   }, [pending]);
 
-  // Só trava depois do prazo; dentro da tolerância quem avisa é o
-  // PlanFeeReminderBanner.
-  const current = pending.find(ev => ev.locked && !adminDismissedRef.current.has(ev.id));
+  // "Suave" (dentro do prazo): 1x por login por evento. sessionStorage pode
+  // estar bloqueado (aba privada) — nesse caso mostra de novo, sem quebrar.
+  const softKey = (id: string) => `coreohub_plan_fee_soft_seen_${id}`;
+  const softSeen = (id: string) => { try { return sessionStorage.getItem(softKey(id)) === '1'; } catch { return false; } };
+  const handleSoftDismiss = (id: string) => {
+    try { sessionStorage.setItem(softKey(id), '1'); } catch { /* storage bloqueado — segue sem persistir */ }
+    setErrorMsg(null);
+    setWaitingPayment(false);
+    forceRender(n => n + 1);
+  };
+
+  // A trava (prazo vencido) tem prioridade sobre o cartão suave.
+  const locked = pending.find(ev => ev.locked && !adminDismissedRef.current.has(ev.id));
+  const soft = locked ? undefined : pending.find(ev => !ev.locked && !softSeen(ev.id));
+  const current = locked ?? soft;
+  const isSoft = !!current && !current.locked;
 
   const handlePayNow = async () => {
     if (!current) return;
@@ -98,12 +114,24 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
           </div>
         </div>
 
-        <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          O prazo pra pagar a taxa única de ativação (<strong>R$ {valor.toFixed(2)}</strong>) do evento{' '}
-          <strong className="text-slate-900 dark:text-white">{current.name}</strong> no plano{' '}
-          <strong>{planoLabel}</strong> venceu em <strong>{venceuEm}</strong>. O painel volta ao normal
-          assim que o pagamento for confirmado.
-        </p>
+        {isSoft ? (
+          <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            Falta pagar a taxa única de ativação (<strong>R$ {valor.toFixed(2)}</strong>) do evento{' '}
+            <strong className="text-slate-900 dark:text-white">{current.name}</strong> no plano{' '}
+            <strong>{planoLabel}</strong>. O prazo vai até <strong>{venceuEm}</strong>: até lá você pode continuar
+            configurando o evento.{' '}
+            {current.salesClosed
+              ? 'As vendas e inscrições só abrem depois do pagamento, e depois dessa data o painel trava até a taxa ser paga.'
+              : 'Depois dessa data as vendas fecham e o painel trava até a taxa ser paga.'}
+          </p>
+        ) : (
+          <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            O prazo pra pagar a taxa única de ativação (<strong>R$ {valor.toFixed(2)}</strong>) do evento{' '}
+            <strong className="text-slate-900 dark:text-white">{current.name}</strong> no plano{' '}
+            <strong>{planoLabel}</strong> venceu em <strong>{venceuEm}</strong>. O painel volta ao normal
+            assim que o pagamento for confirmado.
+          </p>
+        )}
 
         {errorMsg && (
           <div className="flex items-start gap-2 p-3 rounded-xl text-sm bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300" role="alert">
@@ -131,6 +159,16 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
           Pagar agora
         </button>
 
+        {isSoft && (
+          <button
+            onClick={() => handleSoftDismiss(current.id)}
+            disabled={actionLoading}
+            className="w-full py-3 border-2 border-slate-200 dark:border-white/15 hover:border-slate-300 dark:hover:border-white/30 text-slate-600 dark:text-slate-300 rounded-xl font-black text-xs uppercase tracking-widest transition-colors"
+          >
+            Continuar configurando
+          </button>
+        )}
+
         {termsPending && (
           <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
             O Termo do Produtor foi atualizado.{' '}
@@ -144,7 +182,7 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
           Dúvida sobre a cobrança? Fale com o suporte da CoreoHub.
         </p>
 
-        {isImpersonating && (
+        {isImpersonating && !isSoft && (
           <button
             onClick={handleAdminDismiss}
             disabled={actionLoading}
