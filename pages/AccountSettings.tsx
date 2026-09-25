@@ -29,7 +29,7 @@ import {
   CreditCard, CheckCircle, AlertCircle, ExternalLink, Percent, Hash,
   Image as ImageIcon, Upload, Play, Pause, Volume2,
   Instagram, MessageCircle, Globe, Mail, FileText, Youtube, Smartphone,
-  RefreshCw, Facebook, Crosshair,
+  RefreshCw, Facebook, Crosshair, MapPin,
 } from 'lucide-react';
 import FocalPointPicker from '../components/FocalPointPicker';
 import { formatEventWhatsApp, resolveEstudio, stripEstiloVertentes } from '../utils/formatters';
@@ -2936,12 +2936,12 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-              {/* Dados do Evento */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Identidade */}
               <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-5">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><Settings size={18} /></div>
-                  <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Dados do Evento</h3>
+                  <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Identidade</h3>
                 </div>
                 <div>
                   <label className={label}>Nome do Festival</label>
@@ -3046,82 +3046,44 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     </div>
                   )}
                 </div>
+              </div>
 
+              {/* Data e horário */}
+              <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-5">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><CalendarDays size={18} /></div>
+                  <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Data e Horário</h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={label}>Local do Evento</label>
-                  <input type="text" value={general.location} onChange={e => setGeneral({ ...general, location: e.target.value })} placeholder="Ex: Ginásio Municipal - Centro" className={input} />
+                  <label className={label}>Data de Início</label>
+                  <input
+                    type="date"
+                    value={general.eventDate}
+                    onChange={e => setGeneral(g => ({
+                      ...g,
+                      eventDate: e.target.value,
+                      // Evento de 1 dia é o caso comum — se a Data Final
+                      // ainda não tinha sido customizada (estava vazia ou
+                      // igual à Data de Início antiga), acompanha a Início
+                      // automaticamente. Camps multi-dia (ex: Vicenza)
+                      // ajustam a Final manualmente depois.
+                      endDate: (!g.endDate || g.endDate === g.eventDate) ? e.target.value : g.endDate,
+                    }))}
+                    className={input}
+                  />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={label}>Cidade / Estado</label>
-                    {ufListError ? (
-                      // Fallback se a API do IBGE estiver fora do ar — não
-                      // trava o produtor, volta pro texto livre de sempre.
-                      <input type="text" value={general.city} onChange={e => setGeneral({ ...general, city: e.target.value })} placeholder="Votuporanga, SP" className={input} />
-                    ) : (
-                      <div className="grid grid-cols-[92px_1fr] gap-2">
-                        <select
-                          value={selectedUf}
-                          onChange={e => { setSelectedUf(e.target.value); setSelectedCity(''); }}
-                          className={`${input} px-3!`}
-                          aria-label="Estado (UF)"
-                        >
-                          <option value="" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">UF</option>
-                          {ufList.map(uf => (
-                            <option key={uf.sigla} value={uf.sigla} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
-                              {uf.sigla}
-                            </option>
-                          ))}
-                        </select>
-                        <CitySearchSelect
-                          value={selectedCity}
-                          onChange={setSelectedCity}
-                          options={unmatchedCity ? [unmatchedCity, ...cityList] : cityList}
-                          disabled={!selectedUf}
-                          loading={cityListLoading}
-                          placeholder={selectedUf ? 'Digite pra buscar a cidade' : 'Escolha o estado primeiro'}
-                          className={`${input} disabled:opacity-50 disabled:cursor-not-allowed`}
-                          aria-label="Cidade"
-                        />
-                      </div>
-                    )}
-                    {cityListError && (
-                      <p className="text-[9px] text-amber-500 mt-1">
-                        Não consegui carregar as cidades desse estado agora. Tente de novo em instantes.
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className={label}>Data de Início</label>
-                    <input
-                      type="date"
-                      value={general.eventDate}
-                      onChange={e => setGeneral(g => ({
-                        ...g,
-                        eventDate: e.target.value,
-                        // Evento de 1 dia é o caso comum — se a Data Final
-                        // ainda não tinha sido customizada (estava vazia ou
-                        // igual à Data de Início antiga), acompanha a Início
-                        // automaticamente. Camps multi-dia (ex: Vicenza)
-                        // ajustam a Final manualmente depois.
-                        endDate: (!g.endDate || g.endDate === g.eventDate) ? e.target.value : g.endDate,
-                      }))}
-                      className={input}
-                    />
-                  </div>
+                <div>
+                  <label className={label}>Data Final</label>
+                  <input
+                    type="date"
+                    value={general.endDate}
+                    min={general.eventDate || undefined}
+                    onChange={e => setGeneral({ ...general, endDate: e.target.value })}
+                    className={input}
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">Igual à Data de Início pra evento de 1 dia só. Camps/festivais multi-dia (ex: 18 a 23 de janeiro) preenchem uma data posterior aqui.</p>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={label}>Data Final</label>
-                    <input
-                      type="date"
-                      value={general.endDate}
-                      min={general.eventDate || undefined}
-                      onChange={e => setGeneral({ ...general, endDate: e.target.value })}
-                      className={input}
-                    />
-                    <p className="text-[9px] text-slate-400 mt-1">Igual à Data de Início pra evento de 1 dia só. Camps/festivais multi-dia (ex: 18 a 23 de janeiro) preenchem uma data posterior aqui.</p>
-                  </div>
                 </div>
                 <div>
                   <label className={label}>Hora de Início</label>
@@ -3132,6 +3094,57 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                     className={input}
                   />
                   <p className="text-[9px] text-slate-400 mt-1">Aparece na vitrine pública. Ex: 19:00</p>
+                </div>
+              </div>
+
+              {/* Local */}
+              <div className={`bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl space-y-5${isEspetaculo ? ' md:col-span-2' : ''}`}>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2.5 bg-[#ff0068]/10 rounded-xl text-[#ff0068]"><MapPin size={18} /></div>
+                  <h3 className="font-black uppercase tracking-tight text-slate-900 dark:text-white italic">Local</h3>
+                </div>
+                <div>
+                  <label className={label}>Local do Evento</label>
+                  <input type="text" value={general.location} onChange={e => setGeneral({ ...general, location: e.target.value })} placeholder="Ex: Ginásio Municipal - Centro" className={input} />
+                </div>
+                <div>
+                  <label className={label}>Cidade / Estado</label>
+                  {ufListError ? (
+                    // Fallback se a API do IBGE estiver fora do ar — não
+                    // trava o produtor, volta pro texto livre de sempre.
+                    <input type="text" value={general.city} onChange={e => setGeneral({ ...general, city: e.target.value })} placeholder="Votuporanga, SP" className={input} />
+                  ) : (
+                    <div className="grid grid-cols-[92px_1fr] gap-2">
+                      <select
+                        value={selectedUf}
+                        onChange={e => { setSelectedUf(e.target.value); setSelectedCity(''); }}
+                        className={`${input} px-3!`}
+                        aria-label="Estado (UF)"
+                      >
+                        <option value="" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">UF</option>
+                        {ufList.map(uf => (
+                          <option key={uf.sigla} value={uf.sigla} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                            {uf.sigla}
+                          </option>
+                        ))}
+                      </select>
+                      <CitySearchSelect
+                        value={selectedCity}
+                        onChange={setSelectedCity}
+                        options={unmatchedCity ? [unmatchedCity, ...cityList] : cityList}
+                        disabled={!selectedUf}
+                        loading={cityListLoading}
+                        placeholder={selectedUf ? 'Digite pra buscar a cidade' : 'Escolha o estado primeiro'}
+                        className={`${input} disabled:opacity-50 disabled:cursor-not-allowed`}
+                        aria-label="Cidade"
+                      />
+                    </div>
+                  )}
+                  {cityListError && (
+                    <p className="text-[9px] text-amber-500 mt-1">
+                      Não consegui carregar as cidades desse estado agora. Tente de novo em instantes.
+                    </p>
+                  )}
                 </div>
               </div>
 
