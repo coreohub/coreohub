@@ -4,6 +4,17 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-25 (continuação) — Fase 3: matriz de testes pela tela nas sessões do sandbox ✅ DEV — 🚧 Fase 4 e Fase 5 pendentes
+
+Detalhes em `memory/fase3_testes_sandbox_sessoes_2026_09_25.md`. Tudo no sandbox (evento `41d933c9…`, 5 sessões), nenhum evento real tocado; baseline de produção intacto (comm 49, pay 21, regs 125, eventos reais 7, tickets reais 0).
+
+- **Compra pela tela (Playwright no checkout público):** 2 comuns na sessão 2 (A-5/A-6), o mesmo A-5 na sessão 4 sem conflito (reservado nas duas), comum em assento de cadeirante recusado com aviso, PCD + acompanhante (M-8 → oferta "Vai com acompanhante?" → M-7) aprovado, acompanhante sozinho recusado, assento vendido aparece "ocupado". Hold de assento expirou sozinho (CANCELADO) como esperado.
+- **Pagamento e estorno:** pedido PCD+acompanhante (R$ 43,16) pago no sandbox com cartão de teste; o webhook aprovou e os assentos ficaram `vendido`; estorno pela tela do produtor (grupo inteiro) marcou ESTORNADO e devolveu M-8 (cadeirante) e M-7 (acompanhante) como `livre` com o tipo certo. O estorno de ingresso funciona no sandbox (o "saldo insuficiente" real em produção continua sendo o problema de split, sem chamado na Asaas).
+- **Corte de 24 h (art. 23-A do Decreto 5.296):** `seat_general_release_open` só abre com as duas condições (falta < 24 h E comuns esgotados): perto+comuns livres = fechado, longe+esgotado = fechado, perto+esgotado = aberto; nesse último estado a tela deixou um ingresso comum escolher M-15 (cadeirante) e o servidor aceitou (201). Sessão 4 restaurada depois.
+- **PDV (produtor de teste, `cartao_tap`):** comum B-3, PCD em M-16 (assento comum B-4 recusado antes) e acompanhante em M-17 vendidos; lista mostra "Lugar M-16 · PCD" e "Lugar M-17 · Acompanhante". Operador com login de equipe separado NÃO foi testado (só o produtor).
+- **Correções:** mensagem de assento comum num pedido só de PCD/acompanhante ("Este pedido é de ingresso PCD ou de acompanhante…", antes dizia "já escolheu os lugares dos ingressos comuns"); `EventPickerSheet` acrescenta "· dd/mm/aaaa HH:MM" quando dois eventos da lista têm o mesmo nome (sessões duplicadas sem rótulo eram indistinguíveis); 134 testes.
+- **Achados abertos:** a fatura da Asaas mostra o cliente antigo ("Teste da Silva / contato.estudio.cla@gmail.com") quando o CPF já existe como cliente com outro nome/e-mail (provável reuso de cliente por CPF em `create-audience-ticket`; conferir antes de produção); PDV vende PCD e acompanhante como duas vendas separadas (sem a oferta "Vai com acompanhante?" do checkout); automatizar a fatura do sandbox pela tela é frágil (autocomplete de cidade), então o pagamento de teste usou uma function temporária (`temp-sandbox-pay`, já apagada do ambiente); render do mapa lado a lado com as imagens do Guichê NÃO feito (imagens não foram reenviadas nesta sessão).
+
 ### 2026-09-25 — Fase 3, etapa 4: sessões do mesmo espetáculo no mesmo local ✅ DEV (staging) — 🚧 matriz E2E das 4 sessões pendente
 
 Detalhes em `memory/sessoes_mesmo_local_etapa4_2026_09_25.md`. Commit `bcf64c2` na `dev`; migration `20260928_event_sessions.sql` já aplicada em produção (só adiciona coluna/funções e troca o guard do sandbox por versão compatível).
