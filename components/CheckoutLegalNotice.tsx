@@ -26,6 +26,8 @@ interface CheckoutLegalNoticeProps {
   theme?: 'light' | 'dark';
   /** Esconde o badge PIX (ex: quando o checkout já força PIX). */
   hidePixRecommendation?: boolean;
+  /** 'ingresso' inclui as regras do Decreto 13.108/2026 (cancelamento/adiamento, transferência). */
+  variant?: 'geral' | 'ingresso';
 }
 
 const CheckoutLegalNotice: React.FC<CheckoutLegalNoticeProps> = ({
@@ -33,6 +35,7 @@ const CheckoutLegalNotice: React.FC<CheckoutLegalNoticeProps> = ({
   onAcceptedChange,
   theme = 'light',
   hidePixRecommendation = false,
+  variant = 'geral',
 }) => {
   const isDark = theme === 'dark';
   const [modalOpen, setModalOpen] = useState(false);
@@ -111,17 +114,28 @@ const CheckoutLegalNotice: React.FC<CheckoutLegalNoticeProps> = ({
             </div>
             <div className="text-[12px] leading-relaxed text-slate-700 dark:text-slate-300 space-y-3">
               <p>
-                Você tem direito a reembolso integral em até <strong>7 dias corridos</strong> a
-                contar da data desta compra, conforme art. 49 do Código de Defesa do Consumidor
-                (direito de arrependimento em compras online).
+                <strong>Arrependimento:</strong> você tem direito a reembolso integral em até{' '}
+                <strong>7 dias corridos</strong> a contar da data desta compra, conforme art. 49 do
+                Código de Defesa do Consumidor (compras online){variant === 'ingresso' && ' e art. 16 do Decreto nº 13.108/2026'}.
+                A devolução inclui <strong>todas as taxas</strong> cobradas na compra, inclusive a taxa de serviço.
               </p>
+              {variant === 'ingresso' && (
+                <p>
+                  <strong>Cancelamento, adiamento ou alteração relevante do evento:</strong> se o evento
+                  for cancelado, adiado ou sofrer alteração relevante (data, horário ou local), você escolhe
+                  entre <strong>nova data</strong>, <strong>crédito</strong> ou <strong>restituição integral
+                  do valor pago, incluídas as taxas</strong>, sem multa nem retenção (arts. 20 a 22 do Decreto nº 13.108/2026).
+                </p>
+              )}
               <p>
-                Após esse prazo, eventuais reembolsos ficam a critério do <strong>produtor do
-                evento</strong>, conforme política divulgada por ele.
+                Nos demais casos, pedidos feitos após o prazo de arrependimento seguem a política
+                divulgada pelo <strong>produtor do evento</strong>, sem prejuízo dos seus direitos
+                legais.
               </p>
               <p className="text-[10px] text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-white/10">
-                Para solicitar reembolso dentro do prazo legal, entre em contato com o produtor do
-                evento pelos canais informados na confirmação da compra.
+                Para solicitar reembolso, escreva para{' '}
+                <a href="mailto:contato@coreohub.com" className="underline">contato@coreohub.com</a> ou
+                use os canais informados na confirmação da compra.
               </p>
             </div>
             <button

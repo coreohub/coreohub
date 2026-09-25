@@ -432,6 +432,8 @@ interface TicketType {
   lotes?: TicketLote[];
   /** Estoque total (Tier 2). null/undefined = ilimitado. */
   quantidade_total?: number | null;
+  /** Promocional: política comercial do produtor, fora da cota de meia-entrada (Decreto 13.108 art. 10). */
+  promocional?: boolean;
   /** Assento que o ingresso aceita (mapa numerado): comum (padrão), PCD/cadeirante ou acompanhante de PCD. */
   assento_tipo?: 'comum' | 'pcd' | 'acompanhante';
 }
@@ -4107,6 +4109,23 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                             </div>
                           );
                         })()}
+
+                        {/* Promocional (Decreto 13.108 art. 10): política comercial do produtor,
+                            não conta na cota de 40% da meia-entrada e não acumula com ela. */}
+                        <label className="flex items-start gap-2 pt-2 border-t border-slate-200 dark:border-white/5 text-[10px] font-black uppercase tracking-widest text-slate-500 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={item.promocional === true}
+                            onChange={e => updateField({ promocional: e.target.checked ? true : undefined })}
+                            className="mt-0.5 w-4 h-4 accent-[#ff0068]"
+                          />
+                          <span>
+                            Ingresso promocional
+                            <span className="block normal-case tracking-normal font-medium text-slate-500 mt-0.5">
+                              Cupom, convênio ou lote promocional próprio. Não conta na cota de meia-entrada.
+                            </span>
+                          </span>
+                        </label>
                       </div>
                     );
                   })

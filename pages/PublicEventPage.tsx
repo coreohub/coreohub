@@ -27,6 +27,8 @@ const ufUtcOffset = (uf?: string | null): string => {
 };
 import { isEventOver } from '../utils/eventStatus';
 import AvisoViradaLote from '../components/AvisoViradaLote';
+import MeiaEntradaInfo from '../components/MeiaEntradaInfo';
+import { ticketCategory } from '../utils/meiaEntrada';
 import EventInfoSection from '../components/EventInfoSection';
 import { parseInfoConfig, hasInfoContent } from '../utils/eventInfo';
 
@@ -1495,6 +1497,12 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                           </div>
                           {t.obs && <p className="text-[10px] text-slate-400">{t.obs}</p>}
 
+                          {ticketCategory(t) === 'promocional' && (
+                            <p className="text-[10px] font-bold text-violet-300">
+                              Ingresso promocional · não é meia-entrada e não acumula com o benefício
+                            </p>
+                          )}
+
                           {/* Meia-entrada (Lei 12.933): sinaliza tipo + exigência de comprovação na entrada. */}
                           {(t.kind === 'meia' || String(t.nome).toLowerCase().includes('meia')) && (
                             <p className="text-[10px] font-bold text-sky-400">
@@ -1591,6 +1599,9 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                       );
                     })}
                 </div>
+                {salesEnabled && (
+                  <MeiaEntradaInfo eventId={event.id} ingressos={event.ingressos_config} seatMapEnabled={Boolean(event.seat_map_enabled)} />
+                )}
               </div>
             );
           }

@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
+import MeiaEntradaInfo from '../components/MeiaEntradaInfo';
 import SeatGrid from '../components/SeatGrid';
 import SeatLegend from '../components/SeatLegend';
 import { useSeatMap } from '../hooks/useSeatMap';
@@ -797,6 +798,11 @@ export default function CheckoutIngresso() {
           )}
         </div>
 
+        {/* Totais de meia-entrada + texto da Lei 12.933 (Decreto 8.537 art. 11: todo ponto de venda virtual) */}
+        <div className="mb-4">
+          <MeiaEntradaInfo eventId={event.id} ingressos={Array.isArray(event.ingressos_config) ? event.ingressos_config : []} seatMapEnabled={seatMapEnabled} />
+        </div>
+
         {/* Cupom de desconto */}
         <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4">
           <p className="text-xs font-black text-slate-300 uppercase tracking-widest mb-3 flex items-center gap-1.5">
@@ -982,7 +988,7 @@ export default function CheckoutIngresso() {
         )}
 
         <div className="mb-4">
-          <CheckoutLegalNotice accepted={refundAccepted} onAcceptedChange={setRefundAccepted} theme="dark" />
+          <CheckoutLegalNotice accepted={refundAccepted} onAcceptedChange={setRefundAccepted} theme="dark" variant="ingresso" />
         </div>
 
         <button
