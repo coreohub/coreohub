@@ -4,6 +4,18 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-25 (continuação 3) — Taxa fixa de plano (Essencial/Escala): 7 dias de tolerância + fatura refeita a cada clique ✅ DEV (commit `6756656`); banco e edge functions JÁ EM PRODUÇÃO — 🚧 pendente Termo, bloqueio de venda e merge em main
+
+Detalhes em `memory/taxa_plano_tolerancia_7_dias_2026_09_25.md`.
+
+- **Caso Lorrayne (Vicenza Dance Camp 2027):** ela tinha 2 faturas abertas pro mesmo evento (`pay_nocsi…` de 14/09 e `pay_4gwe…` de 18/09) e o webhook só reconhecia a salva no evento — pagar a outra deixaria o dinheiro entrar sem liberar o plano. Evento reapontado pra `pay_4gwe3yxuckmr5w3f` (com o trigger de proteção desligado só durante o UPDATE, mesmo padrão do 20260920); vencimento reaberto no painel Asaas pra 02/10/2026. "Lyris Dance Competition 2027" voltou pra Começo (10%) e o de 2026 (sem movimento) foi apagado.
+- **Modelo novo:** evento nasce JÁ no plano escolhido com a taxa pendente (`billing_plan_fixed_fee_paid_at` NULL); prazo em `events.billing_plan_fee_due_at` (migration `20260925_plan_fee_due_at.sql`, coluna protegida). Só depois do prazo o painel trava.
+- **`create-plan-fixed-fee-payment`:** idempotente (fatura em aberto reaproveitada; vencida/sumida apagada e refeita com vencimento +3 dias, sem estender o prazo do gate), 1ª fatura vence em +7 dias, boleto com `daysAfterDueDateToRegistrationCancellation: 0`, grava o plano na hora, migrada pro helper de ambiente (sandbox por evento, falha fechada — saiu da lista `LEGACY_DIRECT_READERS`).
+- **`asaas-webhook`:** confirma pelo `externalReference`, não pelo id salvo; segundo pagamento do mesmo evento vira noop com log.
+- **`PlanFeeGateModal`:** só "Pagar agora"; trava sem dispensar; reconsulta a cada 6s e destrava sozinho quando o webhook grava `paid_at`. "Descontar do meu saldo" saiu da UI (edge `deduct-plan-fee-now` e aviso do SuperAdmin ficaram).
+- **Validado no sandbox** (conta `teste.produtor@coreohub.com`, evento descartável já apagado): fatura nova, reaproveitada, plano diferente recusado, fatura sumida refeita, modal em desktop+mobile sem overflow, clique abre a fatura, destrava ~2s depois de `paid_at`. **NÃO validado:** webhook com pagamento real/sandbox de ponta a ponta, e se a Asaas aceitou o campo do boleto de 0 dia (a função cai pra "sem o campo" com log se recusar).
+- **Pendente:** (1) Termo do Produtor (7 dias, bloqueio, multa 2% + juros 1% a.m.) — só depois liga multa/juros na função; (2) bloqueio no servidor de abrir venda/inscrição durante a tolerância (levantar todos os pontos antes); (3) merge dev → main — em produção o modal antigo (2 botões, gate de 1h) segue ativo até lá; (4) aviso/lembrete durante os 7 dias.
+
 ### 2026-09-25 (continuação 2) — E-mail de estorno de ingresso + PDV com acompanhante ✅ DEV, NÃO DEPLOYADO (deploy só a partir de 27/09) — 🚧 pendente deploy + teste E2E
 
 Detalhes em `memory/estorno_email_e_pdv_acompanhante_2026_09_25.md`. Commits `f5fae3e` (A) e `e142fb2` (B) na `dev`.
