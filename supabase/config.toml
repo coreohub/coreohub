@@ -563,3 +563,18 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/update-session-status/deno.json"
 entrypoint = "./functions/update-session-status/index.ts"
+
+# Fase 5 item 4b: comprador escolhe manter/crédito/restituição numa sessão adiada/cancelada.
+# verify_jwt=false: autentica pelo access_token do ingresso; rate-limited por IP no código.
+[functions.choose-session-option]
+enabled = true
+verify_jwt = false
+import_map = "./functions/choose-session-option/deno.json"
+entrypoint = "./functions/choose-session-option/index.ts"
+
+# Fase 5 item 4b: produtor restitui em lote os pedidos da sessão. verify_jwt=true (dono/super admin).
+[functions.refund-session-orders]
+enabled = true
+verify_jwt = true
+import_map = "./functions/refund-session-orders/deno.json"
+entrypoint = "./functions/refund-session-orders/index.ts"

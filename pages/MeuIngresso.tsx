@@ -16,6 +16,7 @@ import { supabase } from '../services/supabase';
 import InstallPWAButton from '../components/InstallPWAButton';
 import AsaasBadge from '../components/AsaasBadge';
 import SessionStatusBanner, { type SessionStatusInfo } from '../components/SessionStatusBanner';
+import SessionChoicePanel from '../components/SessionChoicePanel';
 
 interface Sibling {
   id: string;
@@ -212,8 +213,9 @@ const MeuIngresso: React.FC = () => {
   const isPendente = ticket.status_pagamento === 'PENDENTE';
   const isCheckedIn = ticket.check_in_status === 'OK';
   // Status terminais que invalidam o ingresso — QR não vale mais pra entrada
-  const isInvalid = ['CANCELADO', 'VENCIDO', 'ESTORNADO'].includes(ticket.status_pagamento);
+  const isInvalid = ['CANCELADO', 'VENCIDO', 'ESTORNADO', 'CREDITO'].includes(ticket.status_pagamento);
   const invalidLabel = ticket.status_pagamento === 'ESTORNADO' ? 'Estornado'
+    : ticket.status_pagamento === 'CREDITO' ? 'Convertido em crédito'
     : ticket.status_pagamento === 'VENCIDO' ? 'Vencido'
     : 'Cancelado';
   const fallbackCode = ticket.id.replace(/-/g, '').slice(-6).toUpperCase();
@@ -299,6 +301,15 @@ const MeuIngresso: React.FC = () => {
           {sessionInfo && (sessionInfo.sessao_status === 'adiada' || sessionInfo.sessao_status === 'cancelada') && (
             <div className="p-3 print:hidden">
               <SessionStatusBanner {...sessionInfo} dataAtual={ticket.event_start_date} horaAtual={ticket.event_time} context="ingresso" theme="light" />
+              <div className="mt-3">
+                <SessionChoicePanel
+                  token={token!}
+                  sessaoStatus={sessionInfo.sessao_status as 'adiada' | 'cancelada'}
+                  statusPagamento={ticket.status_pagamento}
+                  checkedIn={isCheckedIn}
+                  onChanged={() => { void supabase.rpc('get_audience_ticket_by_token_v2', { p_token: token }).then(({ data }) => { const row = Array.isArray(data) ? data[0] : data; if (row) setTicket(row as Ticket); }); }}
+                />
+              </div>
             </div>
           )}
           {/* Family ticket nav (Tier 2): aparece quando há múltiplos tickets na compra */}
@@ -375,6 +386,8 @@ const MeuIngresso: React.FC = () => {
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-[280px]">
                   {ticket.status_pagamento === 'ESTORNADO'
                     ? 'O reembolso foi processado. O QR deste ingresso não é mais válido pra entrada.'
+                    : ticket.status_pagamento === 'CREDITO'
+                      ? 'Este ingresso foi convertido em crédito. O QR não é mais válido pra entrada; use o cupom exibido acima em outra sessão.'
                     : ticket.status_pagamento === 'VENCIDO'
                       ? 'O prazo de pagamento expirou. Faça uma nova compra se quiser participar.'
                       : 'Este ingresso foi cancelado. Em caso de dúvidas, entre em contato com o organizador.'}

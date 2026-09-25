@@ -67,9 +67,9 @@ const SessionStatusBanner: React.FC<Props> = ({
         {context === 'ingresso' && (
           <p className="opacity-90">
             {cancelada
-              ? 'Este ingresso não vale para entrada. Você tem direito à restituição integral, com as taxas, ou a crédito para outra sessão.'
-              : 'Seu ingresso continua valendo para a nova data. Se preferir, você pode pedir crédito para outra sessão ou a restituição integral, com as taxas.'}{' '}
-            Escreva para <a href="mailto:contato@coreohub.com" className="underline font-bold">contato@coreohub.com</a> informando o e-mail da compra.
+              ? 'Este ingresso não vale para entrada. Você tem direito à restituição integral, com as taxas, ou a crédito para outra sessão. Escolha logo abaixo.'
+              : 'Seu ingresso continua valendo para a nova data. Você pode mantê-lo, converter em crédito para outra sessão ou pedir a restituição integral, com as taxas. Escolha logo abaixo.'}{' '}
+            Dúvidas: <a href="mailto:contato@coreohub.com" className="underline font-bold">contato@coreohub.com</a>.
           </p>
         )}
       </div>

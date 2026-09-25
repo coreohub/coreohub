@@ -56,6 +56,9 @@ interface Row {
   group_id: string | null;
   refunded_at: string | null;
   refund_amount: number | null;
+  payment_id?: string | null;
+  sessao_escolha?: 'manter' | 'credito' | 'restituicao' | null;
+  sessao_escolha_erro?: string | null;
   created_at: string;
 }
 
@@ -69,6 +72,7 @@ const STATUS_FILTERS: Array<{ id: string; label: string }> = [
   { id: 'PENDENTE',  label: 'Pendentes' },
   { id: 'CANCELADO', label: 'Cancelados' },
   { id: 'ESTORNADO', label: 'Estornados' },
+  { id: 'CREDITO',   label: 'Em crédito' },
 ];
 
 const VendasIngressos: React.FC = () => {
@@ -95,6 +99,11 @@ const VendasIngressos: React.FC = () => {
   const [sessionSaving, setSessionSaving] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [sessionResult, setSessionResult] = useState<{ notified: number; failed: number; no_email: number } | null>(null);
+  // Escolhas dos compradores + restituição em lote (Fase 5, 4b)
+  const [bulkConfirm, setBulkConfirm] = useState<'pedidos' | 'todos' | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ refunded: number; failed: number; skipped_used: number; failures: Array<{ buyer: string | null; error: string }> } | null>(null);
+  const [bulkError, setBulkError] = useState<string | null>(null);
   // Refund modal (Tier 2)
   const [refundTarget, setRefundTarget] = useState<Row | null>(null);
   const [refundReason, setRefundReason] = useState('');
@@ -492,6 +501,61 @@ const VendasIngressos: React.FC = () => {
     return orders.size;
   }, [rows]);
 
+  // Pedidos (1 por group_id) da sessão adiada/cancelada, agrupados pela escolha do comprador.
+  const sessionPanel = useMemo(() => {
+    const orders = new Map<string, Row[]>();
+    for (const r of rows) {
+      if (['PENDENTE', 'CANCELADO', 'VENCIDO', 'CORTESIA'].includes(r.status_pagamento)) continue;
+      const key = r.group_id ?? `solo:${r.id}`;
+      orders.set(key, [...(orders.get(key) ?? []), r]);
+    }
+    const total = (list: Row[]) => list.reduce((s, r) => s + Number(r.preco ?? 0) + (r.fee_mode === 'repassar' ? Number(r.commission_amount ?? 0) : 0), 0);
+    let manter = 0, credito = 0, estornados = 0, semEscolha = 0, restituicaoPendente = 0, falhas = 0, semPagamento = 0;
+    let valorSemEscolha = 0, valorPendente = 0;
+    for (const list of orders.values()) {
+      const st = list[0].status_pagamento;
+      const escolha = list[0].sessao_escolha ?? null;
+      if (st === 'CREDITO') credito++;
+      else if (st === 'ESTORNADO') estornados++;
+      else if (st === 'APROVADO' && !list[0].payment_id) semPagamento++; // cortesia/balcão: sem cobrança Asaas pra estornar
+      else if (st === 'APROVADO' && escolha === 'restituicao') { restituicaoPendente++; valorPendente += total(list); if (list[0].sessao_escolha_erro) falhas++; }
+      else if (st === 'APROVADO' && escolha === 'manter') manter++;
+      else if (st === 'APROVADO') { semEscolha++; valorSemEscolha += total(list); }
+    }
+    return { manter, credito, estornados, semEscolha, restituicaoPendente, falhas, semPagamento, valorSemEscolha, valorPendente };
+  }, [rows]);
+
+  const runBulkRefund = async (mode: 'pedidos' | 'todos') => {
+    if (!eventId || bulkRunning) return;
+    setBulkRunning(true);
+    setBulkError(null);
+    setBulkResult(null);
+    const skip: string[] = [];
+    const acc = { refunded: 0, failed: 0, skipped_used: 0, failures: [] as Array<{ buyer: string | null; error: string }> };
+    try {
+      for (let i = 0; i < 20; i++) {
+        const { data, error: invokeErr } = await supabase.functions.invoke('refund-session-orders', {
+          body: { event_id: eventId, mode, skip_orders: skip },
+        });
+        if (invokeErr) throw new Error(await edgeErrorMessage(invokeErr, 'Não foi possível processar as restituições.'));
+        if (data?.error) throw new Error(data.error);
+        acc.refunded += data.refunded ?? 0;
+        acc.failed += data.failed ?? 0;
+        acc.skipped_used = Math.max(acc.skipped_used, (data.skipped_used ?? []).length);
+        for (const fl of (data.failures ?? [])) { skip.push(fl.order_id); acc.failures.push({ buyer: fl.buyer, error: fl.error }); }
+        if (!data.remaining) break;
+      }
+      setBulkResult(acc);
+      setBulkConfirm(null);
+    } catch (e: any) {
+      setBulkError(e.message ?? String(e));
+      setBulkResult(acc);
+    } finally {
+      setBulkRunning(false);
+      if (selectedEventId) void load(selectedEventId);
+    }
+  };
+
   const openSessionModal = () => {
     setSessionError(null);
     setSessionResult(null);
@@ -638,6 +702,73 @@ const VendasIngressos: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Escolhas dos compradores numa sessão adiada/cancelada + restituição em lote (Decreto 13.108 arts. 20-22) */}
+      {sessionInfo.status !== 'agendada' && (
+        <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-5 space-y-3">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+            <CalendarClock size={12} /> Sessão {sessionInfo.status === 'cancelada' ? 'cancelada' : 'adiada'}: escolhas dos compradores
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
+            {([
+              ['Sem resposta', sessionPanel.semEscolha],
+              ...(sessionInfo.status === 'adiada' ? [['Mantiveram', sessionPanel.manter]] : []),
+              ['Em crédito', sessionPanel.credito],
+              ['Restituição pedida', sessionPanel.restituicaoPendente],
+              ['Estornados', sessionPanel.estornados],
+            ] as Array<[string, number]>).map(([label, n]) => (
+              <div key={label} className="bg-slate-50 dark:bg-white/5 rounded-xl py-2 px-1">
+                <p className="text-xl font-black text-slate-900 dark:text-white tabular-nums">{n}</p>
+                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">{label}</p>
+              </div>
+            ))}
+          </div>
+          {sessionPanel.semPagamento > 0 && (
+            <p className="text-xs text-slate-500">{sessionPanel.semPagamento} pedido(s) sem cobrança na plataforma (cortesia ou venda no balcão): não entram no estorno em lote; devolva por fora, se for o caso.</p>
+          )}
+          {sessionPanel.falhas > 0 && (
+            <p className="text-xs text-rose-600 dark:text-rose-300 flex items-start gap-1.5"><AlertCircle size={12} className="mt-0.5 shrink-0" /> {sessionPanel.falhas} restituição(ões) falharam no Asaas. Reprocesse abaixo; se persistir, confira o saldo da conta.</p>
+          )}
+
+          {bulkConfirm ? (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 space-y-2 text-xs text-amber-800 dark:text-amber-200">
+              <p>
+                {bulkConfirm === 'pedidos'
+                  ? `Estornar ${sessionPanel.restituicaoPendente} pedido(s) que pediram restituição, total de ${formatBRL(sessionPanel.valorPendente)} (com as taxas).`
+                  : `Estornar ${sessionPanel.semEscolha + sessionPanel.restituicaoPendente} pedido(s), total de ${formatBRL(sessionPanel.valorSemEscolha + sessionPanel.valorPendente)} (com as taxas), incluindo quem não respondeu. Quem já usou o ingresso na entrada é pulado.`}
+                {' '}O estorno sai da sua conta Asaas e não pode ser desfeito.
+              </p>
+              <div className="flex gap-2">
+                <button type="button" disabled={bulkRunning} onClick={() => setBulkConfirm(null)} className="px-4 py-2 rounded-xl border border-slate-300 dark:border-white/10 text-[10px] font-black uppercase tracking-widest">Voltar</button>
+                <button type="button" disabled={bulkRunning} onClick={() => runBulkRefund(bulkConfirm)} className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1.5 disabled:opacity-50">
+                  {bulkRunning ? <Loader2 size={12} className="animate-spin" /> : <Undo2 size={12} />} {bulkRunning ? 'Estornando...' : 'Confirmar estorno'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <button type="button" disabled={sessionPanel.restituicaoPendente === 0} onClick={() => { setBulkResult(null); setBulkError(null); setBulkConfirm('pedidos'); }}
+                className="px-4 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-[10px] font-black uppercase tracking-widest disabled:opacity-40">
+                Processar restituições pedidas ({sessionPanel.restituicaoPendente})
+              </button>
+              {sessionInfo.status === 'cancelada' && (
+                <button type="button" disabled={sessionPanel.semEscolha + sessionPanel.restituicaoPendente === 0} onClick={() => { setBulkResult(null); setBulkError(null); setBulkConfirm('todos'); }}
+                  className="px-4 py-2 rounded-xl bg-rose-500 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-40">
+                  Restituir todos ({sessionPanel.semEscolha + sessionPanel.restituicaoPendente})
+                </button>
+              )}
+            </div>
+          )}
+
+          {bulkError && <p className="text-xs text-rose-600 dark:text-rose-300 flex items-start gap-1.5"><AlertCircle size={12} className="mt-0.5 shrink-0" /> {bulkError}</p>}
+          {bulkResult && (
+            <div className="text-xs text-slate-700 dark:text-slate-300 space-y-1">
+              <p>Estornados agora: <strong>{bulkResult.refunded}</strong>{bulkResult.failed > 0 && <> · falharam: <strong>{bulkResult.failed}</strong></>}{bulkResult.skipped_used > 0 && <> · pulados (já usaram o ingresso): <strong>{bulkResult.skipped_used}</strong></>}</p>
+              {bulkResult.failures.slice(0, 5).map((fl, i) => <p key={i} className="text-rose-600 dark:text-rose-300">{fl.buyer ?? 'Comprador'}: {fl.error}</p>)}
+            </div>
+          )}
+        </div>
+      )}
 
       {err && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm text-red-600 dark:text-red-300 flex items-start gap-2">
@@ -1550,6 +1681,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     PENDENTE:  { label: 'Pendente',   cls: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',     icon: Clock },
     CANCELADO: { label: 'Cancelado',  cls: 'bg-slate-500/10 text-slate-500',                          icon: XCircle },
     ESTORNADO: { label: 'Estornado',  cls: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',         icon: XCircle },
+    CREDITO:   { label: 'Crédito',    cls: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',   icon: Ticket },
     VENCIDO:   { label: 'Vencido',    cls: 'bg-slate-500/10 text-slate-500',                          icon: XCircle },
     CORTESIA:  { label: 'Cortesia',   cls: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',   icon: CheckCircle2 },
   };

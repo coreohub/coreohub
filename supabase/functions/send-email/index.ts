@@ -777,7 +777,7 @@ function buildAudienceSessionChanged(p: AudienceSessionChangedPayload) {
       <li><strong>Crédito</strong> no valor pago para usar em outra sessão.</li>
       <li><strong>Restituição integral</strong> do valor pago, <strong>incluindo as taxas</strong>, sem multa nem retenção.</li>
     </ul>
-    <p style="margin:12px 0 0;font-size:13px;color:#334155;line-height:1.6;">Para escolher crédito ou restituição, responda este e-mail informando o seu nome e o e-mail da compra.</p>`
+    <p style="margin:12px 0 0;font-size:13px;color:#334155;line-height:1.6;">Você escolhe na página do seu ingresso (botão abaixo). Se preferir, responda este e-mail informando o seu nome e o e-mail da compra.</p>`
 
   if (p.status === 'agendada') {
     return {
@@ -817,6 +817,48 @@ function buildAudienceSessionChanged(p: AudienceSessionChangedPayload) {
       ctaLabel: p.ingressoUrl ? 'Ver meu ingresso' : undefined,
       ctaUrl: p.ingressoUrl,
       footerNote: 'Este aviso é enviado por determinação dos arts. 20 a 22 do Decreto nº 13.108/2026. Em caso de dúvidas, responda este e-mail.',
+      includeAsaasSeal: false,
+    }),
+  }
+}
+
+// ─── Template: audience_session_credit (comprador) ───────────────────────────
+// Crédito (cupom) gerado quando o comprador escolhe crédito numa sessão
+// adiada/cancelada (Decreto 13.108/2026, arts. 20-22). Sem selo Asaas.
+
+interface AudienceSessionCreditPayload {
+  buyerName?: string
+  buyerEmail?: string
+  produtorEmail?: string
+  eventoNome?: string
+  codigo: string
+  valor: number
+  /** Validade já formatada pelo caller (dd/mm/aaaa). */
+  validoAte?: string
+  ingressos?: Array<{ nome: string; assento?: string | null }>
+  eventoUrl?: string
+}
+
+function buildAudienceSessionCredit(p: AudienceSessionCreditPayload) {
+  const lista = (p.ingressos ?? []).filter(i => i?.nome)
+  const linhas = [
+    p.eventoNome ? infoRow('Evento', escape(p.eventoNome)) : '',
+    lista.length > 0 ? infoRow(lista.length > 1 ? 'Ingressos convertidos' : 'Ingresso convertido', lista.map(i => escape(i.assento ? `${i.nome} — lugar ${i.assento}` : i.nome)).join('<br>')) : '',
+    infoRow('Valor do crédito', escape(money(p.valor))),
+    infoRow('Código do cupom', `<span style="font-family:monospace;font-size:18px;letter-spacing:.08em;">${escape(p.codigo)}</span>`),
+    p.validoAte ? infoRow('Válido até', escape(p.validoAte)) : '',
+  ].filter(Boolean).join('')
+  return {
+    subject: `Seu crédito de ingresso — ${p.eventoNome ?? 'CoreoHub'}`,
+    html: baseLayout({
+      preheader: `Crédito de ${money(p.valor)}: use o código ${p.codigo} em outra sessão.`,
+      title: 'Seu crédito está pronto',
+      intro: `Olá ${escape(p.buyerName ?? 'comprador(a)')}, o seu ingresso de ${escape(p.eventoNome ?? 'o evento')} foi convertido em crédito, como você pediu. Use o código abaixo no campo de cupom do checkout de outra sessão do mesmo espetáculo.`,
+      contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>
+        <p style="margin:12px 0 0;font-size:13px;color:#334155;line-height:1.6;">O crédito é de uso único. Se o valor da nova compra for menor, a diferença não é devolvida; se for maior, você paga só o restante. Se preferir a restituição em dinheiro, responda este e-mail antes de usar o código.</p>`,
+      ctaLabel: p.eventoUrl ? 'Ver o espetáculo' : undefined,
+      ctaUrl: p.eventoUrl,
+      footerNote: 'Este crédito decorre dos arts. 20 a 22 do Decreto nº 13.108/2026. Em caso de dúvidas, responda este e-mail.',
       includeAsaasSeal: false,
     }),
   }
@@ -1879,6 +1921,7 @@ interface SendEmailRequest {
     | 'audience_ticket_refunded'
     | 'audience_ticket_refunded_producer'
     | 'audience_session_changed'
+    | 'audience_session_credit'
     | 'workshop_registration_confirmed'
     | 'workshop_registration_producer'
     | 'workshop_pass_confirmed'
@@ -2074,6 +2117,18 @@ Deno.serve(async (req) => {
         if (!p.buyerEmail) throw new Error('buyerEmail é obrigatório')
         if (typeof p.refundAmount !== 'number') throw new Error('refundAmount é obrigatório')
         const tpl = buildAudienceRefundBuyer(p)
+        to = p.buyerEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        replyTo = p.produtorEmail
+        break
+      }
+      case 'audience_session_credit': {
+        const p = payload as unknown as AudienceSessionCreditPayload
+        if (!p.buyerEmail) throw new Error('buyerEmail é obrigatório')
+        if (!p.codigo || typeof p.valor !== 'number') throw new Error('codigo e valor são obrigatórios')
+        const tpl = buildAudienceSessionCredit(p)
         to = p.buyerEmail
         subject = tpl.subject
         html = tpl.html
