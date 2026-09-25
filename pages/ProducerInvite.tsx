@@ -64,6 +64,17 @@ const ProducerInviteLanding = () => {
           role:      'ORGANIZER',
         }, { onConflict: 'id' });
 
+      // Se o profile já existia (UPDATE), o trigger de proteção reverte a role — promove via
+      // edge function (só funciona com sessão; sem sessão o Gate promove no primeiro acesso).
+      if (data.session) {
+        try {
+          const { data: p } = await supabase.from('profiles').select('role').eq('id', data.user.id).maybeSingle();
+          if (p && p.role !== 'ORGANIZER' && p.role !== 'COREOHUB_ADMIN') {
+            await supabase.functions.invoke('promote-to-organizer');
+          }
+        } catch { /* best-effort */ }
+      }
+
       // 3. Marca convite como usado
       if (token) await markInviteUsed(token, data.user.id);
 

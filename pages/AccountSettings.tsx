@@ -1163,6 +1163,13 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
   const handleDisconnectAsaas = async () => {
     if (!currentUserId) return;
+    // As colunas asaas_* são protegidas no banco (trigger protect_profiles_privileged_columns):
+    // só service_role/super admin as alteram, senão qualquer produtor poderia apontar o repasse
+    // pra outra carteira. Desconectar uma subconta com saldo/D+7 também não é ação de 1 clique.
+    if (!isAdmin) {
+      alert('Para desconectar sua conta de pagamento, fale com o suporte da CoreoHub (contato@coreohub.com). Isso evita perder repasses em andamento.');
+      return;
+    }
     if (!confirm('Deseja desconectar sua conta? Os pagamentos ficarão indisponíveis até reconectar.')) return;
     setAsaasLoading(true);
     await supabase.from('profiles').update({
