@@ -22,6 +22,7 @@ import SeatLegend from '../components/SeatLegend';
 import { ticketSeatKind } from '../supabase/functions/_shared/seat-rules';
 import { SEAT_TIPO_LABEL, seatTipoFromLayout } from '../utils/seatTipo';
 import { useSeatMap } from '../hooks/useSeatMap';
+import { companionBySpecial, tipoFromRow, isSpecialTipo, type SeatTipo } from '../utils/seatSelection';
 import { maskCpfCnpj, unmaskCpfCnpj, maskTelefoneBR, unmaskTelefoneBR } from '../utils/masks';
 
 interface TicketTypeConfig {
@@ -117,6 +118,8 @@ const VendasIngressos: React.FC = () => {
   // Assento numerado (Fase 2 Stage 4) — mini-mapa read-only + seletor no PDV
   const [seatMapEnabled, setSeatMapEnabled] = useState(false);
   const [pdvSelectedSeats, setPdvSelectedSeats] = useState<string[]>([]);
+  // Venda PCD + acompanhante na MESMA venda (padrão Ticketmaster/Bilheteria Digital).
+  const [pdvCompanion, setPdvCompanion] = useState(false);
 
   const load = async (targetEventId: string) => {
     setLoading(true);
@@ -216,19 +219,65 @@ const VendasIngressos: React.FC = () => {
     };
   }, [seatStatuses]);
 
-  // Balcão vende 1 tipo por venda: o tipo escolhido define as regras de assento (Fase 3).
+  // O tipo escolhido define as regras de assento (Fase 3). Um ingresso PCD pode levar
+  // o acompanhante na mesma venda (2º ingresso, tipo "acompanhante" do evento).
   const pdvSeatKind = ticketSeatKind(ticketTypes[pdvTypeIdx] as any);
+  const pdvCompanionTypeIdx = useMemo(() => {
+    const i = ticketTypes.findIndex(t => t?.nome && ticketSeatKind(t as any) === 'acompanhante');
+    return i >= 0 ? i : null;
+  }, [ticketTypes]);
+  const pdvCompOn = pdvSeatKind === 'pcd' && pdvCompanion && pdvCompanionTypeIdx != null;
+  const pdvTotalQty = pdvQuantity + (pdvCompOn ? 1 : 0);
   const pdvPcdQty = pdvSeatKind === 'pcd' ? pdvQuantity : 0;
-  const pdvCompQty = pdvSeatKind === 'acompanhante' ? pdvQuantity : 0;
+  const pdvCompQty = pdvSeatKind === 'acompanhante' ? pdvQuantity : (pdvCompOn ? 1 : 0);
   const pdvComumQty = pdvSeatKind === 'comum' ? pdvQuantity : 0;
 
+  const pdvCompanionOfSpecial = useMemo(() => companionBySpecial(rowsConfig), [rowsConfig]);
+  const pdvTipoOfSeat = (id: string): SeatTipo => {
+    const st = seatStatuses[id]?.seat_tipo as SeatTipo | undefined;
+    if (st) return st;
+    const cut = id.lastIndexOf('-');
+    const row = rowsConfig?.find(r => r.codigo === id.slice(0, cut));
+    return row ? tipoFromRow(row, Number(id.slice(cut + 1))) : 'comum';
+  };
+
+  // Oferta "Adicionar acompanhante": 1 ingresso PCD com assento especial escolhido, vizinho livre.
+  const pdvCompanionOffer = useMemo(() => {
+    if (!seatMapEnabled || pdvSeatKind !== 'pcd' || pdvQuantity !== 1 || pdvCompanionTypeIdx == null || pdvCompanion) return null;
+    for (const id of pdvSelectedSeats) {
+      if (!isSpecialTipo(pdvTipoOfSeat(id))) continue;
+      const comp = pdvCompanionOfSpecial[id];
+      if (!comp || pdvSelectedSeats.includes(comp)) continue;
+      if (seatStatuses[comp]?.status !== 'livre') continue;
+      return { special: id, comp };
+    }
+    return null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seatMapEnabled, pdvSeatKind, pdvQuantity, pdvCompanionTypeIdx, pdvCompanion, pdvSelectedSeats, pdvCompanionOfSpecial, seatStatuses, rowsConfig]);
+
+  const addPdvCompanion = () => {
+    if (!pdvCompanionOffer) return;
+    setPdvCompanion(true);
+    setPdvSelectedSeats(prev => (prev.includes(pdvCompanionOffer.comp) ? prev : [...prev, pdvCompanionOffer.comp]));
+  };
+
   const togglePdvSeat = (seatId: string) => {
-    setPdvSelectedSeats(prev => {
-      if (prev.includes(seatId)) return prev.filter(id => id !== seatId);
-      if (seatStatuses[seatId]?.status !== 'livre') return prev;
-      if (prev.length >= pdvQuantity) return prev;
-      return [...prev, seatId];
-    });
+    const prev = pdvSelectedSeats;
+    if (prev.includes(seatId)) {
+      // Tirar o assento PCD leva junto o acompanhante dele (a venda volta a 1 ingresso).
+      const comp = pdvCompanionOfSpecial[seatId];
+      if (pdvCompanion && comp && prev.includes(comp)) {
+        setPdvSelectedSeats(prev.filter(id => id !== seatId && id !== comp));
+        setPdvCompanion(false);
+        return;
+      }
+      if (pdvCompanion && pdvTipoOfSeat(seatId) === 'acompanhante') setPdvCompanion(false);
+      setPdvSelectedSeats(prev.filter(id => id !== seatId));
+      return;
+    }
+    if (seatStatuses[seatId]?.status !== 'livre') return;
+    if (prev.length >= pdvTotalQty) return;
+    setPdvSelectedSeats([...prev, seatId]);
   };
 
   // ─── Métricas ─────────────────────────────────────────────────────────────
@@ -362,17 +411,25 @@ const VendasIngressos: React.FC = () => {
       setPdvError('Preencha nome, e-mail e CPF válido.');
       return;
     }
-    if (seatMapEnabled && pdvSelectedSeats.length !== pdvQuantity) {
-      setPdvError(`Escolha exatamente ${pdvQuantity} assento(s).`);
+    if (seatMapEnabled && pdvSelectedSeats.length !== pdvTotalQty) {
+      setPdvError(`Escolha exatamente ${pdvTotalQty} assento(s).`);
       return;
     }
+    // PCD + acompanhante: 2 itens na mesma venda; assentos na ordem dos itens (PCD primeiro).
+    const orderedSeats = pdvCompOn
+      ? [...pdvSelectedSeats.filter(id => pdvTipoOfSeat(id) !== 'acompanhante'), ...pdvSelectedSeats.filter(id => pdvTipoOfSeat(id) === 'acompanhante')]
+      : pdvSelectedSeats;
     setPdvSaving(true);
     try {
       const { data, error: invokeErr } = await supabase.functions.invoke('create-pdv-ticket', {
         body: {
           event_id: eventId,
-          ticket_type_idx: pdvTypeIdx,
-          quantity: pdvQuantity,
+          ...(pdvCompOn
+            ? { items: [
+                { ticket_type_idx: pdvTypeIdx, quantity: pdvQuantity },
+                { ticket_type_idx: pdvCompanionTypeIdx, quantity: 1 },
+              ] }
+            : { ticket_type_idx: pdvTypeIdx, quantity: pdvQuantity }),
           buyer: {
             name: pdvForm.name.trim(),
             email: pdvForm.email.trim(),
@@ -380,7 +437,7 @@ const VendasIngressos: React.FC = () => {
             phone: unmaskTelefoneBR(pdvForm.phone) || undefined,
           },
           payment_method: pdvMethod,
-          ...(seatMapEnabled ? { seat_ids: pdvSelectedSeats } : {}),
+          ...(seatMapEnabled ? { seat_ids: orderedSeats } : {}),
         },
       });
       if (invokeErr) {
@@ -421,7 +478,7 @@ const VendasIngressos: React.FC = () => {
     setPdvTypeIdx(0);
     setPdvQuantity(1);
     setPdvMethod('pix');
-    setPdvSelectedSeats([]);
+    setPdvSelectedSeats([]); setPdvCompanion(false);
   };
 
   // Enquanto o PIX no balcão está PENDENTE, o realtime (assinatura já
@@ -836,7 +893,7 @@ const VendasIngressos: React.FC = () => {
                     <select
                       id="pdv-type"
                       value={pdvTypeIdx}
-                      onChange={e => { setPdvTypeIdx(Number(e.target.value)); setPdvSelectedSeats([]); }}
+                      onChange={e => { setPdvTypeIdx(Number(e.target.value)); setPdvSelectedSeats([]); setPdvCompanion(false); }}
                       className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white dark:[color-scheme:dark] focus:outline-none focus:border-[#ff0068]/50"
                     >
                       {ticketTypes.map((t, idx) => (
@@ -855,7 +912,8 @@ const VendasIngressos: React.FC = () => {
                       onChange={e => {
                         const q = Math.max(1, Math.min(20, Number(e.target.value) || 1));
                         setPdvQuantity(q);
-                        setPdvSelectedSeats(prev => prev.slice(0, q));
+                        setPdvCompanion(false);
+                        setPdvSelectedSeats(prev => prev.filter(id => pdvTipoOfSeat(id) !== 'acompanhante' || pdvSeatKind === 'acompanhante').slice(0, q));
                       }}
                       className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
                     />
@@ -867,7 +925,7 @@ const VendasIngressos: React.FC = () => {
                         <span className="block text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
                           <Armchair size={12} /> Escolher lugar
                         </span>
-                        <span className="text-[10px] text-slate-500">{pdvSelectedSeats.length}/{pdvQuantity}</span>
+                        <span className="text-[10px] text-slate-500">{pdvSelectedSeats.length}/{pdvTotalQty}</span>
                       </div>
                       <div className="border border-slate-200 dark:border-white/10 rounded-xl p-2">
                         <SeatGrid
@@ -884,6 +942,25 @@ const VendasIngressos: React.FC = () => {
                         />
                         <SeatLegend rowsConfig={rowsConfig} variant="auto" />
                       </div>
+                      {pdvCompanionOffer && (
+                        <div className="mt-2 flex items-center gap-3 bg-sky-500/10 border border-sky-500/30 rounded-xl p-3 text-xs text-sky-700 dark:text-sky-200">
+                          <p className="flex-1">
+                            <strong>Vai com acompanhante?</strong> O lugar {pdvCompanionOffer.comp}, ao lado do {pdvCompanionOffer.special}, está reservado para ele. Sai na mesma venda.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={addPdvCompanion}
+                            className="px-3 py-2 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-[10px] font-black uppercase tracking-widest cursor-pointer"
+                          >
+                            Adicionar acompanhante
+                          </button>
+                        </div>
+                      )}
+                      {pdvCompOn && (
+                        <p className="mt-2 text-[11px] text-sky-700 dark:text-sky-300">
+                          Venda com acompanhante: {pdvQuantity}× PCD + 1× {ticketTypes[pdvCompanionTypeIdx as number]?.nome}.
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -980,7 +1057,7 @@ const VendasIngressos: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleSellPdv}
-                    disabled={pdvSaving || ticketTypes.length === 0 || (seatMapEnabled && pdvSelectedSeats.length !== pdvQuantity)}
+                    disabled={pdvSaving || ticketTypes.length === 0 || (seatMapEnabled && pdvSelectedSeats.length !== pdvTotalQty)}
                     className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-xl text-[11px] font-black uppercase tracking-widest inline-flex items-center justify-center gap-2"
                   >
                     {pdvSaving ? <Loader2 size={14} className="animate-spin" /> : <Store size={14} />}

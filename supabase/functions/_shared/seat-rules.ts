@@ -39,3 +39,31 @@ export function countCompanionTickets(items: Array<{ seatKind: TicketSeatKind; q
 export function effectiveTicketKind(kind: string, seatKind: TicketSeatKind): string {
   return seatKind === 'comum' ? kind : 'outro'
 }
+
+/**
+ * Vários tipos na mesma venda: o vínculo assento↔ingresso segue a ORDEM dos itens,
+ * então os assentos precisam chegar alinhados por tipo (PCD → assento especial,
+ * acompanhante → assento de acompanhante, comum → o resto), sem depender da ordem
+ * em que o cliente os mandou. Depois da liberação geral qualquer assento serve:
+ * o que sobrar entra na ordem original.
+ */
+export function alignSeatsToItems(
+  items: Array<{ seatKind: TicketSeatKind; quantity: number }>,
+  seatIds: string[],
+  tipoById: Map<string, string>,
+): string[] {
+  const prefers = (k: TicketSeatKind, tipo: string) =>
+    k === 'pcd' ? (tipo === 'cadeirante' || tipo === 'pcd_largo')
+    : k === 'acompanhante' ? tipo === 'acompanhante'
+    : tipo === 'comum'
+  const left = [...seatIds]
+  const aligned: string[] = []
+  for (const it of items) {
+    for (let n = 0; n < it.quantity && left.length > 0; n++) {
+      let i = left.findIndex(id => prefers(it.seatKind, tipoById.get(id) ?? 'comum'))
+      if (i < 0) i = 0
+      aligned.push(left.splice(i, 1)[0])
+    }
+  }
+  return aligned
+}

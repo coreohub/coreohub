@@ -38,7 +38,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { computeAudienceCart, round2 } from '../_shared/audience-pricing.ts'
 import { buildCorsHeaders } from '../_shared/cors.ts'
-import { ticketSeatKind, effectiveTicketKind } from '../_shared/seat-rules.ts'
+import { ticketSeatKind, effectiveTicketKind, countPcdTickets, countCompanionTickets, alignSeatsToItems, type TicketSeatKind } from '../_shared/seat-rules.ts'
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 
@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
     const quantity = Math.max(1, Math.min(20, Number(body.quantity ?? 1)))
 
     if (!event_id) throw new Error('event_id obrigatório')
-    if (typeof ticket_type_idx !== 'number') throw new Error('ticket_type_idx obrigatório')
+    if (typeof ticket_type_idx !== 'number' && !(Array.isArray(body.items) && body.items.length > 0)) throw new Error('ticket_type_idx ou items obrigatório')
     if (payment_method !== 'pix' && payment_method !== 'cartao_tap') {
       throw new Error("payment_method deve ser 'pix' ou 'cartao_tap'")
     }
@@ -173,23 +173,56 @@ Deno.serve(async (req) => {
     }
 
     const ingressos: any[] = Array.isArray(event.ingressos_config) ? event.ingressos_config : []
-    const t = ingressos[ticket_type_idx]
-    if (!t?.nome) throw new Error('Tipo de ingresso inválido')
-    const precoUnit = resolvePreco(t)
-    if (precoUnit <= 0) throw new Error(`Preço inválido para "${t.nome}"`)
-    const kind = effectiveTicketKind(detectKind(t.nome, t.kind), ticketSeatKind(t))
-    const quantidadeTotal: number | null =
-      t.quantidade_total != null && Number(t.quantidade_total) > 0 ? Number(t.quantidade_total) : null
+
+    // ── Itens da venda: `items[]` (vários tipos na mesma venda — ex.: PCD +
+    // acompanhante, padrão de mercado) OU o formato antigo (ticket_type_idx +
+    // quantity). Os seat_ids seguem a ORDEM dos itens (cada tipo, na ordem em que
+    // aparece, consome quantity assentos).
+    const mergedQty = new Map<number, number>()
+    if (Array.isArray(body.items) && body.items.length > 0) {
+      for (const it of body.items as Array<{ ticket_type_idx?: number; quantity?: number }>) {
+        if (typeof it?.ticket_type_idx !== 'number') throw new Error('ticket_type_idx inválido em items')
+        const q = Math.max(1, Math.min(20, Number(it.quantity ?? 1)))
+        mergedQty.set(it.ticket_type_idx, (mergedQty.get(it.ticket_type_idx) ?? 0) + q)
+      }
+    } else {
+      mergedQty.set(ticket_type_idx as number, quantity)
+    }
+
+    type ResolvedItem = {
+      idx: number; nome: string; kind: string; quantity: number
+      precoUnit: number; quantidadeTotal: number | null; seatKind: TicketSeatKind
+    }
+    const resolved: ResolvedItem[] = []
+    let totalQty = 0
+    let totalBase = 0
+    for (const [idx, q] of mergedQty.entries()) {
+      const tt = ingressos[idx]
+      if (!tt?.nome) throw new Error('Tipo de ingresso inválido')
+      const preco = resolvePreco(tt)
+      if (preco <= 0) throw new Error(`Preço inválido para "${tt.nome}"`)
+      const seatKind = ticketSeatKind(tt)
+      // PCD/acompanhante ficam fora do limite de 1 meia por venda (base legal própria).
+      const k = effectiveTicketKind(detectKind(tt.nome, tt.kind), seatKind)
+      const qTotal: number | null =
+        tt.quantidade_total != null && Number(tt.quantidade_total) > 0 ? Number(tt.quantidade_total) : null
+      resolved.push({ idx, nome: String(tt.nome), kind: k, quantity: q, precoUnit: preco, quantidadeTotal: qTotal, seatKind })
+      totalQty += q
+      totalBase += preco * q
+    }
+    totalBase = round2(totalBase)
+    const itemsDesc = resolved.map(r => `${r.quantity}x ${r.nome}`).join(', ')
 
     const maxPerPurchase = Number(event.audience_max_per_purchase ?? 6)
     const maxPerCpf = Number(event.audience_max_per_cpf ?? 6)
-    if (quantity > maxPerPurchase) throw new Error(`Limite de ${maxPerPurchase} ingressos por venda`)
-    if (kind === 'meia' && quantity > 1) throw new Error('Lei 12.933: meia-entrada limitada a 1 por CPF')
+    if (totalQty > maxPerPurchase) throw new Error(`Limite de ${maxPerPurchase} ingressos por venda`)
+    const meiaQty = resolved.filter(r => r.kind === 'meia').reduce((s, r) => s + r.quantity, 0)
+    if (meiaQty > 1) throw new Error('Lei 12.933: meia-entrada limitada a 1 por CPF')
 
     const seatMapEnabled = Boolean((event as any).seat_map_enabled)
-    const seatIds = Array.isArray(seatIdsRaw) ? seatIdsRaw.filter(s => typeof s === 'string' && s.trim()) : []
+    let seatIds = Array.isArray(seatIdsRaw) ? seatIdsRaw.filter(s => typeof s === 'string' && s.trim()) : []
     if (seatMapEnabled) {
-      if (seatIds.length !== quantity) throw new Error(`Selecione exatamente ${quantity} assento(s)`)
+      if (seatIds.length !== totalQty) throw new Error(`Selecione exatamente ${totalQty} assento(s)`)
       if (new Set(seatIds).size !== seatIds.length) throw new Error('Assento selecionado mais de uma vez')
 
       // Mesmas regras do checkout público (Decreto 9.404/2018): o balcão também
@@ -197,15 +230,28 @@ Deno.serve(async (req) => {
       const { data: seatRuleMsg, error: seatRuleErr } = await supabase.rpc('validate_seat_cart', {
         p_event_id:    event_id,
         p_seat_ids:    seatIds,
-        p_pcd_qty:     ticketSeatKind(t) === 'pcd' ? quantity : 0,
+        p_pcd_qty:     countPcdTickets(resolved),
         p_require_pcd: true,
-        p_comp_qty:    ticketSeatKind(t) === 'acompanhante' ? quantity : 0,
+        p_comp_qty:    countCompanionTickets(resolved),
       })
       if (seatRuleErr) {
         console.error('[create-pdv-ticket] erro validate_seat_cart:', seatRuleErr.message)
         throw new Error('Falha ao validar os assentos')
       }
       if (seatRuleMsg) throw new Error(String(seatRuleMsg))
+
+      // Vários tipos na venda: o vínculo assento↔ingresso segue a ORDEM dos itens.
+      // Não confia na ordem que o cliente mandou: alinha por tipo de assento (PCD →
+      // assento especial, acompanhante → assento de acompanhante, comum → o resto).
+      if (resolved.length > 1) {
+        const { data: tipoRows } = await supabase
+          .from('event_seats')
+          .select('seat_id, seat_tipo')
+          .eq('event_id', event_id)
+          .in('seat_id', seatIds)
+        const tipoById = new Map((tipoRows ?? []).map((r: any) => [r.seat_id as string, String(r.seat_tipo ?? 'comum')]))
+        seatIds = alignSeatsToItems(resolved, seatIds, tipoById)
+      }
     }
 
     // ── Comissão: normal no PIX (processa via Asaas de verdade), zero no Tap
@@ -216,13 +262,16 @@ Deno.serve(async (req) => {
     const feeMode = (event as any).audience_fee_mode ?? 'repassar'
 
     const pricing = computeAudienceCart({
-      resolved: [{ idx: ticket_type_idx, nome: String(t.nome), kind, quantity, precoUnit, quantidadeTotal }],
-      totalBase: round2(precoUnit * quantity),
+      resolved: resolved.map(r => ({
+        idx: r.idx, nome: r.nome, kind: r.kind,
+        quantity: r.quantity, precoUnit: r.precoUnit, quantidadeTotal: r.quantidadeTotal,
+      })),
+      totalBase,
       discountTotal: 0,
       commissionPercent,
       feeMode,
     })
-    const item = pricing.items[0]
+    const rpcItems = pricing.items
     const chargedTotal = pricing.chargedTotal
     const producerTotal = pricing.producerTotal
 
@@ -233,24 +282,47 @@ Deno.serve(async (req) => {
     // ── Reserva atômica (mesma trava de estoque/CPF/Lei 12.933 do checkout
     // público — venda presencial decrementa o MESMO estoque, sem isso venderia
     // 2x o mesmo lugar) ───────────────────────────────────────────────────────
-    const { data: reserveData, error: reserveErr } = await supabase.rpc('try_reserve_audience_tickets', {
-      p_event_id: event_id,
-      p_cpf: cpfLimpo,
-      p_kind: kind,
-      p_quantity: quantity,
-      p_max_per_cpf: maxPerCpf,
-      p_ticket_type_id: item.ticket_type_id,
-      p_ticket_type_nome: item.ticket_type_nome,
-      p_preco: item.preco,
-      p_buyer_name: buyerName,
-      p_buyer_email: buyerEmail,
-      p_buyer_phone: buyerPhone,
-      p_commission_amount: item.commission_amount,
-      p_producer_amount: item.producer_amount,
-      p_fee_mode: feeMode,
-      p_quantidade_total: quantidadeTotal,
-      p_reserved_minutes: 10,
-    })
+    // Venda de 1 tipo → RPC v1 (caminho de sempre, inalterado). Vários tipos na
+    // mesma venda (PCD + acompanhante) → RPC v2, que agrupa sob 1 group_id.
+    let reserveData: any
+    let reserveErr: any
+    if (rpcItems.length === 1) {
+      const item = rpcItems[0]
+      const r = await supabase.rpc('try_reserve_audience_tickets', {
+        p_event_id: event_id,
+        p_cpf: cpfLimpo,
+        p_kind: resolved[0].kind,
+        p_quantity: resolved[0].quantity,
+        p_max_per_cpf: maxPerCpf,
+        p_ticket_type_id: item.ticket_type_id,
+        p_ticket_type_nome: item.ticket_type_nome,
+        p_preco: item.preco,
+        p_buyer_name: buyerName,
+        p_buyer_email: buyerEmail,
+        p_buyer_phone: buyerPhone,
+        p_commission_amount: item.commission_amount,
+        p_producer_amount: item.producer_amount,
+        p_fee_mode: feeMode,
+        p_quantidade_total: resolved[0].quantidadeTotal,
+        p_reserved_minutes: 10,
+      })
+      reserveData = r.data; reserveErr = r.error
+    } else {
+      const r = await supabase.rpc('try_reserve_audience_tickets_v2', {
+        p_event_id: event_id,
+        p_cpf: cpfLimpo,
+        p_buyer_name: buyerName,
+        p_buyer_email: buyerEmail,
+        p_buyer_phone: buyerPhone,
+        p_max_per_cpf: maxPerCpf,
+        p_fee_mode: feeMode,
+        p_reserved_minutes: 10,
+        p_coupon_id: null,
+        p_coupon_code: null,
+        p_items: rpcItems,
+      })
+      reserveData = r.data; reserveErr = r.error
+    }
     if (reserveErr) {
       console.error('[create-pdv-ticket] erro RPC reserve:', reserveErr.message)
       throw new Error(`Falha ao reservar ingresso: ${reserveErr.message}`)
@@ -337,7 +409,7 @@ Deno.serve(async (req) => {
           .update({ status: 'vendido', held_until: null })
           .in('audience_ticket_id', createdTickets.map(t => t.id))
       }
-      console.log(`[create-pdv-ticket] ok(tap) event=${event_id} qty=${quantity} type=${t.nome} operator=${user.id}`)
+      console.log(`[create-pdv-ticket] ok(tap) event=${event_id} qty=${totalQty} items=${itemsDesc} operator=${user.id}`)
       return json({
         tickets: createdTickets,
         group_id: groupId,
@@ -404,7 +476,7 @@ Deno.serve(async (req) => {
         billingType: 'PIX',
         value: chargedTotal,
         dueDate: dueDateStr,
-        description: `${quantity}x ${t.nome} - ${event.name} (venda presencial)`,
+        description: `${itemsDesc} - ${event.name} (venda presencial)`,
         externalReference: externalRef,
         split: [{ walletId: producer.asaas_wallet_id, fixedValue: producerTotal }],
       }),
@@ -439,7 +511,7 @@ Deno.serve(async (req) => {
       .update({ payment_id: payData.id, payment_url: payData.invoiceUrl })
       .in('id', createdTickets.map(t => t.id))
 
-    console.log(`[create-pdv-ticket] ok(pix) event=${event_id} qty=${quantity} type=${t.nome} charged=${chargedTotal} operator=${user.id} payment=${payData.id}`)
+    console.log(`[create-pdv-ticket] ok(pix) event=${event_id} qty=${totalQty} items=${itemsDesc} charged=${chargedTotal} operator=${user.id} payment=${payData.id}`)
 
     return json({
       tickets: createdTickets,

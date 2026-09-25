@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { ticketSeatKind, countPcdTickets, countCompanionTickets, effectiveTicketKind } from '../supabase/functions/_shared/seat-rules'
+import { ticketSeatKind, countPcdTickets, countCompanionTickets, effectiveTicketKind, alignSeatsToItems } from '../supabase/functions/_shared/seat-rules'
 
 describe('ticketSeatKind', () => {
   it('campo explícito vence o nome', () => {
@@ -136,5 +136,23 @@ describe('layout -> tipo', () => {
   it('pedido satisfaz as regras do servidor', () => {
     expect(seatsSatisfyRules(1, 1, 1, 1)).toBe(true)
     expect(seatsSatisfyRules(0, 1, 1, 1)).toBe(false)
+  })
+})
+
+describe('alignSeatsToItems (venda PCD + acompanhante)', () => {
+  const tipos = new Map([['M-8', 'cadeirante'], ['M-7', 'acompanhante'], ['A-1', 'comum'], ['L-1', 'pcd_largo']])
+  const pcdComp = [{ seatKind: 'pcd' as const, quantity: 1 }, { seatKind: 'acompanhante' as const, quantity: 1 }]
+
+  it('alinha por tipo mesmo com a ordem trocada pelo cliente', () => {
+    expect(alignSeatsToItems(pcdComp, ['M-7', 'M-8'], tipos)).toEqual(['M-8', 'M-7'])
+    expect(alignSeatsToItems(pcdComp, ['M-8', 'M-7'], tipos)).toEqual(['M-8', 'M-7'])
+  })
+  it('PCD aceita cadeirante ou assento PCD largo; comum fica com o resto', () => {
+    const misto = [{ seatKind: 'pcd' as const, quantity: 1 }, { seatKind: 'comum' as const, quantity: 1 }]
+    expect(alignSeatsToItems(misto, ['A-1', 'L-1'], tipos)).toEqual(['L-1', 'A-1'])
+  })
+  it('depois da liberação geral (sem assento do tipo) segue a ordem original', () => {
+    const doisComuns = [{ seatKind: 'pcd' as const, quantity: 1 }, { seatKind: 'acompanhante' as const, quantity: 1 }]
+    expect(alignSeatsToItems(doisComuns, ['A-1', 'A-2'], new Map())).toEqual(['A-1', 'A-2'])
   })
 })
