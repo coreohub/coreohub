@@ -614,6 +614,8 @@ interface AudienceLateRefundPayload {
   /** 'seat_taken' | 'sold_out' */
   motivo?: string
   appUrl?: string
+  /** URL pública do evento — destino do botão "Comprar novamente" (cai na raiz do app se ausente). */
+  eventoUrl?: string
 }
 
 function lateRefundMotivo(m?: string) {
@@ -635,7 +637,7 @@ function buildAudienceLateRefundBuyer(p: AudienceLateRefundPayload) {
       intro: `Olá ${escape(p.buyerName ?? 'comprador(a)')}, ${lateRefundMotivo(p.motivo)}. Por isso não foi possível confirmar seu ingresso e estornamos o valor integral, sem custo.`,
       contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>`,
       ctaLabel: 'Comprar novamente',
-      ctaUrl: p.appUrl ?? 'https://app.coreohub.com',
+      ctaUrl: p.eventoUrl ?? p.appUrl ?? 'https://app.coreohub.com',
       footerNote: 'O estorno pode levar alguns dias úteis para aparecer, conforme o meio de pagamento. Em caso de dúvidas, responda este email.',
     }),
   }
@@ -655,6 +657,86 @@ function buildAudienceLateRefundProducer(p: AudienceLateRefundPayload) {
       title: 'Pagamento tardio estornado',
       intro: `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, ${lateRefundMotivo(p.motivo)}. Estornamos o valor integral ao comprador e nenhuma venda foi registrada.`,
       contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>`,
+      footerNote: 'Você está recebendo este email por ser o produtor responsável pelo evento.',
+    }),
+  }
+}
+
+// ─── Templates: audience_ticket_refunded (comprador) + _producer ─────────────
+// Estorno de ingresso feito pelo PRODUTOR (refund-audience-ticket). O de pagamento
+// tardio (acima) é automático e tem texto próprio.
+
+interface AudienceRefundPayload {
+  buyerName?: string
+  buyerEmail?: string
+  produtorNome?: string
+  produtorEmail?: string
+  eventoNome?: string
+  /** Sessão já formatada pelo caller, ex.: "Sáb, 19 de dezembro de 2026 · 19:30". */
+  sessao?: string
+  /** Ingressos do pedido estornado (o pedido inteiro é estornado de uma vez). */
+  ingressos?: Array<{ nome: string; assento?: string | null }>
+  refundAmount: number
+  /** Comissão CoreoHub devolvida (R$) — só no e-mail do produtor. */
+  commissionRefunded?: number
+  refundReason?: string | null
+  /** URL pública do evento/sessão pro botão "Comprar novamente". */
+  eventoUrl?: string
+  appUrl?: string
+  /** Evento em modo sandbox — só marca o assunto da cópia interna. */
+  sandbox?: boolean
+}
+
+function refundIngressosHtml(p: AudienceRefundPayload): string {
+  const lista = (p.ingressos ?? []).filter(i => i?.nome)
+  if (lista.length === 0) return ''
+  const itens = lista.map(i => escape(i.assento ? `${i.nome} — lugar ${i.assento}` : i.nome)).join('<br>')
+  return infoRow(lista.length > 1 ? 'Ingressos estornados' : 'Ingresso estornado', itens)
+}
+
+function buildAudienceRefundBuyer(p: AudienceRefundPayload) {
+  const linhas = [
+    p.eventoNome ? infoRow('Evento', escape(p.eventoNome)) : '',
+    p.sessao ? infoRow('Sessão', escape(p.sessao)) : '',
+    refundIngressosHtml(p),
+    infoRow('Valor estornado', escape(money(p.refundAmount))),
+    p.refundReason ? infoRow('Motivo informado', escape(p.refundReason)) : '',
+  ].filter(Boolean).join('')
+  return {
+    subject: `Estorno do seu ingresso — ${p.eventoNome ?? 'CoreoHub'}`,
+    html: baseLayout({
+      preheader: `Seu ingresso foi estornado: ${money(p.refundAmount)}.`,
+      title: 'Ingresso estornado',
+      intro: `Olá ${escape(p.buyerName ?? 'comprador(a)')}, o organizador de ${escape(p.eventoNome ?? 'o evento')} estornou o seu pedido. O valor foi devolvido pelo mesmo meio de pagamento e os ingressos deixaram de valer para entrada.`,
+      contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>`,
+      ctaLabel: p.eventoUrl ? 'Ver o evento' : undefined,
+      ctaUrl: p.eventoUrl,
+      footerNote: 'O estorno pode levar alguns dias úteis para aparecer, conforme o meio de pagamento (no cartão, depende da operadora). Em caso de dúvidas, responda este email.',
+    }),
+  }
+}
+
+function buildAudienceRefundProducer(p: AudienceRefundPayload, opts?: { adminCopy?: boolean }) {
+  const linhas = [
+    p.eventoNome ? infoRow('Evento', escape(p.eventoNome)) : '',
+    p.sessao ? infoRow('Sessão', escape(p.sessao)) : '',
+    p.buyerName ? infoRow('Comprador', escape(p.buyerName)) : '',
+    p.buyerEmail ? infoRow('Email', escape(p.buyerEmail)) : '',
+    refundIngressosHtml(p),
+    infoRow('Valor estornado', escape(money(p.refundAmount))),
+    typeof p.commissionRefunded === 'number' ? infoRow('Comissão CoreoHub devolvida', escape(money(p.commissionRefunded))) : '',
+    p.refundReason ? infoRow('Motivo', escape(p.refundReason)) : '',
+  ].filter(Boolean).join('')
+  const tag = opts?.adminCopy ? `${p.sandbox ? '[SANDBOX] ' : ''}[Cópia] ` : ''
+  return {
+    subject: `${tag}Estorno realizado — ${p.eventoNome ?? 'CoreoHub'}`,
+    html: baseLayout({
+      preheader: `Estorno de ${money(p.refundAmount)} concluído.`,
+      title: 'Estorno realizado',
+      intro: `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, o estorno abaixo foi concluído. Os lugares foram liberados para nova venda e o comprador foi avisado por email.`,
+      contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>`,
+      ctaLabel: 'Ver vendas',
+      ctaUrl: `${p.appUrl ?? 'https://app.coreohub.com'}/vendas-ingressos`,
       footerNote: 'Você está recebendo este email por ser o produtor responsável pelo evento.',
     }),
   }
@@ -1609,6 +1691,14 @@ function buildPayoutReleased(p: PayoutReleasedPayload) {
 
 // ─── Handler ────────────────────────────────────────────────────────────────
 
+/** Cópia interna pro admin da CoreoHub (ADMIN_NOTIFY_EMAIL, padrão contato@coreohub.com).
+ *  Fire-and-forget: falha nunca bloqueia o email principal. */
+function sendAdminCopy(subject: string, html: string) {
+  const adminEmail = Deno.env.get('ADMIN_NOTIFY_EMAIL') ?? 'contato@coreohub.com'
+  sendViaResend({ to: adminEmail, subject, html, fromOverride: 'CoreoHub <contato@coreohub.com>' })
+    .catch(err => console.warn('[send-email] cópia admin falhou:', err?.message ?? err))
+}
+
 interface SendEmailRequest {
   type:
     | 'payment_confirmed_registrant'
@@ -1619,6 +1709,8 @@ interface SendEmailRequest {
     | 'audience_ticket_producer'
     | 'audience_ticket_late_refund'
     | 'audience_ticket_late_refund_producer'
+    | 'audience_ticket_refunded'
+    | 'audience_ticket_refunded_producer'
     | 'workshop_registration_confirmed'
     | 'workshop_registration_producer'
     | 'workshop_pass_confirmed'
@@ -1803,6 +1895,33 @@ Deno.serve(async (req) => {
         to = p.produtorEmail
         subject = tpl.subject
         html = tpl.html
+        // Cópia interna pro admin (best-effort, mesmo padrão de admin_new_producer).
+        sendAdminCopy(`[Cópia] ${tpl.subject}`, tpl.html)
+        break
+      }
+      case 'audience_ticket_refunded': {
+        const p = payload as unknown as AudienceRefundPayload
+        if (!p.buyerEmail) throw new Error('buyerEmail é obrigatório')
+        if (typeof p.refundAmount !== 'number') throw new Error('refundAmount é obrigatório')
+        const tpl = buildAudienceRefundBuyer(p)
+        to = p.buyerEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        replyTo = p.produtorEmail
+        break
+      }
+      case 'audience_ticket_refunded_producer': {
+        const p = payload as unknown as AudienceRefundPayload
+        if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
+        if (typeof p.refundAmount !== 'number') throw new Error('refundAmount é obrigatório')
+        const tpl = buildAudienceRefundProducer(p)
+        to = p.produtorEmail
+        subject = tpl.subject
+        html = tpl.html
+        // Cópia fixa de TODO estorno pro admin da CoreoHub (auditoria).
+        const adminTpl = buildAudienceRefundProducer(p, { adminCopy: true })
+        sendAdminCopy(adminTpl.subject, adminTpl.html)
         break
       }
       case 'workshop_registration_confirmed': {
