@@ -99,6 +99,20 @@ const CriarEventoGate: React.FC<CriarEventoGateProps> = ({
     check();
   }, []);
 
+  // O upsert do cadastro só grava role='ORGANIZER' quando o perfil ainda não existe (INSERT).
+  // Se o perfil já foi criado, é UPDATE e o trigger protect_profiles_privileged_columns
+  // reverte a role — a promoção precisa passar pela edge function (service_role).
+  const ensureOrganizerRole = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: p } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+      if (p && p.role !== 'ORGANIZER' && p.role !== 'COREOHUB_ADMIN') {
+        await supabase.functions.invoke('promote-to-organizer');
+      }
+    } catch { /* o check() do mount tenta de novo no próximo carregamento */ }
+  };
+
   const handleSignup = async () => {
     setFormError(null);
     if (!form.full_name.trim()) { setFormError('Informe seu nome completo.'); return; }
@@ -142,6 +156,7 @@ const CriarEventoGate: React.FC<CriarEventoGateProps> = ({
       // signup em Auth.tsx: tenta logar imediato, só avança se de fato
       // conseguiu sessão.
       if (data.session) {
+        await ensureOrganizerRole();
         setStatus('ready');
         return;
       }
@@ -150,6 +165,7 @@ const CriarEventoGate: React.FC<CriarEventoGateProps> = ({
         password: form.password,
       });
       if (!signInError) {
+        await ensureOrganizerRole();
         setStatus('ready');
         return;
       }
