@@ -8,7 +8,7 @@ interface Props {
   producerId: string;
   /** true quando o super admin está "Ver como" esse produtor. O gate
    *  continua aparecendo (pedido explícito 2026-09-20, pra inspeção/teste),
-   *  mas ganha um caminho — "Fechar" — que só existe nesse contexto:
+   *  mas ganha um caminho — "Fechar" (trava e cartão suave) — que só existe nesse contexto:
    *  admin não deveria ser forçado a tomar (ou fingir que tomou) uma decisão
    *  financeira em nome de outra pessoa só pra conseguir sair da tela. */
   isImpersonating?: boolean;
@@ -48,15 +48,15 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
   const adminDismissedRef = useRef<Set<string>>(new Set());
   const [, forceRender] = useState(0);
 
-  // Fecha SEM resolver nada — só existe durante impersonate (ver Props).
-  // Reabre normalmente ao recarregar, porque não persiste nada.
-  const handleAdminDismiss = useCallback(() => {
-    const first = pending.find(ev => ev.locked && !adminDismissedRef.current.has(ev.id));
-    if (first) adminDismissedRef.current.add(first.id);
+  // Fecha SEM resolver nada — só existe durante impersonate (ver Props), tanto
+  // na trava quanto no cartão suave. Reabre normalmente ao recarregar, porque
+  // não persiste nada.
+  const handleAdminDismiss = useCallback((id: string) => {
+    adminDismissedRef.current.add(id);
     setErrorMsg(null);
     setWaitingPayment(false);
     forceRender(n => n + 1);
-  }, [pending]);
+  }, []);
 
   // "Suave" (dentro do prazo): 1x por login por evento. sessionStorage pode
   // estar bloqueado (aba privada) — nesse caso mostra de novo, sem quebrar.
@@ -71,7 +71,7 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
 
   // A trava (prazo vencido) tem prioridade sobre o cartão suave.
   const locked = pending.find(ev => ev.locked && !adminDismissedRef.current.has(ev.id));
-  const soft = locked ? undefined : pending.find(ev => !ev.locked && !softSeen(ev.id));
+  const soft = locked ? undefined : pending.find(ev => !ev.locked && !softSeen(ev.id) && !adminDismissedRef.current.has(ev.id));
   const current = locked ?? soft;
   const isSoft = !!current && !current.locked;
 
@@ -182,9 +182,9 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
           Dúvida sobre a cobrança? Fale com o suporte da CoreoHub.
         </p>
 
-        {isImpersonating && !isSoft && (
+        {isImpersonating && (
           <button
-            onClick={handleAdminDismiss}
+            onClick={() => handleAdminDismiss(current.id)}
             disabled={actionLoading}
             className="w-full text-center text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:underline pt-1"
           >
