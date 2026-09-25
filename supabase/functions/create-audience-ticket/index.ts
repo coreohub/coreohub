@@ -319,12 +319,18 @@ Deno.serve(async (req) => {
         throw new Error('Falha ao validar cupom')
       }
       const row = Array.isArray(cv) ? cv[0] : cv
-      if (!row || row.error_message) {
-        throw new Error(row?.error_message ?? 'Cupom inválido')
+      // A RPC validate_audience_coupon (v2, 20260616) devolve `err` e `discount_amount`
+      // (as RPCs de workshop/vídeo ainda usam error_message/discount). Ler o nome errado
+      // deixava o desconto NaN (preço nulo) e ignorava cupom inválido — bug real achado
+      // na matriz da Fase 4 (2026-09-25). Aceita os dois formatos.
+      const couponErr = row?.err ?? row?.error_message
+      if (!row || couponErr) {
+        throw new Error(couponErr ?? 'Cupom inválido')
       }
       couponId = row.coupon_id
       couponCode = row.code
-      discountTotal = round2(Number(row.discount))
+      discountTotal = round2(Number(row.discount_amount ?? row.discount))
+      if (!Number.isFinite(discountTotal) || discountTotal < 0) throw new Error('Falha ao calcular o desconto do cupom')
     }
 
     // ── Calcula valores por tipo (distribui desconto + comissão + split) ─────
