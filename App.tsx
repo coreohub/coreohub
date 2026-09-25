@@ -21,6 +21,7 @@ const CookieBanner = lazy(() => import('./components/CookieBanner'));
 const PwaUpdatePrompt = lazy(() => import('./components/PwaUpdatePrompt'));
 const RequirePermission = lazy(() => import('./components/RequirePermission'));
 const PlanFeeGateModal = lazy(() => import('./components/PlanFeeGateModal'));
+const PlanFeeReminderBanner = lazy(() => import('./components/PlanFeeReminderBanner'));
 
 // Páginas internas (autenticadas) — lazy. Landing page é a única rota "/"
 // do domínio de marketing (coreohub.com), então fica eager: visitante da
@@ -328,6 +329,10 @@ const PrivateLayout: React.FC<{
               tomar (achado ao vivo: evento sem fatura deixava "Pagar
               agora" morto e "Descontar" era o único jeito de sair). */}
           <PlanFeeGateModal producerId={profile.id} isImpersonating={isImpersonating} />
+          {/* Aviso da tolerância de 7 dias da taxa fixa do plano (decisão
+              2026-09-25): antes do prazo lembra o que falta; depois dele o
+              PlanFeeGateModal acima trava o painel. */}
+          <PlanFeeReminderBanner producerId={profile.id} />
           <div className="p-3 lg:p-4">
             <Suspense fallback={<PageLoader />}>
               {children}
