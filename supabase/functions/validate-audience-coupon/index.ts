@@ -74,8 +74,10 @@ Deno.serve(async (req) => {
 
     const row = Array.isArray(data) ? data[0] : data
     if (!row) throw new Error('Cupom inválido')
-    if (row.error_message) {
-      return json({ error: row.error_message }, 400)
+    // RPC v2 devolve `err`/`discount_amount`/`final_amount`; aceita também os nomes antigos.
+    const couponErr = row.err ?? row.error_message
+    if (couponErr) {
+      return json({ error: couponErr }, 400)
     }
 
     return json({
@@ -83,8 +85,8 @@ Deno.serve(async (req) => {
       code:           row.code,
       discount_type:  row.discount_type,
       discount_value: Number(row.discount_value),
-      discount:       Number(row.discount),
-      final_value:    Number(row.final_value),
+      discount:       Number(row.discount_amount ?? row.discount),
+      final_value:    Number(row.final_amount ?? row.final_value),
     })
   } catch (err: any) {
     return json({ error: err.message ?? String(err) }, 400)
