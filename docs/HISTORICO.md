@@ -4,6 +4,16 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-25 (continuação 2) — E-mail de estorno de ingresso + PDV com acompanhante ✅ DEV, NÃO DEPLOYADO (deploy só a partir de 27/09) — 🚧 pendente deploy + teste E2E
+
+Detalhes em `memory/estorno_email_e_pdv_acompanhante_2026_09_25.md`. Commits `f5fae3e` (A) e `e142fb2` (B) na `dev`.
+
+- **Achado (print de e-mail do produtor):** o estorno de ingresso feito pelo produtor (`refund-audience-ticket`) NÃO enviava e-mail a ninguém (só o estorno automático por pagamento tardio enviava). Boa prática (Sympla avisa o participante por e-mail em cancelamento/reembolso).
+- **A. E-mail de estorno:** templates novos `audience_ticket_refunded` (comprador: evento, sessão, ingressos com lugar, valor, motivo, aviso de que o QR deixou de valer, botão "Ver o evento") e `audience_ticket_refunded_producer` (comprador, ingressos, valor, comissão devolvida) no `send-email`; `refund-audience-ticket` dispara os dois depois do estorno, best-effort, 1 e-mail por pedido (group_id). **Cópia fixa de TODO estorno para o admin** via `sendAdminCopy` → `ADMIN_NOTIFY_EMAIL` (padrão `contato@coreohub.com`, mesma convenção dos avisos de novo produtor/lead; `coreohub@gmail.com` é só o login super admin/conta master Asaas). O e-mail de pagamento tardio também ganhou cópia ao admin e o botão aceita `eventoUrl`. **Pendente:** passar `eventoUrl` no `asaas-webhook` (select `slug` + payload) depois que a outra sessão (correção do plano fixo/PLANFEE) commitar o arquivo — as 2 linhas foram removidas do working tree para não misturar.
+- **B. PDV com acompanhante:** pesquisa (Ticketmaster/Bilheteria Digital/Sympla vendem PCD + acompanhante no mesmo pedido, acompanhante com meia; EUA: bilheteria bloqueia lugares juntos, alguns locais liberam até 3). `create-pdv-ticket` aceita `items[]` (1 item segue o caminho antigo v1, vários usam `try_reserve_audience_tickets_v2` sob 1 group_id), meia-entrada por venda inteira, e `alignSeatsToItems` (`_shared/seat-rules.ts`, testado) alinha os assentos por tipo no servidor. Tela do balcão (`VendasIngressos.tsx`): oferta "Vai com acompanhante?" quando 1 PCD escolhe assento especial com vizinho livre; tirar o PCD leva o acompanhante junto; payload `items` + `seat_ids`.
+- **Validação:** função rodada localmente com Deno contra o banco (só evento sandbox, `cartao_tap`): caminho antigo intacto, PCD+acompanhante com assentos em ordem trocada mapeados certo (M-8 cadeirante → PCD, M-7 → acompanhante), recusas corretas; UI por Playwright (desktop e mobile, chamada interceptada): oferta, contador 2/2, desmarcar, payload; 137 testes, lint e `deno check` ok. **Falta:** Pix multi-item e o E2E dos e-mails (só possível após o deploy).
+- **Limite conhecido:** oferta de acompanhante só para venda de 1 ingresso PCD (quantidade 1).
+
 ### 2026-09-25 (continuação) — Fase 3: matriz de testes pela tela nas sessões do sandbox ✅ DEV — 🚧 Fase 4 e Fase 5 pendentes
 
 Detalhes em `memory/fase3_testes_sandbox_sessoes_2026_09_25.md`. Tudo no sandbox (evento `41d933c9…`, 5 sessões), nenhum evento real tocado; baseline de produção intacto (comm 49, pay 21, regs 125, eventos reais 7, tickets reais 0).
