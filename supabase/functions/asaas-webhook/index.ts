@@ -1601,10 +1601,30 @@ Deno.serve(async (req) => {
     }
 
     // ── Ambiente x evento (Fase 2): pagamento sandbox só toca evento sandbox,
-    // e o inverso. Por ora o sandbox só existe para ingressos (AT:).
-    if (webhookEnv === 'sandbox' && !isAudienceTicket) {
+    // e o inverso. O sandbox existe para ingressos (AT:) e para a taxa fixa de
+    // plano (PLANFEE:, create-plan-fixed-fee-payment também roteia por evento).
+    if (webhookEnv === 'sandbox' && !isAudienceTicket && !isPlanFee) {
       console.warn(`[asaas-webhook] sandbox com ref nao suportada (${externalRef.slice(0, 4)}) — ignorando`)
       return ok({ status: 'ignored', reason: 'sandbox_ref_not_supported' })
+    }
+    if (isPlanFee && planFeeEventId) {
+      const planEnvGuard = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+      )
+      const { data: evEnv, error: evEnvErr } = await planEnvGuard
+        .from('events').select('payment_sandbox').eq('id', planFeeEventId).maybeSingle()
+      if (!evEnvErr && evEnv) {
+        if (!webhookMatchesEvent(webhookEnv, evEnv.payment_sandbox)) {
+          console.error(`[asaas-webhook] AMBIENTE INCOMPATIVEL env=${webhookEnv} event_sandbox=${evEnv.payment_sandbox} plan_fee event=${planFeeEventId} — rejeitando`)
+          return ok({ status: 'rejected', reason: 'env_mismatch' })
+        }
+      } else if (webhookEnv === 'sandbox') {
+        // Sandbox nunca segue sem confirmar que o evento é sandbox.
+        console.error('[asaas-webhook] sandbox plan_fee: nao foi possivel confirmar o evento — rejeitando')
+        return ok({ status: 'rejected', reason: 'env_lookup_failed' })
+      }
+      // Produção com falha de leitura segue como antes (não bloqueia pagamento real).
     }
     if (isAudienceTicket && audienceGroupId) {
       const envGuard = createClient(
