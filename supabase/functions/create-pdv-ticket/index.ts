@@ -41,6 +41,7 @@ import { buildCorsHeaders } from '../_shared/cors.ts'
 import { ticketSeatKind, effectiveTicketKind, countPcdTickets, countCompanionTickets, alignSeatsToItems, type TicketSeatKind } from '../_shared/seat-rules.ts'
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
+import { planFeeSalesBlocked, SALES_NOT_OPEN_MESSAGE } from '../_shared/plan-fee-gate.ts'
 
 function isValidCpf(cpf: string): boolean {
   const digits = cpf.replace(/\D/g, '')
@@ -153,6 +154,7 @@ Deno.serve(async (req) => {
       .eq('id', event_id)
       .single()
     if (!event || evErr) throw new Error('Evento não encontrado')
+    if (await planFeeSalesBlocked(supabase, event_id)) throw new Error(SALES_NOT_OPEN_MESSAGE)
     if (!event.audience_sales_enabled) throw new Error('Venda de ingressos não está ativa para este evento')
     if (event.politica_ingressos !== 'INTERNO') throw new Error('Este evento não vende ingressos pela plataforma')
 

@@ -38,6 +38,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
+import { planFeeSalesBlocked, SALES_NOT_OPEN_MESSAGE } from '../_shared/plan-fee-gate.ts'
 
 function isValidCpf(cpf: string): boolean {
   const digits = cpf.replace(/\D/g, '')
@@ -172,6 +173,7 @@ Deno.serve(async (req) => {
     // Sandbox (Fase 2) por ora só existe para ingressos de plateia: recusa cobrança
     // de workshop em evento sandbox para nunca usar a chave de produção.
     if (workshop.event_id) {
+      if (await planFeeSalesBlocked(supabase, workshop.event_id)) throw new Error(SALES_NOT_OPEN_MESSAGE)
       const { data: evSb } = await supabase.from('events').select('payment_sandbox').eq('id', workshop.event_id).maybeSingle()
       if (evSb?.payment_sandbox === true) {
         throw new Error('Evento em modo sandbox: este tipo de cobrança ainda não é suportado no ambiente de teste')

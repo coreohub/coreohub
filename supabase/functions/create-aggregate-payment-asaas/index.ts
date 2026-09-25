@@ -8,6 +8,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
+import { planFeeSalesBlocked, SALES_NOT_OPEN_MESSAGE } from '../_shared/plan-fee-gate.ts'
 
 type RegistrationRow = {
   id:                    string
@@ -183,6 +184,7 @@ Deno.serve(async (req) => {
     ])
 
     if (!event) throw new Error('Evento não encontrado.')
+    if (await planFeeSalesBlocked(supabase, event_id)) throw new Error(SALES_NOT_OPEN_MESSAGE)
     // Sandbox (Fase 2) por ora só existe para ingressos de plateia: recusa evento
     // em modo sandbox para nunca cobrar com a chave de produção.
     if ((event as { payment_sandbox?: boolean }).payment_sandbox === true) {

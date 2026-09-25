@@ -41,6 +41,7 @@ import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 import { ticketSeatKind, countPcdTickets, countCompanionTickets, effectiveTicketKind, type TicketSeatKind } from '../_shared/seat-rules.ts'
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
+import { planFeeSalesBlocked, SALES_NOT_OPEN_MESSAGE } from '../_shared/plan-fee-gate.ts'
 
 // Valida CPF formato + dígito verificador (mod-11)
 function isValidCpf(cpf: string): boolean {
@@ -205,6 +206,7 @@ Deno.serve(async (req) => {
       .single()
 
     if (!event || evErr) throw new Error('Evento não encontrado')
+    if (await planFeeSalesBlocked(supabase, event_id)) throw new Error(SALES_NOT_OPEN_MESSAGE)
     // Ambiente Asaas (produção por padrão; sandbox só com flag + produtor de teste).
     const asaasEnv = await loadAsaasEnvForEvent(supabase, event, 'create-audience-ticket')
     const ASAAS_API_KEY  = asaasEnv.apiKey
