@@ -4,6 +4,11 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-25 (continuação 13) — Fase 5 item 5: relatório de meia, exportação sem PII e guarda de 2 anos ✅ (dev; banco em produção)
+
+- Migration `20260930g`: `get_meia_report`, `export_audience_sales_anonymized` e trava de exclusão de ingresso com movimento (<2 anos). Vitrine de evento encerrado mostra o relatório; Vendas de ingressos ganhou "Dados sem identificação".
+- Termo do Produtor v1.7 fica como rascunho (`docs/termo-produtor-v1.7-rascunho.md`), sem subir a versão, até validação. Retenção e pendências em `docs/retencao-dados-ingressos.md`.
+
 ### 2026-09-25 (continuação 12) — Fase 5 item 3: transferência gratuita de titularidade do ingresso ✅ (dev; banco/functions em produção)
 
 - **Achado de desenho:** o QR era o `id` do ingresso; trocar só o `access_token` não invalidaria o QR salvo. Criada a credencial rotativa `qr_code` (NULL = nunca transferido); o check-in recusa o id de ingresso transferido.
