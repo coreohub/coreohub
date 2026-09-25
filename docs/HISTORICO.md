@@ -4,6 +4,13 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-25 (continuação 7) — Fase 4 (matriz E2E no sandbox): meia-entrada, cupom entre sessões, expiração de reserva ✅ 10/10 — 🐛 bug real do cupom de plateia corrigido e deployado (commit `7d1d361`)
+
+- **Bug real:** a RPC `validate_audience_coupon` (v2, migration `20260616`) devolve `err`/`discount_amount`/`final_amount`, mas `create-audience-ticket` e `validate-audience-coupon` liam `error_message`/`discount`/`final_value` (as RPCs de workshop/vídeo NÃO mudaram e seguem certas). Efeito: TODA compra de ingresso de plateia com cupom falhava ("null value in column preco", desconto virava NaN) e cupom inválido era ignorado; o botão "Aplicar cupom" do checkout devolvia desconto NaN. Quebrado desde 16/06, invisível porque há 0 ingressos reais vendidos. Corrigido (aceita os dois formatos + barra desconto não numérico); `create-audience-ticket` v47 e `validate-audience-coupon` v22 deployadas com `--no-verify-jwt`.
+- **Matriz (sessões 3 e 5 do sandbox, alvo travado, config revertida no fim):** carrinho Inteira + Meia-entrada (preços 20 e 10 gravados, cobrado 32,37 = 30 + comissão, cada ticket com assento); cupom de 50% vale na sessão dona (desconto 20 sobre 40) e é recusado na sessão irmã ("Cupom inválido ou inativo" — cupom não é compartilhado entre sessões); reserva vencida vira CANCELADO, assento volta a livre e pode ser comprado de novo (mesmo SQL do cron `expire-audience-reservations`). Antiabuso: repetir a matriz seguido dá 429; esperar ~5 min.
+- **Pendências da Fase 4:** Pix REAL de R$ 20 em produção (só com autorização explícita do produtor) e estorno do ingresso A-1 pelo painel da Asaas a partir de ~26/09.
+- **Ícone ⇔ (legenda):** NÃO confirmado. Páginas de eventos passados do Nelson Camargo na Guichê Web (Circo dos Sonhos, Rock ao Piano) mostram "nenhum ingresso disponível" e o mapa só carrega com evento ativo; a busca pública não traz a legenda. Confirmar clicando no ícone num evento ATIVO do local (tooltip) ou perguntando à Guichê Web/Prefeitura. Mantido como "não confirmado".
+
 ### 2026-09-25 (continuação 6) — 🔒 Proteção real de registrations/workshop_registrations/audience_tickets + edge function `registration-status` ✅ EM PRODUÇÃO (main 9427906 via cherry-pick; migration `20260929c` aplicada)
 
 Detalhes em `memory/seguranca_triggers_protect_bypass_current_user_2026_09_25.md`.
