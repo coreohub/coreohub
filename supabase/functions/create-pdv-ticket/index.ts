@@ -423,6 +423,7 @@ Deno.serve(async (req) => {
     const asaasEnv = await loadAsaasEnvForEvent(supabase, event, 'create-pdv-ticket')
     const ASAAS_API_KEY = asaasEnv.apiKey
     const ASAAS_BASE_URL = asaasEnv.baseUrl
+    const skipSplit = asaasEnv.isSandbox && (Deno.env.get('ASAAS_SANDBOX_SKIP_SPLIT') ?? '') === 'true'
     const asaasHeaders = { 'access_token': ASAAS_API_KEY, 'Content-Type': 'application/json' }
 
     const { data: producer } = await supabase
@@ -478,7 +479,8 @@ Deno.serve(async (req) => {
         dueDate: dueDateStr,
         description: `${itemsDesc} - ${event.name} (venda presencial)`,
         externalReference: externalRef,
-        split: [{ walletId: producer.asaas_wallet_id, fixedValue: producerTotal }],
+        // Sandbox: subconta de teste pode estar bloqueada pra split — ASAAS_SANDBOX_SKIP_SPLIT=true cobra sem split (SÓ no sandbox; em produção o split é sempre enviado).
+        ...(skipSplit ? {} : { split: [{ walletId: producer.asaas_wallet_id, fixedValue: producerTotal }] }),
       }),
     })
     const payData = await payRes.json()
