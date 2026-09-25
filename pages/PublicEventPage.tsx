@@ -118,6 +118,11 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
   // Carrinho multi-tipo de ingressos: mapa realIdx(string) → quantidade.
   // React state local (não localStorage) — sessão zera ao sair, padrão Sympla.
   const [cart, setCart] = useState<Record<string, number>>({});
+  // Sessões do mesmo espetáculo (eventos irmãos ligados por session_group_id).
+  // Só aparece quando há 2+ sessões públicas; cada uma tem URL própria.
+  const [eventSessions, setEventSessions] = useState<Array<{
+    id: string; slug: string | null; name: string; start_date: string | null; event_time: string | null; is_current: boolean;
+  }>>([]);
   // Página pública do produtor — preenche o espaço vazio da coluna da foto
   // no hero (abaixo dos ícones de rede social) só quando o produtor ativou
   // a própria página em /profile. null = não tem página pública ativa.
@@ -227,6 +232,15 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
         }
         // view_event é disparado num useEffect separado que aguarda
         // pixelsReady (ver abaixo) — não dispara aqui.
+
+        // Outras sessões do mesmo espetáculo (best-effort, não bloqueia a vitrine).
+        supabase.rpc('get_event_sessions_public', { p_event_id: eventData.id }).then(
+          ({ data, error }) => {
+            if (error) console.error('[PublicEventPage] erro ao buscar sessões:', error);
+            setEventSessions(Array.isArray(data) ? (data as any) : []);
+          },
+          () => setEventSessions([]),
+        );
 
         // Etapa 1.5: jurados públicos via RPC security-definer
         // (retorna só campos seguros — sem PIN, sem token)
@@ -789,6 +803,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
     Array.isArray(event.programacao_config) && event.programacao_config.length > 0
       ? { id: 'programacao', label: 'Programação' }
       : null,
+    eventSessions.length > 1 ? { id: 'sessoes', label: 'Sessões' } : null,
     (Array.isArray(event.ingressos_config) && event.ingressos_config.length > 0)
       || event.politica_ingressos === 'GRATUITO'
       || event.politica_ingressos === 'EXTERNO'
@@ -1301,6 +1316,39 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                     <p className="font-bold text-sm text-white">{item.atividade}</p>
                   </div>
                 ))}
+            </div>
+          </div>
+        )}
+
+        {/* Outras sessões do mesmo espetáculo — cada sessão é um evento com URL própria */}
+        {eventSessions.length > 1 && (
+          <div id="sessoes" className="space-y-4 scroll-mt-20">
+            <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
+              <Calendar size={24} className="text-[#ff0068]" /> Sessões
+            </h2>
+            <div className="space-y-2">
+              {eventSessions.map(s => {
+                const inner = (
+                  <>
+                    <div className="min-w-0">
+                      <p className="font-bold text-sm text-white">{formatDate(s.start_date ?? undefined)}</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-0.5">{s.name}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-2xl font-black text-[#ff0068] tabular-nums tracking-tighter">{s.event_time?.slice(0, 5) || '--:--'}</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        {s.is_current ? 'Você está aqui' : 'Ver sessão'}
+                      </p>
+                    </div>
+                  </>
+                );
+                const base = 'flex items-center justify-between gap-4 p-4 border rounded-2xl transition-colors ';
+                return s.is_current ? (
+                  <div key={s.id} aria-current="true" className={base + 'bg-[#ff0068]/10 border-[#ff0068]/40'}>{inner}</div>
+                ) : (
+                  <a key={s.id} href={`/evento/${s.slug ?? s.id}`} className={base + 'bg-white/5 border-white/10 hover:border-[#ff0068]/30'}>{inner}</a>
+                );
+              })}
             </div>
           </div>
         )}

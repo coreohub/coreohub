@@ -17,6 +17,7 @@ import AsaasBadge from '../components/AsaasBadge';
 import PageHeader from '../components/PageHeader';
 import EventPickerSheet, { EventPickerOption } from '../components/EventPickerSheet';
 import DemoSettingsTab from '../components/DemoSettingsTab';
+import EventSessionsCard from '../components/EventSessionsCard';
 import {
   Settings, Clock, Save, Plus, Pencil, Trash2, Check, Info,
   Music2, DollarSign, Users, AlertTriangle,
@@ -4191,6 +4192,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 </>
               )}
             </div>
+
+            {/* Sessões do mesmo espetáculo (evento por sessão, mesmo local) */}
+            {activeEventId && (isEspetaculo || eventSeatMap) && <EventSessionsCard eventId={activeEventId} />}
 
             {/* Patrocinadores / Apoiadores */}
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
