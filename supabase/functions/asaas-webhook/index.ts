@@ -198,7 +198,7 @@ async function handleAudienceTicket(opts: {
       const eventId = lateTickets[0].event_id
       const { data: ev } = await supabase
         .from('events')
-        .select('name, created_by, ingressos_config')
+        .select('name, slug, created_by, ingressos_config')
         .eq('id', eventId)
         .maybeSingle()
       const cfg: any[] = Array.isArray((ev as any)?.ingressos_config) ? (ev as any).ingressos_config : []
@@ -257,6 +257,7 @@ async function handleAudienceTicket(opts: {
           jobs.push(dispararEmail('audience_ticket_late_refund', {
             buyerName: lateTickets[0].buyer_name, buyerEmail: lateTickets[0].buyer_email,
             produtorEmail: prod?.email, eventoNome: (ev as any)?.name, valor, motivo, appUrl,
+            eventoUrl: (ev as any)?.slug ? `${appUrl}/evento/${(ev as any).slug}` : undefined,
           }))
         }
         if (prod?.email) {
