@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
+import { TERMO_PRODUTOR_VERSION } from '../utils/termoVersion';
 
 export interface PendingPlanFeeEvent {
   id: string;
@@ -31,6 +32,9 @@ export const PLAN_LABEL: Record<string, string> = { essencial: 'Essencial', esca
 export function usePlanFeePending(producerId: string | undefined, pollMs = 6000) {
   const [pending, setPending] = useState<PendingPlanFeeEvent[]>([]);
   const [loaded, setLoaded] = useState(false);
+  // Termo do Produtor: true quando o produtor ainda não aceitou a versão vigente.
+  // Só sinaliza (não bloqueia nada): o aceite é feito em /termo-produtor.
+  const [termsPending, setTermsPending] = useState(false);
 
   const fetchPending = useCallback(async (): Promise<PendingPlanFeeEvent[] | null> => {
     if (!producerId) return [];
@@ -66,6 +70,13 @@ export function usePlanFeePending(producerId: string | undefined, pollMs = 6000)
       const list = await fetchPending();
       if (cancelled) return;
       if (list) setPending(list);
+      // Só consulta o Termo quando há taxa pendente (é quando o aviso é mostrado).
+      if (list && list.length > 0 && producerId) {
+        const { data: prof, error: profErr } = await supabase
+          .from('profiles').select('producer_terms_version').eq('id', producerId).maybeSingle();
+        if (profErr) console.error('[usePlanFeePending] erro ao consultar versão do Termo:', profErr);
+        else if (!cancelled) setTermsPending((prof?.producer_terms_version ?? null) !== TERMO_PRODUTOR_VERSION);
+      }
       setLoaded(true);
     };
     run();
@@ -73,7 +84,7 @@ export function usePlanFeePending(producerId: string | undefined, pollMs = 6000)
     return () => { cancelled = true; clearInterval(t); };
   }, [producerId, fetchPending, pollMs]);
 
-  return { pending, loaded };
+  return { pending, loaded, termsPending };
 }
 
 /**

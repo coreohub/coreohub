@@ -12,6 +12,7 @@ import { extractRegulationFromPdfOrThrow, isExtractEmpty, RegulationExtract } fr
 import { eventTemplates, getTemplate, TemplateId } from '../services/eventTemplates';
 import { generateEventSlug } from '../services/eventSlug';
 import { EventFormat } from '../types';
+import { TERMO_PRODUTOR_VERSION } from '../utils/termoVersion';
 
 type Step = 1 | 2 | 3;
 
@@ -85,6 +86,26 @@ const OnboardingWizard: React.FC = () => {
   // então cliques rápidos podem entrar no handleCreate antes do re-render
   // desabilitar o botão — bug que gerou 10 events duplicados em produção.
   const createInFlightRef = useRef(false);
+
+  // Termo do Produtor (cláusula 4-bis: taxa fixa dos planos pagos). Quem escolhe
+  // Essencial/Escala precisa ter aceitado a versão vigente ANTES de criar o
+  // evento — sem isso as regras da taxa (prazo, bloqueio, multa, reembolso) não
+  // valem pra ele. undefined = ainda consultando (tratado como "não aceitou").
+  const [termsVersion, setTermsVersion] = useState<string | null | undefined>(undefined);
+  const [termsChecked, setTermsChecked] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: prof, error: profErr } = await supabase
+        .from('profiles').select('producer_terms_version').eq('id', user.id).maybeSingle();
+      if (profErr) console.error('[OnboardingWizard] erro ao consultar versão do Termo:', profErr);
+      if (!cancelled) setTermsVersion(prof?.producer_terms_version ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  const needsTermsAccept = selectedPlan !== 'comeco' && termsVersion !== TERMO_PRODUTOR_VERSION;
 
   const [data, setData] = useState({
     name: '',
@@ -203,6 +224,19 @@ const OnboardingWizard: React.FC = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Sessão expirada — faça login de novo.');
+
+      // Plano pago: registra o aceite do Termo vigente antes de criar o evento.
+      // RPC SECURITY DEFINER (mesma de /termo-produtor): grava IP do servidor +
+      // audit log imutável. Se falhar, NÃO cria o evento.
+      if (needsTermsAccept) {
+        if (!termsChecked) throw new Error('Marque o aceite do Termo de Adesão do Produtor para criar um evento com plano pago.');
+        const { error: acceptErr } = await supabase.rpc('accept_producer_terms', {
+          p_version:    TERMO_PRODUTOR_VERSION,
+          p_user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+        });
+        if (acceptErr) throw new Error(acceptErr.message ?? 'Não foi possível registrar o aceite do Termo. Tente de novo.');
+        setTermsVersion(TERMO_PRODUTOR_VERSION);
+      }
 
       // Defesa em profundidade: se já existe event do mesmo produtor com
       // mesmo nome (case-insensitive) e mesmo ano, redireciona pra ele em
@@ -567,6 +601,25 @@ const OnboardingWizard: React.FC = () => {
                 )}
               </div>
 
+              {needsTermsAccept && (
+                <label className="flex items-start gap-3 p-4 rounded-2xl border-2 border-[#ff0068]/30 bg-[#ff0068]/5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={termsChecked}
+                    onChange={(e) => setTermsChecked(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 accent-[#ff0068] shrink-0"
+                  />
+                  <span className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                    Li e aceito o{' '}
+                    <a href="/termo-produtor" target="_blank" rel="noopener noreferrer" className="font-black text-[#ff0068] hover:underline">
+                      Termo de Adesão do Produtor (versão {TERMO_PRODUTOR_VERSION})
+                    </a>
+                    , incluindo a cláusula 4-bis: taxa fixa do plano com vencimento em 7 dias, vendas indisponíveis e painel bloqueado
+                    enquanto não paga, multa e juros por atraso, exclusão do evento não pago e taxa não reembolsável (exceto desistência em 7 dias).
+                  </span>
+                </label>
+              )}
+
               <div className="flex gap-3">
                 <button
                   onClick={() => setStep(1)}
@@ -576,7 +629,7 @@ const OnboardingWizard: React.FC = () => {
                 </button>
                 <button
                   onClick={handleCreate}
-                  disabled={!canAdvanceStep2 || saving}
+                  disabled={!canAdvanceStep2 || saving || (needsTermsAccept && !termsChecked)}
                   className="flex-1 flex items-center justify-center gap-2 py-4 bg-[#ff0068] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-[#ff0068]/20 disabled:bg-slate-200 dark:disabled:bg-white/10 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:shadow-none disabled:hover:scale-100"
                 >
                   {saving

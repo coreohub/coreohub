@@ -4,6 +4,7 @@ import { supabase } from '../services/supabase';
 import { ArrowLeft, ShieldCheck, FileText, AlertTriangle, CheckCircle2, Loader2, ArrowRight, CreditCard, Home } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 import PageHeader from '../components/PageHeader';
+import { TERMO_PRODUTOR_VERSION } from '../utils/termoVersion';
 
 // Versão do Termo. Bump ao alterar conteúdo — produtores existentes precisarão
 // re-aceitar antes da próxima ação que dependa de aceite (ex: criar evento novo,
@@ -32,7 +33,7 @@ import PageHeader from '../components/PageHeader';
 // painel após o prazo, multa de 2% e juros de 1% ao mês por atraso, exclusão
 // do evento após 60 dias sem pagamento e taxa não reembolsável (exceto
 // desistência em 7 dias sem publicação nem venda).
-export const TERMO_PRODUTOR_VERSION = '1.6';
+export { TERMO_PRODUTOR_VERSION };
 
 const TermoProdutor: React.FC = () => {
   const navigate = useNavigate();

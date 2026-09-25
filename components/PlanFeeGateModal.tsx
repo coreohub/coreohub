@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useLocation } from 'react-router-dom';
 import { Receipt, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { usePlanFeePending, openPlanFeeInvoice, PLAN_FIXED_FEE, PLAN_LABEL } from '../hooks/usePlanFeePending';
 
@@ -34,7 +35,8 @@ interface Props {
  * basta, fica preso atrás de outros elementos).
  */
 const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
-  const { pending, loaded } = usePlanFeePending(producerId);
+  const { pending, loaded, termsPending } = usePlanFeePending(producerId);
+  const { pathname } = useLocation();
   const [actionLoading, setActionLoading] = useState(false);
   const [waitingPayment, setWaitingPayment] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -71,7 +73,9 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
     }
   };
 
-  if (!loaded || !current) return null;
+  // Página do Termo fica livre da trava: o produtor precisa conseguir ler e
+  // aceitar o Termo mesmo com o painel bloqueado (o link abre em outra aba).
+  if (!loaded || !current || pathname === '/termo-produtor') return null;
 
   const valor = PLAN_FIXED_FEE[current.billing_plan];
   const planoLabel = PLAN_LABEL[current.billing_plan];
@@ -126,6 +130,15 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
           {actionLoading ? <Loader2 size={16} className="animate-spin" /> : <Receipt size={16} />}
           Pagar agora
         </button>
+
+        {termsPending && (
+          <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+            O Termo do Produtor foi atualizado.{' '}
+            <a href="/termo-produtor" target="_blank" rel="noopener noreferrer" className="font-bold text-[#ff0068] hover:underline">
+              Ler e aceitar
+            </a>
+          </p>
+        )}
 
         <p className="text-xs text-slate-400 text-center">
           Dúvida sobre a cobrança? Fale com o suporte da CoreoHub.

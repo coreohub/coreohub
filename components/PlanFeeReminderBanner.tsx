@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Receipt, Loader2, AlertTriangle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Receipt, Loader2, AlertTriangle, FileText } from 'lucide-react';
 import { usePlanFeePending, openPlanFeeInvoice, PLAN_FIXED_FEE, PLAN_LABEL } from '../hooks/usePlanFeePending';
 
 interface Props {
@@ -16,7 +17,7 @@ interface Props {
  * visível, nunca escondido: se há taxa pendente dentro do prazo, aparece.
  */
 const PlanFeeReminderBanner: React.FC<Props> = ({ producerId }) => {
-  const { pending } = usePlanFeePending(producerId);
+  const { pending, termsPending } = usePlanFeePending(producerId);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -74,6 +75,25 @@ const PlanFeeReminderBanner: React.FC<Props> = ({ producerId }) => {
           </div>
         );
       })}
+      {termsPending && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60" role="status">
+          <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-white/10 flex items-center justify-center flex-shrink-0">
+            <FileText size={18} className="text-slate-600 dark:text-slate-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Termo do Produtor atualizado</p>
+            <p className="text-sm text-slate-700 dark:text-slate-200 leading-snug">
+              A versão vigente traz as regras da taxa do plano (prazo, bloqueio, multa e reembolso). Leia e aceite para ficar em dia.
+            </p>
+          </div>
+          <Link
+            to="/termo-produtor"
+            className="flex items-center justify-center gap-2 px-5 py-3 border-2 border-slate-300 dark:border-white/20 hover:border-[#ff0068] text-slate-700 dark:text-slate-200 rounded-xl font-black text-xs uppercase tracking-widest transition-colors flex-shrink-0"
+          >
+            Ler e aceitar
+          </Link>
+        </div>
+      )}
       {errorMsg && (
         <div className="flex items-start gap-2 p-3 rounded-xl text-sm bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300" role="alert">
           <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
