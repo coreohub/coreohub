@@ -4,6 +4,12 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-25 (continuação 9) — Fase 5 item 4a: cancelar/adiar sessão + 🚨 página do ingresso quebrada na main (fix na dev) ✅ (banco/functions em produção)
+
+- **Cancelar/adiar (9399b8f):** migration `20260930b_event_session_status.sql` (aplicada), edge `update-session-status`, template `audience_session_changed` no `send-email`, banner na vitrine/checkout/`MeuIngresso`, botão e modal em Vendas de Ingressos, venda bloqueada em sessão cancelada (`create-audience-ticket`, `quote-audience-ticket`, `create-pdv-ticket`). Adiar move a data do evento (a original fica guardada); vendas seguem abertas. Validado no sandbox (adiar, cancelar, desfazer, e-mails, compra recusada).
+- **Bug de produção:** `pages/MeuIngresso.tsx` na `main` (desde dba0f86) chama hooks depois dos `return` antecipados e derruba a página do ingresso ("Rendered more hooks..."). Corrigido na `dev` no mesmo commit; **falta cherry-pick para a `main`** (só quando o produtor pedir).
+- **Falta (4b):** comprador escolher manter/crédito (cupom)/restituição, estorno em lote e painel de escolhas. Detalhes em `memory/fase5_cotacao_travada_shipado_2026_09_25.md`.
+
 ### 2026-09-25 (continuação 8) — Fase 5 (Decreto 13.108): cotação travada de preço/taxa + meia-entrada e política de reembolso ✅ (dev; banco/functions em produção)
 
 - **Cotação travada (4edacae):** migration `20260930_audience_price_quotes.sql` (aplicada), edge `quote-audience-ticket` (pública) e `create-audience-ticket` honrando `quote_id` (deployadas). Preço, comissão e modo de taxa gravados por `audience_reservation_minutes` (15 min); vencida ou inválida devolve `quote_expired` e o checkout recota e avisa antes de pagar. Sem `quote_id` mantém o cálculo ao vivo. Sandbox: compra com cotação de R$ 25 + 10% cobrou R$ 27,50 contra R$ 20 + 7,9% ao vivo.
