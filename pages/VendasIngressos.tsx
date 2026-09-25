@@ -669,6 +669,37 @@ const VendasIngressos: React.FC = () => {
     URL.revokeObjectURL(a.href);
   };
 
+  // ─── Dados desagregados SEM dados pessoais (Decreto 13.108 art. 15 p.ú.) ──────
+  const [exportingAnon, setExportingAnon] = useState(false);
+  const exportAnonymizedCsv = async () => {
+    if (!eventId) return;
+    setExportingAnon(true);
+    try {
+      const { data, error: rpcErr } = await supabase.rpc('export_audience_sales_anonymized', { p_event_id: eventId });
+      if (rpcErr) throw rpcErr;
+      const list = (data ?? []) as Array<Record<string, any>>;
+      const header = ['transacao_id', 'grupo_id', 'data_venda', 'tipo_ingresso', 'categoria', 'preco', 'taxa_servico', 'modo_taxa', 'status', 'metodo_pagamento', 'pago_em', 'estornado_em', 'valor_estornado', 'assento', 'check_in', 'transferido'];
+      const csv = [
+        header.join(';'),
+        ...list.map(r => header.map(h => {
+          const v = r[h];
+          return `"${String(v == null ? '' : typeof v === 'number' ? String(v).replace('.', ',') : v).replace(/"/g, '""')}"`;
+        }).join(';')),
+      ].join('\n');
+      const blob = new Blob([new TextEncoder().encode('\uFEFF' + csv)], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `vendas-desagregadas-sem-dados-pessoais-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e: any) {
+      console.error('[VendasIngressos] export_audience_sales_anonymized:', e?.message ?? e);
+      setErr(e?.message ?? 'Não foi possível gerar a exportação.');
+    } finally {
+      setExportingAnon(false);
+    }
+  };
+
   // ─── Render ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -729,6 +760,14 @@ const VendasIngressos: React.FC = () => {
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#ff0068] text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-30"
           >
             <Download size={12} /> Exportar CSV
+          </button>
+          <button
+            onClick={() => void exportAnonymizedCsv()}
+            disabled={exportingAnon || !eventId}
+            title="Dados de venda por transação, sem nenhum dado pessoal, para requisição de órgão de defesa do consumidor (Decreto 13.108/2026, art. 15)"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-white/10 disabled:bg-slate-100 dark:disabled:bg-white/5 disabled:text-slate-400"
+          >
+            <Download size={12} /> Dados sem identificação
           </button>
         </div>
       </div>

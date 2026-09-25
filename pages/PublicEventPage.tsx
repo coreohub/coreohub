@@ -28,6 +28,7 @@ const ufUtcOffset = (uf?: string | null): string => {
 import { isEventOver } from '../utils/eventStatus';
 import AvisoViradaLote from '../components/AvisoViradaLote';
 import MeiaEntradaInfo from '../components/MeiaEntradaInfo';
+import MeiaVendasReport from '../components/MeiaVendasReport';
 import SessionStatusBanner from '../components/SessionStatusBanner';
 import { ticketCategory } from '../utils/meiaEntrada';
 import EventInfoSection from '../components/EventInfoSection';
@@ -1612,6 +1613,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                 {salesEnabled && (
                   <MeiaEntradaInfo eventId={event.id} ingressos={event.ingressos_config} seatMapEnabled={Boolean(event.seat_map_enabled)} />
                 )}
+                {eventOver && <MeiaVendasReport eventId={event.id} />}
               </div>
             );
           }
