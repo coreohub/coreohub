@@ -4,6 +4,13 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-25 (continuação 12) — Fase 5 item 3: transferência gratuita de titularidade do ingresso ✅ (dev; banco/functions em produção)
+
+- **Achado de desenho:** o QR era o `id` do ingresso; trocar só o `access_token` não invalidaria o QR salvo. Criada a credencial rotativa `qr_code` (NULL = nunca transferido); o check-in recusa o id de ingresso transferido.
+- **Migration `20260930f`:** `qr_code/transfer_count/transferred_at`, tabela `audience_ticket_transfers` (CPF mascarado, RLS só dono/super admin), RPC `get_audience_ticket_by_token_v3`, irmãos do pedido filtrados pelo mesmo titular. Edge `transfer-ticket` (10/dia por IP, CAS, auditoria antes da troca) e e-mails `audience_ticket_transferred_from/_to`.
+- **UI:** aba "Transferir ingresso" em `MeuIngresso` (avisos de meia e assento PCD), histórico de titulares + marca "Transferido" em `VendasIngressos`. Crédito/restituição de sessão adiada/cancelada de ingresso transferido é do comprador original.
+- **Validado no sandbox:** transferência, link antigo morto, bloqueios (check-in, sessão cancelada, CREDITO, mesmo titular), 429 por IP, Playwright 1440/375 sem erros. Baseline 49/21/125/0 intacto. Pendente: e-mail a novo titular quando a sessão for adiada/cancelada; item 5 da Fase 5.
+
 ### 2026-09-25 (continuação 11) — Fase 5 item 4b, ajuste: crédito com SALDO (pesquisa de mercado) ✅ (dev; banco/functions em produção)
 
 - **Pesquisa:** validade de 12 meses tem respaldo (Blueticket, Lei 14.046/2020); o Decreto 13.108 não fixa prazo; vale-crédito pode ter validade clara, mas o fornecedor não pode ficar com a diferença não usada (Defensoria PR). O cupom de uso único perdia o saldo.
