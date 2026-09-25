@@ -4,6 +4,16 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-25 — Fase 3, etapa 4: sessões do mesmo espetáculo no mesmo local ✅ DEV (staging) — 🚧 matriz E2E das 4 sessões pendente
+
+Detalhes em `memory/sessoes_mesmo_local_etapa4_2026_09_25.md`. Commit `bcf64c2` na `dev`; migration `20260928_event_sessions.sql` já aplicada em produção (só adiciona coluna/funções e troca o guard do sandbox por versão compatível).
+
+- **Modelo**: cada sessão é um evento próprio (padrão Guichê Web/Sympla/Diversos Ingressos, spec pendência 3). `events.session_group_id` liga as irmãs, sem tabela nova; a origem vira âncora do grupo na 1ª duplicação. `event_seats` já é por evento, então o mesmo assento em sessões diferentes não conflita.
+- **`duplicate_event_session(evento, data, hora, nome?)`** (só dono/super admin): copia local, ingressos, preços, regras, comissão e textos da `configuracoes`; NÃO copia vendas, cupons nem taxa fixa paga; recusa data passada, hora inválida e data+hora repetida no grupo; slug `<base>-AAAA-MM-DD-HHMM` (sufixo numérico se colidir); gera os assentos da nova data. Sessão de evento sandbox nasce sandbox: o guard `guard_events_payment_sandbox` aceita o INSERT só quando a função marca (`app.session_clone_from`, na própria transação) uma origem que já é sandbox do mesmo dono.
+- **`get_event_sessions_public`** + seção "Sessões" na vitrine (`PublicEventPage.tsx`, âncora "Sessões", só com 2+ sessões públicas; cada sessão mantém URL e JSON-LD `Event` próprios); cartão "Sessões / Duplicar como nova sessão" em Configurações → Geral (`components/EventSessionsCard.tsx`, só espetáculo ou mapa de assentos). Sitemap não precisou mudar (já lista cada evento por slug).
+- **Validação**: smoke SQL em BEGIN/ROLLBACK (grupo, slug, sandbox herdado, 373 assentos/26 especiais por sessão, recusas), 4 sessões reais criadas no sandbox (12/12 19:30, 13/12 20:00, 19/12 19:30, 20/12 18:00), Playwright desktop+mobile na vitrine e no cartão (0 erros, sem overflow), 133 testes, lint e build ok. Baseline de produção intacto (comm 49, pay 21, regs 125, eventos reais 7, tickets reais 0).
+- **Fora desta etapa**: cupons continuam por evento (sem compartilhar entre sessões); relatórios/vendas por sessão via seletor de evento já existente; seletor agregado de sessões no hub de vendas fica para depois.
+
 ### 2026-09-24 (noite) — Pagamento tardio corrigido + Fase 3 (PCD/cadeirante/acompanhante) etapas 1–3 ✅ DEV (staging) — 🚧 sessões e matriz E2E pendentes
 
 Detalhes em `memory/pagamento_tardio_ingresso_shipado_2026_09_24.md`, `memory/fase3_etapas_1_2_tipos_assento_shipado_2026_09_24.md` e `memory/planta_nelson_camargo_extracao_2026_09_24.md`. Commits na `dev`: `51be9ee`, `d4f5c6b`, `f1ed6bc`, `574c0a1`, `cdb2b0b`, `dba0f86` (nada em `main`).
