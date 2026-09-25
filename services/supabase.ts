@@ -373,6 +373,40 @@ export const fetchMyTeamEventIds = async (): Promise<string[]> => {
   return Array.isArray(data) ? data.map(String) : [];
 };
 
+export type RegistrationStatusAction =
+  | 'approve_free'
+  | 'set_awaiting_video'
+  | 'producer_approve'
+  | 'producer_disqualify';
+
+/**
+ * Muda status/status_pagamento de uma inscrição pela edge function `registration-status`.
+ * O cliente NÃO pode gravar essas colunas direto: o trigger protect_registrations_status_columns
+ * as reverte (só service_role/super admin passam).
+ * Devolve { ok, error, notFree } — `notFree` = 409 de approve_free (inscrição não é gratuita).
+ */
+export const registrationStatusAction = async (
+  action: RegistrationStatusAction,
+  registrationId: string,
+): Promise<{ ok: boolean; error?: string; notFree?: boolean }> => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`${supabaseUrl}/functions/v1/registration-status`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session?.access_token ?? ''}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ action, registration_id: registrationId }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok) return { ok: true };
+    return { ok: false, error: body?.error ?? `Erro ${res.status}`, notFree: body?.not_free === true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? 'Falha de rede' };
+  }
+};
+
 /** Filtro PostgREST `.or()` dos eventos do usuário: os que criou + os da equipe. */
 export const ownedOrTeamEventsFilter = (userId: string, teamEventIds: string[]): string =>
   teamEventIds.length > 0

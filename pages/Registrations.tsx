@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { isRegistrationPaid } from '../utils/registrationStatus';
 import { toTitleCase, resolveTrilhaUrl, formatCategoriaAbbrev } from '../utils/formatters';
-import { supabase, supabaseUrl, fetchMyTeamEventIds, ownedOrTeamEventsFilter } from '../services/supabase';
+import { supabase, supabaseUrl, fetchMyTeamEventIds, ownedOrTeamEventsFilter, registrationStatusAction } from '../services/supabase';
 import { trackFeatureUsed } from '../services/appAnalytics';
 import { motion, AnimatePresence } from 'motion/react';
 import { refundRegistration } from '../services/refundService';
@@ -594,8 +594,9 @@ const Registrations = () => {
     // Webhook sempre salva 'APROVADO'. Manter consistência aqui também
     // — o painel deve mostrar o mesmo valor em ambos os caminhos
     // (pagamento real via Asaas + aprovação manual pelo produtor).
-    const { error } = await supabase.from('registrations').update({ status: 'APROVADA', status_pagamento: 'APROVADO' }).eq('id', id);
-    if (error) return;
+    // Servidor grava (colunas de status são protegidas contra UPDATE direto do cliente).
+    const r = await registrationStatusAction('producer_approve', id);
+    if (!r.ok) { alert(r.error ?? 'Não foi possível aprovar a inscrição.'); return; }
     setRegistrations(prev => prev.map(reg => reg.id === id ? { ...reg, status: 'APROVADA', status_pagamento: 'APROVADO' } : reg));
     setReviewingReg(null);
   };
@@ -1154,7 +1155,13 @@ const Registrations = () => {
     if (decision === 'APPROVE')     update = { ...update, penalidade_aplicada: 'NENHUMA' };
     if (decision === 'PENALIZE')    update = { ...update, penalidade_aplicada: 'DESCONTO_NOTA' };
     if (decision === 'DISQUALIFY')  update = { ...update, status: 'DESCLASSIFICADA', penalidade_aplicada: 'DESCLASSIFICACAO' };
-    await supabase.from('registrations').update(update).eq('id', regId);
+    if (decision === 'DISQUALIFY') {
+      // `status` é coluna protegida: quem grava é o servidor.
+      const r = await registrationStatusAction('producer_disqualify', regId);
+      if (!r.ok) { alert(r.error ?? 'Não foi possível desclassificar.'); return; }
+    } else {
+      await supabase.from('registrations').update(update).eq('id', regId);
+    }
     setRegistrations(prev => prev.map(r => r.id === regId ? { ...r, ...update } : r));
     setTriageAction(null);
   };
