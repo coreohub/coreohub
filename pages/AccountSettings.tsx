@@ -35,7 +35,7 @@ import FocalPointPicker from '../components/FocalPointPicker';
 import { formatEventWhatsApp, resolveEstudio, stripEstiloVertentes } from '../utils/formatters';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
 import { resolveAvaliadaLabel } from '../utils/formatoParticipacao';
-import { parseInfoConfig, serializeInfoConfig, EMPTY_INFO, type InfoConfig } from '../utils/eventInfo';
+import { parseInfoConfig, serializeInfoConfig, hasInfoContent, EMPTY_INFO, type InfoConfig } from '../utils/eventInfo';
 import EventInfoEditor from '../components/EventInfoEditor';
 import InstallPWAButton from '../components/InstallPWAButton';
 import { previewNarration, fetchNarrationAudios, type NarrationKind } from '../services/narrationApi';
@@ -2928,9 +2928,13 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
             </div>
 
             {/* Informações e regras (seções fixas + FAQ) — seção pública no fim da vitrine */}
-            <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
-              <EventInfoEditor value={infoConfig} onChange={setInfoConfig} inputClass={input} labelClass={label} />
-            </div>
+            {/* Só pra evento com ingresso (Espetáculo ou venda interna/externa); quem já
+                tem conteúdo salvo continua vendo, pra não perder acesso ao que escreveu. */}
+            {(isEspetaculo || politicaIngressos === 'INTERNO' || politicaIngressos === 'EXTERNO' || hasInfoContent(infoConfig)) && (
+              <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 p-8 rounded-3xl">
+                <EventInfoEditor value={infoConfig} onChange={setInfoConfig} inputClass={input} labelClass={label} />
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Dados do Evento */}
