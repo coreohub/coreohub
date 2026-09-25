@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { isRegistrationPaid } from '../utils/registrationStatus';
 import { toTitleCase, resolveTrilhaUrl, formatCategoriaAbbrev } from '../utils/formatters';
-import { supabase, supabaseUrl } from '../services/supabase';
+import { supabase, supabaseUrl, fetchMyTeamEventIds, ownedOrTeamEventsFilter } from '../services/supabase';
 import { trackFeatureUsed } from '../services/appAnalytics';
 import { motion, AnimatePresence } from 'motion/react';
 import { refundRegistration } from '../services/refundService';
@@ -416,10 +416,11 @@ const Registrations = () => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      const teamEventIds = await fetchMyTeamEventIds();
       const { data } = await supabase
         .from('events')
         .select('id,name,edition_year,start_date,event_time,is_demo,created_at')
-        .eq('created_by', user.id)
+        .or(ownedOrTeamEventsFilter(user.id, teamEventIds))
         .order('created_at', { ascending: false });
       if (data && data.length > 0) {
         setAllEvents(data);

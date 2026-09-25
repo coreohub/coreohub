@@ -15,7 +15,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import imageCompression from 'browser-image-compression';
-import { supabase, supabaseUrl } from '../services/supabase';
+import { supabase, supabaseUrl, fetchMyTeamEventIds, ownedOrTeamEventsFilter } from '../services/supabase';
 import { trackFeatureUsed } from '../services/appAnalytics';
 import PageHeader from '../components/PageHeader';
 import EventPickerSheet, { EventPickerOption } from '../components/EventPickerSheet';
@@ -222,10 +222,11 @@ const Certificates: React.FC = () => {
     // já era um <select> explícito (nunca teve o bug de auto-resolver
     // silenciosamente), só trocando pro EventPickerSheet padrão do resto do
     // app (melhor em mobile, mostra badge DEMO).
+    const teamEventIds = await fetchMyTeamEventIds();
     const { data: evs } = await supabase
       .from('events')
       .select('id, name, edition_year, is_demo, start_date')
-      .eq('created_by', user.id)
+      .or(ownedOrTeamEventsFilter(user.id, teamEventIds))
       .order('is_demo', { ascending: true })
       .order('created_at', { ascending: false });
     if (evs) setEvents(evs);

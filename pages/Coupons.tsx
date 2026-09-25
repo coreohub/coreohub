@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { supabase } from '../services/supabase';
+import { supabase, fetchMyTeamEventIds, ownedOrTeamEventsFilter } from '../services/supabase';
 import { trackFeatureUsed } from '../services/appAnalytics';
 import {
   listCouponsByEvent, createCoupon, updateCoupon, deleteCoupon,
@@ -115,10 +115,11 @@ const Coupons: React.FC = () => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      const teamEventIds = await fetchMyTeamEventIds();
       const { data } = await supabase
         .from('events')
         .select('id, name, is_demo')
-        .eq('created_by', user.id)
+        .or(ownedOrTeamEventsFilter(user.id, teamEventIds))
         .order('created_at', { ascending: false });
       if (data && data.length > 0) {
         setEvents(data);
