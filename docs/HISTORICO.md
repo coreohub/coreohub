@@ -4,6 +4,11 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-25 (continuação 11) — Fase 5 item 4b, ajuste: crédito com SALDO (pesquisa de mercado) ✅ (dev; banco/functions em produção)
+
+- **Pesquisa:** validade de 12 meses tem respaldo (Blueticket, Lei 14.046/2020); o Decreto 13.108 não fixa prazo; vale-crédito pode ter validade clara, mas o fornecedor não pode ficar com a diferença não usada (Defensoria PR). O cupom de uso único perdia o saldo.
+- **Mudança (`20260930e`):** saldo = valor − desconto de ingressos ativos, devolvido sozinho se a compra expira/estorna; trigger de uso único removido; piso de R$ 20 na base da compra (o crédito grande em compra pequena não zera mais o total: some a limitação "crédito de 100%"). Página do ingresso mostra valor, saldo e validade. Sandbox: crédito R$ 21,58, compra de base R$ 40 usou R$ 20, saldo R$ 1,58, cupom segue ativo.
+
 ### 2026-09-25 (continuação 10) — Fase 5 item 4b: comprador escolhe manter/crédito/restituição e produtor restitui em lote ✅ (dev; banco/functions em produção)
 
 - **Fluxo:** na sessão adiada/cancelada, a página do ingresso (`SessionChoicePanel`) deixa o comprador manter (só adiada), converter em crédito (cupom `CRED-…` de uso único, valor pago com taxa, 12 meses, válido nas sessões do mesmo espetáculo) ou pedir restituição integral. O produtor ganha painel de escolhas e restituição em lote em Vendas de Ingressos. Edges `choose-session-option` (pública, por token) e `refund-session-orders`; estorno extraído para `_shared/audience-refund.ts`. Migrations `20260930c` e `20260930d`.
