@@ -761,6 +761,8 @@ interface AudienceSessionChangedPayload {
   /** Link /meu-ingresso/<token> do pedido. */
   ingressoUrl?: string
   eventoUrl?: string
+  /** Ingresso recebido por transferência: a restituição/crédito é do comprador original. */
+  transferido?: boolean
 }
 
 function buildAudienceSessionChanged(p: AudienceSessionChangedPayload) {
@@ -770,7 +772,9 @@ function buildAudienceSessionChanged(p: AudienceSessionChangedPayload) {
     ? infoRow(lista.length > 1 ? 'Seus ingressos' : 'Seu ingresso', lista.map(i => escape(i.assento ? `${i.nome} — lugar ${i.assento}` : i.nome)).join('<br>'))
     : ''
   const motivoHtml = p.motivo ? infoRow('Motivo informado pelo organizador', escape(p.motivo)) : ''
-  const opcoes = `
+  const opcoes = p.transferido ? `
+    <p style="margin:16px 0 6px;font-size:13px;color:#0b0b0f;font-weight:700;">Seu ingresso foi recebido por transferência</p>
+    <p style="margin:0;font-size:13px;color:#334155;line-height:1.6;">${p.status === 'adiada' ? 'O ingresso continua valendo para a nova data. ' : ''}O crédito ou a restituição do valor pago é escolhido por quem fez a compra original, pois foi essa pessoa que pagou. Se precisar de ajuda, responda este e-mail.</p>` : `
     <p style="margin:16px 0 6px;font-size:13px;color:#0b0b0f;font-weight:700;">O que você pode fazer</p>
     <ul style="margin:0;padding-left:18px;font-size:13px;color:#334155;line-height:1.6;">
       ${p.status === 'adiada' ? '<li><strong>Manter</strong> o ingresso: ele continua valendo para a nova data (não precisa fazer nada).</li>' : ''}

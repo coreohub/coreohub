@@ -12,6 +12,6 @@ Situação em 2026-09-25. Levantamento do que a plataforma guarda hoje e o que f
 
 ## Não feito (decisão pendente)
 - **Eliminação/anonimização depois do prazo:** nenhuma rotina apaga ou anonimiza dado pessoal (nome, e-mail, CPF do comprador e dos titulares) após 2 anos. A LGPD pede eliminar ao fim da finalidade, mas o relatório jurídico sugere manter 5 anos por defesa de direitos (prescrição do CDC). Decidir com advogado antes de criar a rotina.
-- **Exclusão em cascata:** `audience_tickets.event_id` apaga junto com o evento (`ON DELETE CASCADE`). Qualquer caminho que apague um evento com venda com menos de 2 anos (por exemplo, exclusão da conta do produtor, se ela apagar eventos) agora falha no banco pela guarda legal. Verificar esse fluxo e, se existir, anonimizar em vez de apagar.
+- **Exclusão em cascata:** `audience_tickets.event_id` apaga junto com o evento (`ON DELETE CASCADE`), mas `events.created_by` referencia `profiles(id)` sem cascata: não existe caminho no app nem no banco que apague um evento com venda por exclusão de conta (só `delete-event`, que já bloqueia evento com ingresso, e a limpeza de demo). Conferido em 2026-09-25.
 - **Purga de `audience_price_quotes`:** definir prazo (2 anos) com o mesmo critério.
 - **Logs de acesso/IP:** o decreto não os exige; `audience_ticket_transfers.ip` guarda o IP da transferência como antiabuso. Confirmar o prazo com o advogado.

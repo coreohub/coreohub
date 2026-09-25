@@ -164,10 +164,10 @@ Deno.serve(async (req) => {
       changed_by: user.id,
     }).select('id').single()
 
-    // ── Avisa os compradores (1 e-mail por pedido) ──────────────────────────
+    // ── Avisa os titulares (1 e-mail por pedido e por titular: ingresso transferido avisa o novo titular) ──────────────────────────
     const { data: tickets } = await supabase
       .from('audience_tickets')
-      .select('id, group_id, buyer_email, buyer_name, ticket_type_nome, seat_id, access_token')
+      .select('id, group_id, buyer_email, buyer_name, ticket_type_nome, seat_id, access_token, transfer_count')
       .eq('event_id', event_id)
       .eq('status_pagamento', 'APROVADO')
       .is('refunded_at', null)
@@ -176,7 +176,8 @@ Deno.serve(async (req) => {
     let noEmail = 0
     for (const t of (tickets ?? []) as any[]) {
       if (!t.buyer_email) { noEmail++; continue }
-      const key = t.group_id ?? `solo:${t.id}`
+      // Titular = e-mail atual do ingresso: depois de uma transferência o novo titular tem o próprio aviso.
+      const key = `${t.group_id ?? `solo:${t.id}`}|${String(t.buyer_email).trim().toLowerCase()}`
       orders.set(key, [...(orders.get(key) ?? []), t])
     }
 
@@ -209,6 +210,7 @@ Deno.serve(async (req) => {
           ...base,
           buyerName: first.buyer_name,
           buyerEmail: first.buyer_email,
+          transferido: order.some((o: any) => Number(o.transfer_count ?? 0) > 0),
           ingressos: order.map((o: any) => ({ nome: o.ticket_type_nome ?? 'Ingresso', assento: o.seat_id })),
           ingressoUrl: first.access_token ? `${appUrl}/meu-ingresso/${first.access_token}` : undefined,
         })
