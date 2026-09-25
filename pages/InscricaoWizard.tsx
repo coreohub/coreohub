@@ -19,7 +19,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { supabase } from '../services/supabase';
+import { supabase, registrationStatusAction } from '../services/supabase';
 import {
   ChevronLeft, ChevronRight, Loader2, Music2, User, Users, Upload,
   AlertCircle, CheckCircle, Plus, Trash2, ArrowRight, Video, ShieldCheck,
@@ -1143,18 +1143,15 @@ const InscricaoWizard: React.FC = () => {
         // sem cobrar R$ real. Sem isso, testar o fluxo no demo gerava cobrança
         // real (reportado em 2026-05-21).
         if ((event as any)?.is_demo) {
-          await supabase
-            .from('registrations')
-            .update({ status_pagamento: 'AGUARDANDO_VIDEO', video_fee_status: 'waived' })
-            .eq('id', reg.id);
+          // Status é gravado pelo servidor (o cliente não pode: trigger de proteção).
+          const rDemo = await registrationStatusAction('set_awaiting_video', reg.id);
+          if (!rDemo.ok) throw new Error(rDemo.error ?? 'Erro ao registrar a inscrição na seletiva.');
           navigate(`/minhas-coreografias?nova=${reg.id}`);
           return;
         }
         // Modelo 3 — cobra taxa de seletiva antes do upload do vídeo.
-        await supabase
-          .from('registrations')
-          .update({ status_pagamento: 'AGUARDANDO_VIDEO', video_fee_status: 'pending' })
-          .eq('id', reg.id);
+        const rPend = await registrationStatusAction('set_awaiting_video', reg.id);
+        if (!rPend.ok) throw new Error(rPend.error ?? 'Erro ao registrar a inscrição na seletiva.');
         try {
           const { data: { session } } = await supabase.auth.getSession();
           const r = await fetch(
@@ -1191,10 +1188,8 @@ const InscricaoWizard: React.FC = () => {
       } else if (requiresVideoSel && videoFee === 0) {
         // Modelo 2 — inscrição provisória grátis, vídeo é pré-requisito do
         // pagamento da inscrição cheia.
-        await supabase
-          .from('registrations')
-          .update({ status_pagamento: 'AGUARDANDO_VIDEO', video_fee_status: 'waived' })
-          .eq('id', reg.id);
+        const rM2 = await registrationStatusAction('set_awaiting_video', reg.id);
+        if (!rM2.ok) throw new Error(rM2.error ?? 'Erro ao registrar a inscrição na seletiva.');
         navigate('/minha-seletiva');
         return;
       }
@@ -1211,10 +1206,9 @@ const InscricaoWizard: React.FC = () => {
       // fato R$0 (dessincronia), fica só como aprovação otimista incorreta;
       // aceitável porque o produtor sempre revisa em Inscrições antes do evento.
       if (isFormacaoGratuita) {
-        await supabase
-          .from('registrations')
-          .update({ status_pagamento: 'APROVADO', valor_pago: 0 })
-          .eq('id', reg.id);
+        // O servidor confirma que é mesmo gratuita (409 = segue o fluxo normal de pagamento;
+        // qualquer falha aqui deixa a inscrição PENDENTE, como já era o comportamento seguro).
+        await registrationStatusAction('approve_free', reg.id);
       }
       // Param `nova=<id>` permite a UI destacar/animar a inscrição recém-criada.
       navigate(`/minhas-coreografias?nova=${reg.id}`);

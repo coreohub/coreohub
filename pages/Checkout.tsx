@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../services/supabase';
+import { supabase, registrationStatusAction } from '../services/supabase';
 import { eventFilterColumn } from '../services/eventResolver';
 import { validateCoupon } from '../services/couponService';
 import type { RegistrationLot } from '../types';
@@ -227,10 +227,9 @@ const Checkout = () => {
     setConfirming(true);
     setError(null);
     try {
-      await supabase
-        .from('registrations')
-        .update({ status_pagamento: 'APROVADO', valor_pago: 0 })
-        .eq('id', registrationId);
+      // Servidor valida que a inscrição é mesmo gratuita (o cliente não pode gravar status_pagamento).
+      const r = await registrationStatusAction('approve_free', registrationId);
+      if (!r.ok) throw new Error(r.error ?? 'Erro ao confirmar inscrição.');
       navigate(`/pagamento/sucesso?registration_id=${registrationId}`);
     } catch (err: any) {
       setError(err.message ?? 'Erro ao confirmar inscrição.');
