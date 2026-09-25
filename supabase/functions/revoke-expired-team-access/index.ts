@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
     // fora do escopo silenciosamente.
     const { data: events, error: evErr } = await supabase
       .from('events')
-      .select('id, equipe_access_days_after')
+      .select('id, equipe_access_days_after, session_group_id, created_by')
       .or('is_demo.eq.false,is_demo.is.null')
     if (evErr) return json({ status: 'error', reason: evErr.message }, 500)
     if (!events || events.length === 0) return json({ status: 'ok', revoked: 0, scanned_events: 0 })
@@ -71,12 +71,28 @@ Deno.serve(async (req) => {
     const dataEventoById = new Map((configs ?? []).map(c => [c.id, c.data_evento as string | null]))
     const now = Date.now()
 
+    // Prazo por evento; sessões do mesmo espetáculo (session_group_id + mesmo produtor,
+    // mesma regra de team_event_ids no banco) compartilham o prazo da ÚLTIMA sessão —
+    // senão o operador perderia acesso a sessões que ainda vão acontecer. Se alguma
+    // sessão do grupo não tem data, o grupo inteiro fica de fora (conservador).
+    const deadlineOf = (e: { id: string; equipe_access_days_after: number }) => {
+      const dataEvento = dataEventoById.get(String(e.id))
+      return dataEvento ? new Date(dataEvento).getTime() + e.equipe_access_days_after * 86_400_000 : null
+    }
+    const groupKey = (e: { id: string; session_group_id: string | null; created_by: string }) =>
+      e.session_group_id ? `${e.created_by}:${e.session_group_id}` : `solo:${e.id}`
+    const groupDeadline = new Map<string, number | null>()
+    for (const e of events) {
+      const k = groupKey(e)
+      const d = deadlineOf(e)
+      if (!groupDeadline.has(k)) { groupDeadline.set(k, d); continue }
+      const prev = groupDeadline.get(k)
+      groupDeadline.set(k, prev == null || d == null ? null : Math.max(prev, d))
+    }
     const expiredEventIds = events
       .filter(e => {
-        const dataEvento = dataEventoById.get(String(e.id))
-        if (!dataEvento) return false
-        const deadline = new Date(dataEvento).getTime() + e.equipe_access_days_after * 86_400_000
-        return now >= deadline
+        const d = groupDeadline.get(groupKey(e))
+        return d != null && now >= d
       })
       .map(e => e.id)
 

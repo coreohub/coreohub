@@ -9,7 +9,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { supabase, resolveActiveEventId } from '../services/supabase';
+import { supabase, resolveActiveEventId, fetchMyTeamEventIds, ownedOrTeamEventsFilter } from '../services/supabase';
 import {
   Ticket, Loader2, Search, Download, ExternalLink, CheckCircle2, Clock, XCircle, RotateCcw,
   Users, DollarSign, AlertCircle, Undo2, X, Store, Copy, QrCode, Printer, Armchair,
@@ -152,11 +152,13 @@ const VendasIngressos: React.FC = () => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      // Equipe (operador) vê também as sessões irmãs do espetáculo vinculado.
+      const teamEventIds = await fetchMyTeamEventIds();
       const [{ data: events }, defaultId] = await Promise.all([
         supabase
           .from('events')
           .select('id,name,edition_year,is_demo,created_at,start_date,event_time')
-          .eq('created_by', user.id)
+          .or(ownedOrTeamEventsFilter(user.id, teamEventIds))
           .order('created_at', { ascending: false }),
         resolveActiveEventId(),
       ]);

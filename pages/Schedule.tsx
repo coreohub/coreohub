@@ -8,7 +8,7 @@ import {
   Layers, X, Plus, Trash2, ArrowUp, ArrowDown, Edit3, SkipForward,
   Search, Megaphone, FileText, Rewind, FastForward,
 } from 'lucide-react';
-import { supabase } from '../services/supabase';
+import { supabase, fetchMyTeamEventIds, ownedOrTeamEventsFilter } from '../services/supabase';
 import { trackFeatureUsed } from '../services/appAnalytics';
 import PageHeader from '../components/PageHeader';
 import { DndContext, closestCenter, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors, useDroppable } from '@dnd-kit/core';
@@ -766,11 +766,7 @@ const Schedule = () => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { fetchData(null); return; }
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('team_event_id')
-        .eq('id', user.id)
-        .maybeSingle();
+      const teamEventIds = await fetchMyTeamEventIds();
       const query = supabase
         .from('events')
         .select('id,name,edition_year,start_date,created_at,is_demo')
@@ -779,9 +775,7 @@ const Schedule = () => {
         // ver CLAUDE.md 2026-07-12). Dentro do mesmo grupo, o mais recente vence.
         .order('is_demo', { ascending: true })
         .order('created_at', { ascending: false });
-      const { data } = profile?.team_event_id
-        ? await query.or(`created_by.eq.${user.id},id.eq.${profile.team_event_id}`)
-        : await query.eq('created_by', user.id);
+      const { data } = await query.or(ownedOrTeamEventsFilter(user.id, teamEventIds));
       if (data && data.length > 0) {
         setAllEvents(data);
         setSelectedEventId(prev => prev ?? data[0].id);

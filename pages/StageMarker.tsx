@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, CheckCircle2, RotateCcw, AlertTriangle, Clock, Users, Music, ChevronRight, Wifi, WifiOff, Settings2, Save, Loader2, Search, X, Radio, RefreshCw, Layers } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { supabase } from '../services/supabase';
+import { supabase, fetchMyTeamEventIds, ownedOrTeamEventsFilter } from '../services/supabase';
 import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus';
 import EventPickerSheet, { EventPickerOption } from '../components/EventPickerSheet';
 
@@ -100,18 +100,12 @@ const StageMarker = () => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('team_event_id')
-        .eq('id', user.id)
-        .maybeSingle();
+      const teamEventIds = await fetchMyTeamEventIds();
       const query = supabase
         .from('events')
         .select('id,name,edition_year,start_date,created_at,is_demo')
         .order('created_at', { ascending: false });
-      const { data } = profile?.team_event_id
-        ? await query.or(`created_by.eq.${user.id},id.eq.${profile.team_event_id}`)
-        : await query.eq('created_by', user.id);
+      const { data } = await query.or(ownedOrTeamEventsFilter(user.id, teamEventIds));
       if (data && data.length > 0) {
         setAllEvents(data);
         setSelectedEventId(prev => prev ?? data[0].id);

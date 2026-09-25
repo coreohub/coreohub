@@ -361,6 +361,25 @@ export const resolveActiveEventId = async (eventIdHint?: string | null): Promise
 };
 
 /**
+ * Eventos a que o membro de equipe logado tem acesso: o vinculado
+ * (profiles.team_event_id) + as sessões irmãs do mesmo espetáculo/produtor
+ * (RPC team_event_ids, mesma regra das policies). Vazio pra quem não é equipe.
+ */
+export const fetchMyTeamEventIds = async (): Promise<string[]> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data, error } = await supabase.rpc('team_event_ids', { uid: user.id });
+  if (error) { console.error('[team_event_ids]', error.message); return []; }
+  return Array.isArray(data) ? data.map(String) : [];
+};
+
+/** Filtro PostgREST `.or()` dos eventos do usuário: os que criou + os da equipe. */
+export const ownedOrTeamEventsFilter = (userId: string, teamEventIds: string[]): string =>
+  teamEventIds.length > 0
+    ? `created_by.eq.${userId},id.in.(${teamEventIds.join(',')})`
+    : `created_by.eq.${userId}`;
+
+/**
  * Busca a row de `configuracoes` do evento ativo do user.
  * Tenta primeiro `event_id = X` (multi-tenant correto). Fallback id='1' (legacy).
  * Use isso em vez de `eq('id', 1)` direto.

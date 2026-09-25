@@ -42,6 +42,7 @@ import { ticketSeatKind, effectiveTicketKind, countPcdTickets, countCompanionTic
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 import { planFeeSalesBlocked, SALES_NOT_OPEN_MESSAGE } from '../_shared/plan-fee-gate.ts'
+import { isTeamMemberOfEvent } from '../_shared/team-access.ts'
 
 function isValidCpf(cpf: string): boolean {
   const digits = cpf.replace(/\D/g, '')
@@ -168,8 +169,9 @@ Deno.serve(async (req) => {
       .maybeSingle()
     const isSuperAdmin = profile?.is_super_admin === true
     const isOwner = event.created_by === user.id
-    const isTeamMember = profile?.team_event_id === event_id &&
-      (profile?.permissoes_custom as any)?.vendas_ingressos === true
+    // Equipe vale pra todas as sessões do mesmo espetáculo (mesmo produtor).
+    const isTeamMember = (profile?.permissoes_custom as any)?.vendas_ingressos === true &&
+      await isTeamMemberOfEvent(supabase, user.id, event_id)
     if (!isOwner && !isTeamMember && !isSuperAdmin) {
       return json({ error: 'Sem permissão pra vender ingressos deste evento' }, 403)
     }

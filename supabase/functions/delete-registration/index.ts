@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders } from '../_shared/cors.ts'
+import { isTeamMemberOfEvent } from '../_shared/team-access.ts'
 
 /**
  * delete-registration — exclusão definitiva de inscrição (2026-07-17).
@@ -71,13 +72,8 @@ Deno.serve(async (req) => {
       .eq('id', reg.event_id)
       .maybeSingle()
     if (evErr) throw evErr
-    const { data: profile } = await admin
-      .from('profiles')
-      .select('team_event_id')
-      .eq('id', user.id)
-      .maybeSingle()
     const isOwner = event?.created_by === user.id
-    const isTeam = profile?.team_event_id === reg.event_id
+    const isTeam = isOwner ? false : await isTeamMemberOfEvent(admin, user.id, reg.event_id)
     if (!isOwner && !isTeam) {
       return new Response(JSON.stringify({ error: 'Você não tem acesso a esta inscrição.' }), {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
