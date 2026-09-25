@@ -547,3 +547,11 @@ entrypoint = "./functions/auth-email-hook/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/send-lead-reengagement-emails/index.ts"
+
+# Fase 5 (Decreto 13.108): cotação travada do ingresso (preço + taxa por ~15 min).
+# verify_jwt=false (checkout público). Rate-limited por IP no próprio código.
+[functions.quote-audience-ticket]
+enabled = true
+verify_jwt = false
+import_map = "./functions/quote-audience-ticket/deno.json"
+entrypoint = "./functions/quote-audience-ticket/index.ts"

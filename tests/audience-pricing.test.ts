@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeAudienceCart, type PricingInput } from '../supabase/functions/_shared/audience-pricing';
+import { computeAudienceCart, resolveTicketPrice, type PricingInput } from '../supabase/functions/_shared/audience-pricing';
 
 // O cálculo que decide quanto o comprador paga e quanto vai pro produtor.
 // Bug aqui = cobra valor errado de gente real. Testa o cenário do carrinho
@@ -102,5 +102,25 @@ describe('computeAudienceCart — edge cases', () => {
     expect(r.items[0].ticket_type_id).toBe('3');
     expect(r.items[0].ticket_type_nome).toBe('VIP');
     expect(r.items[0].quantidade_total).toBe(50);
+  });
+});
+
+describe('resolveTicketPrice — preço vigente por lote (base da cotação travada)', () => {
+  const lotes = [
+    { data_virada: '2026-10-10', preco: 40, nome: '1º lote' },
+    { data_virada: null, preco: 60, nome: '2º lote' },
+  ];
+  it('usa o lote vigente até a data de virada (inclusive)', () => {
+    expect(resolveTicketPrice({ lotes }, '2026-10-10')).toEqual({ preco: 40, lote: '1º lote' });
+  });
+  it('vira pro próximo lote no dia seguinte', () => {
+    expect(resolveTicketPrice({ lotes }, '2026-10-11')).toEqual({ preco: 60, lote: '2º lote' });
+  });
+  it('sem lotes cai no preço direto', () => {
+    expect(resolveTicketPrice({ preco: 30 }, '2026-10-11')).toEqual({ preco: 30, lote: null });
+  });
+  it('todas as datas vencidas usa o último lote', () => {
+    const vencidos = [{ data_virada: '2026-01-01', preco: 10 }, { data_virada: '2026-02-01', preco: 20 }];
+    expect(resolveTicketPrice({ lotes: vencidos }, '2026-10-11').preco).toBe(20);
   });
 });
