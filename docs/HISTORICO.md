@@ -4,6 +4,17 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-25 (continuação 4) — Plano C: equipe (operadores) vale para todas as sessões do mesmo espetáculo ✅ DEV (commit `bb8d6c8`); migration e 3 edge functions JÁ EM PRODUÇÃO — 🚧 pendente merge em main
+
+Detalhes em `memory/plano_c_equipe_por_grupo_de_sessoes_shipado_2026_09_25.md`.
+
+- **Regra única no banco:** `team_event_ids(uid)` = evento vinculado (`profiles.team_event_id`) + sessões com o MESMO `session_group_id` e o MESMO `created_by` (sem a trava de produtor, o produtor B poderia puxar evento próprio pro grupo do A). Só devolve a lista do próprio chamador (ou service_role). Migration `20260929_team_access_by_session_group.sql`.
+- **Trocado nas policies** de `events`, `audience_tickets`, `workshop_registrations`, `stage_timings` e nas funções `is_team_member_of_event` (também afeta `registrations`) e `caller_can_checkin_teammate`. Policies de `profiles` NÃO mudaram (só comparam o vínculo do colega). Trigger `protect_events_session_group` impede UPDATE direto de `session_group_id`.
+- **Edge functions:** `_shared/team-access.ts`; `create-pdv-ticket` (v16), `delete-registration` e `revoke-expired-team-access` deployadas. A revogação agora expira pela ÚLTIMA sessão do grupo (decisão do produtor); grupo com alguma sessão sem data fica fora (conservador).
+- **Frontend:** `fetchMyTeamEventIds`/`ownedOrTeamEventsFilter` em `services/supabase.ts`; `Schedule`, `StageMarker` e `VendasIngressos` listam as sessões irmãs pra equipe.
+- **Validação:** smoke `BEGIN/ROLLBACK` com produtor B simulado + evento do mesmo produtor fora do grupo (0 vazamento). No sandbox, operador vinculado à sessão 2 vendeu no PDV nas sessões 3 e 5, viu as 5 no seletor, fez check-in em sessão irmã, não viu inscrições reais; após revogar, PDV deu 403. 13/13; vínculo revertido; baseline de produção idêntico (49/21/125/0 tickets/0 equipe).
+- **⚠️ Achado, não corrigido:** `Credenciais`, `Registrations`, `Avisos`, `Cupons` e `Certificados` listam eventos só por `created_by` — equipe não vê seletor nelas (lacuna anterior às sessões). Além disso, o bypass `current_user IN ('postgres', …)` do padrão `protect_*` não funciona dentro de função SECURITY DEFINER (current_user vira o dono); o trigger novo é SEM definer de propósito. Vale auditar os `protect_*` existentes.
+
 ### 2026-09-25 (continuação 3) — Taxa fixa de plano (Essencial/Escala): 7 dias de tolerância + fatura refeita a cada clique ✅ DEV (commit `6756656`); banco e edge functions JÁ EM PRODUÇÃO — 🚧 pendente só merge em main + revisão do Termo
 
 Detalhes em `memory/taxa_plano_tolerancia_7_dias_2026_09_25.md`.
