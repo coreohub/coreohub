@@ -29,7 +29,9 @@ import PageHeader from '../components/PageHeader';
 // 1.5 → 1.6 (2026-09-25): adiciona cláusula 4-bis sobre os planos com taxa
 // fixa (Essencial e Escala): taxa única de ativação por evento, fatura com
 // vencimento em 7 dias, vendas indisponíveis enquanto não paga, bloqueio do
-// painel após o prazo, multa de 2% e juros de 1% ao mês por atraso.
+// painel após o prazo, multa de 2% e juros de 1% ao mês por atraso, exclusão
+// do evento após 60 dias sem pagamento e taxa não reembolsável (exceto
+// desistência em 7 dias sem publicação nem venda).
 export const TERMO_PRODUTOR_VERSION = '1.6';
 
 const TermoProdutor: React.FC = () => {
@@ -193,9 +195,19 @@ const TermoProdutor: React.FC = () => {
               4-bis.4. Vencido o prazo sem o pagamento, o acesso ao painel do evento fica bloqueado até a confirmação do pagamento. O Produtor pode pagar a
               qualquer momento pelo botão "Pagar agora"; se a fatura original estiver vencida, será gerada outra, pelo mesmo valor, sem custo adicional.
             </p>
-            <p>
+            <p className="mb-2">
               4-bis.5. Em caso de pagamento após o vencimento, incidem <strong>multa de 2% (dois por cento)</strong> sobre o valor da fatura e{' '}
               <strong>juros de mora de 1% (um por cento) ao mês</strong>, calculados <em>pro rata die</em> até a data do pagamento.
+            </p>
+            <p className="mb-2">
+              4-bis.6. Se a taxa não for paga, o evento permanece bloqueado a partir do vencimento e, passados <strong>60 (sessenta) dias do vencimento</strong> sem
+              pagamento, poderá ser excluído da Plataforma, mediante aviso prévio por e-mail ao Produtor. A qualquer momento antes da exclusão, o pagamento da
+              fatura restabelece o acesso. Eventos que já tenham inscrições pagas ou ingressos vendidos não são excluídos por esse motivo.
+            </p>
+            <p>
+              4-bis.7. A taxa fixa é <strong>não reembolsável</strong>, pois remunera a ativação do plano e a configuração do evento na Plataforma, exceto se o
+              Produtor solicitar o cancelamento por escrito em até <strong>7 (sete) dias corridos</strong> do pagamento e o evento ainda não tiver sido publicado
+              nem registrado qualquer venda ou inscrição, caso em que o valor pago é devolvido integralmente.
             </p>
           </section>
 
@@ -384,7 +396,7 @@ const TermoProdutor: React.FC = () => {
               />
               <span className="text-[12px] text-slate-700 dark:text-slate-300 leading-relaxed">
                 Li e aceito integralmente o Termo de Adesão do Produtor versão <strong>{TERMO_PRODUTOR_VERSION}</strong>,
-                incluindo a cláusula 4-bis (taxa fixa dos planos Essencial e Escala, prazo de 7 dias, bloqueio de vendas e do painel, multa e juros por atraso),
+                incluindo a cláusula 4-bis (taxa fixa dos planos Essencial e Escala, prazo de 7 dias, bloqueio de vendas e do painel, multa e juros por atraso, exclusão do evento não pago e não reembolso da taxa),
                 a cláusula 5 (taxas bancárias do Asaas, taxa única de criação de conta R$ 12,90),
                 a cláusula 6 (janela de 7 dias para liberação dos repasses e antecipação manual sob risco),
                 a cláusula 7 (ressarcimento de chargebacks/estornos e autorização de débito automático no Asaas) e

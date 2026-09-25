@@ -30,6 +30,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
+import { termsVersionAtLeast } from '../_shared/terms-version.ts'
 
 const PLAN_FIXED_FEE: Record<string, number> = {
   essencial: 250.00,
@@ -42,10 +43,12 @@ const GRACE_DAYS = 7
 const REGEN_DAYS = 3
 
 // Multa e juros por atraso (Termo do Produtor v1.6, cláusula 4-bis.5: multa 2% +
-// juros 1% ao mês). DESLIGADO de propósito: só ligar depois que o Termo v1.6
-// estiver em produção (merge dev → main) — cobrar antes seria multa sem acordo.
-const APPLY_LATE_FEES = false
-const LATE_FEES = { fine: { value: 2 }, interest: { value: 1 } }
+// juros 1% ao mês). Só entram na fatura de quem JÁ ACEITOU o Termo v1.6 ou
+// posterior (profiles.producer_terms_version) — quem não aceitou não concordou
+// com a multa, então a fatura sai sem ela.
+const APPLY_LATE_FEES = true
+const LATE_FEES_MIN_TERMS_VERSION = '1.6'
+const LATE_FEES = { fine: { value: 2, type: 'PERCENTAGE' }, interest: { value: 1 } }
 
 /** YYYY-MM-DD em horário de Brasília daqui a `days` dias (toISOString() puro
  *  usa UTC e vira o dia errado entre 21h e 24h BRT). */
@@ -147,7 +150,7 @@ Deno.serve(async (req) => {
     // ── 2. Perfil do produtor (é ele quem paga, não o inscrito) ─────────────
     const { data: producerProfile } = await supabase
       .from('profiles')
-      .select('full_name, email, cpf_cnpj')
+      .select('full_name, email, cpf_cnpj, producer_terms_version')
       .eq('id', event.created_by)
       .single()
 
@@ -205,7 +208,8 @@ Deno.serve(async (req) => {
     // 0 = boleto cancelado assim que a fatura vence (o produtor usa a
     // plataforma enquanto não paga — sem prazo extra). Se a Asaas recusar o
     // campo, refaz sem ele em vez de travar o pagamento.
-    const noGraceCancel = { daysAfterDueDateToRegistrationCancellation: 0, ...(APPLY_LATE_FEES ? LATE_FEES : {}) }
+    const chargeLateFees = APPLY_LATE_FEES && termsVersionAtLeast(producerProfile?.producer_terms_version, LATE_FEES_MIN_TERMS_VERSION)
+    const noGraceCancel = { daysAfterDueDateToRegistrationCancellation: 0, ...(chargeLateFees ? LATE_FEES : {}) }
 
     const createPayment = async (body: Record<string, unknown>) => {
       const res = await fetch(`${ASAAS_BASE_URL}/payments`, {
@@ -218,6 +222,16 @@ Deno.serve(async (req) => {
 
     if (!payRes.ok && isDomainCallbackError(payData)) {
       ;({ res: payRes, data: payData } = await createPayment({ ...basePayload, ...noGraceCancel }))
+    }
+    // Multa/juros são um extra: se a Asaas recusar o formato deles, a fatura sai
+    // sem eles (mantendo o boleto de 0 dia) em vez de impedir o produtor de pagar.
+    if (!payRes.ok && chargeLateFees && !JSON.stringify(payData).includes('daysAfterDueDateToRegistrationCancellation')) {
+      console.warn('[create-plan-fixed-fee-payment] Asaas recusou a cobrança com multa/juros — refazendo sem eles:', payData)
+      const noLate = { daysAfterDueDateToRegistrationCancellation: 0 }
+      ;({ res: payRes, data: payData } = await createPayment({ ...basePayload, ...noLate, callback: callbackPayload }))
+      if (!payRes.ok && isDomainCallbackError(payData)) {
+        ;({ res: payRes, data: payData } = await createPayment({ ...basePayload, ...noLate }))
+      }
     }
     if (!payRes.ok && JSON.stringify(payData).includes('daysAfterDueDateToRegistrationCancellation')) {
       console.warn('[create-plan-fixed-fee-payment] Asaas recusou daysAfterDueDateToRegistrationCancellation — refazendo sem o campo:', payData)
