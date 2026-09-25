@@ -26,7 +26,11 @@ import PageHeader from '../components/PageHeader';
 // 1.4 → 1.5 (2026-08-10): cláusula 10.1 dizia "exportá-los em lote quando
 // essa função estiver disponível" — a exportação em lote (.zip) foi
 // shipada no mesmo dia, texto atualizado pra tempo presente.
-export const TERMO_PRODUTOR_VERSION = '1.5';
+// 1.5 → 1.6 (2026-09-25): adiciona cláusula 4-bis sobre os planos com taxa
+// fixa (Essencial e Escala): taxa única de ativação por evento, fatura com
+// vencimento em 7 dias, vendas indisponíveis enquanto não paga, bloqueio do
+// painel após o prazo, multa de 2% e juros de 1% ao mês por atraso.
+export const TERMO_PRODUTOR_VERSION = '1.6';
 
 const TermoProdutor: React.FC = () => {
   const navigate = useNavigate();
@@ -168,6 +172,30 @@ const TermoProdutor: React.FC = () => {
               A comissão é aplicada via mecanismo de split de pagamento no Asaas: a parte do Produtor é creditada diretamente
               em sua subconta; a parte da CoreoHub é creditada em conta da Plataforma. O Produtor é o único responsável por
               definir os preços de inscrição e tributação aplicável às suas receitas.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">4-bis. Planos com taxa fixa (Essencial e Escala)</h2>
+            <p className="mb-2">
+              4-bis.1. Nos planos <strong>Essencial</strong> e <strong>Escala</strong>, além da comissão prevista na cláusula 4, o Produtor paga à CoreoHub
+              uma <strong>taxa fixa única de ativação por evento</strong>, no valor informado na tela de escolha do plano (na data desta versão,
+              R$ 250,00 no Essencial e R$ 1.490,00 no Escala). Essa taxa não se confunde com as taxas do parceiro financeiro descritas na cláusula 5.
+            </p>
+            <p className="mb-2">
+              4-bis.2. A taxa é cobrada por fatura (Pix, boleto ou cartão) gerada no momento em que o Produtor escolhe o plano, com{' '}
+              <strong>vencimento em 7 (sete) dias corridos</strong>. Durante esse prazo o Produtor pode configurar o evento normalmente.
+            </p>
+            <p className="mb-2">
+              4-bis.3. Enquanto a taxa não estiver paga, a CoreoHub poderá manter indisponíveis as vendas e inscrições pagas do evento.
+            </p>
+            <p className="mb-2">
+              4-bis.4. Vencido o prazo sem o pagamento, o acesso ao painel do evento fica bloqueado até a confirmação do pagamento. O Produtor pode pagar a
+              qualquer momento pelo botão "Pagar agora"; se a fatura original estiver vencida, será gerada outra, pelo mesmo valor, sem custo adicional.
+            </p>
+            <p>
+              4-bis.5. Em caso de pagamento após o vencimento, incidem <strong>multa de 2% (dois por cento)</strong> sobre o valor da fatura e{' '}
+              <strong>juros de mora de 1% (um por cento) ao mês</strong>, calculados <em>pro rata die</em> até a data do pagamento.
             </p>
           </section>
 
@@ -356,7 +384,8 @@ const TermoProdutor: React.FC = () => {
               />
               <span className="text-[12px] text-slate-700 dark:text-slate-300 leading-relaxed">
                 Li e aceito integralmente o Termo de Adesão do Produtor versão <strong>{TERMO_PRODUTOR_VERSION}</strong>,
-                incluindo a cláusula 5 (taxas bancárias do Asaas, taxa única de criação de conta R$ 12,90),
+                incluindo a cláusula 4-bis (taxa fixa dos planos Essencial e Escala, prazo de 7 dias, bloqueio de vendas e do painel, multa e juros por atraso),
+                a cláusula 5 (taxas bancárias do Asaas, taxa única de criação de conta R$ 12,90),
                 a cláusula 6 (janela de 7 dias para liberação dos repasses e antecipação manual sob risco),
                 a cláusula 7 (ressarcimento de chargebacks/estornos e autorização de débito automático no Asaas) e
                 a cláusula 10.1 (acesso e retenção de 90 dias dos comentários de avaliação dos jurados).

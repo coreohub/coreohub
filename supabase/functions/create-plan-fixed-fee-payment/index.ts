@@ -41,6 +41,12 @@ const PLAN_FIXED_FEE: Record<string, number> = {
 const GRACE_DAYS = 7
 const REGEN_DAYS = 3
 
+// Multa e juros por atraso (Termo do Produtor v1.6, cláusula 4-bis.5: multa 2% +
+// juros 1% ao mês). DESLIGADO de propósito: só ligar depois que o Termo v1.6
+// estiver em produção (merge dev → main) — cobrar antes seria multa sem acordo.
+const APPLY_LATE_FEES = false
+const LATE_FEES = { fine: { value: 2 }, interest: { value: 1 } }
+
 /** YYYY-MM-DD em horário de Brasília daqui a `days` dias (toISOString() puro
  *  usa UTC e vira o dia errado entre 21h e 24h BRT). */
 function brtDatePlusDays(days: number): string {
@@ -199,7 +205,7 @@ Deno.serve(async (req) => {
     // 0 = boleto cancelado assim que a fatura vence (o produtor usa a
     // plataforma enquanto não paga — sem prazo extra). Se a Asaas recusar o
     // campo, refaz sem ele em vez de travar o pagamento.
-    const noGraceCancel = { daysAfterDueDateToRegistrationCancellation: 0 }
+    const noGraceCancel = { daysAfterDueDateToRegistrationCancellation: 0, ...(APPLY_LATE_FEES ? LATE_FEES : {}) }
 
     const createPayment = async (body: Record<string, unknown>) => {
       const res = await fetch(`${ASAAS_BASE_URL}/payments`, {
