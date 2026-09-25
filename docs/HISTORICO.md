@@ -4,6 +4,12 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-25 (continuação 8) — Fase 5 (Decreto 13.108): cotação travada de preço/taxa + meia-entrada e política de reembolso ✅ (dev; banco/functions em produção)
+
+- **Cotação travada (4edacae):** migration `20260930_audience_price_quotes.sql` (aplicada), edge `quote-audience-ticket` (pública) e `create-audience-ticket` honrando `quote_id` (deployadas). Preço, comissão e modo de taxa gravados por `audience_reservation_minutes` (15 min); vencida ou inválida devolve `quote_expired` e o checkout recota e avisa antes de pagar. Sem `quote_id` mantém o cálculo ao vivo. Sandbox: compra com cotação de R$ 25 + 10% cobrou R$ 27,50 contra R$ 20 + 7,9% ao vivo.
+- **Meia-entrada e reembolso (6d5f107, só frontend):** `MeiaEntradaInfo` na vitrine e no checkout (totais, meia disponível, aviso de esgotamento, art. 1º da Lei 12.933, órgãos de fiscalização), flag `promocional` no editor de tipos, `CheckoutLegalNotice variant=ingresso` sem a cláusula "a critério do produtor" nos casos de arrependimento e cancelamento.
+- **Pendências:** telefones de fiscalização por estado (texto usa Procon 151 + consumidor.gov.br), fluxo de cancelar/adiar (item 4) e transferência (item 3) ainda não existem, limite de meia por beneficiário, relatório de meia, retenção de 2 anos, Termo v1.7. Texto jurídico é rascunho: advogado valida. Detalhes em `memory/fase5_cotacao_travada_shipado_2026_09_25.md`.
+
 ### 2026-09-25 (continuação 7) — Fase 4 (matriz E2E no sandbox): meia-entrada, cupom entre sessões, expiração de reserva ✅ 10/10 — 🐛 bug real do cupom de plateia corrigido e deployado (commit `7d1d361`)
 
 - **Bug real:** a RPC `validate_audience_coupon` (v2, migration `20260616`) devolve `err`/`discount_amount`/`final_amount`, mas `create-audience-ticket` e `validate-audience-coupon` liam `error_message`/`discount`/`final_value` (as RPCs de workshop/vídeo NÃO mudaram e seguem certas). Efeito: TODA compra de ingresso de plateia com cupom falhava ("null value in column preco", desconto virava NaN) e cupom inválido era ignorado; o botão "Aplicar cupom" do checkout devolvia desconto NaN. Quebrado desde 16/06, invisível porque há 0 ingressos reais vendidos. Corrigido (aceita os dois formatos + barra desconto não numérico); `create-audience-ticket` v47 e `validate-audience-coupon` v22 deployadas com `--no-verify-jwt`.
