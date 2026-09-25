@@ -1545,6 +1545,93 @@ function buildLeadReengagement(p: LeadReengagementPayload) {
   }
 }
 
+// ─── Taxa de plano em atraso (Termo do Produtor, cláusula 4-bis.6) ─────
+
+interface PlanFeeDeletionWarningPayload {
+  produtorEmail:    string
+  produtorNome?:    string
+  eventoNome:       string
+  planoLabel:       string
+  /** Valor da taxa (R$). */
+  valor:            number
+  /** Dias desde o vencimento da fatura. */
+  diasVencido:      number
+  /** Dias que faltam pra completar 60 dias do vencimento (data de exclusão possível). */
+  diasParaExcluir:  number
+  appUrl?:          string
+}
+
+function buildPlanFeeDeletionWarning(p: PlanFeeDeletionWarningPayload) {
+  const appUrl = p.appUrl ?? 'https://app.coreohub.com'
+  const dias = Math.max(0, p.diasParaExcluir)
+  const valorFmt = p.valor.toFixed(2).replace('.', ',')
+  const urgente = dias <= 7
+  const contentHtml = `
+    <div style="margin-top:4px;padding:22px;border-radius:14px;background:${urgente ? '#fffbeb' : '#fff5f8'};border:2px solid ${urgente ? '#fde68a' : '#ff0068'};text-align:center;">
+      <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:${urgente ? '#f59e0b' : '#ff0068'};">Exclusão possível em</p>
+      <p style="margin:8px 0 0;font-size:36px;font-weight:900;color:#0b0b0f;letter-spacing:-.02em;">${dias} ${dias === 1 ? 'dia' : 'dias'}</p>
+      <p style="margin:6px 0 0;font-size:13px;line-height:1.55;color:#475569;">para o evento <strong>${escape(p.eventoNome)}</strong></p>
+    </div>
+    <p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      A taxa de ativação do plano <strong>${escape(p.planoLabel)}</strong> (R$ ${valorFmt}) venceu há ${p.diasVencido} dias e segue sem pagamento.
+      Pagando a qualquer momento antes da exclusão, o acesso ao painel é restabelecido na hora e o evento continua como está.
+    </p>`
+  return {
+    subject: `[${p.eventoNome}] Taxa do plano ${p.planoLabel} em atraso — exclusão possível em ${dias} ${dias === 1 ? 'dia' : 'dias'}`,
+    html: baseLayout({
+      preheader: `A taxa do plano ${p.planoLabel} de ${p.eventoNome} está em atraso.`,
+      title: 'Taxa do plano em atraso',
+      intro: `Olá ${escape(p.produtorNome ?? 'produtor(a)')}, o evento <strong>${escape(p.eventoNome)}</strong> está bloqueado por falta de pagamento da taxa do plano.`,
+      contentHtml,
+      ctaLabel: 'Pagar agora',
+      ctaUrl: `${appUrl}/qg-organizador`,
+      footerNote: 'Conforme a cláusula 4-bis.6 do Termo de Adesão do Produtor, o evento não pago pode ser excluído 60 dias após o vencimento, mediante aviso por e-mail. Eventos com inscrições pagas ou ingressos vendidos não são excluídos por esse motivo.',
+    }),
+  }
+}
+
+interface PlanFeeOverdueAdminPayload {
+  eventos: Array<{
+    nome:           string
+    plano:          string
+    produtorNome?:  string | null
+    produtorEmail?: string | null
+    diasVencido:    number
+  }>
+}
+
+function buildPlanFeeOverdueAdmin(p: PlanFeeOverdueAdminPayload) {
+  const n = p.eventos.length
+  const linhas = p.eventos.map(e => `
+    <tr>
+      <td style="padding:8px 6px;border-bottom:1px solid #e2e8f0;font-size:13px;color:#0b0b0f;"><strong>${escape(e.nome)}</strong><br/><span style="color:#64748b;font-size:12px;">${escape(e.produtorNome ?? '—')} · ${escape(e.produtorEmail ?? '—')}</span></td>
+      <td style="padding:8px 6px;border-bottom:1px solid #e2e8f0;font-size:13px;color:#475569;white-space:nowrap;">${escape(e.plano)}</td>
+      <td style="padding:8px 6px;border-bottom:1px solid #e2e8f0;font-size:13px;color:#b45309;white-space:nowrap;text-align:right;"><strong>${e.diasVencido} dias</strong></td>
+    </tr>`).join('')
+  const contentHtml = `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin-top:8px;">
+      <tr>
+        <th align="left" style="padding:6px;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Evento</th>
+        <th align="left" style="padding:6px;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Plano</th>
+        <th align="right" style="padding:6px;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Vencido há</th>
+      </tr>${linhas}
+    </table>
+    <p style="margin:18px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      Nenhum evento é excluído automaticamente. Para excluir, use o painel (a exclusão recusa evento com movimento financeiro).
+    </p>`
+  return {
+    subject: `[CoreoHub] ${n} evento${n === 1 ? '' : 's'} com taxa de plano vencida há mais de 60 dias`,
+    html: baseLayout({
+      preheader: `${n} evento(s) elegíveis à exclusão por taxa de plano não paga.`,
+      title: 'Taxas de plano vencidas há mais de 60 dias',
+      intro: `Resumo semanal: ${n} evento${n === 1 ? '' : 's'} sem pagamento da taxa de plano há mais de 60 dias após o vencimento (cláusula 4-bis.6).`,
+      contentHtml,
+      footerNote: 'E-mail interno da CoreoHub.',
+      includeAsaasSeal: false,
+    }),
+  }
+}
+
 // ─── Refund (reembolso) ────────────────────────────────────────────────────
 
 interface RefundRegistrantPayload {
@@ -1723,6 +1810,8 @@ interface SendEmailRequest {
     | 'video_rejected'
     | 'payout_released'
     | 'lead_reengagement'
+    | 'plan_fee_deletion_warning'
+    | 'plan_fee_overdue_admin'
     | 'refund_confirmed_registrant'
     | 'refund_confirmed_producer'
   payload: Record<string, unknown>
@@ -2113,6 +2202,26 @@ Deno.serve(async (req) => {
         html = tpl.html
         festivalName = p.eventoNome
         replyTo = p.produtorEmail ?? undefined
+        break
+      }
+      case 'plan_fee_deletion_warning': {
+        const p = payload as unknown as PlanFeeDeletionWarningPayload
+        if (!p.produtorEmail) throw new Error('produtorEmail é obrigatório')
+        if (!p.eventoNome) throw new Error('eventoNome é obrigatório')
+        const tpl = buildPlanFeeDeletionWarning(p)
+        to = p.produtorEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        break
+      }
+      case 'plan_fee_overdue_admin': {
+        const p = payload as unknown as PlanFeeOverdueAdminPayload
+        if (!Array.isArray(p.eventos) || p.eventos.length === 0) throw new Error('eventos é obrigatório')
+        const tpl = buildPlanFeeOverdueAdmin(p)
+        to = Deno.env.get('ADMIN_NOTIFY_EMAIL') ?? 'contato@coreohub.com'
+        subject = tpl.subject
+        html = tpl.html
         break
       }
       case 'refund_confirmed_registrant': {
