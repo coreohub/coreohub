@@ -2,4 +2,4 @@
 // telas leves (wizard de criação, avisos) poderem comparar a versão aceita sem
 // puxar a página inteira do Termo (pages/TermoProdutor.tsx, que a re-exporta).
 // O histórico de mudanças de cada versão está em pages/TermoProdutor.tsx.
-export const TERMO_PRODUTOR_VERSION = '1.6';
+export const TERMO_PRODUTOR_VERSION = '1.7';

@@ -33,6 +33,13 @@ import { TERMO_PRODUTOR_VERSION } from '../utils/termoVersion';
 // painel após o prazo, multa de 2% e juros de 1% ao mês por atraso, exclusão
 // do evento após 60 dias sem pagamento e taxa não reembolsável (exceto
 // desistência em 7 dias sem publicação nem venda).
+// 1.6 → 1.7 (2026-09-26): adiciona as cláusulas 4-ter (venda de ingressos ao
+// público, Decreto 13.108/2026), 4-quater (cancelamento, adiamento ou alteração
+// relevante: devolução ao comprador com taxas, reembolso pelo Produtor, extrato,
+// contestação em 5 dias), 4-quinquies (reposição de saldo em 10 dias, suspensão
+// de vendas, correção, juros e multa), 4-sexies (relatório de meia-entrada e
+// guarda de dados) e 4-septies (arrependimento do comprador). Multa e juros do
+// débito de reposição só valem para quem aceitou a versão 1.7 ou posterior.
 export { TERMO_PRODUTOR_VERSION };
 
 const TermoProdutor: React.FC = () => {
@@ -209,6 +216,111 @@ const TermoProdutor: React.FC = () => {
               4-bis.7. A taxa fixa é <strong>não reembolsável</strong>, pois remunera a ativação do plano e a configuração do evento na Plataforma, exceto se o
               Produtor solicitar o cancelamento por escrito em até <strong>7 (sete) dias corridos</strong> do pagamento e o evento ainda não tiver sido publicado
               nem registrado qualquer venda ou inscrição, caso em que o valor pago é devolvido integralmente.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">4-ter. Venda de ingressos ao público (Decreto nº 13.108/2026)</h2>
+            <p className="mb-2">
+              4-ter.1. Nas vendas de ingressos feitas pela Plataforma, o Produtor reconhece que a CoreoHub atua como comercializadora primária e cumpre, no
+              ambiente de venda, as regras do Decreto nº 13.108/2026: preço e taxa de serviço discriminados desde a oferta; reserva temporária de lugares com
+              preço e taxa travados; informação dos totais e da quantidade de meia-entrada; transferência gratuita de titularidade; canal de arrependimento.
+            </p>
+            <p className="mb-2">
+              4-ter.2. O Produtor define corretamente cada tipo de ingresso. Meia-entrada é a prevista em lei (estudante, pessoa com deficiência e acompanhante,
+              jovem de baixa renda, idoso). Cupom, convênio, ingresso solidário e lote promocional são "promocionais" e devem ser marcados como tal no cadastro,
+              porque não entram na cota de 40% da meia-entrada.
+            </p>
+            <p>
+              4-ter.3. O Produtor confere, na portaria, o documento que comprova o direito à meia-entrada e cobra a diferença de quem não comprovar. Se o
+              ingresso for transferido, a comprovação passa a ser exigida do novo titular.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-sm font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-2">
+              <AlertTriangle size={14} /> 4-quater. Cancelamento, adiamento ou alteração relevante do evento
+            </h2>
+            <p className="mb-2">
+              4-quater.1. Se o Produtor cancelar, adiar ou alterar de forma relevante o evento ou a sessão (data, horário, local, atração principal ou formato,
+              ou outra mudança que reduza o que foi anunciado na compra), deve registrar a mudança na Plataforma, que avisará os compradores. O comprador escolhe
+              entre manter o ingresso na nova data, receber crédito ou ser reembolsado. A CoreoHub devolve ao comprador <strong>o valor total pago, incluindo a
+              taxa de serviço</strong>, como a lei exige (arts. 20 a 22 do Decreto nº 13.108/2026).
+            </p>
+            <p className="mb-2">
+              4-quater.2. O Produtor reembolsa a CoreoHub por tudo que ela devolver ao comprador por esse motivo, inclusive valores que o Produtor já recebeu e o{' '}
+              <strong>custo de processamento do pagamento que o parceiro financeiro não devolver</strong>, com o valor de cada custo demonstrado. A CoreoHub não
+              cobra multa por isso.
+            </p>
+            <p className="mb-2">
+              4-quater.3. O Produtor <strong>autoriza expressamente</strong> a CoreoHub a descontar esse valor, nesta ordem: (a) do saldo da sua conta na
+              Plataforma; (b) dos repasses futuros do mesmo evento.
+            </p>
+            <p className="mb-2">
+              4-quater.4. Antes do desconto ou da cobrança, a CoreoHub envia por e-mail o <strong>extrato</strong> com cada ingresso devolvido, o valor e o
+              motivo. O Produtor pode <strong>contestar por escrito em até 5 (cinco) dias</strong>; enquanto a contestação é analisada, o valor contestado não é
+              cobrado, salvo o que já foi devolvido ao comprador.
+            </p>
+            <p>
+              4-quater.5. Depois do desconto ou do pagamento, a CoreoHub presta contas por e-mail e devolve qualquer excesso.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-sm font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-2">
+              <AlertTriangle size={14} /> 4-quinquies. Reposição de saldo
+            </h2>
+            <p className="mb-2">
+              4-quinquies.1. Se, ao devolver dinheiro ao comprador por causa do evento do Produtor, o saldo da conta dele não for suficiente, a CoreoHub avisa por
+              e-mail com o extrato do valor devido.
+            </p>
+            <p className="mb-2">
+              4-quinquies.2. O Produtor repõe o valor em até <strong>10 (dez) dias corridos</strong> do aviso, por PIX ou boleto gerado pela CoreoHub.
+            </p>
+            <p className="mb-2">
+              4-quinquies.3. <strong>Desde o aviso</strong>, a CoreoHub pode suspender novas vendas e novos eventos e reter os repasses futuros até o valor ser
+              coberto. Isso não gera multa. A suspensão das vendas se aplica quando o prazo de reposição vence sem pagamento e sem contestação em análise.
+            </p>
+            <p className="mb-2">
+              4-quinquies.4. Vencido o prazo sem pagamento, o valor tem <strong>correção pelo IPCA, juros de 1% (um por cento) ao mês e multa de 2% (dois por
+              cento)</strong>, contados do vencimento.
+            </p>
+            <p>
+              4-quinquies.5. Depois de aviso por escrito com prazo adicional de 10 (dez) dias, a CoreoHub pode cobrar por meios extrajudiciais e judiciais.
+              Pela parceria financeira, a CoreoHub responde perante a Asaas pelo saldo negativo das subcontas dos Produtores, o que justifica o prazo curto.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">4-sexies. Relatório de meia-entrada e guarda de dados</h2>
+            <p className="mb-2">
+              4-sexies.1. Encerrado o evento, a Plataforma publica automaticamente, na página do evento, o relatório da venda com o total de ingressos vendidos,
+              a quantidade e o percentual de meia-entrada, sem dados pessoais. O Produtor autoriza essa publicação, que também atende ao dever de manter o
+              relatório da venda (Decreto nº 8.537/2015, art. 12).
+            </p>
+            <p className="mb-2">
+              4-sexies.2. A CoreoHub guarda por, no mínimo, dois anos os dados desagregados de venda (por categoria e transação, sem dados pessoais) e o
+              histórico de transferência de titularidade de cada ingresso, e pode disponibilizá-los aos órgãos do Sistema Nacional de Defesa do Consumidor
+              mediante requisição fundamentada. O Produtor pode exportar os dados desagregados do seu evento pelo painel.
+            </p>
+            <p className="mb-2">
+              4-sexies.3. Os dados pessoais de compras e transferências são guardados por até <strong>5 (cinco) anos</strong> com acesso restrito (obrigação
+              legal e defesa em reclamações e processos) e, depois, anonimizados; o IP registrado na transferência é guardado por <strong>6 (seis) meses</strong>.
+            </p>
+            <p>
+              4-sexies.4. Ingressos com venda concluída não são excluídos antes desse prazo, ainda que o Produtor peça a exclusão do evento.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">4-septies. Arrependimento do comprador</h2>
+            <p className="mb-2">
+              4-septies.1. O comprador pode desistir da compra em até 7 (sete) dias corridos do pagamento e até o início do evento, com devolução integral,
+              incluindo a taxa de serviço (CDC, art. 49; Decreto nº 13.108/2026, art. 16). A CoreoHub processa a devolução pela Plataforma.
+            </p>
+            <p>
+              4-septies.2. O valor devolvido é descontado do repasse do Produtor. Como o prazo de arrependimento coincide com a janela de retenção de 7 dias dos
+              repasses (cláusula 6), em regra o valor ainda está retido e não gera saldo negativo.
             </p>
           </section>
 
@@ -398,6 +510,10 @@ const TermoProdutor: React.FC = () => {
               <span className="text-[12px] text-slate-700 dark:text-slate-300 leading-relaxed">
                 Li e aceito integralmente o Termo de Adesão do Produtor versão <strong>{TERMO_PRODUTOR_VERSION}</strong>,
                 incluindo a cláusula 4-bis (taxa fixa dos planos Essencial e Escala, prazo de 7 dias, bloqueio de vendas e do painel, multa e juros por atraso, exclusão do evento não pago e não reembolso da taxa),
+                a cláusula 4-ter.2 (marcar corretamente meia-entrada e ingressos promocionais),
+                a cláusula 4-quater (devolução ao comprador em cancelamento, adiamento ou alteração relevante, reembolso pelo Produtor, autorização de desconto do saldo e dos repasses, extrato e contestação em 5 dias),
+                a cláusula 4-quinquies (reposição de saldo em 10 dias, suspensão de vendas, correção, juros e multa),
+                a cláusula 4-sexies (relatório público de meia-entrada e guarda de dados),
                 a cláusula 5 (taxas bancárias do Asaas, taxa única de criação de conta R$ 12,90),
                 a cláusula 6 (janela de 7 dias para liberação dos repasses e antecipação manual sob risco),
                 a cláusula 7 (ressarcimento de chargebacks/estornos e autorização de débito automático no Asaas) e
