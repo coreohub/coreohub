@@ -1832,6 +1832,85 @@ function buildPlanFeeOverdueAdmin(p: PlanFeeOverdueAdminPayload) {
   }
 }
 
+// ─── Templates: producer_debt_notice (produtor) + producer_debt_admin (interno) ───────
+// Livro de débitos do produtor (Termo v1.7, cláusulas 4-quater e 4-quinquies): extrato por
+// ingresso, prazos de contestação (5 dias) e de reposição (10 dias corridos) e a cobrança.
+
+interface ProducerDebtNoticePayload {
+  producerEmail: string
+  producerName?: string
+  eventoNome?: string
+  motivo?: string
+  itens?: Array<{ descricao: string; valor: number }>
+  repassado?: number
+  custoProcessamento?: number
+  total: number
+  /** Datas já formatadas pelo caller (dd/mm/aaaa). */
+  contestUntil?: string
+  dueAt?: string
+  invoiceUrl?: string
+  painelUrl?: string
+}
+
+function buildProducerDebtNotice(p: ProducerDebtNoticePayload) {
+  const itens = (p.itens ?? []).filter(i => i?.descricao)
+  const linhasItens = itens.map(i => `
+    <tr>
+      <td style="padding:6px;border-bottom:1px solid #e2e8f0;font-size:13px;color:#0b0b0f;">${escape(i.descricao)}</td>
+      <td style="padding:6px;border-bottom:1px solid #e2e8f0;font-size:13px;color:#475569;text-align:right;white-space:nowrap;">${escape(money(i.valor))}</td>
+    </tr>`).join('')
+  const contentHtml = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${[
+      p.eventoNome ? infoRow('Evento', escape(p.eventoNome)) : '',
+      p.motivo ? infoRow('Motivo', escape(p.motivo)) : '',
+      typeof p.repassado === 'number' ? infoRow('Valor já repassado a você', escape(money(p.repassado))) : '',
+      (p.custoProcessamento ?? 0) > 0 ? infoRow('Custo de processamento não devolvido', escape(money(p.custoProcessamento ?? 0))) : '',
+      infoRow('Total a repor', `<strong>${escape(money(p.total))}</strong>`),
+      p.contestUntil ? infoRow('Contestar até', escape(p.contestUntil)) : '',
+      p.dueAt ? infoRow('Repor até', escape(p.dueAt)) : '',
+    ].filter(Boolean).join('')}</table>
+    ${linhasItens ? `<p style="margin:16px 0 4px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Extrato por ingresso devolvido</p>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${linhasItens}</table>` : ''}
+    <p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      Você pode <strong>contestar por escrito</strong> respondendo este e-mail ou pelo painel, até a data acima; enquanto a contestação é analisada, o valor contestado não é cobrado. Se o prazo de reposição vencer sem pagamento, as novas vendas dos seus eventos ficam suspensas até a regularização.
+    </p>`
+  return {
+    subject: `Extrato de valores a repor — ${p.eventoNome ?? 'CoreoHub'}`,
+    html: baseLayout({
+      preheader: `Total a repor: ${money(p.total)}. Você tem até ${p.dueAt ?? 'o prazo informado'} para repor.`,
+      title: 'Valores a repor à CoreoHub',
+      intro: `Olá ${escape(p.producerName ?? 'produtor(a)')}, a CoreoHub devolveu dinheiro a compradores por causa do seu evento e o saldo da sua conta não cobre o valor. Segue o extrato, conforme o Termo do Produtor (cláusulas 4-quater e 4-quinquies).`,
+      contentHtml,
+      ctaLabel: p.invoiceUrl ? 'Pagar (PIX ou boleto)' : (p.painelUrl ? 'Ver no painel' : undefined),
+      ctaUrl: p.invoiceUrl ?? p.painelUrl,
+      footerNote: 'Em caso de dúvida, responda este e-mail.',
+      includeAsaasSeal: false,
+    }),
+  }
+}
+
+interface ProducerDebtAdminPayload {
+  assunto: string
+  linhas?: string[]
+  /** Se informado, o aviso vai para este e-mail (resposta ao produtor); senão, para o admin. */
+  toEmail?: string
+}
+
+function buildProducerDebtAdmin(p: ProducerDebtAdminPayload) {
+  const linhas = (p.linhas ?? []).map(l => `<li style="margin:4px 0;">${escape(l)}</li>`).join('')
+  return {
+    subject: `[CoreoHub] ${p.assunto}`,
+    html: baseLayout({
+      preheader: p.assunto,
+      title: p.assunto,
+      intro: 'Atualização no livro de débitos de produtores.',
+      contentHtml: `<ul style="margin:8px 0 0;padding-left:18px;font-size:13px;color:#334155;line-height:1.6;">${linhas}</ul>`,
+      footerNote: 'E-mail interno da CoreoHub.',
+      includeAsaasSeal: false,
+    }),
+  }
+}
+
 // ─── Refund (reembolso) ────────────────────────────────────────────────────
 
 interface RefundRegistrantPayload {
@@ -2016,6 +2095,8 @@ interface SendEmailRequest {
     | 'lead_reengagement'
     | 'plan_fee_deletion_warning'
     | 'plan_fee_overdue_admin'
+    | 'producer_debt_notice'
+    | 'producer_debt_admin'
     | 'refund_confirmed_registrant'
     | 'refund_confirmed_producer'
   payload: Record<string, unknown>
@@ -2462,6 +2543,28 @@ Deno.serve(async (req) => {
         if (!Array.isArray(p.eventos) || p.eventos.length === 0) throw new Error('eventos é obrigatório')
         const tpl = buildPlanFeeOverdueAdmin(p)
         to = Deno.env.get('ADMIN_NOTIFY_EMAIL') ?? 'contato@coreohub.com'
+        subject = tpl.subject
+        html = tpl.html
+        break
+      }
+      case 'producer_debt_notice': {
+        const p = payload as unknown as ProducerDebtNoticePayload
+        if (!p.producerEmail) throw new Error('producerEmail é obrigatório')
+        if (typeof p.total !== 'number') throw new Error('total é obrigatório')
+        const tpl = buildProducerDebtNotice(p)
+        to = p.producerEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        // Cópia interna pro admin (best-effort).
+        sendAdminCopy(`[Cópia] ${tpl.subject}`, tpl.html)
+        break
+      }
+      case 'producer_debt_admin': {
+        const p = payload as unknown as ProducerDebtAdminPayload
+        if (!p.assunto) throw new Error('assunto é obrigatório')
+        const tpl = buildProducerDebtAdmin(p)
+        to = p.toEmail ?? Deno.env.get('ADMIN_NOTIFY_EMAIL') ?? 'contato@coreohub.com'
         subject = tpl.subject
         html = tpl.html
         break

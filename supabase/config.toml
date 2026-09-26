@@ -594,3 +594,11 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/request-withdrawal/deno.json"
 entrypoint = "./functions/request-withdrawal/index.ts"
+
+# Livro de débitos do produtor (Termo v1.7): admin registra/notifica/cobra, produtor contesta.
+# verify_jwt=true; permissão (super admin ou produtor dono) checada no código.
+[functions.manage-producer-debt]
+enabled = true
+verify_jwt = true
+import_map = "./functions/manage-producer-debt/deno.json"
+entrypoint = "./functions/manage-producer-debt/index.ts"

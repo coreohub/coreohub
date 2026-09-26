@@ -37,6 +37,7 @@ import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus
 import { resolveAvaliadaLabel } from '../utils/formatoParticipacao';
 import { parseInfoConfig, serializeInfoConfig, hasInfoContent, EMPTY_INFO, type InfoConfig } from '../utils/eventInfo';
 import EventInfoEditor from '../components/EventInfoEditor';
+import ProducerDebtsCard from '../components/ProducerDebtsCard';
 import InstallPWAButton from '../components/InstallPWAButton';
 import { previewNarration, fetchNarrationAudios, type NarrationKind } from '../services/narrationApi';
 import { fetchUfList, fetchCitiesByUf, parseCityUf, type UfOption } from '../services/ibgeLocation';
@@ -5593,6 +5594,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 </button>
               </div>
             )}
+
+            {/* Débitos com a CoreoHub (Termo v1.7, cl. 4-quater/4-quinquies) */}
+            <ProducerDebtsCard />
 
             {/* Conexão Asaas */}
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-3xl overflow-hidden">
