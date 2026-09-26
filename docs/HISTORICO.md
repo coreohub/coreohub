@@ -4,6 +4,11 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-26 (continuação 5) — Termos de Uso e Política de Privacidade atualizados e em produção ✅
+
+- `TermosDeUso.tsx`: nova cláusula 7 (compra de ingressos: preço e taxa, meia-entrada, transferência, arrependimento, cancelamento/adiamento/crédito, quem responde) e cláusula 6 corrigida (antes dizia que só o produtor devolve; pelo Decreto 13.108 a CoreoHub também responde). Demais cláusulas renumeradas (8 a 14). `PoliticaDePrivacidade.tsx`: dados do comprador e do novo titular, IP da transferência, compartilhamento com novo titular e SNDC, seção de retenção reescrita (5 anos; transferência 2 a 5 anos; IP 6 meses). Aviso da tela de transferência com link para a política.
+- Redações vieram da pesquisa jurídica por IA (sem advogado, não é parecer). Erro pego na revisão: uma lei de meia-entrada citada de memória não existia; ficou Lei 12.933/2013 e Decreto 8.537/2015.
+
 ### 2026-09-26 (continuação 4) — MERGE dev → main `acc8dea`: arrependimento, retenção, livro de débitos e Termo do Produtor v1.7 EM PRODUÇÃO ✅
 
 - Publicado: canal de arrependimento (`request-withdrawal` + botão "Desistir da compra"), rotina de retenção (`apply_ticket_data_retention`), livro de débitos do produtor (`/debitos-produtores`, cartão "Valores a repor", webhook `DEBT:`) e **Termo do Produtor v1.7** com numeração sequencial 1 a 18 (antes usava 4-bis, 4-ter etc., que não é padrão brasileiro; tabela antiga → nova no histórico do `TermoProdutor.tsx`).
