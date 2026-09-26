@@ -4,6 +4,12 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-26 (continuação 2) — Pesquisa jurídica → proposta do Termo v1.7, retenção e pauta do advogado ✅ (dev; migration em produção)
+
+- Pesquisa por IA (sem advogado, não é parecer) em `docs/pesquisa-juridica-termo-produtor-regresso-prazo-retencao.md` (não commitada, a pedido). Achado-chave conferido nos Termos da Asaas (cl. 5.1.4/5.1.5): a CoreoHub, como conta principal, garante o saldo negativo das subcontas.
+- `docs/termo-produtor-v1.7-rascunho.md` reescrito (regresso, reposição de saldo em 10 dias, relatório/guarda, arrependimento). **Não aplicado** no `TermoProdutor.tsx` (versão segue 1.6). Tabela no topo lista o que as cláusulas prometem e o produto ainda não faz (extrato, contestação, livro de débitos): não publicar 4-quater/4-quinquies antes disso.
+- Migration `20260930h` (aplicada): `apply_ticket_data_retention` + job `ticket-data-retention-daily` (IP zerado aos 6 meses, dados pessoais anonimizados aos 5 anos). Hoje 0/0/0. `docs/pauta-consulta-advogado-ingressos.md` com as 12 perguntas.
+
 ### 2026-09-26 — Canal de arrependimento do ingresso (art. 16 do Decreto 13.108) ✅ (dev; edge function em produção)
 
 - Edge `request-withdrawal` + painel "Desistir da compra" em `MeuIngresso`: 7 dias corridos do pagamento e até o início do evento (sem o corte de 48 h, decisão do produtor), pedido inteiro, devolução integral com taxa. Bloqueia pedido com ingresso transferido ou check-in. A Asaas não devolve as taxas dela no estorno (Pix sem taxa de estorno, boleto R$ 5): custo absorvido pela CoreoHub, o comprador recebe tudo de volta.
