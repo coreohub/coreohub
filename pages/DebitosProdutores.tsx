@@ -229,8 +229,19 @@ const Inner: React.FC = () => {
                 <div><dt className={labelCls}>Contestar até</dt><dd className="text-slate-800 dark:text-slate-200">{fmt(d.contest_until)}</dd></div>
                 <div><dt className={labelCls}>Repor até</dt><dd className="text-slate-800 dark:text-slate-200">{fmt(d.due_at)}</dd></div>
               </dl>
+              <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                Repassado ao produtor <strong>{brl(Number(d.suggested_amount) - Number(d.processing_cost))}</strong>
+                {' + '}custo de processamento <strong>{brl(d.processing_cost)}</strong>
+                {' = '}sugerido <strong>{brl(d.suggested_amount)}</strong>
+                {Number(d.amount_due) !== Number(d.suggested_amount) && <> · a cobrar <strong>{brl(d.amount_due)}</strong> (ajustado)</>}
+              </p>
               {d.admin_note && <p className="text-[11px] text-slate-500">Obs.: {d.admin_note}</p>}
-              {d.invoice_url && <a href={d.invoice_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#ff0068]">Cobrança na Asaas <ExternalLink size={11} /></a>}
+              {d.invoice_url && (
+                <a href={d.invoice_url} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-[#ff0068]/40 bg-[#ff0068]/5 text-[#ff0068] hover:bg-[#ff0068]/10 text-[10px] font-black uppercase tracking-widest">
+                  Abrir cobrança na Asaas <ExternalLink size={12} />
+                </a>
+              )}
 
               {d.status === 'rascunho' && (
                 <div className="flex flex-wrap items-end gap-2">

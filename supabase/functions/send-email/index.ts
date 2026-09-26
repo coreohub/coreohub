@@ -1870,7 +1870,8 @@ function buildProducerDebtNotice(p: ProducerDebtNoticePayload) {
       p.dueAt ? infoRow('Repor até', escape(p.dueAt)) : '',
     ].filter(Boolean).join('')}</table>
     ${linhasItens ? `<p style="margin:16px 0 4px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Extrato por ingresso devolvido</p>
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${linhasItens}</table>` : ''}
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${linhasItens}</table>
+    <p style="margin:8px 0 0;font-size:12px;line-height:1.5;color:#64748b;">Os valores da lista são o que cada comprador pagou. O <strong>total a repor</strong> considera apenas a parte que já foi repassada a você${(p.custoProcessamento ?? 0) > 0 ? ', mais o custo de processamento' : ''}, por isso pode ser menor que a soma da lista.</p>` : ''}
     <p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:#475569;">
       Você pode <strong>contestar por escrito</strong> respondendo este e-mail ou pelo painel, até a data acima; enquanto a contestação é analisada, o valor contestado não é cobrado. Se o prazo de reposição vencer sem pagamento, as novas vendas dos seus eventos ficam suspensas até a regularização.
     </p>`
