@@ -4,6 +4,12 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-26 (continuação 3) — Item 4: livro de débitos do produtor ✅ (dev; banco e edge functions em produção)
+
+- Migration `20260930i` (`producer_debts` + itens) e edge `manage-producer-debt`. Fluxo: super admin cria o débito a partir dos ingressos estornados (extrato por ingresso; valor sugerido = repassado + custo de processamento, editável), notifica (gera cobrança PIX/boleto para a master, e-mail com extrato, contestar em 5 dias e repor em 10), resolve contestação (manter/ajustar/cancelar), cancela ou marca pago. Produtor vê o extrato em Configurações > Pagamentos e contesta.
+- Bloqueio de vendas: débito notificado, vencido e não contestado bloqueia as vendas (mesmo gate da taxa de plano; a compra recusa, a cotação não). `asaas-webhook` ganhou ramo aditivo `DEBT:<id>` com baixa automática e trava de ambiente.
+- Sandbox: API 27/28 (a falha foi expectativa errada sobre a cotação), incluindo pagamento real com cartão de teste e baixa automática pelo webhook; tela do produtor validada em 1440 e 375. **Tela do super admin (`/debitos-produtores`) NÃO validada visualmente** (fica atrás do MFA e o desvio local do gate foi barrado): o produtor precisa abri-la uma vez. Sem desconto automático de repasses futuros (fica manual).
+
 ### 2026-09-26 (continuação 2) — Pesquisa jurídica → proposta do Termo v1.7, retenção e pauta do advogado ✅ (dev; migration em produção)
 
 - Pesquisa por IA (sem advogado, não é parecer) em `docs/pesquisa-juridica-termo-produtor-regresso-prazo-retencao.md` (não commitada, a pedido). Achado-chave conferido nos Termos da Asaas (cl. 5.1.4/5.1.5): a CoreoHub, como conta principal, garante o saldo negativo das subcontas.
