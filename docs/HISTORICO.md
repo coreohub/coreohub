@@ -4,6 +4,13 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-26 (continuação 4) — MERGE dev → main `acc8dea`: arrependimento, retenção, livro de débitos e Termo do Produtor v1.7 EM PRODUÇÃO ✅
+
+- Publicado: canal de arrependimento (`request-withdrawal` + botão "Desistir da compra"), rotina de retenção (`apply_ticket_data_retention`), livro de débitos do produtor (`/debitos-produtores`, cartão "Valores a repor", webhook `DEBT:`) e **Termo do Produtor v1.7** com numeração sequencial 1 a 18 (antes usava 4-bis, 4-ter etc., que não é padrão brasileiro; tabela antiga → nova no histórico do `TermoProdutor.tsx`).
+- Conferido em app.coreohub.com: Termo v1.7, cartão de débitos e painel do ingresso, sem erros de console e sem overflow. Lint, 162 testes e build ok. Baseline 49/21/125/0.
+- Efeito: quem aceitou a 1.6 reaceita a 1.7 na próxima ação relevante. Multa e juros do débito só valem para quem aceitou a 1.7.
+- Pendências: Pix real de R$ 20 em produção (só com autorização) e estorno do ingresso A-1; teste da câmera com QR transferido; validar com advogado quando houver (5 anos de retenção, IP como registro de acesso, protesto/negativação fora do texto); desconto automático de repasses futuros não existe (manual).
+
 ### 2026-09-26 (continuação 3) — Item 4: livro de débitos do produtor ✅ (dev; banco e edge functions em produção)
 
 - Migration `20260930i` (`producer_debts` + itens) e edge `manage-producer-debt`. Fluxo: super admin cria o débito a partir dos ingressos estornados (extrato por ingresso; valor sugerido = repassado + custo de processamento, editável), notifica (gera cobrança PIX/boleto para a master, e-mail com extrato, contestar em 5 dias e repor em 10), resolve contestação (manter/ajustar/cancelar), cancela ou marca pago. Produtor vê o extrato em Configurações > Pagamentos e contesta.
