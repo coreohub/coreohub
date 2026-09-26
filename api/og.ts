@@ -108,7 +108,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // UUID vs slug — bota filter correto. PublicEventPage usa mesma lógica.
     const filterCol = UUID_REGEX.test(slug) ? 'id' : 'slug';
-    const restUrl = `${SUPABASE_URL}/rest/v1/events?select=id,name,slug,description,cover_url,start_date,end_date,event_time,city,state,location,formacoes_config,ingressos_config,audience_sales_enabled,payment_sandbox&${filterCol}=eq.${encodeURIComponent(slug)}&limit=1`;
+    const restUrl = `${SUPABASE_URL}/rest/v1/events?select=id,name,slug,description,cover_url,start_date,end_date,event_time,city,state,location,formacoes_config,ingressos_config,audience_sales_enabled,payment_sandbox,sessao_status,sessao_motivo,sessao_data_original&${filterCol}=eq.${encodeURIComponent(slug)}&limit=1`;
 
     const fetchRes = await fetch(restUrl, {
       headers: {
@@ -140,6 +140,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ingressos_config: Array<{ nome?: string; preco?: number | string; lotes?: Array<{ preco?: number | string; data_inicio?: string | null; data_virada?: string | null }> }> | null;
       audience_sales_enabled: boolean | null;
       payment_sandbox: boolean | null;
+      sessao_status: string | null;
+      sessao_motivo: string | null;
+      sessao_data_original: string | null;
     }>;
 
     const ev = events?.[0];
@@ -170,7 +173,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? false
       : !prazoInscricao ||
         Date.now() <= new Date(prazoInscricao.includes('T') ? prazoInscricao : `${prazoInscricao}T23:59:59`).getTime();
-    const statusLabel = isRegistrationOpen
+    // Sessão cancelada/adiada (Decreto 13.108, arts. 20-22): o status do evento vem primeiro,
+    // igual ao JSON-LD da página React (PublicEventPage.tsx) — bots não podem ver "agendado".
+    const sessaoCancelada = ev.sessao_status === 'cancelada';
+    const sessaoAdiada = ev.sessao_status === 'adiada';
+    const statusLabel = sessaoCancelada
+      ? 'Sessão cancelada'
+      : sessaoAdiada
+        ? 'Sessão adiada'
+        : isRegistrationOpen
       ? 'Inscrições abertas'
       : eventOver
         ? 'Confira o resultado'
@@ -212,6 +223,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Ingressos de plateia (só com venda pelo CoreoHub ligada): preço vigente
     // do lote de hoje, com URL do checkout — Google exige offers.url crawleável.
     const todayIso = new Date().toISOString().slice(0, 10);
+    // Sessão cancelada: ingressos e workshops deixam de ser ofertáveis para o Google.
+    const offerAvailability = sessaoCancelada ? 'https://schema.org/Discontinued' : 'https://schema.org/InStock';
     const ticketOffers = (ev.audience_sales_enabled && Array.isArray(ev.ingressos_config) ? ev.ingressos_config : [])
       .map((t, idx) => {
         const lotes = Array.isArray(t.lotes) ? t.lotes : [];
@@ -225,7 +238,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         name: t.nome,
         price: t.price.toFixed(2),
         priceCurrency: 'BRL',
-        availability: 'https://schema.org/InStock',
+        availability: offerAvailability,
         url: `${SITE_URL}/checkout-ingresso/${canonicalSlug}/${t.idx}`,
       }));
     const workshopOffers = workshops
@@ -235,7 +248,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         name: w.name,
         price: w.gratis_para_inscritos ? '0' : String(w.preco_padrao ?? '0'),
         priceCurrency: 'BRL',
-        availability: 'https://schema.org/InStock',
+        availability: offerAvailability,
         url,
       }));
     const allOffers = [...ticketOffers, ...workshopOffers];
@@ -251,7 +264,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? `${ev.start_date}T${ev.event_time.slice(0, 5).padStart(5, '0')}:00${ufUtcOffset(ev.state)}`
         : (ev.start_date ?? undefined),
       endDate: ev.end_date ?? ev.start_date ?? undefined,
-      eventStatus: 'https://schema.org/EventScheduled',
+      eventStatus: sessaoCancelada
+        ? 'https://schema.org/EventCancelled'
+        : sessaoAdiada ? 'https://schema.org/EventRescheduled' : 'https://schema.org/EventScheduled',
+      ...(sessaoAdiada && ev.sessao_data_original ? { previousStartDate: ev.sessao_data_original } : {}),
       eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
       location: {
         '@type': 'Place',
@@ -280,6 +296,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       prazoInscricao ? `Inscrições até: ${prazoInscricao}` : null,
       formacoesAtivas.length > 0 ? `Formações: ${formacoesAtivas.join(', ')}` : null,
       `Status: ${statusLabel}`,
+      sessaoAdiada && ev.sessao_data_original ? `Data anterior: ${ev.sessao_data_original}` : null,
+      (sessaoAdiada || sessaoCancelada) && ev.sessao_motivo ? `Motivo informado pelo organizador: ${ev.sessao_motivo}` : null,
     ].filter(Boolean) as string[];
 
     const workshopsListHtml = workshops.length > 0
