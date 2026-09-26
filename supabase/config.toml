@@ -547,3 +547,42 @@ entrypoint = "./functions/auth-email-hook/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/send-lead-reengagement-emails/index.ts"
+
+# Fase 5 (Decreto 13.108): cotação travada do ingresso (preço + taxa por ~15 min).
+# verify_jwt=false (checkout público). Rate-limited por IP no próprio código.
+[functions.quote-audience-ticket]
+enabled = true
+verify_jwt = false
+import_map = "./functions/quote-audience-ticket/deno.json"
+entrypoint = "./functions/quote-audience-ticket/index.ts"
+
+# Fase 5 item 4: produtor cancela/adia sessão e avisa compradores. verify_jwt=true
+# (só dono do evento / super admin; checado no código).
+[functions.update-session-status]
+enabled = true
+verify_jwt = true
+import_map = "./functions/update-session-status/deno.json"
+entrypoint = "./functions/update-session-status/index.ts"
+
+# Fase 5 item 4b: comprador escolhe manter/crédito/restituição numa sessão adiada/cancelada.
+# verify_jwt=false: autentica pelo access_token do ingresso; rate-limited por IP no código.
+[functions.choose-session-option]
+enabled = true
+verify_jwt = false
+import_map = "./functions/choose-session-option/deno.json"
+entrypoint = "./functions/choose-session-option/index.ts"
+
+# Fase 5 item 4b: produtor restitui em lote os pedidos da sessão. verify_jwt=true (dono/super admin).
+[functions.refund-session-orders]
+enabled = true
+verify_jwt = true
+import_map = "./functions/refund-session-orders/deno.json"
+entrypoint = "./functions/refund-session-orders/index.ts"
+
+# Fase 5 item 3: transferência gratuita de titularidade do ingresso (Decreto 13.108, arts. 17-19).
+# verify_jwt=false: autentica pelo access_token do ingresso; rate-limited por IP (10/dia) no código.
+[functions.transfer-ticket]
+enabled = true
+verify_jwt = false
+import_map = "./functions/transfer-ticket/deno.json"
+entrypoint = "./functions/transfer-ticket/index.ts"

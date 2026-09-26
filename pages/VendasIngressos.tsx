@@ -9,10 +9,11 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { edgeErrorMessage } from '../utils/edgeError';
 import { supabase, resolveActiveEventId, fetchMyTeamEventIds, ownedOrTeamEventsFilter } from '../services/supabase';
 import {
   Ticket, Loader2, Search, Download, ExternalLink, CheckCircle2, Clock, XCircle, RotateCcw,
-  Users, DollarSign, AlertCircle, Undo2, X, Store, Copy, QrCode, Printer, Armchair,
+  Users, DollarSign, AlertCircle, Undo2, X, Store, Copy, QrCode, Printer, Armchair, CalendarClock,
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 import VendasTabs from '../components/VendasTabs';
@@ -55,6 +56,22 @@ interface Row {
   group_id: string | null;
   refunded_at: string | null;
   refund_amount: number | null;
+  payment_id?: string | null;
+  sessao_escolha?: 'manter' | 'credito' | 'restituicao' | null;
+  sessao_escolha_erro?: string | null;
+  transfer_count?: number | null;
+  transferred_at?: string | null;
+  created_at: string;
+}
+
+interface TransferHistoryRow {
+  id: string;
+  from_name: string | null;
+  from_email: string | null;
+  from_cpf_masked: string | null;
+  to_name: string;
+  to_email: string;
+  to_cpf_masked: string;
   created_at: string;
 }
 
@@ -68,6 +85,7 @@ const STATUS_FILTERS: Array<{ id: string; label: string }> = [
   { id: 'PENDENTE',  label: 'Pendentes' },
   { id: 'CANCELADO', label: 'Cancelados' },
   { id: 'ESTORNADO', label: 'Estornados' },
+  { id: 'CREDITO',   label: 'Em crédito' },
 ];
 
 const VendasIngressos: React.FC = () => {
@@ -86,6 +104,19 @@ const VendasIngressos: React.FC = () => {
   const [err, setErr] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
+  // Cancelar/adiar sessão (Decreto 13.108 arts. 20-22)
+  const [sessionInfo, setSessionInfo] = useState<{ status: string; motivo: string | null; start_date: string | null; event_time: string | null }>({ status: 'agendada', motivo: null, start_date: null, event_time: null });
+  const [sessionOpen, setSessionOpen] = useState(false);
+  const [sessionForm, setSessionForm] = useState<{ status: 'adiada' | 'cancelada' | 'agendada'; nova_data: string; nova_hora: string; motivo: string }>({ status: 'adiada', nova_data: '', nova_hora: '', motivo: '' });
+  const [sessionConfirmed, setSessionConfirmed] = useState(false);
+  const [sessionSaving, setSessionSaving] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const [sessionResult, setSessionResult] = useState<{ notified: number; failed: number; no_email: number } | null>(null);
+  // Escolhas dos compradores + restituição em lote (Fase 5, 4b)
+  const [bulkConfirm, setBulkConfirm] = useState<'pedidos' | 'todos' | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ refunded: number; failed: number; skipped_used: number; failures: Array<{ buyer: string | null; error: string }> } | null>(null);
+  const [bulkError, setBulkError] = useState<string | null>(null);
   // Refund modal (Tier 2)
   const [refundTarget, setRefundTarget] = useState<Row | null>(null);
   const [refundReason, setRefundReason] = useState('');
@@ -93,6 +124,23 @@ const VendasIngressos: React.FC = () => {
   const [refundError, setRefundError] = useState<string | null>(null);
   // Detail drawer (Stripe Dashboard pattern: row click → side sheet com detalhes)
   const [detailRow, setDetailRow] = useState<Row | null>(null);
+  // Histórico de titulares do ingresso aberto no drawer (Decreto 13.108/2026, art. 17 §1º)
+  const [transferHistory, setTransferHistory] = useState<TransferHistoryRow[] | null>(null);
+  useEffect(() => {
+    if (!detailRow || !(Number(detailRow.transfer_count ?? 0) > 0)) { setTransferHistory(null); return; }
+    let cancel = false;
+    setTransferHistory(null);
+    void supabase
+      .from('audience_ticket_transfers')
+      .select('id, from_name, from_email, from_cpf_masked, to_name, to_email, to_cpf_masked, created_at')
+      .eq('ticket_id', detailRow.id)
+      .order('created_at', { ascending: true })
+      .then(({ data, error: hErr }) => {
+        if (hErr) console.error('[VendasIngressos] histórico de titulares:', hErr.message);
+        if (!cancel) setTransferHistory((data ?? []) as TransferHistoryRow[]);
+      });
+    return () => { cancel = true; };
+  }, [detailRow]);
   // Cortesia (convite gratuito direto, sem cupom — padrão Sympla/Eventbrite)
   const [courtesyOpen, setCourtesyOpen] = useState(false);
   const [courtesyForm, setCourtesyForm] = useState({ name: '', email: '', cpf: '', phone: '' });
@@ -126,10 +174,11 @@ const VendasIngressos: React.FC = () => {
     setErr(null);
     try {
       setEventId(targetEventId);
-      const { data: ev } = await supabase.from('events').select('name, ingressos_config, seat_map_enabled').eq('id', targetEventId).maybeSingle();
+      const { data: ev } = await supabase.from('events').select('name, ingressos_config, seat_map_enabled, sessao_status, sessao_motivo, start_date, event_time').eq('id', targetEventId).maybeSingle();
       setEventName(ev?.name ?? '');
       setTicketTypes(Array.isArray(ev?.ingressos_config) ? (ev!.ingressos_config as TicketTypeConfig[]).filter(t => t?.nome) : []);
       setSeatMapEnabled(Boolean((ev as any)?.seat_map_enabled));
+      setSessionInfo({ status: (ev as any)?.sessao_status ?? 'agendada', motivo: (ev as any)?.sessao_motivo ?? null, start_date: (ev as any)?.start_date ?? null, event_time: (ev as any)?.event_time ?? null });
       const { data, error } = await supabase
         .from('audience_tickets')
         .select('*')
@@ -472,6 +521,104 @@ const VendasIngressos: React.FC = () => {
     }
   };
 
+  // Pedidos com ingresso confirmado (1 e-mail por pedido, igual à edge function).
+  const sessionBuyers = useMemo(() => {
+    const orders = new Set<string>();
+    for (const r of rows) {
+      if (r.status_pagamento !== 'APROVADO' || r.refunded_at || !r.buyer_email) continue;
+      orders.add(r.group_id ?? `solo:${r.id}`);
+    }
+    return orders.size;
+  }, [rows]);
+
+  // Pedidos (1 por group_id) da sessão adiada/cancelada, agrupados pela escolha do comprador.
+  const sessionPanel = useMemo(() => {
+    const orders = new Map<string, Row[]>();
+    for (const r of rows) {
+      if (['PENDENTE', 'CANCELADO', 'VENCIDO', 'CORTESIA'].includes(r.status_pagamento)) continue;
+      const key = r.group_id ?? `solo:${r.id}`;
+      orders.set(key, [...(orders.get(key) ?? []), r]);
+    }
+    const total = (list: Row[]) => list.reduce((s, r) => s + Number(r.preco ?? 0) + (r.fee_mode === 'repassar' ? Number(r.commission_amount ?? 0) : 0), 0);
+    let manter = 0, credito = 0, estornados = 0, semEscolha = 0, restituicaoPendente = 0, falhas = 0, semPagamento = 0;
+    let valorSemEscolha = 0, valorPendente = 0;
+    for (const list of orders.values()) {
+      const st = list[0].status_pagamento;
+      const escolha = list[0].sessao_escolha ?? null;
+      if (st === 'CREDITO') credito++;
+      else if (st === 'ESTORNADO') estornados++;
+      else if (st === 'APROVADO' && !list[0].payment_id) semPagamento++; // cortesia/balcão: sem cobrança Asaas pra estornar
+      else if (st === 'APROVADO' && escolha === 'restituicao') { restituicaoPendente++; valorPendente += total(list); if (list[0].sessao_escolha_erro) falhas++; }
+      else if (st === 'APROVADO' && escolha === 'manter') manter++;
+      else if (st === 'APROVADO') { semEscolha++; valorSemEscolha += total(list); }
+    }
+    return { manter, credito, estornados, semEscolha, restituicaoPendente, falhas, semPagamento, valorSemEscolha, valorPendente };
+  }, [rows]);
+
+  const runBulkRefund = async (mode: 'pedidos' | 'todos') => {
+    if (!eventId || bulkRunning) return;
+    setBulkRunning(true);
+    setBulkError(null);
+    setBulkResult(null);
+    const skip: string[] = [];
+    const acc = { refunded: 0, failed: 0, skipped_used: 0, failures: [] as Array<{ buyer: string | null; error: string }> };
+    try {
+      for (let i = 0; i < 20; i++) {
+        const { data, error: invokeErr } = await supabase.functions.invoke('refund-session-orders', {
+          body: { event_id: eventId, mode, skip_orders: skip },
+        });
+        if (invokeErr) throw new Error(await edgeErrorMessage(invokeErr, 'Não foi possível processar as restituições.'));
+        if (data?.error) throw new Error(data.error);
+        acc.refunded += data.refunded ?? 0;
+        acc.failed += data.failed ?? 0;
+        acc.skipped_used = Math.max(acc.skipped_used, (data.skipped_used ?? []).length);
+        for (const fl of (data.failures ?? [])) { skip.push(fl.order_id); acc.failures.push({ buyer: fl.buyer, error: fl.error }); }
+        if (!data.remaining) break;
+      }
+      setBulkResult(acc);
+      setBulkConfirm(null);
+    } catch (e: any) {
+      setBulkError(e.message ?? String(e));
+      setBulkResult(acc);
+    } finally {
+      setBulkRunning(false);
+      if (selectedEventId) void load(selectedEventId);
+    }
+  };
+
+  const openSessionModal = () => {
+    setSessionError(null);
+    setSessionResult(null);
+    setSessionConfirmed(false);
+    setSessionForm({ status: 'adiada', nova_data: '', nova_hora: sessionInfo.event_time?.slice(0, 5) ?? '', motivo: '' });
+    setSessionOpen(true);
+  };
+
+  const handleSessionChange = async () => {
+    if (!eventId || sessionSaving) return;
+    setSessionSaving(true);
+    setSessionError(null);
+    try {
+      const { data, error: invokeErr } = await supabase.functions.invoke('update-session-status', {
+        body: {
+          event_id: eventId,
+          status: sessionForm.status,
+          nova_data: sessionForm.status === 'adiada' ? sessionForm.nova_data : undefined,
+          nova_hora: sessionForm.status === 'adiada' ? (sessionForm.nova_hora || undefined) : undefined,
+          motivo: sessionForm.status === 'agendada' ? undefined : sessionForm.motivo,
+        },
+      });
+      if (invokeErr) throw new Error(await edgeErrorMessage(invokeErr, 'Não foi possível atualizar a sessão.'));
+      if (data?.error) throw new Error(data.error);
+      setSessionResult({ notified: data?.notified ?? 0, failed: data?.failed ?? 0, no_email: data?.no_email ?? 0 });
+      if (selectedEventId) void load(selectedEventId);
+    } catch (e: any) {
+      setSessionError(e.message ?? String(e));
+    } finally {
+      setSessionSaving(false);
+    }
+  };
+
   const closePdvModal = () => {
     setPdvOpen(false);
     setPdvResult(null);
@@ -522,6 +669,37 @@ const VendasIngressos: React.FC = () => {
     URL.revokeObjectURL(a.href);
   };
 
+  // ─── Dados desagregados SEM dados pessoais (Decreto 13.108 art. 15 p.ú.) ──────
+  const [exportingAnon, setExportingAnon] = useState(false);
+  const exportAnonymizedCsv = async () => {
+    if (!eventId) return;
+    setExportingAnon(true);
+    try {
+      const { data, error: rpcErr } = await supabase.rpc('export_audience_sales_anonymized', { p_event_id: eventId });
+      if (rpcErr) throw rpcErr;
+      const list = (data ?? []) as Array<Record<string, any>>;
+      const header = ['transacao_id', 'grupo_id', 'data_venda', 'tipo_ingresso', 'categoria', 'preco', 'taxa_servico', 'modo_taxa', 'status', 'metodo_pagamento', 'pago_em', 'estornado_em', 'valor_estornado', 'assento', 'check_in', 'transferido'];
+      const csv = [
+        header.join(';'),
+        ...list.map(r => header.map(h => {
+          const v = r[h];
+          return `"${String(v == null ? '' : typeof v === 'number' ? String(v).replace('.', ',') : v).replace(/"/g, '""')}"`;
+        }).join(';')),
+      ].join('\n');
+      const blob = new Blob([new TextEncoder().encode('\uFEFF' + csv)], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `vendas-desagregadas-sem-dados-pessoais-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e: any) {
+      console.error('[VendasIngressos] export_audience_sales_anonymized:', e?.message ?? e);
+      setErr(e?.message ?? 'Não foi possível gerar a exportação.');
+    } finally {
+      setExportingAnon(false);
+    }
+  };
+
   // ─── Render ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -563,6 +741,13 @@ const VendasIngressos: React.FC = () => {
             <Users size={12} /> Adicionar cortesia
           </button>
           <button
+            onClick={openSessionModal}
+            disabled={!eventId}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-500/20 disabled:opacity-40"
+          >
+            <CalendarClock size={12} /> {sessionInfo.status === 'agendada' ? 'Cancelar ou adiar sessão' : 'Alterar aviso da sessão'}
+          </button>
+          <button
             onClick={() => { setPdvError(null); setPdvOpen(true); }}
             disabled={ticketTypes.length === 0}
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500/20 disabled:bg-slate-100 dark:disabled:bg-white/5 disabled:border-slate-200 dark:disabled:border-white/10 disabled:text-slate-400 dark:disabled:text-slate-500"
@@ -576,8 +761,83 @@ const VendasIngressos: React.FC = () => {
           >
             <Download size={12} /> Exportar CSV
           </button>
+          <button
+            onClick={() => void exportAnonymizedCsv()}
+            disabled={exportingAnon || !eventId}
+            title="Dados de venda por transação, sem nenhum dado pessoal, para requisição de órgão de defesa do consumidor (Decreto 13.108/2026, art. 15)"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-white/10 disabled:bg-slate-100 dark:disabled:bg-white/5 disabled:text-slate-400"
+          >
+            <Download size={12} /> Dados sem identificação
+          </button>
         </div>
       </div>
+
+      {/* Escolhas dos compradores numa sessão adiada/cancelada + restituição em lote (Decreto 13.108 arts. 20-22) */}
+      {sessionInfo.status !== 'agendada' && (
+        <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-5 space-y-3">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+            <CalendarClock size={12} /> Sessão {sessionInfo.status === 'cancelada' ? 'cancelada' : 'adiada'}: escolhas dos compradores
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
+            {([
+              ['Sem resposta', sessionPanel.semEscolha],
+              ...(sessionInfo.status === 'adiada' ? [['Mantiveram', sessionPanel.manter]] : []),
+              ['Em crédito', sessionPanel.credito],
+              ['Restituição pedida', sessionPanel.restituicaoPendente],
+              ['Estornados', sessionPanel.estornados],
+            ] as Array<[string, number]>).map(([label, n]) => (
+              <div key={label} className="bg-slate-50 dark:bg-white/5 rounded-xl py-2 px-1">
+                <p className="text-xl font-black text-slate-900 dark:text-white tabular-nums">{n}</p>
+                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">{label}</p>
+              </div>
+            ))}
+          </div>
+          {sessionPanel.semPagamento > 0 && (
+            <p className="text-xs text-slate-500">{sessionPanel.semPagamento} pedido(s) sem cobrança na plataforma (cortesia ou venda no balcão): não entram no estorno em lote; devolva por fora, se for o caso.</p>
+          )}
+          {sessionPanel.falhas > 0 && (
+            <p className="text-xs text-rose-600 dark:text-rose-300 flex items-start gap-1.5"><AlertCircle size={12} className="mt-0.5 shrink-0" /> {sessionPanel.falhas} restituição(ões) falharam no Asaas. Reprocesse abaixo; se persistir, confira o saldo da conta.</p>
+          )}
+
+          {bulkConfirm ? (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 space-y-2 text-xs text-amber-800 dark:text-amber-200">
+              <p>
+                {bulkConfirm === 'pedidos'
+                  ? `Estornar ${sessionPanel.restituicaoPendente} pedido(s) que pediram restituição, total de ${formatBRL(sessionPanel.valorPendente)} (com as taxas).`
+                  : `Estornar ${sessionPanel.semEscolha + sessionPanel.restituicaoPendente} pedido(s), total de ${formatBRL(sessionPanel.valorSemEscolha + sessionPanel.valorPendente)} (com as taxas), incluindo quem não respondeu. Quem já usou o ingresso na entrada é pulado.`}
+                {' '}O estorno sai da sua conta Asaas e não pode ser desfeito.
+              </p>
+              <div className="flex gap-2">
+                <button type="button" disabled={bulkRunning} onClick={() => setBulkConfirm(null)} className="px-4 py-2 rounded-xl border border-slate-300 dark:border-white/10 text-[10px] font-black uppercase tracking-widest">Voltar</button>
+                <button type="button" disabled={bulkRunning} onClick={() => runBulkRefund(bulkConfirm)} className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1.5 disabled:opacity-50">
+                  {bulkRunning ? <Loader2 size={12} className="animate-spin" /> : <Undo2 size={12} />} {bulkRunning ? 'Estornando...' : 'Confirmar estorno'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <button type="button" disabled={sessionPanel.restituicaoPendente === 0} onClick={() => { setBulkResult(null); setBulkError(null); setBulkConfirm('pedidos'); }}
+                className="px-4 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-[10px] font-black uppercase tracking-widest disabled:opacity-40">
+                Processar restituições pedidas ({sessionPanel.restituicaoPendente})
+              </button>
+              {sessionInfo.status === 'cancelada' && (
+                <button type="button" disabled={sessionPanel.semEscolha + sessionPanel.restituicaoPendente === 0} onClick={() => { setBulkResult(null); setBulkError(null); setBulkConfirm('todos'); }}
+                  className="px-4 py-2 rounded-xl bg-rose-500 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-40">
+                  Restituir todos ({sessionPanel.semEscolha + sessionPanel.restituicaoPendente})
+                </button>
+              )}
+            </div>
+          )}
+
+          {bulkError && <p className="text-xs text-rose-600 dark:text-rose-300 flex items-start gap-1.5"><AlertCircle size={12} className="mt-0.5 shrink-0" /> {bulkError}</p>}
+          {bulkResult && (
+            <div className="text-xs text-slate-700 dark:text-slate-300 space-y-1">
+              <p>Estornados agora: <strong>{bulkResult.refunded}</strong>{bulkResult.failed > 0 && <> · falharam: <strong>{bulkResult.failed}</strong></>}{bulkResult.skipped_used > 0 && <> · pulados (já usaram o ingresso): <strong>{bulkResult.skipped_used}</strong></>}</p>
+              {bulkResult.failures.slice(0, 5).map((fl, i) => <p key={i} className="text-rose-600 dark:text-rose-300">{fl.buyer ?? 'Comprador'}: {fl.error}</p>)}
+            </div>
+          )}
+        </div>
+      )}
 
       {err && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm text-red-600 dark:text-red-300 flex items-start gap-2">
@@ -686,6 +946,9 @@ const VendasIngressos: React.FC = () => {
                       <p className="font-bold text-slate-900 dark:text-white hover:text-[#ff0068]">{r.buyer_name}</p>
                       <p className="text-[10px] text-slate-500">{r.buyer_email}</p>
                       <p className="text-[10px] text-slate-400 font-mono">{formatCpf(r.buyer_cpf)}</p>
+                      {Number(r.transfer_count ?? 0) > 0 && (
+                        <p className="mt-0.5 inline-block px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-600 dark:text-violet-300 text-[9px] font-black uppercase tracking-widest">Transferido</p>
+                      )}
                     </Td>
                     <Td>
                       <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{r.ticket_type_nome}</p>
@@ -1134,6 +1397,103 @@ const VendasIngressos: React.FC = () => {
         document.body
       )}
 
+      {/* Cancelar / adiar sessão (Decreto 13.108 arts. 20-22): grava por edge function e avisa os compradores por e-mail */}
+      {sessionOpen && createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" role="dialog" aria-modal="true" aria-labelledby="session-modal-title">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4 max-h-[92dvh] overflow-y-auto">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 id="session-modal-title" className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white italic">
+                  Cancelar ou adiar sessão
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">{eventName}</p>
+              </div>
+              <button type="button" onClick={() => setSessionOpen(false)} disabled={sessionSaving} aria-label="Fechar" className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5">
+                <X size={18} />
+              </button>
+            </div>
+
+            {sessionResult ? (
+              <div className="space-y-4">
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 text-sm text-emerald-700 dark:text-emerald-300 space-y-1">
+                  <p className="font-bold">Sessão atualizada.</p>
+                  <p>Avisos enviados: <strong>{sessionResult.notified}</strong>{sessionResult.failed > 0 && <> · falharam: <strong>{sessionResult.failed}</strong></>}{sessionResult.no_email > 0 && <> · ingressos sem e-mail: <strong>{sessionResult.no_email}</strong></>}</p>
+                  {sessionResult.failed > 0 && <p className="text-xs">Os avisos que falharam precisam ser reenviados: fale com o suporte.</p>}
+                </div>
+                <button type="button" onClick={() => setSessionOpen(false)} className="w-full py-3 bg-[#ff0068] text-white rounded-xl text-[11px] font-black uppercase tracking-widest">Fechar</button>
+              </div>
+            ) : (
+              <>
+                <fieldset className="space-y-2">
+                  <legend className="sr-only">O que aconteceu com a sessão</legend>
+                  {([
+                    ['adiada', 'Adiar para outra data'],
+                    ['cancelada', 'Cancelar a sessão'],
+                    ...(sessionInfo.status !== 'agendada' ? [['agendada', 'Desfazer: a sessão está mantida']] : []),
+                  ] as Array<[string, string]>).map(([value, label]) => (
+                    <label key={value} className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer text-sm font-bold ${sessionForm.status === value ? 'border-[#ff0068] bg-[#ff0068]/10 text-slate-900 dark:text-white' : 'border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300'}`}>
+                      <input type="radio" name="session-status" checked={sessionForm.status === value} onChange={() => setSessionForm(f => ({ ...f, status: value as any }))} className="accent-[#ff0068]" />
+                      {label}
+                    </label>
+                  ))}
+                </fieldset>
+
+                {sessionForm.status === 'adiada' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="session-date" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Nova data</label>
+                      <input id="session-date" type="date" value={sessionForm.nova_data} onChange={e => setSessionForm(f => ({ ...f, nova_data: e.target.value }))}
+                        className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white dark:[color-scheme:dark] focus:outline-none focus:border-[#ff0068]/50" />
+                    </div>
+                    <div>
+                      <label htmlFor="session-time" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Horário</label>
+                      <input id="session-time" type="time" value={sessionForm.nova_hora} onChange={e => setSessionForm(f => ({ ...f, nova_hora: e.target.value }))}
+                        className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white dark:[color-scheme:dark] focus:outline-none focus:border-[#ff0068]/50" />
+                    </div>
+                  </div>
+                )}
+
+                {sessionForm.status !== 'agendada' && (
+                  <div>
+                    <label htmlFor="session-motivo" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Motivo (vai no aviso aos compradores)</label>
+                    <textarea id="session-motivo" rows={3} maxLength={500} value={sessionForm.motivo} onChange={e => setSessionForm(f => ({ ...f, motivo: e.target.value }))}
+                      placeholder="Ex.: indisponibilidade do teatro na data original"
+                      className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50" />
+                  </div>
+                )}
+
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-300 space-y-1">
+                  <p><strong>{sessionBuyers}</strong> pedido{sessionBuyers === 1 ? '' : 's'} com ingresso confirmado {sessionBuyers === 1 ? 'receberá' : 'receberão'} um e-mail agora.</p>
+                  {sessionForm.status === 'cancelada' && <p>As vendas desta sessão serão encerradas. Os compradores têm direito à restituição integral, com as taxas (Decreto 13.108/2026, arts. 20 a 22); as escolhas chegam por e-mail e você as processa pelo botão de estorno de cada ingresso.</p>}
+                  {sessionForm.status === 'adiada' && <p>Os ingressos continuam valendo para a nova data. Quem preferir crédito ou restituição integral, com as taxas, responderá o e-mail.</p>}
+                </div>
+
+                <label className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
+                  <input type="checkbox" checked={sessionConfirmed} onChange={e => setSessionConfirmed(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#ff0068]" />
+                  Entendo que os compradores serão avisados por e-mail agora.
+                </label>
+
+                {sessionError && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm text-red-600 dark:text-red-300 flex items-start gap-2">
+                    <AlertCircle size={14} className="shrink-0 mt-0.5" /><span>{sessionError}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setSessionOpen(false)} disabled={sessionSaving} className="flex-1 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 rounded-xl text-[11px] font-black uppercase tracking-widest">Voltar</button>
+                  <button type="button" onClick={handleSessionChange} disabled={sessionSaving || !sessionConfirmed}
+                    className="flex-1 py-3 bg-rose-500 hover:bg-rose-600 disabled:bg-slate-200 dark:disabled:bg-white/10 disabled:text-slate-400 text-white rounded-xl text-[11px] font-black uppercase tracking-widest inline-flex items-center justify-center gap-2">
+                    {sessionSaving ? <Loader2 size={14} className="animate-spin" /> : <CalendarClock size={14} />}
+                    {sessionSaving ? 'Enviando avisos...' : 'Confirmar e avisar'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+
       {refundTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5">
@@ -1299,6 +1659,28 @@ const VendasIngressos: React.FC = () => {
                 />
               </Section>
 
+              {Number(detailRow.transfer_count ?? 0) > 0 && (
+                <Section title="Histórico de titulares">
+                  {transferHistory === null ? (
+                    <p className="text-[11px] text-slate-500 py-1.5">Carregando histórico...</p>
+                  ) : transferHistory.length === 0 ? (
+                    <p className="text-[11px] text-slate-500 py-1.5">Ingresso transferido {detailRow.transfer_count}x, sem detalhes disponíveis.</p>
+                  ) : (
+                    transferHistory.map(t => (
+                      <div key={t.id} className="px-3 py-1.5 border-b border-slate-100 dark:border-white/5 last:border-b-0">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{new Date(t.created_at).toLocaleString('pt-BR')}</p>
+                        <p className="text-xs text-slate-700 dark:text-slate-300">
+                          {t.from_name ?? '—'} <span className="text-slate-400">({t.from_cpf_masked ?? '—'})</span>
+                          {' → '}
+                          <strong>{t.to_name}</strong> <span className="text-slate-400">({t.to_cpf_masked})</span>
+                        </p>
+                        <p className="text-[10px] text-slate-500 font-mono">{t.to_email}</p>
+                      </div>
+                    ))
+                  )}
+                </Section>
+              )}
+
               {detailRow.refunded_at && (
                 <Section title="Estorno">
                   <Field label="Em" value={new Date(detailRow.refunded_at).toLocaleString('pt-BR')} />
@@ -1393,6 +1775,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     PENDENTE:  { label: 'Pendente',   cls: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',     icon: Clock },
     CANCELADO: { label: 'Cancelado',  cls: 'bg-slate-500/10 text-slate-500',                          icon: XCircle },
     ESTORNADO: { label: 'Estornado',  cls: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',         icon: XCircle },
+    CREDITO:   { label: 'Crédito',    cls: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',   icon: Ticket },
     VENCIDO:   { label: 'Vencido',    cls: 'bg-slate-500/10 text-slate-500',                          icon: XCircle },
     CORTESIA:  { label: 'Cortesia',   cls: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',   icon: CheckCircle2 },
   };

@@ -4,6 +4,42 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-25 (continuação 13) — Fase 5 item 5: relatório de meia, exportação sem PII e guarda de 2 anos ✅ (dev; banco em produção)
+
+- Migration `20260930g`: `get_meia_report`, `export_audience_sales_anonymized` e trava de exclusão de ingresso com movimento (<2 anos). Vitrine de evento encerrado mostra o relatório; Vendas de ingressos ganhou "Dados sem identificação".
+- Termo do Produtor v1.7 fica como rascunho (`docs/termo-produtor-v1.7-rascunho.md`), sem subir a versão, até validação. Retenção e pendências em `docs/retencao-dados-ingressos.md`.
+
+### 2026-09-25 (continuação 12) — Fase 5 item 3: transferência gratuita de titularidade do ingresso ✅ (dev; banco/functions em produção)
+
+- **Achado de desenho:** o QR era o `id` do ingresso; trocar só o `access_token` não invalidaria o QR salvo. Criada a credencial rotativa `qr_code` (NULL = nunca transferido); o check-in recusa o id de ingresso transferido.
+- **Migration `20260930f`:** `qr_code/transfer_count/transferred_at`, tabela `audience_ticket_transfers` (CPF mascarado, RLS só dono/super admin), RPC `get_audience_ticket_by_token_v3`, irmãos do pedido filtrados pelo mesmo titular. Edge `transfer-ticket` (10/dia por IP, CAS, auditoria antes da troca) e e-mails `audience_ticket_transferred_from/_to`.
+- **UI:** aba "Transferir ingresso" em `MeuIngresso` (avisos de meia e assento PCD), histórico de titulares + marca "Transferido" em `VendasIngressos`. Crédito/restituição de sessão adiada/cancelada de ingresso transferido é do comprador original.
+- **Validado no sandbox:** transferência, link antigo morto, bloqueios (check-in, sessão cancelada, CREDITO, mesmo titular), 429 por IP, Playwright 1440/375 sem erros. Baseline 49/21/125/0 intacto. Pendente: e-mail a novo titular quando a sessão for adiada/cancelada; item 5 da Fase 5.
+
+### 2026-09-25 (continuação 11) — Fase 5 item 4b, ajuste: crédito com SALDO (pesquisa de mercado) ✅ (dev; banco/functions em produção)
+
+- **Pesquisa:** validade de 12 meses tem respaldo (Blueticket, Lei 14.046/2020); o Decreto 13.108 não fixa prazo; vale-crédito pode ter validade clara, mas o fornecedor não pode ficar com a diferença não usada (Defensoria PR). O cupom de uso único perdia o saldo.
+- **Mudança (`20260930e`):** saldo = valor − desconto de ingressos ativos, devolvido sozinho se a compra expira/estorna; trigger de uso único removido; piso de R$ 20 na base da compra (o crédito grande em compra pequena não zera mais o total: some a limitação "crédito de 100%"). Página do ingresso mostra valor, saldo e validade. Sandbox: crédito R$ 21,58, compra de base R$ 40 usou R$ 20, saldo R$ 1,58, cupom segue ativo.
+
+### 2026-09-25 (continuação 10) — Fase 5 item 4b: comprador escolhe manter/crédito/restituição e produtor restitui em lote ✅ (dev; banco/functions em produção)
+
+- **Fluxo:** na sessão adiada/cancelada, a página do ingresso (`SessionChoicePanel`) deixa o comprador manter (só adiada), converter em crédito (cupom `CRED-…` de uso único, valor pago com taxa, 12 meses, válido nas sessões do mesmo espetáculo) ou pedir restituição integral. O produtor ganha painel de escolhas e restituição em lote em Vendas de Ingressos. Edges `choose-session-option` (pública, por token) e `refund-session-orders`; estorno extraído para `_shared/audience-refund.ts`. Migrations `20260930c` e `20260930d`.
+- **Decisão técnica:** ingresso convertido vira status `CREDITO` (não `CANCELADO`): o webhook tardio do Asaas religa CANCELADO/VENCIDO e reviveria o ingresso com o crédito já emitido. O CHECK de `status_pagamento` precisou aceitar o valor novo (achado no teste).
+- **Sandbox (alvo travado):** compra + pagamento de teste, estorno manual refatorado, manter→crédito, crédito usado na sessão irmã (uso único), restituição pelo comprador REFUNDED, lote com pulo de cortesia/balcão. Três bugs achados e corrigidos no próprio teste (CHECK, ordem de liberar assento, cortesia como falha).
+- **Limitações:** crédito que cobre 100% da nova compra não emite (checkout recusa valor zero); estorno real em produção ainda com o bug "saldo insuficiente" sem chamado na Asaas; receita de ingresso em crédito sai dos relatórios como estorno. Detalhes em `memory/fase5_cotacao_travada_shipado_2026_09_25.md`.
+
+### 2026-09-25 (continuação 9) — Fase 5 item 4a: cancelar/adiar sessão + 🚨 página do ingresso quebrada na main (fix na dev) ✅ (banco/functions em produção)
+
+- **Cancelar/adiar (9399b8f):** migration `20260930b_event_session_status.sql` (aplicada), edge `update-session-status`, template `audience_session_changed` no `send-email`, banner na vitrine/checkout/`MeuIngresso`, botão e modal em Vendas de Ingressos, venda bloqueada em sessão cancelada (`create-audience-ticket`, `quote-audience-ticket`, `create-pdv-ticket`). Adiar move a data do evento (a original fica guardada); vendas seguem abertas. Validado no sandbox (adiar, cancelar, desfazer, e-mails, compra recusada).
+- **Bug de produção:** `pages/MeuIngresso.tsx` na `main` (desde dba0f86) chamava hooks depois dos `return` antecipados e derrubava a página do ingresso ("Rendered more hooks..."). Corrigido na `dev` no mesmo commit e **levado sozinho para a `main` (c96e516, a pedido do produtor)** por worktree a partir da `origin/main`, sem o resto da `dev`; conferido em `app.coreohub.com` (QR e código manual, 0 erros). A correção da `dev` toca as mesmas linhas: no próximo merge `dev` → `main` pode dar conflito trivial em `MeuIngresso.tsx` (ficar com a versão da `dev`, que já inclui o banner).
+- **Falta (4b):** comprador escolher manter/crédito (cupom)/restituição, estorno em lote e painel de escolhas. Detalhes em `memory/fase5_cotacao_travada_shipado_2026_09_25.md`.
+
+### 2026-09-25 (continuação 8) — Fase 5 (Decreto 13.108): cotação travada de preço/taxa + meia-entrada e política de reembolso ✅ (dev; banco/functions em produção)
+
+- **Cotação travada (4edacae):** migration `20260930_audience_price_quotes.sql` (aplicada), edge `quote-audience-ticket` (pública) e `create-audience-ticket` honrando `quote_id` (deployadas). Preço, comissão e modo de taxa gravados por `audience_reservation_minutes` (15 min); vencida ou inválida devolve `quote_expired` e o checkout recota e avisa antes de pagar. Sem `quote_id` mantém o cálculo ao vivo. Sandbox: compra com cotação de R$ 25 + 10% cobrou R$ 27,50 contra R$ 20 + 7,9% ao vivo.
+- **Meia-entrada e reembolso (6d5f107, só frontend):** `MeiaEntradaInfo` na vitrine e no checkout (totais, meia disponível, aviso de esgotamento, art. 1º da Lei 12.933, órgãos de fiscalização), flag `promocional` no editor de tipos, `CheckoutLegalNotice variant=ingresso` sem a cláusula "a critério do produtor" nos casos de arrependimento e cancelamento.
+- **Pendências:** telefones de fiscalização por estado (texto usa Procon 151 + consumidor.gov.br), fluxo de cancelar/adiar (item 4) e transferência (item 3) ainda não existem, limite de meia por beneficiário, relatório de meia, retenção de 2 anos, Termo v1.7. Texto jurídico é rascunho: advogado valida. Detalhes em `memory/fase5_cotacao_travada_shipado_2026_09_25.md`.
+
 ### 2026-09-25 (continuação 7) — Fase 4 (matriz E2E no sandbox): meia-entrada, cupom entre sessões, expiração de reserva ✅ 10/10 — 🐛 bug real do cupom de plateia corrigido e deployado (commit `7d1d361`)
 
 - **Bug real:** a RPC `validate_audience_coupon` (v2, migration `20260616`) devolve `err`/`discount_amount`/`final_amount`, mas `create-audience-ticket` e `validate-audience-coupon` liam `error_message`/`discount`/`final_value` (as RPCs de workshop/vídeo NÃO mudaram e seguem certas). Efeito: TODA compra de ingresso de plateia com cupom falhava ("null value in column preco", desconto virava NaN) e cupom inválido era ignorado; o botão "Aplicar cupom" do checkout devolvia desconto NaN. Quebrado desde 16/06, invisível porque há 0 ingressos reais vendidos. Corrigido (aceita os dois formatos + barra desconto não numérico); `create-audience-ticket` v47 e `validate-audience-coupon` v22 deployadas com `--no-verify-jwt`.

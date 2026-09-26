@@ -3,7 +3,7 @@
  * Acessada por link no email pós-pagamento: /meu-ingresso/<access_token>
  *
  * Tier 1 paid tickets. Reaproveita layout de Credencial.tsx (QR + info).
- * Lookup via RPC `get_audience_ticket_by_token_v2` (security definer, mascara CPF/email).
+ * Lookup via RPC `get_audience_ticket_by_token_v3` (security definer, mascara CPF/email).
  */
 
 import React, { useEffect, useState } from 'react';
@@ -11,10 +11,13 @@ import { fetchSeatTipo, SEAT_TIPO_LABEL } from '../utils/seatTipo';
 import type { SeatTipo } from '../utils/seatSelection';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { QRCodeCanvas } from 'qrcode.react';
-import { ArrowLeft, Loader2, AlertCircle, Sun, Calendar, MapPin, ExternalLink, Download, Share2, ChevronLeft, ChevronRight, Users, Printer } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertCircle, Sun, Calendar, MapPin, ExternalLink, Download, Share2, ChevronLeft, ChevronRight, Users, Printer, Send } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import InstallPWAButton from '../components/InstallPWAButton';
 import AsaasBadge from '../components/AsaasBadge';
+import SessionStatusBanner, { type SessionStatusInfo } from '../components/SessionStatusBanner';
+import SessionChoicePanel from '../components/SessionChoicePanel';
+import TransferTicketPanel from '../components/TransferTicketPanel';
 
 interface Sibling {
   id: string;
@@ -51,6 +54,9 @@ interface Ticket {
   check_in_at: string | null;
   access_token: string;
   created_at: string;
+  qr_code: string | null;
+  transfer_count: number;
+  transferred_at: string | null;
 }
 
 const MeuIngresso: React.FC = () => {
@@ -61,6 +67,7 @@ const MeuIngresso: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [siblings, setSiblings] = useState<Sibling[]>([]);
+  const [transferredTo, setTransferredTo] = useState<string | null>(null);
 
   // Carga inicial + recarrega quando o token muda
   useEffect(() => {
@@ -68,7 +75,7 @@ const MeuIngresso: React.FC = () => {
     let active = true;
     const fetchTicket = async () => {
       const [{ data, error: rpcErr }, sibRes] = await Promise.all([
-        supabase.rpc('get_audience_ticket_by_token_v2', { p_token: token }),
+        supabase.rpc('get_audience_ticket_by_token_v3', { p_token: token }),
         supabase.rpc('get_audience_ticket_siblings', { p_token: token }),
       ]);
       if (!active) return;
@@ -100,9 +107,10 @@ const MeuIngresso: React.FC = () => {
     const interval = isPendente ? 5_000 : 30_000;
     const t = setInterval(async () => {
       // Re-fetch silencioso
-      const { data } = await supabase.rpc('get_audience_ticket_by_token_v2', { p_token: token });
+      const { data } = await supabase.rpc('get_audience_ticket_by_token_v3', { p_token: token });
       const row = Array.isArray(data) ? data[0] : data;
       if (row) setTicket(row as Ticket);
+      else { setTicket(null); setError('Este link deixou de valer: o ingresso foi transferido para outro titular. Quem recebeu o ingresso tem o link novo.'); }
     }, interval);
     return () => clearInterval(t);
   }, [token, ticket]);
@@ -158,8 +166,21 @@ const MeuIngresso: React.FC = () => {
     window.open(waUrl, '_blank', 'noopener,noreferrer');
   };
 
-  // Hooks SEMPRE antes dos return antecipados (loading/erro): mudar a ordem de hooks entre
-  // renders derruba a página com "Rendered more hooks than during the previous render".
+  // ── Hooks SEMPRE antes dos return antecipados (loading/erro): mudar a ordem de hooks
+  // entre renders derruba a página com "Rendered more hooks than during the previous render".
+  // Sessão adiada/cancelada (Decreto 13.108 arts. 20-22): busca o status público do evento.
+  const [sessionInfo, setSessionInfo] = useState<SessionStatusInfo | null>(null);
+  useEffect(() => {
+    if (!ticket?.event_id) return;
+    let cancel = false;
+    void supabase.rpc('get_event_session_status', { p_event_id: ticket.event_id }).then(({ data, error: sErr }) => {
+      if (sErr) { console.warn('[MeuIngresso] get_event_session_status:', sErr.message); return; }
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!cancel && row) setSessionInfo(row as SessionStatusInfo);
+    });
+    return () => { cancel = true; };
+  }, [ticket?.event_id]);
+
   // Tipo do assento (etiqueta PCD/acompanhante).
   const [seatTipo, setSeatTipo] = useState<SeatTipo>('comum');
   useEffect(() => {
@@ -169,6 +190,23 @@ const MeuIngresso: React.FC = () => {
     return () => { cancel = true; };
   }, [ticket?.event_id, ticket?.seat_id]);
   const seatTipoLabel = SEAT_TIPO_LABEL[seatTipo];
+
+  if (transferredTo) {
+    return (
+      <div role="status" className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-950 p-6">
+        <div className="max-w-md w-full text-center space-y-4">
+          <div className="inline-flex p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-3xl">
+            <Send size={32} className="text-emerald-500" />
+          </div>
+          <p className="text-base font-black uppercase tracking-tight text-slate-800 dark:text-white">Ingresso transferido</p>
+          <p className="text-sm text-slate-600 dark:text-slate-300 max-w-xs mx-auto">
+            O ingresso agora é de {transferredTo}. Enviamos o ingresso para o e-mail dessa pessoa e uma confirmação para o seu.
+          </p>
+          <p className="text-xs text-slate-500 max-w-xs mx-auto">O QR e o link que você tinha deixaram de funcionar.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -198,11 +236,14 @@ const MeuIngresso: React.FC = () => {
   const isPendente = ticket.status_pagamento === 'PENDENTE';
   const isCheckedIn = ticket.check_in_status === 'OK';
   // Status terminais que invalidam o ingresso — QR não vale mais pra entrada
-  const isInvalid = ['CANCELADO', 'VENCIDO', 'ESTORNADO'].includes(ticket.status_pagamento);
+  const isInvalid = ['CANCELADO', 'VENCIDO', 'ESTORNADO', 'CREDITO'].includes(ticket.status_pagamento);
   const invalidLabel = ticket.status_pagamento === 'ESTORNADO' ? 'Estornado'
+    : ticket.status_pagamento === 'CREDITO' ? 'Convertido em crédito'
     : ticket.status_pagamento === 'VENCIDO' ? 'Vencido'
     : 'Cancelado';
-  const fallbackCode = ticket.id.replace(/-/g, '').slice(-6).toUpperCase();
+  // QR: o id do ingresso; depois de uma transferência, o qr_code novo (o id antigo deixa de valer no check-in).
+  const qrValue = ticket.qr_code ?? ticket.id;
+  const fallbackCode = qrValue.replace(/-/g, '').slice(-6).toUpperCase();
 
   // Bug clássico: Date('YYYY-MM-DD') interpreta como UTC e em pt-BR mostra 1 dia atras.
   // Adicionando T12:00:00 forçamos meio-dia local, neutralizando offset de timezone.
@@ -282,6 +323,26 @@ const MeuIngresso: React.FC = () => {
 
       <div className="flex-1 flex items-center justify-center px-4 pb-6 print:block print:p-0">
         <div className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl overflow-hidden print:max-w-full print:rounded-none print:shadow-none print:mx-auto">
+          {sessionInfo && (sessionInfo.sessao_status === 'adiada' || sessionInfo.sessao_status === 'cancelada') && (
+            <div className="p-3 print:hidden">
+              <SessionStatusBanner {...sessionInfo} dataAtual={ticket.event_start_date} horaAtual={ticket.event_time} context="ingresso" theme="light" />
+              <div className="mt-3">
+                {ticket.transfer_count > 0 ? (
+                  <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-snug text-slate-600">
+                    Este ingresso foi transferido. O crédito ou a restituição é escolhido por quem fez a compra, pelo ingresso que continua com essa pessoa.
+                  </p>
+                ) : (
+                <SessionChoicePanel
+                  token={token!}
+                  sessaoStatus={sessionInfo.sessao_status as 'adiada' | 'cancelada'}
+                  statusPagamento={ticket.status_pagamento}
+                  checkedIn={isCheckedIn}
+                  onChanged={() => { void supabase.rpc('get_audience_ticket_by_token_v3', { p_token: token }).then(({ data }) => { const row = Array.isArray(data) ? data[0] : data; if (row) setTicket(row as Ticket); }); }}
+                />
+                )}
+              </div>
+            </div>
+          )}
           {/* Family ticket nav (Tier 2): aparece quando há múltiplos tickets na compra */}
           {siblings.length > 1 && (() => {
             const current = siblings.find(s => s.access_token === token);
@@ -356,6 +417,8 @@ const MeuIngresso: React.FC = () => {
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-[280px]">
                   {ticket.status_pagamento === 'ESTORNADO'
                     ? 'O reembolso foi processado. O QR deste ingresso não é mais válido pra entrada.'
+                    : ticket.status_pagamento === 'CREDITO'
+                      ? 'Este ingresso foi convertido em crédito. O QR não é mais válido pra entrada; use o cupom exibido acima em outra sessão.'
                     : ticket.status_pagamento === 'VENCIDO'
                       ? 'O prazo de pagamento expirou. Faça uma nova compra se quiser participar.'
                       : 'Este ingresso foi cancelado. Em caso de dúvidas, entre em contato com o organizador.'}
@@ -390,7 +453,7 @@ const MeuIngresso: React.FC = () => {
                 <div className="bg-white p-3 rounded-2xl border-2 border-slate-100">
                   <QRCodeCanvas
                     id="ticket-qr"
-                    value={ticket.id}
+                    value={qrValue}
                     size={256}
                     level="H"
                     fgColor={isCheckedIn ? '#94a3b8' : '#000000'}
@@ -538,6 +601,23 @@ const MeuIngresso: React.FC = () => {
               </div>
             )}
           </div>
+
+          {ticket.transfer_count > 0 && ticket.transferred_at && (
+            <div className="px-6 py-2 border-t border-slate-100 print:hidden">
+              <p className="text-[10px] text-slate-500">
+                Ingresso transferido em {new Date(ticket.transferred_at).toLocaleString('pt-BR')}.
+              </p>
+            </div>
+          )}
+
+          {(isPago || ticket.status_pagamento === 'CORTESIA') && !isCheckedIn && sessionInfo?.sessao_status !== 'cancelada' && (
+            <TransferTicketPanel
+              token={token!}
+              isMeia={ticket.ticket_type_kind === 'meia'}
+              hasSeat={!!ticket.seat_id}
+              onTransferred={setTransferredTo}
+            />
+          )}
 
           <div className="px-6 py-3 bg-slate-50 border-t border-slate-100">
             <p className="text-[9px] text-slate-400 text-center leading-relaxed">

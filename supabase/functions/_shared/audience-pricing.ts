@@ -16,6 +16,23 @@
 
 export const round2 = (n: number) => parseFloat(n.toFixed(2));
 
+/**
+ * Preço de face vigente de um tipo de ingresso (lotes por data_virada, com
+ * fallback pro preço direto). `todayISO` é injetável pra teste.
+ */
+export function resolveTicketPrice(
+  ticketType: { lotes?: Array<{ data_virada: string | null; preco: number; nome?: string }> | null; preco?: number | null },
+  todayISO: string = new Date().toISOString().slice(0, 10),
+): { preco: number; lote: string | null } {
+  const lotes = Array.isArray(ticketType.lotes) ? ticketType.lotes : [];
+  if (lotes.length > 0) {
+    const idx = lotes.findIndex((l) => !l.data_virada || l.data_virada >= todayISO);
+    const lote = idx >= 0 ? lotes[idx] : lotes[lotes.length - 1];
+    return { preco: Number(lote?.preco ?? 0), lote: lote?.nome ?? null };
+  }
+  return { preco: Number(ticketType.preco ?? 0), lote: null };
+}
+
 export interface PricingInput {
   idx: number;
   nome: string;

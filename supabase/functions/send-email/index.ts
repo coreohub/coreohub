@@ -742,6 +742,203 @@ function buildAudienceRefundProducer(p: AudienceRefundPayload, opts?: { adminCop
   }
 }
 
+// ─── Template: audience_session_changed (comprador) ──────────────────────────
+// Sessão cancelada / adiada / mantida (Decreto 13.108/2026 arts. 20-22). Disparado
+// pela edge function update-session-status, um e-mail por pedido. Sem selo Asaas:
+// é aviso operacional (a restituição em si tem o e-mail de estorno próprio).
+
+interface AudienceSessionChangedPayload {
+  buyerName?: string
+  buyerEmail?: string
+  produtorEmail?: string
+  eventoNome?: string
+  status: 'adiada' | 'cancelada' | 'agendada'
+  /** Datas já formatadas pelo caller, ex.: "Sáb, 19 de dezembro de 2026 · 19:30". */
+  sessaoAntiga?: string
+  sessaoNova?: string
+  motivo?: string | null
+  ingressos?: Array<{ nome: string; assento?: string | null }>
+  /** Link /meu-ingresso/<token> do pedido. */
+  ingressoUrl?: string
+  eventoUrl?: string
+  /** Ingresso recebido por transferência: a restituição/crédito é do comprador original. */
+  transferido?: boolean
+}
+
+function buildAudienceSessionChanged(p: AudienceSessionChangedPayload) {
+  const nome = escape(p.eventoNome ?? 'o evento')
+  const lista = (p.ingressos ?? []).filter(i => i?.nome)
+  const ingressosHtml = lista.length > 0
+    ? infoRow(lista.length > 1 ? 'Seus ingressos' : 'Seu ingresso', lista.map(i => escape(i.assento ? `${i.nome} — lugar ${i.assento}` : i.nome)).join('<br>'))
+    : ''
+  const motivoHtml = p.motivo ? infoRow('Motivo informado pelo organizador', escape(p.motivo)) : ''
+  const opcoes = p.transferido ? `
+    <p style="margin:16px 0 6px;font-size:13px;color:#0b0b0f;font-weight:700;">Seu ingresso foi recebido por transferência</p>
+    <p style="margin:0;font-size:13px;color:#334155;line-height:1.6;">${p.status === 'adiada' ? 'O ingresso continua valendo para a nova data. ' : ''}O crédito ou a restituição do valor pago é escolhido por quem fez a compra original, pois foi essa pessoa que pagou. Se precisar de ajuda, responda este e-mail.</p>` : `
+    <p style="margin:16px 0 6px;font-size:13px;color:#0b0b0f;font-weight:700;">O que você pode fazer</p>
+    <ul style="margin:0;padding-left:18px;font-size:13px;color:#334155;line-height:1.6;">
+      ${p.status === 'adiada' ? '<li><strong>Manter</strong> o ingresso: ele continua valendo para a nova data (não precisa fazer nada).</li>' : ''}
+      <li><strong>Crédito</strong> no valor pago para usar em outra sessão.</li>
+      <li><strong>Restituição integral</strong> do valor pago, <strong>incluindo as taxas</strong>, sem multa nem retenção.</li>
+    </ul>
+    <p style="margin:12px 0 0;font-size:13px;color:#334155;line-height:1.6;">Você escolhe na página do seu ingresso (botão abaixo). Se preferir, responda este e-mail informando o seu nome e o e-mail da compra.</p>`
+
+  if (p.status === 'agendada') {
+    return {
+      subject: `Sessão mantida — ${p.eventoNome ?? 'CoreoHub'}`,
+      html: baseLayout({
+        preheader: 'O aviso anterior foi desfeito: a sessão está mantida.',
+        title: 'Sessão mantida',
+        intro: `Olá ${escape(p.buyerName ?? 'comprador(a)')}, o organizador de ${nome} desfez o aviso anterior: a sessão está mantida e o seu ingresso continua valendo normalmente.`,
+        contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${[
+          p.sessaoNova ? infoRow('Sessão', escape(p.sessaoNova)) : '',
+          ingressosHtml,
+        ].filter(Boolean).join('')}</table>`,
+        ctaLabel: p.ingressoUrl ? 'Ver meu ingresso' : undefined,
+        ctaUrl: p.ingressoUrl,
+        includeAsaasSeal: false,
+      }),
+    }
+  }
+
+  const cancelada = p.status === 'cancelada'
+  const linhas = [
+    p.eventoNome ? infoRow('Evento', escape(p.eventoNome)) : '',
+    p.sessaoAntiga ? infoRow(cancelada ? 'Sessão cancelada' : 'Data anterior', escape(p.sessaoAntiga)) : '',
+    !cancelada && p.sessaoNova ? infoRow('Nova data', escape(p.sessaoNova)) : '',
+    motivoHtml,
+    ingressosHtml,
+  ].filter(Boolean).join('')
+  return {
+    subject: `${cancelada ? 'Sessão cancelada' : 'Sessão adiada'} — ${p.eventoNome ?? 'CoreoHub'}`,
+    html: baseLayout({
+      preheader: cancelada ? 'A sessão foi cancelada. Veja como receber o seu dinheiro de volta.' : 'A sessão foi adiada. Veja as suas opções.',
+      title: cancelada ? 'Sessão cancelada' : 'Sessão adiada',
+      intro: cancelada
+        ? `Olá ${escape(p.buyerName ?? 'comprador(a)')}, o organizador de ${nome} cancelou a sessão para a qual você comprou ingresso. Você tem direito à restituição integral, com as taxas.`
+        : `Olá ${escape(p.buyerName ?? 'comprador(a)')}, o organizador de ${nome} adiou a sessão para a qual você comprou ingresso. Você escolhe o que fazer.`,
+      contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>${opcoes}`,
+      ctaLabel: p.ingressoUrl ? 'Ver meu ingresso' : undefined,
+      ctaUrl: p.ingressoUrl,
+      footerNote: 'Este aviso é enviado por determinação dos arts. 20 a 22 do Decreto nº 13.108/2026. Em caso de dúvidas, responda este e-mail.',
+      includeAsaasSeal: false,
+    }),
+  }
+}
+
+// ─── Template: audience_session_credit (comprador) ───────────────────────────
+// Crédito (cupom) gerado quando o comprador escolhe crédito numa sessão
+// adiada/cancelada (Decreto 13.108/2026, arts. 20-22). Sem selo Asaas.
+
+interface AudienceSessionCreditPayload {
+  buyerName?: string
+  buyerEmail?: string
+  produtorEmail?: string
+  eventoNome?: string
+  codigo: string
+  valor: number
+  /** Validade já formatada pelo caller (dd/mm/aaaa). */
+  validoAte?: string
+  ingressos?: Array<{ nome: string; assento?: string | null }>
+  eventoUrl?: string
+}
+
+function buildAudienceSessionCredit(p: AudienceSessionCreditPayload) {
+  const lista = (p.ingressos ?? []).filter(i => i?.nome)
+  const linhas = [
+    p.eventoNome ? infoRow('Evento', escape(p.eventoNome)) : '',
+    lista.length > 0 ? infoRow(lista.length > 1 ? 'Ingressos convertidos' : 'Ingresso convertido', lista.map(i => escape(i.assento ? `${i.nome} — lugar ${i.assento}` : i.nome)).join('<br>')) : '',
+    infoRow('Valor do crédito', escape(money(p.valor))),
+    infoRow('Código do cupom', `<span style="font-family:monospace;font-size:18px;letter-spacing:.08em;">${escape(p.codigo)}</span>`),
+    p.validoAte ? infoRow('Válido até', escape(p.validoAte)) : '',
+  ].filter(Boolean).join('')
+  return {
+    subject: `Seu crédito de ingresso — ${p.eventoNome ?? 'CoreoHub'}`,
+    html: baseLayout({
+      preheader: `Crédito de ${money(p.valor)}: use o código ${p.codigo} em outra sessão.`,
+      title: 'Seu crédito está pronto',
+      intro: `Olá ${escape(p.buyerName ?? 'comprador(a)')}, o seu ingresso de ${escape(p.eventoNome ?? 'o evento')} foi convertido em crédito, como você pediu. Use o código abaixo no campo de cupom do checkout de outra sessão do mesmo espetáculo.`,
+      contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>
+        <p style="margin:12px 0 0;font-size:13px;color:#334155;line-height:1.6;">O crédito tem saldo: você pode usá-lo em mais de uma compra até acabar, e o que não for usado continua disponível até a data de validade. Cada compra precisa passar de R$ 20,00 depois do desconto. Se preferir a restituição em dinheiro, responda este e-mail antes de usar o código.</p>`,
+      ctaLabel: p.eventoUrl ? 'Ver o espetáculo' : undefined,
+      ctaUrl: p.eventoUrl,
+      footerNote: 'Este crédito decorre dos arts. 20 a 22 do Decreto nº 13.108/2026. Em caso de dúvidas, responda este e-mail.',
+      includeAsaasSeal: false,
+    }),
+  }
+}
+
+// ─── Templates: audience_ticket_transferred_from / _to ───────────────────────
+// Transferência gratuita de titularidade (Decreto 13.108/2026, arts. 17-19).
+// _from: titular anterior (confirmação + QR antigo invalidado).
+// _to: novo titular (o ingresso, com o link novo). Sem selo Asaas.
+
+interface AudienceTicketTransferPayload {
+  /** Quem recebe o e-mail. */
+  toEmail?: string
+  recipientName?: string
+  fromName?: string
+  toName?: string
+  eventoNome?: string
+  ingressoNome?: string
+  assento?: string | null
+  /** Data/hora já formatada pelo caller. */
+  sessao?: string
+  produtorEmail?: string
+  /** _to: link /meu-ingresso/<token novo>. */
+  ingressoUrl?: string
+  meia?: boolean
+  assentoEspecial?: boolean
+}
+
+function buildAudienceTicketTransferredFrom(p: AudienceTicketTransferPayload) {
+  const linhas = [
+    p.eventoNome ? infoRow('Evento', escape(p.eventoNome)) : '',
+    p.sessao ? infoRow('Data', escape(p.sessao)) : '',
+    p.ingressoNome ? infoRow('Ingresso', escape(p.assento ? `${p.ingressoNome} — lugar ${p.assento}` : p.ingressoNome)) : '',
+    p.toName ? infoRow('Novo titular', escape(p.toName)) : '',
+  ].filter(Boolean).join('')
+  return {
+    subject: `Ingresso transferido — ${p.eventoNome ?? 'CoreoHub'}`,
+    html: baseLayout({
+      preheader: 'A transferência foi concluída e o seu QR deixou de valer.',
+      title: 'Ingresso transferido',
+      intro: `Olá ${escape(p.recipientName ?? 'titular')}, a transferência do seu ingresso de ${escape(p.eventoNome ?? 'o evento')} foi concluída. O ingresso agora pertence ao novo titular.`,
+      contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>
+        <p style="margin:12px 0 0;font-size:13px;color:#334155;line-height:1.6;"><strong>O QR e o link que você tinha deixaram de funcionar.</strong> Não é possível entrar no evento com eles. A transferência é gratuita e não altera valores pagos. Se você não fez esta transferência, responda este e-mail agora.</p>`,
+      footerNote: 'Transferência de titularidade conforme arts. 17 a 19 do Decreto nº 13.108/2026.',
+      includeAsaasSeal: false,
+    }),
+  }
+}
+
+function buildAudienceTicketTransferredTo(p: AudienceTicketTransferPayload) {
+  const linhas = [
+    p.eventoNome ? infoRow('Evento', escape(p.eventoNome)) : '',
+    p.sessao ? infoRow('Data', escape(p.sessao)) : '',
+    p.ingressoNome ? infoRow('Ingresso', escape(p.assento ? `${p.ingressoNome} — lugar ${p.assento}` : p.ingressoNome)) : '',
+    p.fromName ? infoRow('Transferido por', escape(p.fromName)) : '',
+  ].filter(Boolean).join('')
+  const avisos = [
+    p.meia ? '<li><strong>Meia-entrada:</strong> na portaria você precisa comprovar que tem direito ao benefício. Sem a comprovação, será cobrada a diferença para o valor inteiro.</li>' : '',
+    p.assentoEspecial ? '<li><strong>Assento reservado (PCD, mobilidade reduzida ou acompanhante):</strong> confira as regras do local com o organizador.</li>' : '',
+  ].filter(Boolean).join('')
+  return {
+    subject: `Você recebeu um ingresso — ${p.eventoNome ?? 'CoreoHub'}`,
+    html: baseLayout({
+      preheader: 'Um ingresso foi transferido para você. Abra o link para ver o QR.',
+      title: 'Você recebeu um ingresso',
+      intro: `Olá ${escape(p.recipientName ?? 'titular')}, ${escape(p.fromName ?? 'alguém')} transferiu para você um ingresso de ${escape(p.eventoNome ?? 'o evento')}. O ingresso está no seu nome e o QR novo está na página abaixo.`,
+      contentHtml: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${linhas}</table>${avisos ? `<ul style="margin:12px 0 0;padding-left:18px;font-size:13px;color:#334155;line-height:1.6;">${avisos}</ul>` : ''}
+        <p style="margin:12px 0 0;font-size:13px;color:#334155;line-height:1.6;">Guarde este e-mail: o link é a sua chave de acesso ao ingresso. Não compartilhe.</p>`,
+      ctaLabel: p.ingressoUrl ? 'Ver meu ingresso' : undefined,
+      ctaUrl: p.ingressoUrl,
+      footerNote: 'Transferência de titularidade conforme arts. 17 a 19 do Decreto nº 13.108/2026.',
+      includeAsaasSeal: false,
+    }),
+  }
+}
+
 // ─── Templates: workshop_registration_confirmed + workshop_registration_producer
 // Backlog item: faltava implementação. Webhook já disparava, edge function só
 // logava warning. Workshops ja existem como entidade desde Etapa 1 (2026-05-04).
@@ -1798,6 +1995,10 @@ interface SendEmailRequest {
     | 'audience_ticket_late_refund_producer'
     | 'audience_ticket_refunded'
     | 'audience_ticket_refunded_producer'
+    | 'audience_session_changed'
+    | 'audience_session_credit'
+    | 'audience_ticket_transferred_from'
+    | 'audience_ticket_transferred_to'
     | 'workshop_registration_confirmed'
     | 'workshop_registration_producer'
     | 'workshop_pass_confirmed'
@@ -1993,6 +2194,44 @@ Deno.serve(async (req) => {
         if (!p.buyerEmail) throw new Error('buyerEmail é obrigatório')
         if (typeof p.refundAmount !== 'number') throw new Error('refundAmount é obrigatório')
         const tpl = buildAudienceRefundBuyer(p)
+        to = p.buyerEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        replyTo = p.produtorEmail
+        break
+      }
+      case 'audience_ticket_transferred_from':
+      case 'audience_ticket_transferred_to': {
+        const p = payload as unknown as AudienceTicketTransferPayload
+        if (!p.toEmail) throw new Error('toEmail é obrigatório')
+        const tpl = type === 'audience_ticket_transferred_from'
+          ? buildAudienceTicketTransferredFrom(p)
+          : buildAudienceTicketTransferredTo(p)
+        to = p.toEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        replyTo = p.produtorEmail
+        break
+      }
+      case 'audience_session_credit': {
+        const p = payload as unknown as AudienceSessionCreditPayload
+        if (!p.buyerEmail) throw new Error('buyerEmail é obrigatório')
+        if (!p.codigo || typeof p.valor !== 'number') throw new Error('codigo e valor são obrigatórios')
+        const tpl = buildAudienceSessionCredit(p)
+        to = p.buyerEmail
+        subject = tpl.subject
+        html = tpl.html
+        festivalName = p.eventoNome
+        replyTo = p.produtorEmail
+        break
+      }
+      case 'audience_session_changed': {
+        const p = payload as unknown as AudienceSessionChangedPayload
+        if (!p.buyerEmail) throw new Error('buyerEmail é obrigatório')
+        if (!['adiada', 'cancelada', 'agendada'].includes(p.status)) throw new Error('status inválido')
+        const tpl = buildAudienceSessionChanged(p)
         to = p.buyerEmail
         subject = tpl.subject
         html = tpl.html

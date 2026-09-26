@@ -103,7 +103,13 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
         // Cache miss inicial é silencioso (produtor pode não ter Asaas conectado).
         // Refresh manual sinaliza o erro.
         if (withAsaas === 'force') {
-          const reason = asaasData?.message ?? asaasData?.reason ?? asaasErr?.message ?? 'erro_desconhecido';
+          // Em non-2xx o supabase-js devolve data=null e uma mensagem genérica;
+          // o motivo real está no corpo da Response em error.context.
+          let body: any = null;
+          try { body = await asaasErr?.context?.json?.(); } catch { /* corpo não-JSON */ }
+          const reason = asaasData?.message ?? body?.message
+            ?? (body?.reason === 'asaas_fetch_failed' ? `Asaas respondeu HTTP ${body.http_status ?? '?'}` : body?.reason)
+            ?? asaasData?.reason ?? asaasErr?.message ?? 'erro_desconhecido';
           setFeedback({ kind: 'err', msg: `Não foi possível consultar o Asaas: ${reason}` });
         }
       } else {

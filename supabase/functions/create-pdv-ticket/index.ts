@@ -150,12 +150,13 @@ Deno.serve(async (req) => {
         id, name, created_by, ingressos_config,
         audience_commission_percent, audience_fee_mode,
         audience_max_per_cpf, audience_max_per_purchase, audience_sales_enabled,
-        politica_ingressos, seat_map_enabled, payment_sandbox
+        politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status
       `)
       .eq('id', event_id)
       .single()
     if (!event || evErr) throw new Error('Evento não encontrado')
     if (await planFeeSalesBlocked(supabase, event_id)) throw new Error(SALES_NOT_OPEN_MESSAGE)
+    if ((event as any).sessao_status === 'cancelada') throw new Error('Esta sessão foi cancelada pelo organizador. As vendas estão encerradas.')
     if (!event.audience_sales_enabled) throw new Error('Venda de ingressos não está ativa para este evento')
     if (event.politica_ingressos !== 'INTERNO') throw new Error('Este evento não vende ingressos pela plataforma')
 

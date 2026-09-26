@@ -167,13 +167,22 @@ const CheckIn = () => {
     }
 
     // 2) Ingresso plateia (audience_tickets.id)
-    const { data: ticket } = canScan('INGRESSO')
-      ? await supabase
-          .from('audience_tickets')
-          .select('id, event_id, ticket_type_nome, ticket_type_kind, buyer_name, status_pagamento, check_in_status, check_in_at, seat_id')
-          .eq('id', id)
-          .maybeSingle()
-      : { data: null };
+    // O QR do ingresso é o id — ou, depois de uma transferência de titularidade, o qr_code novo.
+    // O id de um ingresso transferido deixa de valer (o titular anterior ainda tem esse QR salvo).
+    const TICKET_COLS = 'id, event_id, ticket_type_nome, ticket_type_kind, buyer_name, status_pagamento, check_in_status, check_in_at, seat_id, qr_code';
+    let ticket: any = null;
+    if (canScan('INGRESSO')) {
+      const { data: byId } = await supabase.from('audience_tickets').select(TICKET_COLS).eq('id', id).maybeSingle();
+      if (byId?.qr_code) {
+        setScanResult({ type: 'error', message: 'QR desatualizado: este ingresso foi transferido para outro titular. Peça o QR novo.', name: byId.buyer_name, kind: 'INGRESSO' });
+        return;
+      }
+      ticket = byId;
+      if (!ticket) {
+        const { data: byQr } = await supabase.from('audience_tickets').select(TICKET_COLS).eq('qr_code', id).maybeSingle();
+        ticket = byQr;
+      }
+    }
     if (ticket) {
       if (ticket.check_in_status === 'OK') {
         const t = ticket.check_in_at ? formatTime(ticket.check_in_at) : '';
@@ -192,7 +201,7 @@ const CheckIn = () => {
       const { data: updated, error: upErr } = await supabase
         .from('audience_tickets')
         .update({ check_in_status: 'OK', check_in_at: now, check_in_by: user?.id ?? null })
-        .eq('id', id)
+        .eq('id', ticket.id)
         .eq('check_in_status', 'PENDENTE')
         .select('id');
       if (upErr) {
@@ -206,7 +215,7 @@ const CheckIn = () => {
         const { data: recheck } = await supabase
           .from('audience_tickets')
           .select('check_in_status, check_in_at')
-          .eq('id', id)
+          .eq('id', ticket.id)
           .maybeSingle();
         if (recheck?.check_in_status === 'OK') {
           const t = recheck.check_in_at ? formatTime(recheck.check_in_at) : '';

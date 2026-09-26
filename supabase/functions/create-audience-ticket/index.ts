@@ -132,7 +132,9 @@ Deno.serve(async (req) => {
       coupon_code,
       seat_ids: seatIdsRaw,
       hold_token: holdTokenRaw,
+      quote_id: quoteIdRaw,
     } = body as {
+      quote_id?: string
       hold_token?: string
       event_id?: string
       ticket_type_idx?: number
@@ -200,7 +202,7 @@ Deno.serve(async (req) => {
         id, name, created_by, ingressos_config, start_date, end_date,
         audience_commission_percent, audience_fee_mode,
         audience_max_per_cpf, audience_max_per_purchase, audience_sales_enabled,
-        audience_reservation_minutes, politica_ingressos, seat_map_enabled, payment_sandbox
+        audience_reservation_minutes, politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status
       `)
       .eq('id', event_id)
       .single()
@@ -211,6 +213,7 @@ Deno.serve(async (req) => {
     const asaasEnv = await loadAsaasEnvForEvent(supabase, event, 'create-audience-ticket')
     const ASAAS_API_KEY  = asaasEnv.apiKey
     const ASAAS_BASE_URL = asaasEnv.baseUrl
+    if ((event as any).sessao_status === 'cancelada') throw new Error('Esta sessão foi cancelada pelo organizador. As vendas estão encerradas.')
     if (!event.audience_sales_enabled) {
       throw new Error('Venda de ingressos não está ativa para este evento')
     }
@@ -231,6 +234,35 @@ Deno.serve(async (req) => {
 
     const ingressos: any[] = Array.isArray(event.ingressos_config) ? event.ingressos_config : []
 
+    // ── Cotação travada (Decreto 13.108): preço, taxa e modo gravados no checkout ─
+    // Com quote_id válido a compra honra esses valores mesmo se o lote virou ou o
+    // produtor editou o ingresso. Vencida (além de 60s de tolerância pro relógio
+    // do aparelho) → erro com quote_expired: o checkout recota e mostra o novo
+    // preço ANTES de o comprador pagar. Sem quote_id (PWA antigo) = cálculo ao vivo.
+    let quotePrices: Record<string, { preco: number; lote: string | null }> | null = null
+    let quoteCommission: number | null = null
+    let quoteFeeMode: string | null = null
+    if (quoteIdRaw) {
+      const { data: quote } = await supabase
+        .from('audience_price_quotes')
+        .select('event_id, prices, commission_percent, fee_mode, expires_at')
+        .eq('id', quoteIdRaw)
+        .maybeSingle()
+      if (!quote || quote.event_id !== event_id) {
+        const err: any = new Error('Cotação inválida. Atualize a página e confira os valores.')
+        err.quote_expired = true
+        throw err
+      }
+      if (new Date(quote.expires_at).getTime() + 60_000 < Date.now()) {
+        const err: any = new Error('O tempo da sua cotação acabou. Atualizamos os valores; confira antes de pagar.')
+        err.quote_expired = true
+        throw err
+      }
+      quotePrices = quote.prices as Record<string, { preco: number; lote: string | null }>
+      quoteCommission = Number(quote.commission_percent)
+      quoteFeeMode = String(quote.fee_mode)
+    }
+
     // ── Resolve cada item (preço/kind/estoque) ───────────────────────────────
     type ResolvedItem = {
       idx: number
@@ -247,7 +279,8 @@ Deno.serve(async (req) => {
     for (const [idx, quantity] of mergedQty.entries()) {
       const t = ingressos[idx]
       if (!t?.nome) throw new Error('Tipo de ingresso inválido')
-      const precoUnit = resolvePreco(t)
+      // Tipo fora da cotação (criado depois) cai no preço ao vivo.
+      const precoUnit = quotePrices?.[String(idx)]?.preco ?? resolvePreco(t)
       if (precoUnit <= 0) throw new Error(`Preço inválido para "${t.nome}"`)
       const seatKind = ticketSeatKind(t)
       // PCD/acompanhante ficam fora do limite de 1 meia por carrinho (base legal própria).
@@ -336,8 +369,8 @@ Deno.serve(async (req) => {
     // ── Calcula valores por tipo (distribui desconto + comissão + split) ─────
     // Matemática extraída pra _shared/audience-pricing (A19) — mesma fonte que
     // o breakdown do CheckoutIngresso deve replicar. Testada em tests/.
-    const commissionPercent = Number(event.audience_commission_percent ?? 10)
-    const feeMode           = (event as any).audience_fee_mode ?? 'repassar'
+    const commissionPercent = quoteCommission ?? Number(event.audience_commission_percent ?? 10)
+    const feeMode           = quoteFeeMode ?? (event as any).audience_fee_mode ?? 'repassar'
 
     const pricing = computeAudienceCart({
       resolved: resolved.map(r => ({
@@ -657,7 +690,10 @@ Deno.serve(async (req) => {
     }, 201)
   } catch (error: any) {
     console.error('[create-audience-ticket] erro:', error.message)
-    const extra = error.occupied_seats ? { occupied_seats: error.occupied_seats } : {}
+    const extra = {
+      ...(error.occupied_seats ? { occupied_seats: error.occupied_seats } : {}),
+      ...(error.quote_expired ? { quote_expired: true } : {}),
+    }
     return json({ error: error.message, ...extra }, 400)
   }
 })

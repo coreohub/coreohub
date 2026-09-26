@@ -25,6 +25,8 @@ import {
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
+import MeiaEntradaInfo from '../components/MeiaEntradaInfo';
+import SessionStatusBanner from '../components/SessionStatusBanner';
 import SeatGrid from '../components/SeatGrid';
 import SeatLegend from '../components/SeatLegend';
 import { useSeatMap } from '../hooks/useSeatMap';
@@ -134,6 +136,21 @@ export default function CheckoutIngresso() {
   const heldSeatsRef = useRef<string[]>([]);   // último conjunto que o servidor confirmou
   const holdVersionRef = useRef(0);
 
+  // Cotação travada (Decreto 13.108): preço/taxa gravados por ~15 min no servidor.
+  // null = função indisponível → cai no cálculo ao vivo (comportamento antigo).
+  type PriceQuote = {
+    id: string;
+    prices: Record<string, { preco: number; lote: string | null }>;
+    commission: number;
+    feeMode: string;
+    expiresAt: number;
+  };
+  const [quote, setQuote] = useState<PriceQuote | null>(null);
+  const [quoteNotice, setQuoteNotice] = useState<string | null>(null);
+  const quoteRef = useRef<PriceQuote | null>(null);
+  quoteRef.current = quote;
+  const quoteFetchingRef = useRef(false);
+
   // Estoque por idx + cupom
   const [stockByIdx, setStockByIdx] = useState<Record<string, { remaining: number | null; sold_out: boolean }>>({});
   const [couponInput, setCouponInput] = useState('');
@@ -152,7 +169,7 @@ export default function CheckoutIngresso() {
         const filterCol = isUuid ? 'id' : 'slug';
         const { data: ev, error: evErr } = await supabase
           .from('events')
-          .select('id, name, slug, start_date, end_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos, seat_map_enabled, payment_sandbox')
+          .select('id, name, slug, start_date, end_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status, sessao_motivo, sessao_data_original, sessao_hora_original')
           .eq(filterCol, idOrSlug)
           .maybeSingle();
         if (evErr || !ev) { setError('Evento não encontrado.'); return; }
@@ -163,6 +180,10 @@ export default function CheckoutIngresso() {
         // Fix 2026-06-28: checava `event_date`, coluna legada sempre NULL nos
         // eventos reais — esse bloqueio nunca disparava. Fonte real é
         // start_date/end_date (preenchidas pelo painel).
+        if (ev.sessao_status === 'cancelada') {
+          setError('Esta sessão foi cancelada pelo organizador. As vendas estão encerradas.');
+          return;
+        }
         if (isEventOver(ev)) {
           setError('Este evento já aconteceu. Vendas de ingressos encerradas.');
           return;
@@ -184,6 +205,64 @@ export default function CheckoutIngresso() {
     })();
   }, [idOrSlug]);
 
+  // ─── Cotação de preço: pega ao entrar, renova só depois de vencer ─────────
+  const fetchQuote = async (notify: boolean) => {
+    if (!event?.id || quoteFetchingRef.current) return;
+    quoteFetchingRef.current = true;
+    try {
+      const key = `coreohub:price-quote:${event.id}`;
+      let prevId: string | null = null;
+      try { prevId = sessionStorage.getItem(key); } catch { /* sem sessionStorage */ }
+      const { data, error: quoteErr } = await supabase.functions.invoke('quote-audience-ticket', {
+        body: { event_id: event.id, quote_id: prevId ?? undefined },
+      });
+      if (quoteErr || !data?.quote_id) {
+        console.warn('[CheckoutIngresso] cotação indisponível, usando preço ao vivo:', quoteErr?.message ?? data?.error);
+        setQuote(null);
+        return;
+      }
+      try { sessionStorage.setItem(key, data.quote_id); } catch { /* segue só em memória */ }
+      const now = Date.now();
+      setNowMs(now);
+      const next: PriceQuote = {
+        id: data.quote_id,
+        prices: data.prices ?? {},
+        commission: Number(data.commission_percent ?? 10),
+        feeMode: String(data.fee_mode ?? 'repassar'),
+        expiresAt: now + Number(data.seconds_left ?? 0) * 1000,
+      };
+      const prev = quoteRef.current;
+      if (notify && data.renewed && prev) {
+        const changed = Object.keys(cart).some(k => (prev.prices[k]?.preco ?? 0) !== (next.prices[k]?.preco ?? 0))
+          || prev.commission !== next.commission || prev.feeMode !== next.feeMode;
+        setQuoteNotice(changed
+          ? 'O tempo da cotação acabou e os valores foram atualizados. Confira o novo total antes de pagar.'
+          : 'O tempo da cotação acabou e foi renovado. Os valores continuam os mesmos.');
+      }
+      setQuote(next);
+    } finally {
+      quoteFetchingRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    if (!event?.id) return;
+    void fetchQuote(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [event?.id]);
+
+  // Relógio da cotação: 1 tick/s enquanto vale; vencida = pede uma nova.
+  useEffect(() => {
+    if (!quote) return;
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [quote?.id]);
+  useEffect(() => {
+    if (quote && nowMs >= quote.expiresAt) void fetchQuote(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nowMs, quote?.expiresAt]);
+  const quoteRemainingSec = quote ? Math.max(0, Math.ceil((quote.expiresAt - nowMs) / 1000)) : null;
+
   // ─── Linhas do carrinho (resolve preço vigente + kind + estoque) ──────────
   const lines = useMemo<LineItem[]>(() => {
     if (!event) return [];
@@ -196,7 +275,8 @@ export default function CheckoutIngresso() {
         if (!t?.nome || qty <= 0) return null;
         const lotes: Lote[] = Array.isArray(t.lotes) ? t.lotes : [];
         const r = resolveLote(lotes, today);
-        const precoUnit = r ? Number(r.lote.preco ?? 0) : Number(t.preco ?? 0);
+        const quoted = quote?.prices[String(idx)];
+        const precoUnit = quoted ? quoted.preco : (r ? Number(r.lote.preco ?? 0) : Number(t.preco ?? 0));
         const quantidadeTotal = t.quantidade_total != null && Number(t.quantidade_total) > 0
           ? Number(t.quantidade_total) : null;
         return {
@@ -205,14 +285,14 @@ export default function CheckoutIngresso() {
           kind: detectKind(t.nome),
           precoUnit,
           qty,
-          loteNome: (r?.lote as any)?.nome ?? null,
+          loteNome: quoted ? quoted.lote : ((r?.lote as any)?.nome ?? null),
           quantidadeTotal,
           seatKind: ticketSeatKind(t),
         } as LineItem;
       })
       .filter(Boolean)
       .sort((a, b) => a!.idx - b!.idx) as LineItem[];
-  }, [event, cart]);
+  }, [event, cart, quote]);
 
   const maxPurchase = Math.max(1, Math.min(
     Number(event?.audience_max_per_purchase ?? 6),
@@ -494,7 +574,7 @@ export default function CheckoutIngresso() {
   // bater centavo-a-centavo com a cobrança gerada. Fonte única em _shared. ───
   const breakdown = useMemo(() => {
     if (!event || lines.length === 0) return null;
-    const feeMode = event.audience_fee_mode ?? 'repassar';
+    const feeMode = quote?.feeMode ?? event.audience_fee_mode ?? 'repassar';
     try {
       const r = computeAudienceCart({
         resolved: lines.map(l => ({
@@ -503,7 +583,7 @@ export default function CheckoutIngresso() {
         })),
         totalBase,
         discountTotal: Math.min(couponDiscount, totalBase),
-        commissionPercent: Number(event.audience_commission_percent ?? 10),
+        commissionPercent: quote?.commission ?? Number(event.audience_commission_percent ?? 10),
         feeMode,
       });
       return {
@@ -518,7 +598,7 @@ export default function CheckoutIngresso() {
       // A validação de cupom já previne; aqui é só defesa em profundidade.
       return null;
     }
-  }, [event, lines, totalBase, couponDiscount]);
+  }, [event, lines, totalBase, couponDiscount, quote]);
 
   // ─── Submit ────────────────────────────────────────────────────────────────
   const anySoldOut = lines.some(l => stockByIdx[String(l.idx)]?.sold_out === true);
@@ -545,11 +625,13 @@ export default function CheckoutIngresso() {
             phone: phone.replace(/\D/g, '') || undefined,
           },
           coupon_code: appliedCouponCode ?? undefined,
+          quote_id: quote?.id,
           ...(seatMapEnabled ? { seat_ids: selectedSeats, hold_token: holdToken ?? undefined } : {}),
         },
       });
       if (invokeErr) {
         const body = await edgeErrorBody(invokeErr);
+        if (body?.quote_expired) void fetchQuote(true);
         if (Array.isArray(body?.occupied_seats) && body.occupied_seats.length > 0) {
           setSelectedSeats(prev => prev.filter(id => !body.occupied_seats.includes(id)));
           markSeatsOccupied(body.occupied_seats);
@@ -636,10 +718,37 @@ export default function CheckoutIngresso() {
           <ArrowLeft size={14} /> Voltar pro evento
         </button>
 
+        {event.sessao_status === 'adiada' && (
+          <SessionStatusBanner {...event} dataAtual={event.start_date} horaAtual={event.event_time} context="checkout" className="mb-4" />
+        )}
+
         <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter mb-1">
           Seu carrinho
         </h1>
         <p className="text-sm text-slate-400 mb-6">{event.name}</p>
+
+        {/* Cotação travada: preço e taxa garantidos durante a reserva */}
+        {quoteRemainingSec != null && (
+          <p
+            role="timer"
+            aria-live="off"
+            className={`mb-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[11px] font-black tabular-nums ${
+              quoteRemainingSec <= 60 ? 'bg-rose-500/10 border-rose-500/30 text-rose-300' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+            }`}
+          >
+            <Clock size={12} aria-hidden="true" />
+            Preço e taxa garantidos por {String(Math.floor(quoteRemainingSec / 60)).padStart(2, '0')}:{String(quoteRemainingSec % 60).padStart(2, '0')}
+          </p>
+        )}
+        {quoteNotice && (
+          <div role="alert" aria-live="polite" className="mb-4 flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200">
+            <AlertCircle size={14} className="shrink-0 mt-0.5" />
+            <span className="flex-1">{quoteNotice}</span>
+            <button type="button" aria-label="Fechar aviso" onClick={() => setQuoteNotice(null)} className="text-amber-300/70 hover:text-amber-200 cursor-pointer">
+              <X size={14} />
+            </button>
+          </div>
+        )}
 
         {/* Resumo editável do carrinho */}
         <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4 space-y-3">
@@ -696,6 +805,11 @@ export default function CheckoutIngresso() {
               <span><strong>Lei 12.933:</strong> meia-entrada é nominativa e limitada a 1 por CPF. Apresente o documento que comprove o benefício na entrada.</span>
             </p>
           )}
+        </div>
+
+        {/* Totais de meia-entrada + texto da Lei 12.933 (Decreto 8.537 art. 11: todo ponto de venda virtual) */}
+        <div className="mb-4">
+          <MeiaEntradaInfo eventId={event.id} ingressos={Array.isArray(event.ingressos_config) ? event.ingressos_config : []} seatMapEnabled={seatMapEnabled} />
         </div>
 
         {/* Cupom de desconto */}
@@ -883,7 +997,7 @@ export default function CheckoutIngresso() {
         )}
 
         <div className="mb-4">
-          <CheckoutLegalNotice accepted={refundAccepted} onAcceptedChange={setRefundAccepted} theme="dark" />
+          <CheckoutLegalNotice accepted={refundAccepted} onAcceptedChange={setRefundAccepted} theme="dark" variant="ingresso" />
         </div>
 
         <button
