@@ -4,6 +4,11 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-26 — Canal de arrependimento do ingresso (art. 16 do Decreto 13.108) ✅ (dev; edge function em produção)
+
+- Edge `request-withdrawal` + painel "Desistir da compra" em `MeuIngresso`: 7 dias corridos do pagamento e até o início do evento (sem o corte de 48 h, decisão do produtor), pedido inteiro, devolução integral com taxa. Bloqueia pedido com ingresso transferido ou check-in. A Asaas não devolve as taxas dela no estorno (Pix sem taxa de estorno, boleto R$ 5): custo absorvido pela CoreoHub, o comprador recebe tudo de volta.
+- Sandbox 17/17 (estorno real R$ 43,16, prazo vencido, evento iniciado, transferido, check-in, mobile 375 sem overflow). Falta merge para a main.
+
 ### 2026-09-25 (continuação 14) — Fase 5 (ingressos) EM PRODUÇÃO: merge dev → main `cbc806d` ✅
 
 - Merge da Fase 5 inteira (cotação travada, meia-entrada e política, cancelar/adiar sessão, crédito com saldo, transferência de titularidade, relatório de meia, exportação sem PII, guarda de 2 anos) na `main`. Conflitos: `MeuIngresso.tsx` (ficou a versão da `dev`) e `docs/HISTORICO.md`. Lint, 162 testes e build ok antes do push.
