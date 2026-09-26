@@ -33,6 +33,17 @@ import { TERMO_PRODUTOR_VERSION } from '../utils/termoVersion';
 // painel após o prazo, multa de 2% e juros de 1% ao mês por atraso, exclusão
 // do evento após 60 dias sem pagamento e taxa não reembolsável (exceto
 // desistência em 7 dias sem publicação nem venda).
+// 1.6 → 1.7 (2026-09-26): adiciona as cláusulas 4-ter (venda de ingressos ao
+// público, Decreto 13.108/2026), 4-quater (cancelamento, adiamento ou alteração
+// relevante: devolução ao comprador com taxas, reembolso pelo Produtor, extrato,
+// contestação em 5 dias), 4-quinquies (reposição de saldo em 10 dias, suspensão
+// de vendas, correção, juros e multa), 4-sexies (relatório de meia-entrada e
+// guarda de dados) e 4-septies (arrependimento do comprador). Multa e juros do
+// débito de reposição só valem para quem aceitou a versão 1.7 ou posterior.
+// Renumeração da v1.7 (numeração sequencial, como nos termos das plataformas brasileiras):
+// as cláusulas citadas nos comentários acima usam a numeração ANTIGA. Correspondência
+// antiga → nova: 4-bis→5, 4-ter→6, 4-quater→7, 4-quinquies→8, 4-sexies→9, 4-septies→10,
+// 5→11, 6→12, 7→13, 8→14, 9→15, 10→16 (10.1→16.1), 11→17, 12→18. As cláusulas 1 a 4 não mudam.
 export { TERMO_PRODUTOR_VERSION };
 
 const TermoProdutor: React.FC = () => {
@@ -179,46 +190,151 @@ const TermoProdutor: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">4-bis. Planos com taxa fixa (Essencial e Escala)</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">5. Planos com taxa fixa (Essencial e Escala)</h2>
             <p className="mb-2">
-              4-bis.1. Nos planos <strong>Essencial</strong> e <strong>Escala</strong>, além da comissão prevista na cláusula 4, o Produtor paga à CoreoHub
+              5.1. Nos planos <strong>Essencial</strong> e <strong>Escala</strong>, além da comissão prevista na cláusula 4, o Produtor paga à CoreoHub
               uma <strong>taxa fixa única de ativação por evento</strong>, no valor informado na tela de escolha do plano (na data desta versão,
-              R$ 250,00 no Essencial e R$ 1.490,00 no Escala). Essa taxa não se confunde com as taxas do parceiro financeiro descritas na cláusula 5.
+              R$ 250,00 no Essencial e R$ 1.490,00 no Escala). Essa taxa não se confunde com as taxas do parceiro financeiro descritas na cláusula 11.
             </p>
             <p className="mb-2">
-              4-bis.2. A taxa é cobrada por fatura (Pix, boleto ou cartão) gerada no momento em que o Produtor escolhe o plano, com{' '}
+              5.2. A taxa é cobrada por fatura (Pix, boleto ou cartão) gerada no momento em que o Produtor escolhe o plano, com{' '}
               <strong>vencimento em 7 (sete) dias corridos</strong>. Durante esse prazo o Produtor pode configurar o evento normalmente.
             </p>
             <p className="mb-2">
-              4-bis.3. Enquanto a taxa não estiver paga, a CoreoHub poderá manter indisponíveis as vendas e inscrições pagas do evento.
+              5.3. Enquanto a taxa não estiver paga, a CoreoHub poderá manter indisponíveis as vendas e inscrições pagas do evento.
             </p>
             <p className="mb-2">
-              4-bis.4. Vencido o prazo sem o pagamento, o acesso ao painel do evento fica bloqueado até a confirmação do pagamento. O Produtor pode pagar a
+              5.4. Vencido o prazo sem o pagamento, o acesso ao painel do evento fica bloqueado até a confirmação do pagamento. O Produtor pode pagar a
               qualquer momento pelo botão "Pagar agora"; se a fatura original estiver vencida, será gerada outra, pelo mesmo valor, sem custo adicional.
             </p>
             <p className="mb-2">
-              4-bis.5. Em caso de pagamento após o vencimento, incidem <strong>multa de 2% (dois por cento)</strong> sobre o valor da fatura e{' '}
+              5.5. Em caso de pagamento após o vencimento, incidem <strong>multa de 2% (dois por cento)</strong> sobre o valor da fatura e{' '}
               <strong>juros de mora de 1% (um por cento) ao mês</strong>, calculados <em>pro rata die</em> até a data do pagamento.
             </p>
             <p className="mb-2">
-              4-bis.6. Se a taxa não for paga, o evento permanece bloqueado a partir do vencimento e, passados <strong>60 (sessenta) dias do vencimento</strong> sem
+              5.6. Se a taxa não for paga, o evento permanece bloqueado a partir do vencimento e, passados <strong>60 (sessenta) dias do vencimento</strong> sem
               pagamento, poderá ser excluído da Plataforma, mediante aviso prévio por e-mail ao Produtor. A qualquer momento antes da exclusão, o pagamento da
               fatura restabelece o acesso. Eventos que já tenham inscrições pagas ou ingressos vendidos não são excluídos por esse motivo.
             </p>
             <p>
-              4-bis.7. A taxa fixa é <strong>não reembolsável</strong>, pois remunera a ativação do plano e a configuração do evento na Plataforma, exceto se o
+              5.7. A taxa fixa é <strong>não reembolsável</strong>, pois remunera a ativação do plano e a configuração do evento na Plataforma, exceto se o
               Produtor solicitar o cancelamento por escrito em até <strong>7 (sete) dias corridos</strong> do pagamento e o evento ainda não tiver sido publicado
               nem registrado qualquer venda ou inscrição, caso em que o valor pago é devolvido integralmente.
             </p>
           </section>
 
           <section>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">5. Taxas bancárias do parceiro financeiro Asaas</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">6. Venda de ingressos ao público (Decreto nº 13.108/2026)</h2>
             <p className="mb-2">
-              5.1. Para o processamento de pagamentos, será aberta conta digital exclusiva em nome do Produtor no <strong>ASAAS GESTÃO FINANCEIRA S.A.</strong> (CNPJ 19.540.550/0001-21), instituição financeira autorizada pelo Banco Central, parceira financeira da CoreoHub, mediante completude do procedimento de identificação (KYC).
+              6.1. Nas vendas de ingressos feitas pela Plataforma, o Produtor reconhece que a CoreoHub atua como comercializadora primária e cumpre, no
+              ambiente de venda, as regras do Decreto nº 13.108/2026: preço e taxa de serviço discriminados desde a oferta; reserva temporária de lugares com
+              preço e taxa travados; informação dos totais e da quantidade de meia-entrada; transferência gratuita de titularidade; canal de arrependimento.
             </p>
             <p className="mb-2">
-              5.2. O Produtor declara estar ciente e de acordo que, sobre a abertura e utilização de sua conta digital, incidirão taxas <strong>cobradas exclusivamente pelo Asaas</strong> e <strong>não pela CoreoHub</strong>, conforme abaixo:
+              6.2. O Produtor define corretamente cada tipo de ingresso. Meia-entrada é a prevista em lei (estudante, pessoa com deficiência e acompanhante,
+              jovem de baixa renda, idoso). Cupom, convênio, ingresso solidário e lote promocional são "promocionais" e devem ser marcados como tal no cadastro,
+              porque não entram na cota de 40% da meia-entrada.
+            </p>
+            <p>
+              6.3. O Produtor confere, na portaria, o documento que comprova o direito à meia-entrada e cobra a diferença de quem não comprovar. Se o
+              ingresso for transferido, a comprovação passa a ser exigida do novo titular.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-sm font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-2">
+              <AlertTriangle size={14} /> 7. Cancelamento, adiamento ou alteração relevante do evento
+            </h2>
+            <p className="mb-2">
+              7.1. Se o Produtor cancelar, adiar ou alterar de forma relevante o evento ou a sessão (data, horário, local, atração principal ou formato,
+              ou outra mudança que reduza o que foi anunciado na compra), deve registrar a mudança na Plataforma, que avisará os compradores. O comprador escolhe
+              entre manter o ingresso na nova data, receber crédito ou ser reembolsado. A CoreoHub devolve ao comprador <strong>o valor total pago, incluindo a
+              taxa de serviço</strong>, como a lei exige (arts. 20 a 22 do Decreto nº 13.108/2026).
+            </p>
+            <p className="mb-2">
+              7.2. O Produtor reembolsa a CoreoHub por tudo que ela devolver ao comprador por esse motivo, inclusive valores que o Produtor já recebeu e o{' '}
+              <strong>custo de processamento do pagamento que o parceiro financeiro não devolver</strong>, com o valor de cada custo demonstrado. A CoreoHub não
+              cobra multa por isso.
+            </p>
+            <p className="mb-2">
+              7.3. O Produtor <strong>autoriza expressamente</strong> a CoreoHub a descontar esse valor, nesta ordem: (a) do saldo da sua conta na
+              Plataforma; (b) dos repasses futuros do mesmo evento.
+            </p>
+            <p className="mb-2">
+              7.4. Antes do desconto ou da cobrança, a CoreoHub envia por e-mail o <strong>extrato</strong> com cada ingresso devolvido, o valor e o
+              motivo. O Produtor pode <strong>contestar por escrito em até 5 (cinco) dias</strong>; enquanto a contestação é analisada, o valor contestado não é
+              cobrado, salvo o que já foi devolvido ao comprador.
+            </p>
+            <p>
+              7.5. Depois do desconto ou do pagamento, a CoreoHub presta contas por e-mail e devolve qualquer excesso.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-sm font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-2">
+              <AlertTriangle size={14} /> 8. Reposição de saldo
+            </h2>
+            <p className="mb-2">
+              8.1. Se, ao devolver dinheiro ao comprador por causa do evento do Produtor, o saldo da conta dele não for suficiente, a CoreoHub avisa por
+              e-mail com o extrato do valor devido.
+            </p>
+            <p className="mb-2">
+              8.2. O Produtor repõe o valor em até <strong>10 (dez) dias corridos</strong> do aviso, por PIX ou boleto gerado pela CoreoHub.
+            </p>
+            <p className="mb-2">
+              8.3. <strong>Desde o aviso</strong>, a CoreoHub pode suspender novas vendas e novos eventos e reter os repasses futuros até o valor ser
+              coberto. Isso não gera multa. A suspensão das vendas se aplica quando o prazo de reposição vence sem pagamento e sem contestação em análise.
+            </p>
+            <p className="mb-2">
+              8.4. Vencido o prazo sem pagamento, o valor tem <strong>correção pelo IPCA, juros de 1% (um por cento) ao mês e multa de 2% (dois por
+              cento)</strong>, contados do vencimento.
+            </p>
+            <p>
+              8.5. Depois de aviso por escrito com prazo adicional de 10 (dez) dias, a CoreoHub pode cobrar por meios extrajudiciais e judiciais.
+              Pela parceria financeira, a CoreoHub responde perante a Asaas pelo saldo negativo das subcontas dos Produtores, o que justifica o prazo curto.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">9. Relatório de meia-entrada e guarda de dados</h2>
+            <p className="mb-2">
+              9.1. Encerrado o evento, a Plataforma publica automaticamente, na página do evento, o relatório da venda com o total de ingressos vendidos,
+              a quantidade e o percentual de meia-entrada, sem dados pessoais. O Produtor autoriza essa publicação, que também atende ao dever de manter o
+              relatório da venda (Decreto nº 8.537/2015, art. 12).
+            </p>
+            <p className="mb-2">
+              9.2. A CoreoHub guarda por, no mínimo, dois anos os dados desagregados de venda (por categoria e transação, sem dados pessoais) e o
+              histórico de transferência de titularidade de cada ingresso, e pode disponibilizá-los aos órgãos do Sistema Nacional de Defesa do Consumidor
+              mediante requisição fundamentada. O Produtor pode exportar os dados desagregados do seu evento pelo painel.
+            </p>
+            <p className="mb-2">
+              9.3. Os dados pessoais de compras e transferências são guardados por até <strong>5 (cinco) anos</strong> com acesso restrito (obrigação
+              legal e defesa em reclamações e processos) e, depois, anonimizados; o IP registrado na transferência é guardado por <strong>6 (seis) meses</strong>.
+            </p>
+            <p>
+              9.4. Ingressos com venda concluída não são excluídos antes desse prazo, ainda que o Produtor peça a exclusão do evento.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">10. Arrependimento do comprador</h2>
+            <p className="mb-2">
+              10.1. O comprador pode desistir da compra em até 7 (sete) dias corridos do pagamento e até o início do evento, com devolução integral,
+              incluindo a taxa de serviço (CDC, art. 49; Decreto nº 13.108/2026, art. 16). A CoreoHub processa a devolução pela Plataforma.
+            </p>
+            <p>
+              10.2. O valor devolvido é descontado do repasse do Produtor. Como o prazo de arrependimento coincide com a janela de retenção de 7 dias dos
+              repasses (cláusula 12), em regra o valor ainda está retido e não gera saldo negativo.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">11. Taxas bancárias do parceiro financeiro Asaas</h2>
+            <p className="mb-2">
+              11.1. Para o processamento de pagamentos, será aberta conta digital exclusiva em nome do Produtor no <strong>ASAAS GESTÃO FINANCEIRA S.A.</strong> (CNPJ 19.540.550/0001-21), instituição financeira autorizada pelo Banco Central, parceira financeira da CoreoHub, mediante completude do procedimento de identificação (KYC).
+            </p>
+            <p className="mb-2">
+              11.2. O Produtor declara estar ciente e de acordo que, sobre a abertura e utilização de sua conta digital, incidirão taxas <strong>cobradas exclusivamente pelo Asaas</strong> e <strong>não pela CoreoHub</strong>, conforme abaixo:
             </p>
             <ul className="list-disc list-inside space-y-1.5 ml-2 mb-2">
               <li>
@@ -229,39 +345,39 @@ const TermoProdutor: React.FC = () => {
               </li>
             </ul>
             <p className="mb-2">
-              5.3. A CoreoHub <strong>não cobra</strong> do Produtor taxas adicionais de processamento de pagamento (PIX, boleto, cartão) — tais custos são absorvidos pela CoreoHub como parte do serviço da Plataforma. A comissão devida à CoreoHub, regida pela cláusula 4, é cobrada exclusivamente como serviço da Plataforma e independe das taxas bancárias do Asaas.
+              11.3. A CoreoHub <strong>não cobra</strong> do Produtor taxas adicionais de processamento de pagamento (PIX, boleto, cartão) — tais custos são absorvidos pela CoreoHub como parte do serviço da Plataforma. A comissão devida à CoreoHub, regida pela cláusula 4, é cobrada exclusivamente como serviço da Plataforma e independe das taxas bancárias do Asaas.
             </p>
             <p>
-              5.4. As taxas do Asaas podem ser reajustadas pela instituição financeira mediante prévio aviso aos seus correntistas. A CoreoHub se compromete a comunicar reajustes assim que tomar ciência, mas não tem ingerência sobre tais valores nem responsabilidade por seu reajuste.
+              11.4. As taxas do Asaas podem ser reajustadas pela instituição financeira mediante prévio aviso aos seus correntistas. A CoreoHub se compromete a comunicar reajustes assim que tomar ciência, mas não tem ingerência sobre tais valores nem responsabilidade por seu reajuste.
             </p>
           </section>
 
           <section>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">6. Prazo de liberação dos repasses (janela D+7)</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">12. Prazo de liberação dos repasses (janela D+7)</h2>
             <p className="mb-2">
-              6.1. Os valores líquidos devidos ao Produtor (resultado do pagamento aprovado, líquido da comissão da Plataforma e taxas Asaas)
+              12.1. Os valores líquidos devidos ao Produtor (resultado do pagamento aprovado, líquido da comissão da Plataforma e taxas Asaas)
               permanecem retidos na subconta Asaas do Produtor por um período de <strong>7 (sete) dias corridos</strong> contados da
               confirmação do pagamento. Decorrido esse prazo, a Plataforma dispara automaticamente a transferência do saldo
               liberado para a chave PIX cadastrada pelo Produtor.
             </p>
             <p className="mb-2">
-              6.2. A janela de 7 dias tem por finalidade <strong>preservar saldo suficiente</strong> para o processamento integral de
+              12.2. A janela de 7 dias tem por finalidade <strong>preservar saldo suficiente</strong> para o processamento integral de
               eventuais reembolsos (art. 49 do CDC), estornos solicitados ao Asaas, devoluções via MED do PIX e contestações
               de cartão (chargebacks) — evitando que o Produtor precise repor valores do próprio bolso para honrar reembolsos
               legítimos.
             </p>
             <p className="mb-2">
-              6.3. <strong>Antecipação manual ("Transferir agora"):</strong> a Plataforma disponibiliza no painel do Produtor a opção
+              12.3. <strong>Antecipação manual ("Transferir agora"):</strong> a Plataforma disponibiliza no painel do Produtor a opção
               de antecipar a transferência do saldo retido a qualquer momento, antes do encerramento da janela de 7 dias, sem custo adicional.
               Caso ocorra reembolso, estorno, MED ou chargeback nas vendas correspondentes após a antecipação e o saldo da subconta Asaas
               for insuficiente para cobrir o valor devolvido, a <strong>CoreoHub absorve temporariamente</strong> o gap como garantidora
               da subconta BaaS e recupera o valor automaticamente nos próximos pagamentos recebidos do Produtor, conforme mecanismo padrão
               de subcontas BaaS Asaas. O Produtor <strong>não precisa enviar PIX manual</strong> para a Plataforma neste cenário.
-              Aplica-se subsidiariamente a autorização expressa de débito automático prevista na cláusula 7 para casos excepcionais
+              Aplica-se subsidiariamente a autorização expressa de débito automático prevista na cláusula 13 para casos excepcionais
               em que o Produtor deixe de operar antes da recuperação completa do gap.
             </p>
             <p>
-              6.4. A janela de 7 dias e o mecanismo de antecipação podem ser ajustados pela Plataforma mediante prévio aviso ao
+              12.4. A janela de 7 dias e o mecanismo de antecipação podem ser ajustados pela Plataforma mediante prévio aviso ao
               Produtor, em especial para acomodar exigências regulatórias, mudanças no contrato com o Asaas ou ajustes
               operacionais relacionados à mitigação de risco de fraude.
             </p>
@@ -269,7 +385,7 @@ const TermoProdutor: React.FC = () => {
 
           <section className="border-l-4 border-amber-500 pl-4 bg-amber-50/50 dark:bg-amber-500/5 py-3 rounded-r-xl">
             <h2 className="text-sm font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-2">
-              <AlertTriangle size={14} /> 7. Chargebacks, estornos e reembolsos
+              <AlertTriangle size={14} /> 13. Chargebacks, estornos e reembolsos
             </h2>
             <p className="mb-2">
               <strong>O Produtor é integralmente responsável</strong> pelos valores devidos em razão de chargebacks (contestação
@@ -303,7 +419,7 @@ const TermoProdutor: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">8. Política de reembolso ao comprador</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">14. Política de reembolso ao comprador</h2>
             <p>
               Em conformidade com o art. 49 do Código de Defesa do Consumidor (Lei 8.078/90), o comprador (inscrito ou
               espectador) tem direito a reembolso integral em até <strong>7 (sete) dias corridos</strong> contados da data da compra,
@@ -317,7 +433,7 @@ const TermoProdutor: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">9. Obrigações do Produtor</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">15. Obrigações do Produtor</h2>
             <ul className="list-disc list-inside space-y-1.5">
               <li>Fornecer informações verdadeiras, completas e atualizadas sobre si e sobre seus eventos.</li>
               <li>Cumprir as exigências de KYC (Know Your Customer) do Asaas, fornecendo documentação solicitada.</li>
@@ -329,7 +445,7 @@ const TermoProdutor: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">10. Dados pessoais (LGPD)</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">16. Dados pessoais (LGPD)</h2>
             <p className="mb-2">
               O tratamento de dados pessoais coletados pela Plataforma observa a Lei Geral de Proteção de Dados
               (Lei 13.709/2018). O Produtor atua como controlador dos dados de seus inscritos, espectadores e bailarinos,
@@ -337,7 +453,7 @@ const TermoProdutor: React.FC = () => {
               prestação dos serviços financeiros, em conformidade com a Política de Privacidade do Asaas.
             </p>
             <p>
-              10.1. Os comentários em áudio e/ou texto registrados pelos jurados durante a avaliação das apresentações
+              16.1. Os comentários em áudio e/ou texto registrados pelos jurados durante a avaliação das apresentações
               ficam disponíveis tanto ao inscrito quanto ao <strong>Produtor</strong>, que pode acessá-los individualmente
               pelo painel de Apuração e exportá-los em lote, para fins de gestão do
               evento, backup e resolução de eventuais disputas. Esses arquivos permanecem na Plataforma por até
@@ -347,7 +463,7 @@ const TermoProdutor: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">11. Suspensão e encerramento</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">17. Suspensão e encerramento</h2>
             <p>
               A CoreoHub poderá suspender ou encerrar o acesso do Produtor a qualquer tempo, sem aviso prévio, em caso de
               descumprimento deste Termo, inadimplência, suspeita de fraude, determinação de autoridade competente ou
@@ -356,7 +472,7 @@ const TermoProdutor: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">12. Foro</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">18. Foro</h2>
             <p>
               Fica eleito o foro da comarca de <strong>Votuporanga / SP</strong> para dirimir quaisquer controvérsias decorrentes
               deste Termo, com renúncia expressa a qualquer outro, por mais privilegiado que seja.
@@ -397,11 +513,15 @@ const TermoProdutor: React.FC = () => {
               />
               <span className="text-[12px] text-slate-700 dark:text-slate-300 leading-relaxed">
                 Li e aceito integralmente o Termo de Adesão do Produtor versão <strong>{TERMO_PRODUTOR_VERSION}</strong>,
-                incluindo a cláusula 4-bis (taxa fixa dos planos Essencial e Escala, prazo de 7 dias, bloqueio de vendas e do painel, multa e juros por atraso, exclusão do evento não pago e não reembolso da taxa),
-                a cláusula 5 (taxas bancárias do Asaas, taxa única de criação de conta R$ 12,90),
-                a cláusula 6 (janela de 7 dias para liberação dos repasses e antecipação manual sob risco),
-                a cláusula 7 (ressarcimento de chargebacks/estornos e autorização de débito automático no Asaas) e
-                a cláusula 10.1 (acesso e retenção de 90 dias dos comentários de avaliação dos jurados).
+                incluindo a cláusula 5 (taxa fixa dos planos Essencial e Escala, prazo de 7 dias, bloqueio de vendas e do painel, multa e juros por atraso, exclusão do evento não pago e não reembolso da taxa),
+                a cláusula 6.2 (marcar corretamente meia-entrada e ingressos promocionais),
+                a cláusula 7 (devolução ao comprador em cancelamento, adiamento ou alteração relevante, reembolso pelo Produtor, autorização de desconto do saldo e dos repasses, extrato e contestação em 5 dias),
+                a cláusula 8 (reposição de saldo em 10 dias, suspensão de vendas, correção, juros e multa),
+                a cláusula 9 (relatório público de meia-entrada e guarda de dados),
+                a cláusula 11 (taxas bancárias do Asaas, taxa única de criação de conta R$ 12,90),
+                a cláusula 12 (janela de 7 dias para liberação dos repasses e antecipação manual sob risco),
+                a cláusula 13 (ressarcimento de chargebacks/estornos e autorização de débito automático no Asaas) e
+                a cláusula 16.1 (acesso e retenção de 90 dias dos comentários de avaliação dos jurados).
               </span>
             </label>
 

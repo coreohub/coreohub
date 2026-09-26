@@ -55,6 +55,7 @@ const Deliberacoes             = lazy(() => import('./pages/Deliberacoes'));
 const JudgePractice            = lazy(() => import('./pages/JudgePractice'));
 const ProducerDashboard        = lazy(() => import('./pages/ProducerDashboard'));
 const SuperAdminDashboard      = lazy(() => import('./pages/SuperAdmin'));
+const DebitosProdutores        = lazy(() => import('./pages/DebitosProdutores'));
 const Cotacoes                 = lazy(() => import('./pages/Cotacoes'));
 const ProducerInviteLanding    = lazy(() => import('./pages/ProducerInvite'));
 const TeamInviteLanding        = lazy(() => import('./pages/TeamInvite'));
@@ -796,6 +797,7 @@ const App: React.FC = () => {
         <Route path="/event-config" element={<PrivateRoute {...privateRouteProps}><RegistrationGradeConfig /></PrivateRoute>} />
         <Route path="/ai-analysis" element={<PrivateRoute {...privateRouteProps}><AIAnalysis /></PrivateRoute>} />
         <Route path="/super-admin" element={<PrivateRoute {...privateRouteProps}><SuperAdminDashboard /></PrivateRoute>} />
+        <Route path="/debitos-produtores" element={<PrivateRoute {...privateRouteProps}><DebitosProdutores /></PrivateRoute>} />
         <Route path="/cotacoes-terminal-juri" element={<PrivateRoute {...privateRouteProps}><Cotacoes /></PrivateRoute>} />
         <Route path="/certificados" element={<PrivateRoute {...privateRouteProps}><RequirePermission perm="emitir_certificados"><Certificates /></RequirePermission></PrivateRoute>} />
         <Route path="/trilhas" element={<PrivateRoute {...privateRouteProps}><TracksManagement /></PrivateRoute>} />

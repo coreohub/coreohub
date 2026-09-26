@@ -8,7 +8,7 @@
 //
 // Risco operacional: produtor que antecipa o retido fica devendo se um
 // bailarino solicitar refund antes da janela D+7 fechar. O termo v1.2
-// (cláusula 6) cobre essa autorização — o modal no frontend reforça
+// (cláusula 12) cobre essa autorização — o modal no frontend reforça
 // a mensagem antes do clique.
 //
 // Auth: chamado pelo frontend com sessão authenticated. O producer_id

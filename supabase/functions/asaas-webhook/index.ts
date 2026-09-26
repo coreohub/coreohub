@@ -1536,6 +1536,7 @@ Deno.serve(async (req) => {
     const isSetupFee       = externalRef.startsWith('SETUP:') && !isSetupUpgrade
     const isPlanFee        = externalRef.startsWith('PLANFEE:')
     const isPlanSettlement = externalRef.startsWith('PLANSETTLE:')
+    const isDebt           = externalRef.startsWith('DEBT:')
     const audienceGroupId  = isAudienceTicket ? externalRef.slice(3) : null
     const workshopRegistrationId = isWorkshop ? externalRef.slice(3) : null
     const workshopPassGroupId = isWorkshopPass ? externalRef.slice(4) : null
@@ -1545,7 +1546,8 @@ Deno.serve(async (req) => {
     const planFeeEventId  = isPlanFee ? externalRef.split(':')[1] : null
     const planFeePlano    = isPlanFee ? externalRef.split(':')[2] : null
     const planSettlementEventId = isPlanSettlement ? externalRef.slice(11) : null
-    const registrationId   = (isAudienceTicket || isWorkshop || isWorkshopPass || isAggregate || isVideoSelection || isSetupFee || isSetupUpgrade || isPlanFee || isPlanSettlement) ? null : externalRef
+    const debtId = isDebt ? externalRef.slice(5) : null
+    const registrationId   = (isAudienceTicket || isWorkshop || isWorkshopPass || isAggregate || isVideoSelection || isSetupFee || isSetupUpgrade || isPlanFee || isPlanSettlement || isDebt) ? null : externalRef
 
     // Defesa em profundidade contra forja de webhook (token estatico
     // pode vazar): cross-check via API Asaas. Atacante com token vazado
@@ -1604,7 +1606,7 @@ Deno.serve(async (req) => {
     // ── Ambiente x evento (Fase 2): pagamento sandbox só toca evento sandbox,
     // e o inverso. O sandbox existe para ingressos (AT:) e para a taxa fixa de
     // plano (PLANFEE:, create-plan-fixed-fee-payment também roteia por evento).
-    if (webhookEnv === 'sandbox' && !isAudienceTicket && !isPlanFee) {
+    if (webhookEnv === 'sandbox' && !isAudienceTicket && !isPlanFee && !isDebt) {
       console.warn(`[asaas-webhook] sandbox com ref nao suportada (${externalRef.slice(0, 4)}) — ignorando`)
       return ok({ status: 'ignored', reason: 'sandbox_ref_not_supported' })
     }
@@ -1658,6 +1660,27 @@ Deno.serve(async (req) => {
       // Produção com falha de leitura segue como antes (não bloqueia pagamento real).
     }
 
+    // Débito de produtor (DEBT:<id>): o ambiente do webhook precisa bater com o do evento do débito.
+    if (isDebt && debtId) {
+      const debtEnvGuard = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+      )
+      const { data: dbt } = await debtEnvGuard.from('producer_debts').select('event_id').eq('id', debtId).maybeSingle()
+      const { data: evEnv } = dbt?.event_id
+        ? await debtEnvGuard.from('events').select('payment_sandbox').eq('id', dbt.event_id).maybeSingle()
+        : { data: null }
+      if (evEnv) {
+        if (!webhookMatchesEvent(webhookEnv, evEnv.payment_sandbox)) {
+          console.error(`[asaas-webhook] AMBIENTE INCOMPATIVEL env=${webhookEnv} event_sandbox=${evEnv.payment_sandbox} debt=${debtId} — rejeitando`)
+          return ok({ status: 'rejected', reason: 'env_mismatch' })
+        }
+      } else if (webhookEnv === 'sandbox') {
+        console.error('[asaas-webhook] sandbox debt: nao foi possivel confirmar o evento — rejeitando')
+        return ok({ status: 'rejected', reason: 'env_lookup_failed' })
+      }
+    }
+
     const refType = isAudienceTicket ? 'audience'
                   : isWorkshop       ? 'workshop'
                   : isWorkshopPass   ? 'workshop_pass'
@@ -1667,6 +1690,7 @@ Deno.serve(async (req) => {
                   : isSetupUpgrade   ? 'setup_fee_upgrade'
                   : isPlanFee        ? 'plan_fee'
                   : isPlanSettlement ? 'plan_settlement'
+                  : isDebt           ? 'producer_debt'
                                      : 'registration'
 
     // ── BRANCH: PAYMENT DELETED / CANCELLED ─────────────────────────────────
@@ -1908,6 +1932,41 @@ Deno.serve(async (req) => {
       }
       console.log(`[asaas-webhook] setup_fee confirmado event=${setupFeeEventId} total_pago=R$${novoTotal.toFixed(2)} kind=${refType}`)
       return ok({ status: 'confirmed', event_id: setupFeeEventId, kind: refType })
+    }
+
+    // ── BRANCH: DÉBITO DE PRODUTOR (Termo v1.7, cláusulas 7 e 8) ──────
+    // Cobrança de reposição do PRODUTOR (sem split, 100% master), criada por
+    // manage-producer-debt. PAYMENT_RECEIVED/CONFIRMED dá baixa no débito.
+    if (isDebt && debtId) {
+      if (statusInterno !== 'APROVADO') {
+        console.log(`[asaas-webhook] producer_debt status=${statusInterno} — nada a fazer (debt=${debtId})`)
+        return ok({ status: 'noop', reason: 'not_approved', kind: refType })
+      }
+      const { data: debt } = await supabase
+        .from('producer_debts')
+        .select('id, status, asaas_payment_id, amount_due')
+        .eq('id', debtId)
+        .maybeSingle()
+      if (!debt) {
+        console.warn(`[asaas-webhook] producer_debt ${debtId} nao encontrado — ignorando`)
+        return ok({ status: 'noop', reason: 'debt_not_found', kind: refType })
+      }
+      if (debt.status === 'paga') return ok({ status: 'noop', reason: 'already_paid', kind: refType })
+      if (debt.asaas_payment_id !== String(payment.id)) {
+        // Cobrança antiga (débito ajustado/refeito): o dinheiro entrou, mas não é a fatura atual. Não baixa sozinho.
+        console.error(`[asaas-webhook] producer_debt ${debtId}: payment ${payment.id} difere do atual (${debt.asaas_payment_id}) — conferir manualmente`)
+        return ok({ status: 'noop', reason: 'payment_id_mismatch', kind: refType })
+      }
+      const { error: debtErr } = await supabase
+        .from('producer_debts')
+        .update({ status: 'paga', paid_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', debtId)
+      if (debtErr) {
+        console.error(`[asaas-webhook] erro ao dar baixa no debito ${debtId}:`, debtErr.message)
+        return ok({ status: 'error', reason: debtErr.message, kind: refType })
+      }
+      console.log(`[asaas-webhook] producer_debt pago debt=${debtId} payment=${payment.id}`)
+      return ok({ status: 'confirmed', debt_id: debtId, kind: refType })
     }
 
     // ── BRANCH: PLAN FEE (componente fixo do plano Essencial/Escala) ───────

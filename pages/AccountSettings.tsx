@@ -37,6 +37,7 @@ import { SCHEDULABLE_REGISTRATIONS_OR_FILTER } from '../utils/registrationStatus
 import { resolveAvaliadaLabel } from '../utils/formatoParticipacao';
 import { parseInfoConfig, serializeInfoConfig, hasInfoContent, EMPTY_INFO, type InfoConfig } from '../utils/eventInfo';
 import EventInfoEditor from '../components/EventInfoEditor';
+import ProducerDebtsCard from '../components/ProducerDebtsCard';
 import InstallPWAButton from '../components/InstallPWAButton';
 import { previewNarration, fetchNarrationAudios, type NarrationKind } from '../services/narrationApi';
 import { fetchUfList, fetchCitiesByUf, parseCityUf, type UfOption } from '../services/ibgeLocation';
@@ -5594,6 +5595,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
               </div>
             )}
 
+            {/* Débitos com a CoreoHub (Termo v1.7, cláusulas 7 e 8) */}
+            <ProducerDebtsCard />
+
             {/* Conexão Asaas */}
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-3xl overflow-hidden">
               <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100 dark:border-white/8">
@@ -5659,7 +5663,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       </div>
                     )}
 
-                    {/* Histórico de taxas — referência transparente (cláusula 5
+                    {/* Histórico de taxas — referência transparente (cláusula 11
                         do Termo de Adesão). Mostra a taxa única que o produtor
                         já aceitou + link pro regulamento Asaas atualizado. */}
                     <details className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl">
@@ -5668,7 +5672,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                       </summary>
                       <div className="px-4 pb-4 space-y-2 text-[11px] text-slate-600 dark:text-slate-400">
                         <p className="text-slate-500 dark:text-slate-500 leading-relaxed">
-                          Conforme cláusula 5 do Termo de Adesão aceito, sua conta digital
+                          Conforme cláusula 11 do Termo de Adesão aceito, sua conta digital
                           está no <strong>Asaas Gestão Financeira S.A.</strong> (CNPJ 19.540.550/0001-21).
                         </p>
                         <div className="flex justify-between items-start gap-3 py-2 border-t border-slate-200 dark:border-white/10">
@@ -5894,7 +5898,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                         UPFRONT da taxa de criação de conta antes do produtor
                         aceitar o termo. Tom formal, separação clara entre
                         taxas do Asaas vs comissão CoreoHub, exemplo numérico
-                        concreto. Aceite vai no Termo (cláusula 5). */}
+                        concreto. Aceite vai no Termo (cláusula 11). */}
                     <div className="p-5 bg-blue-50/50 dark:bg-blue-500/5 border border-blue-200 dark:border-blue-500/20 rounded-2xl space-y-3">
                       <div className="flex items-start gap-3">
                         <div className="p-2 bg-blue-100 dark:bg-blue-500/10 rounded-xl text-blue-600 dark:text-blue-400 shrink-0">
@@ -5966,7 +5970,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
                     {/* Gate: Termo de Adesão precisa ser aceito antes de abrir a subconta.
                         Quando não aceito, mostra CTA pro termo e BLOQUEIA o form de conexão.
-                        O termo (versão 1.1+) cobre a taxa do Asaas na cláusula 5. */}
+                        O termo (versão 1.1+) cobre a taxa do Asaas na cláusula 11. */}
                     {!termsAccepted && (
                       <div className="p-5 bg-[#ff0068]/5 border-2 border-[#ff0068]/30 rounded-2xl space-y-3">
                         <div className="flex items-start gap-3">
@@ -5978,8 +5982,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                             <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
                               Antes de conectar sua conta de recebimento, é necessário aceitar o
                               <strong> Termo de Adesão do Produtor</strong>, que cobre as taxas
-                              bancárias do Asaas (cláusula 5), responsabilidades sobre chargebacks
-                              e estornos (cláusula 6) e demais condições do serviço.
+                              bancárias do Asaas (cláusula 11), responsabilidades sobre chargebacks
+                              e estornos (cláusula 13) e demais condições do serviço.
                             </p>
                           </div>
                         </div>

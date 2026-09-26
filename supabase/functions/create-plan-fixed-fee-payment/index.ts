@@ -42,7 +42,7 @@ const PLAN_FIXED_FEE: Record<string, number> = {
 const GRACE_DAYS = 7
 const REGEN_DAYS = 3
 
-// Multa e juros por atraso (Termo do Produtor v1.6, cláusula 4-bis.5: multa 2% +
+// Multa e juros por atraso (Termo do Produtor v1.6, cláusula 5.5 (numeração da v1.7; era 4-bis.5): multa 2% +
 // juros 1% ao mês). Só entram na fatura de quem JÁ ACEITOU o Termo v1.6 ou
 // posterior (profiles.producer_terms_version) — quem não aceitou não concordou
 // com a multa, então a fatura sai sem ela.

@@ -4,6 +4,29 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-26 (continuação 3) — Item 4: livro de débitos do produtor ✅ (dev; banco e edge functions em produção)
+
+- Migration `20260930i` (`producer_debts` + itens) e edge `manage-producer-debt`. Fluxo: super admin cria o débito a partir dos ingressos estornados (extrato por ingresso; valor sugerido = repassado + custo de processamento, editável), notifica (gera cobrança PIX/boleto para a master, e-mail com extrato, contestar em 5 dias e repor em 10), resolve contestação (manter/ajustar/cancelar), cancela ou marca pago. Produtor vê o extrato em Configurações > Pagamentos e contesta.
+- Bloqueio de vendas: débito notificado, vencido e não contestado bloqueia as vendas (mesmo gate da taxa de plano; a compra recusa, a cotação não). `asaas-webhook` ganhou ramo aditivo `DEBT:<id>` com baixa automática e trava de ambiente.
+- Sandbox: API 27/28 (a falha foi expectativa errada sobre a cotação), incluindo pagamento real com cartão de teste e baixa automática pelo webhook; tela do produtor validada em 1440 e 375. **Tela do super admin (`/debitos-produtores`) NÃO validada visualmente** (fica atrás do MFA e o desvio local do gate foi barrado): o produtor precisa abri-la uma vez. Sem desconto automático de repasses futuros (fica manual).
+
+### 2026-09-26 (continuação 2) — Pesquisa jurídica → proposta do Termo v1.7, retenção e pauta do advogado ✅ (dev; migration em produção)
+
+- Pesquisa por IA (sem advogado, não é parecer) em `docs/pesquisa-juridica-termo-produtor-regresso-prazo-retencao.md` (não commitada, a pedido). Achado-chave conferido nos Termos da Asaas (cl. 5.1.4/5.1.5): a CoreoHub, como conta principal, garante o saldo negativo das subcontas.
+- `docs/termo-produtor-v1.7-rascunho.md` reescrito (regresso, reposição de saldo em 10 dias, relatório/guarda, arrependimento). **Não aplicado** no `TermoProdutor.tsx` (versão segue 1.6). Tabela no topo lista o que as cláusulas prometem e o produto ainda não faz (extrato, contestação, livro de débitos): não publicar 4-quater/4-quinquies antes disso.
+- Migration `20260930h` (aplicada): `apply_ticket_data_retention` + job `ticket-data-retention-daily` (IP zerado aos 6 meses, dados pessoais anonimizados aos 5 anos). Hoje 0/0/0. `docs/pauta-consulta-advogado-ingressos.md` com as 12 perguntas.
+
+### 2026-09-26 — Canal de arrependimento do ingresso (art. 16 do Decreto 13.108) ✅ (dev; edge function em produção)
+
+- Edge `request-withdrawal` + painel "Desistir da compra" em `MeuIngresso`: 7 dias corridos do pagamento e até o início do evento (sem o corte de 48 h, decisão do produtor), pedido inteiro, devolução integral com taxa. Bloqueia pedido com ingresso transferido ou check-in. A Asaas não devolve as taxas dela no estorno (Pix sem taxa de estorno, boleto R$ 5): custo absorvido pela CoreoHub, o comprador recebe tudo de volta.
+- Sandbox 17/17 (estorno real R$ 43,16, prazo vencido, evento iniciado, transferido, check-in, mobile 375 sem overflow). Falta merge para a main.
+
+### 2026-09-25 (continuação 14) — Fase 5 (ingressos) EM PRODUÇÃO: merge dev → main `cbc806d` ✅
+
+- Merge da Fase 5 inteira (cotação travada, meia-entrada e política, cancelar/adiar sessão, crédito com saldo, transferência de titularidade, relatório de meia, exportação sem PII, guarda de 2 anos) na `main`. Conflitos: `MeuIngresso.tsx` (ficou a versão da `dev`) e `docs/HISTORICO.md`. Lint, 162 testes e build ok antes do push.
+- Conferido em produção (app.coreohub.com): painel "Transferir ingresso" na página do ingresso e relatório de meia na vitrine do Ecodança, sem erros de console e sem overflow.
+- Testes minuciosos no sandbox antes do merge: check-in 9/9, transferência A→B→C 13/13, sessão adiada/cancelada 20/21 (falha do teste), estorno real + lote 11/11, relatório/exportação/vitrine ok. Pendentes: câmera real com QR transferido, Pix real de R$ 20 em produção (produtor pediu depois do merge) e estorno do ingresso A-1, textos jurídicos (Termo v1.7 e privacidade) com o produtor.
+
 ### 2026-09-25 (continuação 13) — Fase 5 item 5: relatório de meia, exportação sem PII e guarda de 2 anos ✅ (dev; banco em produção)
 
 - Migration `20260930g`: `get_meia_report`, `export_audience_sales_anonymized` e trava de exclusão de ingresso com movimento (<2 anos). Vitrine de evento encerrado mostra o relatório; Vendas de ingressos ganhou "Dados sem identificação".

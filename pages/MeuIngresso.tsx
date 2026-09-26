@@ -18,6 +18,7 @@ import AsaasBadge from '../components/AsaasBadge';
 import SessionStatusBanner, { type SessionStatusInfo } from '../components/SessionStatusBanner';
 import SessionChoicePanel from '../components/SessionChoicePanel';
 import TransferTicketPanel from '../components/TransferTicketPanel';
+import WithdrawalPanel from '../components/WithdrawalPanel';
 
 interface Sibling {
   id: string;
@@ -608,6 +609,16 @@ const MeuIngresso: React.FC = () => {
                 Ingresso transferido em {new Date(ticket.transferred_at).toLocaleString('pt-BR')}.
               </p>
             </div>
+          )}
+
+          {isPago && !isCheckedIn && ticket.paid_at && ticket.transfer_count === 0 && (
+            <WithdrawalPanel
+              token={token!}
+              paidAt={ticket.paid_at}
+              eventStartDate={ticket.event_start_date}
+              eventTime={ticket.event_time}
+              onDone={() => { void supabase.rpc('get_audience_ticket_by_token_v3', { p_token: token }).then(({ data }) => { const row = Array.isArray(data) ? data[0] : data; if (row) setTicket(row as Ticket); }); }}
+            />
           )}
 
           {(isPago || ticket.status_pagamento === 'CORTESIA') && !isCheckedIn && sessionInfo?.sessao_status !== 'cancelada' && (

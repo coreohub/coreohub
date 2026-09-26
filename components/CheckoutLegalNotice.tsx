@@ -118,6 +118,7 @@ const CheckoutLegalNotice: React.FC<CheckoutLegalNoticeProps> = ({
                 <strong>7 dias corridos</strong> a contar da data desta compra, conforme art. 49 do
                 Código de Defesa do Consumidor (compras online){variant === 'ingresso' && ' e art. 16 do Decreto nº 13.108/2026'}.
                 A devolução inclui <strong>todas as taxas</strong> cobradas na compra, inclusive a taxa de serviço.
+                {variant === 'ingresso' && <> Você desiste pela própria página do ingresso, no botão <strong>Desistir da compra</strong>, sem precisar falar com ninguém.</>}
               </p>
               {variant === 'ingresso' && (
                 <p>

@@ -586,3 +586,19 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/transfer-ticket/deno.json"
 entrypoint = "./functions/transfer-ticket/index.ts"
+
+# Fase 5: arrependimento do comprador de ingresso (CDC art. 49 + Decreto 13.108 art. 16).
+# verify_jwt=false: autentica pelo access_token do ingresso; rate-limited por IP no código.
+[functions.request-withdrawal]
+enabled = true
+verify_jwt = false
+import_map = "./functions/request-withdrawal/deno.json"
+entrypoint = "./functions/request-withdrawal/index.ts"
+
+# Livro de débitos do produtor (Termo v1.7): admin registra/notifica/cobra, produtor contesta.
+# verify_jwt=true; permissão (super admin ou produtor dono) checada no código.
+[functions.manage-producer-debt]
+enabled = true
+verify_jwt = true
+import_map = "./functions/manage-producer-debt/deno.json"
+entrypoint = "./functions/manage-producer-debt/index.ts"
