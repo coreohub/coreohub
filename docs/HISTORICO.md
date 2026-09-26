@@ -4,6 +4,11 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-26 (continuação 6) — SEO/GEO/AEO: página dos bots reflete sessão cancelada/adiada, robots e llms.txt ✅ (em produção, `afe6dba`)
+
+- Achado: `api/og.ts` (o que Googlebot e IAs recebem) sempre declarava `EventScheduled`; agora `EventCancelled`/`EventRescheduled` (+`previousStartDate`), ofertas `Discontinued` quando cancelada e status/motivo em texto. Validado chamando o handler contra o banco nos 3 estados; em produção, evento real agendado responde `EventScheduled` sem erro.
+- `robots.txt`: Disallow `/debitos-produtores` e `/super-admin`. `llms.txt`: cita transferência, arrependimento, cancelamento e o Decreto 13.108, e o que Termos/Privacidade cobrem. Itens do checklist que dependem do Google Search Console (sitemap, inspeção de URL, Rich Results) seguem manuais com o produtor.
+
 ### 2026-09-26 (continuação 5) — Termos de Uso e Política de Privacidade atualizados e em produção ✅
 
 - `TermosDeUso.tsx`: nova cláusula 7 (compra de ingressos: preço e taxa, meia-entrada, transferência, arrependimento, cancelamento/adiamento/crédito, quem responde) e cláusula 6 corrigida (antes dizia que só o produtor devolve; pelo Decreto 13.108 a CoreoHub também responde). Demais cláusulas renumeradas (8 a 14). `PoliticaDePrivacidade.tsx`: dados do comprador e do novo titular, IP da transferência, compartilhamento com novo titular e SNDC, seção de retenção reescrita (5 anos; transferência 2 a 5 anos; IP 6 meses). Aviso da tela de transferência com link para a política.
