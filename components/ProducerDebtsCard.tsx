@@ -4,7 +4,7 @@ import { supabase } from '../services/supabase';
 import { edgeErrorMessage } from '../utils/edgeError';
 
 /**
- * Débitos do produtor com a CoreoHub (Termo do Produtor v1.7, cláusulas 4-quater e 4-quinquies):
+ * Débitos do produtor com a CoreoHub (Termo do Produtor v1.7, cláusulas 7 e 8):
  * valores que a CoreoHub devolveu a compradores por causa de um evento seu e que já tinham sido
  * repassados. Mostra o extrato por ingresso, os prazos (contestar em 5 dias, repor em 10 dias) e o
  * link de pagamento. Sempre renderiza (empty state visível). Leitura direta com RLS (só os próprios

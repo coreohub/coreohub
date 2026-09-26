@@ -6,7 +6,7 @@ import PageHeader from '../components/PageHeader';
 import SuperAdminMfaGate from '../components/SuperAdminMfaGate';
 
 /**
- * Livro de débitos de produtores (Termo do Produtor v1.7, cláusulas 4-quater e 4-quinquies).
+ * Livro de débitos de produtores (Termo do Produtor v1.7, cláusulas 7 e 8).
  * Só super admin (protegido por SuperAdminMfaGate + checagem na edge function manage-producer-debt).
  * Fluxo: criar rascunho a partir dos ingressos estornados de um evento -> conferir/ajustar o valor
  * -> notificar (gera a cobrança PIX/boleto e envia o extrato) -> acompanhar contestação (5 dias) e

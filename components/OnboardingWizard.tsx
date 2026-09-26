@@ -87,7 +87,7 @@ const OnboardingWizard: React.FC = () => {
   // desabilitar o botão — bug que gerou 10 events duplicados em produção.
   const createInFlightRef = useRef(false);
 
-  // Termo do Produtor (cláusula 4-bis: taxa fixa dos planos pagos). Quem escolhe
+  // Termo do Produtor (cláusula 5: taxa fixa dos planos pagos). Quem escolhe
   // Essencial/Escala precisa ter aceitado a versão vigente ANTES de criar o
   // evento — sem isso as regras da taxa (prazo, bloqueio, multa, reembolso) não
   // valem pra ele. undefined = ainda consultando (tratado como "não aceitou").
@@ -614,7 +614,7 @@ const OnboardingWizard: React.FC = () => {
                     <a href="/termo-produtor" target="_blank" rel="noopener noreferrer" className="font-black text-[#ff0068] hover:underline">
                       Termo de Adesão do Produtor (versão {TERMO_PRODUTOR_VERSION})
                     </a>
-                    , incluindo a cláusula 4-bis: taxa fixa do plano com vencimento em 7 dias, vendas indisponíveis e painel bloqueado
+                    , incluindo a cláusula 5: taxa fixa do plano com vencimento em 7 dias, vendas indisponíveis e painel bloqueado
                     enquanto não paga, multa e juros por atraso, exclusão do evento não pago e taxa não reembolsável (exceto desistência em 7 dias).
                   </span>
                 </label>

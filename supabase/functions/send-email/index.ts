@@ -425,7 +425,7 @@ function buildProducerWelcome(p: ProducerWelcomePayload) {
       </td></tr>
     </table>
 
-    <!-- Aviso da taxa bancária do Asaas (cláusula 5 do Termo). Pattern de
+    <!-- Aviso da taxa bancária do Asaas (cláusula 11 do Termo). Pattern de
          mercado: lembrete formal pós-aceite pra eliminar surpresa na 1ª venda. -->
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;background:#fffbeb;border:1px solid #fde68a;border-radius:12px;">
       <tr><td style="padding:16px;">
@@ -433,7 +433,7 @@ function buildProducerWelcome(p: ProducerWelcomePayload) {
           Lembrete: Taxa de criação de conta bancária
         </p>
         <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#78350f;">
-          Conforme cláusula 5 do Termo de Adesão aceito, a instituição financeira
+          Conforme cláusula 11 do Termo de Adesão aceito, a instituição financeira
           <strong>Asaas</strong> (parceiro financeiro da CoreoHub) aplica uma taxa única de
           <strong>R$ 12,90</strong> pela criação da sua conta digital. Este valor será
           descontado automaticamente da sua primeira venda aprovada.
@@ -1745,7 +1745,7 @@ function buildLeadReengagement(p: LeadReengagementPayload) {
   }
 }
 
-// ─── Taxa de plano em atraso (Termo do Produtor, cláusula 4-bis.6) ─────
+// ─── Taxa de plano em atraso (Termo do Produtor, cláusula 5.6) ─────
 
 interface PlanFeeDeletionWarningPayload {
   produtorEmail:    string
@@ -1785,7 +1785,7 @@ function buildPlanFeeDeletionWarning(p: PlanFeeDeletionWarningPayload) {
       contentHtml,
       ctaLabel: 'Pagar agora',
       ctaUrl: `${appUrl}/qg-organizador`,
-      footerNote: 'Conforme a cláusula 4-bis.6 do Termo de Adesão do Produtor, o evento não pago pode ser excluído 60 dias após o vencimento, mediante aviso por e-mail. Eventos com inscrições pagas ou ingressos vendidos não são excluídos por esse motivo.',
+      footerNote: 'Conforme a cláusula 5.6 do Termo de Adesão do Produtor, o evento não pago pode ser excluído 60 dias após o vencimento, mediante aviso por e-mail. Eventos com inscrições pagas ou ingressos vendidos não são excluídos por esse motivo.',
     }),
   }
 }
@@ -1879,7 +1879,7 @@ function buildProducerDebtNotice(p: ProducerDebtNoticePayload) {
     html: baseLayout({
       preheader: `Total a repor: ${money(p.total)}. Você tem até ${p.dueAt ?? 'o prazo informado'} para repor.`,
       title: 'Valores a repor à CoreoHub',
-      intro: `Olá ${escape(p.producerName ?? 'produtor(a)')}, a CoreoHub devolveu dinheiro a compradores por causa do seu evento e o saldo da sua conta não cobre o valor. Segue o extrato, conforme o Termo do Produtor (cláusulas 4-quater e 4-quinquies).`,
+      intro: `Olá ${escape(p.producerName ?? 'produtor(a)')}, a CoreoHub devolveu dinheiro a compradores por causa do seu evento e o saldo da sua conta não cobre o valor. Segue o extrato, conforme o Termo do Produtor (cláusulas 7 e 8).`,
       contentHtml,
       ctaLabel: p.invoiceUrl ? 'Pagar (PIX ou boleto)' : (p.painelUrl ? 'Ver no painel' : undefined),
       ctaUrl: p.invoiceUrl ?? p.painelUrl,

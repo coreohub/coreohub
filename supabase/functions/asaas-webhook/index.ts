@@ -1934,7 +1934,7 @@ Deno.serve(async (req) => {
       return ok({ status: 'confirmed', event_id: setupFeeEventId, kind: refType })
     }
 
-    // ── BRANCH: DÉBITO DE PRODUTOR (Termo v1.7, cláusulas 4-quater/4-quinquies) ──────
+    // ── BRANCH: DÉBITO DE PRODUTOR (Termo v1.7, cláusulas 7 e 8) ──────
     // Cobrança de reposição do PRODUTOR (sem split, 100% master), criada por
     // manage-producer-debt. PAYMENT_RECEIVED/CONFIRMED dá baixa no débito.
     if (isDebt && debtId) {

@@ -1,5 +1,5 @@
 // Cron worker diário: acompanha eventos com a taxa fixa do plano (Essencial/
-// Escala) vencida e NÃO paga, conforme o Termo do Produtor v1.6, cláusula 4-bis.6
+// Escala) vencida e NÃO paga, conforme o Termo do Produtor, cláusula 5.6 (v1.7; era 4-bis.6 na v1.6)
 // (bloqueio a partir do vencimento; exclusão possível 60 dias depois, com aviso
 // prévio por e-mail ao Produtor).
 //
@@ -24,7 +24,7 @@ const PLAN_LABEL: Record<string, string> = { essencial: 'Essencial', escala: 'Es
 const GRACE_DAYS = 7          // mesma tolerância de create-plan-fixed-fee-payment
 const WARN_FROM_DAYS = 30     // 1º aviso ao produtor
 const FINAL_WARN_DAYS = 53    // aviso final (~7 dias antes)
-const DELETE_AFTER_DAYS = 60  // cláusula 4-bis.6
+const DELETE_AFTER_DAYS = 60  // cláusula 5.6
 
 Deno.serve(async (req) => {
   const corsHeaders = buildCorsHeaders(req)

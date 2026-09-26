@@ -1,5 +1,7 @@
 # Termo do Produtor v1.7 — PROPOSTA PARA REVISÃO (não aplicada)
 
+> **Numeração final (2026-09-26):** o Termo publicado usa numeração sequencial (como as plataformas brasileiras), não "4-ter" etc. Correspondência deste rascunho → Termo: 4-bis→5, 4-ter→6, 4-quater→7, 4-quinquies→8, 4-sexies→9, 4-septies→10; cláusulas antigas 5→11, 6→12, 7→13, 8→14, 9→15, 10→16, 11→17, 12→18. **A fonte do texto é `pages/TermoProdutor.tsx`.**
+
 **Status:** rascunho de texto. `TERMO_PRODUTOR_VERSION` continua em 1.6 e `pages/TermoProdutor.tsx` NÃO foi alterado. Subir a versão obriga todos os produtores a reaceitar. Base: `docs/pesquisa-juridica-termo-produtor-regresso-prazo-retencao.md` e `docs/pesquisa-juridica-decreto-13108.md` (pesquisa por IA, sem advogado: **não é parecer**). Versão anterior deste rascunho (2026-09-25) foi substituída por esta.
 
 **Regra de trabalho:** nada aqui vira texto final sem o produtor aprovar; revisão de advogado recomendada, especialmente onde marcado **[ADVOGADO]**.

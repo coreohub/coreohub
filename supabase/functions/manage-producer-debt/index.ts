@@ -1,7 +1,7 @@
 /**
  * Edge Function: manage-producer-debt
  *
- * Livro de débitos do produtor (Termo do Produtor v1.7, cláusulas 4-quater e 4-quinquies).
+ * Livro de débitos do produtor (Termo do Produtor v1.7, cláusulas 7 e 8).
  * Quando a CoreoHub devolve dinheiro a compradores por causa do evento do produtor e o valor já
  * havia sido repassado, o produtor reembolsa a CoreoHub. Esta função registra o débito com extrato
  * por ingresso, envia o aviso, gera a cobrança PIX/boleto (sem split, 100% para a master) e controla
