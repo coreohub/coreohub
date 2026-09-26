@@ -4,6 +4,12 @@ Movido do CLAUDE.md em 2026-09-24 para reduzir o custo fixo de contexto. Texto o
 
 Cronológico inverso. Detalhes individuais em `memory/`.
 
+### 2026-09-25 (continuação 14) — Fase 5 (ingressos) EM PRODUÇÃO: merge dev → main `cbc806d` ✅
+
+- Merge da Fase 5 inteira (cotação travada, meia-entrada e política, cancelar/adiar sessão, crédito com saldo, transferência de titularidade, relatório de meia, exportação sem PII, guarda de 2 anos) na `main`. Conflitos: `MeuIngresso.tsx` (ficou a versão da `dev`) e `docs/HISTORICO.md`. Lint, 162 testes e build ok antes do push.
+- Conferido em produção (app.coreohub.com): painel "Transferir ingresso" na página do ingresso e relatório de meia na vitrine do Ecodança, sem erros de console e sem overflow.
+- Testes minuciosos no sandbox antes do merge: check-in 9/9, transferência A→B→C 13/13, sessão adiada/cancelada 20/21 (falha do teste), estorno real + lote 11/11, relatório/exportação/vitrine ok. Pendentes: câmera real com QR transferido, Pix real de R$ 20 em produção (produtor pediu depois do merge) e estorno do ingresso A-1, textos jurídicos (Termo v1.7 e privacidade) com o produtor.
+
 ### 2026-09-25 (continuação 13) — Fase 5 item 5: relatório de meia, exportação sem PII e guarda de 2 anos ✅ (dev; banco em produção)
 
 - Migration `20260930g`: `get_meia_report`, `export_audience_sales_anonymized` e trava de exclusão de ingresso com movimento (<2 anos). Vitrine de evento encerrado mostra o relatório; Vendas de ingressos ganhou "Dados sem identificação".
