@@ -105,7 +105,7 @@ const TransferTicketPanel: React.FC<Props> = ({ token, isMeia, hasSeat, onTransf
           )}
 
           <p className="text-[9px] leading-snug text-slate-400">
-            Usamos o nome, CPF, e-mail e telefone do novo titular apenas para emitir o ingresso, conferir a identidade na entrada e manter o histórico de titulares exigido por lei (guardado por, no mínimo, 2 anos). Base legal: cumprimento de obrigação legal e execução do contrato de compra do ingresso.
+            Usamos o nome, CPF, e-mail e telefone do novo titular apenas para emitir o ingresso, conferir a identidade na entrada e manter o histórico de titulares exigido por lei, guardado por, no mínimo, 2 anos e até 5 anos, com acesso restrito. Base legal: cumprimento de obrigação legal e execução do contrato de compra do ingresso. Veja o prazo e os seus direitos na{' '}<a href="/privacidade" target="_blank" rel="noopener noreferrer" className="underline">Política de Privacidade</a>.
           </p>
 
           {error && <p role="alert" className="text-[11px] font-bold text-rose-600">{error}</p>}

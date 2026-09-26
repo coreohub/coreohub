@@ -53,7 +53,7 @@ const TermosDeUso: React.FC = () => {
           <h1 className="font-black text-4xl md:text-5xl uppercase tracking-tight mb-3">
             Termos de Uso
           </h1>
-          <p className="text-sm text-white/40">Última atualização: julho de 2026</p>
+          <p className="text-sm text-white/40">Última atualização: 26 de setembro de 2026</p>
         </div>
 
         {/* Body */}
@@ -116,12 +116,28 @@ const TermosDeUso: React.FC = () => {
               6. Pagamentos e reembolsos
             </h2>
             <p className="mb-3">Os pagamentos são processados por meio do gateway Asaas. A CoreoHub não armazena dados de cartão de crédito. Reembolsos podem ser processados diretamente pelo painel do produtor, sujeitos às políticas do meio de pagamento utilizado.</p>
-            <p>Em casos de cancelamento de evento, o produtor assume a responsabilidade pelo reembolso integral dos inscritos.</p>
+            <p>Em caso de cancelamento, adiamento ou alteração relevante do evento, o comprador tem direito à restituição integral do valor pago, incluindo as taxas, nos termos da cláusula 7. A CoreoHub processa a devolução pela plataforma e o produtor reembolsa a CoreoHub conforme o Termo do Produtor.</p>
           </section>
 
           <section>
             <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
-              7. Propriedade intelectual
+              7. Compra de ingressos
+            </h2>
+            <p className="mb-3">Esta cláusula vale para quem compra ingressos de plateia pela plataforma, além dos direitos previstos no Código de Defesa do Consumidor e no Decreto nº 13.108/2026.</p>
+            <ul className="list-disc pl-5 space-y-2 mb-4">
+              <li><strong className="text-white font-semibold">Preço e taxa de serviço:</strong> o preço do ingresso e a taxa de serviço aparecem separados desde a oferta, com o total antes do pagamento. Ao escolher os ingressos, o preço e a taxa ficam travados pelo tempo exibido na tela do checkout.</li>
+              <li><strong className="text-white font-semibold">Meia-entrada:</strong> vale nos termos da Lei nº 12.933/2013 e do Decreto nº 8.537/2015, cujo texto e os órgãos de fiscalização aparecem no ponto de venda. O benefício é pessoal e o documento que comprova o direito deve ser apresentado na compra e na portaria; sem a comprovação, paga-se a diferença para o valor inteiro. Cada CPF de comprador pode comprar 1 meia-entrada por evento, salvo os ingressos de pessoa com deficiência e de acompanhante. Cada evento mostra o total de ingressos e quantos são de meia-entrada e, depois do evento, publica o relatório de vendas.</li>
+              <li><strong className="text-white font-semibold">Transferência:</strong> o ingresso pode ser transferido, de graça, para outra pessoa pela própria página do ingresso, informando nome, CPF, e-mail e telefone do novo titular. O QR e o link antigos deixam de valer e o novo titular recebe o ingresso por e-mail. Não é possível transferir depois do check-in nem em sessão cancelada. Na transferência de meia-entrada, o novo titular precisa comprovar o direito na portaria.</li>
+              <li><strong className="text-white font-semibold">Arrependimento:</strong> você pode desistir da compra em até 7 dias corridos do pagamento e até o início do evento, pelo botão "Desistir da compra" na página do ingresso, com devolução integral do valor pago, incluindo a taxa de serviço. A desistência vale para todos os ingressos da mesma compra.</li>
+              <li><strong className="text-white font-semibold">Cancelamento, adiamento ou alteração relevante:</strong> se a sessão for cancelada, adiada ou sofrer alteração relevante (data, horário, local, atração principal ou formato), você escolhe entre manter o ingresso na nova data, receber crédito ou pedir a restituição integral, incluindo as taxas, sem multa nem retenção. O crédito tem saldo, vale por 12 meses e pode ser usado em outras sessões do mesmo espetáculo. Você faz a escolha pela página do ingresso.</li>
+              <li><strong className="text-white font-semibold">Quem responde:</strong> perante o comprador, a CoreoHub e o produtor respondem em conjunto pela devolução dos valores. Entre eles, o produtor reembolsa a CoreoHub, como previsto no Termo do Produtor.</li>
+            </ul>
+            <p>Reclamações também podem ser feitas ao Procon do seu estado e em consumidor.gov.br.</p>
+          </section>
+
+          <section>
+            <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
+              8. Propriedade intelectual
             </h2>
             <p className="mb-3">A marca, o logotipo, o código-fonte e todos os elementos da plataforma CoreoHub são de propriedade exclusiva da CoreoHub. É vedada a reprodução, distribuição ou uso não autorizado desses elementos.</p>
             <p>O produtor mantém os direitos sobre o conteúdo que publica (nome do evento, imagens, regulamentos), concedendo à CoreoHub uma licença limitada para exibi-los na plataforma durante a vigência do contrato.</p>
@@ -129,7 +145,7 @@ const TermosDeUso: React.FC = () => {
 
           <section>
             <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
-              8. Limitação de responsabilidade
+              9. Limitação de responsabilidade
             </h2>
             <p className="mb-3">A CoreoHub não se responsabiliza por:</p>
             <ul className="list-disc pl-5 space-y-1.5">
@@ -142,7 +158,7 @@ const TermosDeUso: React.FC = () => {
 
           <section>
             <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
-              9. Privacidade
+              10. Privacidade
             </h2>
             <p>O tratamento de dados pessoais é regido pela nossa{' '}
               <Link to="/privacidade" className="text-[#FF0068] hover:underline">Política de Privacidade</Link>
@@ -152,28 +168,28 @@ const TermosDeUso: React.FC = () => {
 
           <section>
             <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
-              10. Modificações
+              11. Modificações
             </h2>
             <p>A CoreoHub pode atualizar estes termos a qualquer momento. Alterações relevantes serão comunicadas por e-mail ou notificação na plataforma com antecedência mínima de 15 dias. O uso continuado da plataforma após a vigência das alterações constitui aceitação dos novos termos.</p>
           </section>
 
           <section>
             <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
-              11. Cancelamento
+              12. Cancelamento
             </h2>
             <p>O produtor pode encerrar sua conta a qualquer momento, sem multa. Eventos em andamento com inscrições abertas devem ser encerrados antes do cancelamento da conta, garantindo os direitos dos inscritos.</p>
           </section>
 
           <section>
             <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
-              12. Lei aplicável e foro
+              13. Lei aplicável e foro
             </h2>
             <p>Estes termos são regidos pelas leis da República Federativa do Brasil. Fica eleito o foro da comarca de São José do Rio Preto — SP para dirimir quaisquer controvérsias decorrentes deste instrumento.</p>
           </section>
 
           <section>
             <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
-              13. Contato
+              14. Contato
             </h2>
             <p>Dúvidas sobre estes termos podem ser enviadas via WhatsApp:{' '}
               <a

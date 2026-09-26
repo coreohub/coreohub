@@ -54,7 +54,7 @@ const PoliticaDePrivacidade: React.FC = () => {
             Política de Privacidade
           </h1>
           <p className="text-sm text-white/40">
-            Última atualização: julho de 2026 · Em conformidade com a LGPD (Lei nº 13.709/2018)
+            Última atualização: 26 de setembro de 2026 · Em conformidade com a LGPD (Lei nº 13.709/2018)
           </p>
         </div>
 
@@ -96,6 +96,8 @@ const PoliticaDePrivacidade: React.FC = () => {
                     ['Nome e e-mail', 'Criação de conta, comunicações do evento', 'Execução de contrato'],
                     ['CPF', 'Emissão de certificados e notas fiscais', 'Obrigação legal'],
                     ['Dados de pagamento', 'Processamento de transações (via Asaas — não armazenamos cartão)', 'Execução de contrato'],
+                    ['Nome, CPF, e-mail e telefone de quem compra e de quem recebe um ingresso', 'Emitir o ingresso, conferir a identidade na entrada, transferir a titularidade e atender pedidos de arrependimento ou reembolso', 'Execução de contrato e obrigação legal (Decreto nº 13.108/2026)'],
+                    ['IP registrado na transferência de ingresso', 'Prevenção de fraude na transferência', 'Legítimo interesse'],
                     ['Dados de acesso (IP, navegador)', 'Segurança, diagnóstico e analytics (GA4)', 'Legítimo interesse'],
                     ['Vídeos enviados pelo inscrito', 'Pré-seleção remota pelo júri', 'Consentimento'],
                   ].map(([dado, fin, base]) => (
@@ -133,6 +135,8 @@ const PoliticaDePrivacidade: React.FC = () => {
               <li><strong className="text-white font-semibold">Asaas</strong> — gateway de pagamento, para processar transações financeiras</li>
               <li><strong className="text-white font-semibold">Google</strong> — Analytics (GA4) para métricas de uso, com dados anonimizados</li>
               <li><strong className="text-white font-semibold">Produtor do evento</strong> — acessa os dados dos inscritos para gestão do festival ou mostra em que você se inscreveu</li>
+              <li><strong className="text-white font-semibold">Novo titular de um ingresso transferido</strong> — recebe o ingresso por e-mail e o nome de quem o transferiu</li>
+              <li><strong className="text-white font-semibold">Órgãos de defesa do consumidor</strong> (Procon, Senacon e outros do Sistema Nacional de Defesa do Consumidor) — dados de compra e de transferência de ingressos, quando pedirem por escrito e com justificativa</li>
             </ul>
             <p>Todos os parceiros são obrigados contratualmente a proteger seus dados e não utilizá-los para outras finalidades.</p>
           </section>
@@ -173,7 +177,18 @@ const PoliticaDePrivacidade: React.FC = () => {
             <h2 className="font-black text-xl uppercase tracking-wide text-white border-b border-white/8 pb-2 mb-4">
               7. Retenção de dados
             </h2>
-            <p>Mantemos seus dados enquanto sua conta estiver ativa ou enquanto necessário para cumprir obrigações legais. Dados de transações financeiras são retidos por 5 anos conforme exigência fiscal. Certificados emitidos ficam disponíveis por tempo indeterminado para fins de validação. Comentários em áudio e/ou texto de avaliação dos jurados ficam disponíveis por até 90 dias após o evento, tanto para o inscrito quanto para o produtor do evento, sendo removidos automaticamente após esse prazo.</p>
+            <p className="mb-3">Guardamos seus dados só pelo tempo necessário para cada finalidade:</p>
+            <ul className="list-disc pl-5 space-y-1.5 mb-4">
+              <li><strong className="text-white font-semibold">Conta:</strong> enquanto estiver ativa ou for necessária para cumprir obrigações legais.</li>
+              <li><strong className="text-white font-semibold">Compra e ingresso</strong> (nome, CPF, e-mail, telefone, valor pago): durante o evento e, depois dele, por até <strong className="text-white font-semibold">5 anos</strong>, para cumprir obrigações legais e fiscais, atender pedidos de reembolso e nos defender em reclamações ou processos.</li>
+              <li><strong className="text-white font-semibold">Transferência de ingresso</strong> (quem transferiu, quem recebeu, data e hora): por, no mínimo, <strong className="text-white font-semibold">2 anos</strong>, como exige o Decreto nº 13.108/2026, e por até 5 anos para defesa em reclamações ou processos. Nesse período, só pessoas autorizadas acessam esses dados, e só quando necessário.</li>
+              <li><strong className="text-white font-semibold">IP registrado na transferência:</strong> por <strong className="text-white font-semibold">6 meses</strong>.</li>
+              <li><strong className="text-white font-semibold">Estatísticas de vendas que não identificam você:</strong> podem ficar por mais tempo.</li>
+              <li><strong className="text-white font-semibold">Transações financeiras:</strong> 5 anos, conforme exigência fiscal.</li>
+              <li><strong className="text-white font-semibold">Certificados emitidos:</strong> ficam disponíveis por tempo indeterminado para fins de validação.</li>
+              <li><strong className="text-white font-semibold">Comentários de avaliação dos jurados</strong> (áudio e/ou texto): até 90 dias após o evento, para o inscrito e para o produtor, e removidos automaticamente depois.</li>
+            </ul>
+            <p>Terminado o prazo, eliminamos ou anonimizamos os dados, exceto se houver processo ou obrigação legal em andamento.</p>
           </section>
 
           <section>
