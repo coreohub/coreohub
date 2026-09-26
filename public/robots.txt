@@ -7,6 +7,8 @@ Allow: /
 Disallow: /qg-organizador
 Disallow: /configuracoes
 Disallow: /account-settings
+Disallow: /debitos-produtores
+Disallow: /super-admin
 Disallow: /credenciais
 Disallow: /credencial/
 Disallow: /credenciamento
