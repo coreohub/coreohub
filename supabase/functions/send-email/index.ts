@@ -552,6 +552,9 @@ function buildAudienceTicketConfirmation(p: AudienceTicketPayload) {
     ${ticketBlocks}
     <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#475569;">
       Guarde este email — o link de cada ingresso é seu comprovante.${isMulti ? ' Cada pessoa precisa do seu próprio QR na entrada.' : ''}
+    </p>
+    <p style="margin:12px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      <strong>Arrependimento:</strong> você pode desistir da compra em até 7 dias corridos do pagamento (e até o início do evento), com devolução integral do valor pago, incluindo a taxa de serviço. É só abrir a página de qualquer ingresso acima e usar o botão "Desistir da compra".
     </p>`
 
   return {
