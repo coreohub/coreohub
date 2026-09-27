@@ -781,6 +781,8 @@ const InscricaoWizard: React.FC = () => {
       // Categoria etária só é obrigatória quando a modalidade NÃO é livre.
       if (!isCategoriaLivre && !data.categoria) return 'Selecione a categoria etária.';
       if (!data.coreografo_nome.trim())    return 'Informe o nome do coreógrafo.';
+      if (!data.estudio_uf)     return 'Selecione o estado (UF) de origem.';
+      if (!data.estudio_cidade) return 'Informe a cidade de origem.';
       // Tipo de mostra obrigatório quando há 2+ opções habilitadas pelo produtor.
       // Quando há só 1, o state já foi auto-setado no load — não cai aqui.
       if (tiposApresentacao.length > 1 && !data.tipo_apresentacao) {
@@ -1590,7 +1592,7 @@ const InscricaoWizard: React.FC = () => {
             </div>
 
             <div>
-              <label className={labelCls}>Estúdio/escola (opcional)</label>
+              <label className={labelCls}>Estúdio/Grupo/Companhia (opcional)</label>
               <input
                 type="text"
                 value={data.estudio_nome}
@@ -1602,7 +1604,7 @@ const InscricaoWizard: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label htmlFor="estudio-uf" className={labelCls}>UF do estúdio</label>
+                <label htmlFor="estudio-uf" className={labelCls}>UF de origem *</label>
                 <select
                   id="estudio-uf"
                   value={data.estudio_uf}
@@ -1616,7 +1618,7 @@ const InscricaoWizard: React.FC = () => {
                 </select>
               </div>
               <div className="sm:col-span-2">
-                <label htmlFor="estudio-cidade" className={labelCls}>Cidade do estúdio</label>
+                <label htmlFor="estudio-cidade" className={labelCls}>Cidade de origem *</label>
                 {municipios.length > 0 ? (
                   <CitySearchSelect
                     id="estudio-cidade"
@@ -1626,7 +1628,7 @@ const InscricaoWizard: React.FC = () => {
                     disabled={!data.estudio_uf}
                     placeholder="Digite pra buscar a cidade"
                     className={inputCls}
-                    aria-label="Cidade do estúdio"
+                    aria-label="Cidade de origem"
                   />
                 ) : (
                   <input
