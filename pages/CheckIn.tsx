@@ -554,8 +554,8 @@ const CheckIn = () => {
       {/* ── QR Scanner modal ── */}
       <AnimatePresence>
         {scannerOpen && (
-          <div className="fixed inset-0 z-[100] bg-black flex flex-col">
-            <div className="flex items-center justify-between px-5 pt-6 pb-4">
+          <div className="fixed inset-0 z-[100] bg-black flex flex-col h-[100dvh]">
+            <div className="flex items-center justify-between px-5 pt-6 pb-3 shrink-0">
               <div>
                 <p className="text-white font-black uppercase text-lg tracking-tighter">Escanear QR Code</p>
                 <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Aponte para o QR do grupo</p>
@@ -565,12 +565,14 @@ const CheckIn = () => {
               </button>
             </div>
 
-            {/* Camera */}
-            <div className="flex-1 relative overflow-hidden">
+            {/* Camera — altura mínima garantida pra não espremer quando o teclado
+                abre pro campo manual logo abaixo (dvh evita o salto da barra de
+                URL do navegador mobile mudando a viewport no meio do scan). */}
+            <div className="flex-1 min-h-[180px] relative overflow-hidden">
               <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" playsInline muted />
               {/* Scan frame overlay */}
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-[min(70vw,256px)] h-[min(70vw,256px)] relative">
+                <div className="w-[min(60vw,220px)] h-[min(60vw,220px)] relative">
                   <div className="absolute inset-0 border-2 border-white/20 rounded-3xl" />
                   <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-[#ff0068] rounded-tl-2xl" />
                   <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-[#ff0068] rounded-tr-2xl" />
@@ -588,23 +590,39 @@ const CheckIn = () => {
 
             {/* Manual input fallback */}
             {/* Intentional dark: vive dentro do scanner modal (bg-black com câmera).
-                Tem que casar com o overlay escuro do BarcodeDetector. */}
-            <div className="px-5 py-6 space-y-3 bg-slate-950">
+                Tem que casar com o overlay escuro do BarcodeDetector. shrink-0 +
+                altura fixa da câmera acima garantem que esse bloco nunca fica
+                espremido/cortado em tela baixa (achado real: campo minúsculo e
+                sem botão visível de confirmar, só Enter, difícil de usar no celular). */}
+            <div className="shrink-0 px-5 py-4 space-y-2.5 bg-slate-950 border-t border-white/10 pb-[max(1rem,env(safe-area-inset-bottom))]">
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 text-center">Ou insira o código manualmente</p>
-              <div className="flex gap-2">
+              <form
+                className="flex gap-2"
+                onSubmit={async e => {
+                  e.preventDefault();
+                  const input = e.currentTarget.elements.namedItem('manualQr') as HTMLInputElement;
+                  const val = input.value;
+                  stopScanner();
+                  await processQrId(val);
+                }}
+              >
                 <input
+                  name="manualQr"
                   type="text"
+                  inputMode="text"
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  autoCorrect="off"
                   placeholder="Cole o UUID da inscrição..."
-                  className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-[#ff0068]/50"
-                  onKeyDown={async e => {
-                    if (e.key === 'Enter') {
-                      const val = (e.target as HTMLInputElement).value;
-                      stopScanner();
-                      await processQrId(val);
-                    }
-                  }}
+                  className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-white text-base font-mono focus:outline-none focus:border-[#ff0068]/50"
                 />
-              </div>
+                <button
+                  type="submit"
+                  className="shrink-0 px-5 py-3.5 bg-[#ff0068] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#ff1a7d] transition-all"
+                >
+                  OK
+                </button>
+              </form>
             </div>
           </div>
         )}
