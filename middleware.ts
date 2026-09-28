@@ -25,9 +25,10 @@ import { rewrite, next } from '@vercel/functions';
 const BOT_UA_REGEX =
   /WhatsApp|Telegram|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|Discordbot|bingbot|Pinterest|SkypeUriPreview|vkShare|W3C_Validator|redditbot|Applebot|GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-Web|anthropic-ai|PerplexityBot|Perplexity-User|Google-Extended|Amazonbot|Bytespider|CCBot/i;
 
-const CUSTOM_DOMAIN_SLUGS: Record<string, string> = {
-  'festival.usualdance.com': 'usualdance-festival-2026',
-};
+// Vazio desde 2026-09-28 — festival.usualdance.com trocou de hospedagem (site
+// Next.js próprio, DNS não aponta mais pra Vercel/CoreoHub), achado durante
+// auditoria de SEO. Ver migration 20260928_clear_stale_custom_domain_usualdance.sql.
+const CUSTOM_DOMAIN_SLUGS: Record<string, string> = {};
 
 // Prefixos de rota pública em app.coreohub.com (espelha App.tsx — tudo que
 // NÃO está dentro de <PrivateRoute>). Qualquer coisa fora dessa lista nesse

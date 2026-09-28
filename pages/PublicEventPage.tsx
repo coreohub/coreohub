@@ -724,6 +724,22 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
     };
   }).filter(o => Number(o.price) > 0);
 
+  // Offers de workshops/passes — paridade com api/og.ts (achado auditoria SEO
+  // 2026-09-28: bot via api/og.ts já listava workshops no JSON-LD, a página
+  // React não). Sem checkout dedicado por workshop no JSON-LD, aponta pra URL
+  // do próprio evento (mesmo padrão de api/og.ts).
+  const workshopJsonLdOffers = publicWorkshops
+    .filter(w => w.preco_padrao != null || w.gratis_para_inscritos)
+    .map(w => ({
+      '@type': 'Offer',
+      name: w.name,
+      price: w.gratis_para_inscritos ? '0' : String(w.preco_padrao ?? '0'),
+      priceCurrency: 'BRL',
+      availability: 'https://schema.org/InStock',
+      url: seoUrl,
+    }));
+  const allJsonLdOffers = [...jsonLdOffers, ...workshopJsonLdOffers];
+
   // Schema.org Event pra rich snippets do Google (data, local, organizador).
   const eventJsonLd = {
     '@context': 'https://schema.org',
@@ -757,7 +773,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
       name: publicProducer?.full_name ?? 'CoreoHub',
       url: 'https://coreohub.com',
     },
-    ...(jsonLdOffers.length > 0 ? { offers: jsonLdOffers } : {}),
+    ...(allJsonLdOffers.length > 0 ? { offers: allJsonLdOffers } : {}),
     url: seoUrl,
   };
 
