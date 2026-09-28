@@ -118,33 +118,41 @@ export const updateProfile = async (id: string, updates: Partial<Profile>) => {
  */
 export const uploadAudioFeedback = async (regId: string, audioBlob: Blob) => {
   const fileName = `feedback_${regId}_${Date.now()}.webm`;
+  // cacheControl 1 ano: path é único por timestamp (nunca sobrescrito), então o
+  // conteúdo nunca muda depois de salvo. Mesmo bug de egress estourado já
+  // corrigido no bucket 'trilhas' (cache default de 1h forçava re-download
+  // inteiro a cada replay) — replicado aqui.
   const { data, error } = await supabase.storage
     .from('audio-feedbacks')
-    .upload(fileName, audioBlob);
-    
+    .upload(fileName, audioBlob, { cacheControl: '31536000' });
+
   if (error) throw error;
-  
+
   const { data: { publicUrl } } = supabase.storage
     .from('audio-feedbacks')
     .getPublicUrl(fileName);
-    
+
   return publicUrl;
 };
 
 export const uploadEventCover = async (eventId: string, fileBlob: Blob) => {
   const fileName = `cover_${eventId}_${Date.now()}.webp`;
+  // cacheControl 1 ano: mesmo motivo do uploadAudioFeedback acima — a capa é
+  // servida em toda visita à vitrine pública, então cache curto (1h default)
+  // multiplica egress por visitante recorrente.
   const { data, error } = await supabase.storage
     .from('event-covers')
     .upload(fileName, fileBlob, {
-      contentType: 'image/webp'
+      contentType: 'image/webp',
+      cacheControl: '31536000',
     });
-    
+
   if (error) throw error;
-  
+
   const { data: { publicUrl } } = supabase.storage
     .from('event-covers')
     .getPublicUrl(fileName);
-    
+
   return publicUrl;
 };
 
@@ -153,14 +161,14 @@ export const uploadEventRules = async (eventId: string, file: File) => {
   const fileName = `rules_${eventId}_${Date.now()}.${fileExt}`;
   const { data, error } = await supabase.storage
     .from('event-rules')
-    .upload(fileName, file);
-    
+    .upload(fileName, file, { cacheControl: '31536000' });
+
   if (error) throw error;
-  
+
   const { data: { publicUrl } } = supabase.storage
     .from('event-rules')
     .getPublicUrl(fileName);
-    
+
   return publicUrl;
 };
 
@@ -169,7 +177,7 @@ export const uploadEventDocument = async (eventId: string, file: File) => {
   const fileName = `doc_${eventId}_${Date.now()}.${fileExt}`;
   const { error } = await supabase.storage
     .from('event-rules')
-    .upload(fileName, file);
+    .upload(fileName, file, { cacheControl: '31536000' });
 
   if (error) throw error;
 
@@ -185,14 +193,14 @@ export const uploadMusic = async (eventId: string, file: File) => {
   const fileName = `music_${eventId}_${Date.now()}.${fileExt}`;
   const { data, error } = await supabase.storage
     .from('event-music')
-    .upload(fileName, file);
-    
+    .upload(fileName, file, { cacheControl: '31536000' });
+
   if (error) throw error;
-  
+
   const { data: { publicUrl } } = supabase.storage
     .from('event-music')
     .getPublicUrl(fileName);
-    
+
   return publicUrl;
 };
 

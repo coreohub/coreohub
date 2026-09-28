@@ -121,9 +121,15 @@ Deno.serve(async (req) => {
     const fileName = `feedback_${registration_id}_${judge_id}_${Date.now()}.${ext}`
     const buf = new Uint8Array(await audio.arrayBuffer())
 
+    // cacheControl 1 ano: fileName é único por timestamp (upsert:false, nunca
+    // sobrescreve), então o conteúdo nunca muda depois de salvo. Cache default
+    // (1h) forçava rebaixar o áudio inteiro de novo a cada replay depois de 1h
+    // — mesma causa raiz de egress estourado já corrigida no bucket 'trilhas'
+    // (2026-07-15), nunca replicada aqui (2026-09-28, achado real: 107GB/5.5GB
+    // de cota Supabase, 'audio-feedbacks' era o maior bucket: 374MB/406 arquivos).
     const { error: upErr } = await supa.storage
       .from('audio-feedbacks')
-      .upload(fileName, buf, { contentType: audio.type || 'audio/webm', upsert: false })
+      .upload(fileName, buf, { contentType: audio.type || 'audio/webm', upsert: false, cacheControl: '31536000' })
     if (upErr) return json({ error: 'storage_error', detail: upErr.message }, 500)
 
     const { data: pub } = supa.storage.from('audio-feedbacks').getPublicUrl(fileName)
