@@ -571,7 +571,7 @@ Deno.serve(async (req) => {
       const searchData = await searchRes.json()
       const found = searchData.data?.[0]
       customerId = found?.id ?? null
-      await ensureNotificationDisabled(ASAAS_BASE_URL, asaasHeaders, found)
+      await ensureNotificationDisabled(ASAAS_BASE_URL, asaasHeaders, found, buyer)
     } catch { /* ignore */ }
 
     if (!customerId) {
