@@ -29,6 +29,7 @@ import { readAudioDuration } from '../utils/audioDuration';
 import { UF_LIST, fetchMunicipios } from '../utils/ibge';
 import { resolveTipoApresentacaoLabel } from '../utils/formatoParticipacao';
 import TrackDurationBadge from '../components/TrackDurationBadge';
+import HelpWhatsappButton from '../components/HelpWhatsappButton';
 import CitySearchSelect from '../components/CitySearchSelect';
 import StaffTecnicoEditor, { StaffTecnicoValue } from '../components/StaffTecnicoEditor';
 import { trackViewEvent } from '../services/producerAnalytics';
@@ -491,7 +492,7 @@ const InscricaoWizard: React.FC = () => {
       // de inscrições for criada, adicionar a migration e voltar aqui.
       const { data: ev, error: evErr } = await supabase
         .from('events')
-        .select('id, name, slug, formacoes_config, start_date, event_date, producer_ga4_id, producer_meta_pixel_id, video_selection_enabled, video_selection_fee_required, video_selection_fee, is_demo')
+        .select('id, name, slug, formacoes_config, start_date, event_date, producer_ga4_id, producer_meta_pixel_id, video_selection_enabled, video_selection_fee_required, video_selection_fee, is_demo, easy_login_enabled, whatsapp_event')
         .eq(filterCol, idOrSlug)
         .maybeSingle();
 
@@ -1435,6 +1436,14 @@ const InscricaoWizard: React.FC = () => {
 
       {/* Conteúdo do passo atual ──────────────────────────────────────────── */}
       <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+        {event?.easy_login_enabled === true && event?.whatsapp_event && (
+          <HelpWhatsappButton
+            whatsapp={event.whatsapp_event}
+            eventName={event.name ?? 'o evento'}
+            origem={`inscricao_passo_${step + 1}`}
+            className="w-full"
+          />
+        )}
         {/* ─── Passo 0: Coreografia ─────────────────────────────────────── */}
         {step === 0 && (
           <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-3xl p-6 space-y-5">

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../services/supabase';
 import { OtpBoxes } from '../components/OtpBoxes';
 import AsaasBadge from '../components/AsaasBadge';
+import HelpWhatsappButton from '../components/HelpWhatsappButton';
 import { suggestEmail } from '../utils/mailcheck';
 import { isInAppBrowser } from '../utils/inAppBrowser';
 import { resolveFirstEquipeRoute } from '../utils/permMenu';
@@ -132,7 +133,10 @@ const Auth = () => {
 
   // Quando o login vem de um deep link de festival, mostra contexto do evento
   // pra reduzir confusão ("estou me inscrevendo em qual mostra?")
-  const [eventContext, setEventContext] = useState<{ id: string; name: string; coverUrl: string | null } | null>(null);
+  const [eventContext, setEventContext] = useState<{
+    id: string; name: string; coverUrl: string | null;
+    easyLogin: boolean; whatsapp: string | null;
+  } | null>(null);
 
   useEffect(() => {
     if (!redirectTo) { setEventContext(null); return; }
@@ -143,13 +147,21 @@ const Auth = () => {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
     const filterCol = isUuid ? 'id' : 'slug';
     (async () => {
-      const { data } = await supabase
+      const { data, error: evErr } = await supabase
         .from('events')
-        .select('id, name, cover_url')
+        .select('id, name, cover_url, easy_login_enabled, whatsapp_event')
         .eq(filterCol, idOrSlug)
         .maybeSingle();
+      if (evErr) console.error('[Auth] erro ao buscar evento do deep link:', evErr);
       if (data?.id && data?.name) {
-        setEventContext({ id: data.id, name: data.name, coverUrl: data.cover_url ?? null });
+        const easyLogin = data.easy_login_enabled === true;
+        setEventContext({
+          id: data.id, name: data.name, coverUrl: data.cover_url ?? null,
+          easyLogin, whatsapp: data.whatsapp_event ?? null,
+        });
+        // Login facilitado: abre direto no "e-mail sem senha" (código + link),
+        // sem criar senha nem exigir confirmação de e-mail separada.
+        if (easyLogin) setUseOtp(true);
         // Funil de leads: persiste evento de origem antes do signup. Lido no
         // callback SIGNED_IN pra gravar em profiles.entry_event_id. Plano em
         // [[plano-leads-reengajamento]] — habilita email de reengajamento
@@ -788,7 +800,7 @@ const Auth = () => {
             {/* Divisor + Login social — escondido dentro de webview (Instagram/
                 Facebook/TikTok) porque o OAuth do Google quebra em in-app
                 browser (403 disallowed_useragent). Lá usamos OTP por e-mail. */}
-            {!isInApp && !useOtp && (
+            {!isInApp && (!useOtp || eventContext?.easyLogin) && (
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
@@ -815,7 +827,7 @@ const Auth = () => {
             <div className="pt-4 flex flex-col items-center gap-3">
               {/* Dentro de webview (Instagram/Facebook/TikTok) o Google quebra,
                   então alternamos entre OTP por e-mail e e-mail+senha. */}
-              {isInApp && (
+              {(isInApp || eventContext?.easyLogin) && (
                 <button
                   type="button"
                   onClick={() => { setUseOtp((v) => !v); setOtpStep('idle'); setOtpCode(''); setOtpError(null); }}
@@ -874,6 +886,20 @@ const Auth = () => {
             </div>
           </div>
         </div>
+
+        {eventContext?.easyLogin && eventContext.whatsapp && (
+          <div className="mt-4 flex flex-col items-center gap-2 text-center">
+            <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+              Está com dificuldade para entrar ou se inscrever?
+            </p>
+            <HelpWhatsappButton
+              whatsapp={eventContext.whatsapp}
+              eventName={eventContext.name}
+              origem="login"
+              className="w-full"
+            />
+          </div>
+        )}
 
         <div className="mt-12 flex items-center justify-center gap-8 text-slate-400 dark:text-slate-800">
           <div className="flex items-center gap-2">
