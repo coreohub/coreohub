@@ -11,6 +11,7 @@ import {
 import AsaasBadge from '../components/AsaasBadge';
 import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
 import { maskCpfCnpj } from '../utils/masks';
+import { usePwaUpdate } from '../contexts/PwaUpdateContext';
 
 const SUPABASE_URL = 'https://ghpltzzijlvykiytwslu.supabase.co';
 
@@ -82,6 +83,17 @@ const Checkout = () => {
       errorRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [error]);
+
+  // Update do PWA (2026-09-29): Checkout fica no "Grupo B" — sem banner
+  // visível. Risco baixo aqui (o clique de pagar já redireciona pra fora do
+  // domínio, linha ~219), então aplica de forma simples: só se o update já
+  // estava pendente quando a página carregou (deps [] — não quer disparar
+  // se a versão nova chegar DEPOIS, com o comprador preenchendo CPF/cupom).
+  const { needRefresh, updateServiceWorker } = usePwaUpdate();
+  useEffect(() => {
+    if (needRefresh) updateServiceWorker(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isGovernment = event?.event_type === 'government';
   const finalValue   = Math.max(0, baseFee - (appliedCoupon?.discount ?? 0));

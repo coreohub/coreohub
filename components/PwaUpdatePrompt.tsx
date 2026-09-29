@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { RefreshCw, X } from 'lucide-react';
-import { useRegisterSW } from 'virtual:pwa-register/react';
+import { usePwaUpdate } from '../contexts/PwaUpdateContext';
 
 /**
  * Banner global — aparece quando o Service Worker baixou uma versão nova do
@@ -12,12 +13,19 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
  * Sem timeout automático de reload por decisão: forçar recarregar sozinho
  * no meio de alguém preenchendo formulário seria pior que o problema atual.
  *
- * `useRegisterSW` sozinho só registra o SW e detecta update via checagem
- * nativa do browser (que pode nunca rodar numa SPA com aba parada, sem
- * navegação/full reload) — por isso `onRegisteredSW` força `registration
- * .update()` a cada 3min enquanto a aba fica aberta, senão o banner nunca
- * apareceria pra quem só deixa a tela de Configurações aberta e parada
- * (exatamente o cenário real que motivou essa feature).
+ * `needRefresh`/`updateServiceWorker` vêm de `PwaUpdateContext` (Provider
+ * montado 1x em App.tsx) — esse componente NUNCA chama `useRegisterSW`
+ * diretamente (ver comentário em contexts/PwaUpdateContext.tsx pro porquê:
+ * chamar de novo registraria um 2º Service Worker na mesma aba).
+ *
+ * "Grupo B" (2026-09-29): banner some em telas operadas por jurado leigo ou
+ * com formulário/wizard em andamento sob pressão de tempo (Terminal do Júri,
+ * telas de entrada do jurado, Wizard de inscrição, Checkout, Perfil, Minhas
+ * Coreografias) — motivo real: botão "Atualizar" confundiu um produtor
+ * operando o Terminal do Júri ao vivo. Essas telas não ficam sem update: cada
+ * uma consome o mesmo Context e aplica sozinha no seu "momento seguro" (ver
+ * cada arquivo). Fora dessas rotas ("Grupo A"), comportamento 100% igual ao
+ * de antes.
  *
  * Só mostra o banner pra sessão logada (2026-09-16) — visitante anônimo na
  * vitrine pública (coreohub.com/festival/..., app.coreohub.com/evento/...)
@@ -29,20 +37,28 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
  * www.coreohub.com esse state nunca é populado por decisão de performance,
  * ver App.tsx isMarketingHost) pra funcionar certo independente de hostname.
  */
-const UPDATE_CHECK_INTERVAL_MS = 3 * 60 * 1000;
+
+/** Rotas/prefixos do "Grupo B" — telas que escondem o banner mas aplicam o
+ *  update sozinhas no momento seguro delas (ver cada arquivo). Mantido aqui
+ *  perto do único consumidor que precisa decidir "mostrar ou não". */
+function isGroupBRoute(pathname: string): boolean {
+  if (pathname === '/judge-terminal' || pathname.startsWith('/judge-terminal/')) return true;
+  if (pathname === '/deliberacao' || pathname === '/conferencia' || pathname === '/jurado-seletiva') return true;
+  if (pathname === '/judge-login' || pathname.startsWith('/judge-login/')) return true;
+  if (pathname === '/entrar-juri') return true;
+  if (pathname === '/minhas-coreografias') return true;
+  if (pathname === '/profile') return true;
+  // Wizard de inscrição: /festival/:idOrSlug/register, /inscrever, /inscrever/:modalidade
+  if (/^\/festival\/[^/]+\/(register|inscrever)(\/.*)?$/.test(pathname)) return true;
+  // Checkout de inscrição — não confundir com /checkout-ingresso e
+  // /checkout-workshop (públicos, sem sessão, banner nem apareceria mesmo).
+  if (/^\/festival\/[^/]+\/checkout$/.test(pathname)) return true;
+  return false;
+}
 
 const PwaUpdatePrompt: React.FC = () => {
-  const {
-    needRefresh: [needRefresh, setNeedRefresh],
-    updateServiceWorker,
-  } = useRegisterSW({
-    onRegisteredSW(_swUrl, registration) {
-      if (!registration) return;
-      setInterval(() => {
-        registration.update();
-      }, UPDATE_CHECK_INTERVAL_MS);
-    },
-  });
+  const { needRefresh, updateServiceWorker, dismiss } = usePwaUpdate();
+  const location = useLocation();
 
   const [updating, setUpdating] = useState(false);
   // null = ainda checando (evita flash), evita mostrar/esconder errado antes
@@ -71,6 +87,7 @@ const PwaUpdatePrompt: React.FC = () => {
   }, [needRefresh]);
 
   if (!needRefresh || !hasSession) return null;
+  if (isGroupBRoute(location.pathname)) return null;
 
   // updateServiceWorker manda o skipWaiting e conta com um listener interno
   // da lib (evento 'controlling') pra recarregar sozinho — em testes com
@@ -98,7 +115,7 @@ const PwaUpdatePrompt: React.FC = () => {
           {updating ? 'Atualizando…' : 'Atualizar'}
         </button>
         <button
-          onClick={() => setNeedRefresh(false)}
+          onClick={dismiss}
           className="shrink-0 p-1 text-white/80 hover:text-white transition-colors cursor-pointer"
           aria-label="Dispensar por agora"
           title="Dispensar por agora"

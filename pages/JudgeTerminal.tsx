@@ -21,6 +21,7 @@ import { fetchTerminalData, fetchPreviousEvaluations, submitEvaluation as submit
 import { enqueueEvaluation, fetchTerminalDataSWR, fetchPreviousEvaluationsSWR } from '../services/judgeApiOffline';
 import OfflineStatusBadge from '../components/OfflineStatusBadge';
 import JudgeMicCheck from '../components/JudgeMicCheck';
+import { usePwaUpdate } from '../contexts/PwaUpdateContext';
 
 /** Maps the canonical PT criterion name (used as score key in DB) to a dict key. */
 const DEFAULT_CRITERION_KEYS: Record<string, JudgeDictKey> = {
@@ -263,6 +264,12 @@ const scoreGrade = (v: string | number, _scale: ScoreScale = 'BASE_10') => {
 /* ════════════════════════ COMPONENT ════════════════════════ */
 const JudgeTerminal = () => {
   const navigate = useNavigate();
+
+  // Update do PWA (2026-09-29): terminal fica no "Grupo B" — sem banner
+  // "Atualizar" visível (confundiu jurado leigo ao vivo), mas aplica sozinho
+  // no handleAdvance abaixo, no exato momento em que a nota já foi enviada e
+  // travada (isSubmitted=true), nunca no meio de uma avaliação em andamento.
+  const { needRefresh, updateServiceWorker } = usePwaUpdate();
 
   // Sessão de jurado (PIN-based, via /judge-login). Quando existe, o terminal
   // pula o seletor "qual jurado é você?" e fixa o jurado da sessão.
@@ -1519,7 +1526,13 @@ const JudgeTerminal = () => {
   };
 
   /* ── Advance to next performance (after reviewing submitted state) ── */
-  const handleAdvance = () => { requestGoToIndex(currentIndex + 1); };
+  const handleAdvance = () => {
+    requestGoToIndex(currentIndex + 1);
+    // Momento seguro pro update do PWA: a nota da apresentação atual já foi
+    // enviada/travada antes desse ponto (isSubmitted=true), então recarregar
+    // aqui nunca derruba avaliação em andamento. Ver PwaUpdateContext.tsx.
+    if (needRefresh) updateServiceWorker(true);
+  };
 
   /* ── Jump to performance by ordem_apresentacao (item 38 — push offline)
      Coordenador anuncia "apresentação #N" em voz alta quando Wi-Fi cai;

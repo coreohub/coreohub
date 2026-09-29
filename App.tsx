@@ -5,6 +5,12 @@ import { UserRole, Profile as UserProfile } from './types';
 import { identifyUser, trackAppPageView } from './services/appAnalytics';
 import { trackPageView } from './services/analytics';
 import { isImpersonating as isImpersonatingSession } from './services/impersonateService';
+// Registro único de Service Worker do PWA (ver contexts/PwaUpdateContext.tsx
+// pro porquê de NUNCA duplicar essa chamada). Import eager de propósito —
+// `useRegisterSW` (virtual:pwa-register/react) é leve e não puxa
+// supabase-js/motion, então não compromete o achado de perf do PSI
+// 2026-09-15 (esses sim continuam lazy, ver PwaUpdatePrompt.tsx).
+import { PwaUpdateProvider } from './contexts/PwaUpdateContext';
 // Chrome do app autenticado (Sidebar/Header/BottomNavBar/banners) — lazy.
 // Vários desses componentes importam 'motion' e/ou o cliente Supabase
 // (Header, BottomNavBar, DemoBanner, EmailVerifyBanner…); eager aqui forçava
@@ -698,6 +704,7 @@ const App: React.FC = () => {
   };
 
   return (
+    <PwaUpdateProvider>
     <Router>
       <PublicPageViewTracker />
       <Routes>
@@ -863,6 +870,7 @@ const App: React.FC = () => {
       <Suspense fallback={null}><CookieBanner /></Suspense>
       <Suspense fallback={null}><PwaUpdatePrompt /></Suspense>
     </Router>
+    </PwaUpdateProvider>
   );
 };
 

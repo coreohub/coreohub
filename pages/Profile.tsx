@@ -7,6 +7,7 @@ import { toTitleCase, slugify } from '../utils/formatters';
 import PageHeader from '../components/PageHeader';
 import CitySearchSelect from '../components/CitySearchSelect';
 import { clearImpersonationState } from '../services/impersonateService';
+import { usePwaUpdate } from '../contexts/PwaUpdateContext';
 import {
   User, Phone, MapPin, Save, Loader2,
   CheckCircle, AlertCircle, CreditCard, Music2,
@@ -123,6 +124,10 @@ const MeuPerfil = () => {
   const [error, setError]           = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const fileInputRef                = useRef<HTMLInputElement | null>(null);
+  // Update do PWA (2026-09-29): Profile fica no "Grupo B" — sem banner
+  // visível, aplica sozinho em handleSave() abaixo, só depois de um save
+  // bem-sucedido (dado já persistido, sem formulário em edição logo depois).
+  const { needRefresh, updateServiceWorker } = usePwaUpdate();
 
   /* ── Cidade/UF via IBGE (mesmo padrão de Configurações → Geral — antes
      era texto livre, gerava divergência de digitação). `form.location`
@@ -385,6 +390,10 @@ const MeuPerfil = () => {
         throw err;
       }
       setSaved(true);
+      // Save já persistiu no banco — momento seguro pro update do PWA
+      // (updateServiceWorker(true) recarrega a aba; supera o timeout de
+      // "Salvo!"/returnPath abaixo, o que é esperado).
+      if (needRefresh) updateServiceWorker(true);
       // Se veio com ?return=<path> (deep link de fluxo interrompido), navega
       // de volta após 1.2s — dá tempo do user ver o toast "Salvo!"
       if (returnPath) {

@@ -19,6 +19,7 @@ import {
 } from '../utils/bailarinos';
 import { validateCoupon } from '../services/couponService';
 import { isRegistrationPaid } from '../utils/registrationStatus';
+import { usePwaUpdate } from '../contexts/PwaUpdateContext';
 
 /* ══════════════════════════════════════════════════════════════
    TYPES
@@ -223,6 +224,39 @@ const MinhasCoreografias = () => {
   // tem pelo menos 1 evento futuro; senão "Todas".
   type Tab = 'all' | 'upcoming' | 'past' | 'selecao';
   const [activeTab, setActiveTab] = useState<Tab>('upcoming');
+
+  // Update do PWA (2026-09-29): esta tela fica no "Grupo B" — sem banner
+  // visível. É mais painel de listagem/gestão do que formulário contínuo,
+  // então aplica sozinha ao voltar o foco pra aba, mas NUNCA com algum
+  // modal/drawer ou cupom em edição aberto (dado não salvo — ex. modal de
+  // CPF, editor de bailarinos, cupom digitado/aplicado no card "PAGAR TUDO").
+  const { needRefresh, updateServiceWorker } = usePwaUpdate();
+  useEffect(() => {
+    if (!needRefresh) return;
+    const hasUnsavedUI = () =>
+      cpfModalOpen ||
+      fullNameModalOpen ||
+      !!confirmDel ||
+      !!editingBailarinos ||
+      !!editingVideo ||
+      Object.values(couponInputs).some(v => v.trim().length > 0) ||
+      Object.values(aggregateCouponInputs).some(v => v.trim().length > 0) ||
+      Object.values(appliedAggregateCoupons).some(Boolean);
+    const tryApply = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (hasUnsavedUI()) return;
+      updateServiceWorker(true);
+    };
+    // Roda já ao montar (cobre o caso do update ter chegado com a aba já em
+    // foco) + de novo toda vez que a aba volta a ficar visível.
+    tryApply();
+    document.addEventListener('visibilitychange', tryApply);
+    return () => document.removeEventListener('visibilitychange', tryApply);
+  }, [
+    needRefresh, updateServiceWorker,
+    cpfModalOpen, fullNameModalOpen, confirmDel, editingBailarinos, editingVideo,
+    couponInputs, aggregateCouponInputs, appliedAggregateCoupons,
+  ]);
 
   /* ══════════════════════════════════════════════════════════
      FETCH

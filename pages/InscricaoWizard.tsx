@@ -33,6 +33,7 @@ import CitySearchSelect from '../components/CitySearchSelect';
 import StaffTecnicoEditor, { StaffTecnicoValue } from '../components/StaffTecnicoEditor';
 import { trackViewEvent } from '../services/producerAnalytics';
 import ProducerPixels from '../components/ProducerPixels';
+import { usePwaUpdate } from '../contexts/PwaUpdateContext';
 
 /** Marca um evento como "já trackeado" na sessão. Lido pelo Wizard pra
  *  evitar disparar view_event duplicado quando inscrito veio da vitrine
@@ -295,6 +296,11 @@ const InscricaoWizard: React.FC = () => {
   const [profileNeedsName, setProfileNeedsName] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
+  // Update do PWA (2026-09-29): Wizard fica no "Grupo B" — sem banner
+  // "Atualizar" visível, mas aplica sozinho em advance() abaixo, só depois
+  // que o passo atual já validou com sucesso (nunca no meio do passo sendo
+  // preenchido).
+  const { needRefresh, updateServiceWorker } = usePwaUpdate();
   // Fase 4B — gate de view_event quando inscrito chega no Wizard por link
   // direto (sem passar pela vitrine). Espera ProducerPixels chamar onReady
   // antes de disparar, e checa se a vitrine já trackou nessa sessão pra
@@ -879,6 +885,10 @@ const InscricaoWizard: React.FC = () => {
     if (err) { setError(err); return; }
     setError(null);
     setStep(s => Math.min(3, (s + 1)) as 0 | 1 | 2 | 3);
+    // Passo atual validado com sucesso — momento seguro pro update do PWA
+    // (não faria isso no carregamento inicial nem no meio do passo atual
+    // sendo preenchido, só nesse evento real de avanço).
+    if (needRefresh) updateServiceWorker(true);
   };
 
   const back = () => {
