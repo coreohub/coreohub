@@ -15,6 +15,16 @@ interface PendingCommission {
   card_credit_at: string | null;
 }
 
+/** Repasse interno da CoreoHub (eventos com absorção de taxa de baixo valor): o
+ *  dinheiro está na conta principal e a CoreoHub transfere pro produtor depois
+ *  da janela de segurança. Não gera linha em platform_commissions. */
+interface LowValueTransfer {
+  id:                string;
+  value:             number;
+  status:            string;
+  safety_release_at: string | null;
+}
+
 interface Props {
   producerId: string;
 }
@@ -51,6 +61,7 @@ function writeAsaasCache(producerId: string, value: number) {
 const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
   const [loading, setLoading]     = useState(true);
   const [pending, setPending]     = useState<PendingCommission[]>([]);
+  const [lowValue, setLowValue]   = useState<LowValueTransfer[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [feedback, setFeedback]   = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
@@ -74,6 +85,14 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
       .eq('is_sandbox', false)   // comissão de teste (sandbox) nunca entra no saldo
       .gt('net_amount', 0);
 
+    // Repasses internos de baixo valor ainda a caminho (nunca entram no saque
+    // manual nem na comparação com o saldo real Asaas: o dinheiro está na master).
+    const lowValuePromise = supabase
+      .from('low_value_transfers')
+      .select('id, value, status, safety_release_at')
+      .eq('producer_id', targetId)
+      .in('status', ['aguardando_janela', 'pronto', 'transferencia_pedida']);
+
     // Decide se chama a API Asaas: força (refresh manual) ou cache miss.
     let asaasNeedsFetch = false;
     if (withAsaas === 'force') {
@@ -91,7 +110,13 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
       ? supabase.functions.invoke('get-producer-asaas-balance', { body: {} })
       : Promise.resolve(null);
 
-    const [localRes, asaasRes] = await Promise.all([localPromise, asaasPromise]);
+    const [localRes, asaasRes, lowValueRes] = await Promise.all([localPromise, asaasPromise, lowValuePromise]);
+
+    if (lowValueRes.error) {
+      console.error('[ProducerBalanceCard] erro query low_value_transfers:', lowValueRes.error);
+    } else {
+      setLowValue((lowValueRes.data ?? []) as LowValueTransfer[]);
+    }
 
     if (localRes.error) {
       // Coluna ausente (migration não aplicada) também cai aqui — logar sempre.
@@ -192,6 +217,21 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
 
   const total = retido + disponivel;
 
+  // A caminho por transferência interna da CoreoHub (baixo valor). Mostrado à
+  // parte: não entra no saque manual (total) nem na checagem do saldo Asaas.
+  const { aCaminho, nextLowValueAt } = useMemo(() => {
+    let v = 0;
+    let next: number | null = null;
+    for (const t of lowValue) {
+      const amt = Number(t.value ?? 0);
+      if (amt <= 0) continue;
+      v += amt;
+      const ts = t.safety_release_at ? new Date(t.safety_release_at).getTime() : null;
+      if (ts !== null && (next === null || ts < next)) next = ts;
+    }
+    return { aCaminho: parseFloat(v.toFixed(2)), nextLowValueAt: next };
+  }, [lowValue]);
+
   const handleTransfer = async () => {
     setTransferring(true);
     setFeedback(null);
@@ -272,7 +312,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
         {/* Número grande do total + breakdown secundário */}
         <div className="mb-5">
           <div className="text-4xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tighter mb-2">
-            {fmtBRL(total)}
+            {fmtBRL(total + aCaminho)}
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
             <span className="inline-flex items-center gap-1.5">
@@ -287,8 +327,20 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
               retido {nextReleaseAt ? '· libera ' + fmtNextRelease() : ''}
             </span>
           </div>
+          {aCaminho > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+              <Clock size={11} className="text-emerald-500" />
+              <strong className="font-black text-slate-700 dark:text-slate-300">{fmtBRL(aCaminho)}</strong>
+              a caminho por transferência da CoreoHub
+              {nextLowValueAt && (
+                <span>
+                  (a partir de {new Date(nextLowValueAt).toLocaleDateString('pt-BR')})
+                </span>
+              )}
+            </div>
+          )}
           {cartao > 0 && (
-            <div className="mt-2 inline-flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
               <Clock size={11} className="text-sky-500" />
               <strong className="font-black text-slate-700 dark:text-slate-300">{fmtBRL(cartao)}</strong>
               a receber no cartão
