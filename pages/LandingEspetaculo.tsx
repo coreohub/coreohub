@@ -101,7 +101,7 @@ export default function LandingEspetaculo() {
       <meta name="description" content={PAGE_DESCRIPTION} />
       <meta property="og:title" content={PAGE_TITLE} />
       <meta property="og:description" content={PAGE_DESCRIPTION} />
-      <meta property="og:image" content={`${SITE_URL}/og-image.jpg`} />
+      <meta property="og:image" content={`${SITE_URL}/og-espetaculo.jpg`} />
       <meta property="og:url" content={CANONICAL_URL} />
       <meta property="og:type" content="website" />
       <meta property="og:site_name" content="CoreoHub" />
@@ -109,7 +109,7 @@ export default function LandingEspetaculo() {
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={PAGE_TITLE} />
       <meta name="twitter:description" content={PAGE_DESCRIPTION} />
-      <meta name="twitter:image" content={`${SITE_URL}/og-image.jpg`} />
+      <meta name="twitter:image" content={`${SITE_URL}/og-espetaculo.jpg`} />
       <link rel="canonical" href={CANONICAL_URL} />
       <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
 
@@ -159,16 +159,16 @@ export default function LandingEspetaculo() {
       {/* ─── 1. HERO (escuro, foto) ──────────────────────────────────────────────── */}
       <section className="relative min-h-[80vh] flex flex-col overflow-hidden bg-black">
         <img
-          src="/hero-espetaculo-leque.webp"
-          srcSet="/hero-espetaculo-leque-mobile.webp 960w, /hero-espetaculo-leque.webp 1200w"
+          src="/hero-espetaculo.webp"
+          srcSet="/hero-espetaculo-mobile.webp 960w, /hero-espetaculo.webp 1376w"
           sizes="100vw"
           alt=""
           aria-hidden="true"
-          width={1200}
-          height={630}
+          width={1376}
+          height={768}
           fetchPriority="high"
           decoding="async"
-          className="absolute inset-0 w-full h-full object-cover object-[50%_55%]"
+          className="absolute inset-0 w-full h-full object-cover object-[50%_35%]"
         />
         <div className="absolute inset-0 bg-black/50" />
         <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.75)_0%,rgba(0,0,0,0.25)_40%,transparent_65%)]" />

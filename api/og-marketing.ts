@@ -70,6 +70,8 @@ const PAGES: Record<string, PageMeta> = {
     title: 'Bilheteria para espetáculo de fim de ano de dança — Plano Espetáculo | CoreoHub',
     description:
       'Venda ingresso do espetáculo de fim de ano do seu estúdio de dança sem planilha: 7,9% sobre o vendido, sem mensalidade, taxa pública. Cupom, cortesia e credenciamento por QR Code incluídos.',
+    // Mesma foto da hero da página (antes caía na foto genérica da home).
+    image: `${SITE_URL}/og-espetaculo.jpg`,
   },
 };
 
