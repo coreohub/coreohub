@@ -294,7 +294,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
               a receber no cartão
               {nextCardAt && (
                 <span>
-                  · o Asaas credita a partir de {new Date(nextCardAt).toLocaleDateString('pt-BR')}
+                  (previsão de crédito do Asaas: {new Date(nextCardAt).toLocaleDateString('pt-BR')})
                 </span>
               )}
             </div>
