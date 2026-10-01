@@ -159,16 +159,16 @@ export default function LandingEspetaculo() {
       {/* ─── 1. HERO (escuro, foto) ──────────────────────────────────────────────── */}
       <section className="relative min-h-[80vh] flex flex-col overflow-hidden bg-black">
         <img
-          src="/hero-espetaculo.webp"
-          srcSet="/hero-espetaculo-mobile.webp 960w, /hero-espetaculo.webp 1376w"
+          src="/hero-espetaculo-leque.webp"
+          srcSet="/hero-espetaculo-leque-mobile.webp 960w, /hero-espetaculo-leque.webp 1200w"
           sizes="100vw"
           alt=""
           aria-hidden="true"
-          width={1376}
-          height={768}
+          width={1200}
+          height={630}
           fetchPriority="high"
           decoding="async"
-          className="absolute inset-0 w-full h-full object-cover object-[50%_35%]"
+          className="absolute inset-0 w-full h-full object-cover object-[50%_55%]"
         />
         <div className="absolute inset-0 bg-black/50" />
         <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.75)_0%,rgba(0,0,0,0.25)_40%,transparent_65%)]" />
