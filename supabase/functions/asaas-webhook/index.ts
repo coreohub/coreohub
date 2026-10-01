@@ -13,10 +13,38 @@ import {
 // (chama `manual-transfer-now`).
 const RELEASE_WINDOW_DAYS = 7
 
-/** Calcula o instante em que a comissão fica elegível pro sweep automático. */
-function computeReleaseAt(paidAtIso?: string): string {
+/** Calcula o instante em que a comissão fica elegível pro sweep automático.
+ *
+ *  PIX/boleto: pagamento + 7 dias (janela D+7).
+ *  Cartão: o dinheiro só entra na subconta quando o Asaas libera (padrão D+32,
+ *  campo creditDate / estimatedCreditDate do payment). Liberar em D+7 faria o
+ *  sweep tentar sacar saldo que ainda não existe, ou pior, puxar o dinheiro
+ *  retido de outras vendas. Então vale o MAIOR entre D+7 e a data de crédito. */
+const CARD_FALLBACK_CREDIT_DAYS = 32
+
+function isCardPayment(payment?: any): boolean {
+  const bt = String(payment?.billingType ?? '').toUpperCase()
+  return bt === 'CREDIT_CARD' || bt === 'DEBIT_CARD'
+}
+
+/** Data (ISO) em que o Asaas credita o cartão na conta, ou null se não for cartão. */
+function computeCardCreditAt(paidAtIso?: string, payment?: any): string | null {
+  if (!isCardPayment(payment)) return null
+  const raw = payment?.creditDate ?? payment?.estimatedCreditDate
+  if (raw) {
+    const d = new Date(String(raw) + 'T12:00:00')
+    if (!isNaN(d.getTime())) return d.toISOString()
+  }
   const base = paidAtIso ? new Date(paidAtIso).getTime() : Date.now()
-  return new Date(base + RELEASE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString()
+  return new Date(base + CARD_FALLBACK_CREDIT_DAYS * 24 * 60 * 60 * 1000).toISOString()
+}
+
+function computeReleaseAt(paidAtIso?: string, payment?: any): string {
+  const base = paidAtIso ? new Date(paidAtIso).getTime() : Date.now()
+  const windowEnd = base + RELEASE_WINDOW_DAYS * 24 * 60 * 60 * 1000
+  const cardAt = computeCardCreditAt(paidAtIso, payment)
+  const cardMs = cardAt ? new Date(cardAt).getTime() : 0
+  return new Date(Math.max(windowEnd, cardMs)).toISOString()
 }
 
 /** Label legível por tipo de venda — usado na notificação do super admin. */
@@ -368,7 +396,9 @@ async function handleAudienceTicket(opts: {
       commission_type:   'percent',
       audience_ticket_group_id: groupId,
       kind:              'audience',
-      release_at:        computeReleaseAt(audiencePaidAt),
+      release_at:        computeReleaseAt(audiencePaidAt, payment),
+
+      card_credit_at:     computeCardCreditAt(audiencePaidAt, payment),
     })
 
   if (commErr) {
@@ -561,7 +591,9 @@ async function handleWorkshopRegistration(opts: {
       commission_type:           'percent',
       workshop_registration_id:  registrationId,
       kind:                      'workshop',
-      release_at:                computeReleaseAt(workshopPaidAt),
+      release_at:                computeReleaseAt(workshopPaidAt, payment),
+
+      card_credit_at:             computeCardCreditAt(workshopPaidAt, payment),
     })
 
   if (commErr) {
@@ -739,7 +771,9 @@ async function handleWorkshopPassPayment(opts: {
     commission_type:           'percent',
     workshop_registration_id:  r.id,
     kind:                      'workshop',
-    release_at:                computeReleaseAt(paidAt),
+    release_at:                computeReleaseAt(paidAt, payment),
+
+    card_credit_at:             computeCardCreditAt(paidAt, payment),
   }))
 
   const { error: commErr } = await supabase
@@ -1012,7 +1046,7 @@ async function handleAggregatePayment(opts: {
     .maybeSingle()
 
   if (lvt && lvt.status === 'aguardando_pagamento') {
-    const safetyReleaseAt = computeReleaseAt(paidAtReal)
+    const safetyReleaseAt = computeReleaseAt(paidAtReal, payment)
     const { error: lvtUpdErr } = await supabase
       .from('low_value_transfers')
       .update({ status: 'aguardando_janela', safety_release_at: safetyReleaseAt, updated_at: new Date().toISOString() })
@@ -1094,7 +1128,9 @@ async function handleAggregatePayment(opts: {
         asaas_payment_id:  String(payment.id),
         commission_type:   eventData?.commission_type ?? 'percent',
         kind:              'registration',  // carrinho = inscrição cheia
-        release_at:        computeReleaseAt(paidAtReal),
+        release_at:        computeReleaseAt(paidAtReal, payment),
+
+        card_credit_at:     computeCardCreditAt(paidAtReal, payment),
       }
     })
 
@@ -1405,7 +1441,9 @@ async function handleVideoSelectionFee(opts: {
         net_amount:        producerAmount,
         asaas_payment_id:  String(payment.id),
         kind:              'video_selection',  // discriminador opcional pra relatórios
-        release_at:        computeReleaseAt(),
+        release_at:        computeReleaseAt(undefined, payment),
+
+        card_credit_at:     computeCardCreditAt(undefined, payment),
       })
 
     await notifySuperAdmins(supabase, {
@@ -2156,7 +2194,7 @@ Deno.serve(async (req) => {
         .maybeSingle()
 
       if (lvt && lvt.status === 'aguardando_pagamento') {
-        const safetyReleaseAt = computeReleaseAt()
+        const safetyReleaseAt = computeReleaseAt(undefined, payment)
         const { error: lvtUpdErr } = await supabase
           .from('low_value_transfers')
           .update({ status: 'aguardando_janela', safety_release_at: safetyReleaseAt, updated_at: new Date().toISOString() })
@@ -2211,7 +2249,9 @@ Deno.serve(async (req) => {
             net_amount:       producerAmount,
             asaas_payment_id: String(payment.id),
             commission_type:  eventData?.commission_type ?? 'percent',
-            release_at:       computeReleaseAt(),
+            release_at:       computeReleaseAt(undefined, payment),
+
+            card_credit_at:    computeCardCreditAt(undefined, payment),
           })
 
         if (insErr) {

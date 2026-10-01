@@ -11,6 +11,8 @@ interface PendingCommission {
   net_amount:    number;
   refund_amount: number | null;
   release_at:    string | null;
+  /** Data em que o Asaas credita o cartão na subconta (null = não é cartão). */
+  card_credit_at: string | null;
 }
 
 interface Props {
@@ -65,7 +67,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
 
     const localPromise = supabase
       .from('platform_commissions')
-      .select('id, net_amount, refund_amount, release_at')
+      .select('id, net_amount, refund_amount, release_at, card_credit_at')
       .eq('producer_id', targetId)
       .is('released_at', null)
       .is('refunded_at', null)
@@ -92,6 +94,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
     const [localRes, asaasRes] = await Promise.all([localPromise, asaasPromise]);
 
     if (localRes.error) {
+      // Coluna ausente (migration não aplicada) também cai aqui — logar sempre.
       console.error('[ProducerBalanceCard] erro query commissions:', localRes.error);
     } else {
       setPending((localRes.data ?? []) as PendingCommission[]);
@@ -150,10 +153,11 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
     };
   }, [load]);
 
-  const { retido, disponivel, nextReleaseAt } = useMemo(() => {
+  const { retido, disponivel, nextReleaseAt, cartao, nextCardAt } = useMemo(() => {
     const now = Date.now();
-    let r = 0, d = 0;
+    let r = 0, d = 0, cc = 0;
     let next: number | null = null;
+    let nextCard: number | null = null;
     for (const c of pending) {
       const releaseTs = c.release_at ? new Date(c.release_at).getTime() : 0;
       // Refund parcial: comissão segue válida pela diferença. Refund total
@@ -161,6 +165,15 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
       // descontar o parcial.
       const amt = Number(c.net_amount ?? 0) - Number(c.refund_amount ?? 0);
       if (amt <= 0) continue;
+      // Cartão que o Asaas ainda não creditou: o dinheiro NÃO está na
+      // subconta, então não entra em retido/disponível (nem na comparação
+      // com o saldo real Asaas, que acusaria dívida falsa).
+      const cardTs = c.card_credit_at ? new Date(c.card_credit_at).getTime() : 0;
+      if (cardTs > now) {
+        cc += amt;
+        if (nextCard === null || cardTs < nextCard) nextCard = cardTs;
+        continue;
+      }
       if (releaseTs > now) {
         r += amt;
         if (next === null || releaseTs < next) next = releaseTs;
@@ -172,6 +185,8 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
       retido:        parseFloat(r.toFixed(2)),
       disponivel:    parseFloat(d.toFixed(2)),
       nextReleaseAt: next,
+      cartao:        parseFloat(cc.toFixed(2)),
+      nextCardAt:    nextCard,
     };
   }, [pending]);
 
@@ -240,7 +255,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
               Saldo
             </h2>
             <p className="text-[10px] text-slate-500 mt-0.5">
-              Repasse automático em até 7 dias
+              PIX: repasse em até 7 dias · Cartão: cai em cerca de 32 dias
             </p>
           </div>
           <button
@@ -272,6 +287,18 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
               retido {nextReleaseAt ? '· libera ' + fmtNextRelease() : ''}
             </span>
           </div>
+          {cartao > 0 && (
+            <div className="mt-2 inline-flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+              <Clock size={11} className="text-sky-500" />
+              <strong className="font-black text-slate-700 dark:text-slate-300">{fmtBRL(cartao)}</strong>
+              a receber no cartão
+              {nextCardAt && (
+                <span>
+                  · o Asaas credita a partir de {new Date(nextCardAt).toLocaleDateString('pt-BR')}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* CTA principal */}
@@ -314,8 +341,9 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
         <div className="mt-4 flex items-start gap-2 text-[10px] text-slate-500">
           <Info size={11} className="shrink-0 mt-0.5" />
           <span>
-            Saldo retido é repassado automático após 7 dias. Você pode antecipar
-            quando quiser — sem taxa.
+            Saldo retido de PIX é repassado automático após 7 dias. Você pode antecipar
+            quando quiser — sem taxa. Vendas no cartão só podem ser repassadas depois
+            que o Asaas credita o valor (prazo padrão de 32 dias após o pagamento).
           </span>
         </div>
 

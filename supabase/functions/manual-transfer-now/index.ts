@@ -16,7 +16,7 @@
 // só pra ler profile + atualizar platform_commissions com bypass de RLS.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { sweepProducerBalance } from '../_shared/asaas-payouts.ts'
+import { sweepProducerBalance, pickCoveredCommissionIds } from '../_shared/asaas-payouts.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin':  '*',
@@ -83,9 +83,10 @@ Deno.serve(async (req) => {
     //    estornadas + subtrai refund_amount no cálculo do total — sem isso,
     //    sweep tentaria sacar valor já refundado e o Asaas rejeitaria por
     //    saldo insuficiente.
-    const { data: pending, error: cErr } = await admin
+    const { data: pendingAll, error: cErr } = await admin
       .from('platform_commissions')
-      .select('id, net_amount, refund_amount, release_at, kind')
+      .select('id, net_amount, refund_amount, release_at, kind, card_credit_at')
+      .order('release_at', { ascending: true })
       .eq('producer_id', producerId)
       .is('released_at', null)
       .is('refunded_at', null)
@@ -95,7 +96,16 @@ Deno.serve(async (req) => {
     if (cErr) {
       return jsonResp({ status: 'error', reason: 'query_failed', error: cErr.message }, 500)
     }
-    if (!pending || pending.length === 0) {
+    const nowMs = Date.now()
+    const pending = (pendingAll ?? []).filter(c => !c.card_credit_at || new Date(c.card_credit_at).getTime() <= nowMs)
+    const cardWaiting = (pendingAll ?? []).filter(c => c.card_credit_at && new Date(c.card_credit_at).getTime() > nowMs)
+    if (pending.length === 0 && cardWaiting.length > 0) {
+      const nextCredit = cardWaiting.map(c => c.card_credit_at as string).sort()[0]
+      return jsonResp({ status: 'ok', reason: 'card_not_credited', released: 0, commissions: 0,
+        message: 'Seus recebimentos no cartão ainda não foram creditados pelo Asaas (o cartão cai em cerca de 32 dias). Previsão: ' + new Date(nextCredit).toLocaleDateString('pt-BR') + '.',
+        next_card_credit_at: nextCredit })
+    }
+    if (pending.length === 0) {
       return jsonResp({ status: 'ok', reason: 'nothing_to_release', released: 0, commissions: 0 })
     }
 
@@ -149,7 +159,7 @@ Deno.serve(async (req) => {
         release_transfer_id: result.transferId ?? null,
         released_manually:   true,
       })
-      .in('id', pending.map(c => c.id as string))
+      .in('id', pickCoveredCommissionIds(pending.map(c => ({ id: c.id as string, net: parseFloat(netOf(c).toFixed(2)) })), result.value))
 
     if (updErr) {
       // Sweep já aconteceu — log erro mas devolve sucesso pra UI (próximo

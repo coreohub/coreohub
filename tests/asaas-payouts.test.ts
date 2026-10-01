@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectPixType, isKycPendingError } from '../supabase/functions/_shared/asaas-payouts';
+import { detectPixType, isKycPendingError, pickCoveredCommissionIds } from '../supabase/functions/_shared/asaas-payouts';
 
 // Payout PIX: se detectPixType errar o tipo da chave, o Asaas rejeita a
 // transferência e a grana do produtor fica presa. O caso ambíguo crítico é
@@ -83,5 +83,28 @@ describe('isKycPendingError', () => {
   it('body vazio/sem errors retorna false', () => {
     expect(isKycPendingError('{}')).toBe(false);
     expect(isKycPendingError('{"errors":[]}')).toBe(false);
+  });
+});
+
+// Repasse parcial: o sweep é limitado ao saldo real da subconta. Só pode marcar
+// como liberada a comissão cujo valor realmente saiu (caso real: cartão que o
+// Asaas ainda não creditou, Usualdance 2026-06).
+describe("pickCoveredCommissionIds", () => {
+  const items = [
+    { id: "a", net: 100 },
+    { id: "b", net: 50 },
+    { id: "c", net: 697 },
+  ];
+  it("saque cobre tudo: libera todas", () => {
+    expect(pickCoveredCommissionIds(items, 847)).toEqual(["a", "b", "c"]);
+  });
+  it("saque menor: deixa de fora a comissão que não foi coberta", () => {
+    expect(pickCoveredCommissionIds(items, 150)).toEqual(["a", "b"]);
+  });
+  it("saldo insuficiente pra primeira: não libera nada", () => {
+    expect(pickCoveredCommissionIds(items, 99)).toEqual([]);
+  });
+  it("tolera 1 centavo de arredondamento", () => {
+    expect(pickCoveredCommissionIds([{ id: "x", net: 10.01 }], 10)).toEqual(["x"]);
   });
 });

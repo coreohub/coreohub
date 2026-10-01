@@ -269,3 +269,25 @@ export async function getTransferStatus(opts: {
     return { ok: false, error: (e as Error).message }
   }
 }
+
+/** Quais comissões o valor realmente sacado cobre, em ordem (as mais antigas
+ *  primeiro). Evita marcar como "liberada" uma comissão cujo dinheiro não
+ *  saiu: o sweep é limitado ao saldo real da subconta, então value pode ser
+ *  menor que o devido (ex.: cartão que o Asaas ainda não creditou). Tolerância
+ *  de 1 centavo pra arredondamento. */
+export function pickCoveredCommissionIds(
+  items: { id: string; net: number }[],
+  swept: number,
+): string[] {
+  const ids: string[] = []
+  let left = swept + 0.01
+  for (const it of items) {
+    if (it.net <= left) {
+      ids.push(it.id)
+      left -= it.net
+    } else {
+      break
+    }
+  }
+  return ids
+}

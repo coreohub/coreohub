@@ -15,7 +15,7 @@
 // Manual run pra debug: POST direto com service-role.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { sweepProducerBalance, getTransferStatus } from '../_shared/asaas-payouts.ts'
+import { sweepProducerBalance, getTransferStatus, pickCoveredCommissionIds } from '../_shared/asaas-payouts.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin':  '*',
@@ -30,6 +30,7 @@ interface ProducerBucket {
   email:         string | null
   totalAmount:   number
   commissionIds: string[]
+  items:         { id: string; net: number }[]
 }
 
 /** Mascara PIX key mostrando só os últimos 4 chars. Cobre todos os formatos
@@ -88,6 +89,7 @@ Deno.serve(async (req) => {
     const { data: commissions, error: cErr } = await supabase
       .from('platform_commissions')
       .select('id, producer_id, net_amount, refund_amount, release_at, asaas_payment_id, kind')
+      .order('release_at', { ascending: true })
       .lte('release_at', new Date().toISOString())
       .is('released_at', null)
       .is('refunded_at', null)
@@ -133,6 +135,7 @@ Deno.serve(async (req) => {
           email:         prof?.email ?? null,
           totalAmount:   0,
           commissionIds: [],
+          items:         [],
         })
       }
       const b = buckets.get(pid)!
@@ -142,6 +145,7 @@ Deno.serve(async (req) => {
       if (net <= 0) continue
       b.totalAmount += net
       b.commissionIds.push(c.id as string)
+      b.items.push({ id: c.id as string, net: parseFloat(net.toFixed(2)) })
     }
 
     let producersOk = 0
@@ -174,7 +178,7 @@ Deno.serve(async (req) => {
             release_transfer_id: result.transferId ?? null,
             released_manually:   false,
           })
-          .in('id', bucket.commissionIds)
+          .in('id', pickCoveredCommissionIds(bucket.items, result.value))
         if (updErr) {
           console.error(`[daily-release-funds] ERRO update produtor=${bucket.producerId}:`, updErr.message)
         }
