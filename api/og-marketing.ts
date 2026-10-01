@@ -31,6 +31,9 @@ type PageMeta = {
   path: string;
   title: string;
   description: string;
+  /** Texto curto só pro cartão de compartilhamento (WhatsApp/Instagram/X); <title> e meta description seguem os campos acima (SEO). */
+  ogTitle?: string;
+  ogDescription?: string;
   /** Imagem própria pra essa página. Sem isso, cai no DEFAULT_IMAGE (foto do Hero da home). */
   image?: string;
 };
@@ -70,6 +73,8 @@ const PAGES: Record<string, PageMeta> = {
     title: 'Bilheteria para espetáculo de fim de ano de dança — Plano Espetáculo | CoreoHub',
     description:
       'Venda ingresso do espetáculo de fim de ano do seu estúdio de dança sem planilha: 7,9% sobre o vendido, sem mensalidade, taxa pública. Cupom, cortesia e credenciamento por QR Code incluídos.',
+    ogTitle: 'Venda os ingressos do seu espetáculo de dança online',
+    ogDescription: 'Ingresso por Pix, cortesias e entrada por QR Code. Você paga 7,9% só sobre o que vender.',
     // Mesma foto da hero da página (antes caía na foto genérica da home).
     image: `${SITE_URL}/og-espetaculo.jpg`,
   },
@@ -78,6 +83,8 @@ const PAGES: Record<string, PageMeta> = {
 const html = (meta: PageMeta): string => {
   const url = `${SITE_URL}${meta.path}`;
   const image = meta.image ?? DEFAULT_IMAGE;
+  const ogTitle = meta.ogTitle ?? meta.title;
+  const ogDescription = meta.ogDescription ?? meta.description;
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -87,11 +94,12 @@ const html = (meta: PageMeta): string => {
 <meta name="description" content="${esc(meta.description)}">
 
 <!-- Open Graph (WhatsApp, Telegram, Facebook, Instagram, LinkedIn) -->
-<meta property="og:title" content="${esc(meta.title)}">
-<meta property="og:description" content="${esc(meta.description)}">
+<meta property="og:title" content="${esc(ogTitle)}">
+<meta property="og:description" content="${esc(ogDescription)}">
 <meta property="og:image" content="${esc(image)}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="${esc(ogTitle)}">
 <meta property="og:url" content="${esc(url)}">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="CoreoHub">
@@ -99,8 +107,8 @@ const html = (meta: PageMeta): string => {
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="${esc(meta.title)}">
-<meta name="twitter:description" content="${esc(meta.description)}">
+<meta name="twitter:title" content="${esc(ogTitle)}">
+<meta name="twitter:description" content="${esc(ogDescription)}">
 <meta name="twitter:image" content="${esc(image)}">
 
 <link rel="canonical" href="${esc(url)}">

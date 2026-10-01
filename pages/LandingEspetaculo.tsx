@@ -30,6 +30,9 @@ const SITE_URL = 'https://coreohub.com';
 const CANONICAL_URL = `${SITE_URL}/espetaculo`;
 
 const PAGE_TITLE = 'Bilheteria para espetáculo de fim de ano de dança — Plano Espetáculo | CoreoHub';
+// Texto curto só do cartão de compartilhamento (WhatsApp/Instagram/X). Espelha ogTitle/ogDescription em api/og-marketing.ts.
+const OG_TITLE = 'Venda os ingressos do seu espetáculo de dança online';
+const OG_DESCRIPTION = 'Ingresso por Pix, cortesias e entrada por QR Code. Você paga 7,9% só sobre o que vender.';
 const PAGE_DESCRIPTION = 'Venda ingresso do espetáculo de fim de ano do seu estúdio de dança sem grupo de WhatsApp nem planilha: 7,9% sobre o vendido, sem mensalidade, taxa pública. Cupom, cortesia e credenciamento por QR Code incluídos.';
 
 const FAQ_ITEMS = [
@@ -99,16 +102,16 @@ export default function LandingEspetaculo() {
     <div className="min-h-screen bg-slate-950 text-white selection:bg-[#ff0068]/30 overflow-x-hidden">
       <title>{PAGE_TITLE}</title>
       <meta name="description" content={PAGE_DESCRIPTION} />
-      <meta property="og:title" content={PAGE_TITLE} />
-      <meta property="og:description" content={PAGE_DESCRIPTION} />
+      <meta property="og:title" content={OG_TITLE} />
+      <meta property="og:description" content={OG_DESCRIPTION} />
       <meta property="og:image" content={`${SITE_URL}/og-espetaculo.jpg`} />
       <meta property="og:url" content={CANONICAL_URL} />
       <meta property="og:type" content="website" />
       <meta property="og:site_name" content="CoreoHub" />
       <meta property="og:locale" content="pt_BR" />
       <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:title" content={PAGE_TITLE} />
-      <meta name="twitter:description" content={PAGE_DESCRIPTION} />
+      <meta name="twitter:title" content={OG_TITLE} />
+      <meta name="twitter:description" content={OG_DESCRIPTION} />
       <meta name="twitter:image" content={`${SITE_URL}/og-espetaculo.jpg`} />
       <link rel="canonical" href={CANONICAL_URL} />
       <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
