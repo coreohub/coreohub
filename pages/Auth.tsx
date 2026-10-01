@@ -116,6 +116,10 @@ const Auth = () => {
   const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null);
   const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
   const [recoveryLoading, setRecoveryLoading] = useState(false);
+  // E-mail ainda não confirmado: mostra "Reenviar" + "Entrar com código" (sem isso
+  // a pessoa só via o aviso e ficava sem saída).
+  const [needsConfirm, setNeedsConfirm] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const passwordRef = useRef<HTMLInputElement>(null);
 
   // Detecção de in-app browser (Instagram/Facebook/TikTok): o OAuth do Google
@@ -364,6 +368,7 @@ const Auth = () => {
     setIsLoading(true);
     setError(null);
     setRecoveryNotice(null);
+    setNeedsConfirm(false);
 
     try {
       if (authMode === 'login') {
@@ -401,12 +406,19 @@ const Auth = () => {
         }
         if (signInError.message?.toLowerCase().includes('email not confirmed')) {
           setRecoveryNotice('Conta criada! Confirme seu e-mail pra ativar o acesso. Já enviamos o link.');
+          setNeedsConfirm(true);
           setIsLoading(false);
           return;
         }
         throw signInError;
       }
     } catch (err: any) {
+      if (/email not confirmed/i.test(err.message ?? '')) {
+        setRecoveryNotice('Seu e-mail ainda não foi confirmado. Reenvie o link ou entre com um código enviado ao e-mail.');
+        setNeedsConfirm(true);
+        setIsLoading(false);
+        return;
+      }
       let message = 'Erro na autenticação. Verifique suas credenciais.';
       if (err.message === 'Invalid login credentials') message = 'E-mail ou senha incorretos.';
       if (err.message === 'User already registered') message = 'Este e-mail já está cadastrado.';
@@ -441,6 +453,39 @@ const Auth = () => {
     } finally {
       setRecoveryLoading(false);
     }
+  };
+
+  /** Reenvia o e-mail de confirmação do cadastro. */
+  const handleResendConfirmation = async () => {
+    setError(null);
+    const mail = email.trim();
+    if (!mail) { setError('Digite seu e-mail.'); return; }
+    setResendLoading(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: mail,
+        options: { emailRedirectTo: `${window.location.origin}${redirectTo || '/inicio'}` },
+      });
+      if (error) throw error;
+      setRecoveryNotice('Reenviamos o e-mail de confirmação. Confira também a caixa de spam.');
+    } catch (err: any) {
+      setError(err.message ?? 'Não foi possível reenviar o e-mail.');
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
+  /** Troca pro login por código (OTP) já disparando o envio pro e-mail digitado. */
+  const handleSwitchToOtp = () => {
+    setError(null);
+    setRecoveryNotice(null);
+    setNeedsConfirm(false);
+    setUseOtp(true);
+    setOtpStep('idle');
+    setOtpCode('');
+    setOtpError(null);
+    void handleSendOtp();
   };
 
   // Cooldown do botão de reenvio de código.
@@ -601,6 +646,26 @@ const Auth = () => {
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {needsConfirm && (
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={handleResendConfirmation}
+                  disabled={resendLoading}
+                  className="w-full py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 hover:border-[#ff0068] hover:text-[#ff0068] transition-colors disabled:opacity-60"
+                >
+                  {resendLoading ? 'Reenviando...' : 'Reenviar e-mail de confirmação'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSwitchToOtp}
+                  className="w-full py-3 rounded-2xl bg-[#ff0068] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#ff1a7d] transition-colors"
+                >
+                  Entrar com código por e-mail
+                </button>
+              </div>
+            )}
 
             {/* ── Login por e-mail (OTP) — caminho dentro de webview ── */}
             {useOtp && (
