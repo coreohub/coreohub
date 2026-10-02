@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { resolveAsaasEnv, resolveWebhookEnvName, webhookMatchesEvent } from '../_shared/asaas-env.ts'
+import { cardCreditFallback } from '../_shared/card-credit-date.ts'
 import {
   dispatchPurchaseConversions,
   type MetaCapiTarget,
@@ -20,7 +21,6 @@ const RELEASE_WINDOW_DAYS = 7
  *  campo creditDate / estimatedCreditDate do payment). Liberar em D+7 faria o
  *  sweep tentar sacar saldo que ainda não existe, ou pior, puxar o dinheiro
  *  retido de outras vendas. Então vale o MAIOR entre D+7 e a data de crédito. */
-const CARD_FALLBACK_CREDIT_DAYS = 32
 
 function isCardPayment(payment?: any): boolean {
   const bt = String(payment?.billingType ?? '').toUpperCase()
@@ -36,7 +36,7 @@ function computeCardCreditAt(paidAtIso?: string, payment?: any): string | null {
     if (!isNaN(d.getTime())) return d.toISOString()
   }
   const base = paidAtIso ? new Date(paidAtIso).getTime() : Date.now()
-  return new Date(base + CARD_FALLBACK_CREDIT_DAYS * 24 * 60 * 60 * 1000).toISOString()
+  return cardCreditFallback(base)
 }
 
 function computeReleaseAt(paidAtIso?: string, payment?: any): string {
