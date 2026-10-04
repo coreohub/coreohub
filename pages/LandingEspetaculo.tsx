@@ -32,13 +32,13 @@ const CANONICAL_URL = `${SITE_URL}/espetaculo`;
 const PAGE_TITLE = 'Bilheteria para espetáculo de fim de ano de dança — Plano Espetáculo | CoreoHub';
 // Texto curto só do cartão de compartilhamento (WhatsApp/Instagram/X). Espelha ogTitle/ogDescription em api/og-marketing.ts.
 const OG_TITLE = 'Venda os ingressos do seu espetáculo de dança online';
-const OG_DESCRIPTION = 'Ingresso por Pix, cortesias e entrada por QR Code. Você paga 7,9% só sobre o que vender.';
-const PAGE_DESCRIPTION = 'Venda ingresso do espetáculo de fim de ano do seu estúdio de dança sem grupo de WhatsApp nem planilha: 7,9% sobre o vendido, sem mensalidade, taxa pública. Cupom, cortesia e credenciamento por QR Code incluídos.';
+const OG_DESCRIPTION = 'Ingresso por Pix, cortesias e entrada por QR Code. Você paga 7,9% só sobre o que vender, sem mensalidade.';
+const PAGE_DESCRIPTION = 'Venda ingresso do espetáculo de dança do estúdio: 7,9% sobre o vendido, sem mensalidade, mais taxa de pagamento (comprador ou você). Cupom, cortesia e QR Code.';
 
 const FAQ_ITEMS = [
   {
     q: 'Quanto custa vender ingresso pro espetáculo de fim de ano?',
-    a: 'A CoreoHub cobra 7,9% sobre o valor total vendido (GMV), sem mínimo e com tudo incluso — a CoreoHub absorve 100% da taxa de processamento de PIX, cartão e boleto. Não tem mensalidade, não tem taxa de adesão, não tem contrato. Esse número é público e fixo: não muda por negociação caso a caso, é o mesmo pra qualquer estúdio.',
+    a: 'A CoreoHub cobra 7,9% sobre o valor vendido, sem mínimo, sem mensalidade e sem taxa de adesão. Além disso há a taxa de pagamento (Pix ou cartão), que aparece como linha separada no checkout e, por padrão, é paga pelo comprador. Se preferir, você assume essa taxa e o ingresso sai com preço fechado. O percentual de 7,9% é público e igual para qualquer estúdio.',
   },
   {
     q: 'E se a plateia não lotar e sobrar ingresso?',
@@ -62,7 +62,11 @@ const FAQ_ITEMS = [
   },
   {
     q: 'Quem já compra ingresso paga alguma taxa a mais?',
-    a: 'Por padrão, sim — o valor da taxa fica embutido no preço final mostrado, sem linha "+taxa" separada no checkout. O estúdio pode configurar pra absorver a taxa em vez de repassar, se preferir.',
+    a: 'Sim, por padrão o comprador paga duas coisas além do preço do ingresso: a taxa de serviço (a comissão de 7,9% repassada) e a taxa de pagamento, que depende de ele escolher Pix ou cartão. Tudo aparece separado, com o total, antes de pagar. O estúdio pode assumir essas taxas em vez de repassar, e o ingresso sai com preço fechado.',
+  },
+  {
+    q: 'O que é a taxa de pagamento e quem paga?',
+    a: 'É uma linha separada no checkout que cobre o custo de processar o Pix ou o cartão. É proporcional ao valor da compra, com teto no Pix, e não entra no seu repasse: o que você recebe é o preço do ingresso menos a comissão. Por padrão quem paga é o comprador. Se você escolher pagar, o valor sai do seu repasse e o comprador vê o preço fechado. Em caso de estorno, a taxa de pagamento é devolvida ao comprador junto com o ingresso.',
   },
 ];
 
@@ -83,7 +87,7 @@ export default function LandingEspetaculo() {
         serviceType: 'Bilheteria online para espetáculo de dança',
         offers: {
           '@type': 'Offer',
-          description: '7,9% sobre o GMV vendido, sem mínimo, tudo incluso',
+          description: '7,9% sobre o valor vendido, sem mínimo e sem mensalidade, mais taxa de pagamento (Pix ou cartão) paga pelo comprador ou assumida pelo produtor',
           priceCurrency: 'BRL',
         },
       },
@@ -332,11 +336,11 @@ export default function LandingEspetaculo() {
           </h2>
           <div className="max-w-2xl mx-auto bg-gradient-to-br from-[#ff0068]/10 via-white/5 to-purple-700/10 border border-white/10 rounded-3xl p-8 md:p-10 backdrop-blur-xl">
             <p className="text-5xl font-black tracking-tighter text-white">7,9%</p>
-            <p className="text-slate-300 text-sm mt-2">sobre cada ingresso vendido — sem mínimo, sem taxa fixa, tudo incluso</p>
+            <p className="text-slate-300 text-sm mt-2">sobre cada ingresso vendido — sem mínimo, sem mensalidade, sem taxa de adesão</p>
             <ul className="mt-6 space-y-2 text-left max-w-sm mx-auto">
               {[
                 'Não vendeu, não pagou — sem estoque mínimo, sem risco',
-                'A CoreoHub absorve 100% do processamento (PIX, cartão, boleto)',
+                'Taxa de pagamento (Pix ou cartão) em linha separada no checkout: paga pelo comprador ou por você, como preferir',
                 'Repasse automático via Pix, sem fechamento de caixa manual',
               ].map((item, i) => (
                 <li key={i} className="flex items-start gap-3 text-slate-300">

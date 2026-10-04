@@ -62,7 +62,7 @@ const PAGES: Record<string, PageMeta> = {
     // renderiza JS e vê a versão real da SPA, mas os crawlers de IA (GEO/AEO)
     // dependem inteiramente deste texto estar correto.
     description:
-      'Começo (10% sobre inscrições, ingressos e workshops, sem taxa fixa), Essencial (R$250 + 5%) ou Escala (R$1.490 + R$2/participante, teto de 4,5%). Sem mensalidade — você paga proporcional ao que o festival fatura. Só a seletiva por vídeo tem taxa própria, configurável à parte.',
+      'Começo (10% sobre inscrições, ingressos e workshops, sem taxa fixa), Essencial (R$250 + 5%) ou Escala (R$1.490 + R$2/participante, teto de 4,5%). Sem mensalidade — você paga proporcional ao que o festival fatura. A taxa de pagamento (Pix ou cartão) aparece separada no checkout, paga pelo comprador ou por você, conforme o evento. Só a seletiva por vídeo tem taxa própria, configurável à parte.',
     // Imagem própria (cartões Começo/Essencial/Escala) — sem isso, compartilhar
     // o link de Planos mostrava a mesma foto do Hero da home, sem relação
     // nenhuma com preço/comercial. Achado 2026-09-13.
@@ -72,9 +72,9 @@ const PAGES: Record<string, PageMeta> = {
     path: '/espetaculo',
     title: 'Bilheteria para espetáculo de fim de ano de dança — Plano Espetáculo | CoreoHub',
     description:
-      'Venda ingresso do espetáculo de fim de ano do seu estúdio de dança sem planilha: 7,9% sobre o vendido, sem mensalidade, taxa pública. Cupom, cortesia e credenciamento por QR Code incluídos.',
+      'Venda ingresso do espetáculo de dança do estúdio: 7,9% sobre o vendido, sem mensalidade, mais taxa de pagamento (comprador ou você). Cupom, cortesia e QR Code.',
     ogTitle: 'Venda os ingressos do seu espetáculo de dança online',
-    ogDescription: 'Ingresso por Pix, cortesias e entrada por QR Code. Você paga 7,9% só sobre o que vender.',
+    ogDescription: 'Ingresso por Pix, cortesias e entrada por QR Code. Você paga 7,9% só sobre o que vender, sem mensalidade.',
     // Mesma foto da hero da página (antes caía na foto genérica da home).
     image: `${SITE_URL}/og-espetaculo.jpg`,
   },

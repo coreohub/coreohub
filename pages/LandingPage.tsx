@@ -776,7 +776,7 @@ const LandingPage = () => {
               },
               {
                 q: 'Quantos festivais por mês posso criar?',
-                a: 'Quantos quiser. Não há limite de festivais, edições ou mostras — você paga só a comissão de cada inscrição vendida, então pode rodar um evento por mês ou dez, sem custo fixo te travando.',
+                a: 'Quantos quiser. Não há limite de festivais, edições ou mostras — você paga só a comissão do seu plano sobre o que vender (nos planos Essencial e Escala, mais a taxa de ativação por evento), então pode rodar um evento por mês ou dez, sem mensalidade te travando.',
               },
               {
                 q: 'Funciona pra evento gratuito ou edital público?',

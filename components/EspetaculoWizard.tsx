@@ -268,7 +268,7 @@ const EspetaculoWizard: React.FC = () => {
             </div>
 
             <p className="text-[10px] text-slate-400 leading-relaxed">
-              Comissão fixa de <strong className="text-slate-600 dark:text-slate-300">7,9% sobre o ingresso vendido</strong>, sem mensalidade nem taxa fixa — só paga se vender.
+              Comissão fixa de <strong className="text-slate-600 dark:text-slate-300">7,9% sobre o ingresso vendido</strong>, sem mensalidade nem taxa fixa — só paga se vender. A taxa de pagamento (Pix ou cartão) aparece separada no checkout.
             </p>
 
             <button

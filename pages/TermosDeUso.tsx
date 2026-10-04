@@ -94,7 +94,8 @@ const TermosDeUso: React.FC = () => {
               4. Modelo de cobrança
             </h2>
             <p className="mb-3">A CoreoHub opera no modelo de comissão por transação. <strong className="text-white font-semibold">Não há mensalidade.</strong> A cobrança ocorre apenas sobre transações financeiras realizadas através da plataforma, conforme a comissão configurada para cada evento.</p>
-            <p>Eventos sem transações financeiras não geram cobrança. A comissão é definida no momento da criação de cada evento e pode ser configurada pelo produtor dentro dos limites estabelecidos pela plataforma.</p>
+            <p className="mb-3">Eventos sem transações financeiras não geram cobrança. A comissão é definida no momento da criação de cada evento e pode ser configurada pelo produtor dentro dos limites estabelecidos pela plataforma.</p>
+            <p>Em eventos em que estiver ativada, a plataforma também cobra a <strong className="text-white font-semibold">taxa de pagamento</strong>, uma linha separada que cobre o custo de processar o Pix ou o cartão. Ela é exibida ao comprador, com o total, antes do pagamento, e por padrão é paga por ele. O produtor pode optar por assumi-la, caso em que o comprador paga o preço fechado.</p>
           </section>
 
           <section>
@@ -116,7 +117,7 @@ const TermosDeUso: React.FC = () => {
               6. Pagamentos e reembolsos
             </h2>
             <p className="mb-3">Os pagamentos são processados por meio do gateway Asaas. A CoreoHub não armazena dados de cartão de crédito. Reembolsos podem ser processados diretamente pelo painel do produtor, sujeitos às políticas do meio de pagamento utilizado.</p>
-            <p>Em caso de cancelamento, adiamento ou alteração relevante do evento, o comprador tem direito à restituição integral do valor pago, incluindo as taxas, nos termos da cláusula 7. A CoreoHub processa a devolução pela plataforma e o produtor reembolsa a CoreoHub conforme o Termo do Produtor.</p>
+            <p>Em caso de cancelamento, adiamento ou alteração relevante do evento, o comprador tem direito à restituição integral do valor pago, incluindo as taxas (de serviço e de pagamento), nos termos da cláusula 7. A CoreoHub processa a devolução pela plataforma e o produtor reembolsa a CoreoHub conforme o Termo do Produtor.</p>
           </section>
 
           <section>
@@ -125,7 +126,7 @@ const TermosDeUso: React.FC = () => {
             </h2>
             <p className="mb-3">Esta cláusula vale para quem compra ingressos de plateia pela plataforma, além dos direitos previstos no Código de Defesa do Consumidor e no Decreto nº 13.108/2026.</p>
             <ul className="list-disc pl-5 space-y-2 mb-4">
-              <li><strong className="text-white font-semibold">Preço e taxa de serviço:</strong> o preço do ingresso e a taxa de serviço aparecem separados desde a oferta, com o total antes do pagamento. Ao escolher os ingressos, o preço e a taxa ficam travados pelo tempo exibido na tela do checkout.</li>
+              <li><strong className="text-white font-semibold">Preço, taxa de serviço e taxa de pagamento:</strong> o preço do ingresso, a taxa de serviço e, quando cobrada, a taxa de pagamento (que depende de você escolher Pix ou cartão) aparecem separados, com o total antes do pagamento. Ao escolher os ingressos, o preço e as taxas ficam travados pelo tempo exibido na tela do checkout. Em caso de estorno ou desistência, a taxa de pagamento é devolvida junto com o valor pago.</li>
               <li><strong className="text-white font-semibold">Meia-entrada:</strong> vale nos termos da Lei nº 12.933/2013 e do Decreto nº 8.537/2015, cujo texto e os órgãos de fiscalização aparecem no ponto de venda. O benefício é pessoal e o documento que comprova o direito deve ser apresentado na compra e na portaria; sem a comprovação, paga-se a diferença para o valor inteiro. Cada CPF de comprador pode comprar 1 meia-entrada por evento, salvo os ingressos de pessoa com deficiência e de acompanhante. Cada evento mostra o total de ingressos e quantos são de meia-entrada e, depois do evento, publica o relatório de vendas.</li>
               <li><strong className="text-white font-semibold">Transferência:</strong> o ingresso pode ser transferido, de graça, para outra pessoa pela própria página do ingresso, informando nome, CPF, e-mail e telefone do novo titular. O QR e o link antigos deixam de valer e o novo titular recebe o ingresso por e-mail. Não é possível transferir depois do check-in nem em sessão cancelada. Na transferência de meia-entrada, o novo titular precisa comprovar o direito na portaria.</li>
               <li><strong className="text-white font-semibold">Arrependimento:</strong> você pode desistir da compra em até 7 dias corridos do pagamento e até o início do evento, pelo botão "Desistir da compra" na página do ingresso, com devolução integral do valor pago, incluindo a taxa de serviço. A desistência vale para todos os ingressos da mesma compra.</li>

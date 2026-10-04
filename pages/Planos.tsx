@@ -64,7 +64,7 @@ const PLANOS: Plan[] = [
 
 const PLANOS_TITLE = 'Planos e preços — CoreoHub';
 const PLANOS_DESCRIPTION =
-  'Começo (10% sobre inscrições, ingressos e workshops, sem taxa fixa), Essencial (R$250 + 5%) ou Escala (R$1.490 + R$2/participante, teto de 4,5%). Sem mensalidade — você paga proporcional ao que o festival fatura. Só a seletiva por vídeo tem taxa própria, configurável à parte.';
+  'Começo (10% sobre inscrições, ingressos e workshops, sem taxa fixa), Essencial (R$250 + 5%) ou Escala (R$1.490 + R$2/participante, teto de 4,5%). Sem mensalidade — você paga proporcional ao que o festival fatura. A taxa de pagamento (Pix ou cartão) aparece separada no checkout, paga pelo comprador ou por você, conforme o evento. Só a seletiva por vídeo tem taxa própria, configurável à parte.';
 
 const fmtBRL = (n: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(n);
@@ -166,10 +166,30 @@ const Planos: React.FC = () => {
     const prevCanonical = canonical.href;
     canonical.href = 'https://coreohub.com/planos';
 
+    // FAQPage (AEO): mesma pergunta e resposta do bloco visível "O que é a taxa de pagamento e quem paga?".
+    const faqLd = document.createElement('script');
+    faqLd.type = 'application/ld+json';
+    faqLd.id = 'planos-faq-ld';
+    faqLd.text = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: [{
+        '@type': 'Question',
+        name: 'O que é a taxa de pagamento e quem paga?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: 'É uma linha separada no checkout que cobre o custo de processar o Pix ou o cartão. Aparece com o total antes de pagar, não entra no repasse do produtor e é devolvida ao comprador em caso de estorno. Em ingressos, workshops e passes o comprador paga por padrão e o produtor pode assumir. Nas inscrições dos planos Essencial e Escala o produtor escolhe o modo; no Começo o preço é fechado.',
+        },
+      }],
+    });
+    document.getElementById('planos-faq-ld')?.remove();
+    document.head.appendChild(faqLd);
+
     return () => {
       document.title = prevTitle;
       if (prevDesc !== null) setMeta('description', prevDesc);
       canonical!.href = prevCanonical;
+      faqLd.remove();
     };
   }, []);
 
@@ -599,6 +619,33 @@ const Planos: React.FC = () => {
 
           <p className="text-[11px] text-slate-500 text-center mt-6">
             Valores de referência — cada taxa é configurável por evento junto com nosso time.
+          </p>
+        </div>
+
+        <div className="max-w-4xl mx-auto pt-16">
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff0068] mb-3 text-center">Sem letra miúda</p>
+          <h2 className="text-2xl md:text-3xl font-black uppercase italic tracking-tight text-center mb-3">
+            O que é a <span className="text-[#ff0068]">taxa de pagamento</span> e quem paga?
+          </h2>
+          <p className="text-slate-300 text-sm text-center max-w-2xl mx-auto mb-8 leading-relaxed">
+            É uma linha separada no checkout que cobre o custo de processar o Pix ou o cartão. Aparece com o total antes de pagar, não entra no seu repasse e é devolvida ao comprador em caso de estorno. A comissão do plano continua sendo a de cima; a taxa de pagamento é outra linha.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+              <p className="text-sm font-bold text-white mb-1">Ingressos, workshops e passes</p>
+              <p className="text-xs text-slate-400 leading-relaxed">Por padrão o comprador paga a taxa. Você pode assumi-la e vender com preço fechado, e o valor sai do seu repasse.</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+              <p className="text-sm font-bold text-white mb-1">Inscrições no Essencial e no Escala</p>
+              <p className="text-xs text-slate-400 leading-relaxed">Você escolhe: Pix sem taxa e cartão com taxa (padrão), taxa em todos os pagamentos, ou preço fechado, em que o custo do cartão sai do seu repasse.</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+              <p className="text-sm font-bold text-white mb-1">Inscrições no Começo</p>
+              <p className="text-xs text-slate-400 leading-relaxed">Preço fechado: o inscrito nunca vê taxa de pagamento. A comissão de 10% cobre tudo.</p>
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-500 text-center mt-6">
+            Os valores seguem a lei de cada estado e podem ser simulados em Configurações &gt; Pagamentos &gt; Taxas e simulador, dentro da plataforma. Atualizado em outubro de 2026.
           </p>
         </div>
       </section>
