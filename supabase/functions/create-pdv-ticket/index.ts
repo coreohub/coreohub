@@ -36,7 +36,9 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { computeAudienceCart, round2 } from '../_shared/audience-pricing.ts'
+import { round2 } from '../_shared/audience-pricing.ts'
+import { computeAudienceCheckout } from '../_shared/audience-checkout.ts'
+import { allocateProportional } from '../_shared/processing-fee.ts'
 import { buildCorsHeaders } from '../_shared/cors.ts'
 import { ticketSeatKind, effectiveTicketKind, countPcdTickets, countCompanionTickets, alignSeatsToItems, type TicketSeatKind } from '../_shared/seat-rules.ts'
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
@@ -150,7 +152,8 @@ Deno.serve(async (req) => {
         id, name, created_by, ingressos_config,
         audience_commission_percent, audience_fee_mode,
         audience_max_per_cpf, audience_max_per_purchase, audience_sales_enabled,
-        politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status
+        politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status,
+        processing_fee_enabled, audience_processing_payer, state
       `)
       .eq('id', event_id)
       .single()
@@ -266,7 +269,9 @@ Deno.serve(async (req) => {
     const commissionPercent = payment_method === 'pix' ? Number(event.audience_commission_percent ?? 10) : 0
     const feeMode = (event as any).audience_fee_mode ?? 'repassar'
 
-    const pricing = computeAudienceCart({
+    // Linha "Taxa de pagamento" (P3): só no Pix do balcão (passa pela Asaas). Cartão presencial
+    // (Tap) não passa pela Asaas nem paga comissão, então também não paga linha.
+    const pricing = computeAudienceCheckout({
       resolved: resolved.map(r => ({
         idx: r.idx, nome: r.nome, kind: r.kind,
         quantity: r.quantity, precoUnit: r.precoUnit, quantidadeTotal: r.quantidadeTotal,
@@ -275,10 +280,17 @@ Deno.serve(async (req) => {
       discountTotal: 0,
       commissionPercent,
       feeMode,
+      processingFeeEnabled: payment_method === 'pix' && Boolean((event as any).processing_fee_enabled),
+      payer: (event as any).audience_processing_payer ?? 'comprador',
+      method: 'pix',
+      installments: 1,
+      uf: (event as any).state ?? null,
     })
+    const effectiveFeeMode = pricing.feeMode   // AC/RR forçam 'absorver'
     const rpcItems = pricing.items
     const chargedTotal = pricing.chargedTotal
     const producerTotal = pricing.producerTotal
+    const processingFee = pricing.processingFee
 
     const buyerName = buyer.name!.trim()
     const buyerEmail = buyer.email!.trim().toLowerCase()
@@ -307,7 +319,7 @@ Deno.serve(async (req) => {
         p_buyer_phone: buyerPhone,
         p_commission_amount: item.commission_amount,
         p_producer_amount: item.producer_amount,
-        p_fee_mode: feeMode,
+        p_fee_mode: effectiveFeeMode,
         p_quantidade_total: resolved[0].quantidadeTotal,
         p_reserved_minutes: 10,
       })
@@ -320,7 +332,7 @@ Deno.serve(async (req) => {
         p_buyer_email: buyerEmail,
         p_buyer_phone: buyerPhone,
         p_max_per_cpf: maxPerCpf,
-        p_fee_mode: feeMode,
+        p_fee_mode: effectiveFeeMode,
         p_reserved_minutes: 10,
         p_coupon_id: null,
         p_coupon_code: null,
@@ -515,8 +527,30 @@ Deno.serve(async (req) => {
 
     await supabase
       .from('audience_tickets')
-      .update({ payment_id: payData.id, payment_url: payData.invoiceUrl })
+      .update({
+        payment_id: payData.id,
+        payment_url: payData.invoiceUrl,
+        ...((event as any).processing_fee_enabled ? { payment_method_chosen: 'pix', installments: 1 } : {}),
+      })
       .in('id', createdTickets.map(t => t.id))
+
+    // Linha paga pelo comprador gravada por ticket (rateio pro rata, soma exata em centavos).
+    if (processingFee > 0) {
+      const { data: tkRows } = await supabase
+        .from('audience_tickets')
+        .select('id, preco, commission_amount')
+        .in('id', createdTickets.map(t => t.id))
+      const rows = (tkRows ?? []) as Array<{ id: string; preco: number; commission_amount: number }>
+      const weights = rows.map(r => Number(r.preco ?? 0) + (effectiveFeeMode === 'repassar' ? Number(r.commission_amount ?? 0) : 0))
+      const shares = allocateProportional(processingFee, weights)
+      for (let i = 0; i < rows.length; i++) {
+        const { error: feeErr } = await supabase
+          .from('audience_tickets')
+          .update({ processing_fee_amount: shares[i] })
+          .eq('id', rows[i].id)
+        if (feeErr) console.error('[create-pdv-ticket] erro ao gravar linha no ticket:', feeErr.message)
+      }
+    }
 
     console.log(`[create-pdv-ticket] ok(pix) event=${event_id} qty=${totalQty} items=${itemsDesc} charged=${chargedTotal} operator=${user.id} payment=${payData.id}`)
 
@@ -528,6 +562,7 @@ Deno.serve(async (req) => {
       payment_id: payData.id,
       charged_amount: chargedTotal,
       producer_amount: producerTotal,
+      processing_fee: processingFee,
       pix,
     }, 201)
   } catch (error: any) {

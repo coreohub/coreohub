@@ -515,6 +515,8 @@ interface AudienceTicketPayload {
   eventoData?: string
   eventoLocal?: string
   valorPago?: number
+  /** Linha "Taxa de pagamento" (já inclusa em valorPago); só quando o evento a cobra do comprador. */
+  taxaPagamento?: number
   tickets?: Array<{ tipo: string; url: string; assento?: string | null }>
   appUrl?: string
 }
@@ -528,6 +530,7 @@ function buildAudienceTicketConfirmation(p: AudienceTicketPayload) {
     p.eventoData  ? infoRow('Data',   escape(p.eventoData)) : '',
     p.eventoLocal ? infoRow('Local',  escape(p.eventoLocal)) : '',
     typeof p.valorPago === 'number' ? infoRow('Valor pago', escape(money(p.valorPago))) : '',
+    typeof p.taxaPagamento === 'number' && p.taxaPagamento > 0 ? infoRow('Taxa de pagamento (inclusa)', escape(money(p.taxaPagamento))) : '',
   ].filter(Boolean).join('')
 
   const ticketBlocks = tickets.map((t, i) => {
@@ -554,7 +557,7 @@ function buildAudienceTicketConfirmation(p: AudienceTicketPayload) {
       Guarde este email — o link de cada ingresso é seu comprovante.${isMulti ? ' Cada pessoa precisa do seu próprio QR na entrada.' : ''}
     </p>
     <p style="margin:12px 0 0;font-size:13px;line-height:1.6;color:#475569;">
-      <strong>Arrependimento:</strong> você pode desistir da compra em até 7 dias corridos do pagamento (e até o início do evento), com devolução integral do valor pago, incluindo a taxa de serviço. É só abrir a página de qualquer ingresso acima e usar o botão "Desistir da compra".
+      <strong>Arrependimento:</strong> você pode desistir da compra em até 7 dias corridos do pagamento (e até o início do evento), com devolução integral do valor pago, incluindo a taxa de serviço${typeof p.taxaPagamento === 'number' && p.taxaPagamento > 0 ? ' e a taxa de pagamento' : ''}. É só abrir a página de qualquer ingresso acima e usar o botão "Desistir da compra".
     </p>`
 
   return {
@@ -578,6 +581,8 @@ interface AudienceProducerPayload {
   quantidade?: number
   valorBruto?: number
   comissao?: number
+  /** Linha "Taxa de pagamento" paga pelo comprador: não entra no repasse do produtor. */
+  taxaPagamento?: number
   valorLiquido?: number
   appUrl?: string
 }
@@ -591,6 +596,7 @@ function buildAudienceProducerNotification(p: AudienceProducerPayload) {
     typeof p.valorBruto === 'number' ? infoRow('Valor bruto', escape(money(p.valorBruto))) : '',
     typeof p.comissao === 'number' ? infoRow('Comissão plataforma', escape(money(p.comissao))) : '',
     typeof p.valorLiquido === 'number' ? infoRow('Valor líquido (você recebe)', `<span style="color:#16a34a;">${escape(money(p.valorLiquido))}</span>`) : '',
+    typeof p.taxaPagamento === 'number' && p.taxaPagamento > 0 ? infoRow('Taxa de pagamento (paga pelo comprador, não entra no seu repasse)', escape(money(p.taxaPagamento))) : '',
   ].filter(Boolean).join('')
 
   return {

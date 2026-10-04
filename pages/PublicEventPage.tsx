@@ -26,6 +26,7 @@ const ufUtcOffset = (uf?: string | null): string => {
   return '-03:00';
 };
 import { isEventOver } from '../utils/eventStatus';
+import { getUfRule } from '../supabase/functions/_shared/uf-rules';
 import AvisoViradaLote from '../components/AvisoViradaLote';
 import MeiaEntradaInfo from '../components/MeiaEntradaInfo';
 import MeiaVendasReport from '../components/MeiaVendasReport';
@@ -172,6 +173,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             politica_ingressos, audience_sales_enabled, billing_plan, seat_map_enabled,
             sessao_status, sessao_motivo, sessao_data_original, sessao_hora_original,
             audience_max_per_purchase, audience_max_per_cpf, audience_fee_mode, audience_commission_percent, payment_sandbox,
+            processing_fee_enabled, audience_processing_payer,
             producer_ga4_id, producer_meta_pixel_id
           `)
           .eq(filterCol, idOrSlug)
@@ -1512,13 +1514,21 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                               </p>
                               {/* Taxa de serviço discriminada desde a oferta (Decreto 13.108/2026):
                                   mesma conta do checkout (computeAudienceCart, repassar = base + comissão). */}
-                              {preco > 0 && salesEnabled && (event.audience_fee_mode ?? 'repassar') === 'repassar' && (() => {
-                                const taxa = Math.round(preco * Number(event.audience_commission_percent ?? 10)) / 100;
-                                return taxa > 0 ? (
+                              {preco > 0 && salesEnabled && (() => {
+                                const repassar = (event.audience_fee_mode ?? 'repassar') === 'repassar';
+                                const taxa = repassar ? Math.round(preco * Number(event.audience_commission_percent ?? 10)) / 100 : 0;
+                                // Linha "Taxa de pagamento": o valor só fecha no checkout, depois de escolher Pix ou cartão
+                                // (varia por forma). Aqui só o aviso, sem número fechado (Decreto 13.108, art. 7).
+                                const payFeeNote = Boolean((event as any).processing_fee_enabled)
+                                  && (event as any).audience_processing_payer !== 'produtor'
+                                  && !getUfRule(event.state)?.forceAbsorb;
+                                if (taxa <= 0 && !payFeeNote) return null;
+                                return (
                                   <p className="text-[10px] font-bold text-slate-400">
-                                    + taxa R$ {formatPrecoBR(taxa)} · total R$ {formatPrecoBR(preco + taxa)}
+                                    {taxa > 0 && <>+ taxa R$ {formatPrecoBR(taxa)} · total R$ {formatPrecoBR(preco + taxa)}</>}
+                                    {payFeeNote && <>{taxa > 0 ? ' ' : ''}+ taxa de pagamento conforme a forma escolhida</>}
                                   </p>
-                                ) : null;
+                                );
                               })()}
                             </div>
                           </div>

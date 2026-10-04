@@ -52,6 +52,10 @@ interface Row {
   access_token: string;
   commission_amount: number | null;
   producer_amount: number | null;
+  // Linha "Taxa de pagamento" paga pelo comprador (P3): vendido = preco base, a linha aparece à parte.
+  processing_fee_amount?: number | null;
+  installments?: number | null;
+  payment_method_chosen?: string | null;
   fee_mode: string | null;
   group_id: string | null;
   refunded_at: string | null;
@@ -338,12 +342,13 @@ const VendasIngressos: React.FC = () => {
     const totalLiquido = aprovados.reduce((s, r) => s + Number(r.producer_amount ?? 0), 0);
     const totalBruto   = aprovados.reduce((s, r) => s + Number(r.preco ?? 0), 0);
     const totalComissao = aprovados.reduce((s, r) => s + Number(r.commission_amount ?? 0), 0);
+    const totalTaxaPagamento = aprovados.reduce((s, r) => s + Number(r.processing_fee_amount ?? 0), 0);
     const checkedIn = aprovados.filter(r => r.check_in_status === 'OK').length;
     return {
       total: rows.length,
       aprovados: aprovados.length,
       pendentes: pendentes.length,
-      totalLiquido, totalBruto, totalComissao,
+      totalLiquido, totalBruto, totalComissao, totalTaxaPagamento,
       checkedIn,
     };
   }, [rows]);
@@ -539,7 +544,7 @@ const VendasIngressos: React.FC = () => {
       const key = r.group_id ?? `solo:${r.id}`;
       orders.set(key, [...(orders.get(key) ?? []), r]);
     }
-    const total = (list: Row[]) => list.reduce((s, r) => s + Number(r.preco ?? 0) + (r.fee_mode === 'repassar' ? Number(r.commission_amount ?? 0) : 0), 0);
+    const total = (list: Row[]) => list.reduce((s, r) => s + Number(r.preco ?? 0) + (r.fee_mode === 'repassar' ? Number(r.commission_amount ?? 0) : 0) + Number(r.processing_fee_amount ?? 0), 0);
     let manter = 0, credito = 0, estornados = 0, semEscolha = 0, restituicaoPendente = 0, falhas = 0, semPagamento = 0;
     let valorSemEscolha = 0, valorPendente = 0;
     for (const list of orders.values()) {
@@ -640,7 +645,7 @@ const VendasIngressos: React.FC = () => {
   const exportCsv = () => {
     const header = [
       'Data compra', 'Tipo', 'Comprador', 'Email', 'CPF', 'Telefone',
-      'Preço', 'Status', 'Pago em', 'Check-in', 'Método', 'Líquido produtor', 'Comissão',
+      'Preço', 'Status', 'Pago em', 'Check-in', 'Método', 'Líquido produtor', 'Comissão', 'Taxa de pagamento', 'Parcelas',
     ];
     const csv = [
       header.join(';'),
@@ -658,6 +663,8 @@ const VendasIngressos: React.FC = () => {
         r.payment_method ?? '',
         Number(r.producer_amount ?? 0).toFixed(2).replace('.', ','),
         Number(r.commission_amount ?? 0).toFixed(2).replace('.', ','),
+        Number(r.processing_fee_amount ?? 0).toFixed(2).replace('.', ','),
+        r.installments ?? '',
       ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')),
     ].join('\n');
 
@@ -849,7 +856,7 @@ const VendasIngressos: React.FC = () => {
       {/* Métricas */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Metric icon={Ticket} label="Vendidos" value={String(metrics.aprovados)} sub={`${metrics.pendentes} pendentes`} tone="neutral" />
-        <Metric icon={DollarSign} label="Total bruto" value={formatBRL(metrics.totalBruto)} sub={`Líquido ${formatBRL(metrics.totalLiquido)}`} />
+        <Metric icon={DollarSign} label="Total bruto" value={formatBRL(metrics.totalBruto)} sub={`Líquido ${formatBRL(metrics.totalLiquido)}${metrics.totalTaxaPagamento > 0 ? ` · taxa de pagamento ${formatBRL(metrics.totalTaxaPagamento)} (paga pelo comprador)` : ''}`} />
         <Metric icon={Users} label="Check-ins" value={`${metrics.checkedIn} / ${metrics.aprovados}`} sub="presenças confirmadas" tone="neutral" />
         <Metric icon={Clock} label="Pendentes" value={String(metrics.pendentes)} sub="aguardando pagamento" tone="warn" />
       </div>
@@ -1632,6 +1639,12 @@ const VendasIngressos: React.FC = () => {
                 )}
                 {detailRow.commission_amount != null && (
                   <Field label="Comissão CoreoHub" value={formatBRL(Number(detailRow.commission_amount))} />
+                )}
+                {Number(detailRow.processing_fee_amount ?? 0) > 0 && (
+                  <Field
+                    label="Taxa de pagamento (comprador)"
+                    value={`${formatBRL(Number(detailRow.processing_fee_amount))}${detailRow.payment_method_chosen === 'card' ? ` · cartão ${detailRow.installments ?? 1}x` : detailRow.payment_method_chosen === 'pix' ? ' · Pix' : ''}`}
+                  />
                 )}
                 {detailRow.fee_mode && (
                   <Field label="Modo" value={detailRow.fee_mode === 'repassar' ? 'Repassar (comprador paga)' : 'Absorver (você paga)'} />

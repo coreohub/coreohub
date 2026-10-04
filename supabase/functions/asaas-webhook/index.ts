@@ -467,6 +467,7 @@ async function handleAudienceTicket(opts: {
         eventoLocal: eventoLocalFmt,
         eventoData:  eventoDataFmt,
         valorPago:   grossAmount,
+        taxaPagamento: processingFeeTotal,
         tickets:     ticketLinks,
         appUrl,
       }))
@@ -480,8 +481,10 @@ async function handleAudienceTicket(opts: {
         buyerName,
         buyerEmail,
         quantidade:    tickets.length,
-        valorBruto:    grossAmount,
+        // valor bruto da venda (sem a linha, que o comprador paga à parte e não entra no repasse)
+        valorBruto:    parseFloat((grossAmount - processingFeeTotal).toFixed(2)),
         comissao:      commissionTotal,
+        taxaPagamento: processingFeeTotal,
         valorLiquido:  producerTotal,
         appUrl,
       }))

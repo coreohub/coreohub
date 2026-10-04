@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
     if (quote_id && UUID_RE.test(quote_id)) {
       const { data: prev } = await supabase
         .from('audience_price_quotes')
-        .select('id, event_id, prices, commission_percent, fee_mode, expires_at')
+        .select('id, event_id, prices, commission_percent, fee_mode, expires_at, processing_fee_enabled')
         .eq('id', quote_id)
         .maybeSingle()
       if (prev && prev.event_id === event_id) {
@@ -86,6 +86,7 @@ Deno.serve(async (req) => {
             prices: prev.prices,
             commission_percent: Number(prev.commission_percent),
             fee_mode: prev.fee_mode,
+            processing_fee_enabled: Boolean((prev as any).processing_fee_enabled),
             renewed: false,
           })
         }
@@ -95,7 +96,7 @@ Deno.serve(async (req) => {
 
     const { data: event } = await supabase
       .from('events')
-      .select('id, ingressos_config, audience_commission_percent, audience_fee_mode, audience_sales_enabled, politica_ingressos, audience_reservation_minutes, sessao_status')
+      .select('id, ingressos_config, audience_commission_percent, audience_fee_mode, audience_sales_enabled, politica_ingressos, audience_reservation_minutes, sessao_status, processing_fee_enabled')
       .eq('id', event_id)
       .maybeSingle()
     if (!event) throw new Error('Evento não encontrado')
@@ -124,6 +125,7 @@ Deno.serve(async (req) => {
         prices,
         commission_percent: commissionPercent,
         fee_mode: feeMode,
+        processing_fee_enabled: Boolean((event as any).processing_fee_enabled),
         expires_at: expiresAt.toISOString(),
       })
       .select('id')
@@ -139,6 +141,7 @@ Deno.serve(async (req) => {
       prices,
       commission_percent: commissionPercent,
       fee_mode: feeMode,
+      processing_fee_enabled: Boolean((event as any).processing_fee_enabled),
       renewed,
     })
   } catch (err: any) {

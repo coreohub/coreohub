@@ -36,7 +36,8 @@ import { resolveLote, todayISO, type Lote } from '../utils/lotes';
 import { isEventOver } from '../utils/eventStatus';
 // Fonte única da matemática de comissão/split (compartilhada com a edge
 // create-audience-ticket). Garante que o total exibido bate com a cobrança.
-import { computeAudienceCart } from '../supabase/functions/_shared/audience-pricing';
+import { computeAudienceCheckout } from '../supabase/functions/_shared/audience-checkout';
+import { PROCESSING_FEE_CONFIG } from '../supabase/functions/_shared/processing-fee';
 
 const formatBRL = (n: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n ?? 0);
@@ -143,8 +144,12 @@ export default function CheckoutIngresso() {
     prices: Record<string, { preco: number; lote: string | null }>;
     commission: number;
     feeMode: string;
+    processingFeeEnabled: boolean;
     expiresAt: number;
   };
+  // Linha "Taxa de pagamento" (só quando events.processing_fee_enabled): forma escolhida no nosso checkout.
+  const [payMethod, setPayMethod] = useState<'pix' | 'card'>('pix');
+  const [installments, setInstallments] = useState(1);
   const [quote, setQuote] = useState<PriceQuote | null>(null);
   const [quoteNotice, setQuoteNotice] = useState<string | null>(null);
   const quoteRef = useRef<PriceQuote | null>(null);
@@ -169,7 +174,7 @@ export default function CheckoutIngresso() {
         const filterCol = isUuid ? 'id' : 'slug';
         const { data: ev, error: evErr } = await supabase
           .from('events')
-          .select('id, name, slug, start_date, end_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status, sessao_motivo, sessao_data_original, sessao_hora_original')
+          .select('id, name, slug, start_date, end_date, location, cover_url, ingressos_config, audience_sales_enabled, audience_commission_percent, audience_fee_mode, audience_max_per_cpf, audience_max_per_purchase, politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status, sessao_motivo, sessao_data_original, sessao_hora_original, processing_fee_enabled, audience_processing_payer, state')
           .eq(filterCol, idOrSlug)
           .maybeSingle();
         if (evErr || !ev) { setError('Evento não encontrado.'); return; }
@@ -229,6 +234,7 @@ export default function CheckoutIngresso() {
         prices: data.prices ?? {},
         commission: Number(data.commission_percent ?? 10),
         feeMode: String(data.fee_mode ?? 'repassar'),
+        processingFeeEnabled: Boolean(data.processing_fee_enabled),
         expiresAt: now + Number(data.seconds_left ?? 0) * 1000,
       };
       const prev = quoteRef.current;
@@ -570,27 +576,38 @@ export default function CheckoutIngresso() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalBase, appliedCouponCode]);
 
-  // ─── Breakdown — usa a MESMA fonte que a edge (computeAudienceCart) pra
+  // ─── Breakdown — usa a MESMA fonte que a edge (computeAudienceCheckout) pra
   // bater centavo-a-centavo com a cobrança gerada. Fonte única em _shared. ───
+  const feeEnabled = quote?.processingFeeEnabled ?? Boolean(event?.processing_fee_enabled);
+  const computeFor = (method: 'pix' | 'card', n: number) => {
+    const feeMode = quote?.feeMode ?? event.audience_fee_mode ?? 'repassar';
+    return computeAudienceCheckout({
+      resolved: lines.map(l => ({
+        idx: l.idx, nome: l.nome, kind: l.kind,
+        quantity: l.qty, precoUnit: l.precoUnit, quantidadeTotal: l.quantidadeTotal,
+      })),
+      totalBase,
+      discountTotal: Math.min(couponDiscount, totalBase),
+      commissionPercent: quote?.commission ?? Number(event.audience_commission_percent ?? 10),
+      feeMode,
+      processingFeeEnabled: feeEnabled,
+      payer: event.audience_processing_payer ?? 'comprador',
+      method,
+      installments: n,
+      uf: event.state ?? null,
+    });
+  };
   const breakdown = useMemo(() => {
     if (!event || lines.length === 0) return null;
-    const feeMode = quote?.feeMode ?? event.audience_fee_mode ?? 'repassar';
     try {
-      const r = computeAudienceCart({
-        resolved: lines.map(l => ({
-          idx: l.idx, nome: l.nome, kind: l.kind,
-          quantity: l.qty, precoUnit: l.precoUnit, quantidadeTotal: l.quantidadeTotal,
-        })),
-        totalBase,
-        discountTotal: Math.min(couponDiscount, totalBase),
-        commissionPercent: quote?.commission ?? Number(event.audience_commission_percent ?? 10),
-        feeMode,
-      });
+      const r = computeFor(payMethod, payMethod === 'card' ? installments : 1);
       return {
-        feeMode,
+        feeMode: r.feeMode,
         totalBase,
         totalDiscount: r.discountApplied,
         totalFee: r.commissionTotal,
+        processingFee: r.processingFee,
+        producerPaidFee: r.producerPaidFee,
         totalCharged: r.chargedTotal,
       };
     } catch {
@@ -598,7 +615,22 @@ export default function CheckoutIngresso() {
       // A validação de cupom já previne; aqui é só defesa em profundidade.
       return null;
     }
-  }, [event, lines, totalBase, couponDiscount, quote]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [event, lines, totalBase, couponDiscount, quote, feeEnabled, payMethod, installments]);
+
+  // Totais de cada forma de pagamento (Pix, cartão à vista, 2x a 12x) pro comprador comparar.
+  const payOptions = useMemo(() => {
+    if (!event || lines.length === 0 || !feeEnabled) return null;
+    try {
+      const pix = computeFor('pix', 1).chargedTotal;
+      const cardTotals: Record<number, number> = {};
+      for (let n = 1; n <= PROCESSING_FEE_CONFIG.maxInstallments; n++) cardTotals[n] = computeFor('card', n).chargedTotal;
+      return { pix, cardTotals };
+    } catch {
+      return null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [event, lines, totalBase, couponDiscount, quote, feeEnabled]);
 
   // ─── Submit ────────────────────────────────────────────────────────────────
   const anySoldOut = lines.some(l => stockByIdx[String(l.idx)]?.sold_out === true);
@@ -626,6 +658,7 @@ export default function CheckoutIngresso() {
           },
           coupon_code: appliedCouponCode ?? undefined,
           quote_id: quote?.id,
+          ...(feeEnabled ? { payment_method: payMethod, installments: payMethod === 'card' ? installments : 1 } : {}),
           ...(seatMapEnabled ? { seat_ids: selectedSeats, hold_token: holdToken ?? undefined } : {}),
         },
       });
@@ -967,6 +1000,43 @@ export default function CheckoutIngresso() {
           </Field>
         </div>
 
+        {/* Forma de pagamento: a "Taxa de pagamento" muda conforme a escolha (só com a chave ligada) */}
+        {feeEnabled && payOptions && (
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4 space-y-3">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Como você quer pagar?</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => { setPayMethod('pix'); setInstallments(1); }}
+                aria-pressed={payMethod === 'pix'}
+                className={`px-3 py-3 rounded-xl border text-left transition-colors ${payMethod === 'pix' ? 'border-[#ff0068] bg-[#ff0068]/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}>
+                <p className="text-sm font-black">Pix</p>
+                <p className="text-[11px] text-slate-400 tabular-nums">{formatBRL(payOptions.pix)}</p>
+              </button>
+              <button type="button" onClick={() => setPayMethod('card')}
+                aria-pressed={payMethod === 'card'}
+                className={`px-3 py-3 rounded-xl border text-left transition-colors ${payMethod === 'card' ? 'border-[#ff0068] bg-[#ff0068]/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}>
+                <p className="text-sm font-black">Cartão de crédito</p>
+                <p className="text-[11px] text-slate-400 tabular-nums">a partir de {formatBRL(payOptions.cardTotals[1])}</p>
+              </button>
+            </div>
+            {payMethod === 'card' && (
+              <label className="block" htmlFor="installments">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Parcelas</p>
+                <select id="installments" value={installments} onChange={e => setInstallments(Number(e.target.value))}
+                  className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm outline-none focus:border-[#ff0068]/50">
+                  {Array.from({ length: PROCESSING_FEE_CONFIG.maxInstallments }, (_, i) => i + 1).map(n => (
+                    <option key={n} value={n} className="bg-[#0b0b0f]">
+                      {n === 1 ? `À vista, ${formatBRL(payOptions.cardTotals[1])}` : `${n}x de ${formatBRL(payOptions.cardTotals[n] / n)} (total ${formatBRL(payOptions.cardTotals[n])})`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <p className="text-[10px] text-slate-500 leading-relaxed">
+              A taxa de pagamento cobre o processamento do pagamento e varia conforme a forma escolhida. Em caso de reembolso, ela é devolvida junto com o valor do ingresso.
+            </p>
+          </div>
+        )}
+
         {/* Resumo de valores */}
         {breakdown && (
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4 space-y-2">
@@ -979,12 +1049,22 @@ export default function CheckoutIngresso() {
             {breakdown.feeMode === 'repassar' && (
               <Row label="Taxa de serviço" value={formatBRL(breakdown.totalFee)} hint="Cobrada pela plataforma." />
             )}
+            {feeEnabled && breakdown.processingFee > 0 && (
+              <Row label="Taxa de pagamento" value={formatBRL(breakdown.processingFee)}
+                hint={payMethod === 'card' ? `Cartão em ${installments}x.` : 'Pix.'} />
+            )}
             <div className="border-t border-white/10 pt-2 mt-2 flex items-baseline justify-between">
               <p className="font-black uppercase text-sm">Total</p>
               <p className="text-2xl font-black text-[#ff0068]">{formatBRL(breakdown.totalCharged)}</p>
             </div>
+            {feeEnabled && payMethod === 'card' && installments > 1 && (
+              <p className="text-[11px] text-slate-400 mt-1 tabular-nums">{installments}x de {formatBRL(breakdown.totalCharged / installments)}</p>
+            )}
             {breakdown.feeMode === 'absorver' && (
               <p className="text-[10px] text-slate-500 mt-1">A taxa de serviço é absorvida pelo organizador.</p>
+            )}
+            {feeEnabled && breakdown.producerPaidFee > 0 && (
+              <p className="text-[10px] text-slate-500 mt-1">A taxa de pagamento é absorvida pelo organizador.</p>
             )}
           </div>
         )}

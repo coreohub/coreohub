@@ -17,6 +17,8 @@
  *   quantity?: number,
  *   buyer: { name, email, cpf, phone? },
  *   coupon_code?: string,   // cupom aplicado no carrinho inteiro (cart-level)
+ *   payment_method?: 'pix' | 'card',  // obrigatório se events.processing_fee_enabled
+ *   installments?: number,            // 1 a 12 (só cartão); limite imposto aqui
  *   seat_ids?: string[]     // obrigatório quando event.seat_map_enabled — array
  *                           // plano, tamanho = soma das quantities do carrinho.
  *                           // Identidade do assento não carrega significado de
@@ -36,7 +38,9 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { computeAudienceCart, round2 } from '../_shared/audience-pricing.ts'
+import { round2 } from '../_shared/audience-pricing.ts'
+import { computeAudienceCheckout } from '../_shared/audience-checkout.ts'
+import { allocateProportional, normalizeInstallments } from '../_shared/processing-fee.ts'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 import { ticketSeatKind, countPcdTickets, countCompanionTickets, effectiveTicketKind, type TicketSeatKind } from '../_shared/seat-rules.ts'
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
@@ -133,7 +137,11 @@ Deno.serve(async (req) => {
       seat_ids: seatIdsRaw,
       hold_token: holdTokenRaw,
       quote_id: quoteIdRaw,
+      payment_method: paymentMethodRaw,
+      installments: installmentsRaw,
     } = body as {
+      payment_method?: string
+      installments?: number
       quote_id?: string
       hold_token?: string
       event_id?: string
@@ -202,7 +210,8 @@ Deno.serve(async (req) => {
         id, name, created_by, ingressos_config, start_date, end_date,
         audience_commission_percent, audience_fee_mode,
         audience_max_per_cpf, audience_max_per_purchase, audience_sales_enabled,
-        audience_reservation_minutes, politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status
+        audience_reservation_minutes, politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status,
+        processing_fee_enabled, audience_processing_payer, state
       `)
       .eq('id', event_id)
       .single()
@@ -242,10 +251,11 @@ Deno.serve(async (req) => {
     let quotePrices: Record<string, { preco: number; lote: string | null }> | null = null
     let quoteCommission: number | null = null
     let quoteFeeMode: string | null = null
+    let quoteProcessingEnabled: boolean | null = null
     if (quoteIdRaw) {
       const { data: quote } = await supabase
         .from('audience_price_quotes')
-        .select('event_id, prices, commission_percent, fee_mode, expires_at')
+        .select('event_id, prices, commission_percent, fee_mode, expires_at, processing_fee_enabled')
         .eq('id', quoteIdRaw)
         .maybeSingle()
       if (!quote || quote.event_id !== event_id) {
@@ -261,6 +271,7 @@ Deno.serve(async (req) => {
       quotePrices = quote.prices as Record<string, { preco: number; lote: string | null }>
       quoteCommission = Number(quote.commission_percent)
       quoteFeeMode = String(quote.fee_mode)
+      quoteProcessingEnabled = Boolean((quote as any).processing_fee_enabled)
     }
 
     // ── Resolve cada item (preço/kind/estoque) ───────────────────────────────
@@ -372,7 +383,24 @@ Deno.serve(async (req) => {
     const commissionPercent = quoteCommission ?? Number(event.audience_commission_percent ?? 10)
     const feeMode           = quoteFeeMode ?? (event as any).audience_fee_mode ?? 'repassar'
 
-    const pricing = computeAudienceCart({
+    // Linha "Taxa de pagamento" (P3): a cotação trava se a chave estava ligada; método e parcelas
+    // vêm do checkout, mas a linha é SEMPRE calculada aqui (nunca confiamos no valor do cliente).
+    const processingEnabled = quoteProcessingEnabled ?? Boolean((event as any).processing_fee_enabled)
+    let paymentMethod: 'pix' | 'card' | null = null
+    let installments = 1
+    if (processingEnabled) {
+      if (paymentMethodRaw !== 'pix' && paymentMethodRaw !== 'card') {
+        throw new Error('Escolha a forma de pagamento (Pix ou cartão)')
+      }
+      paymentMethod = paymentMethodRaw
+      try {
+        installments = normalizeInstallments(paymentMethod, installmentsRaw ?? 1)
+      } catch (e: any) {
+        throw new Error(e.message)
+      }
+    }
+
+    const pricing = computeAudienceCheckout({
       resolved: resolved.map(r => ({
         idx: r.idx, nome: r.nome, kind: r.kind,
         quantity: r.quantity, precoUnit: r.precoUnit, quantidadeTotal: r.quantidadeTotal,
@@ -381,12 +409,19 @@ Deno.serve(async (req) => {
       discountTotal,
       commissionPercent,
       feeMode,
+      processingFeeEnabled: processingEnabled,
+      payer: (event as any).audience_processing_payer ?? 'comprador',
+      method: paymentMethod,
+      installments,
+      uf: (event as any).state ?? null,
     })
+    const effectiveFeeMode = pricing.feeMode   // AC/RR forçam 'absorver'
     const rpcItems        = pricing.items
     const chargedTotal    = pricing.chargedTotal
     const producerTotal   = pricing.producerTotal
     const commissionTotal = pricing.commissionTotal
     const discountApplied = pricing.discountApplied
+    const processingFee   = pricing.processingFee
 
     if (chargedTotal <= 0) {
       // Cupom 100% off → cobrança inválida no Asaas. Bloqueamos por enquanto.
@@ -431,7 +466,7 @@ Deno.serve(async (req) => {
         p_buyer_phone:        buyerPhone,
         p_commission_amount:  it.commission_amount,
         p_producer_amount:    it.producer_amount,
-        p_fee_mode:           feeMode,
+        p_fee_mode:           effectiveFeeMode,
         p_quantidade_total:   it.quantidade_total,
         p_reserved_minutes:   reservedMinutes,
         p_coupon_id:          couponId,
@@ -447,7 +482,7 @@ Deno.serve(async (req) => {
         p_buyer_email:     buyerEmail,
         p_buyer_phone:     buyerPhone,
         p_max_per_cpf:     maxPerCpf,
-        p_fee_mode:        feeMode,
+        p_fee_mode:        effectiveFeeMode,
         p_reserved_minutes: reservedMinutes,
         p_coupon_id:       couponId,
         p_coupon_code:     couponCode,
@@ -611,10 +646,18 @@ Deno.serve(async (req) => {
     const skipSplit = asaasEnv.isSandbox && (Deno.env.get('ASAAS_SANDBOX_SKIP_SPLIT') ?? '') === 'true'
     if (skipSplit) console.warn('[create-audience-ticket] SANDBOX sem split (ASAAS_SANDBOX_SKIP_SPLIT=true)')
 
+    // Chave ligada: o checkout já perguntou a forma, então a cobrança nasce PIX ou CREDIT_CARD
+    // (parcelas fixas na criação: a Asaas não deixa o pagador mudar). Chave desligada: UNDEFINED
+    // como sempre. Cartão parcelado usa totalValue + split totalFixedValue (a Asaas distribui).
+    const chosenBilling = paymentMethod === 'pix' ? 'PIX' : paymentMethod === 'card' ? 'CREDIT_CARD' : 'UNDEFINED'
+    const isInstallment = paymentMethod === 'card' && installments > 1
+
     const basePayload = {
       customer:          customerId,
-      billingType:       'UNDEFINED',
-      value:             chargedTotal,
+      billingType:       chosenBilling,
+      ...(isInstallment
+        ? { installmentCount: installments, totalValue: chargedTotal }
+        : { value: chargedTotal }),
       dueDate:           dueDateStr,
       description,
       externalReference: externalRef,
@@ -625,7 +668,7 @@ Deno.serve(async (req) => {
         split: [
           {
             walletId:   producer.asaas_wallet_id,
-            fixedValue: producerTotal,
+            ...(isInstallment ? { totalFixedValue: producerTotal } : { fixedValue: producerTotal }),
           },
         ],
       }),
@@ -665,13 +708,34 @@ Deno.serve(async (req) => {
       .update({
         payment_id:  payData.id,
         payment_url: payData.invoiceUrl,
+        ...(paymentMethod ? { payment_method_chosen: paymentMethod, installments } : {}),
       })
       .in('id', createdTickets.map(t => t.id))
+
+    // Linha paga pelo comprador: gravada POR TICKET (rateio pro rata do que cada um paga, soma
+    // exata em centavos). O webhook soma esses valores e faz líquido = gross - comissão - linha.
+    if (processingFee > 0) {
+      const { data: tkRows } = await supabase
+        .from('audience_tickets')
+        .select('id, preco, commission_amount')
+        .in('id', createdTickets.map(t => t.id))
+      const rows = (tkRows ?? []) as Array<{ id: string; preco: number; commission_amount: number }>
+      const weights = rows.map(r => Number(r.preco ?? 0) + (effectiveFeeMode === 'repassar' ? Number(r.commission_amount ?? 0) : 0))
+      const shares = allocateProportional(processingFee, weights)
+      for (let i = 0; i < rows.length; i++) {
+        const { error: feeErr } = await supabase
+          .from('audience_tickets')
+          .update({ processing_fee_amount: shares[i] })
+          .eq('id', rows[i].id)
+        if (feeErr) console.error('[create-audience-ticket] erro ao gravar linha no ticket:', feeErr.message)
+      }
+    }
 
     console.log(
       `[create-audience-ticket] ok event=${event_id} qty=${totalQty} types=${resolved.length}` +
       ` charged=${chargedTotal} producer=${producerTotal} commission=${commissionTotal}` +
       ` discount=${discountApplied} coupon=${couponCode ?? '-'} group=${groupId ?? 'solo'}` +
+      ` linha=${processingFee} metodo=${paymentMethod ?? '-'} parcelas=${installments}` +
       ` payment=${payData.id}`
     )
 
@@ -685,7 +749,10 @@ Deno.serve(async (req) => {
       commission_amount: commissionTotal,
       discount_amount:   discountApplied,
       coupon_code:       couponCode,
-      fee_mode:          feeMode,
+      fee_mode:          effectiveFeeMode,
+      processing_fee:    processingFee,
+      payment_method:    paymentMethod,
+      installments:      paymentMethod ? installments : null,
       external_reference: externalRef,
     }, 201)
   } catch (error: any) {
