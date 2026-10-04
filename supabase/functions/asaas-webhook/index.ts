@@ -1056,7 +1056,12 @@ async function handleAggregatePayment(opts: {
   // (ex.: inscrito pagou por uma cobrança avulsa separada antes desta fatura
   // vencer) rebaixando um pagamento já confirmado. Só protege em eventos
   // não-aprovação — APROVADO sempre deve atualizar (é o caminho de sucesso).
-  if (statusInterno !== 'APROVADO') {
+  // ESTORNADO é rebaixamento legítimo (estorno/chargeback feito fora do app
+  // também chega aqui): passa pelo guard, mas só nas inscrições que ESTA fatura
+  // aprovou (payment_id gravado na aprovação), nunca nas pagas por outra cobrança.
+  if (statusInterno === 'ESTORNADO') {
+    regUpdateQuery = regUpdateQuery.eq('payment_id', String(payment.id))
+  } else if (statusInterno !== 'APROVADO') {
     regUpdateQuery = regUpdateQuery.not('status_pagamento', 'in', '(APROVADO,CONFIRMADO)')
   }
   await regUpdateQuery
