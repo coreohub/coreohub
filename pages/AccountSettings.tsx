@@ -38,6 +38,7 @@ import { resolveAvaliadaLabel } from '../utils/formatoParticipacao';
 import { parseInfoConfig, serializeInfoConfig, hasInfoContent, EMPTY_INFO, type InfoConfig } from '../utils/eventInfo';
 import EventInfoEditor from '../components/EventInfoEditor';
 import ProducerDebtsCard from '../components/ProducerDebtsCard';
+import TaxasESimulador from '../components/TaxasESimulador';
 import InstallPWAButton from '../components/InstallPWAButton';
 import { previewNarration, fetchNarrationAudios, type NarrationKind } from '../services/narrationApi';
 import { fetchUfList, fetchCitiesByUf, parseCityUf, type UfOption } from '../services/ibgeLocation';
@@ -5597,6 +5598,9 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
 
             {/* Débitos com a CoreoHub (Termo v1.7, cláusulas 7 e 8) */}
             <ProducerDebtsCard />
+
+            {/* Taxas de pagamento: quem paga em cada produto + simulador */}
+            <TaxasESimulador eventId={activeEventId} />
 
             {/* Conexão Asaas */}
             <div className="bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-3xl overflow-hidden">
