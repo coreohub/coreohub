@@ -28,6 +28,9 @@ const MODES: { value: InscricaoProcessingMode; title: string; desc: string }[] =
   { value: 'fechado_total', title: 'Preço fechado', desc: 'O inscrito nunca vê a taxa. No cartão, o custo real do cartão sai do seu repasse e é somado à comissão da CoreoHub.' },
 ];
 
+const PLAN_NAME: Record<string, string> = { comeco: 'Começo', essencial: 'Essencial', escala: 'Escala', espetaculo: 'Espetáculo' };
+const planName = (p: string | null | undefined) => PLAN_NAME[String(p ?? 'comeco')] ?? String(p);
+
 const PAYER_LABEL: Record<Payer, string> = { comprador: 'Comprador paga', produtor: 'Eu pago' };
 
 const PayerToggle: React.FC<{ value: Payer; disabled?: boolean; onChange: (p: Payer) => void }> = ({ value, disabled, onChange }) => (
@@ -183,7 +186,7 @@ const TaxasESimulador: React.FC<{ eventId: string | null }> = ({ eventId }) => {
               <p className={label}>Inscrições e taxa de seletiva</p>
               {!planEligible ? (
                 <p className="text-xs text-slate-600 dark:text-slate-400">
-                  No plano {ev.billing_plan ?? 'Começo'} o preço da inscrição é fechado: o inscrito nunca paga taxa de pagamento. A escolha de modo vale para os planos Essencial e Escala.
+                  No plano {planName(ev.billing_plan)} o preço da inscrição é fechado: o inscrito nunca paga taxa de pagamento. A escolha de modo vale para os planos Essencial e Escala.
                 </p>
               ) : (
                 <div className="grid gap-2">
@@ -319,7 +322,7 @@ const TaxasESimulador: React.FC<{ eventId: string | null }> = ({ eventId }) => {
                 </div>
               )}
               {sim?.noLine && (
-                <p className="text-[11px] text-slate-500">Plano {ev.billing_plan ?? 'Começo'}: preço fechado, sem taxa de pagamento para o inscrito.</p>
+                <p className="text-[11px] text-slate-500">Plano {planName(ev.billing_plan)}: preço fechado, sem taxa de pagamento para o inscrito.</p>
               )}
               {sim?.warnings.map((w, i) => (
                 <p key={i} className="text-[11px] text-amber-700 dark:text-amber-400">{w}</p>
