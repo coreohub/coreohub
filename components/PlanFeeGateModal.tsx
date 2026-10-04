@@ -39,7 +39,7 @@ interface Props {
  */
 const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
   const { pending, loaded, termsPending } = usePlanFeePending(producerId);
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const [actionLoading, setActionLoading] = useState(false);
   const [waitingPayment, setWaitingPayment] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -91,7 +91,13 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
 
   // Página do Termo fica livre da trava: o produtor precisa conseguir ler e
   // aceitar o Termo mesmo com o painel bloqueado (o link abre em outra aba).
-  if (!loaded || !current || pathname === '/termo-produtor') return null;
+  // Pagamentos (cadastro/KYC da Asaas) também fica livre: sem concluir o
+  // cadastro o produtor não recebe o dinheiro que paga a própria taxa, e a
+  // trava não pode bloquear justamente o caminho de saída (caso Lorrayne,
+  // 2026-10-04). A venda continua fechada no servidor (plan_fee_sales_blocked).
+  const paymentsSetupPath =
+    pathname === '/account-settings' && new URLSearchParams(search).get('tab') === 'Pagamentos';
+  if (!loaded || !current || pathname === '/termo-produtor' || paymentsSetupPath) return null;
 
   const valor = PLAN_FIXED_FEE[current.billing_plan];
   const planoLabel = PLAN_LABEL[current.billing_plan];
@@ -167,6 +173,15 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
           >
             Continuar configurando
           </button>
+        )}
+
+        {!isSoft && (
+          <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+            Precisa concluir o cadastro de pagamentos (documentos da Asaas)?{' '}
+            <a href="/account-settings?tab=Pagamentos" className="font-bold text-[#ff0068] hover:underline">
+              Abrir Pagamentos
+            </a>
+          </p>
         )}
 
         {termsPending && (
