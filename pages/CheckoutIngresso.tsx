@@ -38,6 +38,7 @@ import { isEventOver } from '../utils/eventStatus';
 // create-audience-ticket). Garante que o total exibido bate com a cobrança.
 import { computeAudienceCheckout } from '../supabase/functions/_shared/audience-checkout';
 import { PROCESSING_FEE_CONFIG } from '../supabase/functions/_shared/processing-fee';
+import PaymentMethodPicker from '../components/PaymentMethodPicker';
 
 const formatBRL = (n: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n ?? 0);
@@ -1002,41 +1003,15 @@ export default function CheckoutIngresso() {
 
         {/* Forma de pagamento: a "Taxa de pagamento" muda conforme a escolha (só com a chave ligada) */}
         {feeEnabled && payOptions && (
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4 space-y-3">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Como você quer pagar?</p>
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => { setPayMethod('pix'); setInstallments(1); }}
-                aria-pressed={payMethod === 'pix'}
-                className={`px-3 py-3 rounded-xl border text-left transition-colors ${payMethod === 'pix' ? 'border-[#ff0068] bg-[#ff0068]/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}>
-                <p className="text-sm font-black">Pix</p>
-                <p className="text-[11px] text-slate-400 tabular-nums">{formatBRL(payOptions.pix)}</p>
-              </button>
-              <button type="button" onClick={() => setPayMethod('card')}
-                aria-pressed={payMethod === 'card'}
-                className={`px-3 py-3 rounded-xl border text-left transition-colors ${payMethod === 'card' ? 'border-[#ff0068] bg-[#ff0068]/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}>
-                <p className="text-sm font-black">Cartão de crédito</p>
-                <p className="text-[11px] text-slate-400 tabular-nums">
-                  {PROCESSING_FEE_CONFIG.maxInstallments > 1 ? 'a partir de ' : 'à vista '}{formatBRL(payOptions.cardTotals[1])}
-                </p>
-              </button>
-            </div>
-            {payMethod === 'card' && PROCESSING_FEE_CONFIG.maxInstallments > 1 && (
-              <label className="block" htmlFor="installments">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Parcelas</p>
-                <select id="installments" value={installments} onChange={e => setInstallments(Number(e.target.value))}
-                  className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm outline-none focus:border-[#ff0068]/50">
-                  {Array.from({ length: PROCESSING_FEE_CONFIG.maxInstallments }, (_, i) => i + 1).map(n => (
-                    <option key={n} value={n} className="bg-[#0b0b0f]">
-                      {n === 1 ? `À vista, ${formatBRL(payOptions.cardTotals[1])}` : `${n}x de ${formatBRL(payOptions.cardTotals[n] / n)} (total ${formatBRL(payOptions.cardTotals[n])})`}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <p className="text-[10px] text-slate-500 leading-relaxed">
-              A taxa de pagamento cobre o processamento do pagamento e varia conforme a forma escolhida. Em caso de reembolso, ela é devolvida junto com o valor do ingresso.
-            </p>
-          </div>
+          <PaymentMethodPicker
+            options={payOptions}
+            method={payMethod}
+            installments={installments}
+            onMethodChange={setPayMethod}
+            onInstallmentsChange={setInstallments}
+            refundTarget="o valor do ingresso"
+            formatBRL={formatBRL}
+          />
         )}
 
         {/* Resumo de valores */}

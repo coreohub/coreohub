@@ -6,6 +6,7 @@
  * estoque restante, e botão "Inscrever-se" → /checkout-workshop/:idOrSlug.
  */
 
+import { getUfRule } from '../supabase/functions/_shared/uf-rules';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
@@ -125,7 +126,7 @@ const PublicWorkshopPage: React.FC = () => {
         const filter = isUuid ? 'id' : 'slug';
         const { data: ws, error: wsErr } = await supabase
           .from('workshops')
-          .select('*, events(slug, name)')
+          .select('*, events(slug, name, processing_fee_enabled, state)')
           .eq(filter, idOrSlug)
           .eq('is_published', true)
           .maybeSingle();
@@ -349,6 +350,13 @@ const PublicWorkshopPage: React.FC = () => {
                 <p className="text-[10px] font-bold text-[#ff0068] mt-1">
                   <AvisoViradaLote preco={proximoLote.preco} dataVirada={proximoLote.dataVirada} dias={proximoLote.dias} formatPreco={fmtCurrency} />
                 </p>
+              )}
+              {/* Taxa de pagamento (chave por evento): sem número fechado, varia conforme Pix ou cartão no checkout.
+                  Não aparece com o produtor absorvendo nem em UF que proíbe taxa online (AC/RR). */}
+              {workshop.event_id && (workshop as any).events?.processing_fee_enabled === true
+                && (workshop as any).processing_payer !== 'produtor'
+                && !getUfRule((workshop as any).events?.state)?.forceAbsorb && (
+                <p className="text-[11px] text-slate-400 mt-1">+ taxa de pagamento conforme a forma escolhida</p>
               )}
             </div>
             <button onClick={handleShare} className="p-2 rounded-lg hover:bg-white/10 text-slate-400" title="Compartilhar">

@@ -40,6 +40,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 import { planFeeSalesBlocked, SALES_NOT_OPEN_MESSAGE } from '../_shared/plan-fee-gate.ts'
+import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
+import { normalizeInstallments } from '../_shared/processing-fee.ts'
+import { computeWorkshopCheckout } from '../_shared/workshop-checkout.ts'
 
 function isValidCpf(cpf: string): boolean {
   const digits = cpf.replace(/\D/g, '')
@@ -95,7 +98,12 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}))
-    const { pass_id, buyer, user_id, coupon_code, combo_opt_in, selected_workshop_ids } = body as {
+    const {
+      pass_id, buyer, user_id, coupon_code, combo_opt_in, selected_workshop_ids,
+      payment_method: paymentMethodRaw, installments: installmentsRaw,
+    } = body as {
+      payment_method?: string
+      installments?: number
       pass_id?: string
       buyer?: { name?: string; email?: string; cpf?: string; phone?: string }
       user_id?: string
@@ -112,8 +120,8 @@ Deno.serve(async (req) => {
     const cpfLimpo = buyer.cpf.replace(/\D/g, '')
     if (!isValidCpf(cpfLimpo)) throw new Error('CPF inválido (dígito verificador não bate)')
 
-    const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
-    const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+    let ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
+    let ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -147,21 +155,37 @@ Deno.serve(async (req) => {
         preco, preco_inscritos_mostra, auto_detect_combo,
         pass_commission_percent, pass_fee_mode, pass_max_per_cpf, pass_reservation_minutes,
         selection_mode, min_selecionaveis, max_selecionaveis,
-        is_published
+        is_published, processing_payer
       `)
       .eq('id', pass_id)
       .single()
 
     if (!pass || passErr) throw new Error('Pass não encontrado')
 
-    // Sandbox (Fase 2) por ora só existe para ingressos de plateia: recusa cobrança
-    // de workshop em evento sandbox para nunca usar a chave de produção.
+    // Evento do passe: gate do plano, ambiente Asaas (sandbox só com flag + produtor de teste;
+    // produção continua nas secrets de sempre, lidas acima) e chave da linha "Taxa de pagamento" (P4).
+    // Sem event_id (avulso) não há chave nem sandbox: nada muda.
+    let processingEnabled = false
+    let eventUf: string | null = null
+    let skipSplit = false
     if (pass.event_id) {
       if (await planFeeSalesBlocked(supabase, pass.event_id)) throw new Error(SALES_NOT_OPEN_MESSAGE)
-      const { data: evSb } = await supabase.from('events').select('payment_sandbox').eq('id', pass.event_id).maybeSingle()
+      const { data: evSb, error: evSbErr } = await supabase
+        .from('events')
+        .select('id, created_by, payment_sandbox, processing_fee_enabled, state')
+        .eq('id', pass.event_id)
+        .maybeSingle()
+      // Falha fechada: sem ler payment_sandbox não dá pra saber o ambiente, então não segue.
+      if (evSbErr) throw new Error('Falha ao carregar o evento')
       if (evSb?.payment_sandbox === true) {
-        throw new Error('Evento em modo sandbox: este tipo de cobrança ainda não é suportado no ambiente de teste')
+        const asaasEnv = await loadAsaasEnvForEvent(supabase, evSb, 'create-workshop-pass-registration')
+        ASAAS_API_KEY  = asaasEnv.apiKey
+        ASAAS_BASE_URL = asaasEnv.baseUrl
+        skipSplit = asaasEnv.isSandbox && (Deno.env.get('ASAAS_SANDBOX_SKIP_SPLIT') ?? '') === 'true'
+        if (skipSplit) console.warn('[create-workshop-pass-registration] SANDBOX sem split (ASAAS_SANDBOX_SKIP_SPLIT=true)')
       }
+      processingEnabled = evSb?.processing_fee_enabled === true
+      eventUf = evSb?.state ?? null
     }
     if (!pass.is_published) throw new Error('Pass não está publicado')
 
@@ -266,17 +290,7 @@ Deno.serve(async (req) => {
       throw new Error('Pass com valor final zero não suportado. Use cupom com desconto parcial.')
     }
 
-    // ── Comissão sobre o total ────────────────────────────────────────────────
     const commissionPercent = Number(pass.pass_commission_percent ?? 10)
-    const feeMode            = pass.pass_fee_mode ?? 'repassar'
-
-    const commissionTotal = parseFloat((precoPagoTotal * (commissionPercent / 100)).toFixed(2))
-    const chargedTotal  = feeMode === 'repassar'
-      ? parseFloat((precoPagoTotal + commissionTotal).toFixed(2))
-      : parseFloat(precoPagoTotal.toFixed(2))
-    const producerTotal = feeMode === 'repassar'
-      ? parseFloat(precoPagoTotal.toFixed(2))
-      : parseFloat((precoPagoTotal - commissionTotal).toFixed(2))
 
     // ── Preço por workshop (pra relatório/comissão por row) ──────────────────
     // À la carte: cada item já tem preço próprio exato (calculado acima) — só
@@ -307,19 +321,47 @@ Deno.serve(async (req) => {
     const residuo = parseFloat((precoPagoTotal - precoPagoShares.reduce((s, v) => s + v, 0)).toFixed(2))
     precoPagoShares[n - 1] = parseFloat((precoPagoShares[n - 1] + residuo).toFixed(2))
 
+    // Linha "Taxa de pagamento" (P4): com a chave ligada o checkout escolhe Pix ou cartão e a linha é
+    // SEMPRE calculada aqui (nunca confiamos no valor do cliente). Chave desligada = UNDEFINED, como sempre.
+    let paymentMethod: 'pix' | 'card' | null = null
+    let installments = 1
+    if (processingEnabled && true) {
+      if (paymentMethodRaw !== 'pix' && paymentMethodRaw !== 'card') {
+        throw new Error('Escolha a forma de pagamento (Pix ou cartão)')
+      }
+      paymentMethod = paymentMethodRaw
+      installments = normalizeInstallments(paymentMethod, installmentsRaw ?? 1)
+    }
+
+    // ── Comissão + linha "Taxa de pagamento" sobre o total, rateadas por workshop ─
+    // Matemática em _shared/workshop-checkout (mesma fonte do CheckoutWorkshopPass). Chave desligada
+    // ou passe avulso = o cálculo de sempre (comissão sobre o preço, repassar/absorver), sem linha.
+    const pricing = computeWorkshopCheckout({
+      product: 'passe',
+      itemShares: precoPagoShares,
+      commissionPercent,
+      feeMode: pass.pass_fee_mode ?? 'repassar',
+      processingFeeEnabled: processingEnabled,
+      payer: pass.processing_payer ?? 'comprador',
+      method: paymentMethod,
+      installments,
+      uf: eventUf,
+    })
+    const feeMode         = pricing.feeMode   // AC/RR forçam 'absorver' (só com a chave ligada)
+    const commissionTotal = pricing.commissionTotal
+    const chargedTotal    = pricing.chargedTotal
+    const producerTotal   = pricing.producerTotal
+    const processingFee   = pricing.processingFee
+
     const itemsForRpc = workshops.map((w: any, idx: number) => {
-      const precoPago = precoPagoShares[idx]
-      const commissionAmount = parseFloat((precoPago * (commissionPercent / 100)).toFixed(2))
-      const producerAmount = feeMode === 'repassar'
-        ? precoPago
-        : parseFloat((precoPago - commissionAmount).toFixed(2))
+      const it = pricing.items[idx]
       return {
         workshop_id: w.id,
         workshop_name: w.name,
         preco_base: Number(w.preco_padrao ?? 0),
-        preco_pago: precoPago,
-        commission_amount: commissionAmount,
-        producer_amount: producerAmount,
+        preco_pago: it.preco_pago,
+        commission_amount: it.commission_amount,
+        producer_amount: it.producer_amount,
       }
     })
 
@@ -433,14 +475,14 @@ Deno.serve(async (req) => {
 
     const basePayload = {
       customer:          customerId,
-      billingType:       'UNDEFINED',
+      billingType:       paymentMethod === 'pix' ? 'PIX' : paymentMethod === 'card' ? 'CREDIT_CARD' : 'UNDEFINED',
       value:             chargedTotal,
       dueDate:           dueDateStr,
       description,
       externalReference: externalRef,
-      split: [
-        { walletId, fixedValue: producerTotal },
-      ],
+      // Sandbox: subconta de teste da Asaas pode estar bloqueada para split. SÓ no sandbox
+      // (ASAAS_SANDBOX_SKIP_SPLIT=true); em produção o split é sempre enviado.
+      ...(skipSplit ? {} : { split: [{ walletId, fixedValue: producerTotal }] }),
     }
     const callbackPayload = {
       successUrl:   `${ALLOWED_ORIGIN}/pagamento-sucesso?ref=${encodeURIComponent(externalRef)}`,
@@ -470,15 +512,35 @@ Deno.serve(async (req) => {
       throw new Error(payData.errors?.[0]?.description ?? 'Erro ao criar cobrança no Asaas')
     }
 
-    await supabase
+    const { error: payUpdErr } = await supabase
       .from('workshop_registrations')
-      .update({ payment_id: payData.id, payment_url: payData.invoiceUrl })
+      .update({
+        payment_id: payData.id,
+        payment_url: payData.invoiceUrl,
+        ...(paymentMethod ? { payment_method_chosen: paymentMethod, installments } : {}),
+      })
       .eq('pass_group_id', passGroupId)
+    if (payUpdErr) console.error('[create-workshop-pass-registration] erro ao gravar pagamento na inscrição:', payUpdErr.message)
+
+    // Linha paga pelo comprador gravada POR workshop (rateio pro rata, soma exata em centavos). O webhook
+    // faz gross = comissão + líquido + linha por linha e platform_commissions.net sem a linha.
+    if (processingFee > 0) {
+      for (const r of reserveRows) {
+        const idx = workshops.findIndex((w: any) => w.id === r.workshop_id)
+        if (idx < 0 || !r.registration_id) continue
+        const { error: feeErr } = await supabase
+          .from('workshop_registrations')
+          .update({ processing_fee_amount: pricing.items[idx].processing_fee_amount })
+          .eq('id', r.registration_id)
+        if (feeErr) console.error('[create-workshop-pass-registration] erro ao gravar linha na inscrição:', feeErr.message)
+      }
+    }
 
     console.log(
       `[create-workshop-pass-registration] ok pass=${pass_id} group=${passGroupId}` +
       ` charged=${chargedTotal} producer=${producerTotal} commission=${commissionTotal}` +
       ` discount=${discountAmount} coupon=${couponCode ?? '-'} combo=${isCombo} items=${resultItems.length}` +
+      ` linha=${processingFee} metodo=${paymentMethod ?? '-'}` +
       ` payment=${payData.id}`
     )
 
@@ -497,6 +559,9 @@ Deno.serve(async (req) => {
       discount_amount:   discountAmount,
       coupon_code:       couponCode,
       fee_mode:          feeMode,
+      processing_fee:    processingFee,
+      payment_method:    paymentMethod,
+      installments:      paymentMethod ? installments : null,
       external_reference: externalRef,
     }, 201)
   } catch (error: unknown) {

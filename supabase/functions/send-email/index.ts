@@ -963,6 +963,8 @@ interface WorkshopConfirmedPayload {
   dataInicio?: string  // já formatada em PT-BR pelo caller
   local?: string
   valorPago?: number
+  /** Linha "Taxa de pagamento" (já inclusa em valorPago); só quando o evento a cobra do comprador. */
+  taxaPagamento?: number
   /** URL pública do voucher (/meu-workshop/<token>) — onde o aluno acessa QR */
   voucherUrl?: string
   /** Workshop comprado em combo com inscrição da mostra (gratuito ou desconto). */
@@ -980,6 +982,7 @@ function buildWorkshopRegistrationConfirmation(p: WorkshopConfirmedPayload) {
     typeof p.valorPago === 'number' && p.valorPago > 0
       ? infoRow('Valor pago', escape(money(p.valorPago)))
       : (p.isCombo ? infoRow('Valor', '<span style="color:#16a34a;font-weight:700;">Combo grátis (já incluso na inscrição)</span>') : ''),
+    typeof p.taxaPagamento === 'number' && p.taxaPagamento > 0 ? infoRow('Taxa de pagamento (inclusa)', escape(money(p.taxaPagamento))) : '',
   ].filter(Boolean).join('')
 
   // Bloco do voucher destacado (igual à credencial digital — link com QR).
@@ -1002,7 +1005,10 @@ function buildWorkshopRegistrationConfirmation(p: WorkshopConfirmedPayload) {
     ${voucherBlock}
     <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#475569;">
       Guarde este email como comprovante. Em caso de dúvidas sobre horário ou material da aula, responda este email pra falar diretamente com a produção.
-    </p>`
+    </p>${typeof p.taxaPagamento === 'number' && p.taxaPagamento > 0 ? `
+    <p style="margin:12px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      <strong>Reembolso:</strong> em caso de reembolso, a taxa de pagamento é devolvida junto com o valor da inscrição.
+    </p>` : ''}`
 
   const subjectPrefix = p.workshopNome ? `[${p.workshopNome}] ` : ''
   return {
@@ -1027,6 +1033,8 @@ interface WorkshopProducerPayload {
   buyerName?: string
   buyerEmail?: string
   valorBruto?: number
+  /** Linha "Taxa de pagamento" paga pelo comprador: não entra no repasse do produtor. */
+  taxaPagamento?: number
   comissao?: number
   valorLiquido?: number
   isCombo?: boolean
@@ -1042,6 +1050,7 @@ function buildWorkshopProducerNotification(p: WorkshopProducerPayload) {
       ? infoRow('Modalidade', '<span style="color:#7c3aed;font-weight:700;">Combo grátis (vinculado à inscrição da mostra)</span>')
       : (typeof p.valorBruto === 'number' ? infoRow('Valor bruto', escape(money(p.valorBruto))) : ''),
     !p.isCombo && typeof p.comissao === 'number'     ? infoRow('Comissão plataforma', escape(money(p.comissao)))                                                                       : '',
+    !p.isCombo && typeof p.taxaPagamento === 'number' && p.taxaPagamento > 0 ? infoRow('Taxa de pagamento (paga pelo comprador, não entra no seu repasse)', escape(money(p.taxaPagamento))) : '',
     !p.isCombo && typeof p.valorLiquido === 'number' ? infoRow('Valor líquido (você recebe)', `<span style="color:#16a34a;">${escape(money(p.valorLiquido))}</span>`)                  : '',
   ].filter(Boolean).join('')
 
@@ -1072,6 +1081,8 @@ interface WorkshopPassConfirmedPayload {
   passNome?: string
   items: Array<{ workshopNome: string; voucherUrl: string }>
   valorPago?: number
+  /** Linha "Taxa de pagamento" (já inclusa em valorPago); só quando o evento a cobra do comprador. */
+  taxaPagamento?: number
   isCombo?: boolean
   appUrl?: string
 }
@@ -1085,9 +1096,10 @@ function buildWorkshopPassConfirmation(p: WorkshopPassConfirmedPayload) {
       </a>
     </div>`).join('')
 
-  const valorRow = typeof p.valorPago === 'number' && p.valorPago > 0
+  const valorRow = (typeof p.valorPago === 'number' && p.valorPago > 0
     ? infoRow('Valor pago', escape(money(p.valorPago)))
-    : (p.isCombo ? infoRow('Valor', '<span style="color:#16a34a;font-weight:700;">Combo grátis (já incluso na inscrição)</span>') : '')
+    : (p.isCombo ? infoRow('Valor', '<span style="color:#16a34a;font-weight:700;">Combo grátis (já incluso na inscrição)</span>') : ''))
+    + (typeof p.taxaPagamento === 'number' && p.taxaPagamento > 0 ? infoRow('Taxa de pagamento (inclusa)', escape(money(p.taxaPagamento))) : '')
 
   const contentHtml = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;">${valorRow}</table>
@@ -1097,7 +1109,10 @@ function buildWorkshopPassConfirmation(p: WorkshopPassConfirmedPayload) {
     ${itemRows}
     <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#475569;">
       Guarde este email como comprovante. Cada workshop tem seu próprio voucher — apresente o QR correspondente no credenciamento de cada aula.
-    </p>`
+    </p>${typeof p.taxaPagamento === 'number' && p.taxaPagamento > 0 ? `
+    <p style="margin:12px 0 0;font-size:13px;line-height:1.6;color:#475569;">
+      <strong>Reembolso:</strong> em caso de reembolso, a taxa de pagamento é devolvida junto com o valor da inscrição.
+    </p>` : ''}`
 
   const subjectPrefix = p.passNome ? `[${p.passNome}] ` : ''
   return {
@@ -1122,6 +1137,8 @@ interface WorkshopPassProducerPayload {
   buyerName?: string
   buyerEmail?: string
   valorBruto?: number
+  /** Linha "Taxa de pagamento" paga pelo comprador: não entra no repasse do produtor. */
+  taxaPagamento?: number
   comissao?: number
   valorLiquido?: number
   isCombo?: boolean
@@ -1137,6 +1154,7 @@ function buildWorkshopPassProducerNotification(p: WorkshopPassProducerPayload) {
       ? infoRow('Modalidade', '<span style="color:#7c3aed;font-weight:700;">Combo grátis (vinculado à inscrição da mostra)</span>')
       : (typeof p.valorBruto === 'number' ? infoRow('Valor bruto', escape(money(p.valorBruto))) : ''),
     !p.isCombo && typeof p.comissao === 'number'     ? infoRow('Comissão plataforma', escape(money(p.comissao)))                                                       : '',
+    !p.isCombo && typeof p.taxaPagamento === 'number' && p.taxaPagamento > 0 ? infoRow('Taxa de pagamento (paga pelo comprador, não entra no seu repasse)', escape(money(p.taxaPagamento))) : '',
     !p.isCombo && typeof p.valorLiquido === 'number' ? infoRow('Valor líquido (você recebe)', `<span style="color:#16a34a;">${escape(money(p.valorLiquido))}</span>`) : '',
   ].filter(Boolean).join('')
 

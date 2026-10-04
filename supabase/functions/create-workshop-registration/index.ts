@@ -39,6 +39,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 import { planFeeSalesBlocked, SALES_NOT_OPEN_MESSAGE } from '../_shared/plan-fee-gate.ts'
+import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
+import { normalizeInstallments } from '../_shared/processing-fee.ts'
+import { computeWorkshopCheckout } from '../_shared/workshop-checkout.ts'
 
 function isValidCpf(cpf: string): boolean {
   const digits = cpf.replace(/\D/g, '')
@@ -100,7 +103,11 @@ Deno.serve(async (req) => {
       day_option_id,
       early_arrival,
       late_departure,
+      payment_method: paymentMethodRaw,
+      installments: installmentsRaw,
     } = body as {
+      payment_method?: string
+      installments?: number
       workshop_id?: string
       workshop_lot_id?: string | null
       buyer?: { name?: string; email?: string; cpf?: string; phone?: string }
@@ -125,8 +132,8 @@ Deno.serve(async (req) => {
     const cpfLimpo = buyer.cpf.replace(/\D/g, '')
     if (!isValidCpf(cpfLimpo)) throw new Error('CPF inválido (dígito verificador não bate)')
 
-    const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
-    const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+    let ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
+    let ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -163,21 +170,37 @@ Deno.serve(async (req) => {
         workshop_commission_percent, workshop_fee_mode,
         workshop_max_per_cpf, workshop_reservation_minutes,
         is_published, hospedagem_delta, hospedagem_noites,
-        early_arrival_delta, late_departure_delta
+        early_arrival_delta, late_departure_delta, processing_payer
       `)
       .eq('id', workshop_id)
       .single()
 
     if (!workshop || wsErr) throw new Error('Workshop não encontrado')
 
-    // Sandbox (Fase 2) por ora só existe para ingressos de plateia: recusa cobrança
-    // de workshop em evento sandbox para nunca usar a chave de produção.
+    // Evento do workshop: gate do plano, ambiente Asaas (sandbox só com flag + produtor de teste;
+    // produção continua nas secrets de sempre, lidas acima) e chave da linha "Taxa de pagamento" (P4).
+    // Sem event_id (avulso) não há chave nem sandbox: nada muda.
+    let processingEnabled = false
+    let eventUf: string | null = null
+    let skipSplit = false
     if (workshop.event_id) {
       if (await planFeeSalesBlocked(supabase, workshop.event_id)) throw new Error(SALES_NOT_OPEN_MESSAGE)
-      const { data: evSb } = await supabase.from('events').select('payment_sandbox').eq('id', workshop.event_id).maybeSingle()
+      const { data: evSb, error: evSbErr } = await supabase
+        .from('events')
+        .select('id, created_by, payment_sandbox, processing_fee_enabled, state')
+        .eq('id', workshop.event_id)
+        .maybeSingle()
+      // Falha fechada: sem ler payment_sandbox não dá pra saber o ambiente, então não segue.
+      if (evSbErr) throw new Error('Falha ao carregar o evento')
       if (evSb?.payment_sandbox === true) {
-        throw new Error('Evento em modo sandbox: este tipo de cobrança ainda não é suportado no ambiente de teste')
+        const asaasEnv = await loadAsaasEnvForEvent(supabase, evSb, 'create-workshop-registration')
+        ASAAS_API_KEY  = asaasEnv.apiKey
+        ASAAS_BASE_URL = asaasEnv.baseUrl
+        skipSplit = asaasEnv.isSandbox && (Deno.env.get('ASAAS_SANDBOX_SKIP_SPLIT') ?? '') === 'true'
+        if (skipSplit) console.warn('[create-workshop-registration] SANDBOX sem split (ASAAS_SANDBOX_SKIP_SPLIT=true)')
       }
+      processingEnabled = evSb?.processing_fee_enabled === true
+      eventUf = evSb?.state ?? null
     }
     if (!workshop.is_published) {
       throw new Error('Workshop não está publicado')
@@ -374,20 +397,36 @@ Deno.serve(async (req) => {
     const commissionPercent = Number(workshop.workshop_commission_percent ?? 10)
     const feeMode           = workshop.workshop_fee_mode ?? 'repassar'
 
-    let chargedAmount = 0
-    let producerAmount = 0
-    let commissionAmount = 0
-
-    if (precoPago > 0) {
-      commissionAmount = parseFloat((precoPago * (commissionPercent / 100)).toFixed(2))
-      if (feeMode === 'repassar') {
-        chargedAmount  = parseFloat((precoPago + commissionAmount).toFixed(2))
-        producerAmount = parseFloat(precoPago.toFixed(2))
-      } else {
-        chargedAmount  = parseFloat(precoPago.toFixed(2))
-        producerAmount = parseFloat((precoPago - commissionAmount).toFixed(2))
+    // Linha "Taxa de pagamento" (P4): com a chave ligada o checkout escolhe Pix ou cartão e a linha é
+    // SEMPRE calculada aqui (nunca confiamos no valor do cliente). Chave desligada = UNDEFINED, como sempre.
+    let paymentMethod: 'pix' | 'card' | null = null
+    let installments = 1
+    if (processingEnabled && precoPago > 0) {
+      if (paymentMethodRaw !== 'pix' && paymentMethodRaw !== 'card') {
+        throw new Error('Escolha a forma de pagamento (Pix ou cartão)')
       }
+      paymentMethod = paymentMethodRaw
+      installments = normalizeInstallments(paymentMethod, installmentsRaw ?? 1)
     }
+
+    // Matemática em _shared/workshop-checkout (mesma fonte do CheckoutWorkshop). Chave desligada ou
+    // workshop avulso = o cálculo de sempre (comissão sobre o preço, repassar/absorver), sem linha.
+    const pricing = computeWorkshopCheckout({
+      product: 'workshop',
+      itemShares: [precoPago],
+      commissionPercent,
+      feeMode,
+      processingFeeEnabled: processingEnabled,
+      payer: workshop.processing_payer ?? 'comprador',
+      method: paymentMethod,
+      installments,
+      uf: eventUf,
+    })
+    const effectiveFeeMode = pricing.feeMode   // AC/RR forçam 'absorver' (só com a chave ligada)
+    const chargedAmount    = pricing.chargedTotal
+    const producerAmount   = pricing.producerTotal
+    const commissionAmount = pricing.commissionTotal
+    const processingFee    = pricing.processingFee
 
     // Status inicial: GRATUITO se preço final = 0 — só legítimo quando combo
     // grátis (workshop.gratis_para_inscritos + combo válido). Cupom 100% off
@@ -442,7 +481,7 @@ Deno.serve(async (req) => {
         p_preco_pago:          precoPago,
         p_commission_amount:   commissionAmount,
         p_producer_amount:     producerAmount,
-        p_fee_mode:            feeMode,
+        p_fee_mode:            effectiveFeeMode,
         p_status_inicial:      statusInicial,
         p_reserved_minutes:    Number(workshop.workshop_reservation_minutes ?? 10),
         p_coupon_id:           couponId,
@@ -490,7 +529,7 @@ Deno.serve(async (req) => {
         producer_amount:   0,
         commission_amount: 0,
         discount_amount:   discountAmount,
-        fee_mode:          feeMode,
+        fee_mode:          effectiveFeeMode,
         external_reference: null,
         inclui_hospedagem: inclHospedagem,
         early_arrival: wantsEarlyArrival,
@@ -544,17 +583,21 @@ Deno.serve(async (req) => {
 
     const basePayload = {
       customer:          customerId,
-      billingType:       'UNDEFINED',
+      billingType:       paymentMethod === 'pix' ? 'PIX' : paymentMethod === 'card' ? 'CREDIT_CARD' : 'UNDEFINED',
       value:             chargedAmount,
       dueDate:           dueDateStr,
       description,
       externalReference: externalRef,
-      split: [
-        {
-          walletId:   walletId,
-          fixedValue: producerAmount,
-        },
-      ],
+      // Sandbox: subconta de teste da Asaas pode estar bloqueada para split. SÓ no sandbox
+      // (ASAAS_SANDBOX_SKIP_SPLIT=true); em produção o split é sempre enviado.
+      ...(skipSplit ? {} : {
+        split: [
+          {
+            walletId:   walletId,
+            fixedValue: producerAmount,
+          },
+        ],
+      }),
       // Notificações configuradas no customer (notificationDisabled),
       // não por payment — suporte Asaas confirmou 2026-05-18.
     }
@@ -587,18 +630,22 @@ Deno.serve(async (req) => {
       throw new Error(payData.errors?.[0]?.description ?? 'Erro ao criar cobrança no Asaas')
     }
 
-    await supabase
+    // Linha paga pelo comprador gravada na inscrição; o webhook faz líquido = gross - comissão - linha.
+    const { error: payUpdErr } = await supabase
       .from('workshop_registrations')
       .update({
         payment_id:  payData.id,
         payment_url: payData.invoiceUrl,
+        ...(paymentMethod ? { payment_method_chosen: paymentMethod, installments, processing_fee_amount: processingFee } : {}),
       })
       .eq('id', registrationId)
+    if (payUpdErr) console.error('[create-workshop-registration] erro ao gravar pagamento/linha na inscrição:', payUpdErr.message)
 
     console.log(
       `[create-workshop-registration] ok ws=${workshop_id} reg=${registrationId}` +
       ` charged=${chargedAmount} producer=${producerAmount} commission=${commissionAmount}` +
       ` discount=${discountAmount} coupon=${couponCode ?? '-'} combo=${isCombo}` +
+      ` linha=${processingFee} metodo=${paymentMethod ?? '-'}` +
       ` payment=${payData.id}`
     )
 
@@ -616,7 +663,10 @@ Deno.serve(async (req) => {
       commission_amount: commissionAmount,
       discount_amount:   discountAmount,
       coupon_code:       couponCode,
-      fee_mode:          feeMode,
+      fee_mode:          effectiveFeeMode,
+      processing_fee:    processingFee,
+      payment_method:    paymentMethod,
+      installments:      paymentMethod ? installments : null,
       external_reference: externalRef,
       inclui_hospedagem: inclHospedagem,
       early_arrival: wantsEarlyArrival,

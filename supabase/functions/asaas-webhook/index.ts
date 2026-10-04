@@ -658,6 +658,7 @@ async function handleWorkshopRegistration(opts: {
         dataInicio:    dataInicioFmt,
         local:         workshop?.local,
         valorPago:     grossAmount,
+        taxaPagamento: workshopProcessingFee,
         voucherUrl,
         isCombo:       Boolean(updatedRow.is_combo),
         appUrl,
@@ -671,7 +672,8 @@ async function handleWorkshopRegistration(opts: {
         workshopNome:  workshop?.name,
         buyerName:     updatedRow.buyer_name,
         buyerEmail:    updatedRow.buyer_email,
-        valorBruto:    grossAmount,
+        valorBruto:    parseFloat((grossAmount - workshopProcessingFee).toFixed(2)),
+        taxaPagamento: workshopProcessingFee,
         comissao:      commissionAmount,
         valorLiquido:  producerAmount,
         isCombo:       Boolean(updatedRow.is_combo),
@@ -838,9 +840,11 @@ async function handleWorkshopPassPayment(opts: {
       voucherUrl:   `${appUrl}/meu-workshop/${r.access_token}`,
     }))
 
+    // Bruto sem a linha (comissão + líquido) e a linha paga pelo comprador à parte; o comprador pagou os dois.
     const grossAmount = updatedRows.reduce(
       (s: number, r: any) => s + Number(r.commission_amount ?? 0) + Number(r.producer_amount ?? 0), 0
     )
+    const passProcessingFee = sumProcessingFee(updatedRows)
     const commissionAmount = updatedRows.reduce((s: number, r: any) => s + Number(r.commission_amount ?? 0), 0)
     const producerAmount   = updatedRows.reduce((s: number, r: any) => s + Number(r.producer_amount ?? 0), 0)
 
@@ -853,7 +857,8 @@ async function handleWorkshopPassPayment(opts: {
         produtorEmail: produtorProfile?.email,
         passNome:      pass?.name,
         items,
-        valorPago:     grossAmount,
+        valorPago:     parseFloat((grossAmount + passProcessingFee).toFixed(2)),
+        taxaPagamento: passProcessingFee,
         isCombo:       Boolean(updatedRows[0].is_combo),
         appUrl,
       }))
@@ -867,6 +872,7 @@ async function handleWorkshopPassPayment(opts: {
         buyerName:     updatedRows[0].buyer_name,
         buyerEmail:    updatedRows[0].buyer_email,
         valorBruto:    grossAmount,
+        taxaPagamento: passProcessingFee,
         comissao:      commissionAmount,
         valorLiquido:  producerAmount,
         isCombo:       Boolean(updatedRows[0].is_combo),

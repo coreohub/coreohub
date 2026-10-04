@@ -16,6 +16,8 @@ import { supabase } from '../services/supabase';
 import { edgeErrorMessage } from '../utils/edgeError';
 import AsaasBadge from '../components/AsaasBadge';
 import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
+import PaymentMethodPicker, { type PayMethod } from '../components/PaymentMethodPicker';
+import { computeWorkshopCheckout } from '../supabase/functions/_shared/workshop-checkout';
 import { isEventOver } from '../utils/eventStatus';
 import {
   Loader2, AlertCircle, ArrowLeft, ShieldCheck, User as UserIcon, Mail, Phone, FileText,
@@ -82,6 +84,10 @@ const CheckoutWorkshopPass: React.FC = () => {
   const [cpf, setCpf]     = useState('');
   const [phone, setPhone] = useState('');
   const [paying, setPaying] = useState(false);
+  // Linha "Taxa de pagamento" (só quando events.processing_fee_enabled): forma escolhida no nosso checkout.
+  const [payMethod, setPayMethod] = useState<PayMethod>('pix');
+  const [installments, setInstallments] = useState(1);
+  const [eventFee, setEventFee] = useState<{ enabled: boolean; uf: string | null }>({ enabled: false, uf: null });
   const [refundAccepted, setRefundAccepted] = useState(false);
 
   const [couponInput, setCouponInput] = useState('');
@@ -114,7 +120,7 @@ const CheckoutWorkshopPass: React.FC = () => {
 
         const { data: ev } = await supabase
           .from('events')
-          .select('start_date, end_date')
+          .select('start_date, end_date, processing_fee_enabled, state')
           .eq('id', p.event_id)
           .maybeSingle();
         if (isEventOver(ev)) {
@@ -122,6 +128,7 @@ const CheckoutWorkshopPass: React.FC = () => {
           return;
         }
 
+        setEventFee({ enabled: Boolean(ev?.processing_fee_enabled), uf: ev?.state ?? null });
         setPass(p);
 
         if (p.selection_mode === 'a_la_carte') {
@@ -233,12 +240,30 @@ const CheckoutWorkshopPass: React.FC = () => {
     }
     const discount = couponApplied ? Number(couponApplied.discount) : 0;
     const baseAfterCoupon = Math.max(0, Number((precoAposCombo - discount).toFixed(2)));
-    const commPct = Number(pass.pass_commission_percent ?? 10);
-    const commission = Number((baseAfterCoupon * (commPct / 100)).toFixed(2));
-    const feeMode = pass.pass_fee_mode ?? 'repassar';
-    const charged = feeMode === 'repassar' ? Number((baseAfterCoupon + commission).toFixed(2)) : baseAfterCoupon;
-    return { precoBase, precoAposCombo, comboApplied, discount, commission, feeMode, charged };
-  }, [pass, combo, couponApplied, isALaCarte, poolItems, selectedIds]);
+    // Mesma fonte da edge (_shared/workshop-checkout): o total exibido é o cobrado. Passe avulso
+    // (sem evento) ou chave desligada = cálculo de sempre, sem linha.
+    const feeEnabled = Boolean(pass.event_id && eventFee.enabled);
+    const computeFor = (method: PayMethod, n: number) => computeWorkshopCheckout({
+      product: 'passe',
+      itemShares: [baseAfterCoupon],
+      commissionPercent: Number(pass.pass_commission_percent ?? 10),
+      feeMode: pass.pass_fee_mode ?? 'repassar',
+      processingFeeEnabled: feeEnabled,
+      payer: pass.processing_payer ?? 'comprador',
+      method,
+      installments: n,
+      uf: eventFee.uf,
+    });
+    const r = computeFor(payMethod, payMethod === 'card' ? installments : 1);
+    const payOptions = feeEnabled && r.chargedBeforeFee > 0
+      ? { pix: computeFor('pix', 1).chargedTotal, cardTotals: { 1: computeFor('card', 1).chargedTotal } as Record<number, number> }
+      : null;
+    return {
+      precoBase, precoAposCombo, comboApplied, discount,
+      commission: r.commissionTotal, feeMode: r.feeMode, charged: r.chargedTotal,
+      processingFee: r.processingFee, producerPaidFee: r.producerPaidFee, feeEnabled, payOptions,
+    };
+  }, [pass, combo, couponApplied, isALaCarte, poolItems, selectedIds, payMethod, installments, eventFee]);
 
   const selectionOk = !isALaCarte || (
     selectedIds.size >= (pass?.min_selecionaveis ?? 1) &&
@@ -300,6 +325,9 @@ const CheckoutWorkshopPass: React.FC = () => {
           user_id: user?.id,
           combo_opt_in: true,
           coupon_code: couponApplied?.code,
+          ...(breakdown?.feeEnabled && breakdown.charged > 0
+            ? { payment_method: payMethod, installments: payMethod === 'card' ? installments : 1 }
+            : {}),
           ...(isALaCarte ? { selected_workshop_ids: Array.from(selectedIds) } : {}),
         },
       });
@@ -505,6 +533,19 @@ const CheckoutWorkshopPass: React.FC = () => {
             </div>
           )}
 
+          {/* Forma de pagamento: a "Taxa de pagamento" muda conforme a escolha (só com a chave ligada) */}
+          {breakdown?.payOptions && (!isALaCarte || selectedIds.size > 0) && (
+            <PaymentMethodPicker
+              options={breakdown.payOptions}
+              method={payMethod}
+              installments={installments}
+              onMethodChange={setPayMethod}
+              onInstallmentsChange={setInstallments}
+              refundTarget="o valor da inscrição"
+              formatBRL={formatBRL}
+            />
+          )}
+
           {breakdown && (!isALaCarte || selectedIds.size > 0) && (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-2">
               <Row label={isALaCarte ? `Aulas selecionadas (${selectedIds.size})` : 'Preço do pass'} value={formatBRL(breakdown.precoBase)} />
@@ -516,6 +557,9 @@ const CheckoutWorkshopPass: React.FC = () => {
               )}
               {breakdown.feeMode === 'repassar' && breakdown.commission > 0 && (
                 <Row label="Taxa CoreoHub" value={formatBRL(breakdown.commission)} />
+              )}
+              {breakdown.feeEnabled && breakdown.processingFee > 0 && (
+                <Row label="Taxa de pagamento" value={formatBRL(breakdown.processingFee)} />
               )}
               <div className="border-t border-white/10 pt-2 flex items-center justify-between">
                 <span className="text-sm font-black uppercase tracking-widest">Total</span>
