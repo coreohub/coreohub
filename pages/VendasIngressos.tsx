@@ -685,7 +685,7 @@ const VendasIngressos: React.FC = () => {
       const { data, error: rpcErr } = await supabase.rpc('export_audience_sales_anonymized', { p_event_id: eventId });
       if (rpcErr) throw rpcErr;
       const list = (data ?? []) as Array<Record<string, any>>;
-      const header = ['transacao_id', 'grupo_id', 'data_venda', 'tipo_ingresso', 'categoria', 'preco', 'taxa_servico', 'modo_taxa', 'status', 'metodo_pagamento', 'pago_em', 'estornado_em', 'valor_estornado', 'assento', 'check_in', 'transferido'];
+      const header = ['transacao_id', 'grupo_id', 'data_venda', 'tipo_ingresso', 'categoria', 'preco', 'taxa_servico', 'taxa_processamento', 'modo_taxa', 'status', 'metodo_pagamento', 'pago_em', 'estornado_em', 'valor_estornado', 'assento', 'check_in', 'transferido'];
       const csv = [
         header.join(';'),
         ...list.map(r => header.map(h => {
