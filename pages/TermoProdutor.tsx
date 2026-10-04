@@ -44,6 +44,12 @@ import { TERMO_PRODUTOR_VERSION } from '../utils/termoVersion';
 // as cláusulas citadas nos comentários acima usam a numeração ANTIGA. Correspondência
 // antiga → nova: 4-bis→5, 4-ter→6, 4-quater→7, 4-quinquies→8, 4-sexies→9, 4-septies→10,
 // 5→11, 6→12, 7→13, 8→14, 9→15, 10→16 (10.1→16.1), 11→17, 12→18. As cláusulas 1 a 4 não mudam.
+// 1.7 → 1.8 (2026-10-04): cláusula 11 passa a tratar a Taxa de pagamento paga pelo
+// comprador (11.3 reescrita; 11.5 a 11.9 novas: taxa, modos da inscrição, quem paga em
+// ingressos/workshops/passes, estornos, disposições gerais); cláusula 13 ganha parágrafo
+// sobre devolução da taxa; cláusula 15 ganha 15.1 a 15.5 (venda exclusivamente pela
+// Plataforma, comissão devida em venda por fora, suspensão, relação de inscritos). Sem
+// renumeração. Redação a ser revisada por advogado antes de ir para main.
 export { TERMO_PRODUTOR_VERSION };
 
 const TermoProdutor: React.FC = () => {
@@ -329,7 +335,7 @@ const TermoProdutor: React.FC = () => {
           </section>
 
           <section>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">11. Taxas bancárias do parceiro financeiro Asaas</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2">11. Taxas de processamento e do parceiro financeiro Asaas</h2>
             <p className="mb-2">
               11.1. Para o processamento de pagamentos, será aberta conta digital exclusiva em nome do Produtor no <strong>ASAAS GESTÃO FINANCEIRA S.A.</strong> (CNPJ 19.540.550/0001-21), instituição financeira autorizada pelo Banco Central, parceira financeira da CoreoHub, mediante completude do procedimento de identificação (KYC).
             </p>
@@ -345,10 +351,25 @@ const TermoProdutor: React.FC = () => {
               </li>
             </ul>
             <p className="mb-2">
-              11.3. A CoreoHub <strong>não cobra</strong> do Produtor taxas adicionais de processamento de pagamento (PIX, boleto, cartão) — tais custos são absorvidos pela CoreoHub como parte do serviço da Plataforma. A comissão devida à CoreoHub, regida pela cláusula 4, é cobrada exclusivamente como serviço da Plataforma e independe das taxas bancárias do Asaas.
+              11.3. A CoreoHub absorve o custo de processamento de pagamentos (Pix e cartão), <strong>salvo</strong> nos eventos dos planos Essencial e Escala em que a &quot;Taxa de pagamento&quot; esteja ativada, caso em que se aplicam as cláusulas 11.5 a 11.9. A comissão devida à CoreoHub, regida pela cláusula 4, independe das taxas bancárias do Asaas e da Taxa de pagamento.
             </p>
             <p>
               11.4. As taxas do Asaas podem ser reajustadas pela instituição financeira mediante prévio aviso aos seus correntistas. A CoreoHub se compromete a comunicar reajustes assim que tomar ciência, mas não tem ingerência sobre tais valores nem responsabilidade por seu reajuste.
+            </p>
+            <p className="mt-2 mb-2">
+              11.5. <strong>Taxa de pagamento.</strong> Quando ativada para o evento, o comprador visualiza no checkout uma linha discriminada &quot;Taxa de pagamento&quot;, calculada pela Plataforma conforme a forma escolhida (Pix ou cartão à vista), separada do preço e da comissão. A taxa é receita da CoreoHub, não integra o líquido do Produtor e destina-se a cobrir o custo de processamento. É proporcional ao valor da compra, com teto no Pix e com o limite aplicável nos ingressos de plateia e nos estados em que a lei local restrinja a cobrança. Os valores vigentes constam em Configurações &gt; Pagamentos &gt; Taxas e simulador. Alterações serão comunicadas com 30 (trinta) dias de antecedência e valem apenas para compras posteriores ao prazo.
+            </p>
+            <p className="mb-2">
+              11.6. <strong>Inscrições e taxa de seletiva (planos Essencial e Escala).</strong> O Produtor escolhe, por evento, um de três modos: (i) Pix sem taxa e cartão com taxa paga pelo inscrito (padrão); (ii) taxa paga pelo inscrito em todos os pagamentos; (iii) preço fechado, em que o inscrito não paga a taxa e, nos pagamentos por cartão, o custo real do cartão é descontado do repasse do Produtor e somado à comissão da CoreoHub. No plano Começo o preço é fechado e a taxa não é cobrada.
+            </p>
+            <p className="mb-2">
+              11.7. <strong>Ingressos, workshops e passes.</strong> Por padrão a Taxa de pagamento é paga pelo comprador. O Produtor pode escolher, por produto, assumi-la: nesse caso o comprador não a paga e o valor correspondente é somado à comissão e descontado do repasse do Produtor.
+            </p>
+            <p className="mb-2">
+              11.8. <strong>Estornos.</strong> Em caso de estorno, a Taxa de pagamento é devolvida ao comprador junto com o valor pago. Aplica-se também a cláusula 13.
+            </p>
+            <p>
+              11.9. <strong>Disposições gerais.</strong> No Pix, quando a taxa não é cobrada do comprador, o custo é absorvido pela CoreoHub. A Plataforma não oferece, por ora, pagamento por boleto nem parcelamento no cartão nos fluxos com Taxa de pagamento. A escolha do Produtor vale para compras futuras e não altera compras já realizadas.
             </p>
           </section>
 
@@ -416,6 +437,9 @@ const TermoProdutor: React.FC = () => {
               chargeback. Casos excepcionais (ex: bailarino sem acesso ao método original) devem ser comunicados previamente à
               CoreoHub via canal de suporte.
             </p>
+            <p className="mt-2">
+              A Taxa de pagamento (cláusula 11.5) integra o valor devolvido ao comprador em estornos e reembolsos.
+            </p>
           </section>
 
           <section>
@@ -442,6 +466,21 @@ const TermoProdutor: React.FC = () => {
               <li>Manter atualizada a chave PIX da subconta Asaas para recebimento de repasses.</li>
               <li>Comunicar imediatamente à CoreoHub e ao Asaas qualquer suspeita de fraude ou incidente operacional.</li>
             </ul>
+            <p className="mt-3 mb-2">
+              15.1. <strong>Canal de venda.</strong> Inscrições, ingressos, workshops, passes e demais produtos configurados na Plataforma devem ser comercializados exclusivamente por meio dos meios de pagamento da Plataforma.
+            </p>
+            <p className="mb-2">
+              15.2. É vedado ao Produtor, direta ou indiretamente, direcionar compradores a canais alternativos de pagamento (Pix pessoal, transferência, dinheiro, link de terceiros ou outra plataforma) para a venda de produto já configurado na Plataforma, com o fim de evitar comissão ou taxas.
+            </p>
+            <p className="mb-2">
+              15.3. Vendas realizadas em desacordo com esta cláusula sujeitam o Produtor ao pagamento da comissão e dos demais valores que seriam devidos, calculados sobre o preço de tabela do produto, com correção, juros e multa nos termos da cláusula 8.4, sem prejuízo da suspensão do evento ou da conta em caso de reincidência (cláusula 17).
+            </p>
+            <p className="mb-2">
+              15.4. Para conferência, a CoreoHub poderá solicitar a relação de inscritos e pagantes do evento, e o Produtor a fornecerá em até 5 (cinco) dias úteis.
+            </p>
+            <p>
+              15.5. Não se enquadram nesta vedação as vendas presenciais registradas na Plataforma, as cortesias registradas e os produtos não configurados na Plataforma.
+            </p>
           </section>
 
           <section>
@@ -518,9 +557,10 @@ const TermoProdutor: React.FC = () => {
                 a cláusula 7 (devolução ao comprador em cancelamento, adiamento ou alteração relevante, reembolso pelo Produtor, autorização de desconto do saldo e dos repasses, extrato e contestação em 5 dias),
                 a cláusula 8 (reposição de saldo em 10 dias, suspensão de vendas, correção, juros e multa),
                 a cláusula 9 (relatório público de meia-entrada e guarda de dados),
-                a cláusula 11 (taxas bancárias do Asaas, taxa única de criação de conta R$ 12,90),
+                a cláusula 11 (taxas bancárias do Asaas, taxa única de criação de conta R$ 12,90, e Taxa de pagamento paga pelo comprador, pelo inscrito ou pelo Produtor nos eventos em que estiver ativada),
                 a cláusula 12 (janela de 7 dias para liberação dos repasses e antecipação manual sob risco),
-                a cláusula 13 (ressarcimento de chargebacks/estornos e autorização de débito automático no Asaas) e
+                a cláusula 13 (ressarcimento de chargebacks/estornos e autorização de débito automático no Asaas),
+                a cláusula 15.1 a 15.5 (venda exclusivamente pela Plataforma, comissão devida em venda por fora e suspensão) e
                 a cláusula 16.1 (acesso e retenção de 90 dias dos comentários de avaliação dos jurados).
               </span>
             </label>
