@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 import { planFeeSalesBlocked, SALES_NOT_OPEN_MESSAGE } from '../_shared/plan-fee-gate.ts'
+import { inscricaoLineApplies } from '../_shared/inscricao-checkout.ts'
 
 Deno.serve(async (req) => {
   const corsHeaders = buildCorsHeaders(req)
@@ -50,7 +51,7 @@ Deno.serve(async (req) => {
     // ── 3. Evento ────────────────────────────────────────────────────────────
     const { data: event } = await supabase
       .from('events')
-      .select('id, name, created_by, commission_percent, commission_type, formacoes_config, fee_mode, event_type, absorve_taxa_baixo_valor, payment_sandbox')
+      .select('id, name, created_by, commission_percent, commission_type, formacoes_config, fee_mode, event_type, absorve_taxa_baixo_valor, payment_sandbox, billing_plan, processing_fee_enabled')
       .eq('id', event_id)
       .single()
 
@@ -63,6 +64,18 @@ Deno.serve(async (req) => {
     }
     if (event.event_type === 'government') {
       throw new Error('Eventos governamentais não usam pagamento. A inscrição é gratuita.')
+    }
+    // Evento com a linha "Taxa de pagamento" (P5): o checkout usa o carrinho agregado (create-aggregate-payment-asaas,
+    // aceita 1 inscrição). Este fluxo avulso recalcula a comissão no webhook e não registra o custo de cartão pago
+    // pelo produtor, então não pode cobrar nesses eventos.
+    if (inscricaoLineApplies((event as any).billing_plan, Boolean((event as any).processing_fee_enabled))) {
+      return new Response(
+        JSON.stringify({
+          error: 'Este evento usa o pagamento com forma escolhida no checkout. Abra Minhas Inscrições para pagar.',
+          error_code: 'USE_AGGREGATE',
+        }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
     // ── 4. Configurações do evento ───────────────────────────────────────────

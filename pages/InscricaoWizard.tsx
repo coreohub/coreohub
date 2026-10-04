@@ -1179,6 +1179,11 @@ const InscricaoWizard: React.FC = () => {
             }
           );
           const payload = await r.json();
+          // Evento com a linha "Taxa de pagamento": a forma de pagamento é escolhida em Minhas Inscrições.
+          if (payload?.error_code === 'METHOD_REQUIRED') {
+            navigate(`/minhas-coreografias?nova=${reg.id}`);
+            return;
+          }
           if (!r.ok) throw new Error(payload.error ?? 'Erro ao criar cobrança da taxa de seletiva.');
           if (payload.invoice_url) {
             window.location.href = payload.invoice_url;

@@ -225,6 +225,8 @@ const Checkout = () => {
         }),
       });
       const data = await response.json();
+      // Evento com a linha "Taxa de pagamento": a forma de pagamento é escolhida em Minhas Inscrições.
+      if (data?.error_code === 'USE_AGGREGATE') { navigate('/minhas-coreografias'); return; }
       if (!response.ok) throw new Error(data.error ?? 'Erro ao gerar o pagamento. Tente novamente.');
       const paymentUrl = data.invoice_url;
       if (!paymentUrl) throw new Error('URL de pagamento não retornada.');

@@ -191,6 +191,13 @@ const PagamentoInscrito = () => {
 
       const result = await response.json();
 
+      // Evento com a linha "Taxa de pagamento": a forma de pagamento é escolhida em Minhas Inscrições.
+      if (result?.error_code === 'USE_AGGREGATE') {
+        setPaying(null);
+        navigate('/minhas-coreografias');
+        return;
+      }
+
       if (!response.ok) {
         throw new Error(result.error ?? result.message ?? `Erro ${response.status} ao gerar o pagamento.`);
       }

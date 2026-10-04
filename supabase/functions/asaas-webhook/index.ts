@@ -1453,7 +1453,7 @@ async function handleVideoSelectionFee(opts: {
   if (statusInterno === 'APROVADO') {
     const { data: reg } = await supabase
       .from('registrations')
-      .select('event_id, user_id, nome_coreografia')
+      .select('event_id, user_id, nome_coreografia, video_fee_processing_amount, video_fee_producer_cost')
       .eq('id', registrationId)
       .maybeSingle()
 
@@ -1469,11 +1469,17 @@ async function handleVideoSelectionFee(opts: {
     const commissionPercent = Number((eventData as any)?.commission_percent ?? 10)
     const feeMode           = (eventData as any)?.fee_mode ?? 'repassar'
 
+    // Linha "Taxa de pagamento" da taxa A (P5): paga pelo inscrito, sai da base antes de recalcular a
+    // comissão e nunca entra no líquido do produtor. O custo de cartão pago pelo produtor (fechado_total)
+    // vira comissão. Sem as colunas preenchidas (taxa antiga) = igual a antes.
+    const processingFee = Number((reg as any)?.video_fee_processing_amount ?? 0)
+    const producerCost  = Number((reg as any)?.video_fee_producer_cost ?? 0)
+    const grossBeforeFee = parseFloat((grossAmount - processingFee).toFixed(2))
     const baseFee = feeMode === 'repassar'
-      ? parseFloat((grossAmount / (1 + commissionPercent / 100)).toFixed(2))
-      : grossAmount
-    const commissionAmount = parseFloat((baseFee * (commissionPercent / 100)).toFixed(2))
-    const producerAmount   = parseFloat((grossAmount - commissionAmount).toFixed(2))
+      ? parseFloat((grossBeforeFee / (1 + commissionPercent / 100)).toFixed(2))
+      : grossBeforeFee
+    const commissionAmount = parseFloat((baseFee * (commissionPercent / 100) + producerCost).toFixed(2))
+    const producerAmount   = parseFloat((grossAmount - processingFee - commissionAmount).toFixed(2))
 
     await supabase
       .from('platform_commissions')
@@ -1484,6 +1490,7 @@ async function handleVideoSelectionFee(opts: {
         gross_amount:      grossAmount,
         commission_amount: commissionAmount,
         net_amount:        producerAmount,
+        processing_fee_amount: processingFee,
         asaas_payment_id:  String(payment.id),
         kind:              'video_selection',  // discriminador opcional pra relatórios
         release_at:        computeReleaseAt(undefined, payment),
@@ -1689,7 +1696,7 @@ Deno.serve(async (req) => {
     // ── Ambiente x evento (Fase 2): pagamento sandbox só toca evento sandbox,
     // e o inverso. O sandbox existe para ingressos (AT:), workshops/passes (WS:/WSP:, P4) e para a
     // taxa fixa de plano (PLANFEE:, create-plan-fixed-fee-payment também roteia por evento).
-    if (webhookEnv === 'sandbox' && !isAudienceTicket && !isPlanFee && !isDebt && !isWorkshop && !isWorkshopPass) {
+    if (webhookEnv === 'sandbox' && !isAudienceTicket && !isPlanFee && !isDebt && !isWorkshop && !isWorkshopPass && !isAggregate && !isVideoSelection) {
       console.warn(`[asaas-webhook] sandbox com ref nao suportada (${externalRef.slice(0, 4)}) — ignorando`)
       return ok({ status: 'ignored', reason: 'sandbox_ref_not_supported' })
     }
@@ -1785,6 +1792,54 @@ Deno.serve(async (req) => {
         return ok({ status: 'rejected', reason: 'env_lookup_failed' })
       }
       // Produção com falha de leitura (ou workshop avulso) segue como antes (não bloqueia pagamento real).
+    }
+
+    // Carrinho de inscrições (AGG:<payment_id>): o ambiente do webhook precisa bater com o do evento da fatura.
+    if (isAggregate && aggregatePaymentId) {
+      const aggEnvGuard = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+      )
+      const { data: aggPay, error: aggPayErr } = await aggEnvGuard
+        .from('payments').select('event_id').eq('id', aggregatePaymentId).maybeSingle()
+      const { data: evEnv, error: evEnvErr } = !aggPayErr && aggPay?.event_id
+        ? await aggEnvGuard.from('events').select('payment_sandbox').eq('id', aggPay.event_id).maybeSingle()
+        : { data: null, error: null }
+      if (!aggPayErr && !evEnvErr && evEnv) {
+        if (!webhookMatchesEvent(webhookEnv, evEnv.payment_sandbox)) {
+          console.error(`[asaas-webhook] AMBIENTE INCOMPATIVEL env=${webhookEnv} event_sandbox=${evEnv.payment_sandbox} agg=${aggregatePaymentId} — rejeitando`)
+          return ok({ status: 'rejected', reason: 'env_mismatch' })
+        }
+      } else if (webhookEnv === 'sandbox') {
+        // Sandbox nunca segue sem confirmar que o evento é sandbox.
+        console.error('[asaas-webhook] sandbox agregado: nao foi possivel confirmar o evento — rejeitando')
+        return ok({ status: 'rejected', reason: 'env_lookup_failed' })
+      }
+      // Produção com falha de leitura segue como antes (não bloqueia pagamento real).
+    }
+
+    // Taxa de seletiva (VS:<registration_id>): o ambiente do webhook precisa bater com o do evento da inscrição.
+    if (isVideoSelection && videoSelectionRegistrationId) {
+      const vsEnvGuard = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+      )
+      const { data: vsReg, error: vsRegErr } = await vsEnvGuard
+        .from('registrations').select('event_id').eq('id', videoSelectionRegistrationId).maybeSingle()
+      const { data: evEnv, error: evEnvErr } = !vsRegErr && vsReg?.event_id
+        ? await vsEnvGuard.from('events').select('payment_sandbox').eq('id', vsReg.event_id).maybeSingle()
+        : { data: null, error: null }
+      if (!vsRegErr && !evEnvErr && evEnv) {
+        if (!webhookMatchesEvent(webhookEnv, evEnv.payment_sandbox)) {
+          console.error(`[asaas-webhook] AMBIENTE INCOMPATIVEL env=${webhookEnv} event_sandbox=${evEnv.payment_sandbox} vs=${videoSelectionRegistrationId} — rejeitando`)
+          return ok({ status: 'rejected', reason: 'env_mismatch' })
+        }
+      } else if (webhookEnv === 'sandbox') {
+        // Sandbox nunca segue sem confirmar que o evento é sandbox.
+        console.error('[asaas-webhook] sandbox seletiva: nao foi possivel confirmar o evento — rejeitando')
+        return ok({ status: 'rejected', reason: 'env_lookup_failed' })
+      }
+      // Produção com falha de leitura segue como antes (não bloqueia pagamento real).
     }
 
     // Débito de produtor (DEBT:<id>): o ambiente do webhook precisa bater com o do evento do débito.

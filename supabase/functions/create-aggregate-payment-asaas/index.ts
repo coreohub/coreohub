@@ -9,6 +9,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 import { planFeeSalesBlocked, SALES_NOT_OPEN_MESSAGE } from '../_shared/plan-fee-gate.ts'
+import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
+import { normalizeInstallments } from '../_shared/processing-fee.ts'
+import { computeInscricaoCheckout, inscricaoLineApplies } from '../_shared/inscricao-checkout.ts'
 
 type RegistrationRow = {
   id:                    string
@@ -62,10 +65,12 @@ Deno.serve(async (req) => {
     })
 
   try {
-    const { registration_ids, event_id, coupon_code } = await req.json() as {
+    const { registration_ids, event_id, coupon_code, payment_method: paymentMethodRaw, installments: installmentsRaw } = await req.json() as {
       registration_ids?: string[]
       event_id?: string
       coupon_code?: string
+      payment_method?: string
+      installments?: number
     }
 
     if (!event_id) throw new Error('event_id é obrigatório.')
@@ -76,8 +81,8 @@ Deno.serve(async (req) => {
     // A3 (audit): em PROD jamais fazer fallback pra sandbox — secret faltando
     // significa erro de deploy, não modo degradado. Sem fallback silencioso em
     // código que toca dinheiro.
-    const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY')  ?? ''
-    const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? ''
+    let ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY')  ?? ''
+    let ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? ''
     if (!ASAAS_API_KEY || !ASAAS_BASE_URL) {
       throw new Error('Configuração inválida: ASAAS_API_KEY/ASAAS_BASE_URL não setados.')
     }
@@ -176,7 +181,7 @@ Deno.serve(async (req) => {
     const [{ data: inscritoProfile }, { data: event }, { data: config }] = await Promise.all([
       supabase.from('profiles').select('full_name, email, cpf_cnpj').eq('id', user.id).single(),
       supabase.from('events')
-        .select('id, name, created_by, commission_percent, commission_type, formacoes_config, fee_mode, event_type, absorve_taxa_baixo_valor, payment_sandbox')
+        .select('id, name, created_by, commission_percent, commission_type, formacoes_config, fee_mode, event_type, absorve_taxa_baixo_valor, payment_sandbox, billing_plan, inscricao_processing_mode, processing_fee_enabled, state')
         .eq('id', event_id).single(),
       supabase.from('configuracoes')
         .select('event_id, formatos_precos, prazo_inscricao')
@@ -185,10 +190,15 @@ Deno.serve(async (req) => {
 
     if (!event) throw new Error('Evento não encontrado.')
     if (await planFeeSalesBlocked(supabase, event_id)) throw new Error(SALES_NOT_OPEN_MESSAGE)
-    // Sandbox (Fase 2) por ora só existe para ingressos de plateia: recusa evento
-    // em modo sandbox para nunca cobrar com a chave de produção.
+    // Ambiente Asaas: produção continua nas secrets de sempre (lidas acima); sandbox só com flag no evento
+    // + produtor de teste (loadAsaasEnvForEvent). Split pulado só no sandbox (ASAAS_SANDBOX_SKIP_SPLIT).
+    let skipSplit = false
     if ((event as { payment_sandbox?: boolean }).payment_sandbox === true) {
-      throw new Error('Evento em modo sandbox: este tipo de cobrança ainda não é suportado no ambiente de teste')
+      const asaasEnv = await loadAsaasEnvForEvent(supabase, event as any, 'create-aggregate-payment-asaas')
+      ASAAS_API_KEY  = asaasEnv.apiKey
+      ASAAS_BASE_URL = asaasEnv.baseUrl
+      skipSplit = asaasEnv.isSandbox && (Deno.env.get('ASAAS_SANDBOX_SKIP_SPLIT') ?? '') === 'true'
+      if (skipSplit) console.warn('[create-aggregate-payment-asaas] SANDBOX sem split (ASAAS_SANDBOX_SKIP_SPLIT=true)')
     }
     if (event.event_type === 'government') {
       throw new Error('Eventos governamentais não usam pagamento.')
@@ -502,6 +512,52 @@ Deno.serve(async (req) => {
       )
     }
 
+    // ── 5b-ter. Linha "Taxa de pagamento" (P5) ───────────────────────────────
+    // Só Essencial/Escala com events.processing_fee_enabled (Começo continua "tudo incluso", billingType
+    // UNDEFINED). Forma escolhida no checkout; a linha é SEMPRE calculada aqui. Regras por modo do evento
+    // em _shared/inscricao-checkout. Em fatura de baixo valor SEM SPLIT, o custo pago pelo produtor não
+    // existe (ele recebe tudo): só a linha paga pelo inscrito fica, e fica na master.
+    let chargedTotal   = valueTotal
+    let processingFee  = 0
+    let paymentMethod: 'pix' | 'card' | null = null
+    let installments   = 1
+    let itemFees: number[] = priced.map(() => 0)
+    const processingEnabled = Boolean((event as any).processing_fee_enabled)
+    if (valueTotal > 0 && inscricaoLineApplies((event as any).billing_plan, processingEnabled)) {
+      if (paymentMethodRaw !== 'pix' && paymentMethodRaw !== 'card') {
+        throw new Error('Escolha a forma de pagamento (Pix ou cartão)')
+      }
+      paymentMethod = paymentMethodRaw
+      installments = normalizeInstallments(paymentMethod, installmentsRaw ?? 1)
+      const res = computeInscricaoCheckout({
+        items: priced.map(p => ({ baseFee: p.baseFee, charged: p.charged, producer: p.producer, commission: p.commission })),
+        billingPlan: (event as any).billing_plan,
+        mode: (event as any).inscricao_processing_mode,
+        processingFeeEnabled: processingEnabled,
+        feeMode,
+        method: paymentMethod,
+        installments,
+        uf: (event as any).state ?? null,
+      })
+      if (useNoSplitAbsorb) {
+        if (res.rule === 'buyer') {
+          chargedTotal  = res.chargedTotal
+          processingFee = res.processingFee
+          itemFees      = res.items.map(i => i.processing_fee_amount)
+        }
+      } else {
+        chargedTotal    = res.chargedTotal
+        producerTotal   = res.producerTotal
+        commissionTotal = res.commissionTotal
+        processingFee   = res.processingFee
+        itemFees        = res.items.map(i => i.processing_fee_amount)
+      }
+      console.log(
+        `[create-aggregate-payment-asaas] linha: regra=${res.rule} modo=${res.mode} metodo=${paymentMethod}` +
+        ` linha=${processingFee} chargedTotal=${chargedTotal} producerTotal=${producerTotal} commissionTotal=${commissionTotal}`
+      )
+    }
+
     // ── 5c. Carrinho gratuito (valueTotal === 0) — aprova direto, sem Asaas ──
     // Evento com todas as formações a R$0 (contrato fechado com a CoreoHub,
     // "governo", grandfathered, etc — o MOTIVO não importa aqui) OU cupom
@@ -554,13 +610,17 @@ Deno.serve(async (req) => {
       .insert({
         user_id:           user.id,
         event_id:          event_id,
-        value_total:       valueTotal,
+        // value_total = o que o inscrito paga (inclui a linha). commission_total + producer_total = value_total
+        // - processing_fee_amount; o webhook usa esses totais e a linha à parte.
+        value_total:       chargedTotal,
         commission_total:  commissionTotal,
         producer_total:    producerTotal,
         discount_total:    discountTotal,
         coupon_id:         validatedCoupon?.id ?? null,
         status:            'PENDENTE',
         expires_at:        expiresAt,
+        processing_fee_amount: processingFee,
+        ...(paymentMethod ? { payment_method_chosen: paymentMethod, installments } : {}),
       })
       .select('id')
       .single()
@@ -577,12 +637,15 @@ Deno.serve(async (req) => {
     // A6 (audit): também grava charged_amount por inscrição — snapshot pro
     // webhook distribuir comissão proporcional (quando preços diferem).
     const linkErrors: string[] = []
-    for (const p of priced) {
+    for (const [k, p] of priced.entries()) {
       const { data: row, error } = await supabase
         .from('registrations')
         .update({
           payment_group_id: paymentId,
           charged_amount:   p.charged,
+          // Linha paga pelo inscrito, rateada por inscrição (relatórios/estorno); 0 sem a linha.
+          processing_fee_amount: itemFees[k] ?? 0,
+          ...(paymentMethod ? { payment_method_chosen: paymentMethod, installments } : {}),
           // Snapshot do cupom + desconto distribuído proporcionalmente. Webhook
           // usa esses valores pra commission_amount per registration sem
           // precisar recalcular cupom (idempotente).
@@ -599,7 +662,7 @@ Deno.serve(async (req) => {
       // Race detectada ou erro de update. Rollback completo.
       await supabase
         .from('registrations')
-        .update({ payment_group_id: null, charged_amount: null })
+        .update({ payment_group_id: null, charged_amount: null, processing_fee_amount: 0 })
         .eq('payment_group_id', paymentId)
       await supabase.from('payments').delete().eq('id', paymentId)
       throw new Error(
@@ -681,8 +744,10 @@ Deno.serve(async (req) => {
 
     const basePayload: Record<string, unknown> = {
       customer:          customerId,
-      billingType:       'UNDEFINED',
-      value:             valueTotal,
+      // Linha ligada (plano elegível): o checkout já perguntou a forma, então a cobrança nasce PIX ou
+      // CREDIT_CARD (parcelas fixadas em 1x). Sem a linha: UNDEFINED, o inscrito escolhe na fatura.
+      billingType:       paymentMethod === 'pix' ? 'PIX' : paymentMethod === 'card' ? 'CREDIT_CARD' : 'UNDEFINED',
+      value:             chargedTotal,
       dueDate:           dueDateStr,
       description,
       externalReference: `AGG:${paymentId}`,
@@ -690,7 +755,7 @@ Deno.serve(async (req) => {
     // Item de baixo valor em evento com absorção de taxa: sem split nenhum —
     // 100% cai na master, repasse integral sai depois via transferência
     // interna (ver low_value_transfers + release-low-value-transfers).
-    if (!useNoSplitAbsorb) {
+    if (!useNoSplitAbsorb && !skipSplit) {
       basePayload.split = [
         { walletId: producer.asaas_wallet_id, fixedValue: producerTotal },
       ]
@@ -702,7 +767,7 @@ Deno.serve(async (req) => {
     // A8 (audit): NÃO logar payload bruto (contém customer CPF/email + walletId
     // do produtor). Log resumido — info suficiente pra debug sem secrets.
     console.log(
-      `[create-aggregate-payment-asaas] POST /payments value=${valueTotal} dueDate=${dueDateStr}` +
+      `[create-aggregate-payment-asaas] POST /payments value=${chargedTotal} dueDate=${dueDateStr}` +
       ` externalRef=AGG:${paymentId} split=${producerTotal}`
     )
 
@@ -815,7 +880,7 @@ Deno.serve(async (req) => {
               produtorEmail: produtorProfile?.email,
               eventoNome:    event.name,
               invoiceUrl:    payData.invoiceUrl,
-              valorTotal:    valueTotal,
+              valorTotal:    chargedTotal,
               expiresAt:     expiresAtFmt,
               coreografias:  priced.map(p => ({
                 nome:     p.reg.nome_coreografia ?? 'Coreografia',
@@ -836,13 +901,16 @@ Deno.serve(async (req) => {
         payment_id:        paymentId,
         asaas_payment_id:  payData.id,
         invoice_url:       payData.invoiceUrl,
-        value_total:       valueTotal,
+        value_total:       chargedTotal,
         producer_total:    producerTotal,
         commission_total:  commissionTotal,
         discount_total:    discountTotal,
         coupon_code:       validatedCoupon?.code ?? null,
         registration_count: priced.length,
         fee_mode:          feeMode,
+        processing_fee:    processingFee,
+        payment_method:    paymentMethod,
+        installments:      paymentMethod ? installments : null,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
@@ -860,7 +928,7 @@ async function rollback(supabase: any, paymentId: string, registrationIds: strin
   try {
     await supabase
       .from('registrations')
-      .update({ payment_group_id: null })
+      .update({ payment_group_id: null, processing_fee_amount: 0 })
       .in('id', registrationIds)
     await supabase.from('payments').delete().eq('id', paymentId)
   } catch (e) {

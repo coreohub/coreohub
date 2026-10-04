@@ -2,6 +2,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 import { planFeeSalesBlocked, SALES_NOT_OPEN_MESSAGE } from '../_shared/plan-fee-gate.ts'
+import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
+import { normalizeInstallments } from '../_shared/processing-fee.ts'
+import { computeInscricaoCheckout, inscricaoLineApplies } from '../_shared/inscricao-checkout.ts'
 
 // Cria a cobrança Asaas da TAXA DE SELETIVA (Modelo 3 - Catanduva/SESI/CaconDance).
 // Distinto de create-payment-asaas (cobrança da inscrição cheia) porque:
@@ -24,13 +27,13 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { registration_id, event_id, coupon_id, coupon_code } = await req.json()
+    const { registration_id, event_id, coupon_id, coupon_code, payment_method: paymentMethodRaw, installments: installmentsRaw } = await req.json()
     if (!registration_id || !event_id) {
       throw new Error('registration_id e event_id são obrigatórios.')
     }
 
-    const ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
-    const ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
+    let ASAAS_API_KEY  = Deno.env.get('ASAAS_API_KEY') ?? ''
+    let ASAAS_BASE_URL = Deno.env.get('ASAAS_BASE_URL') ?? 'https://sandbox.asaas.com/api/v3'
     if (!ASAAS_API_KEY) throw new Error('Asaas não configurado.')
 
     const supabase = createClient(
@@ -78,15 +81,20 @@ Deno.serve(async (req) => {
     // ── 3. Evento (precisa ter seletiva ativa e cobrar taxa) ────────────────
     const { data: event } = await supabase
       .from('events')
-      .select('id, name, created_by, commission_percent, fee_mode, event_type, video_selection_enabled, video_selection_fee, video_selection_fee_required, payment_sandbox')
+      .select('id, name, created_by, commission_percent, fee_mode, event_type, video_selection_enabled, video_selection_fee, video_selection_fee_required, payment_sandbox, billing_plan, inscricao_processing_mode, processing_fee_enabled, state')
       .eq('id', event_id)
       .single()
     if (!event) throw new Error('Evento não encontrado.')
     if (await planFeeSalesBlocked(supabase, event_id)) throw new Error(SALES_NOT_OPEN_MESSAGE)
-    // Sandbox (Fase 2) por ora só existe para ingressos de plateia: recusa evento
-    // em modo sandbox para nunca cobrar com a chave de produção.
+    // Ambiente Asaas: produção continua nas secrets de sempre (lidas acima); sandbox só com flag no evento
+    // + produtor de teste. Split pulado só no sandbox (ASAAS_SANDBOX_SKIP_SPLIT).
+    let skipSplit = false
     if ((event as { payment_sandbox?: boolean }).payment_sandbox === true) {
-      throw new Error('Evento em modo sandbox: este tipo de cobrança ainda não é suportado no ambiente de teste')
+      const asaasEnv = await loadAsaasEnvForEvent(supabase, event as any, 'create-video-selection-payment')
+      ASAAS_API_KEY  = asaasEnv.apiKey
+      ASAAS_BASE_URL = asaasEnv.baseUrl
+      skipSplit = asaasEnv.isSandbox && (Deno.env.get('ASAAS_SANDBOX_SKIP_SPLIT') ?? '') === 'true'
+      if (skipSplit) console.warn('[create-video-selection-payment] SANDBOX sem split (ASAAS_SANDBOX_SKIP_SPLIT=true)')
     }
     if (event.event_type === 'government') {
       throw new Error('Eventos governamentais não usam pagamento.')
@@ -188,7 +196,7 @@ Deno.serve(async (req) => {
 
     // ── 6. fee_mode (repassar/absorver) — mesmo split da inscrição cheia ────
     const commissionPercent = Number(event.commission_percent ?? 10)
-    const commissionAmount  = parseFloat((baseFee * (commissionPercent / 100)).toFixed(2))
+    let   commissionAmount  = parseFloat((baseFee * (commissionPercent / 100)).toFixed(2))
     const feeMode           = (event as any).fee_mode ?? 'repassar'
     let chargedAmount:  number
     let producerAmount: number
@@ -198,6 +206,45 @@ Deno.serve(async (req) => {
     } else {
       chargedAmount  = baseFee
       producerAmount = parseFloat((baseFee - commissionAmount).toFixed(2))
+    }
+
+    // ── 6b. Linha "Taxa de pagamento" (P5) ───────────────────────────────────
+    // Mesmas regras da inscrição (plano elegível + chave; modo do evento), calculadas aqui. Sem forma
+    // escolhida, o checkout da seletiva volta pra Minhas Inscrições (METHOD_REQUIRED). Chave desligada
+    // ou plano Começo: igual a antes (UNDEFINED).
+    let paymentMethod: 'pix' | 'card' | null = null
+    let installments = 1
+    let processingFee = 0
+    let producerCost  = 0
+    if (inscricaoLineApplies((event as any).billing_plan, Boolean((event as any).processing_fee_enabled))) {
+      if (paymentMethodRaw !== 'pix' && paymentMethodRaw !== 'card') {
+        return new Response(
+          JSON.stringify({
+            error: 'Escolha a forma de pagamento em Minhas Inscrições para pagar a taxa de seletiva.',
+            error_code: 'METHOD_REQUIRED',
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      const method = paymentMethodRaw as 'pix' | 'card'
+      paymentMethod = method
+      installments = normalizeInstallments(method, installmentsRaw ?? 1)
+      const res = computeInscricaoCheckout({
+        items: [{ baseFee, charged: chargedAmount, producer: producerAmount, commission: commissionAmount }],
+        billingPlan: (event as any).billing_plan,
+        mode: (event as any).inscricao_processing_mode,
+        processingFeeEnabled: true,
+        feeMode,
+        method,
+        installments,
+        uf: (event as any).state ?? null,
+        product: 'seletiva',
+      })
+      processingFee = res.processingFee
+      producerCost  = res.producerPaidFee
+      chargedAmount  = res.chargedTotal
+      producerAmount = res.producerTotal
+      commissionAmount = res.commissionTotal
     }
 
     // ── 7. Wallet do produtor ───────────────────────────────────────────────
@@ -246,12 +293,14 @@ Deno.serve(async (req) => {
 
     const basePayload = {
       customer:          customerId,
-      billingType:       'UNDEFINED',
+      // Linha ligada: o checkout já perguntou a forma (PIX ou CREDIT_CARD à vista). Sem a linha: UNDEFINED.
+      billingType:       paymentMethod === 'pix' ? 'PIX' : paymentMethod === 'card' ? 'CREDIT_CARD' : 'UNDEFINED',
       value:             chargedAmount,
       dueDate:           dueDateStr,
       description:       `Taxa de seletiva — ${coreo.nome_coreografia ?? coreo.nome ?? 'Coreografia'} | ${event.name}`,
       externalReference: `VS:${registration_id}`,
-      split: [{ walletId: producer.asaas_wallet_id, fixedValue: producerAmount }],
+      // Sandbox: subconta de teste pode estar bloqueada para split; SÓ no sandbox (ASAAS_SANDBOX_SKIP_SPLIT).
+      ...(skipSplit ? {} : { split: [{ walletId: producer.asaas_wallet_id, fixedValue: producerAmount }] }),
     }
     const callbackPayload = {
       successUrl:   `${ALLOWED_ORIGIN}/pagamento-sucesso?ref=${encodeURIComponent(`VS:${registration_id}`)}`,
@@ -291,6 +340,10 @@ Deno.serve(async (req) => {
         // Snapshot do cupom — webhook VS vai usar pra incrementar
         // used_count idempotente quando PAYMENT_RECEIVED chegar.
         coupon_id:            validatedCoupon?.id ?? null,
+        // Linha "Taxa de pagamento" da taxa A (colunas próprias: processing_fee_amount é da inscrição cheia).
+        // O webhook VS tira a linha da base da comissão e soma o custo pago pelo produtor à comissão.
+        video_fee_processing_amount: processingFee,
+        video_fee_producer_cost:     producerCost,
       })
       .eq('id', registration_id)
 
@@ -302,7 +355,7 @@ Deno.serve(async (req) => {
 
     console.log(
       `[create-video-selection-payment] registration=${registration_id} payment=${payData.id} ` +
-      `charged=R$${chargedAmount} producer=R$${producerAmount}`
+      `charged=R$${chargedAmount} producer=R$${producerAmount} linha=${processingFee} custoProdutor=${producerCost} metodo=${paymentMethod ?? '-'}`
     )
 
     return new Response(
@@ -314,6 +367,9 @@ Deno.serve(async (req) => {
         commission_amount: commissionAmount,
         discount_amount:   discountAmount,
         fee_mode:          feeMode,
+        processing_fee:    processingFee,
+        payment_method:    paymentMethod,
+        installments:      paymentMethod ? installments : null,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

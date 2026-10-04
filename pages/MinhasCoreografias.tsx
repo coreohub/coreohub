@@ -18,6 +18,8 @@ import {
   type ElencoRow,
 } from '../utils/bailarinos';
 import { validateCoupon } from '../services/couponService';
+import PaymentMethodPicker, { type PayMethod } from '../components/PaymentMethodPicker';
+import { computeInscricaoCheckout, inscricaoLineApplies } from '../supabase/functions/_shared/inscricao-checkout';
 import { isRegistrationPaid } from '../utils/registrationStatus';
 import { usePwaUpdate } from '../contexts/PwaUpdateContext';
 
@@ -80,6 +82,10 @@ interface AggregatePayment {
   discount_total?:  number | null;
   coupon_id?:       string | null;
   coupon_code?:     string | null;
+  /** Linha "Taxa de pagamento" já embutida em value_total (0/null sem a linha). */
+  processing_fee_amount?: number | null;
+  /** Forma escolhida na criação da fatura (fixa: a Asaas não deixa trocar). */
+  payment_method_chosen?: string | null;
   asaas_payment_id: string | null;
   payment_url:      string | null;
   status:           string;
@@ -153,6 +159,12 @@ const MinhasCoreografias = () => {
   const [payingEvent, setPayingEvent]        = useState<string | null>(null);
   const [payingSingle, setPayingSingle]      = useState<string | null>(null);
   const [payingTaxa,   setPayingTaxa]        = useState<string | null>(null);
+  // Linha "Taxa de pagamento" (P5): plano/modo/UF por evento (via RPC, a leitura direta de events é limitada)
+  // e a forma de pagamento escolhida no card "Pagar todas".
+  const [eventFeeInfo, setEventFeeInfo] = useState<Record<string, {
+    plan: string | null; mode: string | null; enabled: boolean; uf: string | null; pct: number; feeMode: string;
+  }>>({});
+  const [payMethodByEvent, setPayMethodByEvent] = useState<Record<string, PayMethod>>({});
   // Modal contextual de CPF (padrão Stripe/Sympla): em vez de navegar pra
   // /profile completo (tela com 8 campos), abre modal com 1 campo só, salva,
   // banner some, fluxo de pagamento continua sem detour. Refator 2026-05-25.
@@ -498,6 +510,25 @@ const MinhasCoreografias = () => {
       }));
       setRegistrations(regs);
 
+      // Linha "Taxa de pagamento": plano/modo/UF de cada evento (RPC; join direto com events é limitado).
+      const feeEventIds = [...new Set(regs.map(r => r.event_id).filter(Boolean))] as string[];
+      const feeEntries = await Promise.all(feeEventIds.map(async (id) => {
+        const { data: info, error: infoErr } = await supabase.rpc('get_event_inscricao_fee_info', { p_event_id: id });
+        if (infoErr) console.error('[MinhasCoreografias] get_event_inscricao_fee_info:', infoErr.message);
+        const row = Array.isArray(info) ? info[0] : info;
+        return [id, row] as const;
+      }));
+      setEventFeeInfo(Object.fromEntries(
+        feeEntries.filter(([, row]) => row).map(([id, row]: any) => [id, {
+          plan: row.billing_plan ?? null,
+          mode: row.inscricao_processing_mode ?? null,
+          enabled: Boolean(row.processing_fee_enabled),
+          uf: row.state ?? null,
+          pct: Number(row.commission_percent ?? 10),
+          feeMode: row.fee_mode ?? 'repassar',
+        }]),
+      ));
+
       // Hidrata elenco em batch. Fonte de verdade dos dados pessoais —
       // o JSONB bailarinos_detalhes só tem id+nome+@. RLS inscrito_own_elenco
       // cobre (user_id = auth.uid).
@@ -520,7 +551,7 @@ const MinhasCoreografias = () => {
       // exibe desconto persistido quando inscrito volta do gateway).
       const { data: payments } = await supabase
         .from('payments')
-        .select('id, user_id, event_id, value_total, discount_total, coupon_id, asaas_payment_id, payment_url, status, expires_at, created_at, paid_at, coupons(code)')
+        .select('id, user_id, event_id, value_total, discount_total, coupon_id, asaas_payment_id, payment_url, status, expires_at, created_at, paid_at, processing_fee_amount, payment_method_chosen, coupons(code)')
         .eq('user_id', user.id)
         .eq('status', 'PENDENTE');
       const map: Record<string, AggregatePayment> = {};
@@ -976,6 +1007,39 @@ const MinhasCoreografias = () => {
     }
   };
 
+  // Linha "Taxa de pagamento": o evento usa a linha (plano elegível + chave ligada)?
+  const lineAppliesFor = (eventId: string) => {
+    const info = eventFeeInfo[eventId];
+    return !!info && inscricaoLineApplies(info.plan, info.enabled);
+  };
+
+  // Estimativa client-side da linha (o servidor é quem manda: mesma fonte, _shared/inscricao-checkout).
+  // Itens reconstruídos do preço mostrado (face + comissão repassada), escalados pelo desconto do cupom.
+  const estimateInscricaoFee = (eventId: string, pendentes: Registration[], preFeeTotal: number, method: PayMethod) => {
+    const info = eventFeeInfo[eventId];
+    if (!info) return null;
+    const rawSum = pendentes.reduce((s, r) => s + Number(r._precoDisplay ?? 0), 0);
+    const scale = rawSum > 0 ? preFeeTotal / rawSum : 1;
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const items = pendentes.map(r => {
+      const charged = r2(Number(r._precoDisplay ?? 0) * scale);
+      if (info.feeMode === 'repassar') {
+        const baseFee = r2(charged / (1 + info.pct / 100));
+        return { baseFee, charged, producer: baseFee, commission: r2(charged - baseFee) };
+      }
+      const commission = r2(charged * info.pct / 100);
+      return { baseFee: charged, charged, producer: r2(charged - commission), commission };
+    });
+    try {
+      return computeInscricaoCheckout({
+        items, billingPlan: info.plan, mode: info.mode, processingFeeEnabled: info.enabled,
+        feeMode: info.feeMode, method, installments: 1, uf: info.uf,
+      });
+    } catch {
+      return null;
+    }
+  };
+
   const handlePagarAgregado = async (grupo: Grupo) => {
     if (!(await requireFullName())) return;
     if (!(await requireCpf(() => handlePagarAgregado(grupo)))) return;
@@ -996,11 +1060,16 @@ const MinhasCoreografias = () => {
       // inscrições" — a 2ª nunca entrou na fatura reaproveitada.
       const faturaCobreTudo = !!grupo.payment?.id &&
         grupo.pendentes.every(r => r.payment_group_id === grupo.payment!.id);
-      if (faturaCobreTudo && grupo.payment?.payment_url) {
+      // Com a linha ativa, a forma de pagamento é fixa na fatura (a Asaas não deixa trocar): se o inscrito
+      // escolheu outra, cancela a fatura e gera uma nova na forma escolhida.
+      const lineOn = lineAppliesFor(grupo.eventId);
+      const chosenMethod: PayMethod = payMethodByEvent[grupo.eventId] ?? 'pix';
+      const methodMismatch = lineOn && faturaCobreTudo && (grupo.payment?.payment_method_chosen ?? null) !== chosenMethod;
+      if (faturaCobreTudo && !methodMismatch && grupo.payment?.payment_url) {
         window.location.href = grupo.payment.payment_url;
         return;
       }
-      if (grupo.payment?.id && !faturaCobreTudo) {
+      if (grupo.payment?.id && (!faturaCobreTudo || methodMismatch)) {
         try {
           await fetch(
             `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cancel-aggregate-payment`,
@@ -1023,6 +1092,7 @@ const MinhasCoreografias = () => {
         event_id:         grupo.eventId,
         registration_ids: grupo.pendentes.map(r => r.id),
       };
+      if (lineOn) { body.payment_method = chosenMethod; body.installments = 1; }
       // Cupom: prioriza o que foi APLICADO via botão (validado client-side).
       // Fallback no input solto (pra retrocompat caso UI mude).
       const appliedCode = appliedAggregateCoupons[grupo.eventId]?.code;
@@ -1087,9 +1157,17 @@ const MinhasCoreografias = () => {
         registration_id: reg.id,
         event_id:        reg.event_id,
       };
+      // Evento com a linha "Taxa de pagamento": cobra pelo carrinho agregado (1 inscrição) na forma escolhida.
+      const lineOn = !!reg.event_id && lineAppliesFor(reg.event_id);
+      if (lineOn) {
+        delete body.registration_id;
+        body.registration_ids = [reg.id];
+        body.payment_method = payMethodByEvent[reg.event_id!] ?? 'pix';
+        body.installments = 1;
+      }
 
       const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-payment-asaas`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${lineOn ? 'create-aggregate-payment-asaas' : 'create-payment-asaas'}`,
         {
           method: 'POST',
           headers: {
@@ -1128,6 +1206,11 @@ const MinhasCoreografias = () => {
       const { data: { session } } = await supabase.auth.getSession();
       const body: Record<string, unknown> = { registration_id: reg.id, event_id: reg.event_id };
       if (couponCode && couponCode.trim()) body.coupon_code = couponCode.trim();
+      // Linha "Taxa de pagamento" (Essencial/Escala): forma escolhida no bloco da taxa.
+      if (reg.event_id && lineAppliesFor(reg.event_id)) {
+        body.payment_method = payMethodByEvent[reg.event_id] ?? 'pix';
+        body.installments = 1;
+      }
       const r = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-video-selection-payment`,
         {
@@ -1583,9 +1666,11 @@ const MinhasCoreografias = () => {
               grupo.pendentes.every(r => r.payment_group_id === faturaPendente!.id);
             const faturaTemCupom = faturaCobreTudo &&
               !!(faturaPendente?.coupon_id && (faturaPendente?.discount_total ?? 0) > 0);
+            // value_total da fatura já inclui a linha (P5): tira a linha pra o subtotal/cupom ficarem sobre o preço.
+            const feeNaFatura = faturaCobreTudo ? Number(faturaPendente?.processing_fee_amount ?? 0) : 0;
             const faturaSubtotal = faturaTemCupom
-              ? (faturaPendente!.value_total + (faturaPendente!.discount_total ?? 0))
-              : (faturaCobreTudo ? faturaPendente!.value_total : grupo.totalPendente);
+              ? ((faturaPendente!.value_total - feeNaFatura) + (faturaPendente!.discount_total ?? 0))
+              : (faturaCobreTudo ? (faturaPendente!.value_total - feeNaFatura) : grupo.totalPendente);
             const subtotal   = faturaSubtotal;
             const expiraDias = faturaPendente?.expires_at ? diasAte(faturaPendente.expires_at) : null;
             // "Tem cupom?" SEMPRE disponível. Se fatura PENDENTE existe sem
@@ -1596,7 +1681,15 @@ const MinhasCoreografias = () => {
             // Desconto: prioriza o aplicado client-side (input local), fallback
             // pro persistido na fatura PENDENTE.
             const discountAmount = applied?.discount ?? (faturaTemCupom ? (faturaPendente!.discount_total ?? 0) : 0);
-            const total          = Math.max(0, subtotal - discountAmount);
+            const totalSemLinha  = Math.max(0, subtotal - discountAmount);
+            // Linha "Taxa de pagamento" (Essencial/Escala): total de cada forma, calculado pela mesma fonte do servidor.
+            const lineOn         = lineAppliesFor(grupo.eventId) && totalSemLinha > 0;
+            const payMethod: PayMethod = payMethodByEvent[grupo.eventId] ?? 'pix';
+            const estPix  = lineOn ? estimateInscricaoFee(grupo.eventId, grupo.pendentes, totalSemLinha, 'pix') : null;
+            const estCard = lineOn ? estimateInscricaoFee(grupo.eventId, grupo.pendentes, totalSemLinha, 'card') : null;
+            const estSel  = payMethod === 'card' ? estCard : estPix;
+            const linhaDoInscrito = lineOn ? (estSel?.processingFee ?? 0) : 0;
+            const total          = totalSemLinha + linhaDoInscrito;
             const isApplying = applyingAggregateCoupon[grupo.eventId] === true;
             const couponErr  = aggregateCouponErrors[grupo.eventId] ?? null;
             return (
@@ -1624,8 +1717,13 @@ const MinhasCoreografias = () => {
                         {fmtMoney(total)}
                       </p>
                     )}
+                    {linhaDoInscrito > 0 && (
+                      <p className="text-[10px] font-bold text-slate-500 mt-0.5 tabular-nums">
+                        Inclui taxa de pagamento de {fmtMoney(linhaDoInscrito)}
+                      </p>
+                    )}
                     <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-                      {grupo.pendentes.length} coreografia{grupo.pendentes.length !== 1 ? 's' : ''} em 1 PIX
+                      {grupo.pendentes.length} coreografia{grupo.pendentes.length !== 1 ? 's' : ''} {lineOn && payMethod === 'card' ? 'no cartão' : 'em 1 PIX'}
                       {expiraDias != null && expiraDias <= 7 && (
                         <span className="text-slate-500 ml-2">
                           · {expiraDias === 0 ? 'Vence hoje' : `Vence em ${expiraDias} dia${expiraDias !== 1 ? 's' : ''}`}
@@ -1649,6 +1747,18 @@ const MinhasCoreografias = () => {
                     <ChevronRight size={12} />
                   </button>
                 </div>
+                {lineOn && estPix && estCard && (
+                  <PaymentMethodPicker
+                    theme="adaptive"
+                    options={{ pix: totalSemLinha + estPix.processingFee, cardTotals: { 1: totalSemLinha + estCard.processingFee } }}
+                    method={payMethod}
+                    installments={1}
+                    onMethodChange={m => setPayMethodByEvent(p => ({ ...p, [grupo.eventId]: m }))}
+                    onInstallmentsChange={() => { /* parcelado fixado em 1x */ }}
+                    refundTarget="o valor da inscrição"
+                    formatBRL={fmtMoney}
+                  />
+                )}
                 {/* Cupom — exclusivo de PAGAR TUDO (decisão de produto 2026-05-25).
                     Padrão Stripe/Sympla/iFood/Hotmart: 1 cupom por sessão de
                     checkout, aplica no total. Cupom não passa pra single payment
@@ -1891,6 +2001,26 @@ const MinhasCoreografias = () => {
                 {grupo.seletiva.map(reg => {
                   const feePending = reg.video_fee_status === 'pending';
                   const fee = Number(reg._videoFee ?? 0);
+                  // Linha "Taxa de pagamento" na taxa de seletiva: total de cada forma pela mesma fonte do servidor.
+                  const vsInfo = reg.event_id ? eventFeeInfo[reg.event_id] : undefined;
+                  const vsLineOn = !!reg.event_id && lineAppliesFor(reg.event_id) && fee > 0;
+                  const vsMethod: PayMethod = (reg.event_id && payMethodByEvent[reg.event_id]) || 'pix';
+                  const vsEst = (m: PayMethod) => {
+                    if (!vsLineOn || !vsInfo) return null;
+                    const r2 = (n: number) => Math.round(n * 100) / 100;
+                    const commission = r2(fee * vsInfo.pct / 100);
+                    const repassar = vsInfo.feeMode === 'repassar';
+                    const charged = repassar ? r2(fee + commission) : fee;
+                    try {
+                      return computeInscricaoCheckout({
+                        items: [{ baseFee: fee, charged, producer: repassar ? fee : r2(fee - commission), commission }],
+                        billingPlan: vsInfo.plan, mode: vsInfo.mode, processingFeeEnabled: vsInfo.enabled,
+                        feeMode: vsInfo.feeMode, method: m, installments: 1, uf: vsInfo.uf, product: 'seletiva',
+                      });
+                    } catch { return null; }
+                  };
+                  const vsPix = vsEst('pix');
+                  const vsCard = vsEst('card');
                   const isEditing = editingVideo === reg.id;
                   return (
                     <div key={reg.id} className="bg-white dark:bg-slate-900/60 border border-amber-500/20 rounded-2xl p-4 space-y-2">
@@ -1962,6 +2092,18 @@ const MinhasCoreografias = () => {
                               Pagar taxa
                             </button>
                           </div>
+                          {vsLineOn && vsPix && vsCard && reg.event_id && (
+                            <PaymentMethodPicker
+                              theme="adaptive"
+                              options={{ pix: vsPix.chargedTotal, cardTotals: { 1: vsCard.chargedTotal } }}
+                              method={vsMethod}
+                              installments={1}
+                              onMethodChange={m => setPayMethodByEvent(p => ({ ...p, [reg.event_id!]: m }))}
+                              onInstallmentsChange={() => { /* parcelado fixado em 1x */ }}
+                              refundTarget="o valor da taxa"
+                              formatBRL={fmtMoney}
+                            />
+                          )}
                           {/* Cupom: input expansível. Mantém checkout limpo pra
                               quem não tem cupom — clica em "Tem cupom?" pra abrir. */}
                           {showCoupon[reg.id] ? (
