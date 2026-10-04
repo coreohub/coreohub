@@ -196,3 +196,65 @@ describe('uf-rules', () => {
     expect(getUfRule('XX')).toBeNull();
   });
 });
+
+import {
+  sumProcessingFee,
+  producerNetExcludingFee,
+  installmentsFromPayment,
+} from '../supabase/functions/_shared/processing-fee';
+import { computeAudienceCart } from '../supabase/functions/_shared/audience-pricing';
+
+describe('webhook: a linha nunca entra no líquido do produtor', () => {
+  it('sumProcessingFee trata NULL/undefined como 0', () => {
+    expect(sumProcessingFee([{ processing_fee_amount: 2.2 }, { processing_fee_amount: null }, {}])).toBe(2.2);
+    expect(sumProcessingFee([])).toBe(0);
+  });
+
+  it('sem linha (evento antigo): líquido = bruto - comissão, igual ao de sempre', () => {
+    expect(producerNetExcludingFee(110, 10, 0)).toBe(100);
+  });
+
+  it('plateia repassar: 2 Inteira R$ 50, comissão 10%, Pix 4%: gross = produtor + comissão + linha', () => {
+    const cart = computeAudienceCart({
+      resolved: [{ idx: 0, nome: 'Inteira', kind: 'inteira', quantity: 2, precoUnit: 50, quantidadeTotal: null }],
+      totalBase: 100, discountTotal: 0, commissionPercent: 10, feeMode: 'repassar',
+    });
+    const fee = computeProcessingFee({ base: cart.chargedTotal, method: 'pix', product: 'plateia' }).fee; // 4% de 110
+    expect(fee).toBe(4.4);
+    const gross = cart.chargedTotal + fee; // o que a Asaas cobra do comprador
+    const net = producerNetExcludingFee(gross, cart.commissionTotal, fee);
+    expect(gross).toBe(114.4);
+    expect(net).toBe(cart.producerTotal); // produtor segue com 100, a linha não o toca
+    expect(net + cart.commissionTotal + fee).toBeCloseTo(gross, 2);
+  });
+
+  it('absorver: base = preço; produtor continua com preço - comissão', () => {
+    const cart = computeAudienceCart({
+      resolved: [{ idx: 0, nome: 'Inteira', kind: 'inteira', quantity: 1, precoUnit: 100, quantidadeTotal: null }],
+      totalBase: 100, discountTotal: 0, commissionPercent: 10, feeMode: 'absorver',
+    });
+    const fee = computeProcessingFee({ base: cart.chargedTotal, method: 'pix', product: 'plateia' }).fee; // 4,00
+    const gross = cart.chargedTotal + fee;
+    expect(producerNetExcludingFee(gross, cart.commissionTotal, fee)).toBe(90);
+  });
+
+  it('cartão 10x workshop: master recebe comissão + linha e paga o custo da Asaas; produtor intocado', () => {
+    const base = 731.85; // 697 + 5% de comissão repassada
+    const r = computeProcessingFee({ base, method: 'card', installments: 10, product: 'workshop' });
+    expect(r.fee).toBe(43.91); // 6% de 731,85
+    const commission = 34.85;
+    const net = producerNetExcludingFee(r.total, commission, r.fee);
+    expect(net).toBe(697);
+    // sobra da CoreoHub depois do custo Asaas: comissão + linha - custo > 0
+    expect(commission + r.fee - r.asaasCost).toBeGreaterThan(0);
+  });
+
+  it('installmentsFromPayment só aceita inteiro de 1 a 12', () => {
+    expect(installmentsFromPayment({ installmentCount: 3 })).toBe(3);
+    expect(installmentsFromPayment({ installmentCount: '6' })).toBe(6);
+    expect(installmentsFromPayment({ installmentCount: 13 })).toBeNull();
+    expect(installmentsFromPayment({ installmentCount: null })).toBeNull();
+    expect(installmentsFromPayment({})).toBeNull();
+    expect(installmentsFromPayment(undefined)).toBeNull();
+  });
+});

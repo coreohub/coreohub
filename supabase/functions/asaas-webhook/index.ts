@@ -2,6 +2,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { resolveAsaasEnv, resolveWebhookEnvName, webhookMatchesEvent } from '../_shared/asaas-env.ts'
 import { cardCreditFallback } from '../_shared/card-credit-date.ts'
 import {
+  allocateProportional,
+  installmentsFromPayment,
+  producerNetExcludingFee,
+  sumProcessingFee,
+} from '../_shared/processing-fee.ts'
+import {
   dispatchPurchaseConversions,
   type MetaCapiTarget,
   type Ga4MpTarget,
@@ -318,6 +324,9 @@ async function handleAudienceTicket(opts: {
     status_pagamento: statusInterno,
     payment_method:   payment.billingType ?? null,
   }
+  // Linha de pagamento: a Asaas confirma as parcelas escolhidas no checkout (null = não sobrescreve).
+  const audienceInstallments = installmentsFromPayment(payment)
+  if (audienceInstallments != null) updatePayload.installments = audienceInstallments
   if (statusInterno === 'APROVADO') {
     updatePayload.paid_at = new Date().toISOString()
   }
@@ -326,7 +335,7 @@ async function handleAudienceTicket(opts: {
     .from('audience_tickets')
     .update(updatePayload)
     .eq('payment_id', String(payment.id))
-    .select('id, event_id, ticket_type_nome, ticket_type_kind, preco, buyer_name, buyer_email, access_token, seat_id, commission_amount, producer_amount, fee_mode')
+    .select('id, event_id, ticket_type_nome, ticket_type_kind, preco, buyer_name, buyer_email, access_token, seat_id, commission_amount, producer_amount, fee_mode, processing_fee_amount')
 
   if (updErr) {
     console.error('[asaas-webhook][audience] erro update:', updErr.message)
@@ -339,7 +348,7 @@ async function handleAudienceTicket(opts: {
       .from('audience_tickets')
       .update(updatePayload)
       .eq('id', groupId)
-      .select('id, event_id, ticket_type_nome, ticket_type_kind, preco, buyer_name, buyer_email, access_token, seat_id, commission_amount, producer_amount, fee_mode')
+      .select('id, event_id, ticket_type_nome, ticket_type_kind, preco, buyer_name, buyer_email, access_token, seat_id, commission_amount, producer_amount, fee_mode, processing_fee_amount')
     if (fallback?.length) {
       console.log(`[asaas-webhook][audience] fallback group_id atualizou ${fallback.length} ticket(s)`)
     } else {
@@ -362,7 +371,10 @@ async function handleAudienceTicket(opts: {
   const eventId = tickets[0].event_id
   const grossAmount     = Number(payment.value ?? 0)
   const commissionTotal = tickets.reduce((s: number, t: any) => s + Number(t.commission_amount ?? 0), 0)
-  const producerTotal   = parseFloat((grossAmount - commissionTotal).toFixed(2))
+  // Linha "Taxa de pagamento" (paga pelo comprador, gravada à parte): o produtor NUNCA a recebe.
+  // gross = líquido produtor + comissão + linha. Sem linha (eventos antigos) = comportamento de sempre.
+  const processingFeeTotal = sumProcessingFee(tickets)
+  const producerTotal   = producerNetExcludingFee(grossAmount, commissionTotal, processingFeeTotal)
 
   const { data: eventData } = await supabase
     .from('events')
@@ -392,6 +404,7 @@ async function handleAudienceTicket(opts: {
       gross_amount:      grossAmount,
       commission_amount: parseFloat(commissionTotal.toFixed(2)),
       net_amount:        producerTotal,
+      processing_fee_amount: processingFeeTotal,
       asaas_payment_id:  String(payment.id),
       commission_type:   'percent',
       audience_ticket_group_id: groupId,
@@ -534,6 +547,8 @@ async function handleWorkshopRegistration(opts: {
     status_pagamento: statusInterno,
     payment_method:   payment.billingType ?? null,
   }
+  const workshopInstallments = installmentsFromPayment(payment)
+  if (workshopInstallments != null) updatePayload.installments = workshopInstallments
   if (statusInterno === 'APROVADO') {
     updatePayload.paid_at = new Date().toISOString()
   }
@@ -544,7 +559,7 @@ async function handleWorkshopRegistration(opts: {
     .eq('id', registrationId)
     .select(`
       id, workshop_id, buyer_name, buyer_email, access_token,
-      commission_amount, producer_amount, fee_mode, preco_pago, is_combo
+      commission_amount, producer_amount, fee_mode, preco_pago, is_combo, processing_fee_amount
     `)
     .maybeSingle()
 
@@ -568,7 +583,8 @@ async function handleWorkshopRegistration(opts: {
   // ── APROVADO: registra comissão + emails ────────────────────────────────
   const grossAmount      = Number(payment.value ?? 0)
   const commissionAmount = parseFloat(Number(updatedRow.commission_amount ?? 0).toFixed(2))
-  const producerAmount   = parseFloat((grossAmount - commissionAmount).toFixed(2))
+  const workshopProcessingFee = sumProcessingFee([updatedRow])
+  const producerAmount   = producerNetExcludingFee(grossAmount, commissionAmount, workshopProcessingFee)
 
   const { data: workshop } = await supabase
     .from('workshops')
@@ -587,6 +603,7 @@ async function handleWorkshopRegistration(opts: {
       gross_amount:              grossAmount,
       commission_amount:         commissionAmount,
       net_amount:                producerAmount,
+      processing_fee_amount:     workshopProcessingFee,
       asaas_payment_id:          String(payment.id),
       commission_type:           'percent',
       workshop_registration_id:  registrationId,
@@ -721,6 +738,8 @@ async function handleWorkshopPassPayment(opts: {
     status_pagamento: statusInterno,
     payment_method:   payment.billingType ?? null,
   }
+  const passInstallments = installmentsFromPayment(payment)
+  if (passInstallments != null) updatePayload.installments = passInstallments
   if (statusInterno === 'APROVADO') {
     updatePayload.paid_at = new Date().toISOString()
   }
@@ -731,7 +750,7 @@ async function handleWorkshopPassPayment(opts: {
     .eq('pass_group_id', passGroupId)
     .select(`
       id, workshop_id, pass_id, buyer_name, buyer_email, access_token,
-      commission_amount, producer_amount, fee_mode, preco_pago, is_combo
+      commission_amount, producer_amount, fee_mode, preco_pago, is_combo, processing_fee_amount
     `)
 
   if (updErr) {
@@ -764,9 +783,11 @@ async function handleWorkshopPassPayment(opts: {
   const commissionRows = updatedRows.map((r: any) => ({
     event_id:                  pass?.event_id ?? null,
     producer_id:               pass?.created_by ?? null,
-    gross_amount:              parseFloat((Number(r.commission_amount ?? 0) + Number(r.producer_amount ?? 0)).toFixed(2)),
+    // gross = o que o comprador pagou por este workshop = comissão + líquido do produtor + linha
+    gross_amount:              parseFloat((Number(r.commission_amount ?? 0) + Number(r.producer_amount ?? 0) + Number(r.processing_fee_amount ?? 0)).toFixed(2)),
     commission_amount:         parseFloat(Number(r.commission_amount ?? 0).toFixed(2)),
     net_amount:                parseFloat(Number(r.producer_amount ?? 0).toFixed(2)),
+    processing_fee_amount:     parseFloat(Number(r.processing_fee_amount ?? 0).toFixed(2)),
     asaas_payment_id:          String(payment.id),
     commission_type:           'percent',
     workshop_registration_id:  r.id,
@@ -941,6 +962,8 @@ async function handleAggregatePayment(opts: {
     status:           statusInterno,
     payment_method:   payment.billingType ?? null,
   }
+  const aggInstallments = installmentsFromPayment(payment)
+  if (aggInstallments != null) paymentUpdate.installments = aggInstallments
   if (statusInterno === 'APROVADO') {
     paymentUpdate.paid_at = paidAtReal
   }
@@ -949,7 +972,7 @@ async function handleAggregatePayment(opts: {
     .from('payments')
     .update(paymentUpdate)
     .eq('id', paymentId)
-    .select('id, user_id, event_id, value_total, commission_total, producer_total, coupon_id, coupon_redeemed_at')
+    .select('id, user_id, event_id, value_total, commission_total, producer_total, coupon_id, coupon_redeemed_at, processing_fee_amount')
     .maybeSingle()
 
   if (payErr || !paymentRow) {
@@ -1008,6 +1031,7 @@ async function handleAggregatePayment(opts: {
     payment_id:       String(payment.id),  // legacy field — UI lê dali
     payment_method:   payment.billingType ?? null,
   }
+  if (aggInstallments != null) regUpdate.installments = aggInstallments
   if (statusInterno === 'APROVADO') {
     regUpdate.paid_at = paidAtReal
   }
@@ -1071,6 +1095,8 @@ async function handleAggregatePayment(opts: {
   const grossTotal       = Number(payment.value ?? paymentRow.value_total)
   const commissionTotal  = Number(paymentRow.commission_total)
   const producerTotalRow = Number(paymentRow.producer_total)
+  // Linha "Taxa de pagamento" do carrinho (gravada à parte na create-aggregate; producer_total já a exclui).
+  const processingFeeTotal = Number(paymentRow.processing_fee_amount ?? 0)
   const n                = registrations.length
   const valueTotalSnap   = Number(paymentRow.value_total)
 
@@ -1106,7 +1132,12 @@ async function handleAggregatePayment(opts: {
   // de confirmação continua saindo normal logo abaixo — só a comissão que
   // não é registrada.
   if (!isLowValueNoSplit) {
-    const commissionRows = registrations.map((r: any) => {
+    // Linha rateada pro rata do charged_amount (soma exata em centavos); uniforme sem snapshot.
+    const feeShares = allocateProportional(
+      processingFeeTotal,
+      registrations.map((r: any) => (hasFullSnapshot ? Number(r.charged_amount) : 1)),
+    )
+    const commissionRows = registrations.map((r: any, idx: number) => {
       let commR: number, prodR: number
       if (hasFullSnapshot) {
         const ratio = Number(r.charged_amount) / sumCharged
@@ -1125,6 +1156,7 @@ async function handleAggregatePayment(opts: {
         gross_amount:      grossPerReg[r.id] ?? 0,
         commission_amount: commR,
         net_amount:        prodR,
+        processing_fee_amount: feeShares[idx] ?? 0,
         asaas_payment_id:  String(payment.id),
         commission_type:   eventData?.commission_type ?? 'percent',
         kind:              'registration',  // carrinho = inscrição cheia
@@ -2145,6 +2177,7 @@ Deno.serve(async (req) => {
         status_pagamento: statusInterno,
         payment_id:       String(payment.id),
         payment_method:   payment.billingType ?? null,
+        ...(installmentsFromPayment(payment) != null ? { installments: installmentsFromPayment(payment) } : {}),
       })
       .eq('id', registrationId)
       .select('id, coupon_id, coupon_redeemed_at')
@@ -2209,7 +2242,7 @@ Deno.serve(async (req) => {
 
       const { data: coreo } = await supabase
         .from('registrations')
-        .select('event_id, user_id, nome:nome_coreografia, formacao:formato_participacao, tipo_apresentacao')
+        .select('event_id, user_id, nome:nome_coreografia, formacao:formato_participacao, tipo_apresentacao, processing_fee_amount')
         .eq('id', registrationId)
         .single()
 
@@ -2227,12 +2260,17 @@ Deno.serve(async (req) => {
       const commissionPercent = Number(eventData?.commission_percent ?? 10)
       const feeMode           = eventData?.fee_mode ?? 'repassar'
 
+      // Linha "Taxa de pagamento" (gravada na inscrição pela create-payment-asaas): sai da base
+      // antes de recalcular a comissão, e nunca entra no líquido do produtor. Sem linha = igual a antes.
+      const processingFee = sumProcessingFee([coreo ?? {}])
+      const grossBeforeFee = parseFloat((grossAmount - processingFee).toFixed(2))
+
       // Recalcula base para não depender de campo que pode não existir
       const baseFee         = feeMode === 'repassar'
-        ? parseFloat((grossAmount / (1 + commissionPercent / 100)).toFixed(2))
-        : grossAmount
+        ? parseFloat((grossBeforeFee / (1 + commissionPercent / 100)).toFixed(2))
+        : grossBeforeFee
       const commissionAmount = parseFloat((baseFee * (commissionPercent / 100)).toFixed(2))
-      const producerAmount   = parseFloat((grossAmount - commissionAmount).toFixed(2))
+      const producerAmount   = producerNetExcludingFee(grossAmount, commissionAmount, processingFee)
 
       // Item sem split (low_value_transfers) não gera comissão nenhuma —
       // 100% do valor vai pro produtor via transferência interna depois da
@@ -2247,6 +2285,7 @@ Deno.serve(async (req) => {
             gross_amount:     grossAmount,
             commission_amount: commissionAmount,
             net_amount:       producerAmount,
+            processing_fee_amount: processingFee,
             asaas_payment_id: String(payment.id),
             commission_type:  eventData?.commission_type ?? 'percent',
             release_at:       computeReleaseAt(undefined, payment),

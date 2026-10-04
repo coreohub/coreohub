@@ -206,3 +206,22 @@ export function allocateProportional(total: number, weights: number[]): number[]
   }
   return base.map((c) => c / 100);
 }
+
+/** Soma segura da linha gravada nas linhas de uma cobrança (NULL conta como 0). */
+export function sumProcessingFee(rows: Array<{ processing_fee_amount?: number | string | null }>): number {
+  return round2(rows.reduce((s, r) => s + Number(r.processing_fee_amount ?? 0), 0));
+}
+
+/**
+ * Líquido do produtor de uma cobrança que inclui a linha: o produtor NUNCA recebe a linha.
+ * gross = o que o comprador pagou (payment.value) = líquido + comissão + linha.
+ */
+export function producerNetExcludingFee(gross: number, commission: number, processingFee: number): number {
+  return round2(gross - commission - processingFee);
+}
+
+/** Parcelas confirmadas pela Asaas (payment.installmentCount); null se ausente/inválido. */
+export function installmentsFromPayment(payment: { installmentCount?: unknown } | null | undefined): number | null {
+  const n = Number(payment?.installmentCount);
+  return Number.isInteger(n) && n >= 1 && n <= 12 ? n : null;
+}
