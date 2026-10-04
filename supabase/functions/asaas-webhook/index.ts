@@ -802,9 +802,13 @@ async function handleWorkshopPassPayment(opts: {
     card_credit_at:             computeCardCreditAt(paidAt, payment),
   }))
 
+  // INSERT simples (não upsert): o índice único de (asaas_payment_id, workshop_registration_id) é PARCIAL
+  // (WHERE workshop_registration_id IS NOT NULL) e o Postgres recusa ON CONFLICT (cols) sem o predicado
+  // (42P10), o que fazia o passe ficar APROVADO sem nenhuma linha de comissão. A idempotência vem do
+  // "already_processed" no topo do handler e do próprio índice único (duplicata vira erro logado abaixo).
   const { error: commErr } = await supabase
     .from('platform_commissions')
-    .upsert(commissionRows, { onConflict: 'asaas_payment_id,workshop_registration_id', ignoreDuplicates: true })
+    .insert(commissionRows)
 
   if (commErr) {
     console.error('[asaas-webhook][workshop-pass] erro inserir comissões:', commErr.message)
