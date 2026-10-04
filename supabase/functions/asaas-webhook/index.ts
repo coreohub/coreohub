@@ -1683,9 +1683,9 @@ Deno.serve(async (req) => {
     }
 
     // ── Ambiente x evento (Fase 2): pagamento sandbox só toca evento sandbox,
-    // e o inverso. O sandbox existe para ingressos (AT:) e para a taxa fixa de
-    // plano (PLANFEE:, create-plan-fixed-fee-payment também roteia por evento).
-    if (webhookEnv === 'sandbox' && !isAudienceTicket && !isPlanFee && !isDebt) {
+    // e o inverso. O sandbox existe para ingressos (AT:), workshops/passes (WS:/WSP:, P4) e para a
+    // taxa fixa de plano (PLANFEE:, create-plan-fixed-fee-payment também roteia por evento).
+    if (webhookEnv === 'sandbox' && !isAudienceTicket && !isPlanFee && !isDebt && !isWorkshop && !isWorkshopPass) {
       console.warn(`[asaas-webhook] sandbox com ref nao suportada (${externalRef.slice(0, 4)}) — ignorando`)
       return ok({ status: 'ignored', reason: 'sandbox_ref_not_supported' })
     }
@@ -1737,6 +1737,50 @@ Deno.serve(async (req) => {
         return ok({ status: 'rejected', reason: 'env_lookup_failed' })
       }
       // Produção com falha de leitura segue como antes (não bloqueia pagamento real).
+    }
+
+    // Workshop (WS:) e passe (WSP:): o ambiente do webhook precisa bater com o do evento do workshop/passe.
+    // Workshop avulso (sem event_id) não tem ambiente sandbox: só vale em produção.
+    if ((isWorkshop && workshopRegistrationId) || (isWorkshopPass && workshopPassGroupId)) {
+      const wsEnvGuard = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+      )
+      let wsEventId: string | null = null
+      let wsLookupFailed = false
+      if (isWorkshop) {
+        const { data: reg, error: regErr } = await wsEnvGuard
+          .from('workshop_registrations').select('workshop_id').eq('id', workshopRegistrationId!).maybeSingle()
+        if (regErr || !reg) wsLookupFailed = true
+        else {
+          const { data: w, error: wErr } = await wsEnvGuard.from('workshops').select('event_id').eq('id', reg.workshop_id).maybeSingle()
+          if (wErr || !w) wsLookupFailed = true
+          else wsEventId = w.event_id ?? null
+        }
+      } else {
+        const { data: reg, error: regErr } = await wsEnvGuard
+          .from('workshop_registrations').select('pass_id').eq('pass_group_id', workshopPassGroupId!).limit(1).maybeSingle()
+        if (regErr || !reg?.pass_id) wsLookupFailed = true
+        else {
+          const { data: ps, error: psErr } = await wsEnvGuard.from('workshop_passes').select('event_id').eq('id', reg.pass_id).maybeSingle()
+          if (psErr || !ps) wsLookupFailed = true
+          else wsEventId = ps.event_id ?? null
+        }
+      }
+      const { data: evEnv, error: evEnvErr } = wsEventId
+        ? await wsEnvGuard.from('events').select('payment_sandbox').eq('id', wsEventId).maybeSingle()
+        : { data: null, error: null }
+      if (!wsLookupFailed && !evEnvErr && evEnv) {
+        if (!webhookMatchesEvent(webhookEnv, evEnv.payment_sandbox)) {
+          console.error(`[asaas-webhook] AMBIENTE INCOMPATIVEL env=${webhookEnv} event_sandbox=${evEnv.payment_sandbox} ${isWorkshop ? 'workshop' : 'workshop_pass'}=${externalRef} — rejeitando`)
+          return ok({ status: 'rejected', reason: 'env_mismatch' })
+        }
+      } else if (webhookEnv === 'sandbox') {
+        // Sandbox nunca segue sem confirmar que o evento é sandbox.
+        console.error('[asaas-webhook] sandbox workshop/passe: nao foi possivel confirmar o evento — rejeitando')
+        return ok({ status: 'rejected', reason: 'env_lookup_failed' })
+      }
+      // Produção com falha de leitura (ou workshop avulso) segue como antes (não bloqueia pagamento real).
     }
 
     // Débito de produtor (DEBT:<id>): o ambiente do webhook precisa bater com o do evento do débito.
