@@ -6,6 +6,9 @@ import {
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 import NewEventBlockedNotice from '../components/NewEventBlockedNotice';
+import NewEventTermsNotice from '../components/NewEventTermsNotice';
+import { TERMO_PRODUTOR_VERSION } from '../utils/termoVersion';
+import { termsVersionAtLeast } from '../supabase/functions/_shared/terms-version';
 import { usePlanFeePending } from '../hooks/usePlanFeePending';
 
 const OnboardingWizard = lazy(() => import('../components/OnboardingWizard'));
@@ -44,6 +47,19 @@ const CriarEventoGate: React.FC<CriarEventoGateProps> = ({
   // Taxa fixa de plano vencida em outro evento trava a criação de um novo
   // (mesma regra do trigger block_new_event_overdue_plan_fee_trigger no banco).
   const { pending: planFeePending, loaded: planFeeLoaded } = usePlanFeePending(userId);
+  // Termo vigente aceito? (mesma regra do trigger block_new_event_terms_not_accepted_trigger no banco).
+  // undefined = ainda consultando; null = nunca aceitou.
+  const [termsVersion, setTermsVersion] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.from('profiles').select('producer_terms_version').eq('id', userId).maybeSingle();
+      if (error) console.error('[CriarEventoGate] erro ao consultar versão do Termo:', error.message);
+      if (!cancelled) setTermsVersion(error ? null : (data?.producer_terms_version ?? null));
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
 
   useEffect(() => {
     const check = async () => {
@@ -238,7 +254,7 @@ const CriarEventoGate: React.FC<CriarEventoGateProps> = ({
   }
 
   if (status === 'ready') {
-    if (!planFeeLoaded) {
+    if (!planFeeLoaded || termsVersion === undefined) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
           <Loader2 size={32} className="animate-spin text-[#ff0068]" />
@@ -247,6 +263,9 @@ const CriarEventoGate: React.FC<CriarEventoGateProps> = ({
     }
     const overdue = planFeePending.filter(ev => ev.locked);
     if (overdue.length > 0) return <NewEventBlockedNotice overdue={overdue} />;
+    if (!termsVersionAtLeast(termsVersion, TERMO_PRODUTOR_VERSION)) {
+      return <NewEventTermsNotice onAccepted={v => setTermsVersion(v)} />;
+    }
     return (
       <Suspense fallback={
         <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">

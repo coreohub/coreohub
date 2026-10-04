@@ -80,6 +80,10 @@ export const createEvent = async (payload: Partial<Event>) => {
       const nomeEvento = error.message.split('|')[2] ?? 'outro evento';
       throw new Error(`Não é possível criar um novo evento enquanto a taxa do plano de "${nomeEvento}" está vencida. Pague em Início → "Pagar agora" e tente de novo.`);
     }
+    // Trigger block_new_event_terms_not_accepted_trigger: Termo vigente não aceito.
+    if (typeof error.message === 'string' && error.message.startsWith('TERMS_NOT_ACCEPTED|')) {
+      throw new Error('Para criar um evento novo, aceite a versão atual do Termo de Adesão do Produtor em Configurações > Pagamentos e tente de novo.');
+    }
     throw error;
   }
   return data;
