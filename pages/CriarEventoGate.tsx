@@ -5,6 +5,8 @@ import {
   Crown, Loader2, AlertCircle, CheckCircle, ArrowRight, Lock, Mail, User, Sparkles,
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
+import NewEventBlockedNotice from '../components/NewEventBlockedNotice';
+import { usePlanFeePending } from '../hooks/usePlanFeePending';
 
 const OnboardingWizard = lazy(() => import('../components/OnboardingWizard'));
 
@@ -38,6 +40,10 @@ const CriarEventoGate: React.FC<CriarEventoGateProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [promoteErrorMsg, setPromoteErrorMsg] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | undefined>(undefined);
+  // Taxa fixa de plano vencida em outro evento trava a criação de um novo
+  // (mesma regra do trigger block_new_event_overdue_plan_fee_trigger no banco).
+  const { pending: planFeePending, loaded: planFeeLoaded } = usePlanFeePending(userId);
 
   useEffect(() => {
     const check = async () => {
@@ -45,6 +51,7 @@ const CriarEventoGate: React.FC<CriarEventoGateProps> = ({
       if (!session) { setStatus('anon'); return; }
 
       const user = session.user;
+      setUserId(user.id);
       const { data: profile } = await supabase
         .from('profiles')
         .select('id, role, full_name, avatar_url, email')
@@ -231,6 +238,15 @@ const CriarEventoGate: React.FC<CriarEventoGateProps> = ({
   }
 
   if (status === 'ready') {
+    if (!planFeeLoaded) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+          <Loader2 size={32} className="animate-spin text-[#ff0068]" />
+        </div>
+      );
+    }
+    const overdue = planFeePending.filter(ev => ev.locked);
+    if (overdue.length > 0) return <NewEventBlockedNotice overdue={overdue} />;
     return (
       <Suspense fallback={
         <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">

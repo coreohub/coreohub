@@ -73,7 +73,15 @@ export const createEvent = async (payload: Partial<Event>) => {
     .insert([normalizedPayload])
     .select();
 
-  if (error) throw error;
+  if (error) {
+    // Trigger block_new_event_overdue_plan_fee_trigger: taxa de plano vencida
+    // em outro evento. Formato PLAN_FEE_OVERDUE|<event_id>|<nome>.
+    if (typeof error.message === 'string' && error.message.startsWith('PLAN_FEE_OVERDUE|')) {
+      const nomeEvento = error.message.split('|')[2] ?? 'outro evento';
+      throw new Error(`Não é possível criar um novo evento enquanto a taxa do plano de "${nomeEvento}" está vencida. Pague em Início → "Pagar agora" e tente de novo.`);
+    }
+    throw error;
+  }
   return data;
 };
 
