@@ -91,6 +91,8 @@ const CheckoutWorkshop: React.FC = () => {
   // Linha "Taxa de pagamento" (só quando events.processing_fee_enabled): forma escolhida no nosso checkout.
   const [payMethod, setPayMethod] = useState<PayMethod>('pix');
   const [installments, setInstallments] = useState(1);
+  // Chave e UF do evento via RPC (a leitura direta de events é bloqueada para anon em evento privado).
+  const [eventFee, setEventFee] = useState<{ enabled: boolean; uf: string | null }>({ enabled: false, uf: null });
   // Mitigation #7: comprador precisa aceitar política de reembolso antes de pagar
   const [refundAccepted, setRefundAccepted] = useState(false);
 
@@ -158,7 +160,7 @@ const CheckoutWorkshop: React.FC = () => {
         const filter = isUuid ? 'id' : 'slug';
         const { data: ws, error: wsErr } = await supabase
           .from('workshops')
-          .select('*, events(slug, name, processing_fee_enabled, state)')
+          .select('*, events(slug, name)')
           .eq(filter, idOrSlug)
           .eq('is_published', true)
           .maybeSingle();
@@ -170,6 +172,12 @@ const CheckoutWorkshop: React.FC = () => {
           return;
         }
 
+        if (ws.event_id) {
+          const { data: info, error: infoErr } = await supabase.rpc('get_event_processing_info', { p_event_id: ws.event_id });
+          if (infoErr) console.error('[CheckoutWorkshop] get_event_processing_info:', infoErr.message);
+          const row = Array.isArray(info) ? info[0] : info;
+          setEventFee({ enabled: Boolean(row?.processing_fee_enabled), uf: row?.state ?? null });
+        }
         setWorkshop(ws);
 
         const { data: st } = await supabase.rpc('get_workshop_stock', { p_workshop_id: ws.id });
@@ -293,7 +301,7 @@ const CheckoutWorkshop: React.FC = () => {
     const baseAfterCoupon = Math.max(0, Number((precoComHospedagem - discount).toFixed(2)));
     // Mesma fonte da edge (_shared/workshop-checkout): o total exibido é o cobrado. Workshop avulso
     // (sem evento) ou chave desligada = cálculo de sempre, sem linha.
-    const feeEnabled = Boolean(workshop.event_id && workshop.events?.processing_fee_enabled);
+    const feeEnabled = Boolean(workshop.event_id && eventFee.enabled);
     const computeFor = (method: PayMethod, n: number) => computeWorkshopCheckout({
       product: 'workshop',
       itemShares: [baseAfterCoupon],
@@ -303,7 +311,7 @@ const CheckoutWorkshop: React.FC = () => {
       payer: workshop.processing_payer ?? 'comprador',
       method,
       installments: n,
-      uf: workshop.events?.state ?? null,
+      uf: eventFee.uf,
     });
     const r = computeFor(payMethod, payMethod === 'card' ? installments : 1);
     const payOptions = feeEnabled && r.chargedBeforeFee > 0
@@ -314,7 +322,7 @@ const CheckoutWorkshop: React.FC = () => {
       commission: r.commissionTotal, feeMode: r.feeMode, charged: r.chargedTotal,
       processingFee: r.processingFee, producerPaidFee: r.producerPaidFee, feeEnabled, payOptions,
     };
-  }, [workshop, stock, combo, couponApplied, inclHospedagem, earlyArrival, lateDeparture, payMethod, installments]);
+  }, [workshop, stock, combo, couponApplied, inclHospedagem, earlyArrival, lateDeparture, payMethod, installments, eventFee]);
 
   // Escada de "quantas noites" — monta a partir da base (hospedagem_delta) +
   // os add-ons de ponta (early_arrival/late_departure), mostrando só o preço

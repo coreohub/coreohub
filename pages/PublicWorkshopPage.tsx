@@ -88,6 +88,7 @@ const PublicWorkshopPage: React.FC = () => {
   const discountToken = searchParams.get('discount_token');
 
   const [workshop, setWorkshop] = useState<Workshop | null>(null);
+  const [eventFee, setEventFee] = useState<{ enabled: boolean; uf: string | null }>({ enabled: false, uf: null });
   const [stock, setStock]       = useState<Stock | null>(null);
   const [proximoLote, setProximoLote] = useState<{ preco: number; dataVirada: string; dias: number } | null>(null);
   const [loading, setLoading]   = useState(true);
@@ -126,7 +127,7 @@ const PublicWorkshopPage: React.FC = () => {
         const filter = isUuid ? 'id' : 'slug';
         const { data: ws, error: wsErr } = await supabase
           .from('workshops')
-          .select('*, events(slug, name, processing_fee_enabled, state)')
+          .select('*, events(slug, name)')
           .eq(filter, idOrSlug)
           .eq('is_published', true)
           .maybeSingle();
@@ -134,6 +135,13 @@ const PublicWorkshopPage: React.FC = () => {
         if (wsErr || !ws) {
           setError('Workshop não encontrado ou ainda não está publicado.');
           return;
+        }
+        if (ws.event_id) {
+          // Chave e UF via RPC (a leitura direta de events é bloqueada para anon em evento privado).
+          const { data: info, error: infoErr } = await supabase.rpc('get_event_processing_info', { p_event_id: ws.event_id });
+          if (infoErr) console.error('[PublicWorkshopPage] get_event_processing_info:', infoErr.message);
+          const row = Array.isArray(info) ? info[0] : info;
+          setEventFee({ enabled: Boolean(row?.processing_fee_enabled), uf: row?.state ?? null });
         }
         setWorkshop(ws);
 
@@ -353,9 +361,9 @@ const PublicWorkshopPage: React.FC = () => {
               )}
               {/* Taxa de pagamento (chave por evento): sem número fechado, varia conforme Pix ou cartão no checkout.
                   Não aparece com o produtor absorvendo nem em UF que proíbe taxa online (AC/RR). */}
-              {workshop.event_id && (workshop as any).events?.processing_fee_enabled === true
+              {workshop.event_id && eventFee.enabled
                 && (workshop as any).processing_payer !== 'produtor'
-                && !getUfRule((workshop as any).events?.state)?.forceAbsorb && (
+                && !getUfRule(eventFee.uf)?.forceAbsorb && (
                 <p className="text-[11px] text-slate-400 mt-1">+ taxa de pagamento conforme a forma escolhida</p>
               )}
             </div>

@@ -120,7 +120,7 @@ const CheckoutWorkshopPass: React.FC = () => {
 
         const { data: ev } = await supabase
           .from('events')
-          .select('start_date, end_date, processing_fee_enabled, state')
+          .select('start_date, end_date')
           .eq('id', p.event_id)
           .maybeSingle();
         if (isEventOver(ev)) {
@@ -128,7 +128,11 @@ const CheckoutWorkshopPass: React.FC = () => {
           return;
         }
 
-        setEventFee({ enabled: Boolean(ev?.processing_fee_enabled), uf: ev?.state ?? null });
+        // Chave e UF via RPC (a leitura direta de events é bloqueada para anon em evento privado).
+        const { data: info, error: infoErr } = await supabase.rpc('get_event_processing_info', { p_event_id: p.event_id });
+        if (infoErr) console.error('[CheckoutWorkshopPass] get_event_processing_info:', infoErr.message);
+        const infoRow = Array.isArray(info) ? info[0] : info;
+        setEventFee({ enabled: Boolean(infoRow?.processing_fee_enabled), uf: infoRow?.state ?? null });
         setPass(p);
 
         if (p.selection_mode === 'a_la_carte') {
