@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { computeAudienceCheckout } from '../supabase/functions/_shared/audience-checkout';
 import { computeAudienceCart, type PricingInput } from '../supabase/functions/_shared/audience-pricing';
+import { PROCESSING_FEE_CONFIG } from '../supabase/functions/_shared/processing-fee';
+
+// Produção fixa o parcelado em 1x; os testes de 2 a 12x usam uma config explícita.
+const PARCELADO = { ...PROCESSING_FEE_CONFIG, maxInstallments: 12 };
 
 const inteira = (qty: number, preco = 50): PricingInput =>
   ({ idx: 0, nome: 'Inteira', kind: 'inteira', quantity: qty, precoUnit: preco, quantidadeTotal: null });
@@ -44,14 +48,14 @@ describe('computeAudienceCheckout — comprador paga a linha', () => {
   });
 
   it('invariante: total = produtor + comissão + linha (carrinho misto Inteira + Meia)', () => {
-    const r = computeAudienceCheckout(base([inteira(2), meia(1)], { method: 'card', installments: 3 }));
+    const r = computeAudienceCheckout(base([inteira(2), meia(1)], { method: 'card', installments: 3, config: PARCELADO }));
     expect(r.processingFee).toBeGreaterThan(0);
     expect(r.producerTotal + r.commissionTotal + r.processingFee).toBeCloseTo(r.chargedTotal, 2);
     expect(r.producerTotal).toBe(125); // intocado pela linha
   });
 
   it('cartão 10x usa o percentual de 7-12x (6%)', () => {
-    const r = computeAudienceCheckout(base([inteira(1, 100)], { method: 'card', installments: 10 }));
+    const r = computeAudienceCheckout(base([inteira(1, 100)], { method: 'card', installments: 10, config: PARCELADO }));
     expect(r.chargedBeforeFee).toBe(110);
     expect(r.processingFee).toBe(6.6);
   });
@@ -64,6 +68,17 @@ describe('computeAudienceCheckout — comprador paga a linha', () => {
     const r = computeAudienceCheckout(base([inteira(1, 10)], { feeMode: 'absorver', method: 'card', installments: 1, commissionPercent: 0 }));
     expect(r.processingFee).toBe(0.7); // 7% de 10; custo real seria 0,82
     expect(r.capApplied).toBe('plateia_cap');
+  });
+});
+
+describe('computeAudienceCheckout — parcelado fixado em 1x', () => {
+  it('cartão 3x com a config padrão é recusado', () => {
+    expect(() => computeAudienceCheckout(base([inteira(1)], { method: 'card', installments: 3 }))).toThrow(/pague à vista/i);
+  });
+
+  it('cartão à vista com a config padrão fecha a conta', () => {
+    const r = computeAudienceCheckout(base([inteira(1, 100)], { method: 'card', installments: 1 }));
+    expect(r.chargedTotal).toBeGreaterThan(r.chargedBeforeFee);
   });
 });
 
@@ -90,7 +105,7 @@ describe('computeAudienceCheckout — produtor absorve a linha', () => {
   });
 
   it('carrinho misto: soma exata e nenhum item com líquido negativo', () => {
-    const r = computeAudienceCheckout(base([inteira(3, 40), meia(2, 20)], { payer: 'produtor', method: 'card', installments: 6 }));
+    const r = computeAudienceCheckout(base([inteira(3, 40), meia(2, 20)], { payer: 'produtor', method: 'card', installments: 6, config: PARCELADO }));
     expect(r.producerTotal + r.commissionTotal).toBeCloseTo(r.chargedTotal, 2);
     r.items.forEach((it) => expect(it.producer_amount).toBeGreaterThanOrEqual(0));
   });
@@ -115,7 +130,7 @@ describe('computeAudienceCheckout — leis estaduais', () => {
   });
 
   it('RJ com comissão absorvida: linha limitada a 10% do valor de face', () => {
-    const r = computeAudienceCheckout(base([inteira(1, 100)], { uf: 'RJ', feeMode: 'absorver', method: 'card', installments: 12 }));
+    const r = computeAudienceCheckout(base([inteira(1, 100)], { uf: 'RJ', feeMode: 'absorver', method: 'card', installments: 12, config: PARCELADO }));
     expect(r.processingFee).toBe(6); // 6% < teto de 10 (comissão absorvida não entra na soma): não limita
     expect(r.ufCapped).toBe(false);
   });

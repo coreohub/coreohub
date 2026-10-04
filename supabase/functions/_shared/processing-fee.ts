@@ -50,7 +50,11 @@ export const PROCESSING_FEE_CONFIG: ProcessingFeeConfig = {
   pixCapReais: 15,
   plateiaCapPercent: 7,
   plateiaCapProducts: ['plateia'],
-  maxInstallments: 12,
+  // Parcelado FIXADO em 1x por decisão do produtor (2026-10-04): a Asaas cria 1 cobrança por parcela e
+  // repassa ao produtor de 32 em 32 dias; o webhook, o estorno (/installments/{id}/refund) e a
+  // expiração ainda não tratam parcelamento. Para reabrir, subir este valor (até 12) SÓ depois de
+  // implementar esses 3 pontos. As tabelas de percentual e custo por faixa seguem prontas abaixo.
+  maxInstallments: 1,
   asaas: {
     pixCost: 1.99,
     cardPercent: { card1x: 2.99, card2to6: 3.49, card7to12: 3.99 },
@@ -109,7 +113,11 @@ export function normalizeInstallments(
     if (n !== 1) throw new Error('Pix não tem parcelas');
     return 1;
   }
-  if (n > config.maxInstallments) throw new Error(`Máximo de ${config.maxInstallments} parcelas`);
+  if (n > config.maxInstallments) {
+    throw new Error(config.maxInstallments <= 1
+      ? 'Parcelamento no cartão indisponível no momento: pague à vista no cartão ou no Pix'
+      : `Máximo de ${config.maxInstallments} parcelas`);
+  }
   return n;
 }
 

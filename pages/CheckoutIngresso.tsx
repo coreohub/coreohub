@@ -1015,10 +1015,12 @@ export default function CheckoutIngresso() {
                 aria-pressed={payMethod === 'card'}
                 className={`px-3 py-3 rounded-xl border text-left transition-colors ${payMethod === 'card' ? 'border-[#ff0068] bg-[#ff0068]/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}>
                 <p className="text-sm font-black">Cartão de crédito</p>
-                <p className="text-[11px] text-slate-400 tabular-nums">a partir de {formatBRL(payOptions.cardTotals[1])}</p>
+                <p className="text-[11px] text-slate-400 tabular-nums">
+                  {PROCESSING_FEE_CONFIG.maxInstallments > 1 ? 'a partir de ' : 'à vista '}{formatBRL(payOptions.cardTotals[1])}
+                </p>
               </button>
             </div>
-            {payMethod === 'card' && (
+            {payMethod === 'card' && PROCESSING_FEE_CONFIG.maxInstallments > 1 && (
               <label className="block" htmlFor="installments">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Parcelas</p>
                 <select id="installments" value={installments} onChange={e => setInstallments(Number(e.target.value))}

@@ -12,6 +12,26 @@ import { applyUfRules, getUfRule, normalizeUf } from '../supabase/functions/_sha
 // Linha "Taxa de pagamento": dinheiro de gente real. Fórmula:
 // min( max( p% x base , piso_custo_cartao ) , teto_pix_R$15 , teto_plateia_7% ).
 
+// Produção fixa o parcelado em 1x (PROCESSING_FEE_CONFIG.maxInstallments = 1). Estes testes exercitam as
+// tabelas de 2 a 12x (prontas pra quando o parcelado voltar) com uma config explícita.
+const PARCELADO = { ...PROCESSING_FEE_CONFIG, maxInstallments: 12 };
+
+describe('parcelado fixado em 1x em produção', () => {
+  it('config padrão: máximo de 1 parcela', () => {
+    expect(PROCESSING_FEE_CONFIG.maxInstallments).toBe(1);
+  });
+
+  it('cartão 2x com a config padrão é recusado com mensagem clara', () => {
+    expect(() => computeProcessingFee({ base: 100, method: 'card', installments: 2, product: 'plateia' }))
+      .toThrow(/pague à vista/i);
+  });
+
+  it('cartão à vista e Pix seguem funcionando', () => {
+    expect(computeProcessingFee({ base: 100, method: 'card', installments: 1, product: 'passe' }).fee).toBe(4);
+    expect(computeProcessingFee({ base: 100, method: 'pix', product: 'passe' }).fee).toBe(4);
+  });
+});
+
 describe('computeProcessingFee — Pix', () => {
   it('Pix 4% sobre a base (plateia R$ 55: preço 50 + comissão 10% repassada)', () => {
     const r = computeProcessingFee({ base: 55, method: 'pix', product: 'plateia' });
@@ -40,7 +60,7 @@ describe('computeProcessingFee — Pix', () => {
 
 describe('computeProcessingFee — cartão', () => {
   it('faixas de percentual: 1x 4, 2-6x 5, 7-12x 6 (acima do piso de custo)', () => {
-    const p = (n: number) => computeProcessingFee({ base: 1000, method: 'card', installments: n, product: 'passe' });
+    const p = (n: number) => computeProcessingFee({ base: 1000, method: 'card', installments: n, product: 'passe', config: PARCELADO });
     expect(p(1).percentApplied).toBe(4);
     expect(p(1).fee).toBe(40);
     expect(p(2).percentApplied).toBe(5);
@@ -65,7 +85,7 @@ describe('computeProcessingFee — cartão', () => {
   it('invariante: em produto sem teto, total - custo Asaas >= base (CoreoHub não paga o cartão)', () => {
     for (const base of [5, 10, 20, 49.9, 100, 250, 731.85, 1597]) {
       for (const n of [1, 2, 3, 6, 7, 10, 12]) {
-        const r = computeProcessingFee({ base, method: 'card', installments: n, product: 'workshop' });
+        const r = computeProcessingFee({ base, method: 'card', installments: n, product: 'workshop', config: PARCELADO });
         const net = r.total - asaasCost(r.total, 'card', n);
         // tolerância de 1 centavo do arredondamento do custo
         expect(net).toBeGreaterThanOrEqual(base - 0.011);
@@ -74,7 +94,7 @@ describe('computeProcessingFee — cartão', () => {
   });
 
   it('máximo de 12 parcelas imposto', () => {
-    expect(() => computeProcessingFee({ base: 100, method: 'card', installments: 13, product: 'plateia' })).toThrow();
+    expect(() => computeProcessingFee({ base: 100, method: 'card', installments: 13, product: 'plateia', config: PARCELADO })).toThrow();
     expect(() => normalizeInstallments('card', 0)).toThrow();
     expect(() => normalizeInstallments('card', 1.5)).toThrow();
   });
@@ -94,7 +114,7 @@ describe('computeProcessingFee — teto de 7% só em plateia', () => {
   });
 
   it('plateia 12x: percentual 6% cabe no teto de 7%', () => {
-    const r = computeProcessingFee({ base: 100, method: 'card', installments: 12, product: 'plateia' });
+    const r = computeProcessingFee({ base: 100, method: 'card', installments: 12, product: 'plateia', config: PARCELADO });
     expect(r.fee).toBe(6);
     expect(r.capApplied).toBeNull();
   });
@@ -240,7 +260,7 @@ describe('webhook: a linha nunca entra no líquido do produtor', () => {
 
   it('cartão 10x workshop: master recebe comissão + linha e paga o custo da Asaas; produtor intocado', () => {
     const base = 731.85; // 697 + 5% de comissão repassada
-    const r = computeProcessingFee({ base, method: 'card', installments: 10, product: 'workshop' });
+    const r = computeProcessingFee({ base, method: 'card', installments: 10, product: 'workshop', config: PARCELADO });
     expect(r.fee).toBe(43.91); // 6% de 731,85
     const commission = 34.85;
     const net = producerNetExcludingFee(r.total, commission, r.fee);

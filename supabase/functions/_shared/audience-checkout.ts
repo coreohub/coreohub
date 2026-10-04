@@ -22,6 +22,7 @@ import {
   computeProcessingFee,
   type FeeCapApplied,
   type PaymentMethod,
+  type ProcessingFeeConfig,
 } from './processing-fee.ts'
 import { applyUfRules } from './uf-rules.ts'
 
@@ -42,6 +43,8 @@ export interface AudienceCheckoutInput {
   installments?: number | null
   /** events.state (UF) */
   uf?: string | null
+  /** Config alternativa (testes; produção usa PROCESSING_FEE_CONFIG). */
+  config?: ProcessingFeeConfig
 }
 
 export interface AudienceCheckoutResult {
@@ -106,6 +109,7 @@ export function computeAudienceCheckout(input: AudienceCheckoutInput): AudienceC
     method: input.method,
     installments: input.installments ?? 1,
     product: 'plateia',
+    config: input.config,
   })
 
   // Teto estadual (AL/RJ/PR): valor de face = preço sem comissão; comissão repassada soma no teto.
