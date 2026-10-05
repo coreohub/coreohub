@@ -259,7 +259,7 @@ const PagamentoInscrito = () => {
       <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-2xl">
         <ShieldCheck size={16} className="text-blue-500 shrink-0 mt-0.5" />
         <p className="text-[10px] text-blue-700 dark:text-blue-400 font-bold leading-relaxed">
-          Pagamento seguro via <strong>Asaas</strong>. Aceitamos Pix, cartão de crédito/débito e boleto.
+          Pagamento seguro via <strong>Asaas</strong>. Aceitamos Pix, cartão de crédito/débito e, nos eventos que oferecem, boleto.
           Sua inscrição é confirmada automaticamente após aprovação.
         </p>
       </div>

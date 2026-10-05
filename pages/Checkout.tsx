@@ -427,7 +427,7 @@ const Checkout = () => {
             <CheckCircle size={16} className="text-blue-500 shrink-0 mt-0.5" />
             <div className="text-[10px] text-blue-700 dark:text-blue-400 space-y-0.5">
               <p className="font-black uppercase tracking-wider">Pagamento seguro via Asaas</p>
-              <p>Você será redirecionado para o ambiente seguro de pagamento. Aceitamos Pix, cartão de crédito e boleto bancário.</p>
+              <p>Você será redirecionado para o ambiente seguro de pagamento. Aceitamos Pix, cartão de crédito e, nos eventos que oferecem, boleto bancário.</p>
             </div>
           </div>
         )}

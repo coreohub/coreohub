@@ -453,6 +453,9 @@ const Planos: React.FC = () => {
             {calcSeletivaValor > 0 && <> + <span className="text-white font-bold tabular-nums">{fmtBRL(calcSeletivaValor)}</span> de seletiva (taxa própria)</>} ·
             plano recomendado <span className="text-[#ff0068] font-black uppercase">{nomeRecomendado}</span> (destacado abaixo)
           </p>
+          <p className="text-[11px] text-slate-500 text-center md:text-left">
+            A simulação mostra o custo do plano. A taxa de pagamento (Pix ou cartão) é paga pelo comprador por padrão; se você assumir, ela sai do seu repasse.
+          </p>
 
           {!leadSubmitted ? (
             !showLeadForm ? (

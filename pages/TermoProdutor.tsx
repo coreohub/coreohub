@@ -379,7 +379,8 @@ const TermoProdutor: React.FC = () => {
               12.1. Os valores líquidos devidos ao Produtor (resultado do pagamento aprovado, líquido da comissão da Plataforma e taxas Asaas)
               permanecem retidos na subconta Asaas do Produtor por um período de <strong>7 (sete) dias corridos</strong> contados da
               confirmação do pagamento. Decorrido esse prazo, a Plataforma dispara automaticamente a transferência do saldo
-              liberado para a chave PIX cadastrada pelo Produtor.
+              liberado para a chave PIX cadastrada pelo Produtor. Nos pagamentos por <strong>cartão</strong>, o valor só entra na subconta na data de crédito
+              informada pelo Asaas (atualmente cerca de 32 dias corridos após a confirmação) e o repasse ocorre depois dessa data.
             </p>
             <p className="mb-2">
               12.2. A janela de 7 dias tem por finalidade <strong>preservar saldo suficiente</strong> para o processamento integral de
@@ -389,7 +390,8 @@ const TermoProdutor: React.FC = () => {
             </p>
             <p className="mb-2">
               12.3. <strong>Antecipação manual ("Transferir agora"):</strong> a Plataforma disponibiliza no painel do Produtor a opção
-              de antecipar a transferência do saldo retido a qualquer momento, antes do encerramento da janela de 7 dias, sem custo adicional.
+              de antecipar a transferência do saldo retido a qualquer momento, antes do encerramento da janela de 7 dias, sem custo adicional. A opção alcança apenas
+              o saldo já creditado na subconta; valores de cartão ainda não creditados não podem ser antecipados por esse botão.
               Caso ocorra reembolso, estorno, MED ou chargeback nas vendas correspondentes após a antecipação e o saldo da subconta Asaas
               for insuficiente para cobrir o valor devolvido, a <strong>CoreoHub absorve temporariamente</strong> o gap como garantidora
               da subconta BaaS e recupera o valor automaticamente nos próximos pagamentos recebidos do Produtor, conforme mecanismo padrão

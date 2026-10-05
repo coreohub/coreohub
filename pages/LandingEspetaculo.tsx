@@ -58,7 +58,7 @@ export const FAQ_ITEMS = [
   },
   {
     q: 'Como recebo o dinheiro das vendas?',
-    a: 'Cada ingresso vendido já sai com o split automático — a comissão de 7,9% fica com a CoreoHub, o resto fica retido na sua conta por até 7 dias (mesma janela de segurança usada por Stripe e Sympla) e depois é transferido via Pix direto pra você, sem precisar fazer nada. Quer o dinheiro antes? O botão "Transferir agora" antecipa a qualquer momento, sem taxa extra.',
+    a: 'Cada ingresso vendido já sai com o split automático — a comissão de 7,9% fica com a CoreoHub e o resto vai para a sua subconta. O Pix fica retido por até 7 dias (janela de segurança para estornos, a mesma ideia de Stripe e Sympla) e depois é transferido via Pix direto pra você, sem precisar fazer nada. O cartão entra na subconta no prazo do Asaas, hoje cerca de 32 dias depois da confirmação, e então segue o mesmo caminho. Quer o dinheiro antes? O botão "Transferir agora" antecipa o saldo que já está na subconta, sem taxa extra.',
   },
   {
     q: 'Quem já compra ingresso paga alguma taxa a mais?',

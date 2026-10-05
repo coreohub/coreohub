@@ -760,7 +760,7 @@ const LandingPage = () => {
             {[
               {
                 q: 'Como recebo o dinheiro das inscrições?',
-                a: 'Quer o dinheiro antes do prazo? O botão "Transferir agora" antecipa a qualquer momento, sem taxa. Fora isso, o repasse já é automático: cada inscrição paga sai com o split — a comissão do seu plano fica com a CoreoHub, o resto fica retido na sua conta por até 7 dias (mesma janela de segurança usada por Stripe e Sympla) e depois a CoreoHub transfere via Pix direto pra você, sem precisar clicar em nada. Único custo à parte é uma taxa única de R$ 12,90 da Asaas (nosso parceiro de pagamentos) pela abertura da sua subconta digital — cobrada uma vez só, no seu primeiro recebimento.',
+                a: 'Quer o dinheiro antes do prazo? O botão "Transferir agora" antecipa o saldo que já está na sua subconta, sem taxa. O repasse é automático: cada pagamento sai com o split — a comissão do seu plano fica com a CoreoHub e o resto vai para a sua subconta. O Pix fica retido por até 7 dias (janela de segurança para estornos, a mesma ideia de Stripe e Sympla) e depois a CoreoHub transfere via Pix direto pra você, sem precisar clicar em nada. O cartão entra na subconta no prazo do Asaas, hoje cerca de 32 dias depois da confirmação, e só então segue o mesmo caminho. Custos à parte: a taxa única de R$ 12,90 da Asaas (nosso parceiro de pagamentos) pela abertura da subconta, cobrada uma vez só no seu primeiro recebimento; nos planos Essencial e Escala, a taxa de ativação por evento; e, quando ativada, a taxa de pagamento, que por padrão é paga pelo comprador.',
               },
               {
                 q: 'Funciona mesmo offline?',

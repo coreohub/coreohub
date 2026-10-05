@@ -73,7 +73,7 @@ const TermosDeUso: React.FC = () => {
             <p className="mb-3">A CoreoHub é uma plataforma de gestão para festivais e mostras de dança que oferece:</p>
             <ul className="list-disc pl-5 space-y-1.5">
               <li>Gerenciamento de inscrições online</li>
-              <li>Processamento de pagamentos via Pix, cartão e boleto</li>
+              <li>Processamento de pagamentos via Pix e cartão (e boleto, nos eventos que o oferecem)</li>
               <li>Júri digital com acesso por tablet e PIN</li>
               <li>Cronograma inteligente com IA</li>
               <li>Bilheteria, check-in por QR Code e emissão automática de certificados</li>

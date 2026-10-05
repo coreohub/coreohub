@@ -91,7 +91,7 @@ const WithdrawalPanel: React.FC<Props> = ({ token, paidAt, eventStartDate, event
       {open && (
         <div className="mt-3 space-y-3">
           <p className="text-[11px] text-slate-500 leading-relaxed">
-            Direito de arrependimento (art. 49 do CDC e art. 16 do Decreto nº 13.108/2026): você pode desistir em até 7 dias corridos do pagamento e recebe o valor pago de volta <strong>integralmente, incluindo a taxa de serviço</strong>. Vale até <strong>{fmtDay(limite)}</strong>.
+            Direito de arrependimento (art. 49 do CDC e art. 16 do Decreto nº 13.108/2026): você pode desistir em até 7 dias corridos do pagamento e recebe o valor pago de volta <strong>integralmente, incluindo a taxa de serviço e a taxa de pagamento</strong>. Vale até <strong>{fmtDay(limite)}</strong>.
           </p>
           <p className="text-[11px] text-slate-500 leading-relaxed">
             A desistência vale para <strong>todos os ingressos desta compra</strong> e eles deixam de valer. Não dá para desfazer.

@@ -311,7 +311,7 @@ const GuiaDeInscricao: React.FC<Props> = ({ profile, config }) => {
       // eventos 100% gratuitos (contrato fechado, governo, etc).
       title: 'Finalize sua inscrição',
       subtitle: 'Confirme sua vaga no evento',
-      description: 'Garanta sua participação. Se o evento cobrar inscrição, pague via Pix, boleto, cartão ou presencialmente no credenciamento. Se for gratuito, é só confirmar — sem cobrança nenhuma.',
+      description: 'Garanta sua participação. Se o evento cobrar inscrição, pague via Pix ou cartão (alguns eventos também aceitam boleto) ou presencialmente no credenciamento. Se for gratuito, é só confirmar — sem cobrança nenhuma.',
       ctaLabel: pagas === total && total > 0 ? 'Ver comprovantes' : `Finalizar (${total - pagas} pend.)`,
       ctaAction: () => navigate('/minhas-coreografias'),
       detail: (
