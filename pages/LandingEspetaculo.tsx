@@ -35,7 +35,7 @@ const OG_TITLE = 'Venda os ingressos do seu espetáculo de dança online';
 const OG_DESCRIPTION = 'Ingresso por Pix, cortesias e entrada por QR Code. Você paga 7,9% só sobre o que vender, sem mensalidade.';
 const PAGE_DESCRIPTION = 'Venda ingresso do espetáculo de dança do estúdio: 7,9% sobre o vendido, sem mensalidade, mais taxa de pagamento (comprador ou você). Cupom, cortesia e QR Code.';
 
-const FAQ_ITEMS = [
+export const FAQ_ITEMS = [
   {
     q: 'Quanto custa vender ingresso pro espetáculo de fim de ano?',
     a: 'A CoreoHub cobra 7,9% sobre o valor vendido, sem mínimo, sem mensalidade e sem taxa de adesão. Além disso há a taxa de pagamento (Pix ou cartão), que aparece como linha separada no checkout e, por padrão, é paga pelo comprador. Se preferir, você assume essa taxa e o ingresso sai com preço fechado. O percentual de 7,9% é público e igual para qualquer estúdio.',

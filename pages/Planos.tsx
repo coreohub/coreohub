@@ -62,6 +62,14 @@ const PLANOS: Plan[] = [
   },
 ];
 
+/** FAQ da página (JSON-LD FAQPage). Espelhado em api/og-marketing.ts pros bots; tests/marketing-faq-parity.test.ts garante que não divergem. */
+export const PLANOS_FAQ_ITEMS = [
+  {
+    q: 'O que é a taxa de pagamento e quem paga?',
+    a: 'É uma linha separada no checkout que cobre o custo de processar o Pix ou o cartão. Aparece com o total antes de pagar, não entra no repasse do produtor e é devolvida ao comprador em caso de estorno. Em ingressos, workshops e passes o comprador paga por padrão e o produtor pode assumir. Nas inscrições dos planos Essencial e Escala o produtor escolhe o modo; no Começo o preço é fechado.',
+  },
+];
+
 const PLANOS_TITLE = 'Planos e preços — CoreoHub';
 const PLANOS_DESCRIPTION =
   'Começo (10% sobre inscrições, ingressos e workshops, sem taxa fixa), Essencial (R$250 + 5%) ou Escala (R$1.490 + R$2/participante, teto de 4,5%). Sem mensalidade — você paga proporcional ao que o festival fatura. A taxa de pagamento (Pix ou cartão) aparece separada no checkout, paga pelo comprador ou por você, conforme o evento. Só a seletiva por vídeo tem taxa própria, configurável à parte.';
@@ -173,14 +181,11 @@ const Planos: React.FC = () => {
     faqLd.text = JSON.stringify({
       '@context': 'https://schema.org',
       '@type': 'FAQPage',
-      mainEntity: [{
+      mainEntity: PLANOS_FAQ_ITEMS.map((item) => ({
         '@type': 'Question',
-        name: 'O que é a taxa de pagamento e quem paga?',
-        acceptedAnswer: {
-          '@type': 'Answer',
-          text: 'É uma linha separada no checkout que cobre o custo de processar o Pix ou o cartão. Aparece com o total antes de pagar, não entra no repasse do produtor e é devolvida ao comprador em caso de estorno. Em ingressos, workshops e passes o comprador paga por padrão e o produtor pode assumir. Nas inscrições dos planos Essencial e Escala o produtor escolhe o modo; no Começo o preço é fechado.',
-        },
-      }],
+        name: item.q,
+        acceptedAnswer: { '@type': 'Answer', text: item.a },
+      })),
     });
     document.getElementById('planos-faq-ld')?.remove();
     document.head.appendChild(faqLd);
