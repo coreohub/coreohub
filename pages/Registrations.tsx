@@ -1718,7 +1718,7 @@ const Registrations = () => {
                           <span className="px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 whitespace-nowrap" title="Dança inclusiva (PCD)">PCD</span>
                         )}
                       </div>
-                      <p className="text-[9px] text-[#ff0068] font-bold uppercase tracking-widest mt-0.5">{reg.tipo_apresentacao}{reg.formato_participacao ? ` · ${reg.formato_participacao}` : ''}</p>
+                      <p className="text-[9px] text-[#ff0068] font-bold uppercase tracking-widest mt-0.5">{[tiposApresentacaoAtivos.length > 1 ? resolveTipoApresentacaoLabel(reg.tipo_apresentacao, formatoLabelConfig) : '', reg.formato_participacao].filter(Boolean).join(' · ')}</p>
                     </div>
                     <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border whitespace-nowrap ${getStatusColor(reg.status_pagamento)}`}>{reg.status_pagamento}</span>
                   </div>
@@ -2362,7 +2362,7 @@ const Registrations = () => {
                 {/* Titulo: tipo, h2 nome, estudio */}
                 <div className="px-4 sm:px-6 py-3 min-w-0">
                   <p className="text-[9px] font-black uppercase tracking-widest text-[#ff0068] mb-1">
-                    {viewingReg.tipo_apresentacao ?? '—'}
+                    {resolveTipoApresentacaoLabel(viewingReg.tipo_apresentacao, formatoLabelConfig) || '—'}
                   </p>
                   <h2 id="reg-panel-title" className="font-black text-lg uppercase tracking-tight text-slate-900 dark:text-white leading-tight break-words">
                     {viewingReg.nome_coreografia ?? 'Sem nome'}
@@ -2432,7 +2432,8 @@ const Registrations = () => {
                           options={estilosDisponiveis} />
                         <EditField label="Tipo de Mostra" value={editValues.tipo_apresentacao}
                           onChange={v => setEditValues(p => ({ ...p, tipo_apresentacao: v }))}
-                          options={['Competitiva', 'Avaliada']} />
+                          options={['Competitiva', 'Avaliada']}
+                          labelFor={o => resolveTipoApresentacaoLabel(o, formatoLabelConfig)} />
                         <EditField label="Nome da Coreografia" value={editValues.nome_coreografia ?? ''}
                           onChange={v => setEditValues(p => ({ ...p, nome_coreografia: v }))}
                           options={[]} />
@@ -3125,7 +3126,8 @@ const EditField: React.FC<{
   value: string;
   onChange: (v: string) => void;
   options: string[];
-}> = ({ label, value, onChange, options }) => {
+  labelFor?: (option: string) => string;
+}> = ({ label, value, onChange, options, labelFor }) => {
   // Mostra select se valor atual está nas opções; senão input livre.
   const inOptions = options.includes(value);
   return (
@@ -3137,7 +3139,7 @@ const EditField: React.FC<{
           onChange={e => onChange(e.target.value)}
           className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 text-[12px] font-bold text-slate-900 dark:text-white outline-none focus:border-[#ff0068] dark:[color-scheme:dark]"
         >
-          {options.map(o => <option key={o} value={o}>{o}</option>)}
+          {options.map(o => <option key={o} value={o}>{labelFor ? labelFor(o) : o}</option>)}
           {!inOptions && value && <option value={value}>{value} (atual)</option>}
         </select>
       ) : (
