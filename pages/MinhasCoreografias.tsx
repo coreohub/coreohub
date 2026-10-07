@@ -21,6 +21,7 @@ import { validateCoupon } from '../services/couponService';
 import PaymentMethodPicker, { type PayMethod } from '../components/PaymentMethodPicker';
 import { computeInscricaoCheckout, inscricaoLineApplies } from '../supabase/functions/_shared/inscricao-checkout';
 import { isRegistrationPaid } from '../utils/registrationStatus';
+import { resolveTipoApresentacaoLabel, type FormatoLabelConfig } from '../utils/formatoParticipacao';
 import { usePwaUpdate } from '../contexts/PwaUpdateContext';
 
 /* ══════════════════════════════════════════════════════════════
@@ -58,6 +59,7 @@ interface Registration {
   discount_token?:       string | null;
   /** Snapshot do video_selection_fee do evento no momento (preview de UI). */
   _videoFee?:            number;
+  _tipoLabelCfg?:        FormatoLabelConfig;
   /** Hidratado do join com events */
   _event?: {
     id:         string;
@@ -329,7 +331,7 @@ const MinhasCoreografias = () => {
             .in('id', eventIds),
           supabase
             .from('configuracoes')
-            .select('event_id, formatos_precos, prazo_inscricao')
+            .select('event_id, formatos_precos, prazo_inscricao, formato_avaliada_label_mode, formato_avaliada_label_custom')
             .in('event_id', eventIds),
         ]);
         for (const ev of (eventsData  ?? [])) eventsMap[ev.id]        = ev;
@@ -507,6 +509,7 @@ const MinhasCoreografias = () => {
         // Snapshot do preço calculado pra exibir. Não é persistido — é só pra UI.
         _precoDisplay: calcPrecoDisplay(r),
         _videoFee:     r.event_id ? Number(eventsMap[r.event_id]?.video_selection_fee ?? 0) : 0,
+        _tipoLabelCfg: r.event_id ? configsMap[r.event_id] : undefined,
       }));
       setRegistrations(regs);
 
@@ -2028,7 +2031,7 @@ const MinhasCoreografias = () => {
                         <div className="min-w-0 flex-1">
                           <p className="font-black text-sm text-slate-900 dark:text-white">{reg.nome_coreografia ?? 'Coreografia'}</p>
                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
-                            {[reg.tipo_apresentacao, reg.formato_participacao, reg.categoria, reg.estilo_danca].filter(Boolean).join(' · ')}
+                            {[resolveTipoApresentacaoLabel(reg.tipo_apresentacao, reg._tipoLabelCfg), reg.formato_participacao, reg.categoria, reg.estilo_danca].filter(Boolean).join(' · ')}
                           </p>
                         </div>
                         <span className="px-2 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[9px] font-black uppercase tracking-widest shrink-0">
