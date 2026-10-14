@@ -91,9 +91,35 @@ type PageMeta = {
   jsonLd?: Record<string, unknown>;
   /** Perguntas e respostas também no corpo do HTML (AEO). */
   faq?: Faq[];
+  /** Meta description curta (snippet ~158 car.), quando `description` é o texto longo do corpo. */
+  metaDescription?: string;
+  /** Fatos em lista no corpo do HTML (bots sem JS não veem o React). */
+  bullets?: string[];
 };
 
 const PAGES: Record<string, PageMeta> = {
+  // Home: sem esta entrada, bots sem JS (GPTBot, ClaudeBot, PerplexityBot) recebiam o shell do
+  // index.html (78 caracteres de texto, nenhum <h1>). Texto espelha index.html (meta + featureList).
+  home: {
+    path: '/',
+    title: 'CoreoHub — Gestão inteligente para festivais e mostras de dança',
+    description:
+      'CoreoHub é a plataforma de gestão para festivais e mostras de dança no Brasil: inscrições, pagamentos, júri digital, cronograma, bilheteria, check-in e certificados. Sem mensalidade. Fundada em 2026 por Ticko Bboy, é uma empresa do Cultural Estúdio, de Votuporanga/SP.',
+    metaDescription:
+      'Plataforma de gestão para festivais e mostras de dança: inscrições, júri digital, cronograma com IA e certificados automáticos. Sem mensalidade.',
+    bullets: [
+      'Inscrições online por modalidade',
+      'Pagamento via Pix, cartão e boleto com split automático',
+      'Júri digital por tablet (funciona sem Wi-Fi)',
+      'Cronograma inteligente com detecção de conflito de bailarino',
+      'Seletiva de vídeo pré-festival',
+      'Bilheteria e workshops integrados',
+      'Check-in por QR code',
+      'Certificados automáticos com QR de validação',
+      'Narração por IA',
+      'Configuração automática de evento por regulamento em PDF',
+    ],
+  },
   festivais: {
     path: '/festivais',
     title: 'Festivais e mostras de dança abertos — CoreoHub',
@@ -122,6 +148,8 @@ const PAGES: Record<string, PageMeta> = {
     // o link de Planos mostrava a mesma foto do Hero da home, sem relação
     // nenhuma com preço/comercial. Achado 2026-09-13.
     image: `${SITE_URL}/og-planos.jpg`,
+    metaDescription:
+      'Começo (10%), Essencial (R$250 + 5%) ou Escala (R$1.490 + R$2/participante). Sem mensalidade: você paga proporcional ao que o festival fatura.',
     faq: PLANOS_FAQ,
     jsonLd: { '@context': 'https://schema.org', ...faqPage(PLANOS_FAQ) },
   },
@@ -187,7 +215,7 @@ const html = (meta: PageMeta): string => {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(meta.title)}</title>
-<meta name="description" content="${esc(meta.description)}">
+<meta name="description" content="${esc(meta.metaDescription ?? meta.description)}">
 
 <!-- Open Graph (WhatsApp, Telegram, Facebook, Instagram, LinkedIn) -->
 <meta property="og:title" content="${esc(ogTitle)}">
@@ -213,6 +241,7 @@ ${meta.jsonLd ? `<script type="application/ld+json">${JSON.stringify(meta.jsonLd
 <body>
 <h1>${esc(meta.title)}</h1>
 <p>${esc(meta.description)}</p>
+${meta.bullets ? `<ul>\n${meta.bullets.map((b) => `<li>${esc(b)}</li>`).join('\n')}\n</ul>` : ''}
 ${meta.faq ? meta.faq.map((i) => `<h2>${esc(i.q)}</h2>\n<p>${esc(i.a)}</p>`).join('\n') : ''}
 <p><a href="${esc(url)}">Acesse a página completa</a></p>
 </body>

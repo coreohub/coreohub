@@ -207,7 +207,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // de fato exibem no snippet); o <body> abaixo carrega o texto INTEIRO —
     // é o que os crawlers de IA/Google realmente indexam como conteúdo.
     const shortDescription =
-      fullDescription.slice(0, 160) || `${statusLabel} — ${ev.name}, festival de dança no CoreoHub.`;
+      (fullDescription.length <= 158
+        ? fullDescription
+        : `${fullDescription.slice(0, 157).replace(/s+S*$/, '')}…`) ||
+      `${statusLabel} — ${ev.name}, festival de dança no CoreoHub.`;
     const image = ev.cover_url || DEFAULT_IMAGE;
     const canonicalSlug = ev.slug ?? ev.id;
     const url = `${SITE_URL}/evento/${canonicalSlug}`;
