@@ -69,6 +69,8 @@ Deno.serve(async () => {
       // motivo do /planos acima: página real com meta/canonical/JSON-LD
       // próprios, sem entrada aqui a descoberta dependeria só de link interno.
       { loc: `${SITE_URL}/espetaculo`, priority: 0.7, changefreq: 'monthly' },
+      // Página institucional (quem está por trás, o que faz, para quem) — sinal de entidade pra IA/Google.
+      { loc: `${SITE_URL}/sobre`, priority: 0.5, changefreq: 'yearly' },
     ];
 
     const eventEntries = (events ?? []).map((ev) => {

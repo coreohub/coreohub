@@ -45,6 +45,7 @@ import TermosDeUso from './pages/TermosDeUso';
 import PoliticaDePrivacidade from './pages/PoliticaDePrivacidade';
 const LandingGoverno  = lazy(() => import('./pages/LandingGoverno'));
 const LandingEspetaculo = lazy(() => import('./pages/LandingEspetaculo'));
+const Sobre = lazy(() => import('./pages/Sobre'));
 const PropostaGoverno = lazy(() => import('./pages/PropostaGoverno'));
 
 // Páginas secundárias — lazy loading para reduzir bundle inicial
@@ -723,6 +724,7 @@ const App: React.FC = () => {
         <Route path="/governo/proposta" element={<Suspense fallback={<PageLoader />}><PropostaGoverno /></Suspense>} />
         {/* Plano Espetáculo (docs/mostra-pricing-spec.md) — landing dedicada,
             fora de /planos, isolada sem link cruzado por ora (decisão 2026-09-20). */}
+        <Route path="/sobre" element={<Suspense fallback={<PageLoader />}><Sobre /></Suspense>} />
         <Route path="/espetaculo" element={<Suspense fallback={<PageLoader />}><LandingEspetaculo /></Suspense>} />
         <Route path="/login" element={<Suspense fallback={<PageLoader />}><Auth /></Suspense>} />
         <Route path="/register" element={<Suspense fallback={<PageLoader />}><Auth /></Suspense>} />

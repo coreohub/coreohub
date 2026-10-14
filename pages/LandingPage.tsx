@@ -850,8 +850,8 @@ const LandingPage = () => {
               </div>
               <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
                 Sistema operacional pra festivais e mostras de dança. Inscrições, jurados, palco,
-                ingressos e certificados num único link. Criado por quem produz festivais de dança
-                há mais de 25 anos.
+                ingressos e certificados num único link. Fundada em 2026 por Ticko Bboy, com mais de 25 anos
+                nas danças urbanas.
               </p>
             </div>
 
@@ -880,11 +880,12 @@ const LandingPage = () => {
 
           <div className="border-t border-white/5 pt-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="text-[10px] text-slate-500 leading-relaxed">
-              <p className="font-bold text-slate-400 uppercase tracking-widest text-[9px] mb-1">CoreoHub Tecnologia LTDA</p>
-              <p>Votuporanga/SP</p>
+              <p className="font-bold text-slate-400 uppercase tracking-widest text-[9px] mb-1">CoreoHub · uma empresa do Cultural Estúdio</p>
+              <p>CNPJ 13.484.650/0001-00 · Votuporanga/SP</p>
               <p className="mt-1">Pagamentos processados pela Asaas IP S.A. (CNPJ 19.540.550/0001-21), instituição de pagamento autorizada pelo Banco Central.</p>
             </div>
             <div className="flex items-center gap-4 flex-wrap">
+              <Link to="/sobre" className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors">Sobre</Link>
               <Link to="/termos" className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors">Termos de Uso</Link>
               <Link to="/privacidade" className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors">Privacidade</Link>
               <p className="text-[10px] text-slate-600">© {new Date().getFullYear()} CoreoHub. Todos os direitos reservados.</p>

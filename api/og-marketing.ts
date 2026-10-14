@@ -125,6 +125,25 @@ const PAGES: Record<string, PageMeta> = {
     faq: PLANOS_FAQ,
     jsonLd: { '@context': 'https://schema.org', ...faqPage(PLANOS_FAQ) },
   },
+  sobre: {
+    path: '/sobre',
+    title: 'Sobre a CoreoHub — quem está por trás e o que a plataforma faz',
+    description:
+      'A CoreoHub é a plataforma de gestão para festivais e mostras de dança no Brasil. Fundada em 2026 por Ticko Bboy, artista com mais de 25 anos nas danças urbanas, é uma empresa do Cultural Estúdio, de Votuporanga/SP.',
+    faq: [
+      { q: 'O que é a CoreoHub?', a: 'Plataforma online de gestão de festivais e mostras de dança: inscrições, pagamentos com split automático, júri digital por tablet, cronograma, bilheteria, check-in por QR Code e certificados.' },
+      { q: 'Para quem é?', a: 'Para produtores de festivais, mostras e competições de dança, estúdios e escolas com espetáculo de fim de ano, e para os inscritos, jurados e público desses eventos.' },
+      { q: 'Quem está por trás?', a: 'A CoreoHub foi fundada em 2026 por Ticko Bboy, artista e empreendedor há mais de 25 anos, de Votuporanga (SP), com atuação nas danças urbanas, MBA em Dança: Gestão e Produção Cultural e apresentações no Brasil, Portugal, Equador, França e Argentina. Ele também fundou a Usualdance e é fundador do Cultural Estúdio (CNPJ 13.484.650/0001-00), empresa da qual a CoreoHub faz parte.' },
+      { q: 'Quanto custa?', a: 'Sem mensalidade: a CoreoHub ganha uma comissão sobre o que o evento vende. Os planos estão em coreohub.com/planos.' },
+    ],
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'AboutPage',
+      name: 'Sobre a CoreoHub',
+      url: `${SITE_URL}/sobre`,
+      mainEntity: { '@id': 'https://coreohub.com/#organization' },
+    },
+  },
   espetaculo: {
     path: '/espetaculo',
     title: 'Bilheteria para espetáculo de fim de ano de dança — Plano Espetáculo | CoreoHub',

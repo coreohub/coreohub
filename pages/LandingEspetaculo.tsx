@@ -494,8 +494,8 @@ export default function LandingEspetaculo() {
 
           <div className="border-t border-white/5 pt-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="text-[10px] text-slate-500 leading-relaxed">
-              <p className="font-bold text-slate-400 uppercase tracking-widest text-[9px] mb-1">CoreoHub Tecnologia LTDA</p>
-              <p>Votuporanga/SP</p>
+              <p className="font-bold text-slate-400 uppercase tracking-widest text-[9px] mb-1">CoreoHub · uma empresa do Cultural Estúdio</p>
+              <p>CNPJ 13.484.650/0001-00 · Votuporanga/SP</p>
               <p className="mt-1">Pagamentos processados pela Asaas IP S.A. (CNPJ 19.540.550/0001-21), instituição de pagamento autorizada pelo Banco Central.</p>
             </div>
             <div className="flex items-center gap-4 flex-wrap">

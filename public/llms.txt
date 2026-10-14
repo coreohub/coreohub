@@ -8,6 +8,7 @@
 - [Planos](https://coreohub.com/planos): os 3 planos de comissão (Começo, Essencial, Escala), calculadora de simulação e taxas de ingresso/workshop/seletiva por vídeo.
 - [Festivais](https://coreohub.com/festivais): vitrine pública com os festivais e mostras de dança ativos na plataforma, abertos pra inscrição.
 - Cada festival/mostra/camp tem página própria em `https://app.coreohub.com/evento/<slug-do-evento>` (ex: `vicenza-dance-camp-2027`), com datas, local, modalidades, workshops/passes com preço e link de inscrição. Lista completa e sempre atualizada de eventos ativos: [sitemap.xml](https://app.coreohub.com/sitemap.xml).
+- [Sobre](https://coreohub.com/sobre): quem está por trás da CoreoHub, o que faz e para quem.
 - [Governo](https://coreohub.com/governo): página específica para editais públicos e mostras municipais/governamentais.
 - [Plano Espetáculo](https://coreohub.com/espetaculo): bilheteria de plateia para espetáculo de fim de ano de estúdio/escola de dança, sem competição — 7,9% sobre o vendido, sem mensalidade, mais a taxa de pagamento (Pix ou cartão), paga pelo comprador ou assumida pelo produtor.
 - [Termos de Uso](https://coreohub.com/termos): termos de uso da plataforma, incluindo as regras de compra de ingressos (meia-entrada, transferência, arrependimento, cancelamento e adiamento).
@@ -15,4 +16,4 @@
 
 ## Sobre a empresa
 
-CoreoHub Tecnologia LTDA, Brasil. Atende produtores de festivais, competições e mostras de dança em todo o país. Contato via WhatsApp: https://wa.me/5517997936169
+CoreoHub é uma empresa do Cultural Estúdio (CNPJ 13.484.650/0001-00), de Votuporanga/SP, fundada em 2026 por Ticko Bboy (artista com mais de 25 anos nas danças urbanas). Atende produtores de festivais, competições e mostras de dança em todo o país. Contato via WhatsApp: https://wa.me/5517997936169
