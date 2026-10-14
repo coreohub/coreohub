@@ -248,6 +248,7 @@ const PoliticaDePrivacidade: React.FC = () => {
       <footer className="border-t border-white/8 py-8 text-center text-xs text-white/40">
         <div className="flex justify-center gap-6 mb-3 flex-wrap">
           <Link to="/" className="hover:text-white transition-colors">Página inicial</Link>
+          <Link to="/sobre" className="hover:text-white transition-colors">Sobre</Link>
           <Link to="/termos" className="hover:text-white transition-colors">Termos de Uso</Link>
           <Link to="/privacidade" className="hover:text-white transition-colors">Política de Privacidade</Link>
         </div>
