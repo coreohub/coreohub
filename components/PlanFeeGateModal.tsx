@@ -134,8 +134,8 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
           <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
             O prazo pra pagar a taxa única de ativação (<strong>R$ {valor.toFixed(2)}</strong>) do evento{' '}
             <strong className="text-slate-900 dark:text-white">{current.name}</strong> no plano{' '}
-            <strong>{planoLabel}</strong> venceu em <strong>{venceuEm}</strong>. O painel volta ao normal
-            assim que o pagamento for confirmado.
+            <strong>{planoLabel}</strong> venceu em <strong>{venceuEm}</strong>. A nova fatura vence no mesmo
+            dia em que for gerada: pague por Pix ou cartão e o painel volta ao normal assim que o pagamento for confirmado.
           </p>
         )}
 
@@ -150,8 +150,8 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
           <div className="flex items-start gap-2 p-3 rounded-xl text-sm bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300" role="status">
             <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
             <span>
-              Fatura aberta em outra aba. Depois de pagar, esta tela libera sozinha em alguns instantes
-              (Pix é quase imediato; boleto pode levar até 3 dias úteis).
+              Fatura aberta em outra aba. Ela vence hoje: pague por Pix ou cartão e esta tela libera sozinha
+              em alguns instantes (Pix e cartão confirmam quase na hora).
             </span>
           </div>
         )}

@@ -40,7 +40,10 @@ const PLAN_FIXED_FEE: Record<string, number> = {
 // Tolerância da 1ª fatura (e prazo do gate do painel) e vencimento das
 // faturas refeitas depois que a original venceu.
 const GRACE_DAYS = 7
-const REGEN_DAYS = 3
+// Fatura REFEITA (a anterior já venceu): vence no mesmo dia. Decisão do produtor
+// 2026-10-14 (caso Lorrayne): quem já estourou o prazo paga na hora, por Pix ou
+// cartão. Boleto com vencimento hoje fica impraticável (é cancelado no vencimento).
+const REGEN_DAYS = 0
 
 // Multa e juros por atraso (Termo do Produtor v1.6, cláusula 5.5 (numeração da v1.7; era 4-bis.5): multa 2% +
 // juros 1% ao mês). Só entram na fatura de quem JÁ ACEITOU o Termo v1.6 ou
