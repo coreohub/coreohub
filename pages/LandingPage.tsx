@@ -623,6 +623,39 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* ─── 10b. QUEM ESTÁ POR TRÁS ──────────────────────────────────────────────── */}
+      <section className="px-6 py-24 lg:py-32 border-t border-white/5">
+        <div className="max-w-5xl mx-auto grid md:grid-cols-5 gap-10 md:gap-14 items-center">
+          <div className="md:col-span-2">
+            <img
+              src="/ticko-bboy.webp"
+              alt="Ticko Bboy, fundador da CoreoHub, com microfone e boné vermelho em palco"
+              width={800}
+              height={1000}
+              loading="lazy"
+              className="w-full max-w-xs mx-auto md:max-w-none rounded-3xl object-cover aspect-[4/5] border border-white/10"
+            />
+          </div>
+          <div className="md:col-span-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#ff0068] mb-3">Quem está por trás</p>
+            <h2 className="text-3xl md:text-5xl font-black tracking-tighter uppercase italic leading-[0.95] mb-5">
+              Feita por quem vive a dança urbana.
+            </h2>
+            <p className="text-slate-300 text-base md:text-lg leading-relaxed mb-6">
+              A CoreoHub foi fundada em 2026 por Ticko Bboy, artista e empreendedor há mais de 25 anos,
+              de Votuporanga (SP), com MBA em Dança: Gestão e Produção Cultural e apresentações no Brasil,
+              Portugal, Equador, França e Argentina.
+            </p>
+            <Link
+              to="/sobre"
+              className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-white hover:text-[#ff0068] transition-colors"
+            >
+              Conheça a história <ArrowRight size={16} />
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* ─── 11. PREÇO / CTA PRA SIMULAÇÃO ──────────────────────────────────────────────── */}
       <section className="px-6 py-24 lg:py-32 border-t border-white/5">
         <div className="max-w-5xl mx-auto text-center">
