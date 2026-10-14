@@ -44,6 +44,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" media="print" onload="this.media='all'">
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"></noscript>
 
+    <!-- JSON-LD de entidade. Pendente: LinkedIn em sameAs; address/telephone da Organization (entram junto do contactPoint) quando definidos. -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -55,6 +56,10 @@
           "url": "https://coreohub.com/",
           "logo": "https://coreohub.com/coreohub-avatar.png",
           "description": "CoreoHub é a plataforma completa de gestão para produtores de festivais e mostras de dança, oferecendo inscrições, pagamentos, júri digital, cronograma inteligente, bilheteria, check-in e certificados automáticos. Criada por quem produz festivais de dança há mais de 25 anos.",
+          "sameAs": [
+            "https://www.instagram.com/coreohub/",
+            "https://www.youtube.com/@CoreoHub"
+          ],
           "areaServed": "Brasil",
           "knowsAbout": ["gestão de festivais de dança", "mostras de dança", "júri digital", "inscrições online para dança", "cronograma de festival", "certificados digitais"],
           "contactPoint": {
@@ -63,6 +68,14 @@
             "availableLanguage": "Portuguese",
             "url": "https://wa.me/5517997936169"
           }
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://coreohub.com/#website",
+          "name": "CoreoHub",
+          "url": "https://coreohub.com/",
+          "inLanguage": "pt-BR",
+          "publisher": { "@id": "https://coreohub.com/#organization" }
         },
         {
           "@type": "SoftwareApplication",
