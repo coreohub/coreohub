@@ -190,7 +190,7 @@ const PropostaGoverno: React.FC = () => {
               </li>
               <li>
                 <strong>Política de Privacidade pública e atualizada</strong>, disponível em
-                coreohub.com/politica-de-privacidade
+                coreohub.com/privacidade
               </li>
               <li>
                 <strong>Atendimento aos direitos do titular</strong> previstos no Art. 18 em

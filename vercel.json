@@ -1,5 +1,8 @@
 {
   "redirects": [
+    { "source": "/politica-de-privacidade", "destination": "/privacidade", "permanent": true },
+    { "source": "/termos-de-uso", "destination": "/termos", "permanent": true },
+    { "source": "/index.html", "destination": "/", "permanent": true },
     {
       "source": "/:path*",
       "has": [
