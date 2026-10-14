@@ -68,6 +68,13 @@ export default function middleware(request: Request) {
     return rewrite(new URL(`/api/og?slug=${slug}`, request.url));
   }
 
+  // Home institucional (coreohub.com/): bots de IA/preview não executam JS e só viam o shell do
+  // index.html (78 caracteres, sem <h1>). Rewrite em vercel.json não funciona pra "/" (filesystem
+  // tem precedência), então vai aqui. Googlebot fica de fora (BOT_UA_REGEX não o inclui; ele renderiza JS).
+  if (url.pathname === '/' && url.hostname === 'coreohub.com' && BOT_UA_REGEX.test(userAgent)) {
+    return rewrite(new URL('/api/og-marketing?page=home', request.url));
+  }
+
   const response = next();
   if (url.hostname === 'app.coreohub.com' && !isPublicAppPath(url.pathname)) {
     response.headers.set('X-Robots-Tag', 'noindex');
