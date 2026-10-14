@@ -16,6 +16,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const SITE_URL = 'https://app.coreohub.com';
+// Páginas institucionais têm canonical em coreohub.com (index.html, api/og-marketing.ts).
+// Listar em app.* no sitemap gerava "página alternativa com tag canônica" no Search Console (2026-10-14).
+const MARKETING_URL = 'https://coreohub.com';
 
 Deno.serve(async () => {
   try {
@@ -57,20 +60,19 @@ Deno.serve(async () => {
     }
 
     const staticPages = [
-      { loc: SITE_URL, priority: 1.0, changefreq: 'daily' },
-      { loc: `${SITE_URL}/festivais`, priority: 0.9, changefreq: 'daily' },
-      { loc: `${SITE_URL}/criar-evento`, priority: 0.5, changefreq: 'monthly' },
+      { loc: MARKETING_URL, priority: 1.0, changefreq: 'daily' },
+      { loc: `${MARKETING_URL}/festivais`, priority: 0.9, changefreq: 'daily' },
       // Faltava — achado 2026-09-13 durante a verificação de SEO/GEO/AEO
       // pós-mudanças no simulador. Página real com meta/canonical/rewrite
       // de bot (api/og-marketing.ts) próprios, mas nunca listada aqui —
       // sem sitemap, discovery depende só de link interno/backlink.
-      { loc: `${SITE_URL}/planos`, priority: 0.7, changefreq: 'monthly' },
+      { loc: `${MARKETING_URL}/planos`, priority: 0.7, changefreq: 'monthly' },
       // Landing do Plano Espetáculo (docs/mostra-pricing-spec.md) — mesmo
       // motivo do /planos acima: página real com meta/canonical/JSON-LD
       // próprios, sem entrada aqui a descoberta dependeria só de link interno.
-      { loc: `${SITE_URL}/espetaculo`, priority: 0.7, changefreq: 'monthly' },
+      { loc: `${MARKETING_URL}/espetaculo`, priority: 0.7, changefreq: 'monthly' },
       // Página institucional (quem está por trás, o que faz, para quem) — sinal de entidade pra IA/Google.
-      { loc: `${SITE_URL}/sobre`, priority: 0.5, changefreq: 'yearly' },
+      { loc: `${MARKETING_URL}/sobre`, priority: 0.5, changefreq: 'yearly' },
     ];
 
     const eventEntries = (events ?? []).map((ev) => {
