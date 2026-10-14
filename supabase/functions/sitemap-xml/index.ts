@@ -29,6 +29,7 @@ Deno.serve(async () => {
       .select('slug, id, created_at, custom_domain')
       .eq('is_public', true)
       .eq('payment_sandbox', false)   // evento de teste (sandbox) fora do sitemap
+      .eq('is_demo', false)           // evento demo fora do sitemap (Google já tinha achado coreohub-open-demo-ticko)
       .order('start_date', { ascending: false });
 
     if (eventsError) {
@@ -42,8 +43,14 @@ Deno.serve(async () => {
     // fallback que PublicWorkshopPage/api/og-workshop já usam).
     const { data: workshops, error: workshopsError } = await supabase
       .from('workshops')
-      .select('slug, id, created_at')
-      .eq('is_published', true);
+      .select('slug, id, created_at, events!inner(is_public, is_demo, payment_sandbox)')
+      .eq('is_published', true)
+      // Achado 2026-10-14 (Search Console): workshop publicado de evento NÃO
+      // público/demo/sandbox (ex.: teste-producao-workshop-p4) vazava no
+      // sitemap. Workshop só entra se o evento dele também está no sitemap.
+      .eq('events.is_public', true)
+      .eq('events.is_demo', false)
+      .eq('events.payment_sandbox', false);
 
     if (workshopsError) {
       console.error('[sitemap-xml] workshops query failed:', workshopsError.message);
