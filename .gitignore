@@ -53,3 +53,7 @@ scripts/.playwright-auth/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# Material do site/blog (fora do app; contem segredos soltos)
+/CoreoHub Site/
+/CoreoHub_Espetaculo/

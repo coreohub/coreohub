@@ -13,7 +13,7 @@
  * LandingPage.tsx/LandingGoverno.tsx, que são 100% escuras.
  *
  * SEO/AEO/GEO seguindo o checklist salvo em
- * D:\Documentos\CoreoHub Site\blog-seo-standard\site-seo-checklist.md +
+ * D:\Documentos\CoreoHub\CoreoHub Site\blog-seo-standard\site-seo-checklist.md +
  * brands\coreohub-seo-rules.md — meta tags nativas React 19 (mesmo padrão de
  * PublicEventPage.tsx), canonical bare coreohub.com, JSON-LD Service+FAQPage,
  * resposta extraível na dobra (seção 7 AEO/GEO).
