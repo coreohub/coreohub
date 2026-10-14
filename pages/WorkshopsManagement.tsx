@@ -407,7 +407,16 @@ const WorkshopsManagement: React.FC = () => {
       event_id: form.event_id || null,
       created_by: user.id,
       name: form.name.trim(),
-      slug: form.slug.trim() || slugify(form.name),
+      // Slug digitado passa pelo slugify (antes ia cru: "J", "Jazz", "(Aula
+      // Avulsa)" com espaço/parêntese entraram assim, 2026-10-14). Exceção:
+      // edição que mantém o slug já salvo NÃO é reescrita — mudar quebraria
+      // link já compartilhado (workshop não tem histórico de slug).
+      slug: (() => {
+        const typed = form.slug.trim();
+        const original = editingId ? workshops.find(x => x.id === editingId)?.slug ?? null : null;
+        if (typed && original && typed === original) return typed;
+        return slugify(typed) || slugify(form.name);
+      })(),
       description: form.description.trim() || null,
       cover_url: form.cover_url.trim() || null,
       cover_focal_x: form.cover_focal_x ?? 50,
