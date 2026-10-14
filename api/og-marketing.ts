@@ -129,7 +129,7 @@ const PAGES: Record<string, PageMeta> = {
     path: '/sobre',
     title: 'Sobre a CoreoHub — quem está por trás e o que a plataforma faz',
     description:
-      'A CoreoHub é a plataforma de gestão para festivais e mostras de dança no Brasil. Fundada em 2026 por Ticko Bboy, artista com mais de 25 anos nas danças urbanas, é uma empresa do Cultural Estúdio, de Votuporanga/SP.',
+      'A CoreoHub é a plataforma de gestão para festivais e mostras de dança. Fundada em 2026 por Ticko Bboy, é uma empresa do Cultural Estúdio, de Votuporanga/SP.',
     faq: [
       { q: 'O que é a CoreoHub?', a: 'Plataforma online de gestão de festivais e mostras de dança: inscrições, pagamentos com split automático, júri digital por tablet, cronograma, bilheteria, check-in por QR Code e certificados.' },
       { q: 'Para quem é?', a: 'Para produtores de festivais, mostras e competições de dança, estúdios e escolas com espetáculo de fim de ano, e para os inscritos, jurados e público desses eventos.' },

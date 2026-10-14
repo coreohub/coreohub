@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 const TITLE = 'Sobre a CoreoHub — quem está por trás e o que a plataforma faz';
 const DESCRIPTION =
-  'A CoreoHub é a plataforma de gestão para festivais e mostras de dança no Brasil. Fundada em 2026 por Ticko Bboy, artista com mais de 25 anos nas danças urbanas, é uma empresa do Cultural Estúdio, de Votuporanga/SP.';
+  'A CoreoHub é a plataforma de gestão para festivais e mostras de dança. Fundada em 2026 por Ticko Bboy, é uma empresa do Cultural Estúdio, de Votuporanga/SP.';
 
 const Sobre: React.FC = () => {
   useEffect(() => {

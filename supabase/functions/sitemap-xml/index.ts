@@ -19,6 +19,8 @@ const SITE_URL = 'https://app.coreohub.com';
 // Páginas institucionais têm canonical em coreohub.com (index.html, api/og-marketing.ts).
 // Listar em app.* no sitemap gerava "página alternativa com tag canônica" no Search Console (2026-10-14).
 const MARKETING_URL = 'https://coreohub.com';
+// Data da última revisão das páginas institucionais (checklist SEO: sem lastmod o Google tem menos motivo pra re-rastrear). Atualizar quando o conteúdo mudar.
+const STATIC_LASTMOD = '2026-10-14';
 
 Deno.serve(async () => {
   try {
@@ -60,19 +62,19 @@ Deno.serve(async () => {
     }
 
     const staticPages = [
-      { loc: MARKETING_URL, priority: 1.0, changefreq: 'daily' },
-      { loc: `${MARKETING_URL}/festivais`, priority: 0.9, changefreq: 'daily' },
+      { loc: MARKETING_URL, lastmod: STATIC_LASTMOD, priority: 1.0, changefreq: 'daily' },
+      { loc: `${MARKETING_URL}/festivais`, lastmod: STATIC_LASTMOD, priority: 0.9, changefreq: 'daily' },
       // Faltava — achado 2026-09-13 durante a verificação de SEO/GEO/AEO
       // pós-mudanças no simulador. Página real com meta/canonical/rewrite
       // de bot (api/og-marketing.ts) próprios, mas nunca listada aqui —
       // sem sitemap, discovery depende só de link interno/backlink.
-      { loc: `${MARKETING_URL}/planos`, priority: 0.7, changefreq: 'monthly' },
+      { loc: `${MARKETING_URL}/planos`, lastmod: STATIC_LASTMOD, priority: 0.7, changefreq: 'monthly' },
       // Landing do Plano Espetáculo (docs/mostra-pricing-spec.md) — mesmo
       // motivo do /planos acima: página real com meta/canonical/JSON-LD
       // próprios, sem entrada aqui a descoberta dependeria só de link interno.
-      { loc: `${MARKETING_URL}/espetaculo`, priority: 0.7, changefreq: 'monthly' },
+      { loc: `${MARKETING_URL}/espetaculo`, lastmod: STATIC_LASTMOD, priority: 0.7, changefreq: 'monthly' },
       // Página institucional (quem está por trás, o que faz, para quem) — sinal de entidade pra IA/Google.
-      { loc: `${MARKETING_URL}/sobre`, priority: 0.5, changefreq: 'yearly' },
+      { loc: `${MARKETING_URL}/sobre`, lastmod: STATIC_LASTMOD, priority: 0.5, changefreq: 'yearly' },
     ];
 
     const eventEntries = (events ?? []).map((ev) => {
