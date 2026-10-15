@@ -215,16 +215,22 @@ Deno.serve(async (req) => {
         const coveredIds = pickCoveredCommissionIds(batch.items, result.value)
         if (coveredIds.length > 0) {
           const nowIso = new Date().toISOString()
-          const { error: markErr } = await supabase
-            .from('low_value_transfers')
-            .update({
-              pix_sent_at:     nowIso,
-              pix_transfer_id: result.transferId ?? null,
-              pix_sent_amount: result.value,
-              updated_at:      nowIso,
-            })
-            .in('id', coveredIds)
-            .is('pix_sent_at', null)
+          // pix_sent_amount = valor do PRÓPRIO repasse (não o total do lote);
+          // o id da transferência é que liga os repasses do mesmo saque.
+          const netById = new Map(batch.items.map(i => [i.id, i.net]))
+          const marks = await Promise.all(coveredIds.map(id =>
+            supabase
+              .from('low_value_transfers')
+              .update({
+                pix_sent_at:     nowIso,
+                pix_transfer_id: result.transferId ?? null,
+                pix_sent_amount: netById.get(id) ?? null,
+                updated_at:      nowIso,
+              })
+              .eq('id', id)
+              .is('pix_sent_at', null)
+          ))
+          const markErr = marks.find(m => m.error)?.error
           if (markErr) {
             // Dinheiro já saiu: logar alto, não reverter. Sem a marca o próximo
             // ciclo tentaria sacar de novo (limitado ao saldo real da subconta).
