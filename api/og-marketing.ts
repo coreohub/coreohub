@@ -29,6 +29,19 @@ const esc = (s: string): string =>
 
 type Faq = { q: string; a: string };
 
+// Links internos no HTML estático pra bots: sem eles, um rastreador que não executa JS (Bing Site Scan,
+// crawlers de IA) não tem por onde navegar além da própria página (achado 2026-10-15: 2 scans, 1 página cada).
+const NAV_LINKS: { path: string; label: string }[] = [
+  { path: '/', label: 'Início' },
+  { path: '/festivais', label: 'Festivais e mostras de dança' },
+  { path: '/planos', label: 'Planos e preços' },
+  { path: '/espetaculo', label: 'Bilheteria para espetáculo de dança' },
+  { path: '/governo', label: 'Gestão para o setor público' },
+  { path: '/sobre', label: 'Sobre a CoreoHub' },
+  { path: '/termos', label: 'Termos de Uso' },
+  { path: '/privacidade', label: 'Política de Privacidade' },
+];
+
 // FAQs espelhadas de pages/LandingEspetaculo.tsx (FAQ_ITEMS) e pages/Planos.tsx (PLANOS_FAQ_ITEMS): bots
 // só leem este HTML. tests/marketing-faq-parity.test.ts quebra se o texto divergir das páginas.
 const ESPETACULO_FAQ: Faq[] = [
@@ -244,6 +257,11 @@ ${meta.jsonLd ? `<script type="application/ld+json">${JSON.stringify(meta.jsonLd
 ${meta.bullets ? `<ul>\n${meta.bullets.map((b) => `<li>${esc(b)}</li>`).join('\n')}\n</ul>` : ''}
 ${meta.faq ? meta.faq.map((i) => `<h2>${esc(i.q)}</h2>\n<p>${esc(i.a)}</p>`).join('\n') : ''}
 <p><a href="${esc(url)}">Acesse a página completa</a></p>
+<nav aria-label="Páginas da CoreoHub">
+<ul>
+${NAV_LINKS.map((l) => `<li><a href="${SITE_URL}${l.path}">${esc(l.label)}</a></li>`).join('\n')}
+</ul>
+</nav>
 </body>
 </html>`;
 };
