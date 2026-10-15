@@ -18,13 +18,21 @@
 // esse cron só prepara a transferência e reconcilia o resultado depois que
 // alguém aprova.
 //
+// 3) Depois de 'transferido', o valor está na SUBCONTA da produtora, que ela
+//    não acessa (white-label). Nenhuma outra rotina o leva pro PIX: o cron
+//    daily-release-funds e o "Transferir agora" sacam só o amount de
+//    platform_commissions. Por isso este cron também saca o valor exato dos
+//    repasses 'transferido' ainda sem pix_sent_at, só pra eventos com
+//    events.absorve_taxa_baixo_valor (regra exclusiva da Tamoios).
+//
 // Trigger: pg_cron diário, mesmo horário do daily-release-funds:
 //   SELECT cron.schedule('release-low-value-transfers', '0 3 * * *',
 //     $$SELECT net.http_post(url:='https://<proj>.supabase.co/functions/v1/release-low-value-transfers',
 //       headers:='{"Authorization":"Bearer <service-role>"}'::jsonb)$$);
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { transferToWallet, getTransferStatus } from '../_shared/asaas-payouts.ts'
+import { transferToWallet, getTransferStatus, sweepProducerBalance, pickCoveredCommissionIds } from '../_shared/asaas-payouts.ts'
+import { groupLowValueByProducer } from '../_shared/low-value-pix.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin':  '*',
@@ -159,8 +167,77 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`[release-low-value-transfers] FIM | criadas=${created} reconciliadas=${reconciled} falhas=${skipped}`)
-    return jsonResp({ status: 'ok', created, reconciled, skipped })
+
+    // ── 3) Manda pro PIX da produtora o que já chegou na subconta ──────────
+    //    Só eventos com absorve_taxa_baixo_valor. Cada repasse sai uma vez
+    //    (pix_sent_at). Saque limitado ao saldo real da subconta: se faltar,
+    //    marca só os repasses cobertos e o resto fica pro próximo ciclo.
+    let pixSent = 0
+    let pixSkipped = 0
+    const { data: toSend, error: sendErr } = await supabase
+      .from('low_value_transfers')
+      .select('id, value, producer_id, events!inner(absorve_taxa_baixo_valor)')
+      .eq('status', 'transferido')
+      .is('pix_sent_at', null)
+      .eq('events.absorve_taxa_baixo_valor', true)
+      .order('transferred_at', { ascending: true })
+
+    if (sendErr) {
+      console.error('[release-low-value-transfers] erro query pix pendente:', sendErr.message)
+    } else {
+      const batches = groupLowValueByProducer((toSend ?? []) as any[])
+      for (const batch of batches) {
+        const { data: prof, error: profErr } = await supabase
+          .from('profiles')
+          .select('asaas_api_key, pix_key, full_name')
+          .eq('id', batch.producerId)
+          .maybeSingle()
+        if (profErr || !prof?.asaas_api_key || !prof?.pix_key) {
+          pixSkipped++
+          console.warn(`[release-low-value-transfers] PIX produtor=${batch.producerId} sem api_key/pix_key — pula (R$${batch.total})`)
+          continue
+        }
+
+        const result = await sweepProducerBalance({
+          producerApiKey: prof.asaas_api_key as string,
+          producerPixKey: prof.pix_key as string,
+          asaasBaseUrl,
+          description:    `CoreoHub — repasse integral de baixo valor (${batch.items.length} itens)`,
+          amount:         batch.total,
+        })
+
+        if (!result.swept) {
+          pixSkipped++
+          console.warn(`[release-low-value-transfers] PIX não enviado produtor=${batch.producerId} motivo=${result.reason}${result.error ? ' ' + result.error : ''}`)
+          continue
+        }
+
+        const coveredIds = pickCoveredCommissionIds(batch.items, result.value)
+        if (coveredIds.length > 0) {
+          const nowIso = new Date().toISOString()
+          const { error: markErr } = await supabase
+            .from('low_value_transfers')
+            .update({
+              pix_sent_at:     nowIso,
+              pix_transfer_id: result.transferId ?? null,
+              pix_sent_amount: result.value,
+              updated_at:      nowIso,
+            })
+            .in('id', coveredIds)
+            .is('pix_sent_at', null)
+          if (markErr) {
+            // Dinheiro já saiu: logar alto, não reverter. Sem a marca o próximo
+            // ciclo tentaria sacar de novo (limitado ao saldo real da subconta).
+            console.error(`[release-low-value-transfers] ERRO ao marcar pix_sent_at produtor=${batch.producerId} transfer=${result.transferId}: ${markErr.message}`)
+          }
+        }
+        pixSent++
+        console.log(`[release-low-value-transfers] PIX enviado produtor=${batch.producerId} valor=R$${result.value} itens=${coveredIds.length}/${batch.items.length} transfer=${result.transferId}`)
+      }
+    }
+
+    console.log(`[release-low-value-transfers] FIM | criadas=${created} reconciliadas=${reconciled} falhas=${skipped} pix_enviados=${pixSent} pix_pulados=${pixSkipped}`)
+    return jsonResp({ status: 'ok', created, reconciled, skipped, pix_sent: pixSent, pix_skipped: pixSkipped })
   } catch (e) {
     console.error('[release-low-value-transfers] exception:', (e as Error).message)
     return jsonResp({ status: 'error', reason: 'exception', error: (e as Error).message }, 500)
