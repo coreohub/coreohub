@@ -1,7 +1,7 @@
 // Chamada pelo botão "Transferir agora" no /qg-organizador. Antecipa o
 // saldo retido da subconta do produtor pro PIX externo dele (mesmo
 // fluxo que o cron `daily-release-funds`, mas dispara on-demand pegando
-// TUDO — retido + disponível).
+// TUDO — retido + disponível; com body { scope: 'available' } só o disponível).
 //
 // Settlement period D+7 (2026-05-21): plano em
 // memory/backlog_settlement_period_d7.md.
@@ -51,6 +51,14 @@ Deno.serve(async (req) => {
   }
   const producerId = user.id
 
+  // scope 'available' = só o que já passou da janela (sem risco de estorno);
+  // 'all' (padrão, comportamento histórico) = antecipa também o retido.
+  let scope: 'available' | 'all' = 'all'
+  try {
+    const body = await req.json()
+    if (body?.scope === 'available') scope = 'available'
+  } catch { /* sem corpo / não-JSON: mantém 'all' */ }
+
   const admin = createClient(supabaseUrl, serviceKey)
 
   try {
@@ -97,7 +105,9 @@ Deno.serve(async (req) => {
       return jsonResp({ status: 'error', reason: 'query_failed', error: cErr.message }, 500)
     }
     const nowMs = Date.now()
-    const pending = (pendingAll ?? []).filter(c => !c.card_credit_at || new Date(c.card_credit_at).getTime() <= nowMs)
+    const pending = (pendingAll ?? [])
+      .filter(c => !c.card_credit_at || new Date(c.card_credit_at).getTime() <= nowMs)
+      .filter(c => scope === 'all' || !c.release_at || new Date(c.release_at).getTime() <= nowMs)
     const cardWaiting = (pendingAll ?? []).filter(c => c.card_credit_at && new Date(c.card_credit_at).getTime() > nowMs)
     if (pending.length === 0 && cardWaiting.length > 0) {
       const nextCredit = cardWaiting.map(c => c.card_credit_at as string).sort()[0]
@@ -124,7 +134,7 @@ Deno.serve(async (req) => {
       producerApiKey: prof.asaas_api_key,
       producerPixKey: prof.pix_key,
       asaasBaseUrl,
-      description:    `CoreoHub — antecipação manual (${pending.length} comissões)`,
+      description:    `CoreoHub — ${scope === 'available' ? 'transferência manual' : 'antecipação manual'} (${pending.length} comissões)`,
       amount:         parseFloat(totalPending.toFixed(2)),
     })
 
@@ -174,6 +184,7 @@ Deno.serve(async (req) => {
 
     return jsonResp({
       status:          'ok',
+      scope,
       released:        result.value,
       commissions:     pending.length,
       anticipated:     parseFloat(anticipated.toFixed(2)),

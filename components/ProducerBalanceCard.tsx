@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Wallet, ArrowDownToLine, Loader2, AlertTriangle, CheckCircle2,
-  Clock, ShieldCheck, X, Info, RefreshCw,
+  Wallet, ArrowDownToLine, ArrowRight, Loader2, AlertTriangle, CheckCircle2,
+  Clock, ShieldCheck, X, Info, RefreshCw, ChevronDown,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
@@ -24,6 +24,34 @@ interface LowValueTransfer {
   status:            string;
   safety_release_at: string | null;
 }
+
+/** Comissão já enviada ao PIX (uma linha por comissão; o lote repete o total). */
+interface SentCommission {
+  net_amount:          number;
+  released_at:         string;
+  released_amount:     number | null;
+  released_manually:   boolean | null;
+  release_transfer_id: string | null;
+}
+
+/** Repasse de baixo valor já enviado ao PIX. */
+interface SentLowValue {
+  value:           number;
+  pix_sent_at:     string;
+  pix_transfer_id: string | null;
+}
+
+/** Uma transferência pro PIX do produtor (já agrupada por id de transferência). */
+interface SentTransfer {
+  key:    string;
+  at:     string;
+  amount: number;
+  kind:   'auto' | 'manual' | 'baixo_valor';
+}
+
+/** Teto de linhas que o PostgREST devolve por consulta; acima disso o total
+ *  "Transferido" fica parcial e o card avisa. */
+const SENT_QUERY_LIMIT = 1000;
 
 interface Props {
   producerId: string;
@@ -53,24 +81,55 @@ function writeAsaasCache(producerId: string, value: number) {
   } catch { /* sessionStorage cheio/bloqueado — ignora silenciosamente */ }
 }
 
+function clearAsaasCache(producerId: string) {
+  try { sessionStorage.removeItem(`${ASAAS_CACHE_KEY}:${producerId}`); } catch { /* ignora */ }
+}
+
+const fmtBRL = (v: number) =>
+  v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+const fmtDateTime = (iso: string) =>
+  new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+  });
+
+/** "em 23h" / "em 3 dias" a partir de um timestamp futuro. */
+function fmtRelative(ts: number): string {
+  const diffH = Math.max(1, Math.round((ts - Date.now()) / (1000 * 60 * 60)));
+  if (diffH < 24) return `em ${diffH}h`;
+  const days = Math.ceil(diffH / 24);
+  return `em ${days} dia${days > 1 ? 's' : ''}`;
+}
+
 /**
- * Card "Saldo" do /qg-organizador — settlement period D+7.
- * Mostra 2 buckets (retido vs disponível) + botão "Transferir agora" que
- * antecipa o retido sob risco (modal de confirmação reforça o aviso).
+ * Card "Seus repasses" do /qg-organizador.
+ * Fluxo lido da esquerda pra direita: A LIBERAR → DISPONÍVEL → TRANSFERIDO.
+ *  - A liberar:   dentro da janela de segurança (D+7) ou repasse interno da
+ *                 CoreoHub ainda a caminho.
+ *  - Disponível:  passou da janela; sai no PIX na transferência automática da
+ *                 madrugada ou na hora, pelo botão.
+ *  - Transferido: o que já foi enviado ao PIX do produtor.
+ * O botão principal manda só o disponível (sem risco de estorno); antecipar o
+ * que ainda está a liberar é uma ação secundária, com o aviso de risco.
  */
 const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
   const [loading, setLoading]     = useState(true);
   const [pending, setPending]     = useState<PendingCommission[]>([]);
   const [lowValue, setLowValue]   = useState<LowValueTransfer[]>([]);
-  const [modalOpen, setModalOpen] = useState(false);
+  const [sentComm, setSentComm]   = useState<SentCommission[]>([]);
+  const [sentLow, setSentLow]     = useState<SentLowValue[]>([]);
+  const [modalScope, setModalScope] = useState<'available' | 'all' | null>(null);
   const [transferring, setTransferring] = useState(false);
+  const [historyOpen, setHistoryOpen]   = useState(false);
+  const [detailsOpen, setDetailsOpen]   = useState(false);
   const [feedback, setFeedback]   = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
   const [asaasBalance, setAsaasBalance] = useState<{ value: number; fetchedAt: number } | null>(null);
+  const realtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Carrega comissões do DB local. `withAsaas`:
   //   - 'force': sempre chama a API Asaas (botão refresh manual)
   //   - 'cached': usa cache da session se fresco (<5min); senão chama API
-  //   - 'skip': só DB local (realtime triggers, evita N chamadas Asaas)
+  //   - 'skip': só DB local (evita N chamadas Asaas)
   const load = useCallback(async (withAsaas: 'force' | 'cached' | 'skip' = 'skip') => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -93,6 +152,24 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
       .eq('producer_id', targetId)
       .in('status', ['aguardando_janela', 'pronto', 'transferencia_pedida']);
 
+    // Já enviado ao PIX (histórico + total "Transferido").
+    const sentCommPromise = supabase
+      .from('platform_commissions')
+      .select('net_amount, released_at, released_amount, released_manually, release_transfer_id')
+      .eq('producer_id', targetId)
+      .not('released_at', 'is', null)
+      .eq('is_sandbox', false)
+      .order('released_at', { ascending: false })
+      .limit(SENT_QUERY_LIMIT);
+
+    const sentLowPromise = supabase
+      .from('low_value_transfers')
+      .select('value, pix_sent_at, pix_transfer_id')
+      .eq('producer_id', targetId)
+      .not('pix_sent_at', 'is', null)
+      .order('pix_sent_at', { ascending: false })
+      .limit(SENT_QUERY_LIMIT);
+
     // Decide se chama a API Asaas: força (refresh manual) ou cache miss.
     let asaasNeedsFetch = false;
     if (withAsaas === 'force') {
@@ -110,12 +187,27 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
       ? supabase.functions.invoke('get-producer-asaas-balance', { body: {} })
       : Promise.resolve(null);
 
-    const [localRes, asaasRes, lowValueRes] = await Promise.all([localPromise, asaasPromise, lowValuePromise]);
+    const [localRes, asaasRes, lowValueRes, sentCommRes, sentLowRes] = await Promise.all([
+      localPromise, asaasPromise, lowValuePromise, sentCommPromise, sentLowPromise,
+    ]);
 
     if (lowValueRes.error) {
       console.error('[ProducerBalanceCard] erro query low_value_transfers:', lowValueRes.error);
     } else {
       setLowValue((lowValueRes.data ?? []) as LowValueTransfer[]);
+    }
+
+    if (sentCommRes.error) {
+      console.error('[ProducerBalanceCard] erro query transferidos (comissões):', sentCommRes.error);
+    } else {
+      setSentComm((sentCommRes.data ?? []) as SentCommission[]);
+    }
+
+    if (sentLowRes.error) {
+      // Coluna ausente (migration 20261015 não aplicada) também cai aqui — logar sempre.
+      console.error('[ProducerBalanceCard] erro query transferidos (baixo valor):', sentLowRes.error);
+    } else {
+      setSentLow((sentLowRes.data ?? []) as SentLowValue[]);
     }
 
     if (localRes.error) {
@@ -155,25 +247,35 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
   useEffect(() => { load('cached'); }, [load]);
 
   // Realtime: cron daily-release-funds marca released_at em commissions sem o
-  // produtor ouvir nada. Sem subscribe, card mostra retido velho até refresh.
+  // produtor ouvir nada. Quando a tabela muda, o saldo real Asaas em cache fica
+  // velho (era o "+R$ 1.980,75" fantasma depois de uma transferência): limpa o
+  // cache e recarrega tudo, com debounce pra rajadas de webhook.
   useEffect(() => {
     let active = true;
     let channel: ReturnType<typeof supabase.channel> | null = null;
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!active || !user?.id) return;
+      const uid = user.id;
       channel = supabase
-        .channel(`balance-${user.id}`)
+        .channel(`balance-${uid}`)
         .on('postgres_changes', {
           event: '*',
           schema: 'public',
           table: 'platform_commissions',
-          filter: `producer_id=eq.${user.id}`,
-        }, () => { load('skip'); })
+          filter: `producer_id=eq.${uid}`,
+        }, () => {
+          if (realtimeTimer.current) clearTimeout(realtimeTimer.current);
+          realtimeTimer.current = setTimeout(() => {
+            clearAsaasCache(uid);
+            load('cached');
+          }, 1500);
+        })
         .subscribe();
     })();
     return () => {
       active = false;
+      if (realtimeTimer.current) clearTimeout(realtimeTimer.current);
       if (channel) supabase.removeChannel(channel);
     };
   }, [load]);
@@ -215,6 +317,8 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
     };
   }, [pending]);
 
+  // Tudo o que a subconta tem por causa de split (retido + disponível). É o que
+  // o "Transferir agora" antecipado manda e o que se compara com o saldo Asaas.
   const total = retido + disponivel;
 
   // A caminho por transferência interna da CoreoHub (baixo valor). Mostrado à
@@ -232,12 +336,57 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
     return { aCaminho: parseFloat(v.toFixed(2)), nextLowValueAt: next };
   }, [lowValue]);
 
+  // Transferido: agrupa por id de transferência. Cada comissão de um lote grava
+  // o total do lote em released_amount, então somar por linha duplica — conta
+  // uma vez por release_transfer_id. Sem id (legado), cai no líquido da linha.
+  const { sentTotal, sentList, sentTruncated } = useMemo(() => {
+    const byKey = new Map<string, SentTransfer>();
+    sentComm.forEach((c, i) => {
+      const key = c.release_transfer_id ? `c:${c.release_transfer_id}` : `c:row:${i}`;
+      const amount = c.release_transfer_id
+        ? Number(c.released_amount ?? c.net_amount ?? 0)
+        : Number(c.net_amount ?? 0);
+      const prev = byKey.get(key);
+      if (!prev) {
+        byKey.set(key, { key, at: c.released_at, amount, kind: c.released_manually ? 'manual' : 'auto' });
+      } else if (c.release_transfer_id) {
+        prev.amount = Math.max(prev.amount, amount);
+        if (c.released_at > prev.at) prev.at = c.released_at;
+      } else {
+        prev.amount += amount;
+      }
+    });
+    // Baixo valor: o saque de um ciclo cobre vários repasses, então soma o valor
+    // de cada repasse por pix_transfer_id.
+    const lowByKey = new Map<string, SentTransfer>();
+    sentLow.forEach((l, i) => {
+      const key = l.pix_transfer_id ? `l:${l.pix_transfer_id}` : `l:row:${i}`;
+      const prev = lowByKey.get(key);
+      const amt = Number(l.value ?? 0);
+      if (!prev) lowByKey.set(key, { key, at: l.pix_sent_at, amount: amt, kind: 'baixo_valor' });
+      else prev.amount += amt;
+    });
+    const list = [...byKey.values(), ...lowByKey.values()]
+      .filter(t => t.amount > 0)
+      .sort((a, b) => (a.at < b.at ? 1 : -1));
+    const sum = list.reduce((s, t) => s + t.amount, 0);
+    return {
+      sentTotal:     parseFloat(sum.toFixed(2)),
+      sentList:      list,
+      sentTruncated: sentComm.length >= SENT_QUERY_LIMIT || sentLow.length >= SENT_QUERY_LIMIT,
+    };
+  }, [sentComm, sentLow]);
+
+  const aLiberar        = parseFloat((retido + aCaminho).toFixed(2));
+  const totalAReceber   = parseFloat((retido + disponivel + aCaminho).toFixed(2));
+
   const handleTransfer = async () => {
+    const scope = modalScope ?? 'available';
     setTransferring(true);
     setFeedback(null);
     try {
       const { data, error } = await supabase.functions.invoke('manual-transfer-now', {
-        body: {},
+        body: { scope },
       });
       if (error) throw error;
       if ((data as any)?.status !== 'ok') {
@@ -246,26 +395,17 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
       const released = Number((data as any)?.released ?? 0);
       setFeedback({
         kind: 'ok',
-        msg:  `Transferência disparada: R$ ${released.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} a caminho do seu PIX.`,
+        msg:  `Transferência disparada: ${fmtBRL(released)} a caminho do seu PIX.`,
       });
-      setModalOpen(false);
+      setModalScope(null);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id) clearAsaasCache(user.id);
       await load('force');
     } catch (e: any) {
       setFeedback({ kind: 'err', msg: e?.message ?? 'Erro ao processar transferência.' });
     } finally {
       setTransferring(false);
     }
-  };
-
-  const fmtBRL = (v: number) =>
-    v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-  const fmtNextRelease = () => {
-    if (!nextReleaseAt) return null;
-    const diffH = Math.max(1, Math.round((nextReleaseAt - Date.now()) / (1000 * 60 * 60)));
-    if (diffH < 24) return `em ${diffH}h`;
-    const days = Math.ceil(diffH / 24);
-    return `em ${days} dia${days > 1 ? 's' : ''}`;
   };
 
   if (loading) {
@@ -278,6 +418,16 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
 
   // Mostra sempre, mesmo vazio — empty state é melhor que sumir silencioso.
 
+  const nextLiberaTs = [nextReleaseAt, nextLowValueAt]
+    .filter((t): t is number => t !== null)
+    .sort((a, b) => a - b)[0] ?? null;
+
+  const modalAmount = modalScope === 'all' ? total : disponivel;
+  const stepBox = 'flex-1 min-w-0 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 p-4';
+  const stepLabel = 'text-[10px] font-black uppercase tracking-widest text-slate-500';
+  const stepValue = 'text-2xl font-black tracking-tighter text-slate-900 dark:text-white tabular-nums mt-1';
+  const stepNote = 'text-[11px] text-slate-500 leading-snug';
+
   return (
     <>
       <motion.div
@@ -285,83 +435,156 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
         animate={{ opacity: 1, y: 0 }}
         className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-3xl p-6"
       >
-        {/* Header: ícone + título compacto */}
+        {/* Header */}
         <div className="flex items-center gap-3 mb-5">
           <div className="p-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-500/20">
             <Wallet size={16} />
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">
-              Saldo
+              Seus repasses
             </h2>
-            <p className="text-[10px] text-slate-500 mt-0.5">
-              PIX: repasse em até 7 dias · Cartão: cai em cerca de 32 dias
-            </p>
           </div>
           <button
             onClick={() => load('force')}
             disabled={loading}
-            title="Atualizar saldo"
+            title="Atualizar"
             className="p-2 rounded-xl text-slate-400 hover:text-[#ff0068] hover:bg-slate-100 dark:hover:bg-white/5 transition-all disabled:opacity-50"
-            aria-label="Atualizar saldo"
+            aria-label="Atualizar repasses"
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
 
-        {/* Número grande do total + breakdown secundário */}
+        {/* Total a receber */}
         <div className="mb-5">
-          <div className="text-4xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tighter mb-2">
-            {fmtBRL(total + aCaminho)}
+          <p className={stepLabel}>Total a receber</p>
+          <div className="text-4xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tighter mt-1">
+            {fmtBRL(totalAReceber)}
           </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
-            <span className="inline-flex items-center gap-1.5">
-              <CheckCircle2 size={11} className="text-emerald-500" />
-              <strong className="font-black text-slate-700 dark:text-slate-300">{fmtBRL(disponivel)}</strong>
-              já liberado
-            </span>
-            <span className="text-slate-300 dark:text-slate-600">•</span>
-            <span className="inline-flex items-center gap-1.5">
-              <Clock size={11} className="text-amber-500" />
-              <strong className="font-black text-slate-700 dark:text-slate-300">{fmtBRL(retido)}</strong>
-              retido {nextReleaseAt ? '· libera ' + fmtNextRelease() : ''}
-            </span>
-          </div>
-          {aCaminho > 0 && (
-            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
-              <Clock size={11} className="text-emerald-500" />
-              <strong className="font-black text-slate-700 dark:text-slate-300">{fmtBRL(aCaminho)}</strong>
-              a caminho por transferência da CoreoHub
-              {nextLowValueAt && (
-                <span>
-                  (a partir de {new Date(nextLowValueAt).toLocaleDateString('pt-BR')})
-                </span>
-              )}
-            </div>
-          )}
-          {cartao > 0 && (
-            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
-              <Clock size={11} className="text-sky-500" />
-              <strong className="font-black text-slate-700 dark:text-slate-300">{fmtBRL(cartao)}</strong>
-              a receber no cartão
-              {nextCardAt && (
-                <span>
-                  (previsão de crédito do Asaas: {new Date(nextCardAt).toLocaleDateString('pt-BR')})
-                </span>
-              )}
-            </div>
-          )}
         </div>
 
-        {/* CTA principal */}
-        <button
-          onClick={() => setModalOpen(true)}
-          disabled={total <= 0}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#ff0068] hover:bg-[#e0005c] disabled:bg-slate-200 dark:disabled:bg-white/10 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20"
-        >
-          <ArrowDownToLine size={13} />
-          Transferir agora — {fmtBRL(total)}
-        </button>
+        {/* Fluxo: A LIBERAR → DISPONÍVEL → TRANSFERIDO */}
+        <div className="flex flex-col sm:flex-row sm:items-stretch gap-3 sm:gap-2 mb-5">
+          <div className={stepBox}>
+            <div className="flex items-center gap-1.5">
+              <Clock size={11} className="text-amber-500" />
+              <p className={stepLabel}>A liberar</p>
+            </div>
+            <p className={stepValue}>{fmtBRL(aLiberar)}</p>
+            <div className="mt-2 space-y-1">
+              {retido > 0 && (
+                <p className={stepNote}>
+                  <strong className="font-black text-slate-700 dark:text-slate-300">{fmtBRL(retido)}</strong>
+                  {nextReleaseAt ? ` · libera ${fmtRelative(nextReleaseAt)}` : ''}
+                </p>
+              )}
+              {aCaminho > 0 && (
+                <p className={stepNote}>
+                  <strong className="font-black text-slate-700 dark:text-slate-300">{fmtBRL(aCaminho)}</strong>
+                  {nextLowValueAt
+                    ? ` · a partir de ${new Date(nextLowValueAt).toLocaleDateString('pt-BR')}`
+                    : ' · libera após o pagamento'}
+                </p>
+              )}
+              {aLiberar <= 0 && <p className={stepNote}>Nada aguardando liberação.</p>}
+            </div>
+          </div>
+
+          <div className="hidden sm:flex items-center text-slate-300 dark:text-slate-600" aria-hidden="true">
+            <ArrowRight size={16} />
+          </div>
+
+          <div className={stepBox}>
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 size={11} className="text-emerald-500" />
+              <p className={stepLabel}>Disponível</p>
+            </div>
+            <p className={stepValue}>{fmtBRL(disponivel)}</p>
+            <p className={`${stepNote} mt-2`}>
+              {disponivel > 0
+                ? 'Sai no seu PIX sozinho na madrugada (00h), ou agora pelo botão abaixo.'
+                : 'Nada disponível agora.'}
+            </p>
+          </div>
+
+          <div className="hidden sm:flex items-center text-slate-300 dark:text-slate-600" aria-hidden="true">
+            <ArrowRight size={16} />
+          </div>
+
+          <div className={stepBox}>
+            <div className="flex items-center gap-1.5">
+              <ArrowDownToLine size={11} className="text-sky-500" />
+              <p className={stepLabel}>Transferido</p>
+            </div>
+            <p className={stepValue}>{fmtBRL(sentTotal)}</p>
+            <p className={`${stepNote} mt-2`}>
+              {sentList.length > 0
+                ? `Já enviado ao seu PIX${sentTruncated ? ' (últimos registros)' : ''}.`
+                : 'Nada transferido ainda.'}
+            </p>
+            {sentList.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(o => !o)}
+                aria-expanded={historyOpen}
+                className="mt-2 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#ff0068] hover:underline"
+              >
+                {historyOpen ? 'Ocultar histórico' : 'Ver histórico'}
+                <ChevronDown size={11} className={historyOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {historyOpen && sentList.length > 0 && (
+          <div className="mb-5 rounded-2xl border border-slate-200 dark:border-white/10 divide-y divide-slate-200 dark:divide-white/10">
+            {sentList.slice(0, 8).map(t => (
+              <div key={t.key} className="flex items-center justify-between gap-3 px-4 py-2.5 text-[12px]">
+                <span className="text-slate-500 tabular-nums">{fmtDateTime(t.at)}</span>
+                <span className="flex-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  {t.kind === 'manual' ? 'Pedido por você' : t.kind === 'baixo_valor' ? 'Repasse de baixo valor' : 'Automático'}
+                </span>
+                <strong className="text-slate-900 dark:text-white tabular-nums">{fmtBRL(t.amount)}</strong>
+              </div>
+            ))}
+            {sentList.length > 8 && (
+              <p className="px-4 py-2 text-[10px] text-slate-500">Mostrando as 8 mais recentes de {sentList.length}.</p>
+            )}
+          </div>
+        )}
+
+        {cartao > 0 && (
+          <div className="mb-5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+            <Clock size={11} className="text-sky-500" />
+            <strong className="font-black text-slate-700 dark:text-slate-300">{fmtBRL(cartao)}</strong>
+            a receber no cartão
+            {nextCardAt && (
+              <span>(previsão de crédito do Asaas: {new Date(nextCardAt).toLocaleDateString('pt-BR')})</span>
+            )}
+          </div>
+        )}
+
+        {/* CTA principal: só o disponível */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <button
+            onClick={() => setModalScope('available')}
+            disabled={disponivel <= 0}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#ff0068] hover:bg-[#e0005c] disabled:bg-slate-200 dark:disabled:bg-white/10 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20"
+          >
+            <ArrowDownToLine size={13} />
+            {disponivel > 0 ? `Transferir ${fmtBRL(disponivel)} agora` : 'Nada disponível pra transferir'}
+          </button>
+          {retido > 0 && (
+            <button
+              type="button"
+              onClick={() => setModalScope('all')}
+              className="text-left sm:text-center text-[11px] font-bold text-slate-500 hover:text-[#ff0068] underline underline-offset-4 decoration-slate-300 dark:decoration-white/20 transition-colors"
+            >
+              Antecipar também o que está a liberar ({fmtBRL(retido)})
+            </button>
+          )}
+        </div>
 
         <AnimatePresence>
           {feedback && (
@@ -390,37 +613,14 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
           )}
         </AnimatePresence>
 
-        <div className="mt-4 flex items-start gap-2 text-[10px] text-slate-500">
-          <Info size={11} className="shrink-0 mt-0.5" />
-          <span>
-            Saldo retido de PIX é repassado automático após 7 dias. Você pode antecipar
-            quando quiser — sem taxa. Vendas no cartão só podem ser repassadas depois
-            que o Asaas credita o valor (prazo padrão de 32 dias após o pagamento).
-          </span>
-        </div>
-
-        {/* Saldo real Asaas — fetcha em background no mount (cache 5min).
-            Diferencia 2 cenários de divergência:
-            - Asaas < CoreoHub: dívida pendente (refund parcial pós-sweep)
-            - Asaas > CoreoHub: crédito não rastreado (ajuste manual Asaas) */}
+        {/* Conferência com o saldo real Asaas. Divergência negativa (dívida de
+            estorno) fica sempre visível; o resto só em "Ver detalhes". */}
         {asaasBalance && (() => {
           const diff = asaasBalance.value - total;
           const hasDivergence = Math.abs(diff) > 0.01;
           const isDebt = diff < -0.01;
           return (
-            <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-white/5 space-y-2">
-              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px]">
-                <ShieldCheck size={11} className="text-slate-400" />
-                <span className="text-slate-500">Saldo real Asaas:</span>
-                <strong className="font-black text-slate-700 dark:text-slate-300">
-                  {fmtBRL(asaasBalance.value)}
-                </strong>
-                {hasDivergence && (
-                  <span className={`text-[10px] font-black ${isDebt ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                    • {isDebt ? '−' : '+'}{fmtBRL(Math.abs(diff))}
-                  </span>
-                )}
-              </div>
+            <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-white/5 space-y-2">
               {hasDivergence && isDebt && (
                 <div className="flex items-start gap-2 p-2.5 rounded-xl bg-amber-500/5 border border-amber-500/20 text-[10px] text-amber-700 dark:text-amber-300 leading-relaxed">
                   <AlertTriangle size={11} className="shrink-0 mt-0.5" />
@@ -431,6 +631,29 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
                   </span>
                 </div>
               )}
+              <button
+                type="button"
+                onClick={() => setDetailsOpen(o => !o)}
+                aria-expanded={detailsOpen}
+                className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                Ver detalhes
+                <ChevronDown size={11} className={detailsOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
+              </button>
+              {detailsOpen && (
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px]">
+                  <ShieldCheck size={11} className="text-slate-400" />
+                  <span className="text-slate-500">Saldo na conta de pagamentos (Asaas):</span>
+                  <strong className="font-black text-slate-700 dark:text-slate-300">
+                    {fmtBRL(asaasBalance.value)}
+                  </strong>
+                  {hasDivergence && (
+                    <span className={`text-[10px] font-black ${isDebt ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500'}`}>
+                      • {isDebt ? '−' : '+'}{fmtBRL(Math.abs(diff))} em relação ao painel
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           );
         })()}
@@ -438,13 +661,13 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
 
       {/* Modal de confirmação */}
       <AnimatePresence>
-        {modalOpen && (
+        {modalScope && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-            onClick={() => !transferring && setModalOpen(false)}
+            onClick={() => !transferring && setModalScope(null)}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
@@ -459,10 +682,10 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
                 </div>
                 <div>
                   <h3 className="text-lg font-black uppercase tracking-tight italic text-slate-900 dark:text-white">
-                    Confirmar transferência
+                    {modalScope === 'all' ? 'Antecipar repasse' : 'Confirmar transferência'}
                   </h3>
                   <p className="text-[11px] text-slate-500 mt-1">
-                    Você vai receber {fmtBRL(total)} no seu PIX cadastrado.
+                    Você vai receber {fmtBRL(modalAmount)} no seu PIX cadastrado.
                   </p>
                 </div>
               </div>
@@ -472,41 +695,41 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
                   <span className="text-slate-500">Disponível (sem risco)</span>
                   <strong className="text-emerald-600 dark:text-emerald-400">{fmtBRL(disponivel)}</strong>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Antecipado (sob risco)</span>
-                  <strong className="text-amber-600 dark:text-amber-400">{fmtBRL(retido)}</strong>
-                </div>
+                {modalScope === 'all' && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Antecipado (sob risco)</span>
+                    <strong className="text-amber-600 dark:text-amber-400">{fmtBRL(retido)}</strong>
+                  </div>
+                )}
                 <div className="flex justify-between pt-2 border-t border-slate-200 dark:border-white/10">
                   <span className="font-black text-slate-900 dark:text-white">Total</span>
-                  <strong className="text-slate-900 dark:text-white">{fmtBRL(total)}</strong>
+                  <strong className="text-slate-900 dark:text-white">{fmtBRL(modalAmount)}</strong>
                 </div>
               </div>
 
-              {retido > 0 && (
+              {modalScope === 'all' ? (
                 <div className="rounded-2xl border border-sky-500/30 bg-sky-500/5 p-4 flex items-start gap-3">
                   <Info size={16} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
                   <div className="text-[11px] text-sky-800 dark:text-sky-200 leading-relaxed">
                     <strong className="block mb-1">Antecipação imediata.</strong>
-                    O saldo retido seria liberado automaticamente em até 7 dias —
+                    O valor a liberar sairia sozinho em até 7 dias —
                     antecipando agora você recebe na hora. Reembolsos nos próximos
                     7 dias são absorvidos pela CoreoHub e recuperados nos
                     próximos pagamentos recebidos (sem PIX manual).
                   </div>
                 </div>
-              )}
-
-              {retido === 0 && (
+              ) : (
                 <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 flex items-start gap-3">
                   <ShieldCheck size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                   <div className="text-[11px] text-emerald-800 dark:text-emerald-200 leading-relaxed">
-                    Todo o saldo já passou da janela de 7 dias — transferência sem risco de reembolso.
+                    Esse valor já passou da janela de 7 dias — transferência sem risco de reembolso.
                   </div>
                 </div>
               )}
 
               <div className="flex gap-2 pt-2">
                 <button
-                  onClick={() => setModalOpen(false)}
+                  onClick={() => setModalScope(null)}
                   disabled={transferring}
                   className="flex-1 px-4 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 text-[10px] font-black uppercase tracking-widest hover:border-slate-300 dark:hover:border-white/20 transition-all disabled:opacity-50"
                 >
@@ -514,7 +737,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
                 </button>
                 <button
                   onClick={handleTransfer}
-                  disabled={transferring}
+                  disabled={transferring || modalAmount <= 0}
                   className="flex-1 px-4 py-3 rounded-2xl bg-[#ff0068] hover:bg-[#e0005c] text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-[#ff0068]/20 disabled:opacity-50 inline-flex items-center justify-center gap-2"
                 >
                   {transferring
