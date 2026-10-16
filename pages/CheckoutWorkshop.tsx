@@ -17,6 +17,7 @@ import AsaasBadge from '../components/AsaasBadge';
 import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
 import PaymentMethodPicker, { type PayMethod } from '../components/PaymentMethodPicker';
 import { computeWorkshopCheckout } from '../supabase/functions/_shared/workshop-checkout';
+import { installmentConfigFor } from '../supabase/functions/_shared/installment-offer';
 import {
   Loader2, AlertCircle, ArrowLeft, ShieldCheck, User as UserIcon, Mail, Phone, FileText,
   Tag, X, Check, GraduationCap, Sparkles,
@@ -92,7 +93,7 @@ const CheckoutWorkshop: React.FC = () => {
   const [payMethod, setPayMethod] = useState<PayMethod>('pix');
   const [installments, setInstallments] = useState(1);
   // Chave e UF do evento via RPC (a leitura direta de events é bloqueada para anon em evento privado).
-  const [eventFee, setEventFee] = useState<{ enabled: boolean; uf: string | null }>({ enabled: false, uf: null });
+  const [eventFee, setEventFee] = useState<{ enabled: boolean; uf: string | null; sandbox: boolean }>({ enabled: false, uf: null, sandbox: false });
   // Mitigation #7: comprador precisa aceitar política de reembolso antes de pagar
   const [refundAccepted, setRefundAccepted] = useState(false);
 
@@ -176,7 +177,7 @@ const CheckoutWorkshop: React.FC = () => {
           const { data: info, error: infoErr } = await supabase.rpc('get_event_processing_info', { p_event_id: ws.event_id });
           if (infoErr) console.error('[CheckoutWorkshop] get_event_processing_info:', infoErr.message);
           const row = Array.isArray(info) ? info[0] : info;
-          setEventFee({ enabled: Boolean(row?.processing_fee_enabled), uf: row?.state ?? null });
+          setEventFee({ enabled: Boolean(row?.processing_fee_enabled), uf: row?.state ?? null, sandbox: Boolean(row?.payment_sandbox) });
         }
         setWorkshop(ws);
 
@@ -302,6 +303,8 @@ const CheckoutWorkshop: React.FC = () => {
     // Mesma fonte da edge (_shared/workshop-checkout): o total exibido é o cobrado. Workshop avulso
     // (sem evento) ou chave desligada = cálculo de sempre, sem linha.
     const feeEnabled = Boolean(workshop.event_id && eventFee.enabled);
+    // Cartão parcelado: 3x só em evento sandbox (produção segue em 1x).
+    const feeConfig = installmentConfigFor(eventFee.sandbox);
     const computeFor = (method: PayMethod, n: number) => computeWorkshopCheckout({
       product: 'workshop',
       itemShares: [baseAfterCoupon],
@@ -312,10 +315,16 @@ const CheckoutWorkshop: React.FC = () => {
       method,
       installments: n,
       uf: eventFee.uf,
+      config: feeConfig,
     });
     const r = computeFor(payMethod, payMethod === 'card' ? installments : 1);
+    // Só as parcelas que o servidor aceitaria (pedido mínimo, parcela mínima, UF): quem recusa lança.
+    const cardTotals: Record<number, number> = { 1: computeFor('card', 1).chargedTotal };
+    for (let n = 2; feeEnabled && n <= feeConfig.maxInstallments; n++) {
+      try { cardTotals[n] = computeFor('card', n).chargedTotal; } catch { break; }
+    }
     const payOptions = feeEnabled && r.chargedBeforeFee > 0
-      ? { pix: computeFor('pix', 1).chargedTotal, cardTotals: { 1: computeFor('card', 1).chargedTotal } as Record<number, number> }
+      ? { pix: computeFor('pix', 1).chargedTotal, cardTotals }
       : null;
     return {
       precoBase, precoAposCombo, comboApplied, hospedagemDelta, discount,
@@ -731,6 +740,7 @@ const CheckoutWorkshop: React.FC = () => {
               installments={installments}
               onMethodChange={setPayMethod}
               onInstallmentsChange={setInstallments}
+              maxInstallments={Math.max(...Object.keys(breakdown.payOptions.cardTotals).map(Number))}
               refundTarget="o valor da inscrição"
               formatBRL={formatBRL}
             />

@@ -1,8 +1,9 @@
 /**
  * PaymentMethodPicker — bloco "Como você quer pagar?" dos checkouts com a linha "Taxa de pagamento"
  * (ingresso, workshop, passe e inscrição). Mostra o total de cada forma (Pix, cartão) pro comprador comparar.
- * O seletor de parcelas só aparece se PROCESSING_FEE_CONFIG.maxInstallments > 1 (hoje fixado em 1x:
- * o cartão aparece "à vista"). Os valores vêm do servidor/núcleo puro; este componente só exibe.
+ * O seletor de parcelas só aparece se maxInstallments > 1 (prop do checkout; padrão PROCESSING_FEE_CONFIG,
+ * hoje 1x: o cartão aparece "à vista"). Parcelado mostra a taxa de parcelamento, os juros ao mês e a taxa
+ * efetiva anual (CDC art. 52). Os valores vêm do servidor/núcleo puro; este componente só exibe.
  *
  * theme 'dark' (padrão): checkouts públicos, fundo sempre escuro.
  * theme 'adaptive': telas internas com modo claro/escuro (Minhas Inscrições).
@@ -10,6 +11,7 @@
 
 import React from 'react';
 import { PROCESSING_FEE_CONFIG } from '../supabase/functions/_shared/processing-fee';
+import { installmentDisclosure } from '../supabase/functions/_shared/installment-offer';
 
 export type PayMethod = 'pix' | 'card';
 
@@ -31,13 +33,19 @@ interface Props {
   theme?: 'dark' | 'adaptive';
   /** Esconde o texto explicativo (quando o card já o mostra). */
   hideNote?: boolean;
+  /** Máximo de parcelas oferecidas neste pedido (o checkout calcula; padrão = config de produção). */
+  maxInstallments?: number;
 }
 
 const PaymentMethodPicker: React.FC<Props> = ({
   options, method, installments, onMethodChange, onInstallmentsChange, refundTarget, formatBRL,
-  theme = 'dark', hideNote = false,
+  theme = 'dark', hideNote = false, maxInstallments,
 }) => {
-  const max = PROCESSING_FEE_CONFIG.maxInstallments;
+  const max = maxInstallments ?? PROCESSING_FEE_CONFIG.maxInstallments;
+  const disclosure = method === 'card' && installments > 1
+    ? installmentDisclosure(options.cardTotals[1], options.cardTotals[installments] ?? 0, installments)
+    : null;
+  const pct = (v: number) => `${(v * 100).toFixed(2).replace('.', ',')}%`;
   const adaptive = theme === 'adaptive';
   const box = adaptive
     ? 'space-y-3'
@@ -84,9 +92,19 @@ const PaymentMethodPicker: React.FC<Props> = ({
           </select>
         </label>
       )}
+      {disclosure && (
+        <div className={`rounded-xl border px-3 py-2.5 text-[11px] leading-relaxed tabular-nums ${adaptive ? 'border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300' : 'border-white/10 text-slate-300'}`}>
+          <p><span className="font-black">Taxa de parcelamento:</span> {formatBRL(disclosure.fee)}</p>
+          <p>
+            À vista no cartão {formatBRL(options.cardTotals[1])} ou {installments}x de {formatBRL(options.cardTotals[installments] / installments)}
+            {' '}(total {formatBRL(options.cardTotals[installments])}).
+          </p>
+          <p>Juros de {pct(disclosure.monthlyRate)} ao mês · taxa efetiva anual (CET) de {pct(disclosure.annualRate)}.</p>
+        </div>
+      )}
       {!hideNote && (
         <p className={`text-[10px] leading-relaxed ${adaptive ? 'text-slate-500' : 'text-slate-500'}`}>
-          A taxa de pagamento cobre o processamento do pagamento e varia conforme a forma escolhida. Em caso de reembolso, ela é devolvida junto com {refundTarget}.
+          A taxa de pagamento cobre o processamento do pagamento e varia conforme a forma escolhida. Em caso de reembolso, ela é devolvida junto com {refundTarget}{installments > 1 ? ' (a taxa de parcelamento também)' : ''}.
         </p>
       )}
     </div>
