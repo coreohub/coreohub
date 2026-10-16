@@ -322,3 +322,14 @@ export function installmentsFromPayment(payment: { installmentCount?: unknown } 
   const n = Number(payment?.installmentCount);
   return Number.isInteger(n) && n >= 1 && n <= 12 ? n : null;
 }
+
+/**
+ * Fração do pedido que uma parcela representa (cartão parcelado: a Asaas cria 1 cobrança por parcela e cada
+ * uma dispara o próprio webhook). 1 quando não é parcelado. Parcela = payment.value; pedido = tudo que o
+ * comprador pagou (produtor + comissão + taxa de pagamento + taxa de parcelamento).
+ */
+export function installmentShare(paymentValue: number, orderGross: number, installments: number | null | undefined): number {
+  if (!installments || installments <= 1) return 1;
+  if (!(orderGross > 0) || !(paymentValue > 0)) return 1;
+  return Math.min(1, Math.max(0, parseFloat((paymentValue / orderGross).toFixed(6))));
+}

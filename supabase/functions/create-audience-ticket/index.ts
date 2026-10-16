@@ -711,6 +711,8 @@ Deno.serve(async (req) => {
       .update({
         payment_id:  payData.id,
         payment_url: payData.invoiceUrl,
+        // Cartão parcelado: id do carnê (as demais parcelas chegam no webhook com este `installment`).
+        ...(isInstallment && payData.installment ? { asaas_installment_id: String(payData.installment) } : {}),
         ...(paymentMethod ? { payment_method_chosen: paymentMethod, installments } : {}),
       })
       .in('id', createdTickets.map(t => t.id))
