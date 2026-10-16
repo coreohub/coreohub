@@ -221,6 +221,33 @@ async function insertAudienceInstallmentCommission(
   return 'ok'
 }
 
+// Fecha o arredondamento do carnê: quando todas as parcelas já têm linha, a diferença de centavos entre a soma das
+// linhas e o total do pedido vai pra ÚLTIMA parcela (comissão, taxa e líquido do produtor somam exatamente o pedido).
+async function reconcileAudienceInstallmentRounding(supabase: any, tickets: any[], installmentId: string): Promise<void> {
+  const total = Number(tickets[0]?.installments ?? 0)
+  if (total <= 1) return
+  const { data: rows } = await supabase
+    .from('platform_commissions')
+    .select('id, installment_number, gross_amount, commission_amount, net_amount, processing_fee_amount')
+    .eq('asaas_installment_id', installmentId)
+  const list = (rows ?? []) as any[]
+  if (list.length !== total) return
+  const last = list.reduce((a, b) => (Number(b.installment_number) > Number(a.installment_number) ? b : a))
+  const orderCommission = round2(tickets.reduce((s: number, t: any) => s + Number(t.commission_amount ?? 0), 0))
+  const orderFee = round2(sumProcessingFee(tickets))
+  const sum = (k: string) => round2(list.reduce((s, r) => s + Number(r[k] ?? 0), 0))
+  const dCommission = round2(orderCommission - sum('commission_amount'))
+  const dFee = round2(orderFee - sum('processing_fee_amount'))
+  if (dCommission === 0 && dFee === 0) return
+  const commission = round2(Number(last.commission_amount) + dCommission)
+  const fee = round2(Number(last.processing_fee_amount) + dFee)
+  await supabase.from('platform_commissions').update({
+    commission_amount: commission,
+    processing_fee_amount: fee,
+    net_amount: producerNetExcludingFee(Number(last.gross_amount), commission, fee),
+  }).eq('id', last.id)
+}
+
 // ── Parcelas 2..N de um carnê de cartão (plateia): só a linha de comissão da própria parcela ──────────────
 // A 1a parcela (payment_id gravado no ticket) segue o fluxo normal e aprova o pedido. As demais compartilham o
 // `installment` (id do carnê) gravado no ticket na criação. Idempotente por asaas_payment_id.
@@ -257,6 +284,7 @@ async function handleAudienceInstallmentSibling(opts: {
   if (res === 'error') {
     return new Response(JSON.stringify({ status: 'error', reason: 'commission_insert_failed' }), { status: 500, headers: respHeaders })
   }
+  await reconcileAudienceInstallmentRounding(supabase, tickets, installmentId)
   console.log(`[asaas-webhook][audience-installment] parcela payment=${payment.id} carnê=${installmentId} registrada`)
   return respond({ status: 'ok', installment_sibling: true, payment_id: String(payment.id) })
 }
@@ -548,6 +576,7 @@ async function handleAudienceTicket(opts: {
       for (const parcela of others) {
         await insertAudienceInstallmentCommission(supabase, tickets, parcela, String(payment.installment), groupId)
       }
+      await reconcileAudienceInstallmentRounding(supabase, tickets, String(payment.installment))
       console.log(`[asaas-webhook][audience] carnê=${payment.installment}: ${others.length} parcela(s) irmã(s) registrada(s)`)
     } catch (e: any) {
       console.error('[asaas-webhook][audience] falha ao registrar parcelas irmãs:', e?.message)
