@@ -40,7 +40,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { round2 } from '../_shared/audience-pricing.ts'
 import { computeAudienceCheckout } from '../_shared/audience-checkout.ts'
-import { allocateProportional, normalizeInstallments } from '../_shared/processing-fee.ts'
+import { allocateProportional, normalizeInstallments, PROCESSING_FEE_CONFIG } from '../_shared/processing-fee.ts'
+import { fetchCardAnticipationLimit, limitCovers } from '../_shared/asaas-anticipation.ts'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 import { ticketSeatKind, countPcdTickets, countObesoTickets, countCompanionTickets, effectiveTicketKind, type TicketSeatKind } from '../_shared/seat-rules.ts'
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
@@ -222,6 +223,8 @@ Deno.serve(async (req) => {
     const asaasEnv = await loadAsaasEnvForEvent(supabase, event, 'create-audience-ticket')
     const ASAAS_API_KEY  = asaasEnv.apiKey
     const ASAAS_BASE_URL = asaasEnv.baseUrl
+    // Cartão parcelado: ligado SÓ no sandbox enquanto o fluxo não é validado (produção segue em 1x).
+    const feeConfig = asaasEnv.isSandbox ? { ...PROCESSING_FEE_CONFIG, maxInstallments: 3 } : PROCESSING_FEE_CONFIG
     if ((event as any).sessao_status === 'cancelada') throw new Error('Esta sessão foi cancelada pelo organizador. As vendas estão encerradas.')
     if (!event.audience_sales_enabled) {
       throw new Error('Venda de ingressos não está ativa para este evento')
@@ -396,13 +399,14 @@ Deno.serve(async (req) => {
       }
       paymentMethod = paymentMethodRaw
       try {
-        installments = normalizeInstallments(paymentMethod, installmentsRaw ?? 1)
+        installments = normalizeInstallments(paymentMethod, installmentsRaw ?? 1, feeConfig)
       } catch (e: any) {
         throw new Error(e.message)
       }
     }
 
     const pricing = computeAudienceCheckout({
+      config: feeConfig,
       resolved: resolved.map(r => ({
         idx: r.idx, nome: r.nome, kind: r.kind,
         quantity: r.quantity, precoUnit: r.precoUnit, quantidadeTotal: r.quantidadeTotal,
@@ -420,6 +424,14 @@ Deno.serve(async (req) => {
     const effectiveFeeMode = pricing.feeMode   // AC/RR forçam 'absorver'
     const rpcItems        = pricing.items
     const chargedTotal    = pricing.chargedTotal
+    // Cartão parcelado só é oferecido se a conta principal tiver limite de antecipação pra cobrir o carnê;
+    // sem limite o produtor receberia parcela a parcela (32/64/96 dias) e o comprador pagaria a taxa à toa.
+    if (paymentMethod === 'card' && installments > 1) {
+      const limit = await fetchCardAnticipationLimit(ASAAS_BASE_URL, ASAAS_API_KEY)
+      if (!limitCovers(limit, chargedTotal)) {
+        throw new Error('Parcelamento indisponível no momento: pague à vista no cartão ou no Pix')
+      }
+    }
     const producerTotal   = pricing.producerTotal
     const commissionTotal = pricing.commissionTotal
     const discountApplied = pricing.discountApplied

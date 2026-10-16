@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { resolveAsaasEnv, resolveWebhookEnvName, webhookMatchesEvent } from '../_shared/asaas-env.ts'
 import { cardCreditFallback } from '../_shared/card-credit-date.ts'
+import { requestInstallmentAnticipation } from '../_shared/asaas-anticipation.ts'
 import {
   allocateProportional,
   installmentsFromPayment,
@@ -246,6 +247,49 @@ async function reconcileAudienceInstallmentRounding(supabase: any, tickets: any[
     processing_fee_amount: fee,
     net_amount: producerNetExcludingFee(Number(last.gross_amount), commission, fee),
   }).eq('id', last.id)
+}
+
+// ── Eventos de antecipação do carnê (RECEIVABLE_ANTICIPATION_*) ─────────────────────────────────────────
+// Atualiza o status nas linhas de comissão do carnê. CREDITED = o split caiu na subconta agora: a data de
+// crédito de TODAS as parcelas vira hoje (e o repasse respeita D+7 desde a venda, como sempre). Idempotente.
+async function handleAnticipationEvent(
+  supabase: any,
+  event: string,
+  anticipation: any,
+  ok: (payload: Record<string, unknown>) => Response,
+): Promise<Response> {
+  const installmentId = String(anticipation.installment)
+  const status = event.replace('RECEIVABLE_ANTICIPATION_', '')
+  const { data: rows } = await supabase
+    .from('platform_commissions')
+    .select('id, created_at')
+    .eq('asaas_installment_id', installmentId)
+  if (!rows?.length) {
+    console.warn(`[asaas-webhook][anticipation] evento ${event} sem linhas do carnê ${installmentId}`)
+    return ok({ status: 'ignored', reason: 'installment_not_found' })
+  }
+  const base: Record<string, unknown> = {
+    anticipation_status: status,
+    anticipation_id: anticipation.id ? String(anticipation.id) : null,
+    anticipation_fee: anticipation.fee != null ? Number(anticipation.fee) : null,
+  }
+  if (status === 'CREDITED') {
+    const now = Date.now()
+    for (const r of rows as Array<{ id: string; created_at: string }>) {
+      const sevenDays = new Date(r.created_at).getTime() + RELEASE_WINDOW_DAYS * 24 * 60 * 60 * 1000
+      await supabase.from('platform_commissions').update({
+        ...base,
+        card_credit_at: new Date(now).toISOString(),
+        release_at: new Date(Math.max(sevenDays, now)).toISOString(),
+      }).eq('id', r.id)
+    }
+  } else {
+    await supabase.from('platform_commissions').update(base).eq('asaas_installment_id', installmentId)
+  }
+  if (status === 'DENIED' || status === 'CANCELLED') {
+    console.warn(`[asaas-webhook][anticipation] ${event} carnê=${installmentId} motivo=${anticipation.denialObservation ?? '-'}`)
+  }
+  return ok({ status: 'ok', anticipation_event: event, rows: rows.length })
 }
 
 // ── Parcelas 2..N de um carnê de cartão (plateia): só a linha de comissão da própria parcela ──────────────
@@ -578,6 +622,23 @@ async function handleAudienceTicket(opts: {
       }
       await reconcileAudienceInstallmentRounding(supabase, tickets, String(payment.installment))
       console.log(`[asaas-webhook][audience] carnê=${payment.installment}: ${others.length} parcela(s) irmã(s) registrada(s)`)
+
+      // Antecipação pela conta principal: o split cai integral na subconta (D+2) em vez de parcela a parcela.
+      // Pede só se o limite cobrir o valor bruto do carnê; sem limite o produtor recebe nas datas normais.
+      const carneGross = round2(Number(payment.value ?? 0) + others.reduce((s: number, p: any) => s + Number(p.value ?? 0), 0))
+      const attempt = await requestInstallmentAnticipation({
+        baseUrl: asaasBaseUrl, apiKey: asaasApiKey, installmentId: String(payment.installment), grossTotal: carneGross,
+      })
+      const antStatus = attempt.status === 'requested' ? 'PENDING' : attempt.status === 'no_limit' ? 'NO_LIMIT' : 'REQUEST_ERROR'
+      const ant: any = attempt.status === 'requested' ? attempt.anticipation : null
+      await supabase.from('platform_commissions').update({
+        anticipation_status: antStatus,
+        anticipation_id: ant?.id ? String(ant.id) : null,
+        anticipation_fee: ant?.fee != null ? Number(ant.fee) : null,
+      }).eq('asaas_installment_id', String(payment.installment))
+      console.log(`[asaas-webhook][audience] antecipação carnê=${payment.installment}: ${antStatus}` +
+        (attempt.status === 'error' ? ` (${attempt.message})` : '') +
+        (attempt.status === 'no_limit' ? ` (limite disponível=${attempt.available})` : ''))
     } catch (e: any) {
       console.error('[asaas-webhook][audience] falha ao registrar parcelas irmãs:', e?.message)
     }
@@ -1749,6 +1810,14 @@ Deno.serve(async (req) => {
     const payment = body.payment
 
     console.log(`[asaas-webhook] event=${event} payment_id=${payment?.id} status=${payment?.status}`)
+
+    // Eventos de antecipação (RECEIVABLE_ANTICIPATION_*) vêm com `anticipation`, sem `payment`.
+    if (event?.startsWith('RECEIVABLE_ANTICIPATION_') && body.anticipation?.installment) {
+      return await handleAnticipationEvent(createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? '',
+      ), event, body.anticipation, ok)
+    }
 
     if (!event || !payment?.id) {
       return ok({ status: 'ignored', reason: 'no_event_or_payment' })
