@@ -107,8 +107,21 @@ describe('computeAudienceCheckout — produtor absorve a linha', () => {
 
   it('carrinho misto: soma exata e nenhum item com líquido negativo', () => {
     const r = computeAudienceCheckout(base([inteira(3, 40), meia(2, 20)], { payer: 'produtor', method: 'card', installments: 6, config: PARCELADO }));
-    expect(r.producerTotal + r.commissionTotal).toBeCloseTo(r.chargedTotal, 2);
+    // chargedTotal = produtor + comissão (inclui a taxa de pagamento absorvida) + taxa de parcelamento do comprador
+    expect(r.producerTotal + r.commissionTotal + r.processingFee).toBeCloseTo(r.chargedTotal, 2);
     r.items.forEach((it) => expect(it.producer_amount).toBeGreaterThanOrEqual(0));
+  });
+});
+
+describe('computeAudienceCheckout — parcelado com produtor assumindo a taxa de pagamento', () => {
+  it('produtor assume só os 4%; a taxa de parcelamento é sempre do comprador', () => {
+    const r = computeAudienceCheckout(base([inteira(1, 100)], { payer: 'produtor', method: 'card', installments: 3, config: PARCELADO }));
+    expect(r.producerPaidFee).toBe(4.4); // 4% de 110
+    expect(r.processingFee).toBeGreaterThan(4); // taxa de parcelamento cobrada do comprador
+    expect(r.chargedTotal).toBeCloseTo(110 + r.processingFee, 2);
+    // webhook: líquido = gross - comissão - linha (linha = só a taxa de parcelamento)
+    expect(r.chargedTotal - r.commissionTotal - r.processingFee).toBeCloseTo(r.producerTotal, 2);
+    expect(r.producerTotal).toBe(95.6);
   });
 });
 

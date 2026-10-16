@@ -104,6 +104,20 @@ describe('computeWorkshopCheckout — comprador paga a linha', () => {
   });
 });
 
+describe('computeWorkshopCheckout — parcelado', () => {
+  it('produtor assume a taxa de pagamento; comprador paga a taxa de parcelamento', () => {
+    const r = computeWorkshopCheckout(base([300], { payer: 'produtor', method: 'card', installments: 3, config: PARCELADO }));
+    expect(r.producerPaidFee).toBe(13.2); // 4% de 330
+    expect(r.processingFee).toBeGreaterThan(5);
+    expect(r.chargedTotal).toBeCloseTo(330 + r.processingFee, 2);
+    expect(sum(r.items.map((i) => i.processing_fee_amount))).toBeCloseTo(r.processingFee, 2);
+  });
+
+  it('parcelado recusado em UF com regra própria', () => {
+    expect(() => computeWorkshopCheckout(base([300], { uf: 'RJ', method: 'card', installments: 3, config: PARCELADO }))).toThrow(/indisponível/i);
+  });
+});
+
 describe('computeWorkshopCheckout — produtor absorve', () => {
   it('comprador paga o mesmo que sem linha; linha vira comissão; processing_fee_amount = 0', () => {
     const r = computeWorkshopCheckout(base([200], { payer: 'produtor' }));

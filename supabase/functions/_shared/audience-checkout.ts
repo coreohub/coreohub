@@ -120,8 +120,11 @@ export function computeAudienceCheckout(input: AudienceCheckoutInput): AudienceC
   // Teto estadual (AL/RJ/PR): valor de face = preço sem comissão; comissão repassada soma no teto.
   const face = round2(cart.items.reduce((s, it) => s + it.preco * it.quantity, 0))
   const commissionRepassed = effectiveFeeMode === 'repassar' ? cart.commissionTotal : 0
-  const uf = applyUfRules({ uf: input.uf, face, commissionRepassed, fee: calc.fee })
-  const fee = uf.fee
+  const uf = applyUfRules({ uf: input.uf, face, commissionRepassed, fee: calc.paymentFee })
+  // Taxa de pagamento (pode ser assumida pelo produtor) + taxa de parcelamento (sempre do comprador).
+  const payFee = uf.fee
+  const instFee = calc.installmentFee
+  const fee = round2(payFee + instFee)
 
   if (fee <= 0) return { ...base, capApplied: calc.capApplied, ufCapped: uf.capped }
 
@@ -137,7 +140,7 @@ export function computeAudienceCheckout(input: AudienceCheckoutInput): AudienceC
 
   // payer = produtor: a linha sai do líquido do produtor e vira comissão da CoreoHub.
   const weights = cart.items.map((it) => it.quantity * (it.producer_amount > 0 ? it.producer_amount : 1))
-  const shares = allocateProportional(fee, weights)
+  const shares = allocateProportional(payFee, weights)
   let producerTotal = 0
   let commissionTotal = 0
   let absorbed = 0
@@ -155,6 +158,8 @@ export function computeAudienceCheckout(input: AudienceCheckoutInput): AudienceC
   return {
     ...base,
     items,
+    processingFee: instFee,
+    chargedTotal: round2(cart.chargedTotal + instFee),
     producerPaidFee: round2(absorbed),
     producerTotal: round2(producerTotal),
     commissionTotal: round2(commissionTotal),
