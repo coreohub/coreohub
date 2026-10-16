@@ -105,7 +105,7 @@ export async function refundAudienceOrder(
 
   const { data: ticket } = await supabase
     .from('audience_tickets')
-    .select('id, event_id, payment_id, status_pagamento, refunded_at, preco, group_id, ticket_type_nome, buyer_email, buyer_name, producer_amount')
+    .select('id, event_id, payment_id, status_pagamento, refunded_at, preco, group_id, ticket_type_nome, buyer_email, buyer_name, producer_amount, asaas_installment_id')
     .eq('id', ticketId)
     .maybeSingle()
 
@@ -129,7 +129,16 @@ export async function refundAudienceOrder(
   if (amount && Number(amount) > 0) refundBody.value = Number(amount)
   if (reason) refundBody.description = reason
 
-  const refundRes = await fetch(`${ASAAS_BASE_URL}/payments/${ticket.payment_id}/refund`, {
+  // Cartão parcelado: a Asaas tem 1 cobrança por parcela; o estorno é do carnê inteiro
+  // (POST /installments/{id}/refund, sem value = total) e desfaz todas as parcelas.
+  const installmentId: string | null = ticket.asaas_installment_id ? String(ticket.asaas_installment_id) : null
+  if (installmentId && amount && Number(amount) > 0) {
+    throw new Error('Estorno parcial não é suportado em compra parcelada no cartão: estorne o pedido inteiro')
+  }
+  const refundUrl = installmentId
+    ? `${ASAAS_BASE_URL}/installments/${installmentId}/refund`
+    : `${ASAAS_BASE_URL}/payments/${ticket.payment_id}/refund`
+  const refundRes = await fetch(refundUrl, {
     method: 'POST',
     headers: { 'access_token': ASAAS_API_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify(refundBody),
@@ -141,6 +150,8 @@ export async function refundAudienceOrder(
   }
 
   const refundedAmount = Number(refundData.value ?? amount ?? ticket.preco)
+  // No carnê a resposta é o parcelamento (id do carnê, sem id de estorno próprio).
+  if (installmentId && !refundData.id) refundData.id = installmentId
 
   // ── Persistir no banco via RPC (também replica pros tickets do grupo) ─────
   const { data: ok, error: rpcErr } = await supabase.rpc('mark_audience_ticket_refunded', {

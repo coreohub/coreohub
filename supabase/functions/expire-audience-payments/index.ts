@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
 
   const { data: expired, error } = await supabase
     .from('audience_tickets')
-    .select('id, event_id, payment_id')
+    .select('id, event_id, payment_id, asaas_installment_id')
     .eq('status_pagamento', 'PENDENTE')
     .not('payment_id', 'is', null)
     .not('reserved_until', 'is', null)
@@ -65,11 +65,11 @@ Deno.serve(async (req) => {
   }
 
   // Agrupa por cobrança (1 payment_id cobre N tickets do mesmo carrinho).
-  const byPayment = new Map<string, { event_id: string; ids: string[] }>()
+  const byPayment = new Map<string, { event_id: string; ids: string[]; installmentId: string | null }>()
   for (const t of expired ?? []) {
     const cur = byPayment.get(t.payment_id)
     if (cur) cur.ids.push(t.id)
-    else byPayment.set(t.payment_id, { event_id: t.event_id, ids: [t.id] })
+    else byPayment.set(t.payment_id, { event_id: t.event_id, ids: [t.id], installmentId: t.asaas_installment_id ? String(t.asaas_installment_id) : null })
   }
 
   const eventCache = new Map<string, any>()
@@ -88,7 +88,8 @@ Deno.serve(async (req) => {
       }
       const env = await loadAsaasEnvForEvent(supabase, ev, 'expire-audience-payments')
 
-      const res = await fetch(`${env.baseUrl}/payments/${paymentId}`, {
+      // Cartão parcelado: cancela o carnê inteiro (DELETE /installments/{id}); só a 1a parcela deixaria as demais cobráveis.
+      const res = await fetch(grp.installmentId ? `${env.baseUrl}/installments/${grp.installmentId}` : `${env.baseUrl}/payments/${paymentId}`, {
         method: 'DELETE',
         headers: { access_token: env.apiKey, 'Content-Type': 'application/json' },
       })
