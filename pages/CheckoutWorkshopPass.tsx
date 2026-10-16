@@ -18,6 +18,7 @@ import AsaasBadge from '../components/AsaasBadge';
 import CheckoutLegalNotice from '../components/CheckoutLegalNotice';
 import PaymentMethodPicker, { type PayMethod } from '../components/PaymentMethodPicker';
 import { computeWorkshopCheckout } from '../supabase/functions/_shared/workshop-checkout';
+import { installmentConfigFor } from '../supabase/functions/_shared/installment-offer';
 import { isEventOver } from '../utils/eventStatus';
 import {
   Loader2, AlertCircle, ArrowLeft, ShieldCheck, User as UserIcon, Mail, Phone, FileText,
@@ -87,7 +88,7 @@ const CheckoutWorkshopPass: React.FC = () => {
   // Linha "Taxa de pagamento" (só quando events.processing_fee_enabled): forma escolhida no nosso checkout.
   const [payMethod, setPayMethod] = useState<PayMethod>('pix');
   const [installments, setInstallments] = useState(1);
-  const [eventFee, setEventFee] = useState<{ enabled: boolean; uf: string | null }>({ enabled: false, uf: null });
+  const [eventFee, setEventFee] = useState<{ enabled: boolean; uf: string | null; sandbox: boolean }>({ enabled: false, uf: null, sandbox: false });
   const [refundAccepted, setRefundAccepted] = useState(false);
 
   const [couponInput, setCouponInput] = useState('');
@@ -132,7 +133,7 @@ const CheckoutWorkshopPass: React.FC = () => {
         const { data: info, error: infoErr } = await supabase.rpc('get_event_processing_info', { p_event_id: p.event_id });
         if (infoErr) console.error('[CheckoutWorkshopPass] get_event_processing_info:', infoErr.message);
         const infoRow = Array.isArray(info) ? info[0] : info;
-        setEventFee({ enabled: Boolean(infoRow?.processing_fee_enabled), uf: infoRow?.state ?? null });
+        setEventFee({ enabled: Boolean(infoRow?.processing_fee_enabled), uf: infoRow?.state ?? null, sandbox: Boolean(infoRow?.payment_sandbox) });
         setPass(p);
 
         if (p.selection_mode === 'a_la_carte') {
@@ -247,6 +248,8 @@ const CheckoutWorkshopPass: React.FC = () => {
     // Mesma fonte da edge (_shared/workshop-checkout): o total exibido é o cobrado. Passe avulso
     // (sem evento) ou chave desligada = cálculo de sempre, sem linha.
     const feeEnabled = Boolean(pass.event_id && eventFee.enabled);
+    // Cartão parcelado: 3x só em evento sandbox (produção segue em 1x).
+    const feeConfig = installmentConfigFor(eventFee.sandbox);
     const computeFor = (method: PayMethod, n: number) => computeWorkshopCheckout({
       product: 'passe',
       itemShares: [baseAfterCoupon],
@@ -257,10 +260,16 @@ const CheckoutWorkshopPass: React.FC = () => {
       method,
       installments: n,
       uf: eventFee.uf,
+      config: feeConfig,
     });
     const r = computeFor(payMethod, payMethod === 'card' ? installments : 1);
+    // Só as parcelas que o servidor aceitaria (pedido mínimo, parcela mínima, UF): quem recusa lança.
+    const cardTotals: Record<number, number> = { 1: computeFor('card', 1).chargedTotal };
+    for (let n = 2; feeEnabled && n <= feeConfig.maxInstallments; n++) {
+      try { cardTotals[n] = computeFor('card', n).chargedTotal; } catch { break; }
+    }
     const payOptions = feeEnabled && r.chargedBeforeFee > 0
-      ? { pix: computeFor('pix', 1).chargedTotal, cardTotals: { 1: computeFor('card', 1).chargedTotal } as Record<number, number> }
+      ? { pix: computeFor('pix', 1).chargedTotal, cardTotals }
       : null;
     return {
       precoBase, precoAposCombo, comboApplied, discount,
@@ -545,6 +554,7 @@ const CheckoutWorkshopPass: React.FC = () => {
               installments={installments}
               onMethodChange={setPayMethod}
               onInstallmentsChange={setInstallments}
+              maxInstallments={Math.max(...Object.keys(breakdown.payOptions.cardTotals).map(Number))}
               refundTarget="o valor da inscrição"
               formatBRL={formatBRL}
             />

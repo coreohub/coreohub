@@ -37,7 +37,7 @@ import { isEventOver } from '../utils/eventStatus';
 // Fonte única da matemática de comissão/split (compartilhada com a edge
 // create-audience-ticket). Garante que o total exibido bate com a cobrança.
 import { computeAudienceCheckout } from '../supabase/functions/_shared/audience-checkout';
-import { PROCESSING_FEE_CONFIG } from '../supabase/functions/_shared/processing-fee';
+import { installmentConfigFor } from '../supabase/functions/_shared/installment-offer';
 import PaymentMethodPicker from '../components/PaymentMethodPicker';
 
 const formatBRL = (n: number) =>
@@ -580,6 +580,8 @@ export default function CheckoutIngresso() {
   // ─── Breakdown — usa a MESMA fonte que a edge (computeAudienceCheckout) pra
   // bater centavo-a-centavo com a cobrança gerada. Fonte única em _shared. ───
   const feeEnabled = quote?.processingFeeEnabled ?? Boolean(event?.processing_fee_enabled);
+  // Cartão parcelado: 3x só em evento sandbox (produção segue em 1x).
+  const feeConfig = installmentConfigFor(Boolean((event as any)?.payment_sandbox));
   const computeFor = (method: 'pix' | 'card', n: number) => {
     const feeMode = quote?.feeMode ?? event.audience_fee_mode ?? 'repassar';
     return computeAudienceCheckout({
@@ -596,6 +598,7 @@ export default function CheckoutIngresso() {
       method,
       installments: n,
       uf: event.state ?? null,
+      config: feeConfig,
     });
   };
   const breakdown = useMemo(() => {
@@ -625,7 +628,10 @@ export default function CheckoutIngresso() {
     try {
       const pix = computeFor('pix', 1).chargedTotal;
       const cardTotals: Record<number, number> = {};
-      for (let n = 1; n <= PROCESSING_FEE_CONFIG.maxInstallments; n++) cardTotals[n] = computeFor('card', n).chargedTotal;
+      // Só as parcelas que o servidor aceitaria (pedido mínimo, parcela mínima, UF): quem recusa lança.
+      for (let n = 1; n <= feeConfig.maxInstallments; n++) {
+        try { cardTotals[n] = computeFor('card', n).chargedTotal; } catch { if (n === 1) throw new Error('indisponivel'); break; }
+      }
       return { pix, cardTotals };
     } catch {
       return null;
@@ -1009,6 +1015,7 @@ export default function CheckoutIngresso() {
             installments={installments}
             onMethodChange={setPayMethod}
             onInstallmentsChange={setInstallments}
+            maxInstallments={Math.max(...Object.keys(payOptions.cardTotals).map(Number))}
             refundTarget="o valor do ingresso"
             formatBRL={formatBRL}
           />
