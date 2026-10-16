@@ -40,7 +40,8 @@ import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 import { planFeeSalesBlocked, SALES_NOT_OPEN_MESSAGE } from '../_shared/plan-fee-gate.ts'
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
-import { normalizeInstallments } from '../_shared/processing-fee.ts'
+import { normalizeInstallments, PROCESSING_FEE_CONFIG } from '../_shared/processing-fee.ts'
+import { fetchCardAnticipationLimit, limitCovers } from '../_shared/asaas-anticipation.ts'
 import { computeWorkshopCheckout } from '../_shared/workshop-checkout.ts'
 
 function isValidCpf(cpf: string): boolean {
@@ -183,6 +184,7 @@ Deno.serve(async (req) => {
     let processingEnabled = false
     let eventUf: string | null = null
     let skipSplit = false
+    let isSandboxEnv = false
     if (workshop.event_id) {
       if (await planFeeSalesBlocked(supabase, workshop.event_id)) throw new Error(SALES_NOT_OPEN_MESSAGE)
       const { data: evSb, error: evSbErr } = await supabase
@@ -196,6 +198,7 @@ Deno.serve(async (req) => {
         const asaasEnv = await loadAsaasEnvForEvent(supabase, evSb, 'create-workshop-registration')
         ASAAS_API_KEY  = asaasEnv.apiKey
         ASAAS_BASE_URL = asaasEnv.baseUrl
+        isSandboxEnv = asaasEnv.isSandbox
         skipSplit = asaasEnv.isSandbox && (Deno.env.get('ASAAS_SANDBOX_SKIP_SPLIT') ?? '') === 'true'
         if (skipSplit) console.warn('[create-workshop-registration] SANDBOX sem split (ASAAS_SANDBOX_SKIP_SPLIT=true)')
       }
@@ -399,6 +402,8 @@ Deno.serve(async (req) => {
 
     // Linha "Taxa de pagamento" (P4): com a chave ligada o checkout escolhe Pix ou cartão e a linha é
     // SEMPRE calculada aqui (nunca confiamos no valor do cliente). Chave desligada = UNDEFINED, como sempre.
+    // Cartão parcelado: ligado SÓ no sandbox enquanto o fluxo não é validado (produção segue em 1x).
+    const feeConfig = isSandboxEnv ? { ...PROCESSING_FEE_CONFIG, maxInstallments: 3 } : PROCESSING_FEE_CONFIG
     let paymentMethod: 'pix' | 'card' | null = null
     let installments = 1
     if (processingEnabled && precoPago > 0) {
@@ -406,7 +411,7 @@ Deno.serve(async (req) => {
         throw new Error('Escolha a forma de pagamento (Pix ou cartão)')
       }
       paymentMethod = paymentMethodRaw
-      installments = normalizeInstallments(paymentMethod, installmentsRaw ?? 1)
+      installments = normalizeInstallments(paymentMethod, installmentsRaw ?? 1, feeConfig)
     }
 
     // Matemática em _shared/workshop-checkout (mesma fonte do CheckoutWorkshop). Chave desligada ou
@@ -421,12 +426,22 @@ Deno.serve(async (req) => {
       method: paymentMethod,
       installments,
       uf: eventUf,
+      config: feeConfig,
     })
     const effectiveFeeMode = pricing.feeMode   // AC/RR forçam 'absorver' (só com a chave ligada)
     const chargedAmount    = pricing.chargedTotal
     const producerAmount   = pricing.producerTotal
     const commissionAmount = pricing.commissionTotal
     const processingFee    = pricing.processingFee
+
+    // Cartão parcelado só com limite de antecipação na conta principal pra cobrir o carnê (senão o produtor
+    // receberia parcela a parcela e o comprador pagaria a taxa de parcelamento à toa).
+    if (paymentMethod === 'card' && installments > 1) {
+      const limit = await fetchCardAnticipationLimit(ASAAS_BASE_URL, ASAAS_API_KEY)
+      if (!limitCovers(limit, chargedAmount)) {
+        throw new Error('Parcelamento indisponível no momento: pague à vista no cartão ou no Pix')
+      }
+    }
 
     // Status inicial: GRATUITO se preço final = 0 — só legítimo quando combo
     // grátis (workshop.gratis_para_inscritos + combo válido). Cupom 100% off
@@ -581,10 +596,11 @@ Deno.serve(async (req) => {
 
     const description = `Workshop: ${workshop.name}`
 
+    const isInstallment = paymentMethod === 'card' && installments > 1
     const basePayload = {
       customer:          customerId,
       billingType:       paymentMethod === 'pix' ? 'PIX' : paymentMethod === 'card' ? 'CREDIT_CARD' : 'UNDEFINED',
-      value:             chargedAmount,
+      ...(isInstallment ? { installmentCount: installments, totalValue: chargedAmount } : { value: chargedAmount }),
       dueDate:           dueDateStr,
       description,
       externalReference: externalRef,
@@ -594,7 +610,7 @@ Deno.serve(async (req) => {
         split: [
           {
             walletId:   walletId,
-            fixedValue: producerAmount,
+            ...(isInstallment ? { totalFixedValue: producerAmount } : { fixedValue: producerAmount }),
           },
         ],
       }),
@@ -636,6 +652,8 @@ Deno.serve(async (req) => {
       .update({
         payment_id:  payData.id,
         payment_url: payData.invoiceUrl,
+        // Cartão parcelado: id do carnê (as demais parcelas chegam no webhook com este `installment`).
+        ...(isInstallment && payData.installment ? { asaas_installment_id: String(payData.installment) } : {}),
         ...(paymentMethod ? { payment_method_chosen: paymentMethod, installments, processing_fee_amount: processingFee } : {}),
       })
       .eq('id', registrationId)
