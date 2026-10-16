@@ -50,6 +50,11 @@ import { TERMO_PRODUTOR_VERSION } from '../utils/termoVersion';
 // sobre devolução da taxa; cláusula 15 ganha 15.1 a 15.5 (venda exclusivamente pela
 // Plataforma, comissão devida em venda por fora, suspensão, relação de inscritos). Sem
 // renumeração. Redação a ser revisada por advogado antes de ir para main.
+// 1.8 → 1.9 (2026-10-16): cláusula 11 ganha 11.10 a 11.13 (cartão parcelado: Taxa de parcelamento
+// discriminada, recebimento e antecipação, estornos/chargeback de venda parcelada, limites); 11.9 deixa
+// de dizer que não há parcelamento; a cláusula 13 estende a devolução à Taxa de parcelamento. Sem
+// renumeração. NÃO subir para main antes das respostas da Asaas e da revisão do advogado: a nova versão
+// exige novo aceite de todos os produtores.
 export { TERMO_PRODUTOR_VERSION };
 
 const TermoProdutor: React.FC = () => {
@@ -369,7 +374,19 @@ const TermoProdutor: React.FC = () => {
               11.8. <strong>Estornos.</strong> Em caso de estorno, a Taxa de pagamento é devolvida ao comprador junto com o valor pago. Aplica-se também a cláusula 13.
             </p>
             <p>
-              11.9. <strong>Disposições gerais.</strong> No Pix, quando a taxa não é cobrada do comprador, o custo é absorvido pela CoreoHub. A Plataforma não oferece, por ora, pagamento por boleto nem parcelamento no cartão nos fluxos com Taxa de pagamento. A escolha do Produtor vale para compras futuras e não altera compras já realizadas.
+              11.9. <strong>Disposições gerais.</strong> No Pix, quando a taxa não é cobrada do comprador, o custo é absorvido pela CoreoHub. A Plataforma não oferece, por ora, pagamento por boleto nos fluxos com Taxa de pagamento; o cartão parcelado segue as cláusulas 11.10 a 11.13. A escolha do Produtor vale para compras futuras e não altera compras já realizadas.
+            </p>
+            <p className="mt-2 mb-2">
+              11.10. <strong>Cartão parcelado.</strong> Em ingressos, workshops e passes, quando oferecido para o evento, o comprador pode pagar no cartão de crédito em parcelas, até o limite informado no checkout. Nesse caso a Plataforma cobra do comprador, em linha discriminada e separada da Taxa de pagamento, a &quot;Taxa de parcelamento&quot;, calculada pela Plataforma para cobrir o custo adicional de processamento e de antecipação do pagamento parcelado. Antes de confirmar, o comprador vê o valor da taxa, a taxa de juros mensal e a taxa efetiva anual. A Taxa de parcelamento é sempre paga pelo comprador, não integra o líquido do Produtor e não reduz o valor que ele recebe pela venda.
+            </p>
+            <p className="mb-2">
+              11.11. <strong>Recebimento e antecipação.</strong> O Produtor recebe o valor líquido da venda parcelada integralmente quando a antecipação dos recebíveis é solicitada pela CoreoHub e aprovada pela instituição financeira (Asaas). A antecipação depende de limite disponível e de análise da instituição; sem limite ou se negada, a venda não é parcelada na Plataforma, ou, se já realizada, o repasse acompanha o crédito de cada parcela pela instituição, em prazos sucessivos de cerca de 32 (trinta e dois) dias. O custo da antecipação é suportado pela CoreoHub e não é descontado do Produtor.
+            </p>
+            <p className="mb-2">
+              11.12. <strong>Estornos, cancelamento e chargeback de venda parcelada.</strong> O estorno, o reembolso e o cancelamento de venda parcelada no cartão alcançam o pedido inteiro, e não parcelas isoladas. O Produtor autoriza a CoreoHub a debitar do saldo da sua conta digital, ou a cobrar, os valores já repassados e antecipados que tenham de ser devolvidos por estorno, cancelamento ou contestação (chargeback) da venda, inclusive quando o saldo for insuficiente, aplicando-se, no que couber, a cláusula 8 (reposição de saldo, correção, juros e multa).
+            </p>
+            <p>
+              11.13. <strong>Limites e retenção.</strong> A CoreoHub pode limitar o parcelamento por evento, por valor mínimo do pedido, por valor mínimo de parcela e por número de parcelas, suspendê-lo a qualquer tempo, e reter o repasse de vendas parceladas pelo prazo necessário a cobrir estornos e contestações, inclusive até a realização do evento. As regras vigentes constam em Configurações &gt; Pagamentos &gt; Taxas e simulador.
             </p>
           </section>
 
@@ -440,7 +457,7 @@ const TermoProdutor: React.FC = () => {
               CoreoHub via canal de suporte.
             </p>
             <p className="mt-2">
-              A Taxa de pagamento (cláusula 11.5) integra o valor devolvido ao comprador em estornos e reembolsos.
+              A Taxa de pagamento (cláusula 11.5) e a Taxa de parcelamento (cláusula 11.10) integram o valor devolvido ao comprador em estornos e reembolsos.
             </p>
           </section>
 

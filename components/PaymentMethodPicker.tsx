@@ -104,7 +104,7 @@ const PaymentMethodPicker: React.FC<Props> = ({
       )}
       {!hideNote && (
         <p className={`text-[10px] leading-relaxed ${adaptive ? 'text-slate-500' : 'text-slate-500'}`}>
-          A taxa de pagamento cobre o processamento do pagamento e varia conforme a forma escolhida. Em caso de reembolso, ela é devolvida junto com {refundTarget}{installments > 1 ? ' (a taxa de parcelamento também)' : ''}.
+          A taxa de pagamento cobre o processamento do pagamento e varia conforme a forma escolhida. Em caso de reembolso, ela é devolvida junto com {refundTarget}.
         </p>
       )}
     </div>
