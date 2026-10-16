@@ -24,7 +24,7 @@ import {
   type PaymentMethod,
   type ProcessingFeeConfig,
 } from './processing-fee.ts'
-import { applyUfRules } from './uf-rules.ts'
+import { applyUfRules, getUfRule } from './uf-rules.ts'
 
 export type ProcessingPayer = 'comprador' | 'produtor'
 
@@ -101,6 +101,11 @@ export function computeAudienceCheckout(input: AudienceCheckoutInput): AudienceC
     warnings,
   }
 
+  if (input.processingFeeEnabled && input.method === 'card' && (input.installments ?? 1) > 1 && getUfRule(input.uf)) {
+    // Parcelado (taxa de parcelamento fora do teto de 7%) fica desligado nas UFs com regra própria de taxa
+    // online (AC, RR, AL, RJ, PR) até validação jurídica (docs/plano-tabela-parcelado.md, seção 9).
+    throw new Error('Parcelamento indisponível neste estado: pague à vista no cartão ou no Pix');
+  }
   if (!input.processingFeeEnabled || forcedAbsorb) return base
   if (!input.method) throw new Error('Escolha a forma de pagamento')
 

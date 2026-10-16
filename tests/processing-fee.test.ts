@@ -14,7 +14,7 @@ import { applyUfRules, getUfRule, normalizeUf } from '../supabase/functions/_sha
 
 // Produção fixa o parcelado em 1x (PROCESSING_FEE_CONFIG.maxInstallments = 1). Estes testes exercitam as
 // tabelas de 2 a 12x (prontas pra quando o parcelado voltar) com uma config explícita.
-const PARCELADO = { ...PROCESSING_FEE_CONFIG, maxInstallments: 12 };
+const PARCELADO = { ...PROCESSING_FEE_CONFIG, maxInstallments: 12, installment: { ...PROCESSING_FEE_CONFIG.installment, minOrder: 0, minInstallmentValue: 1 } };
 
 describe('parcelado fixado em 1x em produção', () => {
   it('config padrão: máximo de 1 parcela', () => {
@@ -59,14 +59,27 @@ describe('computeProcessingFee — Pix', () => {
 });
 
 describe('computeProcessingFee — cartão', () => {
-  it('faixas de percentual: 1x 4, 2-6x 5, 7-12x 6 (acima do piso de custo)', () => {
+  it('taxa de pagamento é 4% à vista e parcelado; a taxa de parcelamento é só do 2x em diante e cresce com N', () => {
     const p = (n: number) => computeProcessingFee({ base: 1000, method: 'card', installments: n, product: 'passe', config: PARCELADO });
-    expect(p(1).percentApplied).toBe(4);
+    expect(p(1).paymentFee).toBe(40);
+    expect(p(1).installmentFee).toBe(0);
     expect(p(1).fee).toBe(40);
-    expect(p(2).percentApplied).toBe(5);
-    expect(p(6).fee).toBe(50);
-    expect(p(7).percentApplied).toBe(6);
-    expect(p(12).fee).toBe(60);
+    for (const n of [2, 3, 6, 12]) {
+      expect(p(n).paymentFee).toBe(40);
+      expect(p(n).percentApplied).toBe(4);
+      expect(p(n).fee).toBeCloseTo(p(n).paymentFee + p(n).installmentFee, 2);
+      expect(p(n).installmentFee).toBeGreaterThan(0);
+    }
+    expect(p(3).installmentFee).toBeGreaterThan(p(2).installmentFee);
+    expect(p(6).installmentFee).toBeGreaterThan(p(3).installmentFee);
+    expect(p(12).installmentFee).toBeGreaterThan(p(6).installmentFee);
+  });
+
+  it('taxa de parcelamento do passe de R$ 697 (base): 3x fica perto de R$ 30 e custa ~4% do pedido', () => {
+    const r = computeProcessingFee({ base: 697, method: 'card', installments: 3, product: 'passe', config: PARCELADO });
+    expect(r.paymentFee).toBe(27.88);
+    expect(r.installmentFee).toBeGreaterThan(29);
+    expect(r.installmentFee).toBeLessThan(31);
   });
 
   it('cartão não tem o teto de R$ 15 (passe R$ 1.597 à vista: 4% = 63,88)', () => {
@@ -82,15 +95,23 @@ describe('computeProcessingFee — cartão', () => {
     expect(r.fee).toBe(0.82);
   });
 
-  it('invariante: em produto sem teto, total - custo Asaas >= base (CoreoHub não paga o cartão)', () => {
+  it('invariante: sem tetos, total - custo Asaas - antecipação >= base (CoreoHub não paga o cartão nem a antecipação)', () => {
     for (const base of [5, 10, 20, 49.9, 100, 250, 731.85, 1597]) {
       for (const n of [1, 2, 3, 6, 7, 10, 12]) {
+        if (n > Math.floor(base)) continue; // parcela mínima de R$ 1 nesta config de teste
         const r = computeProcessingFee({ base, method: 'card', installments: n, product: 'workshop', config: PARCELADO });
-        const net = r.total - asaasCost(r.total, 'card', n);
-        // tolerância de 1 centavo do arredondamento do custo
-        expect(net).toBeGreaterThanOrEqual(base - 0.011);
+        const net = r.total - asaasCost(r.total, 'card', n) - r.anticipationCost;
+        // tolerância de 3 centavos: arredondamentos do custo, do centavo pra cima e da antecipação
+        expect(net).toBeGreaterThanOrEqual(base - 0.03);
       }
     }
+  });
+
+  it('parcelado: pedido abaixo do mínimo ou parcela abaixo do mínimo é recusado na config de produção', () => {
+    const prod = { ...PROCESSING_FEE_CONFIG, maxInstallments: 3 };
+    expect(() => computeProcessingFee({ base: 99, method: 'card', installments: 2, product: 'workshop', config: prod })).toThrow(/indisponível/i);
+    expect(() => computeProcessingFee({ base: 100, method: 'card', installments: 4, product: 'workshop', config: { ...prod, maxInstallments: 12 } })).toThrow(/indisponível/i);
+    expect(computeProcessingFee({ base: 100, method: 'card', installments: 3, product: 'workshop', config: prod }).installmentFee).toBeGreaterThan(0);
   });
 
   it('máximo de 12 parcelas imposto', () => {
@@ -113,10 +134,12 @@ describe('computeProcessingFee — teto de 7% só em plateia', () => {
     expect(r.capApplied).toBe('plateia_cap');
   });
 
-  it('plateia 12x: percentual 6% cabe no teto de 7%', () => {
-    const r = computeProcessingFee({ base: 100, method: 'card', installments: 12, product: 'plateia', config: PARCELADO });
-    expect(r.fee).toBe(6);
+  it('plateia 3x: a taxa de pagamento (4%) fica no teto de 7%, a taxa de parcelamento fica FORA do teto', () => {
+    const r = computeProcessingFee({ base: 100, method: 'card', installments: 3, product: 'plateia', config: PARCELADO });
+    expect(r.paymentFee).toBe(4);
     expect(r.capApplied).toBeNull();
+    expect(r.installmentFee).toBeGreaterThan(3);
+    expect(r.fee).toBeGreaterThan(7); // total acima de 7% do pedido, de propósito
   });
 
   it('workshop/passe/seletiva/inscrição não têm o teto de 7%', () => {
@@ -258,15 +281,16 @@ describe('webhook: a linha nunca entra no líquido do produtor', () => {
     expect(producerNetExcludingFee(gross, cart.commissionTotal, fee)).toBe(90);
   });
 
-  it('cartão 10x workshop: master recebe comissão + linha e paga o custo da Asaas; produtor intocado', () => {
+  it('cartão 3x workshop: produtor intocado e a CoreoHub fica como no 1x (taxa de parcelamento só cobre custo)', () => {
     const base = 731.85; // 697 + 5% de comissão repassada
-    const r = computeProcessingFee({ base, method: 'card', installments: 10, product: 'workshop', config: PARCELADO });
-    expect(r.fee).toBe(43.91); // 6% de 731,85
+    const r = computeProcessingFee({ base, method: 'card', installments: 3, product: 'workshop', config: PARCELADO });
+    const one = computeProcessingFee({ base, method: 'card', installments: 1, product: 'workshop' });
     const commission = 34.85;
     const net = producerNetExcludingFee(r.total, commission, r.fee);
     expect(net).toBe(697);
-    // sobra da CoreoHub depois do custo Asaas: comissão + linha - custo > 0
-    expect(commission + r.fee - r.asaasCost).toBeGreaterThan(0);
+    const keep = (x: typeof r) => commission + x.fee - x.asaasCost - x.anticipationCost;
+    expect(keep(r)).toBeGreaterThan(0);
+    expect(Math.abs(keep(r) - keep(one))).toBeLessThan(0.05); // margem igual ao 1x
   });
 
   it('installmentsFromPayment só aceita inteiro de 1 a 12', () => {

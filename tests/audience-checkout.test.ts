@@ -4,7 +4,7 @@ import { computeAudienceCart, type PricingInput } from '../supabase/functions/_s
 import { PROCESSING_FEE_CONFIG } from '../supabase/functions/_shared/processing-fee';
 
 // Produção fixa o parcelado em 1x; os testes de 2 a 12x usam uma config explícita.
-const PARCELADO = { ...PROCESSING_FEE_CONFIG, maxInstallments: 12 };
+const PARCELADO = { ...PROCESSING_FEE_CONFIG, maxInstallments: 12, installment: { ...PROCESSING_FEE_CONFIG.installment, minOrder: 0, minInstallmentValue: 1 } };
 
 const inteira = (qty: number, preco = 50): PricingInput =>
   ({ idx: 0, nome: 'Inteira', kind: 'inteira', quantity: qty, precoUnit: preco, quantidadeTotal: null });
@@ -54,10 +54,11 @@ describe('computeAudienceCheckout — comprador paga a linha', () => {
     expect(r.producerTotal).toBe(125); // intocado pela linha
   });
 
-  it('cartão 10x usa o percentual de 7-12x (6%)', () => {
+  it('cartão 10x: linha = taxa de pagamento 4% + taxa de parcelamento (soma entra no total do comprador)', () => {
     const r = computeAudienceCheckout(base([inteira(1, 100)], { method: 'card', installments: 10, config: PARCELADO }));
     expect(r.chargedBeforeFee).toBe(110);
-    expect(r.processingFee).toBe(6.6);
+    expect(r.processingFee).toBeGreaterThan(4.4 + 8);
+    expect(r.chargedTotal).toBeCloseTo(110 + r.processingFee, 2);
   });
 
   it('chave ligada sem forma de pagamento: erro (servidor nunca adivinha)', () => {
@@ -130,9 +131,18 @@ describe('computeAudienceCheckout — leis estaduais', () => {
   });
 
   it('RJ com comissão absorvida: linha limitada a 10% do valor de face', () => {
-    const r = computeAudienceCheckout(base([inteira(1, 100)], { uf: 'RJ', feeMode: 'absorver', method: 'card', installments: 12, config: PARCELADO }));
-    expect(r.processingFee).toBe(6); // 6% < teto de 10 (comissão absorvida não entra na soma): não limita
+    const r = computeAudienceCheckout(base([inteira(1, 100)], { uf: 'RJ', feeMode: 'absorver', method: 'card', installments: 1 }));
+    expect(r.processingFee).toBe(4); // 4% < teto de 10 (comissão absorvida não entra na soma): não limita
     expect(r.ufCapped).toBe(false);
+  });
+
+  it('parcelado é recusado nas UFs com regra própria (AC, RR, AL, RJ, PR)', () => {
+    for (const uf of ['AC', 'RR', 'AL', 'RJ', 'PR']) {
+      expect(() => computeAudienceCheckout(base([inteira(1, 100)], { uf, feeMode: 'absorver', method: 'card', installments: 3, config: PARCELADO })))
+        .toThrow(/indisponível/i);
+    }
+    const sp = computeAudienceCheckout(base([inteira(1, 100)], { uf: 'SP', method: 'card', installments: 3, config: PARCELADO }));
+    expect(sp.processingFee).toBeGreaterThan(4);
   });
 
   it('PR: teto de 20% cabe com comissão 10% + linha de 4%', () => {
