@@ -244,6 +244,7 @@ import {
   sumProcessingFee,
   producerNetExcludingFee,
   installmentsFromPayment,
+  installmentShare,
 } from '../supabase/functions/_shared/processing-fee';
 import { computeAudienceCart } from '../supabase/functions/_shared/audience-pricing';
 
@@ -300,5 +301,21 @@ describe('webhook: a linha nunca entra no líquido do produtor', () => {
     expect(installmentsFromPayment({ installmentCount: null })).toBeNull();
     expect(installmentsFromPayment({})).toBeNull();
     expect(installmentsFromPayment(undefined)).toBeNull();
+  });
+});
+
+describe('installmentShare: fração do pedido que cada parcela representa', () => {
+  it('à vista ou sem contagem: 1', () => {
+    expect(installmentShare(100, 100, 1)).toBe(1);
+    expect(installmentShare(100, 100, null)).toBe(1);
+    expect(installmentShare(100, 0, 3)).toBe(1);
+  });
+  it('3x de R$ 20 num pedido de R$ 60: 1/3 cada, soma 1 (com R$ 100 em 3x: 33,33 + 33,33 + 33,34)', () => {
+    expect(installmentShare(20, 60, 3)).toBeCloseTo(1 / 3, 5);
+    const parts = [33.33, 33.33, 33.34].map((v) => installmentShare(v, 100, 3));
+    expect(parts.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 4);
+  });
+  it('nunca passa de 1', () => {
+    expect(installmentShare(120, 100, 3)).toBe(1);
   });
 });
