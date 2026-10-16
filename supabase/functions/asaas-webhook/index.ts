@@ -249,6 +249,172 @@ async function reconcileAudienceInstallmentRounding(supabase: any, tickets: any[
   }).eq('id', last.id)
 }
 
+// ── Cartão parcelado em workshop/passe: comissão por parcela, parcelas irmãs e antecipação ───────────────
+// Mesmo desenho da plateia: a 1a parcela aprova o pedido e registra as demais; eventos de parcelas 2..N só
+// inserem a própria linha. Passe = N inscrições (1 linha de comissão por workshop, por parcela).
+interface WorkshopInstallmentCtx { eventId: string | null; producerId: string | null }
+
+async function insertWorkshopInstallmentCommissions(
+  supabase: any,
+  regs: any[],
+  parcela: any,
+  installmentId: string,
+  ctx: WorkshopInstallmentCtx,
+): Promise<'ok' | 'exists' | 'error'> {
+  const { data: existing } = await supabase
+    .from('platform_commissions').select('id').eq('asaas_payment_id', String(parcela.id)).limit(1).maybeSingle()
+  if (existing) return 'exists'
+
+  const orderGross = regs.reduce((s: number, r: any) =>
+    s + Number(r.commission_amount ?? 0) + Number(r.producer_amount ?? 0) + Number(r.processing_fee_amount ?? 0), 0)
+  const share = installmentShare(Number(parcela.value ?? 0), orderGross, Number(regs[0]?.installments ?? 1))
+  const paidAt = new Date().toISOString()
+  const rows = regs.map((r: any) => {
+    const comm = round2(Number(r.commission_amount ?? 0) * share)
+    const fee = round2(Number(r.processing_fee_amount ?? 0) * share)
+    const gross = round2((Number(r.commission_amount ?? 0) + Number(r.producer_amount ?? 0) + Number(r.processing_fee_amount ?? 0)) * share)
+    return {
+      event_id:                 ctx.eventId,
+      producer_id:              ctx.producerId,
+      gross_amount:             gross,
+      commission_amount:        comm,
+      net_amount:               producerNetExcludingFee(gross, comm, fee),
+      processing_fee_amount:    fee,
+      asaas_payment_id:         String(parcela.id),
+      commission_type:          'percent',
+      workshop_registration_id: r.id,
+      kind:                     'workshop',
+      release_at:               computeReleaseAt(paidAt, parcela),
+      card_credit_at:           computeCardCreditAt(paidAt, parcela),
+      asaas_installment_id:     installmentId,
+      installment_number:       parcela.installmentNumber != null ? Number(parcela.installmentNumber) : null,
+      installment_count:        Number(regs[0]?.installments ?? 0) || null,
+    }
+  })
+  const { error } = await supabase.from('platform_commissions').insert(rows)
+  if (error) {
+    console.error('[asaas-webhook][workshop-installment] erro inserir comissão:', error.message)
+    return 'error'
+  }
+  return 'ok'
+}
+
+// Fecha o arredondamento por inscrição: a diferença de centavos vai pra ÚLTIMA parcela.
+async function reconcileWorkshopInstallmentRounding(supabase: any, regs: any[], installmentId: string): Promise<void> {
+  const total = Number(regs[0]?.installments ?? 0)
+  if (total <= 1) return
+  for (const r of regs) {
+    const { data: rows } = await supabase
+      .from('platform_commissions')
+      .select('id, installment_number, gross_amount, commission_amount, processing_fee_amount')
+      .eq('asaas_installment_id', installmentId)
+      .eq('workshop_registration_id', r.id)
+    const list = (rows ?? []) as any[]
+    if (list.length !== total) continue
+    const last = list.reduce((a, b) => (Number(b.installment_number) > Number(a.installment_number) ? b : a))
+    const sum = (k: string) => round2(list.reduce((s, x) => s + Number(x[k] ?? 0), 0))
+    const wantComm = round2(Number(r.commission_amount ?? 0))
+    const wantFee = round2(Number(r.processing_fee_amount ?? 0))
+    const wantGross = round2(Number(r.commission_amount ?? 0) + Number(r.producer_amount ?? 0) + Number(r.processing_fee_amount ?? 0))
+    const dComm = round2(wantComm - sum('commission_amount'))
+    const dFee = round2(wantFee - sum('processing_fee_amount'))
+    const dGross = round2(wantGross - sum('gross_amount'))
+    if (dComm === 0 && dFee === 0 && dGross === 0) continue
+    const comm = round2(Number(last.commission_amount) + dComm)
+    const fee = round2(Number(last.processing_fee_amount) + dFee)
+    const gross = round2(Number(last.gross_amount) + dGross)
+    await supabase.from('platform_commissions').update({
+      commission_amount: comm, processing_fee_amount: fee, gross_amount: gross,
+      net_amount: producerNetExcludingFee(gross, comm, fee),
+    }).eq('id', last.id)
+  }
+}
+
+// Parcelas 2..N (workshop avulso ou passe): só a linha de comissão da própria parcela.
+async function handleWorkshopInstallmentSibling(opts: {
+  supabase: any
+  payment: any
+  statusInterno: string
+  respond: (body: Record<string, unknown>) => Response
+  respHeaders: Record<string, string>
+}): Promise<Response> {
+  const { supabase, payment, statusInterno, respond, respHeaders } = opts
+  const installmentId = String(payment.installment)
+  // Só o pagamento da parcela precisa do pedido; os demais eventos respondem 200 na hora (fila sequencial).
+  if (statusInterno !== 'APROVADO') {
+    return respond({ status: 'ok', installment_sibling: true, internal_status: statusInterno })
+  }
+  const { data: regs } = await supabase
+    .from('workshop_registrations')
+    .select('id, workshop_id, pass_id, commission_amount, producer_amount, processing_fee_amount, installments')
+    .eq('asaas_installment_id', installmentId)
+  if (!regs?.length) {
+    console.warn(`[asaas-webhook][workshop-installment] pedido não encontrado para carnê=${installmentId} payment=${payment.id}`)
+    return new Response(JSON.stringify({ status: 'error', reason: 'installment_order_not_found' }), { status: 500, headers: respHeaders })
+  }
+  const ctx = await workshopInstallmentCtx(supabase, regs[0])
+  const res = await insertWorkshopInstallmentCommissions(supabase, regs, payment, installmentId, ctx)
+  if (res === 'exists') return respond({ status: 'already_processed' })
+  if (res === 'error') {
+    return new Response(JSON.stringify({ status: 'error', reason: 'commission_insert_failed' }), { status: 500, headers: respHeaders })
+  }
+  await reconcileWorkshopInstallmentRounding(supabase, regs, installmentId)
+  return respond({ status: 'ok', installment_sibling: true, payment_id: String(payment.id) })
+}
+
+async function workshopInstallmentCtx(supabase: any, reg: any): Promise<WorkshopInstallmentCtx> {
+  if (reg.pass_id) {
+    const { data } = await supabase.from('workshop_passes').select('event_id, created_by').eq('id', reg.pass_id).maybeSingle()
+    return { eventId: data?.event_id ?? null, producerId: data?.created_by ?? null }
+  }
+  const { data } = await supabase.from('workshops').select('event_id, created_by').eq('id', reg.workshop_id).maybeSingle()
+  return { eventId: data?.event_id ?? null, producerId: data?.created_by ?? null }
+}
+
+// 1a parcela confirmada: registra as outras parcelas (a Asaas só avisa a 1a na confirmação) e pede a
+// antecipação do carnê se o limite cobrir. Nunca lança.
+async function registerWorkshopSiblingsAndAnticipate(opts: {
+  supabase: any
+  payment: any
+  regs: any[]
+  ctx: WorkshopInstallmentCtx
+  asaasBaseUrl: string
+  asaasApiKey: string
+}): Promise<void> {
+  const { supabase, payment, regs, ctx, asaasBaseUrl, asaasApiKey } = opts
+  const installmentId = String(payment.installment)
+  try {
+    const listRes = await fetch(`${asaasBaseUrl}/payments?installment=${encodeURIComponent(installmentId)}&limit=50`, {
+      headers: { 'access_token': asaasApiKey, 'Content-Type': 'application/json' },
+    })
+    const listData = await listRes.json().catch(() => ({}))
+    const others = (Array.isArray(listData?.data) ? listData.data : [])
+      .filter((p: any) => String(p.id) !== String(payment.id) && ['CONFIRMED', 'RECEIVED', 'RECEIVED_IN_CASH'].includes(String(p.status)))
+    for (const parcela of others) {
+      await insertWorkshopInstallmentCommissions(supabase, regs, parcela, installmentId, ctx)
+    }
+    await reconcileWorkshopInstallmentRounding(supabase, regs, installmentId)
+    console.log(`[asaas-webhook][workshop] carnê=${installmentId}: ${others.length} parcela(s) irmã(s) registrada(s)`)
+
+    const carneGross = round2(Number(payment.value ?? 0) + others.reduce((s: number, p: any) => s + Number(p.value ?? 0), 0))
+    const attempt = await requestInstallmentAnticipation({
+      baseUrl: asaasBaseUrl, apiKey: asaasApiKey, installmentId, grossTotal: carneGross,
+    })
+    const antStatus = attempt.status === 'requested' ? 'PENDING' : attempt.status === 'no_limit' ? 'NO_LIMIT' : 'REQUEST_ERROR'
+    const ant: any = attempt.status === 'requested' ? attempt.anticipation : null
+    await supabase.from('platform_commissions').update({
+      anticipation_status: antStatus,
+      anticipation_id: ant?.id ? String(ant.id) : null,
+      anticipation_fee: ant?.fee != null ? Number(ant.fee) : null,
+    }).eq('asaas_installment_id', installmentId)
+    console.log(`[asaas-webhook][workshop] antecipação carnê=${installmentId}: ${antStatus}` +
+      (attempt.status === 'error' ? ` (${attempt.message})` : '') +
+      (attempt.status === 'no_limit' ? ` (limite disponível=${attempt.available})` : ''))
+  } catch (e: any) {
+    console.error('[asaas-webhook][workshop] falha nas parcelas irmãs/antecipação:', e?.message)
+  }
+}
+
 // ── Eventos de antecipação do carnê (RECEIVABLE_ANTICIPATION_*) ─────────────────────────────────────────
 // Atualiza o status nas linhas de comissão do carnê. CREDITED = o split caiu na subconta agora: a data de
 // crédito de TODAS as parcelas vira hoje (e o repasse respeita D+7 desde a venda, como sempre). Idempotente.
@@ -644,6 +810,12 @@ async function handleAudienceTicket(opts: {
     }
   }
 
+  // E-mails mostram o PEDIDO inteiro (num carnê esta cobrança é só uma parcela).
+  const emailGross      = shareOfOrder < 1 ? round2(orderGross) : grossAmount
+  const emailFee        = shareOfOrder < 1 ? round2(sumProcessingFee(tickets)) : processingFeeTotal
+  const emailCommission = shareOfOrder < 1 ? round2(tickets.reduce((s: number, t: any) => s + Number(t.commission_amount ?? 0), 0)) : commissionTotal
+  const emailNet        = shareOfOrder < 1 ? round2(tickets.reduce((s: number, t: any) => s + Number(t.producer_amount ?? 0), 0)) : producerTotal
+
   // ── Emails ──────────────────────────────────────────────────────────────
   try {
     const { data: produtorProfile } = eventData?.created_by
@@ -683,8 +855,8 @@ async function handleAudienceTicket(opts: {
         eventoNome:  eventData?.name,
         eventoLocal: eventoLocalFmt,
         eventoData:  eventoDataFmt,
-        valorPago:   grossAmount,
-        taxaPagamento: processingFeeTotal,
+        valorPago:   emailGross,
+        taxaPagamento: emailFee,
         tickets:     ticketLinks,
         appUrl,
       }))
@@ -699,10 +871,10 @@ async function handleAudienceTicket(opts: {
         buyerEmail,
         quantidade:    tickets.length,
         // valor bruto da venda (sem a linha, que o comprador paga à parte e não entra no repasse)
-        valorBruto:    parseFloat((grossAmount - processingFeeTotal).toFixed(2)),
-        comissao:      commissionTotal,
-        taxaPagamento: processingFeeTotal,
-        valorLiquido:  producerTotal,
+        valorBruto:    parseFloat((emailGross - emailFee).toFixed(2)),
+        comissao:      emailCommission,
+        taxaPagamento: emailFee,
+        valorLiquido:  emailNet,
         appUrl,
       }))
     }
@@ -731,12 +903,23 @@ async function handleWorkshopRegistration(opts: {
   payment: any
   statusInterno: string
   registrationId: string
+  asaasBaseUrl: string
+  asaasApiKey: string
 }): Promise<Response> {
-  const { supabase, payment, statusInterno, registrationId } = opts
+  const { supabase, payment, statusInterno, registrationId, asaasBaseUrl, asaasApiKey } = opts
 
   const respHeaders = { ...corsHeaders, 'Content-Type': 'application/json' }
   const respond = (body: Record<string, unknown>) =>
     new Response(JSON.stringify(body), { status: 200, headers: respHeaders })
+
+  // Cartão parcelado: parcelas 2..N chegam com payment.id diferente do gravado na inscrição (a 1a).
+  if (payment.installment) {
+    const { data: ownReg } = await supabase
+      .from('workshop_registrations').select('id').eq('id', registrationId).eq('payment_id', String(payment.id)).maybeSingle()
+    if (!ownReg) {
+      return await handleWorkshopInstallmentSibling({ supabase, payment, statusInterno, respond, respHeaders })
+    }
+  }
 
   // Idempotência: se já registramos comissão pra este payment, ignora.
   if (statusInterno === 'APROVADO') {
@@ -779,7 +962,7 @@ async function handleWorkshopRegistration(opts: {
     .eq('id', registrationId)
     .select(`
       id, workshop_id, buyer_name, buyer_email, access_token,
-      commission_amount, producer_amount, fee_mode, preco_pago, is_combo, processing_fee_amount
+      commission_amount, producer_amount, fee_mode, preco_pago, is_combo, processing_fee_amount, installments, pass_id
     `)
     .maybeSingle()
 
@@ -802,8 +985,11 @@ async function handleWorkshopRegistration(opts: {
 
   // ── APROVADO: registra comissão + emails ────────────────────────────────
   const grossAmount      = Number(payment.value ?? 0)
-  const commissionAmount = parseFloat(Number(updatedRow.commission_amount ?? 0).toFixed(2))
-  const workshopProcessingFee = sumProcessingFee([updatedRow])
+  // Cartão parcelado: esta cobrança é só UMA parcela; comissão e linha do pedido entram na proporção dela.
+  const wsOrderGross = Number(updatedRow.commission_amount ?? 0) + Number(updatedRow.producer_amount ?? 0) + Number(updatedRow.processing_fee_amount ?? 0)
+  const wsShare = installmentShare(grossAmount, wsOrderGross, Number(updatedRow.installments ?? 1))
+  const commissionAmount = parseFloat((Number(updatedRow.commission_amount ?? 0) * wsShare).toFixed(2))
+  const workshopProcessingFee = round2(sumProcessingFee([updatedRow]) * wsShare)
   const producerAmount   = producerNetExcludingFee(grossAmount, commissionAmount, workshopProcessingFee)
 
   const { data: workshop } = await supabase
@@ -831,7 +1017,20 @@ async function handleWorkshopRegistration(opts: {
       release_at:                computeReleaseAt(workshopPaidAt, payment),
 
       card_credit_at:             computeCardCreditAt(workshopPaidAt, payment),
+      ...(payment.installment ? {
+        asaas_installment_id: String(payment.installment),
+        installment_number:   payment.installmentNumber != null ? Number(payment.installmentNumber) : null,
+        installment_count:    Number(updatedRow.installments ?? 0) || null,
+      } : {}),
     })
+
+  if (!commErr && payment.installment && Number(updatedRow.installments ?? 1) > 1) {
+    await registerWorkshopSiblingsAndAnticipate({
+      supabase, payment, regs: [updatedRow],
+      ctx: { eventId: workshop?.event_id ?? null, producerId: workshop?.created_by ?? null },
+      asaasBaseUrl, asaasApiKey,
+    })
+  }
 
   if (commErr) {
     console.error('[asaas-webhook][workshop] erro inserir comissão:', commErr.message)
@@ -845,6 +1044,12 @@ async function handleWorkshopRegistration(opts: {
       grossAmount, kind: 'workshop',
     })
   }
+
+  // E-mails mostram o PEDIDO inteiro (num carnê esta cobrança é só uma parcela).
+  const wsEmailGross      = wsShare < 1 ? round2(wsOrderGross) : grossAmount
+  const wsEmailFee        = wsShare < 1 ? round2(sumProcessingFee([updatedRow])) : workshopProcessingFee
+  const wsEmailCommission = wsShare < 1 ? round2(Number(updatedRow.commission_amount ?? 0)) : commissionAmount
+  const wsEmailNet        = wsShare < 1 ? round2(Number(updatedRow.producer_amount ?? 0)) : producerAmount
 
   // ── Emails ───────────────────────────────────────────────────────────────
   try {
@@ -874,8 +1079,8 @@ async function handleWorkshopRegistration(opts: {
         modalidade:    workshop?.modalidade,
         dataInicio:    dataInicioFmt,
         local:         workshop?.local,
-        valorPago:     grossAmount,
-        taxaPagamento: workshopProcessingFee,
+        valorPago:     wsEmailGross,
+        taxaPagamento: wsEmailFee,
         voucherUrl,
         isCombo:       Boolean(updatedRow.is_combo),
         appUrl,
@@ -889,10 +1094,10 @@ async function handleWorkshopRegistration(opts: {
         workshopNome:  workshop?.name,
         buyerName:     updatedRow.buyer_name,
         buyerEmail:    updatedRow.buyer_email,
-        valorBruto:    parseFloat((grossAmount - workshopProcessingFee).toFixed(2)),
-        taxaPagamento: workshopProcessingFee,
-        comissao:      commissionAmount,
-        valorLiquido:  producerAmount,
+        valorBruto:    parseFloat((wsEmailGross - wsEmailFee).toFixed(2)),
+        taxaPagamento: wsEmailFee,
+        comissao:      wsEmailCommission,
+        valorLiquido:  wsEmailNet,
         isCombo:       Boolean(updatedRow.is_combo),
         appUrl,
       }))
@@ -923,12 +1128,23 @@ async function handleWorkshopPassPayment(opts: {
   payment: any
   statusInterno: string
   passGroupId: string
+  asaasBaseUrl: string
+  asaasApiKey: string
 }): Promise<Response> {
-  const { supabase, payment, statusInterno, passGroupId } = opts
+  const { supabase, payment, statusInterno, passGroupId, asaasBaseUrl, asaasApiKey } = opts
 
   const respHeaders = { ...corsHeaders, 'Content-Type': 'application/json' }
   const respond = (body: Record<string, unknown>) =>
     new Response(JSON.stringify(body), { status: 200, headers: respHeaders })
+
+  // Cartão parcelado: parcelas 2..N chegam com payment.id diferente do gravado nas inscrições (a 1a).
+  if (payment.installment) {
+    const { data: ownReg } = await supabase
+      .from('workshop_registrations').select('id').eq('pass_group_id', passGroupId).eq('payment_id', String(payment.id)).limit(1).maybeSingle()
+    if (!ownReg) {
+      return await handleWorkshopInstallmentSibling({ supabase, payment, statusInterno, respond, respHeaders })
+    }
+  }
 
   if (statusInterno === 'APROVADO') {
     const { data: existing } = await supabase
@@ -972,7 +1188,7 @@ async function handleWorkshopPassPayment(opts: {
     .eq('pass_group_id', passGroupId)
     .select(`
       id, workshop_id, pass_id, buyer_name, buyer_email, access_token,
-      commission_amount, producer_amount, fee_mode, preco_pago, is_combo, processing_fee_amount
+      commission_amount, producer_amount, fee_mode, preco_pago, is_combo, processing_fee_amount, installments
     `)
 
   if (updErr) {
@@ -1002,22 +1218,36 @@ async function handleWorkshopPassPayment(opts: {
 
   const paidAt = (updatePayload.paid_at as string | undefined) ?? new Date().toISOString()
 
-  const commissionRows = updatedRows.map((r: any) => ({
-    event_id:                  pass?.event_id ?? null,
-    producer_id:               pass?.created_by ?? null,
-    // gross = o que o comprador pagou por este workshop = comissão + líquido do produtor + linha
-    gross_amount:              parseFloat((Number(r.commission_amount ?? 0) + Number(r.producer_amount ?? 0) + Number(r.processing_fee_amount ?? 0)).toFixed(2)),
-    commission_amount:         parseFloat(Number(r.commission_amount ?? 0).toFixed(2)),
-    net_amount:                parseFloat(Number(r.producer_amount ?? 0).toFixed(2)),
-    processing_fee_amount:     parseFloat(Number(r.processing_fee_amount ?? 0).toFixed(2)),
-    asaas_payment_id:          String(payment.id),
-    commission_type:           'percent',
-    workshop_registration_id:  r.id,
-    kind:                      'workshop',
-    release_at:                computeReleaseAt(paidAt, payment),
+  // Cartão parcelado: esta cobrança é só UMA parcela; cada linha entra na proporção dela (share = 1 à vista).
+  const passOrderGross = updatedRows.reduce((s: number, r: any) =>
+    s + Number(r.commission_amount ?? 0) + Number(r.producer_amount ?? 0) + Number(r.processing_fee_amount ?? 0), 0)
+  const passShare = installmentShare(Number(payment.value ?? 0), passOrderGross, Number(updatedRows[0]?.installments ?? 1))
+  const commissionRows = updatedRows.map((r: any) => {
+    const comm = round2(Number(r.commission_amount ?? 0) * passShare)
+    const fee = round2(Number(r.processing_fee_amount ?? 0) * passShare)
+    const gross = round2((Number(r.commission_amount ?? 0) + Number(r.producer_amount ?? 0) + Number(r.processing_fee_amount ?? 0)) * passShare)
+    return {
+      event_id:                  pass?.event_id ?? null,
+      producer_id:               pass?.created_by ?? null,
+      // gross = o que o comprador pagou por este workshop = comissão + líquido do produtor + linha
+      gross_amount:              gross,
+      commission_amount:         comm,
+      net_amount:                passShare === 1 ? parseFloat(Number(r.producer_amount ?? 0).toFixed(2)) : producerNetExcludingFee(gross, comm, fee),
+      processing_fee_amount:     fee,
+      asaas_payment_id:          String(payment.id),
+      commission_type:           'percent',
+      workshop_registration_id:  r.id,
+      kind:                      'workshop',
+      release_at:                computeReleaseAt(paidAt, payment),
 
-    card_credit_at:             computeCardCreditAt(paidAt, payment),
-  }))
+      card_credit_at:             computeCardCreditAt(paidAt, payment),
+      ...(payment.installment ? {
+        asaas_installment_id: String(payment.installment),
+        installment_number:   payment.installmentNumber != null ? Number(payment.installmentNumber) : null,
+        installment_count:    Number(updatedRows[0]?.installments ?? 0) || null,
+      } : {}),
+    }
+  })
 
   // INSERT simples (não upsert): o índice único de (asaas_payment_id, workshop_registration_id) é PARCIAL
   // (WHERE workshop_registration_id IS NOT NULL) e o Postgres recusa ON CONFLICT (cols) sem o predicado
@@ -1026,6 +1256,14 @@ async function handleWorkshopPassPayment(opts: {
   const { error: commErr } = await supabase
     .from('platform_commissions')
     .insert(commissionRows)
+
+  if (!commErr && payment.installment && Number(updatedRows[0]?.installments ?? 1) > 1) {
+    await registerWorkshopSiblingsAndAnticipate({
+      supabase, payment, regs: updatedRows,
+      ctx: { eventId: pass?.event_id ?? null, producerId: pass?.created_by ?? null },
+      asaasBaseUrl, asaasApiKey,
+    })
+  }
 
   if (commErr) {
     console.error('[asaas-webhook][workshop-pass] erro inserir comissões:', commErr.message)
@@ -2269,6 +2507,8 @@ Deno.serve(async (req) => {
         payment,
         statusInterno,
         registrationId: workshopRegistrationId,
+        asaasBaseUrl: ASAAS_BASE_URL,
+        asaasApiKey:  ASAAS_API_KEY,
       })
     }
 
@@ -2279,6 +2519,8 @@ Deno.serve(async (req) => {
         payment,
         statusInterno,
         passGroupId: workshopPassGroupId,
+        asaasBaseUrl: ASAAS_BASE_URL,
+        asaasApiKey:  ASAAS_API_KEY,
       })
     }
 
