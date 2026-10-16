@@ -26,7 +26,7 @@ import {
   type PaymentMethod,
   type ProcessingFeeConfig,
 } from './processing-fee.ts'
-import { applyUfRules } from './uf-rules.ts'
+import { applyUfRules, getUfRule } from './uf-rules.ts'
 
 export type WorkshopProcessingPayer = 'comprador' | 'produtor'
 
@@ -123,6 +123,10 @@ export function computeWorkshopCheckout(input: WorkshopCheckoutInput): WorkshopC
     warnings,
   }
 
+  if (active && input.method === 'card' && (input.installments ?? 1) > 1 && getUfRule(input.uf)) {
+    // Parcelado fica desligado nas UFs com regra própria de taxa online (AC, RR, AL, RJ, PR) até validação jurídica.
+    throw new Error('Parcelamento indisponível neste estado: pague à vista no cartão ou no Pix')
+  }
   if (!active || forcedAbsorb || !(chargedBeforeFee > 0)) return base
   if (!input.method) throw new Error('Escolha a forma de pagamento')
 
@@ -138,9 +142,12 @@ export function computeWorkshopCheckout(input: WorkshopCheckoutInput): WorkshopC
     uf: input.uf,
     face: precoPagoTotal,
     commissionRepassed: repassar ? commissionTotal0 : 0,
-    fee: calc.fee,
+    fee: calc.paymentFee,
   })
-  const fee = uf.fee
+  // Taxa de pagamento (pode ser assumida pelo produtor) + taxa de parcelamento (sempre do comprador).
+  const payFee = uf.fee
+  const instFee = calc.installmentFee
+  const fee = round2(payFee + instFee)
   if (fee <= 0) return { ...base, capApplied: calc.capApplied, ufCapped: uf.capped }
 
   if (input.payer !== 'produtor') {
@@ -157,9 +164,10 @@ export function computeWorkshopCheckout(input: WorkshopCheckoutInput): WorkshopC
     }
   }
 
-  // payer = produtor: a linha sai do líquido do produtor e vira comissão da CoreoHub.
+  // payer = produtor: a taxa de pagamento sai do líquido do produtor e vira comissão da CoreoHub; a taxa de
+  // parcelamento continua do comprador.
   const weights = items.map((it) => (it.producer_amount > 0 ? it.producer_amount : 1))
-  const parts = allocateProportional(fee, weights)
+  const parts = allocateProportional(payFee, weights)
   let absorbed = 0
   const adjusted = items.map((it, i) => {
     const take = Math.min(parts[i], it.producer_amount) // nunca deixa o líquido do produtor negativo
@@ -170,9 +178,13 @@ export function computeWorkshopCheckout(input: WorkshopCheckoutInput): WorkshopC
       commission_amount: round2(it.commission_amount + take),
     }
   })
+  const instWeights = adjusted.map((it) => it.preco_pago + (repassar ? it.commission_amount : 0))
+  const instParts = allocateProportional(instFee, instWeights)
   return {
     ...base,
-    items: adjusted,
+    items: adjusted.map((it, i) => ({ ...it, processing_fee_amount: instParts[i] })),
+    processingFee: instFee,
+    chargedTotal: round2(chargedBeforeFee + instFee),
     producerPaidFee: absorbed,
     producerTotal: round2(producerTotal0 - absorbed),
     commissionTotal: round2(commissionTotal0 + absorbed),

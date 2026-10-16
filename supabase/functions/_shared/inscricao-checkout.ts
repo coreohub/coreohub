@@ -28,7 +28,7 @@ import {
   type PaymentMethod,
   type ProcessingFeeConfig,
 } from './processing-fee.ts'
-import { applyUfRules } from './uf-rules.ts'
+import { applyUfRules, getUfRule } from './uf-rules.ts'
 
 export type InscricaoProcessingMode = 'fechado_total' | 'pix_fechado_cartao_taxa' | 'taxa_todas'
 
@@ -136,6 +136,10 @@ export function computeInscricaoCheckout(input: InscricaoCheckoutInput): Inscric
   if (!(chargedBeforeFee > 0)) return base
 
   const installments = input.installments ?? 1
+  if (input.method === 'card' && installments > 1 && getUfRule(input.uf)) {
+    // Parcelado fica desligado nas UFs com regra própria de taxa online (AC, RR, AL, RJ, PR) até validação jurídica.
+    throw new Error('Parcelamento indisponível neste estado: pague à vista no cartão ou no Pix')
+  }
   const buyerPays =
     mode === 'taxa_todas' || (mode === 'pix_fechado_cartao_taxa' && input.method === 'card')
 
@@ -149,8 +153,9 @@ export function computeInscricaoCheckout(input: InscricaoCheckoutInput): Inscric
     })
     const face = sum((i) => i.baseFee)
     const commissionRepassed = String(input.feeMode) === 'repassar' ? sum((i) => i.commission) : 0
-    const uf = applyUfRules({ uf: input.uf, face, commissionRepassed, fee: calc.fee })
-    const fee = uf.fee
+    const uf = applyUfRules({ uf: input.uf, face, commissionRepassed, fee: calc.paymentFee })
+    // Taxa de pagamento (limitada por UF) + taxa de parcelamento (parcelado é recusado nas UFs com regra própria).
+    const fee = round2(uf.fee + calc.installmentFee)
     const warnings = uf.warnings
     if (fee <= 0) return { ...base, capApplied: calc.capApplied, ufCapped: uf.capped, warnings }
     const parts = allocateProportional(fee, items.map((i) => i.charged))
@@ -168,6 +173,9 @@ export function computeInscricaoCheckout(input: InscricaoCheckoutInput): Inscric
 
   // fechado_total no cartão: o produtor paga o custo real (R$ 0,49 + taxa % sobre o total cobrado, sem margem).
   if (mode === 'fechado_total' && input.method === 'card') {
+    if (installments > 1) {
+      throw new Error('Parcelamento indisponível para esta inscrição: pague à vista no cartão ou no Pix')
+    }
     const cost = asaasCost(chargedBeforeFee, 'card', installments, input.config)
     const parts = allocateProportional(cost, items.map((i) => (i.producer > 0 ? i.producer : 1)))
     let absorbed = 0
