@@ -5,6 +5,7 @@ import { computeInscricaoCheckout, inscricaoLineApplies, normalizeInscricaoMode,
 import { computeWorkshopCheckout } from '../supabase/functions/_shared/workshop-checkout';
 import { computeAudienceCheckout } from '../supabase/functions/_shared/audience-checkout';
 import { round2, type PaymentMethod } from '../supabase/functions/_shared/processing-fee';
+import { installmentConfigFor, installmentDisclosure } from '../supabase/functions/_shared/installment-offer';
 
 type Payer = 'comprador' | 'produtor';
 type SimProduct = 'inscricao' | 'ingresso' | 'workshop' | 'passe';
@@ -17,6 +18,7 @@ interface EventInfo {
   commission_percent: number | null;
   fee_mode: string | null;
   state: string | null;
+  payment_sandbox: boolean | null;
 }
 interface PayerRow { id: string; name: string; processing_payer: string | null }
 
@@ -64,6 +66,7 @@ const TaxasESimulador: React.FC<{ eventId: string | null }> = ({ eventId }) => {
   const [simProduct, setSimProduct] = useState<SimProduct>('inscricao');
   const [simPrice, setSimPrice] = useState('100');
   const [simMethod, setSimMethod] = useState<PaymentMethod>('pix');
+  const [simInstallments, setSimInstallments] = useState(1);
   const [simPayer, setSimPayer] = useState<Payer>('comprador');
 
   useEffect(() => {
@@ -74,7 +77,7 @@ const TaxasESimulador: React.FC<{ eventId: string | null }> = ({ eventId }) => {
       setLoadError(null);
       const [evRes, wsRes, psRes] = await Promise.all([
         supabase.from('events')
-          .select('billing_plan, processing_fee_enabled, inscricao_processing_mode, audience_processing_payer, commission_percent, fee_mode, state')
+          .select('billing_plan, processing_fee_enabled, inscricao_processing_mode, audience_processing_payer, commission_percent, fee_mode, state, payment_sandbox')
           .eq('id', eventId).maybeSingle(),
         supabase.from('workshops').select('id, name, processing_payer').eq('event_id', eventId).order('created_at'),
         supabase.from('workshop_passes').select('id, name, processing_payer').eq('event_id', eventId).order('created_at'),
@@ -111,6 +114,11 @@ const TaxasESimulador: React.FC<{ eventId: string | null }> = ({ eventId }) => {
     setSaveMsg({ ok: true, text: 'Salvo. Vale para as próximas compras.' });
   };
 
+  // Cartão parcelado: 3x só em evento sandbox (produção segue em 1x até o teste real).
+  const feeConfig = useMemo(() => installmentConfigFor(Boolean(ev?.payment_sandbox)), [ev]);
+  const canInstall = Boolean(ev) && feeConfig.maxInstallments > 1 && simMethod === 'card' && simProduct !== 'inscricao';
+  const nParcelas = canInstall ? simInstallments : 1;
+
   const sim = useMemo(() => {
     if (!ev) return null;
     const price = round2(Number(simPrice.replace(',', '.')));
@@ -125,26 +133,29 @@ const TaxasESimulador: React.FC<{ eventId: string | null }> = ({ eventId }) => {
           items: [{ baseFee: price, charged: repassar ? round2(price + commission) : price, producer: repassar ? price : round2(price - commission), commission }],
           billingPlan: ev.billing_plan, mode, processingFeeEnabled: true, feeMode, method: simMethod, uf: ev.state,
         });
-        return { total: r.chargedTotal, fee: r.processingFee, producerPaid: r.producerPaidFee, producer: r.producerTotal, commission: r.commissionTotal, warnings: r.warnings, noLine: !planEligible };
+        return { total: r.chargedTotal, fee: r.processingFee, producerPaid: r.producerPaidFee, producer: r.producerTotal, commission: r.commissionTotal, warnings: r.warnings, noLine: !planEligible, installmentFee: 0, cash: r.chargedTotal, n: 1, error: null as string | null };
       }
-      if (simProduct === 'ingresso') {
-        const r = computeAudienceCheckout({
-          resolved: [{ idx: 0, nome: 'Ingresso', kind: 'inteira', quantity: 1, precoUnit: price, quantidadeTotal: null }],
-          totalBase: price, discountTotal: 0, commissionPercent: pct, feeMode, processingFeeEnabled: true,
-          payer: simPayer, method: simMethod, uf: ev.state,
-        });
-        return { total: r.chargedTotal, fee: r.processingFee, producerPaid: r.producerPaidFee, producer: r.producerTotal, commission: r.commissionTotal, warnings: r.warnings, noLine: false };
-      }
-      const r = computeWorkshopCheckout({
-        product: simProduct, itemShares: [price], commissionPercent: pct, feeMode, processingFeeEnabled: true,
-        payer: simPayer, method: simMethod, uf: ev.state,
-      });
-      return { total: r.chargedTotal, fee: r.processingFee, producerPaid: r.producerPaidFee, producer: r.producerTotal, commission: r.commissionTotal, warnings: r.warnings, noLine: false };
+      const calc = (n: number) => simProduct === 'ingresso'
+        ? computeAudienceCheckout({
+            resolved: [{ idx: 0, nome: 'Ingresso', kind: 'inteira', quantity: 1, precoUnit: price, quantidadeTotal: null }],
+            totalBase: price, discountTotal: 0, commissionPercent: pct, feeMode, processingFeeEnabled: true,
+            payer: simPayer, method: simMethod, installments: n, uf: ev.state, config: feeConfig,
+          })
+        : computeWorkshopCheckout({
+            product: simProduct, itemShares: [price], commissionPercent: pct, feeMode, processingFeeEnabled: true,
+            payer: simPayer, method: simMethod, installments: n, uf: ev.state, config: feeConfig,
+          });
+      const r = calc(nParcelas);
+      const cash = nParcelas > 1 ? calc(1).chargedTotal : r.chargedTotal;
+      const installmentFee = nParcelas > 1 ? round2(r.chargedTotal - cash) : 0;
+      return { total: r.chargedTotal, fee: r.processingFee, producerPaid: r.producerPaidFee, producer: r.producerTotal, commission: r.commissionTotal, warnings: r.warnings, noLine: false, installmentFee, cash, n: nParcelas, error: null as string | null };
     } catch (e: any) {
       console.error('[TaxasESimulador] simulação:', e?.message ?? e);
-      return null;
+      // Parcelamento recusado (pedido mínimo, parcela mínima, estado): explica em vez de sumir com o resultado.
+      return nParcelas > 1 ? { error: String(e?.message ?? 'Parcelamento indisponível') } as any : null;
     }
-  }, [ev, simProduct, simPrice, simMethod, simPayer, mode, planEligible]);
+  }, [ev, simProduct, simPrice, simMethod, simPayer, mode, planEligible, feeConfig, nParcelas]);
+  const simDisclosure = sim && !sim.error && sim.n > 1 ? installmentDisclosure(sim.cash, sim.total, sim.n) : null;
 
   const card = 'bg-white shadow-sm dark:bg-white/5 dark:shadow-none border border-slate-200 dark:border-white/10 rounded-3xl overflow-hidden';
   const label = 'text-[10px] font-black uppercase tracking-widest text-slate-500';
@@ -285,9 +296,20 @@ const TaxasESimulador: React.FC<{ eventId: string | null }> = ({ eventId }) => {
                   <select value={simMethod} onChange={e => setSimMethod(e.target.value as PaymentMethod)}
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-xs font-bold text-slate-900 dark:text-white">
                     <option value="pix">Pix</option>
-                    <option value="card">Cartão (à vista)</option>
+                    <option value="card">{feeConfig.maxInstallments > 1 && simProduct !== 'inscricao' ? 'Cartão' : 'Cartão (à vista)'}</option>
                   </select>
                 </label>
+                {canInstall && (
+                  <label className="space-y-1">
+                    <span className={label}>Parcelas</span>
+                    <select value={simInstallments} onChange={e => setSimInstallments(Number(e.target.value))}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-xs font-bold text-slate-900 dark:text-white">
+                      {Array.from({ length: feeConfig.maxInstallments }, (_, i) => i + 1).map(n => (
+                        <option key={n} value={n}>{n === 1 ? 'À vista' : `${n}x`}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 {simProduct !== 'inscricao' && (
                   <label className="space-y-1">
                     <span className={label}>Quem paga</span>
@@ -300,7 +322,9 @@ const TaxasESimulador: React.FC<{ eventId: string | null }> = ({ eventId }) => {
                 )}
               </div>
 
-              {!sim ? (
+              {sim?.error ? (
+                <p className="text-xs text-amber-700 dark:text-amber-400">{sim.error}</p>
+              ) : !sim ? (
                 <p className="text-xs text-slate-500">Informe um preço maior que zero para simular.</p>
               ) : (
                 <div className="grid sm:grid-cols-2 gap-3">
@@ -308,8 +332,18 @@ const TaxasESimulador: React.FC<{ eventId: string | null }> = ({ eventId }) => {
                     <p className={label}>O comprador paga</p>
                     <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{brl(sim.total)}</p>
                     <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
-                      {sim.fee > 0 ? `Inclui taxa de pagamento de ${brl(sim.fee)}` : 'Sem taxa de pagamento para o comprador'}
+                      {sim.fee > 0
+                        ? (sim.installmentFee > 0
+                            ? `Inclui taxa de pagamento de ${brl(round2(sim.fee - sim.installmentFee))} e taxa de parcelamento de ${brl(sim.installmentFee)}`
+                            : `Inclui taxa de pagamento de ${brl(sim.fee)}`)
+                        : 'Sem taxa de pagamento para o comprador'}
                     </p>
+                    {sim.n > 1 && (
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 tabular-nums">
+                        {sim.n}x de {brl(sim.total / sim.n)}
+                        {simDisclosure ? ` · juros de ${(simDisclosure.monthlyRate * 100).toFixed(2).replace('.', ',')}% a.m. · CET de ${(simDisclosure.annualRate * 100).toFixed(2).replace('.', ',')}% a.a.` : ''}
+                      </p>
+                    )}
                   </div>
                   <div className="p-4 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10">
                     <p className={label}>Você recebe</p>
