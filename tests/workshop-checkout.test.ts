@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { computeWorkshopCheckout } from '../supabase/functions/_shared/workshop-checkout';
 import { PROCESSING_FEE_CONFIG } from '../supabase/functions/_shared/processing-fee';
 
-const PARCELADO = { ...PROCESSING_FEE_CONFIG, maxInstallments: 12 };
+const PARCELADO = { ...PROCESSING_FEE_CONFIG, maxInstallments: 12, installment: { ...PROCESSING_FEE_CONFIG.installment, minOrder: 0, minInstallmentValue: 1 } };
 
 const base = (itemShares: number[], over: Record<string, unknown> = {}) => ({
   product: 'workshop' as const,

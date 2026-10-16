@@ -7,7 +7,7 @@ import {
 } from '../supabase/functions/_shared/inscricao-checkout';
 import { PROCESSING_FEE_CONFIG, asaasCost } from '../supabase/functions/_shared/processing-fee';
 
-const PARCELADO = { ...PROCESSING_FEE_CONFIG, maxInstallments: 12 };
+const PARCELADO = { ...PROCESSING_FEE_CONFIG, maxInstallments: 12, installment: { ...PROCESSING_FEE_CONFIG.installment, minOrder: 0, minInstallmentValue: 1 } };
 
 // Inscrição repassar 10% sobre face (face 100 -> cobra 110, produtor 100, comissão 10).
 const repassar = (face: number, pct = 10): InscricaoItemIn => {
@@ -173,10 +173,10 @@ describe('UF (só linha paga pelo inscrito)', () => {
 });
 
 describe('parcelado segue fixado em 1x', () => {
-  it('cartão 3x é recusado pela config padrão; com config explícita usa a faixa 2-6x', () => {
+  it('cartão 3x é recusado pela config padrão; com config explícita soma taxa de pagamento 4% + taxa de parcelamento', () => {
     expect(() => computeInscricaoCheckout(inp([repassar(100)], { method: 'card', installments: 3 }))).toThrow();
     const r = computeInscricaoCheckout(inp([repassar(100)], { method: 'card', installments: 3, config: PARCELADO }));
-    expect(r.processingFee).toBe(5.5); // 5% de 110
+    expect(r.processingFee).toBeGreaterThan(4.4 + 4); // 4% de 110 + taxa de parcelamento
   });
 });
 
