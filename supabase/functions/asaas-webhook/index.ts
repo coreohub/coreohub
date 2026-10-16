@@ -174,6 +174,53 @@ async function dispararEmail(
   }
 }
 
+// Insere a linha de comissão de UMA parcela (cartão parcelado, plateia), proporcional ao valor dela.
+// Idempotente por asaas_payment_id. Usada pela 1a parcela (pras demais) e pelos eventos das parcelas 2..N.
+async function insertAudienceInstallmentCommission(
+  supabase: any,
+  tickets: any[],
+  parcela: any,
+  installmentId: string,
+  groupId: string,
+): Promise<'ok' | 'exists' | 'error'> {
+  const { data: existing } = await supabase
+    .from('platform_commissions').select('id').eq('asaas_payment_id', String(parcela.id)).maybeSingle()
+  if (existing) return 'exists'
+
+  const grossAmount = Number(parcela.value ?? 0)
+  const orderGross = tickets.reduce((s: number, t: any) =>
+    s + Number(t.producer_amount ?? 0) + Number(t.commission_amount ?? 0) + Number(t.processing_fee_amount ?? 0), 0)
+  const share = installmentShare(grossAmount, orderGross, Number(tickets[0].installments ?? 1))
+  const commission = round2(tickets.reduce((s: number, t: any) => s + Number(t.commission_amount ?? 0), 0) * share)
+  const feeAmount = round2(sumProcessingFee(tickets) * share)
+  const net = producerNetExcludingFee(grossAmount, commission, feeAmount)
+
+  const { data: ev } = await supabase.from('events').select('created_by').eq('id', tickets[0].event_id).maybeSingle()
+  const paidAt = new Date().toISOString()
+  const { error } = await supabase.from('platform_commissions').insert({
+    event_id:          tickets[0].event_id,
+    producer_id:       ev?.created_by ?? null,
+    gross_amount:      grossAmount,
+    commission_amount: commission,
+    net_amount:        net,
+    processing_fee_amount: feeAmount,
+    asaas_payment_id:  String(parcela.id),
+    commission_type:   'percent',
+    audience_ticket_group_id: groupId, // FK pra audience_tickets(id): o id vindo do externalReference (AT:<id>)
+    kind:              'audience',
+    release_at:        computeReleaseAt(paidAt, parcela),
+    card_credit_at:    computeCardCreditAt(paidAt, parcela),
+    asaas_installment_id: installmentId,
+    installment_number:   parcela.installmentNumber != null ? Number(parcela.installmentNumber) : null,
+    installment_count:    Number(tickets[0].installments ?? 0) || null,
+  })
+  if (error) {
+    console.error('[asaas-webhook][audience-installment] erro inserir comissão:', error.message)
+    return 'error'
+  }
+  return 'ok'
+}
+
 // ── Parcelas 2..N de um carnê de cartão (plateia): só a linha de comissão da própria parcela ──────────────
 // A 1a parcela (payment_id gravado no ticket) segue o fluxo normal e aprova o pedido. As demais compartilham o
 // `installment` (id do carnê) gravado no ticket na criação. Idempotente por asaas_payment_id.
@@ -181,11 +228,19 @@ async function handleAudienceInstallmentSibling(opts: {
   supabase: any
   payment: any
   statusInterno: string
+  groupId: string
   respond: (body: Record<string, unknown>) => Response
   respHeaders: Record<string, string>
 }): Promise<Response> {
-  const { supabase, payment, statusInterno, respond, respHeaders } = opts
+  const { supabase, payment, statusInterno, groupId, respond, respHeaders } = opts
   const installmentId = String(payment.installment)
+
+  // Só o pagamento da parcela precisa do pedido. Os demais eventos (ex.: PAYMENT_CREATED das parcelas, que chega
+  // ANTES de o checkout gravar o carnê no ticket) respondem 200 na hora: a fila de webhooks da Asaas é sequencial
+  // e um 500 aqui travaria todos os eventos seguintes.
+  if (statusInterno !== 'APROVADO') {
+    return respond({ status: 'ok', installment_sibling: true, internal_status: statusInterno })
+  }
 
   const { data: tickets } = await supabase
     .from('audience_tickets')
@@ -197,46 +252,12 @@ async function handleAudienceInstallmentSibling(opts: {
     console.warn(`[asaas-webhook][audience-installment] pedido não encontrado para carnê=${installmentId} payment=${payment.id}`)
     return new Response(JSON.stringify({ status: 'error', reason: 'installment_order_not_found' }), { status: 500, headers: respHeaders })
   }
-  if (statusInterno !== 'APROVADO') {
-    return respond({ status: 'ok', installment_sibling: true, internal_status: statusInterno })
-  }
-
-  const { data: existing } = await supabase
-    .from('platform_commissions').select('id').eq('asaas_payment_id', String(payment.id)).maybeSingle()
-  if (existing) return respond({ status: 'already_processed' })
-
-  const grossAmount = Number(payment.value ?? 0)
-  const orderGross = tickets.reduce((s: number, t: any) =>
-    s + Number(t.producer_amount ?? 0) + Number(t.commission_amount ?? 0) + Number(t.processing_fee_amount ?? 0), 0)
-  const share = installmentShare(grossAmount, orderGross, Number(tickets[0].installments ?? 1))
-  const commission = round2(tickets.reduce((s: number, t: any) => s + Number(t.commission_amount ?? 0), 0) * share)
-  const feeAmount = round2(sumProcessingFee(tickets) * share)
-  const net = producerNetExcludingFee(grossAmount, commission, feeAmount)
-
-  const { data: ev } = await supabase.from('events').select('created_by').eq('id', tickets[0].event_id).maybeSingle()
-  const paidAt = new Date().toISOString()
-  const { error: commErr } = await supabase.from('platform_commissions').insert({
-    event_id:          tickets[0].event_id,
-    producer_id:       ev?.created_by ?? null,
-    gross_amount:      grossAmount,
-    commission_amount: commission,
-    net_amount:        net,
-    processing_fee_amount: feeAmount,
-    asaas_payment_id:  String(payment.id),
-    commission_type:   'percent',
-    audience_ticket_group_id: tickets[0].group_id ?? null,
-    kind:              'audience',
-    release_at:        computeReleaseAt(paidAt, payment),
-    card_credit_at:    computeCardCreditAt(paidAt, payment),
-    asaas_installment_id: installmentId,
-    installment_number:   payment.installmentNumber != null ? Number(payment.installmentNumber) : null,
-    installment_count:    Number(tickets[0].installments ?? 0) || null,
-  })
-  if (commErr) {
-    console.error('[asaas-webhook][audience-installment] erro inserir comissão:', commErr.message)
+  const res = await insertAudienceInstallmentCommission(supabase, tickets, payment, installmentId, groupId)
+  if (res === 'exists') return respond({ status: 'already_processed' })
+  if (res === 'error') {
     return new Response(JSON.stringify({ status: 'error', reason: 'commission_insert_failed' }), { status: 500, headers: respHeaders })
   }
-  console.log(`[asaas-webhook][audience-installment] parcela payment=${payment.id} carnê=${installmentId} bruto=R$${grossAmount} comissao=R$${commission}`)
+  console.log(`[asaas-webhook][audience-installment] parcela payment=${payment.id} carnê=${installmentId} registrada`)
   return respond({ status: 'ok', installment_sibling: true, payment_id: String(payment.id) })
 }
 
@@ -263,7 +284,7 @@ async function handleAudienceTicket(opts: {
     const { data: ownTicket } = await supabase
       .from('audience_tickets').select('id').eq('payment_id', String(payment.id)).limit(1).maybeSingle()
     if (!ownTicket) {
-      return await handleAudienceInstallmentSibling({ supabase, payment, statusInterno, respond, respHeaders })
+      return await handleAudienceInstallmentSibling({ supabase, payment, statusInterno, groupId, respond, respHeaders })
     }
   }
 
@@ -512,6 +533,25 @@ async function handleAudienceTicket(opts: {
       eventId: eventId, producerId: eventData?.created_by, eventName: eventData?.name,
       grossAmount, kind: 'audience',
     })
+  }
+
+  // Cartão parcelado: a Asaas só avisa a 1a parcela na confirmação (as demais só no crédito, D+32...).
+  // Registra já a comissão das outras parcelas (cada uma com a própria data de crédito), idempotente.
+  if (payment.installment && Number(tickets[0]?.installments ?? 1) > 1 && !commErr) {
+    try {
+      const listRes = await fetch(`${asaasBaseUrl}/payments?installment=${encodeURIComponent(String(payment.installment))}&limit=50`, {
+        headers: { 'access_token': asaasApiKey, 'Content-Type': 'application/json' },
+      })
+      const listData = await listRes.json().catch(() => ({}))
+      const others = (Array.isArray(listData?.data) ? listData.data : [])
+        .filter((p: any) => String(p.id) !== String(payment.id) && ['CONFIRMED', 'RECEIVED', 'RECEIVED_IN_CASH'].includes(String(p.status)))
+      for (const parcela of others) {
+        await insertAudienceInstallmentCommission(supabase, tickets, parcela, String(payment.installment), groupId)
+      }
+      console.log(`[asaas-webhook][audience] carnê=${payment.installment}: ${others.length} parcela(s) irmã(s) registrada(s)`)
+    } catch (e: any) {
+      console.error('[asaas-webhook][audience] falha ao registrar parcelas irmãs:', e?.message)
+    }
   }
 
   // ── Emails ──────────────────────────────────────────────────────────────
