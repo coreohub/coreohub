@@ -46,7 +46,7 @@ export interface ProcessingFeeConfig {
   maxInstallments: number;
   /** Taxa de parcelamento: custo da antecipação pela conta principal e regras de elegibilidade. */
   installment: {
-    /** Taxa de antecipação da conta principal, % ao mês (automática 1,6; manual 1,7). */
+    /** Taxa de antecipação da conta principal, % ao mês. POST /anticipations por API = taxa MANUAL (1,7); a automática (1,6) só vale na esteira de antecipação automática (Asaas, 2026-10-17). */
     anticipationPercentPerMonth: number;
     /** Dias entre parcelas (a Asaas credita a cada ~32; 33 deixa 1 dia de folga). */
     daysPerInstallment: number;
@@ -75,7 +75,7 @@ export const PROCESSING_FEE_CONFIG: ProcessingFeeConfig = {
   // implementar esses 3 pontos e de testar no sandbox. A taxa de parcelamento já está calculada abaixo.
   maxInstallments: 1,
   installment: {
-    anticipationPercentPerMonth: 1.6,
+    anticipationPercentPerMonth: 1.7,
     daysPerInstallment: 33,
     minOrder: 100,
     minInstallmentValue: 30,

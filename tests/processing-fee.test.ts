@@ -75,11 +75,11 @@ describe('computeProcessingFee — cartão', () => {
     expect(p(12).installmentFee).toBeGreaterThan(p(6).installmentFee);
   });
 
-  it('taxa de parcelamento do passe de R$ 697 (base): 3x fica perto de R$ 30 e custa ~4% do pedido', () => {
+  it('taxa de parcelamento do passe de R$ 697 (base): 3x fica perto de R$ 32 (antecipação a 1,7% a.m.) e custa ~4,4% do pedido', () => {
     const r = computeProcessingFee({ base: 697, method: 'card', installments: 3, product: 'passe', config: PARCELADO });
     expect(r.paymentFee).toBe(27.88);
-    expect(r.installmentFee).toBeGreaterThan(29);
-    expect(r.installmentFee).toBeLessThan(31);
+    expect(r.installmentFee).toBeGreaterThan(31);
+    expect(r.installmentFee).toBeLessThan(33);
   });
 
   it('cartão não tem o teto de R$ 15 (passe R$ 1.597 à vista: 4% = 63,88)', () => {
