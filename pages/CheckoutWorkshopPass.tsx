@@ -572,9 +572,19 @@ const CheckoutWorkshopPass: React.FC = () => {
               {breakdown.feeMode === 'repassar' && breakdown.commission > 0 && (
                 <Row label="Taxa CoreoHub" value={formatBRL(breakdown.commission)} />
               )}
-              {breakdown.feeEnabled && breakdown.processingFee > 0 && (
-                <Row label="Taxa de pagamento" value={formatBRL(breakdown.processingFee)} />
-              )}
+              {breakdown.feeEnabled && breakdown.processingFee > 0 && (() => {
+                // Parcelado: a linha separa "taxa de pagamento" (igual à vista) da "taxa de parcelamento".
+                const opts = breakdown.payOptions;
+                const instFee = opts && payMethod === 'card' && installments > 1
+                  ? Math.max(0, (opts.cardTotals[installments] ?? 0) - (opts.cardTotals[1] ?? 0)) : 0;
+                const payFee = Math.max(0, breakdown.processingFee - instFee);
+                return (
+                  <>
+                    {payFee > 0 && <Row label="Taxa de pagamento" value={formatBRL(payFee)} />}
+                    {instFee > 0 && <Row label="Taxa de parcelamento" value={formatBRL(instFee)} />}
+                  </>
+                );
+              })()}
               <div className="border-t border-white/10 pt-2 flex items-center justify-between">
                 <span className="text-sm font-black uppercase tracking-widest">Total</span>
                 <span className="text-2xl font-black text-white">{formatBRL(breakdown.charged)}</span>

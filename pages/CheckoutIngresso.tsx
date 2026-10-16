@@ -1038,10 +1038,23 @@ export default function CheckoutIngresso() {
             {breakdown.feeMode === 'repassar' && (
               <Row label="Taxa de serviço" value={formatBRL(breakdown.totalFee)} hint="Cobrada pela plataforma." />
             )}
-            {feeEnabled && breakdown.processingFee > 0 && (
-              <Row label="Taxa de pagamento" value={formatBRL(breakdown.processingFee)}
-                hint={payMethod === 'card' ? `Cartão em ${installments}x.` : 'Pix.'} />
-            )}
+            {feeEnabled && breakdown.processingFee > 0 && (() => {
+              // Parcelado: a linha separa "taxa de pagamento" (igual à vista) da "taxa de parcelamento".
+              const instFee = payOptions && payMethod === 'card' && installments > 1
+                ? Math.max(0, (payOptions.cardTotals[installments] ?? 0) - (payOptions.cardTotals[1] ?? 0)) : 0;
+              const payFee = Math.max(0, breakdown.processingFee - instFee);
+              return (
+                <>
+                  {payFee > 0 && (
+                    <Row label="Taxa de pagamento" value={formatBRL(payFee)}
+                      hint={payMethod === 'card' ? 'Cartão.' : 'Pix.'} />
+                  )}
+                  {instFee > 0 && (
+                    <Row label="Taxa de parcelamento" value={formatBRL(instFee)} hint={`Cartão em ${installments}x.`} />
+                  )}
+                </>
+              );
+            })()}
             <div className="border-t border-white/10 pt-2 mt-2 flex items-baseline justify-between">
               <p className="font-black uppercase text-sm">Total</p>
               <p className="text-2xl font-black text-[#ff0068]">{formatBRL(breakdown.totalCharged)}</p>
