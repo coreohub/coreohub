@@ -13,7 +13,7 @@ import { edgeErrorMessage } from '../utils/edgeError';
 import { supabase, resolveActiveEventId, fetchMyTeamEventIds, ownedOrTeamEventsFilter } from '../services/supabase';
 import {
   Ticket, Loader2, Search, Download, ExternalLink, CheckCircle2, Clock, XCircle, RotateCcw,
-  Users, DollarSign, AlertCircle, Undo2, X, Store, Copy, QrCode, Printer, Armchair, CalendarClock,
+  Users, DollarSign, AlertCircle, Undo2, X, Store, Copy, QrCode, Printer, Armchair, CalendarClock, Ban, Unlock,
 } from 'lucide-react';
 import AsaasBadge from '../components/AsaasBadge';
 import VendasTabs from '../components/VendasTabs';
@@ -24,6 +24,8 @@ import { ticketSeatKind } from '../supabase/functions/_shared/seat-rules';
 import { SEAT_TIPO_LABEL, seatTipoFromLayout } from '../utils/seatTipo';
 import { useSeatMap } from '../hooks/useSeatMap';
 import { companionBySpecial, tipoFromRow, isSpecialTipo, type SeatTipo } from '../utils/seatSelection';
+import { expandRange, expandRow, partitionSelection, seatCapacity, selectableForBlock, seatTipoOf, toggleMany } from '../utils/seatBlock';
+import { SEAT_BLOCK_REASON_MAX, summarizeOutcomes, type SeatBlockResult } from '../supabase/functions/_shared/seat-block';
 import { maskCpfCnpj, unmaskCpfCnpj, maskTelefoneBR, unmaskTelefoneBR } from '../utils/masks';
 
 interface TicketTypeConfig {
@@ -173,15 +175,43 @@ const VendasIngressos: React.FC = () => {
   // Venda PCD + acompanhante na MESMA venda (padrão Ticketmaster/Bilheteria Digital).
   const [pdvCompanion, setPdvCompanion] = useState(false);
 
+  // Bloqueio de lugares (docs/plano-bloqueio-assentos.md): só dono e super admin.
+  const [canManageBlocks, setCanManageBlocks] = useState(false);
+  const [blockOpen, setBlockOpen] = useState(false);
+  const [blockSelected, setBlockSelected] = useState<string[]>([]);
+  const [blockReason, setBlockReason] = useState('');
+  const [rangeFrom, setRangeFrom] = useState('');
+  const [rangeTo, setRangeTo] = useState('');
+  const [blockBusy, setBlockBusy] = useState(false);
+  const [blockMsg, setBlockMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [blockConfirm, setBlockConfirm] = useState<'block' | 'unblock' | null>(null);
+  const [blockedList, setBlockedList] = useState<Array<{ seat_id: string; block_reason: string | null }>>([]);
+
   const load = async (targetEventId: string) => {
     setLoading(true);
     setErr(null);
     try {
       setEventId(targetEventId);
-      const { data: ev } = await supabase.from('events').select('name, ingressos_config, seat_map_enabled, sessao_status, sessao_motivo, start_date, event_time').eq('id', targetEventId).maybeSingle();
+      const { data: ev } = await supabase.from('events').select('name, created_by, ingressos_config, seat_map_enabled, sessao_status, sessao_motivo, start_date, event_time').eq('id', targetEventId).maybeSingle();
       setEventName(ev?.name ?? '');
       setTicketTypes(Array.isArray(ev?.ingressos_config) ? (ev!.ingressos_config as TicketTypeConfig[]).filter(t => t?.nome) : []);
       setSeatMapEnabled(Boolean((ev as any)?.seat_map_enabled));
+      // Dono do evento ou super admin pode bloquear lugares e vender lugar bloqueado no PDV.
+      try {
+        const { data: { user: me } } = await supabase.auth.getUser();
+        let allowed = Boolean(me && (ev as any)?.created_by === me.id);
+        if (me && !allowed) {
+          const { data: prof, error: profErr } = await supabase.from('profiles').select('is_super_admin').eq('id', me.id).maybeSingle();
+          if (profErr) console.error('[VendasIngressos] perfil (super admin):', profErr.message);
+          allowed = prof?.is_super_admin === true;
+        }
+        setCanManageBlocks(allowed);
+      } catch (e) {
+        console.error('[VendasIngressos] checar permissão de bloqueio:', e);
+        setCanManageBlocks(false);
+      }
+      setBlockSelected([]);
+      setBlockMsg(null);
       setSessionInfo({ status: (ev as any)?.sessao_status ?? 'agendada', motivo: (ev as any)?.sessao_motivo ?? null, start_date: (ev as any)?.start_date ?? null, event_time: (ev as any)?.event_time ?? null });
       const { data, error } = await supabase
         .from('audience_tickets')
@@ -258,21 +288,89 @@ const VendasIngressos: React.FC = () => {
   }, [selectedEventId]);
 
   // ─── Assento numerado: layout (1x) + status (30s parado, 10s com PDV aberto) ─
-  const { rowsConfig, seatStatuses } = useSeatMap({
+  const { rowsConfig, seatStatuses, refresh: refreshSeats } = useSeatMap({
     eventId,
     enabled: seatMapEnabled,
     pollMs: pdvOpen ? 10_000 : 30_000,
   });
 
-  const seatSummary = useMemo(() => {
-    const all = Object.values(seatStatuses);
-    return {
-      total: all.length,
-      vendido: all.filter(s => s.status === 'vendido' || s.status === 'cortesia').length,
-      reservado: all.filter(s => s.status === 'reservado').length,
-      livre: all.filter(s => s.status === 'livre').length,
-    };
-  }, [seatStatuses]);
+  const seatSummary = useMemo(() => seatCapacity(seatStatuses), [seatStatuses]);
+
+  // ─── Bloqueio de lugares ──────────────────────────────────────────────────
+  const loadBlockedList = async (evId: string) => {
+    const { data, error: listErr } = await supabase
+      .from('event_seats')
+      .select('seat_id, block_reason')
+      .eq('event_id', evId)
+      .eq('status', 'bloqueado')
+      .order('seat_id');
+    if (listErr) {
+      console.error('[VendasIngressos] lista de bloqueados:', listErr.message);
+      return;
+    }
+    setBlockedList((data ?? []) as Array<{ seat_id: string; block_reason: string | null }>);
+  };
+
+  useEffect(() => {
+    if (blockOpen && eventId && canManageBlocks) void loadBlockedList(eventId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blockOpen, eventId, canManageBlocks]);
+
+  const blockPartition = useMemo(
+    () => partitionSelection(rowsConfig, seatStatuses, blockSelected),
+    [rowsConfig, seatStatuses, blockSelected],
+  );
+
+  const selectableIds = (ids: string[]) =>
+    ids.filter(id => selectableForBlock(seatStatuses[id]?.status, seatTipoOf(rowsConfig, seatStatuses, id)));
+
+  const toggleBlockSeat = (seatId: string) => {
+    if (!selectableForBlock(seatStatuses[seatId]?.status, seatTipoOf(rowsConfig, seatStatuses, seatId))) return;
+    setBlockMsg(null);
+    setBlockSelected(prev => (prev.includes(seatId) ? prev.filter(id => id !== seatId) : [...prev, seatId]));
+  };
+
+  const toggleBlockRow = (codigo: string) => {
+    setBlockMsg(null);
+    setBlockSelected(prev => toggleMany(prev, selectableIds(expandRow(rowsConfig, codigo))));
+  };
+
+  const addBlockRange = () => {
+    setBlockMsg(null);
+    const r = expandRange(rowsConfig, rangeFrom, rangeTo);
+    if (r.error) { setBlockMsg({ kind: 'err', text: r.error }); return; }
+    const usable = selectableIds(r.ids);
+    if (usable.length === 0) { setBlockMsg({ kind: 'err', text: 'Nenhum lugar dessa faixa pode ser bloqueado ou desbloqueado agora.' }); return; }
+    setBlockSelected(prev => Array.from(new Set([...prev, ...usable])));
+    setRangeFrom('');
+    setRangeTo('');
+  };
+
+  const runBlockAction = async (action: 'block' | 'unblock') => {
+    if (!eventId || blockBusy) return;
+    const ids = action === 'block' ? blockPartition.toBlock : blockPartition.toUnblock;
+    if (ids.length === 0) return;
+    setBlockBusy(true);
+    setBlockMsg(null);
+    try {
+      const { data, error: invErr } = await supabase.functions.invoke('block-seats', {
+        body: { event_id: eventId, action, seat_ids: ids, reason: action === 'block' ? blockReason : undefined },
+      });
+      if (invErr) throw new Error(await edgeErrorMessage(invErr, 'Não foi possível concluir. Tente de novo.'));
+      if (data?.error) throw new Error(data.error);
+      const results = (data?.results ?? []) as SeatBlockResult[];
+      setBlockMsg({ kind: 'ok', text: summarizeOutcomes(results) });
+      setBlockSelected([]);
+      if (action === 'block') setBlockReason('');
+      refreshSeats();
+      await loadBlockedList(eventId);
+    } catch (e: any) {
+      setBlockMsg({ kind: 'err', text: e.message ?? String(e) });
+    } finally {
+      setBlockBusy(false);
+      setBlockConfirm(null);
+    }
+  };
 
   // O tipo escolhido define as regras de assento (Fase 3). Um ingresso PCD pode levar
   // o acompanhante na mesma venda (2º ingresso, tipo "acompanhante" do evento).
@@ -330,7 +428,9 @@ const VendasIngressos: React.FC = () => {
       setPdvSelectedSeats(prev.filter(id => id !== seatId));
       return;
     }
-    if (seatStatuses[seatId]?.status !== 'livre') return;
+    const seatStatus = seatStatuses[seatId]?.status;
+    // Dono/super admin pode vender direto num lugar bloqueado; a equipe o vê como ocupado.
+    if (seatStatus !== 'livre' && !(seatStatus === 'bloqueado' && canManageBlocks)) return;
     if (prev.length >= pdvTotalQty) return;
     setPdvSelectedSeats([...prev, seatId]);
   };
@@ -876,9 +976,176 @@ const VendasIngressos: React.FC = () => {
             <span className="text-slate-500">
               <strong className="text-emerald-600 dark:text-emerald-400">{seatSummary.livre}</strong> livres
             </span>
-            <span className="text-slate-400">de {seatSummary.total} no total</span>
+            {seatSummary.bloqueado > 0 && (
+              <span className="text-slate-500">
+                <strong className="text-amber-600 dark:text-amber-400">{seatSummary.bloqueado}</strong> bloqueados
+              </span>
+            )}
+            <span className="text-slate-400">de {seatSummary.vendavel} à venda ({seatSummary.total} no mapa)</span>
+          </div>
+          {canManageBlocks && (
+            <button
+              type="button"
+              onClick={() => { setBlockOpen(o => !o); setBlockMsg(null); }}
+              aria-expanded={blockOpen}
+              className="px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 cursor-pointer"
+            >
+              <Ban size={12} /> {blockOpen ? 'Fechar bloqueio' : 'Bloquear lugares'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Bloqueio de lugares (só dono e super admin) */}
+      {seatMapEnabled && canManageBlocks && blockOpen && (
+        <div className="bg-white dark:bg-white/5 border border-amber-300/60 dark:border-amber-500/30 rounded-2xl p-4 space-y-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+              <Ban size={13} className="text-amber-600 dark:text-amber-400" /> Bloquear lugares
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              Lugar bloqueado fica fora da venda online e do balcão da equipe, sem gerar ingresso. O comprador o vê como indisponível, sem o motivo.
+              Toque nos lugares, ou na letra da fileira para pegar a fileira inteira. Lugares PCD e de acompanhante não podem ser bloqueados.
+            </p>
+          </div>
+
+          <div className="border border-slate-200 dark:border-white/10 rounded-xl p-2">
+            <SeatGrid
+              rowsConfig={rowsConfig}
+              seatStatuses={seatStatuses}
+              selectedSeats={blockSelected}
+              onToggle={toggleBlockSeat}
+              onToggleRow={toggleBlockRow}
+              mode="block"
+              size="sm"
+              variant="auto"
+              zoomable
+            />
+            <SeatLegend rowsConfig={rowsConfig} variant="auto" showBlocked />
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label htmlFor="block-range-from" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Faixa de lugares</label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="block-range-from"
+                  value={rangeFrom}
+                  onChange={e => setRangeFrom(e.target.value)}
+                  placeholder="A-5"
+                  maxLength={8}
+                  className="w-24 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+                />
+                <span className="text-xs text-slate-500">até</span>
+                <input
+                  aria-label="Último lugar da faixa"
+                  value={rangeTo}
+                  onChange={e => setRangeTo(e.target.value)}
+                  placeholder="A-12 ou 12"
+                  maxLength={8}
+                  className="w-28 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+                />
+                <button
+                  type="button"
+                  onClick={addBlockRange}
+                  className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 cursor-pointer"
+                >
+                  Adicionar
+                </button>
+              </div>
+            </div>
+            <div>
+              <label htmlFor="block-reason" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Motivo (opcional, só você vê)</label>
+              <input
+                id="block-reason"
+                value={blockReason}
+                onChange={e => setBlockReason(e.target.value)}
+                maxLength={SEAT_BLOCK_REASON_MAX}
+                placeholder="Ex.: reserva da direção, câmera, visibilidade ruim"
+                className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
+              />
+            </div>
+          </div>
+
+          {blockMsg && (
+            <p role="status" className={`text-xs rounded-xl px-3 py-2 ${blockMsg.kind === 'ok' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-rose-500/10 text-rose-700 dark:text-rose-300'}`}>
+              {blockMsg.text}
+            </p>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-slate-500 mr-auto">
+              {blockSelected.length === 0 ? 'Nenhum lugar selecionado.' : `${blockPartition.toBlock.length} para bloquear · ${blockPartition.toUnblock.length} para desbloquear`}
+            </span>
+            {blockSelected.length > 0 && (
+              <button type="button" onClick={() => setBlockSelected([])} className="px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-800 dark:hover:text-white cursor-pointer">
+                Limpar seleção
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={blockPartition.toUnblock.length === 0 || blockBusy}
+              onClick={() => setBlockConfirm('unblock')}
+              className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:disabled:bg-white/5 dark:disabled:text-slate-600 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer"
+            >
+              <Unlock size={12} /> Desbloquear {blockPartition.toUnblock.length > 0 ? blockPartition.toUnblock.length : ''}
+            </button>
+            <button
+              type="button"
+              disabled={blockPartition.toBlock.length === 0 || blockBusy}
+              onClick={() => setBlockConfirm('block')}
+              className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-[10px] font-black uppercase tracking-widest text-black disabled:bg-slate-200 disabled:text-slate-400 dark:disabled:bg-white/5 dark:disabled:text-slate-600 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer"
+            >
+              <Ban size={12} /> Bloquear {blockPartition.toBlock.length > 0 ? blockPartition.toBlock.length : ''}
+            </button>
+          </div>
+
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Lugares bloqueados ({blockedList.length})</p>
+            {blockedList.length === 0 ? (
+              <p className="text-xs text-slate-500">Nenhum lugar bloqueado neste evento.</p>
+            ) : (
+              <ul className="flex flex-wrap gap-1.5">
+                {blockedList.map(b => (
+                  <li key={b.seat_id} className="text-[11px] rounded-lg bg-amber-500/10 text-amber-800 dark:text-amber-200 px-2 py-1">
+                    <strong>{b.seat_id}</strong>{b.block_reason ? ` · ${b.block_reason}` : ''}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
+      )}
+
+      {blockConfirm && createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60" role="dialog" aria-modal="true" aria-labelledby="block-confirm-title">
+          <div className="w-full max-w-md bg-white dark:bg-[#0b0b0b] border border-slate-200 dark:border-white/10 rounded-3xl p-6 space-y-4">
+            <h3 id="block-confirm-title" className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white">
+              {blockConfirm === 'block' ? 'Bloquear lugares' : 'Desbloquear lugares'}
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              {blockConfirm === 'block'
+                ? `${blockPartition.toBlock.length} lugar(es) saem da venda online e do balcão da equipe.${blockReason.trim() ? ` Motivo: ${blockReason.trim()}.` : ''}`
+                : `${blockPartition.toUnblock.length} lugar(es) voltam para a venda.`}
+              {blockPartition.ignored.length > 0 && ` ${blockPartition.ignored.length} lugar(es) selecionado(s) não podem ser alterados e serão ignorados.`}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setBlockConfirm(null)} disabled={blockBusy} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 cursor-pointer">
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => runBlockAction(blockConfirm)}
+                disabled={blockBusy}
+                className="px-4 py-2.5 rounded-xl bg-[#ff0068] hover:bg-[#ff1a7d] text-white text-[10px] font-black uppercase tracking-widest disabled:bg-slate-200 disabled:text-slate-400 dark:disabled:bg-white/5 dark:disabled:text-slate-600 flex items-center gap-1.5 cursor-pointer"
+              >
+                {blockBusy && <Loader2 size={12} className="animate-spin" />}
+                {blockBusy ? 'Salvando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
 
       {/* Filtros */}
@@ -1211,8 +1478,9 @@ const VendasIngressos: React.FC = () => {
                           compQty={pdvCompQty}
                           comumQty={pdvComumQty}
                           onBlocked={setPdvError}
+                          canSellBlocked={canManageBlocks}
                         />
-                        <SeatLegend rowsConfig={rowsConfig} variant="auto" />
+                        <SeatLegend rowsConfig={rowsConfig} variant="auto" showBlocked={canManageBlocks} />
                       </div>
                       {pdvCompanionOffer && (
                         <div className="mt-2 flex items-center gap-3 bg-sky-500/10 border border-sky-500/30 rounded-xl p-3 text-xs text-sky-700 dark:text-sky-200">

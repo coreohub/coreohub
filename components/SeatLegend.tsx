@@ -1,9 +1,11 @@
-import { Accessibility, ArrowLeftRight, Users, Lock } from 'lucide-react';
+import { Accessibility, ArrowLeftRight, Users, Lock, Ban } from 'lucide-react';
 import type { SeatRow } from '../hooks/useSeatMap';
 
 interface SeatLegendProps {
   rowsConfig: SeatRow[] | null;
   variant?: 'dark' | 'auto';
+  /** Painel do produtor: mostra a entrada "Bloqueado" (o comprador nunca vê esse rótulo). */
+  showBlocked?: boolean;
 }
 
 /**
@@ -11,7 +13,7 @@ interface SeatLegendProps {
  * (Fase 3): a planta do teatro não traz legenda, então a explicamos aqui —
  * o Decreto 9.404/2018 (art. 23-B) exige identificar esses lugares no mapa.
  */
-export default function SeatLegend({ rowsConfig, variant = 'dark' }: SeatLegendProps) {
+export default function SeatLegend({ rowsConfig, variant = 'dark', showBlocked = false }: SeatLegendProps) {
   const rows = rowsConfig ?? [];
   const has = (pred: (r: SeatRow) => boolean) => rows.some(pred);
   const hasCadeirante = has(r => !!r.pcd?.length || Object.values(r.tipos ?? {}).includes('cadeirante'));
@@ -21,6 +23,7 @@ export default function SeatLegend({ rowsConfig, variant = 'dark' }: SeatLegendP
   const box = variant === 'dark' ? 'bg-white/10' : 'bg-slate-200 dark:bg-white/10';
   const boxTaken = variant === 'dark' ? 'bg-white/5' : 'bg-slate-100 dark:bg-white/5';
   const sky = variant === 'dark' ? 'bg-sky-500/20 text-sky-300 ring-1 ring-sky-400/50' : 'bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-300 ring-1 ring-sky-400/60';
+  const amber = variant === 'dark' ? 'bg-amber-500/10 text-amber-300 ring-1 ring-dashed ring-amber-400/50' : 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 ring-1 ring-dashed ring-amber-400/70';
   const chip = `w-4 h-4 rounded inline-flex items-center justify-center shrink-0`;
 
   return (
@@ -29,6 +32,7 @@ export default function SeatLegend({ rowsConfig, variant = 'dark' }: SeatLegendP
         <span className="flex items-center gap-1"><span className={`${chip} ${box}`} /> Disponível</span>
         <span className="flex items-center gap-1"><span className={`${chip} bg-[#ff0068]`} /> Selecionado</span>
         <span className="flex items-center gap-1"><span className={`${chip} ${boxTaken}`} /> Ocupado</span>
+        {showBlocked && <span className="flex items-center gap-1"><span className={`${chip} ${amber}`}><Ban size={11} /></span> Bloqueado (fora da venda)</span>}
         {hasCadeirante && <span className="flex items-center gap-1"><span className={`${chip} ${sky}`}><Accessibility size={11} /></span> Espaço de cadeirante</span>}
         {hasLargo && <span className="flex items-center gap-1"><span className={`${chip} ${sky}`}><ArrowLeftRight size={11} /></span> Assento PCD (largo)</span>}
         {hasComp && <span className="flex items-center gap-1"><span className={`${chip} ${sky}`}><Users size={11} /></span> Acompanhante de PCD</span>}

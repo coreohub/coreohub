@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Loader2, Accessibility, Minus, Plus, Maximize2, ArrowLeftRight, Users } from 'lucide-react';
+import { Loader2, Accessibility, Minus, Plus, Maximize2, ArrowLeftRight, Users, Ban } from 'lucide-react';
 import type { SeatRow, SeatStatus } from '../hooks/useSeatMap';
 import { companionBySpecial, isSpecialTipo, seatBlockReason, tipoFromRow, type SeatTipo } from '../utils/seatSelection';
 
@@ -20,6 +20,16 @@ interface SeatGridProps {
   comumQty?: number;
   /** Chamado quando o comprador toca num lugar que o pedido não permite (mostre o motivo). */
   onBlocked?: (reason: string) => void;
+  /**
+   * sell (padrão) = escolher lugar para vender. block = o produtor seleciona lugares
+   * para bloquear/desbloquear (ignora as regras de ingresso; livre e bloqueado são
+   * selecionáveis; PCD/acompanhante, reservado e vendido ficam travados).
+   */
+  mode?: 'sell' | 'block';
+  /** sell: dono/super admin pode escolher lugar bloqueado no PDV (a equipe o vê como ocupado). */
+  canSellBlocked?: boolean;
+  /** block: clicar no rótulo da fileira seleciona a fileira inteira. */
+  onToggleRow?: (rowCode: string) => void;
 }
 
 const SIZES = {
@@ -45,7 +55,7 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
  * dedo (< 30px), o 1º toque amplia até ele e o 2º seleciona (mesmo padrão de
  * 2 passos do Seats.io no mobile).
  */
-export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onToggle, size = 'md', variant = 'dark', zoomable, pcdQty = 0, compQty = 0, comumQty = Number.MAX_SAFE_INTEGER, onBlocked }: SeatGridProps) {
+export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onToggle, size = 'md', variant = 'dark', zoomable, pcdQty = 0, compQty = 0, comumQty = Number.MAX_SAFE_INTEGER, onBlocked, mode = 'sell', canSellBlocked = false, onToggleRow }: SeatGridProps) {
   const s = SIZES[size];
   const canZoom = zoomable ?? size === 'md';
 
@@ -201,6 +211,10 @@ export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onTo
   const specialFree = variant === 'dark'
     ? 'bg-sky-500/20 text-sky-300 ring-1 ring-sky-400/50 hover:bg-sky-500/35'
     : 'bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-300 ring-1 ring-sky-400/60 hover:bg-sky-200 dark:hover:bg-sky-500/35';
+  // Lugar bloqueado pelo produtor: âmbar tracejado (só aparece assim para quem pode agir nele).
+  const blockedClass = variant === 'dark'
+    ? 'bg-amber-500/10 text-amber-300 ring-1 ring-dashed ring-amber-400/50 hover:bg-amber-500/20'
+    : 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 ring-1 ring-dashed ring-amber-400/70 hover:bg-amber-100 dark:hover:bg-amber-500/20';
   const specialLocked = variant === 'dark'
     ? 'bg-sky-500/5 text-sky-700 ring-1 ring-dashed ring-sky-500/30 cursor-not-allowed'
     : 'bg-sky-50 dark:bg-sky-500/5 text-sky-400 dark:text-sky-700 ring-1 ring-sky-300/50 dark:ring-sky-500/30 cursor-not-allowed';
@@ -213,7 +227,19 @@ export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onTo
       style={canZoom ? { transform: `scale(${scale})`, transformOrigin: '0 0' } : undefined}>
       {rowsConfig.map(row => (
         <div key={row.codigo} className={`relative flex items-center justify-center min-w-max ${row.espaco_antes ? s.blockGap : ''}`}>
-          <span className={`absolute ${s.labelPos} font-black ${s.codeText} text-slate-500`}>{row.codigo}</span>
+          {mode === 'block' && onToggleRow ? (
+            <button
+              type="button"
+              onClick={() => onToggleRow(row.codigo)}
+              title={`Selecionar a fileira ${row.codigo} inteira`}
+              aria-label={`Selecionar a fileira ${row.codigo} inteira`}
+              className={`absolute ${s.labelPos} font-black ${s.codeText} text-slate-500 hover:text-[#ff0068] cursor-pointer`}
+            >
+              {row.codigo}
+            </button>
+          ) : (
+            <span className={`absolute ${s.labelPos} font-black ${s.codeText} text-slate-500`}>{row.codigo}</span>
+          )}
           <div className="flex items-center gap-1">
             {Array.from({ length: row.assentos }, (_, i) => i + 1).map(n => {
               const seatId = `${row.codigo}-${n}`;
@@ -221,11 +247,18 @@ export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onTo
               const tipo = tipoOf(row, n);
               const special = tipo !== 'comum';
               const isSelected = selectedSeats.includes(seatId);
-              const isTaken = st !== 'livre';
-              const reason = blockReason(seatId, tipo);
+              const isBlockedSeat = st === 'bloqueado';
+              const blockMode = mode === 'block';
+              const showBlocked = isBlockedSeat && (blockMode || canSellBlocked);
+              const isTaken = blockMode
+                ? !(st === 'livre' || isBlockedSeat)
+                : st !== 'livre' && !(isBlockedSeat && canSellBlocked);
+              const reason = blockMode
+                ? (special && !isBlockedSeat ? 'Lugares PCD e de acompanhante não podem ser bloqueados.' : null)
+                : blockReason(seatId, tipo);
               const locked = !isTaken && !isSelected && !!reason;
               const label = tipo === 'cadeirante' ? 'espaço de cadeirante' : tipo === 'pcd_largo' ? 'assento PCD (largo)' : tipo === 'acompanhante' ? 'acompanhante de PCD' : '';
-              const Icon = tipo === 'cadeirante' ? Accessibility : tipo === 'pcd_largo' ? ArrowLeftRight : tipo === 'acompanhante' ? Users : null;
+              const Icon = showBlocked ? Ban : tipo === 'cadeirante' ? Accessibility : tipo === 'pcd_largo' ? ArrowLeftRight : tipo === 'acompanhante' ? Users : null;
               return (
                 <span key={seatId} className="flex items-center">
                   {row.corredor_apos === n - 1 && <span className={`${s.spacer} shrink-0`} />}
@@ -236,12 +269,12 @@ export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onTo
                       handleSeatClick(seatId, e);
                     }}
                     disabled={isTaken && !isSelected}
-                    title={`${seatId}${label ? ` · ${label}` : ''}${isTaken ? ' · ocupado' : locked ? ` · ${reason}` : ''}`}
-                    aria-label={`Assento ${seatId}${label ? `, ${label}` : ''}${isTaken ? ', ocupado' : locked ? ', indisponível para este pedido' : ', disponível'}`}
+                    title={`${seatId}${label ? ` · ${label}` : ''}${showBlocked ? ' · bloqueado' : isTaken ? (isBlockedSeat ? ' · indisponível' : ' · ocupado') : locked ? ` · ${reason}` : ''}`}
+                    aria-label={`Assento ${seatId}${label ? `, ${label}` : ''}${showBlocked ? ', bloqueado' : isTaken ? (isBlockedSeat ? ', indisponível' : ', ocupado') : locked ? ', indisponível para este pedido' : ', disponível'}`}
                     aria-pressed={isSelected}
                     aria-disabled={locked || undefined}
                     className={`${s.btn} shrink-0 ${s.rounded} ${s.text} font-black flex items-center justify-center transition-colors
-                      ${isSelected ? selectedClass : isTaken ? takenClass : locked ? specialLocked : special ? specialFree : freeClass}`}
+                      ${isSelected ? selectedClass : isTaken ? takenClass : locked ? specialLocked : showBlocked ? blockedClass : special ? specialFree : freeClass}`}
                   >
                     {Icon ? <Icon size={s.icon} /> : n}
                   </button>
