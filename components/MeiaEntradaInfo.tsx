@@ -30,7 +30,8 @@ const MeiaEntradaInfo: React.FC<Props> = ({ eventId, ingressos, seatMapEnabled =
       const { data, error } = await supabase.rpc('get_event_seats_public_v2', { p_event_id: eventId, p_hold_token: null });
       if (error) { console.warn('[MeiaEntradaInfo] get_event_seats_public_v2:', error.message); return; }
       if (cancelled || !Array.isArray(data)) return;
-      const rows = data as Array<{ status: string }>;
+      // Lugar bloqueado pelo produtor nao e capacidade a venda: fica fora do total.
+      const rows = (data as Array<{ status: string }>).filter(r => r.status !== 'bloqueado');
       setSeatCount({ total: rows.length, livres: rows.filter(r => r.status === 'livre').length });
     })();
     return () => { cancelled = true; };

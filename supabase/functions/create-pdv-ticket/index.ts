@@ -179,6 +179,9 @@ Deno.serve(async (req) => {
     if (!isOwner && !isTeamMember && !isSuperAdmin) {
       return json({ error: 'Sem permissão pra vender ingressos deste evento' }, 403)
     }
+    // Lugar bloqueado pelo produtor (docs/plano-bloqueio-assentos.md): só dono e super
+    // admin vendem direto num lugar bloqueado. Equipe de portaria o enxerga como ocupado.
+    const canSellBlocked = isOwner || isSuperAdmin
 
     const ingressos: any[] = Array.isArray(event.ingressos_config) ? event.ingressos_config : []
 
@@ -358,6 +361,36 @@ Deno.serve(async (req) => {
     // tinha sido CONFIRMADO (held_until virou NULL, não expira mais sozinho),
     // qualquer falha depois disso precisa liberar de volta explicitamente.
     let seatsConfirmed = false
+    // Lugares que estavam bloqueados e foram consumidos por esta venda (com o motivo):
+    // se a venda falhar depois, o bloqueio volta como estava.
+    let blockedOrigin: Array<{ seat_id: string; reason: string | null }> = []
+    const restoreBlocks = async () => {
+      if (blockedOrigin.length === 0) return
+      const byReason = new Map<string, string[]>()
+      for (const b of blockedOrigin) {
+        const k = b.reason ?? ''
+        byReason.set(k, [...(byReason.get(k) ?? []), b.seat_id])
+      }
+      for (const [reason, ids] of byReason) {
+        const { error: restErr } = await supabase
+          .from('event_seats')
+          .update({
+            status: 'bloqueado', held_until: null, hold_token: null,
+            block_reason: reason || null, blocked_by: user.id, blocked_at: new Date().toISOString(),
+          })
+          .eq('event_id', event_id)
+          .in('seat_id', ids)
+          .in('status', ['reservado', 'livre'])
+          .is('audience_ticket_id', null)
+        if (restErr) console.error('[create-pdv-ticket] erro ao restaurar bloqueio:', restErr.message)
+      }
+      const { error: logErr } = await supabase.from('event_seat_block_log').insert({
+        event_id, seat_ids: blockedOrigin.map(b => b.seat_id), action: 'restore',
+        reason: 'venda no PDV nao concluida', actor: user.id,
+      })
+      if (logErr) console.error('[create-pdv-ticket] erro ao gravar log de restauracao:', logErr.message)
+      blockedOrigin = []
+    }
     const rollbackTickets = async () => {
       // Ordem importa: event_seats.audience_ticket_id tem ON DELETE SET NULL
       // — libera o assento ANTES de apagar o ticket (senão release_event_seats
@@ -369,26 +402,45 @@ Deno.serve(async (req) => {
         if (relErr) console.error('[create-pdv-ticket] erro ao liberar assento no rollback:', relErr.message)
       }
       await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
+      await restoreBlocks()
     }
 
     // ── Reserva de assento (Fase 2 Stage 4) — mesmo padrão do checkout
     // público: all-or-nothing, rollback dos tickets em caso de conflito.
     if (seatMapEnabled && seatIds.length > 0) {
-      const { data: seatData, error: seatErr } = await supabase.rpc('reserve_event_seats', {
-        p_event_id: event_id, p_seat_ids: seatIds, p_hold_minutes: 10,
-      })
+      // Dono/super admin: reserve_event_seats_pdv aceita livre OU bloqueado (o bloqueio sai
+      // na mesma transação em que o lugar vira reservado). Equipe: reserve_event_seats,
+      // que ignora bloqueado.
+      const { data: seatData, error: seatErr } = canSellBlocked
+        ? await supabase.rpc('reserve_event_seats_pdv', {
+            p_event_id: event_id, p_seat_ids: seatIds, p_actor: user.id, p_hold_minutes: 10,
+          })
+        : await supabase.rpc('reserve_event_seats', {
+            p_event_id: event_id, p_seat_ids: seatIds, p_hold_minutes: 10,
+          })
       if (seatErr) {
         await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
         throw new Error('Falha ao reservar assento')
       }
-      const seatRows = (Array.isArray(seatData) ? seatData : []) as Array<{ seat_id: string; reserved: boolean }>
+      const seatRows = (Array.isArray(seatData) ? seatData : []) as Array<{
+        seat_id: string; reserved: boolean; was_blocked?: boolean; block_reason?: string | null
+      }>
       const occupied = seatRows.filter(r => !r.reserved).map(r => r.seat_id)
       if (occupied.length > 0) {
         await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
-        const err: any = new Error('Um ou mais assentos escolhidos já foram reservados')
+        // Mensagem clara quando o motivo é bloqueio do produtor (o operador é interno).
+        const { data: stRows } = await supabase
+          .from('event_seats').select('seat_id, status').eq('event_id', event_id).in('seat_id', occupied)
+        const blockedNow = (stRows ?? []).filter((r: any) => r.status === 'bloqueado').map((r: any) => r.seat_id as string)
+        const err: any = new Error(
+          blockedNow.length > 0
+            ? `Lugar bloqueado pelo produtor: ${blockedNow.join(', ')}. Só o produtor pode vender ou desbloquear.`
+            : 'Um ou mais assentos escolhidos já foram reservados',
+        )
         err.occupied_seats = occupied
         throw err
       }
+      blockedOrigin = seatRows.filter(r => r.reserved && r.was_blocked).map(r => ({ seat_id: r.seat_id, reason: r.block_reason ?? null }))
       const { error: confirmSeatErr } = await supabase.rpc('confirm_event_seats', {
         p_event_id: event_id,
         p_seat_ids: seatIds,

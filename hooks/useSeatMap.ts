@@ -17,7 +17,7 @@ export type SeatRow = {
 };
 export type SeatStatus = {
   seat_id: string;
-  status: 'livre' | 'reservado' | 'vendido' | 'cortesia';
+  status: 'livre' | 'reservado' | 'vendido' | 'cortesia' | 'bloqueado';
   is_pcd: boolean;
   /** Fase 3 (get_event_seats_public_v2): tipo do assento e se já está liberado para venda geral. */
   seat_tipo?: 'comum' | 'cadeirante' | 'pcd_largo' | 'acompanhante';
@@ -49,6 +49,8 @@ interface UseSeatMapOptions {
 export function useSeatMap({ eventId, enabled, pollMs = 15_000, onLayoutError, onStatusUpdate, holdToken }: UseSeatMapOptions) {
   const [rowsConfig, setRowsConfig] = useState<SeatRow[] | null>(null);
   const [seatStatuses, setSeatStatuses] = useState<Record<string, SeatStatus>>({});
+  // Força uma releitura imediata do status (ex.: logo depois de bloquear lugares).
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Evento mudou (navegação sem reload completo) — nunca mistura mapa/status
   // de um evento com o de outro enquanto o fetch abaixo não termina.
@@ -94,7 +96,7 @@ export function useSeatMap({ eventId, enabled, pollMs = 15_000, onLayoutError, o
     const interval = setInterval(tick, pollMs);
     return () => { cancelled = true; clearInterval(interval); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId, enabled, pollMs, holdToken]);
+  }, [eventId, enabled, pollMs, holdToken, refreshKey]);
 
   // Atualização otimista local (ex: RPC de reserva devolveu "esses assentos
   // já foram pegos" — marca na hora, sem esperar o próximo tick do polling).
@@ -108,5 +110,7 @@ export function useSeatMap({ eventId, enabled, pollMs = 15_000, onLayoutError, o
     });
   };
 
-  return { rowsConfig, seatStatuses, markSeatsOccupied };
+  const refresh = () => setRefreshKey(k => k + 1);
+
+  return { rowsConfig, seatStatuses, markSeatsOccupied, refresh };
 }
