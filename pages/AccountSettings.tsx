@@ -437,7 +437,7 @@ interface TicketType {
   /** Promocional: política comercial do produtor, fora da cota de meia-entrada (Decreto 13.108 art. 10). */
   promocional?: boolean;
   /** Assento que o ingresso aceita (mapa numerado): comum (padrão), PCD/cadeirante ou acompanhante de PCD. */
-  assento_tipo?: 'comum' | 'pcd' | 'acompanhante';
+  assento_tipo?: 'comum' | 'pcd' | 'obeso' | 'acompanhante';
 }
 interface Sponsor    { nome: string; logo_url: string; link?: string }
 
@@ -3958,9 +3958,11 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                               id={`assento-tipo-${i}`}
                               value={item.assento_tipo ?? 'comum'}
                               onChange={e => {
-                                const v = e.target.value as 'comum' | 'pcd' | 'acompanhante';
+                                const v = e.target.value as 'comum' | 'pcd' | 'obeso' | 'acompanhante';
                                 const dica = v === 'pcd'
                                   ? 'Assentos exclusivos para pessoas com deficiência, em área com acessibilidade ampliada.'
+                                  : v === 'obeso'
+                                  ? 'Assento largo, com estrutura reforcada, para pessoa obesa. Sem exigencia de comprovacao na compra.'
                                   : v === 'acompanhante'
                                     ? 'Um acompanhante por pessoa com deficiência, no assento ao lado.'
                                     : undefined;
@@ -3970,6 +3972,7 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                             >
                               <option value="comum">Comum — assentos comuns do mapa</option>
                               <option value="pcd">PCD — espaço de cadeirante / assento PCD</option>
+                              <option value="obeso">Pessoa obesa — assento largo (mobilidade reduzida)</option>
                               <option value="acompanhante">Acompanhante de PCD — assento ao lado do PCD (mesmo pedido)</option>
                             </select>
                           </div>

@@ -16,6 +16,7 @@ interface SeatGridProps {
   zoomable?: boolean;
   /** Ingressos PCD / de acompanhante / comuns no pedido (regras de seleção da Fase 3). */
   pcdQty?: number;
+  obesoQty?: number;
   compQty?: number;
   comumQty?: number;
   /** Chamado quando o comprador toca num lugar que o pedido não permite (mostre o motivo). */
@@ -57,7 +58,7 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
  * dedo (< 30px), o 1º toque amplia até ele e o 2º seleciona (mesmo padrão de
  * 2 passos do Seats.io no mobile).
  */
-export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onToggle, size = 'md', variant = 'dark', zoomable, pcdQty = 0, compQty = 0, comumQty = Number.MAX_SAFE_INTEGER, onBlocked, mode = 'sell', canSellBlocked = false, onToggleRow, blockReasons }: SeatGridProps) {
+export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onToggle, size = 'md', variant = 'dark', zoomable, pcdQty = 0, obesoQty = 0, compQty = 0, comumQty = Number.MAX_SAFE_INTEGER, onBlocked, mode = 'sell', canSellBlocked = false, onToggleRow, blockReasons }: SeatGridProps) {
   const s = SIZES[size];
   const canZoom = zoomable ?? size === 'md';
 
@@ -186,7 +187,8 @@ export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onTo
       tipo,
       liberado: seatStatuses[seatId]?.liberado ?? tipo === 'comum',
       generalOpen,
-      pcdQty, compQty, comumQty,
+      pcdQty, obesoQty, compQty, comumQty,
+      selectedCadeirante: others.filter(id => tipoBySeat(id) === 'cadeirante').length,
       selectedSpecial: others.filter(id => isSpecialTipo(tipoBySeat(id))).length,
       selectedComp: others.filter(id => tipoBySeat(id) === 'acompanhante').length,
       selectedComum: others.filter(id => tipoBySeat(id) === 'comum').length,
@@ -259,7 +261,7 @@ export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onTo
                 ? (special && !isBlockedSeat ? 'Lugares PCD e de acompanhante não podem ser bloqueados.' : null)
                 : blockReason(seatId, tipo);
               const locked = !isTaken && !isSelected && !!reason;
-              const label = tipo === 'cadeirante' ? 'espaço de cadeirante' : tipo === 'pcd_largo' ? 'assento PCD (largo)' : tipo === 'acompanhante' ? 'acompanhante de PCD' : '';
+              const label = tipo === 'cadeirante' ? 'espaço de cadeirante' : tipo === 'pcd_largo' ? 'assento para pessoa obesa (largo)' : tipo === 'acompanhante' ? 'acompanhante de PCD' : '';
               const Icon = showBlocked ? Ban : tipo === 'cadeirante' ? Accessibility : tipo === 'pcd_largo' ? ArrowLeftRight : tipo === 'acompanhante' ? Users : null;
               return (
                 <span key={seatId} className="flex items-center">

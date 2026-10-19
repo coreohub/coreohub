@@ -31,12 +31,16 @@ export interface SeatSelectionCtx {
   liberado: boolean;
   /** A liberação geral já abriu na sala (qualquer ingresso pode ocupar qualquer lugar). */
   generalOpen: boolean;
+  /** Assentos especiais exigidos: ingressos PCD + ingressos para pessoa obesa. */
   pcdQty: number;
+  /** Parte de pcdQty que e ingresso para pessoa obesa (so assento largo). */
+  obesoQty?: number;
   compQty: number;
   /** Ingressos comuns no carrinho (total - pcd - acompanhante). */
   comumQty: number;
   /** Seleção atual, SEM o assento em questão. */
   selectedSpecial: number;
+  selectedCadeirante?: number;
   selectedComp: number;
   selectedComum: number;
   /** O assento especial que este acompanha está selecionado ou já vendido. */
@@ -48,8 +52,11 @@ export function seatBlockReason(c: SeatSelectionCtx): string | null {
   if (c.generalOpen) return null;
   if (isSpecialTipo(c.tipo)) {
     if (c.liberado) return null;
-    if (c.pcdQty <= 0) return 'Reservado para pessoas com deficiência. Escolha o ingresso PCD para usar este lugar.';
-    if (c.selectedSpecial >= c.pcdQty) return 'Você já escolheu os lugares PCD do seu pedido.';
+    if (c.pcdQty <= 0) return 'Reservado para pessoas com deficiência ou obesidade. Escolha o ingresso PCD ou para pessoa obesa para usar este lugar.';
+    if (c.selectedSpecial >= c.pcdQty) return 'Você já escolheu os lugares especiais do seu pedido.';
+    if (c.tipo === 'cadeirante' && (c.obesoQty ?? 0) > 0 && (c.selectedCadeirante ?? 0) >= c.pcdQty - (c.obesoQty ?? 0)) {
+      return 'Este lugar é de cadeirante. O ingresso para pessoa obesa usa o assento largo.';
+    }
     return null;
   }
   if (c.tipo === 'acompanhante') {
@@ -59,12 +66,12 @@ export function seatBlockReason(c: SeatSelectionCtx): string | null {
     if (!c.companionOk) return 'Escolha primeiro o lugar PCD ao lado deste.';
     return null;
   }
-  if (c.comumQty <= 0) return 'Este pedido é de ingresso PCD ou de acompanhante. Escolha um lugar marcado em azul no mapa.';
+  if (c.comumQty <= 0) return 'Este pedido é de ingresso PCD, para pessoa obesa ou de acompanhante. Escolha um lugar marcado em azul no mapa.';
   if (c.selectedComum >= c.comumQty) return 'Você já escolheu os lugares dos ingressos comuns. Ajuste a quantidade ou remova um lugar.';
   return null;
 }
 
 /** O pedido tem os assentos que o servidor exige (PCD e acompanhante)? */
-export function seatsSatisfyRules(specialSelected: number, compSelected: number, pcdQty: number, compQty: number): boolean {
-  return specialSelected >= pcdQty && compSelected >= compQty;
+export function seatsSatisfyRules(specialSelected: number, compSelected: number, pcdQty: number, compQty: number, largoSelected = 0, obesoQty = 0): boolean {
+  return specialSelected >= pcdQty && compSelected >= compQty && largoSelected >= obesoQty;
 }

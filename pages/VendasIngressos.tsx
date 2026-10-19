@@ -381,9 +381,11 @@ const VendasIngressos: React.FC = () => {
     const i = ticketTypes.findIndex(t => t?.nome && ticketSeatKind(t as any) === 'acompanhante');
     return i >= 0 ? i : null;
   }, [ticketTypes]);
-  const pdvCompOn = pdvSeatKind === 'pcd' && pdvCompanion && pdvCompanionTypeIdx != null;
+  const pdvSpecialKind = pdvSeatKind === 'pcd' || pdvSeatKind === 'obeso';
+  const pdvCompOn = pdvSpecialKind && pdvCompanion && pdvCompanionTypeIdx != null;
   const pdvTotalQty = pdvQuantity + (pdvCompOn ? 1 : 0);
-  const pdvPcdQty = pdvSeatKind === 'pcd' ? pdvQuantity : 0;
+  const pdvPcdQty = pdvSpecialKind ? pdvQuantity : 0;
+  const pdvObesoQty = pdvSeatKind === 'obeso' ? pdvQuantity : 0;
   const pdvCompQty = pdvSeatKind === 'acompanhante' ? pdvQuantity : (pdvCompOn ? 1 : 0);
   const pdvComumQty = pdvSeatKind === 'comum' ? pdvQuantity : 0;
 
@@ -398,7 +400,7 @@ const VendasIngressos: React.FC = () => {
 
   // Oferta "Adicionar acompanhante": 1 ingresso PCD com assento especial escolhido, vizinho livre.
   const pdvCompanionOffer = useMemo(() => {
-    if (!seatMapEnabled || pdvSeatKind !== 'pcd' || pdvQuantity !== 1 || pdvCompanionTypeIdx == null || pdvCompanion) return null;
+    if (!seatMapEnabled || !pdvSpecialKind || pdvQuantity !== 1 || pdvCompanionTypeIdx == null || pdvCompanion) return null;
     for (const id of pdvSelectedSeats) {
       if (!isSpecialTipo(pdvTipoOfSeat(id))) continue;
       const comp = pdvCompanionOfSpecial[id];
@@ -1490,6 +1492,7 @@ const VendasIngressos: React.FC = () => {
                           size="sm"
                           variant="auto"
                           pcdQty={pdvPcdQty}
+                          obesoQty={pdvObesoQty}
                           compQty={pdvCompQty}
                           comumQty={pdvComumQty}
                           onBlocked={setPdvError}

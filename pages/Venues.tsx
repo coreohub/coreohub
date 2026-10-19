@@ -61,7 +61,7 @@ const labelCls = 'text-[10px] font-black text-slate-500 uppercase tracking-wides
 const TOOLS: { id: VenuePaintTool; label: string; icon: React.ReactNode; hint: string }[] = [
   { id: 'comum', label: 'Comum', icon: <Armchair size={13} />, hint: 'Assento comum (apaga o tipo)' },
   { id: 'cadeirante', label: 'Cadeirante', icon: <Accessibility size={13} />, hint: 'Espaço de cadeirante' },
-  { id: 'pcd_largo', label: 'PCD largo', icon: <ArrowLeftRight size={13} />, hint: 'Assento PCD largo (pessoa obesa/mobilidade reduzida)' },
+  { id: 'pcd_largo', label: 'Obeso (largo)', icon: <ArrowLeftRight size={13} />, hint: 'Assento largo para pessoa obesa (Decreto 9.404, art. 23 §2º)' },
   { id: 'acompanhante', label: 'Acompanhante', icon: <Users size={13} />, hint: 'Assento ao lado de um lugar PCD, reservado ao acompanhante' },
 ];
 
@@ -307,7 +307,7 @@ const VenueFormModal: React.FC<{
             </div>
             <SeatGridPreview rows={rows} onPaint={handlePaint} onChangeAssentos={handleChangeAssentos} onToggleBloco={handleToggleBloco} />
             <p className="px-1 text-[10px] text-slate-500">
-              {(() => { const c = countTipos(rows); return `${c.cadeirante} cadeirante · ${c.pcd_largo} PCD largo · ${c.acompanhante} acompanhante`; })()}
+              {(() => { const c = countTipos(rows); return `${c.cadeirante} cadeirante · ${c.pcd_largo} obeso (largo) · ${c.acompanhante} acompanhante`; })()}
               {' — '}ao marcar um lugar PCD, o vizinho comum mais próximo (mesmo lado do corredor) vira o assento de acompanhante; ajuste com a ferramenta Acompanhante.
             </p>
             <label className="flex items-center gap-2 px-1 text-[11px] font-bold text-slate-600 dark:text-slate-300 cursor-pointer">

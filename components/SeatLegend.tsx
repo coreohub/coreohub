@@ -34,7 +34,7 @@ export default function SeatLegend({ rowsConfig, variant = 'dark', showBlocked =
         <span className="flex items-center gap-1"><span className={`${chip} ${boxTaken}`} /> Ocupado</span>
         {showBlocked && <span className="flex items-center gap-1"><span className={`${chip} ${amber}`}><Ban size={11} /></span> Bloqueado (fora da venda)</span>}
         {hasCadeirante && <span className="flex items-center gap-1"><span className={`${chip} ${sky}`}><Accessibility size={11} /></span> Espaço de cadeirante</span>}
-        {hasLargo && <span className="flex items-center gap-1"><span className={`${chip} ${sky}`}><ArrowLeftRight size={11} /></span> Assento PCD (largo)</span>}
+        {hasLargo && <span className="flex items-center gap-1"><span className={`${chip} ${sky}`}><ArrowLeftRight size={11} /></span> Assento para pessoa obesa (largo)</span>}
         {hasComp && <span className="flex items-center gap-1"><span className={`${chip} ${sky}`}><Users size={11} /></span> Acompanhante de PCD</span>}
         {(hasCadeirante || hasLargo || hasComp) && (
           <span className="flex items-center gap-1"><Lock size={11} aria-hidden="true" /> Reservado (ainda não liberado)</span>
@@ -42,7 +42,7 @@ export default function SeatLegend({ rowsConfig, variant = 'dark', showBlocked =
       </div>
       {(hasCadeirante || hasLargo) && (
         <p className="leading-relaxed">
-          Espaços de cadeirante e assentos PCD são reservados a pessoas com deficiência, com um acompanhante ao lado.
+          Espaços de cadeirante e assentos largos são reservados a pessoas com deficiência, mobilidade reduzida ou obesidade, com um acompanhante ao lado.
           A comprovação é feita na portaria.
         </p>
       )}
