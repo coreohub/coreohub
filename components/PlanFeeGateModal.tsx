@@ -97,7 +97,12 @@ const PlanFeeGateModal: React.FC<Props> = ({ producerId, isImpersonating }) => {
   // 2026-10-04). A venda continua fechada no servidor (plan_fee_sales_blocked).
   const paymentsSetupPath =
     pathname === '/account-settings' && new URLSearchParams(search).get('tab') === 'Pagamentos';
-  if (!loaded || !current || pathname === '/termo-produtor' || paymentsSetupPath) return null;
+  // O painel (/qg-organizador) também fica livre durante a TRAVA: é onde estão o
+  // saldo e os repasses do produtor, e o PlanFeeReminderBanner lista cada taxa
+  // vencida com "Pagar agora". As demais telas continuam cobertas por este modal.
+  // (A trava "suave" dentro do prazo segue valendo em qualquer rota.)
+  const lockedPainelFree = !!current?.locked && pathname === '/qg-organizador';
+  if (!loaded || !current || pathname === '/termo-produtor' || paymentsSetupPath || lockedPainelFree) return null;
 
   const valor = PLAN_FIXED_FEE[current.billing_plan];
   const planoLabel = PLAN_LABEL[current.billing_plan];
