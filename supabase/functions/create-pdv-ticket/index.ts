@@ -40,7 +40,7 @@ import { round2 } from '../_shared/audience-pricing.ts'
 import { computeAudienceCheckout } from '../_shared/audience-checkout.ts'
 import { allocateProportional } from '../_shared/processing-fee.ts'
 import { buildCorsHeaders } from '../_shared/cors.ts'
-import { ticketSeatKind, effectiveTicketKind, countPcdTickets, countCompanionTickets, alignSeatsToItems, type TicketSeatKind } from '../_shared/seat-rules.ts'
+import { ticketSeatKind, effectiveTicketKind, countPcdTickets, countObesoTickets, countCompanionTickets, alignSeatsToItems, type TicketSeatKind } from '../_shared/seat-rules.ts'
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 import { planFeeSalesBlocked, SALES_NOT_OPEN_MESSAGE } from '../_shared/plan-fee-gate.ts'
@@ -244,6 +244,7 @@ Deno.serve(async (req) => {
         p_pcd_qty:     countPcdTickets(resolved),
         p_require_pcd: true,
         p_comp_qty:    countCompanionTickets(resolved),
+        p_obeso_qty:   countObesoTickets(resolved),
       })
       if (seatRuleErr) {
         console.error('[create-pdv-ticket] erro validate_seat_cart:', seatRuleErr.message)

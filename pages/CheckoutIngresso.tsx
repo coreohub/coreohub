@@ -306,7 +306,10 @@ export default function CheckoutIngresso() {
     Number(event?.audience_max_per_cpf ?? 6),
   ));
   const totalQty = lines.reduce((s, l) => s + l.qty, 0);
-  const pcdQty = lines.reduce((s, l) => s + (l.seatKind === 'pcd' ? l.qty : 0), 0);
+  // pcdQty = lugares especiais exigidos (ingresso PCD + ingresso para pessoa obesa);
+  // obesoQty = parte deles que so aceita assento largo.
+  const obesoQty = lines.reduce((s, l) => s + (l.seatKind === 'obeso' ? l.qty : 0), 0);
+  const pcdQty = lines.reduce((s, l) => s + (l.seatKind === 'pcd' ? l.qty : 0), 0) + obesoQty;
   const compQty = lines.reduce((s, l) => s + (l.seatKind === 'acompanhante' ? l.qty : 0), 0);
   const comumQty = totalQty - pcdQty - compQty;
   // Ingresso "Acompanhante de PCD" configurado no evento (quando existir).
@@ -401,7 +404,7 @@ export default function CheckoutIngresso() {
       const wanted = [...selectedSeats];
       const { data, error: holdErr } = await supabase.rpc('hold_event_seats', {
         p_event_id: event.id, p_seat_ids: wanted, p_hold_token: holdToken, p_hold_minutes: 10,
-        p_pcd_qty: pcdQty, p_comp_qty: compQty,
+        p_pcd_qty: pcdQty - obesoQty, p_comp_qty: compQty, p_obeso_qty: obesoQty,
       });
       if (version !== holdVersionRef.current) return; // mudou de novo enquanto esperava
       if (holdErr) {
@@ -428,7 +431,7 @@ export default function CheckoutIngresso() {
     }, 250);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSeats, holdToken, event?.id, seatMapEnabled, pcdQty, compQty]);
+  }, [selectedSeats, holdToken, event?.id, seatMapEnabled, pcdQty, compQty, obesoQty]);
 
   // Relógio da reserva: 1 tick/s só enquanto há hold. Zerou = solta a seleção.
   useEffect(() => {
@@ -637,7 +640,8 @@ export default function CheckoutIngresso() {
   const anySoldOut = lines.some(l => stockByIdx[String(l.idx)]?.sold_out === true);
   const specialSelected = selectedSeats.filter(id => isSpecialTipo(tipoOfSeat(id))).length;
   const compSelected = selectedSeats.filter(id => tipoOfSeat(id) === 'acompanhante').length;
-  const seatsReady = !seatMapEnabled || (selectedSeats.length === totalQty && seatsSatisfyRules(specialSelected, compSelected, pcdQty, compQty));
+  const largoSelected = selectedSeats.filter(id => tipoOfSeat(id) === 'pcd_largo').length;
+  const seatsReady = !seatMapEnabled || (selectedSeats.length === totalQty && seatsSatisfyRules(specialSelected, compSelected, pcdQty, compQty, largoSelected, obesoQty));
   const canSubmit = !!name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
     && isValidCpf(cpf) && totalQty >= 1 && !paying && !anySoldOut && seatsReady;
 
@@ -937,6 +941,7 @@ export default function CheckoutIngresso() {
               size="md"
               variant="dark"
               pcdQty={pcdQty}
+              obesoQty={obesoQty}
               compQty={compQty}
               comumQty={comumQty}
               onBlocked={setSeatLostNotice}
@@ -956,10 +961,10 @@ export default function CheckoutIngresso() {
             )}
 
             {pcdQty > 0 && specialSelected < pcdQty && (
-              <p className="mt-3 text-[11px] text-sky-300">Escolha {pcdQty - specialSelected} lugar{pcdQty - specialSelected === 1 ? '' : 'es'} PCD (azul) para o seu pedido.</p>
+              <p className="mt-3 text-[11px] text-sky-300">Escolha {pcdQty - specialSelected} lugar{pcdQty - specialSelected === 1 ? '' : 'es'} {obesoQty > 0 ? (obesoQty === pcdQty ? 'largo' : 'PCD ou largo') : 'PCD'} (azul) para o seu pedido.</p>
             )}
             {compQty > 0 && compSelected < compQty && (
-              <p className="mt-2 text-[11px] text-sky-300">Escolha o lugar do acompanhante, ao lado do lugar PCD.</p>
+              <p className="mt-2 text-[11px] text-sky-300">Escolha o lugar do acompanhante, ao lado do lugar especial.</p>
             )}
 
             <SeatLegend rowsConfig={rowsConfig} variant="dark" />

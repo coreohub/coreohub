@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { ticketSeatKind, countPcdTickets, countCompanionTickets, effectiveTicketKind, alignSeatsToItems } from '../supabase/functions/_shared/seat-rules'
+import { ticketSeatKind, countPcdTickets, countObesoTickets, countCompanionTickets, effectiveTicketKind, alignSeatsToItems } from '../supabase/functions/_shared/seat-rules'
 
 describe('ticketSeatKind', () => {
   it('campo explícito vence o nome', () => {
@@ -105,7 +105,7 @@ describe('seatBlockReason', () => {
     expect(seatBlockReason({ ...base, selectedComum: 2 })).toMatch(/ingressos comuns/)
   })
   it('pedido só de PCD/acompanhante: assento comum recusado com mensagem própria', () => {
-    expect(seatBlockReason({ ...base, comumQty: 0, pcdQty: 1 })).toMatch(/PCD ou de acompanhante/)
+    expect(seatBlockReason({ ...base, comumQty: 0, pcdQty: 1 })).toMatch(/PCD, para pessoa obesa ou de acompanhante/)
   })
   it('especial: só com ingresso PCD, até a quantidade', () => {
     const esp = { ...base, tipo: 'cadeirante' as const, liberado: false }
@@ -154,5 +154,48 @@ describe('alignSeatsToItems (venda PCD + acompanhante)', () => {
   it('depois da liberação geral (sem assento do tipo) segue a ordem original', () => {
     const doisComuns = [{ seatKind: 'pcd' as const, quantity: 1 }, { seatKind: 'acompanhante' as const, quantity: 1 }]
     expect(alignSeatsToItems(doisComuns, ['A-1', 'A-2'], new Map())).toEqual(['A-1', 'A-2'])
+  })
+})
+
+describe('ingresso para pessoa obesa', () => {
+  it('reconhece por campo explicito e por nome', () => {
+    expect(ticketSeatKind({ nome: 'Plateia', assento_tipo: 'obeso' })).toBe('obeso')
+    expect(ticketSeatKind({ nome: 'Assento largo (pessoa obesa)' })).toBe('obeso')
+    expect(ticketSeatKind({ nome: 'Acompanhante de pessoa obesa' })).toBe('acompanhante')
+    expect(ticketSeatKind({ nome: 'Plateia' })).toBe('comum')
+  })
+
+  it('conta ingressos obesos e nao os mistura com PCD', () => {
+    const items = [
+      { seatKind: 'obeso' as const, quantity: 2 },
+      { seatKind: 'pcd' as const, quantity: 1 },
+    ]
+    expect(countObesoTickets(items)).toBe(2)
+    expect(countPcdTickets(items)).toBe(1)
+  })
+
+  it('fica fora do limite de meia (kind outro)', () => {
+    expect(effectiveTicketKind('meia', 'obeso')).toBe('outro')
+  })
+
+  it('alinha o ingresso obeso ao assento largo, nao ao cadeirante', () => {
+    const tipos = new Map([['M-8', 'cadeirante'], ['L-1', 'pcd_largo'], ['A-1', 'comum']])
+    const items = [{ seatKind: 'obeso' as const, quantity: 1 }, { seatKind: 'pcd' as const, quantity: 1 }]
+    expect(alignSeatsToItems(items, ['M-8', 'L-1'], tipos)).toEqual(['L-1', 'M-8'])
+  })
+
+  it('seatBlockReason: cadeirante recusado para quem tem so ingresso obeso', () => {
+    const base: SeatSelectionCtx = {
+      tipo: 'cadeirante', liberado: false, generalOpen: false, pcdQty: 1, obesoQty: 1, compQty: 0, comumQty: 0,
+      selectedSpecial: 0, selectedCadeirante: 0, selectedComp: 0, selectedComum: 0, companionOk: false,
+    }
+    expect(seatBlockReason(base)).toMatch(/cadeirante/i)
+    expect(seatBlockReason({ ...base, tipo: 'pcd_largo' })).toBeNull()
+    expect(seatBlockReason({ ...base, pcdQty: 2, obesoQty: 1 })).toBeNull()
+  })
+
+  it('seatsSatisfyRules exige assento largo para o ingresso obeso', () => {
+    expect(seatsSatisfyRules(1, 0, 1, 0, 0, 1)).toBe(false)
+    expect(seatsSatisfyRules(1, 0, 1, 0, 1, 1)).toBe(true)
   })
 })

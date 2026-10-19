@@ -42,7 +42,7 @@ import { round2 } from '../_shared/audience-pricing.ts'
 import { computeAudienceCheckout } from '../_shared/audience-checkout.ts'
 import { allocateProportional, normalizeInstallments } from '../_shared/processing-fee.ts'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
-import { ticketSeatKind, countPcdTickets, countCompanionTickets, effectiveTicketKind, type TicketSeatKind } from '../_shared/seat-rules.ts'
+import { ticketSeatKind, countPcdTickets, countObesoTickets, countCompanionTickets, effectiveTicketKind, type TicketSeatKind } from '../_shared/seat-rules.ts'
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 import { planFeeSalesBlocked, SALES_NOT_OPEN_MESSAGE } from '../_shared/plan-fee-gate.ts'
@@ -308,6 +308,7 @@ Deno.serve(async (req) => {
     const seatMapEnabled = Boolean((event as any).seat_map_enabled)
     const pcdQty = countPcdTickets(resolved)
     const compQty = countCompanionTickets(resolved)
+    const obesoQty = countObesoTickets(resolved)
     const seatIds = Array.isArray(seatIdsRaw) ? seatIdsRaw.filter(s => typeof s === 'string' && s.trim()) : []
     if (seatMapEnabled) {
       if (seatIds.length !== totalQty) {
@@ -325,6 +326,7 @@ Deno.serve(async (req) => {
         p_pcd_qty:     pcdQty,
         p_require_pcd: true,
         p_comp_qty:    compQty,
+        p_obeso_qty:   obesoQty,
       })
       if (seatRuleErr) {
         console.error('[create-audience-ticket] erro validate_seat_cart:', seatRuleErr.message)
@@ -555,6 +557,7 @@ Deno.serve(async (req) => {
         p_hold_minutes: reservedMinutes,
         p_pcd_qty:      pcdQty,
         p_comp_qty:     compQty,
+        p_obeso_qty:    obesoQty,
       })
       if (seatErr) {
         await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))

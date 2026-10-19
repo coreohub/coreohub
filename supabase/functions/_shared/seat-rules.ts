@@ -6,26 +6,32 @@
 /**
  * comum        — assento comum
  * pcd          — espaço de cadeirante / assento PCD
- * acompanhante — acompanhante de PCD (assento ao lado do assento PCD, mesmo pedido)
+ * obeso        — pessoa obesa (assento largo; Decreto 9.404/2018, art. 23 §2º)
+ * acompanhante — acompanhante de PCD/obeso (assento ao lado do assento especial, mesmo pedido)
  */
-export type TicketSeatKind = 'comum' | 'pcd' | 'acompanhante'
+export type TicketSeatKind = 'comum' | 'pcd' | 'obeso' | 'acompanhante'
 
 /**
  * Tipo de assento que o ingresso aceita. Vale o campo explícito
- * `assento_tipo` ('comum' | 'pcd' | 'acompanhante') do ingressos_config; sem ele,
+ * `assento_tipo` ('comum' | 'pcd' | 'obeso' | 'acompanhante') do ingressos_config; sem ele,
  * o nome decide. "acompanhante" é checado ANTES de "pcd" porque o nome
  * "Acompanhante de PCD" contém as duas palavras.
  */
 export function ticketSeatKind(t: { nome?: unknown; assento_tipo?: unknown } | null | undefined): TicketSeatKind {
   const explicit = String(t?.assento_tipo ?? '').trim().toLowerCase()
-  if (explicit === 'acompanhante' || explicit === 'pcd' || explicit === 'comum') return explicit
+  if (explicit === 'acompanhante' || explicit === 'pcd' || explicit === 'obeso' || explicit === 'comum') return explicit
   const nome = String(t?.nome ?? '')
   if (/acompanhante/i.test(nome)) return 'acompanhante'
+  if (/obes[oa]|obesidade|assento largo/i.test(nome)) return 'obeso'
   return /(^|[^a-z])pcd([^a-z]|$)|cadeirante|acessib/i.test(nome) ? 'pcd' : 'comum'
 }
 
 export function countPcdTickets(items: Array<{ seatKind: TicketSeatKind; quantity: number }>): number {
   return items.reduce((s, it) => s + (it.seatKind === 'pcd' ? it.quantity : 0), 0)
+}
+
+export function countObesoTickets(items: Array<{ seatKind: TicketSeatKind; quantity: number }>): number {
+  return items.reduce((s, it) => s + (it.seatKind === 'obeso' ? it.quantity : 0), 0)
 }
 
 export function countCompanionTickets(items: Array<{ seatKind: TicketSeatKind; quantity: number }>): number {
@@ -54,6 +60,7 @@ export function alignSeatsToItems(
 ): string[] {
   const prefers = (k: TicketSeatKind, tipo: string) =>
     k === 'pcd' ? (tipo === 'cadeirante' || tipo === 'pcd_largo')
+    : k === 'obeso' ? tipo === 'pcd_largo'
     : k === 'acompanhante' ? tipo === 'acompanhante'
     : tipo === 'comum'
   const left = [...seatIds]

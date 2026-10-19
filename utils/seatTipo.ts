@@ -8,7 +8,7 @@ import { tipoFromRow, type SeatTipo } from './seatSelection';
 export const SEAT_TIPO_LABEL: Record<SeatTipo, string | null> = {
   comum: null,
   cadeirante: 'Espaço de cadeirante',
-  pcd_largo: 'Assento PCD (largo)',
+  pcd_largo: 'Assento para pessoa obesa (largo)',
   acompanhante: 'Acompanhante de PCD',
 };
 
