@@ -115,10 +115,9 @@ Deno.serve(async (req) => {
       }
       const ids = (done ?? []).map((r: { id: string }) => r.id)
       if (ids.length > 0) {
-        const { error: seatErr } = await supabase
-          .from('event_seats')
-          .update({ status: 'livre', held_until: null, audience_ticket_id: null })
-          .in('audience_ticket_id', ids)
+        // Libera pela funcao SQL: lugar que era BLOQUEADO e foi consumido por venda no PDV
+        // volta a bloqueado (docs/plano-bloqueio-assentos.md); os demais voltam a livre.
+        const { error: seatErr } = await supabase.rpc('release_expired_ticket_seats', { p_ticket_ids: ids })
         if (seatErr) console.error(`[expire-audience-payments] erro liberando assentos payment=${paymentId}:`, seatErr.message)
       }
       cancelled++
