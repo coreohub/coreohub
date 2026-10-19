@@ -40,8 +40,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { round2 } from '../_shared/audience-pricing.ts'
 import { computeAudienceCheckout } from '../_shared/audience-checkout.ts'
-import { allocateProportional, normalizeInstallments, PROCESSING_FEE_CONFIG } from '../_shared/processing-fee.ts'
+import { allocateProportional, normalizeInstallments } from '../_shared/processing-fee.ts'
 import { fetchCardAnticipationLimit, limitCovers } from '../_shared/asaas-anticipation.ts'
+import { installmentConfigFor } from '../_shared/installment-offer.ts'
 import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 import { ticketSeatKind, countPcdTickets, countObesoTickets, countCompanionTickets, effectiveTicketKind, type TicketSeatKind } from '../_shared/seat-rules.ts'
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
@@ -212,7 +213,7 @@ Deno.serve(async (req) => {
         audience_commission_percent, audience_fee_mode,
         audience_max_per_cpf, audience_max_per_purchase, audience_sales_enabled,
         audience_reservation_minutes, politica_ingressos, seat_map_enabled, payment_sandbox, sessao_status,
-        processing_fee_enabled, audience_processing_payer, state
+        processing_fee_enabled, audience_processing_payer, state, max_installments
       `)
       .eq('id', event_id)
       .single()
@@ -223,8 +224,8 @@ Deno.serve(async (req) => {
     const asaasEnv = await loadAsaasEnvForEvent(supabase, event, 'create-audience-ticket')
     const ASAAS_API_KEY  = asaasEnv.apiKey
     const ASAAS_BASE_URL = asaasEnv.baseUrl
-    // Cartão parcelado: ligado SÓ no sandbox enquanto o fluxo não é validado (produção segue em 1x).
-    const feeConfig = asaasEnv.isSandbox ? { ...PROCESSING_FEE_CONFIG, maxInstallments: 3 } : PROCESSING_FEE_CONFIG
+    // Cartão parcelado: limite por evento (events.max_installments; 1 = só à vista) ou 3x em sandbox.
+    const feeConfig = installmentConfigFor(asaasEnv.isSandbox, (event as any).max_installments)
     if ((event as any).sessao_status === 'cancelada') throw new Error('Esta sessão foi cancelada pelo organizador. As vendas estão encerradas.')
     if (!event.audience_sales_enabled) {
       throw new Error('Venda de ingressos não está ativa para este evento')

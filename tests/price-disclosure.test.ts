@@ -58,6 +58,18 @@ describe('computePriceDisclosure (preço total desde o primeiro contato)', () =>
     expect(d.pixTotal).toBeLessThanOrEqual(22 + 22 * 0.07 + 0.01);
   });
 
+  it('flag por evento liga o parcelado em produção na vitrine; sem flag, só à vista', () => {
+    const sem = computePriceDisclosure({ ...base, product: 'workshop', preco: 697 })!;
+    const com = computePriceDisclosure({ ...base, product: 'workshop', preco: 697, maxInstallments: 3 })!;
+    expect(sem.installments).toBeNull();
+    expect(com.installments?.n).toBe(3);
+  });
+
+  it('com flag 6 e pedido que só comporta 3 parcelas, mostra o maior que o servidor aceita', () => {
+    const d = computePriceDisclosure({ ...base, product: 'workshop', preco: 100, maxInstallments: 6 })!;
+    expect(d.installments?.n).toBeLessThanOrEqual(3);
+  });
+
   it('preço zero não mostra taxa', () => {
     expect(computePriceDisclosure({ ...base, product: 'workshop', preco: 0 })).toBeNull();
   });

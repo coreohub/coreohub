@@ -40,7 +40,8 @@ import { buildCorsHeaders, resolveOrigin } from '../_shared/cors.ts'
 import { ensureNotificationDisabled } from '../_shared/asaas-customer.ts'
 import { planFeeSalesBlocked, SALES_NOT_OPEN_MESSAGE } from '../_shared/plan-fee-gate.ts'
 import { loadAsaasEnvForEvent } from '../_shared/asaas-env-loader.ts'
-import { normalizeInstallments, PROCESSING_FEE_CONFIG } from '../_shared/processing-fee.ts'
+import { normalizeInstallments } from '../_shared/processing-fee.ts'
+import { installmentConfigFor } from '../_shared/installment-offer.ts'
 import { fetchCardAnticipationLimit, limitCovers } from '../_shared/asaas-anticipation.ts'
 import { computeWorkshopCheckout } from '../_shared/workshop-checkout.ts'
 
@@ -185,11 +186,12 @@ Deno.serve(async (req) => {
     let eventUf: string | null = null
     let skipSplit = false
     let isSandboxEnv = false
+    let eventMaxInstallments = 1
     if (workshop.event_id) {
       if (await planFeeSalesBlocked(supabase, workshop.event_id)) throw new Error(SALES_NOT_OPEN_MESSAGE)
       const { data: evSb, error: evSbErr } = await supabase
         .from('events')
-        .select('id, created_by, payment_sandbox, processing_fee_enabled, state')
+        .select('id, created_by, payment_sandbox, processing_fee_enabled, state, max_installments')
         .eq('id', workshop.event_id)
         .maybeSingle()
       // Falha fechada: sem ler payment_sandbox não dá pra saber o ambiente, então não segue.
@@ -204,6 +206,7 @@ Deno.serve(async (req) => {
       }
       processingEnabled = evSb?.processing_fee_enabled === true
       eventUf = evSb?.state ?? null
+      eventMaxInstallments = Number(evSb?.max_installments ?? 1) || 1
     }
     if (!workshop.is_published) {
       throw new Error('Workshop não está publicado')
@@ -402,8 +405,8 @@ Deno.serve(async (req) => {
 
     // Linha "Taxa de pagamento" (P4): com a chave ligada o checkout escolhe Pix ou cartão e a linha é
     // SEMPRE calculada aqui (nunca confiamos no valor do cliente). Chave desligada = UNDEFINED, como sempre.
-    // Cartão parcelado: ligado SÓ no sandbox enquanto o fluxo não é validado (produção segue em 1x).
-    const feeConfig = isSandboxEnv ? { ...PROCESSING_FEE_CONFIG, maxInstallments: 3 } : PROCESSING_FEE_CONFIG
+    // Cartão parcelado: limite por evento (events.max_installments; 1 = só à vista) ou 3x em sandbox.
+    const feeConfig = installmentConfigFor(isSandboxEnv, eventMaxInstallments)
     let paymentMethod: 'pix' | 'card' | null = null
     let installments = 1
     if (processingEnabled && precoPago > 0) {

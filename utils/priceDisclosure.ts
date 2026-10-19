@@ -18,8 +18,10 @@ export interface PriceDisclosureInput {
   payer: string | null | undefined;
   /** events.state (UF) */
   uf: string | null | undefined;
-  /** events.payment_sandbox (3x só abre em sandbox até a flag por evento). */
+  /** events.payment_sandbox (evento sandbox oferece no mínimo 3x). */
   sandbox: boolean;
+  /** events.max_installments (flag por evento; 1 = só à vista). */
+  maxInstallments?: number | null;
 }
 
 export interface PriceDisclosure {
@@ -38,7 +40,7 @@ export interface PriceDisclosure {
 /** null = produto sem taxa nenhuma para o comprador (preço de tabela é o total): nada a mostrar. */
 export function computePriceDisclosure(input: PriceDisclosureInput): PriceDisclosure | null {
   if (!(input.preco > 0)) return null;
-  const config = installmentConfigFor(input.sandbox);
+  const config = installmentConfigFor(input.sandbox, input.maxInstallments);
   const run = (method: 'pix' | 'card', installments: number) => {
     const commissionPercent = Number(input.commissionPercent ?? 10);
     const feeMode = input.feeMode ?? 'repassar';

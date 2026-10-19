@@ -93,7 +93,7 @@ const CheckoutWorkshop: React.FC = () => {
   const [payMethod, setPayMethod] = useState<PayMethod>('pix');
   const [installments, setInstallments] = useState(1);
   // Chave e UF do evento via RPC (a leitura direta de events é bloqueada para anon em evento privado).
-  const [eventFee, setEventFee] = useState<{ enabled: boolean; uf: string | null; sandbox: boolean }>({ enabled: false, uf: null, sandbox: false });
+  const [eventFee, setEventFee] = useState<{ enabled: boolean; uf: string | null; sandbox: boolean; maxInstallments: number }>({ enabled: false, uf: null, sandbox: false, maxInstallments: 1 });
   // Mitigation #7: comprador precisa aceitar política de reembolso antes de pagar
   const [refundAccepted, setRefundAccepted] = useState(false);
 
@@ -177,7 +177,7 @@ const CheckoutWorkshop: React.FC = () => {
           const { data: info, error: infoErr } = await supabase.rpc('get_event_processing_info', { p_event_id: ws.event_id });
           if (infoErr) console.error('[CheckoutWorkshop] get_event_processing_info:', infoErr.message);
           const row = Array.isArray(info) ? info[0] : info;
-          setEventFee({ enabled: Boolean(row?.processing_fee_enabled), uf: row?.state ?? null, sandbox: Boolean(row?.payment_sandbox) });
+          setEventFee({ enabled: Boolean(row?.processing_fee_enabled), uf: row?.state ?? null, sandbox: Boolean(row?.payment_sandbox), maxInstallments: Number(row?.max_installments ?? 1) || 1 });
         }
         setWorkshop(ws);
 
@@ -304,7 +304,7 @@ const CheckoutWorkshop: React.FC = () => {
     // (sem evento) ou chave desligada = cálculo de sempre, sem linha.
     const feeEnabled = Boolean(workshop.event_id && eventFee.enabled);
     // Cartão parcelado: 3x só em evento sandbox (produção segue em 1x).
-    const feeConfig = installmentConfigFor(eventFee.sandbox);
+    const feeConfig = installmentConfigFor(eventFee.sandbox, eventFee.maxInstallments);
     const computeFor = (method: PayMethod, n: number) => computeWorkshopCheckout({
       product: 'workshop',
       itemShares: [baseAfterCoupon],

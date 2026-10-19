@@ -177,7 +177,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             politica_ingressos, audience_sales_enabled, billing_plan, seat_map_enabled,
             sessao_status, sessao_motivo, sessao_data_original, sessao_hora_original,
             audience_max_per_purchase, audience_max_per_cpf, audience_fee_mode, audience_commission_percent, payment_sandbox,
-            processing_fee_enabled, audience_processing_payer,
+            processing_fee_enabled, audience_processing_payer, max_installments,
             producer_ga4_id, producer_meta_pixel_id
           `)
           .eq(filterCol, idOrSlug)
@@ -1530,6 +1530,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                                     payer: (event as any).audience_processing_payer,
                                     uf: event.state,
                                     sandbox: Boolean((event as any).payment_sandbox),
+                                    maxInstallments: (event as any).max_installments,
                                   })}
                                 />
                               )}
@@ -1872,6 +1873,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                             payer: pass.processing_payer,
                             uf: event.state,
                             sandbox: Boolean((event as any).payment_sandbox),
+                                    maxInstallments: (event as any).max_installments,
                           })}
                         />
                       </>
@@ -1959,6 +1961,7 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
                             payer: ws.processing_payer,
                             uf: event.state,
                             sandbox: Boolean((event as any).payment_sandbox),
+                                    maxInstallments: (event as any).max_installments,
                           })}
                         />
                       )}

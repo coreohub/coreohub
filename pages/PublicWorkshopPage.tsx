@@ -90,7 +90,7 @@ const PublicWorkshopPage: React.FC = () => {
   const discountToken = searchParams.get('discount_token');
 
   const [workshop, setWorkshop] = useState<Workshop | null>(null);
-  const [eventFee, setEventFee] = useState<{ enabled: boolean; uf: string | null; sandbox: boolean }>({ enabled: false, uf: null, sandbox: false });
+  const [eventFee, setEventFee] = useState<{ enabled: boolean; uf: string | null; sandbox: boolean; maxInstallments: number }>({ enabled: false, uf: null, sandbox: false, maxInstallments: 1 });
   const [stock, setStock]       = useState<Stock | null>(null);
   const [proximoLote, setProximoLote] = useState<{ preco: number; dataVirada: string; dias: number } | null>(null);
   const [loading, setLoading]   = useState(true);
@@ -143,7 +143,7 @@ const PublicWorkshopPage: React.FC = () => {
           const { data: info, error: infoErr } = await supabase.rpc('get_event_processing_info', { p_event_id: ws.event_id });
           if (infoErr) console.error('[PublicWorkshopPage] get_event_processing_info:', infoErr.message);
           const row = Array.isArray(info) ? info[0] : info;
-          setEventFee({ enabled: Boolean(row?.processing_fee_enabled), uf: row?.state ?? null, sandbox: Boolean(row?.payment_sandbox) });
+          setEventFee({ enabled: Boolean(row?.processing_fee_enabled), uf: row?.state ?? null, sandbox: Boolean(row?.payment_sandbox), maxInstallments: Number(row?.max_installments ?? 1) || 1 });
         }
         setWorkshop(ws);
 
@@ -375,6 +375,7 @@ const PublicWorkshopPage: React.FC = () => {
                       payer: (workshop as any).processing_payer,
                       uf: eventFee.uf,
                       sandbox: eventFee.sandbox,
+                      maxInstallments: eventFee.maxInstallments,
                     })}
                   />
                 </div>

@@ -1,12 +1,21 @@
 // Oferta de cartão parcelado ao comprador (docs/plano-tabela-parcelado.md). Módulo puro: o checkout do
-// frontend e as edge functions usam as mesmas regras. Hoje o parcelado só é oferecido em evento sandbox
-// (produção segue em 1x até o teste real).
+// frontend e as edge functions usam as mesmas regras. O parcelado abre por evento (events.max_installments) ou em sandbox
+// (produção segue em 1x por padrão).
 
 import { PROCESSING_FEE_CONFIG, round2, type ProcessingFeeConfig } from './processing-fee.ts'
 
-/** Config de checkout: 3x só em sandbox; qualquer outro evento usa a config de produção (1x). */
-export function installmentConfigFor(isSandbox: boolean): ProcessingFeeConfig {
-  return isSandbox ? { ...PROCESSING_FEE_CONFIG, maxInstallments: 3 } : PROCESSING_FEE_CONFIG
+/** Teto de parcelas que a CoreoHub oferece (decisão de 2026-10-19; a Asaas aceita até 21). */
+export const MAX_INSTALLMENTS_CAP = 6
+
+/**
+ * Config de checkout. O limite de parcelas vem da flag por evento (events.max_installments, 1 = só à vista);
+ * evento sandbox oferece no mínimo 3x. O teto 6 vale sempre, mesmo que o banco tenha outro valor.
+ * Frontend e edge functions chamam esta mesma função, então o que a tela oferece é o que o servidor aceita.
+ */
+export function installmentConfigFor(isSandbox: boolean, eventMax?: number | null): ProcessingFeeConfig {
+  const flag = Math.min(MAX_INSTALLMENTS_CAP, Math.max(1, Math.floor(Number(eventMax) || 1)))
+  const n = isSandbox ? Math.max(3, flag) : flag
+  return n === PROCESSING_FEE_CONFIG.maxInstallments ? PROCESSING_FEE_CONFIG : { ...PROCESSING_FEE_CONFIG, maxInstallments: n }
 }
 
 export interface InstallmentDisclosure {
