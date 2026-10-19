@@ -1,6 +1,6 @@
 # Rascunho: Termo do Produtor sem antecipação do saldo retido
 
-Data: 2026-10-19. Status: RASCUNHO. Nada foi alterado em `pages/TermoProdutor.tsx`, nenhuma versão foi publicada, o gate está desligado. Redação a revisar por advogado (como a v1.8).
+Data: 2026-10-19. Status: TEXTO FECHADO (decisões do produtor na seção 6), sem revisão de advogado por decisão dele. Nada foi alterado em `pages/TermoProdutor.tsx`, nenhuma versão foi publicada, o gate está desligado.
 
 Origem: decisão do produtor (2026-10-19) de tirar a antecipação grátis e imediata do saldo retido, porque, se houver estorno depois do saque, o estorno pode falhar (a Asaas respondeu que a conta principal não cobre sozinha a falta de saldo da subconta) ou a master absorve o prejuízo (o que a 12.3 de hoje promete). Contexto e pesquisa em `memory/repasse_baixo_valor_painel_antecipacao_2026_10_19.md`.
 
@@ -20,11 +20,9 @@ Tamoios (Danielle) fica de fora: o aceite é por produtor (`profiles.producer_te
 
 > 12.4. A janela de 7 dias pode ser ajustada pela Plataforma mediante prévio aviso ao Produtor, em especial para acomodar exigências regulatórias, mudanças no contrato com o Asaas ou ajustes operacionais relacionados à mitigação de risco de fraude.
 
-### Parágrafo opcional (decisão comercial, NÃO é obrigatório)
+### Parágrafo 12.5 (antecipação sob análise): NÃO incluído
 
-Modelo da Sympla (pesquisa 2026-10-19: antecipação paga, parcial, com análise de risco). Só incluir se o produtor quiser manter uma porta de antecipação sob pedido:
-
-> 12.5. Mediante pedido escrito do Produtor e a critério exclusivo da CoreoHub, após análise de risco, a CoreoHub poderá antecipar parte do saldo retido, com custo informado antes da aprovação. A antecipação não é direito do Produtor e pode ser negada, limitada ou revertida em caso de estorno, reembolso, MED ou chargeback das vendas correspondentes.
+Era opcional (modelo Sympla: antecipação paga, parcial, com análise de risco). Recomendação e decisão: **não incluir**. Motivos: o produtor não quer risco pra master; um parágrafo assim cria expectativa de direito e ainda precisaria de preço, teto e regra de reversão; hoje não há produtor ativo que precise de caixa antes. Se algum dia aparecer, trata-se por acordo escrito pontual, fora do Termo, e só então se decide se vira cláusula.
 
 ### Resumo do aceite (linha ~580 de `TermoProdutor.tsx`)
 
@@ -57,9 +55,15 @@ Ponto residual na 11.12: a palavra "antecipados" ali se refere à antecipação 
 5. Ligar o gate (`transfer-scope.ts`) e esconder o link de antecipar no card, **depois** de a versão estar publicada. Quem ainda não aceitou continua com o direito da 12.3 antiga.
 6. Conferir com uma conta de teste que já aceitou: `scope: 'all'` volta `early_payout_disabled` e o painel não mostra o link.
 
-## 6. Decisões em aberto (do produtor)
+## 6. Decisões (produtor, 2026-10-19)
 
-1. Incluir ou não o parágrafo opcional 12.5 (antecipação sob análise)?
-2. O texto passa por advogado antes de publicar?
-3. Antes de publicar, avisar os produtores com evento ativo? (A 12.4 permite ajustes "mediante prévio aviso"; retirar uma opção que o Termo antigo prometia costuma pedir aviso claro. Pergunta jurídica, não pesquisada.)
-4. Quando a 1.9 do parcelado for mesclada: este texto entra junto ou vira 1.10?
+1. **Parágrafo 12.5:** fora do Termo (seção 2). Recomendado e aprovado.
+2. **Advogado:** não passa por advogado.
+3. **Aviso aos produtores com evento ativo:** não há produtor ativo, só a Lorrayne (Vicenza/Lyris), que deve a taxa de plano de 2 eventos e está com a trava de criar evento. Recomendação: sem aviso em massa. O aceite da versão nova já aparece sozinho (gate de criar evento e aviso do painel), e ela precisa aceitar de qualquer jeito. Vale uma mensagem curta e avulsa a ela quando a versão sair, dizendo que o botão "Transferir agora" passa a enviar só o saldo que já passou dos 7 dias.
+4. **Versão:** entra **na 1.9 junto com o parcelado**. A 1.9 ainda não foi publicada e ninguém a aceitou, então o produtor aceita uma vez só. Só vira 1.10 se a 1.9 sair antes deste texto ficar pronto.
+
+## 7. Dependência com o parcelado (outra sessão: liberar até 3x pros produtores)
+
+- A publicação do Termo e a liberação do 3x devem sair juntas, porque são a mesma versão.
+- **Antes de publicar, a outra sessão precisa confirmar como o parcelado grava a venda em `platform_commissions`** (`release_at`, `card_credit_at`, uma linha por venda ou por parcela). O card "Seus repasses" e o `manual-transfer-now` dependem desses campos: se o parcelado antecipado entrar com datas diferentes das esperadas, "A liberar" e "Disponível" mostrariam valores errados. Eu não verifiquei isso.
+- O parcelado aumenta a exposição a estorno (a 11.11 diz que a CoreoHub antecipa o líquido ao produtor), o que reforça a retirada da antecipação do saldo retido.
