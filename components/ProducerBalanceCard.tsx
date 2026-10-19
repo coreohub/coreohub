@@ -93,12 +93,16 @@ const fmtDateTime = (iso: string) =>
     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
   });
 
-/** "em 23h" / "em 3 dias" a partir de um timestamp futuro. */
-function fmtRelative(ts: number): string {
-  const diffH = Math.max(1, Math.round((ts - Date.now()) / (1000 * 60 * 60)));
-  if (diffH < 24) return `em ${diffH}h`;
-  const days = Math.ceil(diffH / 24);
-  return `em ${days} dia${days > 1 ? 's' : ''}`;
+/** "hoje" / "amanhã" / "dd/mm" pra um dia de liberação. */
+function fmtReleaseDay(ts: number): string {
+  const d = new Date(ts);
+  const today = new Date();
+  const sameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (sameDay(d, today)) return 'hoje';
+  const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  if (sameDay(d, tomorrow)) return 'amanhã';
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 }
 
 /**
@@ -280,10 +284,9 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
     };
   }, [load]);
 
-  const { retido, disponivel, nextReleaseAt, cartao, nextCardAt } = useMemo(() => {
+  const { retido, disponivel, cartao, nextCardAt } = useMemo(() => {
     const now = Date.now();
     let r = 0, d = 0, cc = 0;
-    let next: number | null = null;
     let nextCard: number | null = null;
     for (const c of pending) {
       const releaseTs = c.release_at ? new Date(c.release_at).getTime() : 0;
@@ -303,7 +306,6 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
       }
       if (releaseTs > now) {
         r += amt;
-        if (next === null || releaseTs < next) next = releaseTs;
       } else {
         d += amt;
       }
@@ -311,7 +313,6 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
     return {
       retido:        parseFloat(r.toFixed(2)),
       disponivel:    parseFloat(d.toFixed(2)),
-      nextReleaseAt: next,
       cartao:        parseFloat(cc.toFixed(2)),
       nextCardAt:    nextCard,
     };
@@ -323,17 +324,14 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
 
   // A caminho por transferência interna da CoreoHub (baixo valor). Mostrado à
   // parte: não entra no saque manual (total) nem na checagem do saldo Asaas.
-  const { aCaminho, nextLowValueAt } = useMemo(() => {
+  const aCaminho = useMemo(() => {
     let v = 0;
-    let next: number | null = null;
     for (const t of lowValue) {
       const amt = Number(t.value ?? 0);
       if (amt <= 0) continue;
       v += amt;
-      const ts = t.safety_release_at ? new Date(t.safety_release_at).getTime() : null;
-      if (ts !== null && (next === null || ts < next)) next = ts;
     }
-    return { aCaminho: parseFloat(v.toFixed(2)), nextLowValueAt: next };
+    return parseFloat(v.toFixed(2));
   }, [lowValue]);
 
   // Transferido: agrupa por id de transferência. Cada comissão de um lote grava
@@ -377,6 +375,37 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
     };
   }, [sentComm, sentLow]);
 
+  // A liberar agrupado por DIA de liberação (comissões retidas + repasses internos
+  // da CoreoHub), pra o produtor ver quanto libera em cada data.
+  const releaseByDay = useMemo(() => {
+    const now = Date.now();
+    const dayKey = (ts: number) => {
+      const d = new Date(ts);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    const map = new Map<string, { key: string; ts: number; amount: number }>();
+    const add = (ts: number | null, amount: number) => {
+      if (amount <= 0) return;
+      // Sem data futura (repasse já na fila da CoreoHub): agrupa em "em processamento".
+      const future = ts !== null && ts > now;
+      const key = future ? dayKey(ts as number) : 'proc';
+      const cur = map.get(key);
+      if (cur) cur.amount += amount;
+      else map.set(key, { key, ts: future ? (ts as number) : 0, amount });
+    };
+    for (const c of pending) {
+      const releaseTs = c.release_at ? new Date(c.release_at).getTime() : 0;
+      const cardTs = c.card_credit_at ? new Date(c.card_credit_at).getTime() : 0;
+      const amt = Number(c.net_amount ?? 0) - Number(c.refund_amount ?? 0);
+      if (amt <= 0 || cardTs > now || releaseTs <= now) continue;
+      add(releaseTs, amt);
+    }
+    for (const t of lowValue) {
+      add(t.safety_release_at ? new Date(t.safety_release_at).getTime() : null, Number(t.value ?? 0));
+    }
+    return [...map.values()].sort((a, b) => (a.ts === 0 ? 1 : b.ts === 0 ? -1 : a.ts - b.ts));
+  }, [pending, lowValue]);
+
   const aLiberar        = parseFloat((retido + aCaminho).toFixed(2));
   const totalAReceber   = parseFloat((retido + disponivel + aCaminho).toFixed(2));
 
@@ -393,9 +422,11 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
         throw new Error((data as any)?.message ?? (data as any)?.reason ?? 'Falha na transferência');
       }
       const released = Number((data as any)?.released ?? 0);
+      const heldBack = Number((data as any)?.held_back ?? 0);
       setFeedback({
         kind: 'ok',
-        msg:  `Transferência disparada: ${fmtBRL(released)} a caminho do seu PIX.`,
+        msg:  `Transferência disparada: ${fmtBRL(released)} a caminho do seu PIX.`
+          + (heldBack > 0 ? ` ${fmtBRL(heldBack)} seguem nos 7 dias de segurança.` : ''),
       });
       setModalScope(null);
       const { data: { user } } = await supabase.auth.getUser();
@@ -417,10 +448,6 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
   }
 
   // Mostra sempre, mesmo vazio — empty state é melhor que sumir silencioso.
-
-  const nextLiberaTs = [nextReleaseAt, nextLowValueAt]
-    .filter((t): t is number => t !== null)
-    .sort((a, b) => a - b)[0] ?? null;
 
   const modalAmount = modalScope === 'all' ? total : disponivel;
   const stepBox = 'flex-1 min-w-0 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 p-4';
@@ -473,19 +500,14 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
             </div>
             <p className={stepValue}>{fmtBRL(aLiberar)}</p>
             <div className="mt-2 space-y-1">
-              {retido > 0 && (
-                <p className={stepNote}>
-                  <strong className="font-black text-slate-700 dark:text-slate-300">{fmtBRL(retido)}</strong>
-                  {nextReleaseAt ? ` · libera ${fmtRelative(nextReleaseAt)}` : ''}
+              {releaseByDay.slice(0, 4).map(d => (
+                <p key={d.key} className={stepNote}>
+                  <strong className="font-black text-slate-700 dark:text-slate-300">{fmtBRL(d.amount)}</strong>
+                  {d.ts === 0 ? ' · em processamento' : ` · libera ${fmtReleaseDay(d.ts)}`}
                 </p>
-              )}
-              {aCaminho > 0 && (
-                <p className={stepNote}>
-                  <strong className="font-black text-slate-700 dark:text-slate-300">{fmtBRL(aCaminho)}</strong>
-                  {nextLowValueAt
-                    ? ` · a partir de ${new Date(nextLowValueAt).toLocaleDateString('pt-BR')}`
-                    : ' · libera após o pagamento'}
-                </p>
+              ))}
+              {releaseByDay.length > 4 && (
+                <p className={stepNote}>e mais {releaseByDay.length - 4} data{releaseByDay.length - 4 > 1 ? 's' : ''}.</p>
               )}
               {aLiberar <= 0 && <p className={stepNote}>Nada aguardando liberação.</p>}
             </div>
@@ -503,7 +525,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
             <p className={stepValue}>{fmtBRL(disponivel)}</p>
             <p className={`${stepNote} mt-2`}>
               {disponivel > 0
-                ? 'Sai no seu PIX sozinho na madrugada (00h), ou agora pelo botão abaixo.'
+                ? 'Já passou dos 7 dias de segurança. Sai no seu PIX sozinho na madrugada (00h), ou agora pelo botão abaixo.'
                 : 'Nada disponível agora.'}
             </p>
           </div>
@@ -712,10 +734,10 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
                   <Info size={16} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
                   <div className="text-[11px] text-sky-800 dark:text-sky-200 leading-relaxed">
                     <strong className="block mb-1">Antecipação imediata.</strong>
-                    O valor a liberar sairia sozinho em até 7 dias —
-                    antecipando agora você recebe na hora. Reembolsos nos próximos
-                    7 dias são absorvidos pela CoreoHub e recuperados nos
-                    próximos pagamentos recebidos (sem PIX manual).
+                    Esse valor ainda está nos 7 dias de segurança, que existem para cobrir
+                    estornos. Se uma venda dele for estornada antes do fim do prazo, o
+                    estorno pode não ser possível ou o valor ser descontado dos seus
+                    próximos recebimentos. Sem estornos, nada muda.
                   </div>
                 </div>
               ) : (
