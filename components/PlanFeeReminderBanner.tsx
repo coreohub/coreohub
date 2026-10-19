@@ -8,10 +8,12 @@ interface Props {
 }
 
 /**
- * Aviso dentro da tolerância de 7 dias da taxa fixa do plano (Essencial/Escala)
- * — decisão de produto 2026-09-25. Antes do prazo o painel funciona normal e
- * este cartão lembra o que falta; depois do prazo entra em cena o
- * PlanFeeGateModal (trava). Some sozinho quando o webhook confirma o pagamento.
+ * Aviso da taxa fixa do plano (Essencial/Escala) — decisão de produto 2026-09-25.
+ * Dentro da tolerância de 7 dias o painel funciona normal e este cartão lembra o
+ * que falta (âmbar). Depois do prazo o evento aparece aqui em vermelho (vencido)
+ * e o PlanFeeGateModal trava as demais telas; o painel (/qg-organizador) fica
+ * livre pra o produtor ver o saldo e pagar cada taxa. Some sozinho quando o
+ * webhook confirma o pagamento.
  *
  * Inline (não fixed) pra não sobrepor DemoBanner/EmailVerifyBanner. Cartão
  * visível, nunca escondido: se há taxa pendente dentro do prazo, aparece.
@@ -21,7 +23,10 @@ const PlanFeeReminderBanner: React.FC<Props> = ({ producerId }) => {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const soon = pending.filter(ev => !ev.locked);
+  // Vencidos primeiro: o painel (rota /qg-organizador) fica liberado mesmo com
+  // evento vencido pra o produtor ver o saldo, e aqui ele vê cada taxa em aberto
+  // com o próprio "Pagar agora". Nas outras rotas o PlanFeeGateModal cobre a tela.
+  const soon = [...pending].sort((a, b) => Number(b.locked) - Number(a.locked));
   if (soon.length === 0) return null;
 
   const handlePay = async (eventId: string, plano: string) => {
@@ -44,24 +49,43 @@ const PlanFeeReminderBanner: React.FC<Props> = ({ producerId }) => {
         const ate = new Date(ev.lockAt).toLocaleDateString('pt-BR', {
           weekday: 'short', day: '2-digit', month: 'long', year: 'numeric',
         });
+        const overdue = ev.locked;
         return (
           <div
             key={ev.id}
-            className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-2xl border border-amber-300/60 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10"
+            className={`flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-2xl border ${
+              overdue
+                ? 'border-rose-300/60 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10'
+                : 'border-amber-300/60 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10'
+            }`}
             role="status"
           >
-            <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center flex-shrink-0">
-              <Receipt size={18} className="text-amber-700 dark:text-amber-300" />
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+              overdue ? 'bg-rose-100 dark:bg-rose-500/20' : 'bg-amber-100 dark:bg-amber-500/20'
+            }`}>
+              <Receipt size={18} className={overdue ? 'text-rose-700 dark:text-rose-300' : 'text-amber-700 dark:text-amber-300'} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">
-                Taxa do plano {planoLabel} pendente
+              <p className={`text-[10px] font-black uppercase tracking-widest ${
+                overdue ? 'text-rose-700 dark:text-rose-300' : 'text-amber-700 dark:text-amber-300'
+              }`}>
+                {overdue ? `Taxa do plano ${planoLabel} vencida` : `Taxa do plano ${planoLabel} pendente`}
               </p>
               <p className="text-sm text-slate-700 dark:text-slate-200 leading-snug">
-                <strong>{ev.name}</strong>: pague os <strong>R$ {valor.toFixed(2)}</strong> até <strong>{ate}</strong>.{' '}
-                {ev.salesClosed
-                  ? 'Enquanto a taxa não for paga, as vendas e inscrições do evento ficam fechadas.'
-                  : 'Depois dessa data as vendas fecham e o painel trava até o pagamento.'}
+                {overdue ? (
+                  <>
+                    <strong>{ev.name}</strong>: a taxa de <strong>R$ {valor.toFixed(2)}</strong> venceu em <strong>{ate}</strong>.
+                    As vendas desse evento estão fechadas e as demais telas do painel ficam travadas até o pagamento
+                    (Pix ou cartão, a nova fatura vence no mesmo dia). O seu saldo e os repasses continuam aqui.
+                  </>
+                ) : (
+                  <>
+                    <strong>{ev.name}</strong>: pague os <strong>R$ {valor.toFixed(2)}</strong> até <strong>{ate}</strong>.{' '}
+                    {ev.salesClosed
+                      ? 'Enquanto a taxa não for paga, as vendas e inscrições do evento ficam fechadas.'
+                      : 'Depois dessa data as vendas fecham e o painel trava até o pagamento.'}
+                  </>
+                )}
               </p>
             </div>
             <button
