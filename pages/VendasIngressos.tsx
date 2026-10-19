@@ -185,14 +185,16 @@ const VendasIngressos: React.FC = () => {
   const [blockBusy, setBlockBusy] = useState(false);
   const [blockMsg, setBlockMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [blockConfirm, setBlockConfirm] = useState<'block' | 'unblock' | null>(null);
-  const [blockedList, setBlockedList] = useState<Array<{ seat_id: string; block_reason: string | null }>>([]);
+  // Motivos dos lugares bloqueados (leitura direta, so o dono passa na RLS). A LISTA vem do status ao vivo.
+  const [blockedRows, setBlockedRows] = useState<Array<{ seat_id: string; block_reason: string | null }>>([]);
 
   const load = async (targetEventId: string) => {
     setLoading(true);
     setErr(null);
     try {
       setEventId(targetEventId);
-      const { data: ev } = await supabase.from('events').select('name, created_by, ingressos_config, seat_map_enabled, sessao_status, sessao_motivo, start_date, event_time').eq('id', targetEventId).maybeSingle();
+      const { data: ev, error: evErr } = await supabase.from('events').select('name, created_by, ingressos_config, seat_map_enabled, sessao_status, sessao_motivo, start_date, event_time').eq('id', targetEventId).maybeSingle();
+      if (evErr) console.error('[VendasIngressos] leitura do evento:', evErr.message);
       setEventName(ev?.name ?? '');
       setTicketTypes(Array.isArray(ev?.ingressos_config) ? (ev!.ingressos_config as TicketTypeConfig[]).filter(t => t?.nome) : []);
       setSeatMapEnabled(Boolean((ev as any)?.seat_map_enabled));
@@ -308,15 +310,26 @@ const VendasIngressos: React.FC = () => {
       console.error('[VendasIngressos] lista de bloqueados:', listErr.message);
       return;
     }
-    setBlockedList((data ?? []) as Array<{ seat_id: string; block_reason: string | null }>);
+    setBlockedRows((data ?? []) as Array<{ seat_id: string; block_reason: string | null }>);
   };
+
+  // Lista de bloqueados = status ao vivo (acompanha o polling do mapa). Os motivos sao relidos
+  // sempre que o conjunto de lugares bloqueados muda.
+  const blockedKey = useMemo(
+    () => Object.values(seatStatuses).filter(x => x.status === 'bloqueado').map(x => x.seat_id).sort().join(','),
+    [seatStatuses],
+  );
+  const blockedList = useMemo(() => {
+    const reasonMap = reasonsBySeat(blockedRows);
+    return blockedKey === '' ? [] : blockedKey.split(',').map(id => ({ seat_id: id, block_reason: reasonMap[id] ?? null }));
+  }, [blockedKey, blockedRows]);
 
   useEffect(() => {
     if (seatMapEnabled && eventId && canManageBlocks) void loadBlockedList(eventId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seatMapEnabled, eventId, canManageBlocks]);
+  }, [seatMapEnabled, eventId, canManageBlocks, blockedKey]);
 
-  const blockReasons = useMemo(() => reasonsBySeat(blockedList), [blockedList]);
+  const blockReasons = useMemo(() => reasonsBySeat(blockedRows), [blockedRows]);
 
   const blockPartition = useMemo(
     () => partitionSelection(rowsConfig, seatStatuses, blockSelected),
@@ -333,8 +346,15 @@ const VendasIngressos: React.FC = () => {
   };
 
   const toggleBlockRow = (codigo: string) => {
-    setBlockMsg(null);
-    setBlockSelected(prev => toggleMany(prev, selectableIds(expandRow(rowsConfig, codigo))));
+    const all = expandRow(rowsConfig, codigo);
+    const usable = selectableIds(all);
+    // Uma unica acao por clique: se a fileira ainda tem lugar livre, pega so os livres (bloquear);
+    // se so restam bloqueados, pega os bloqueados (desbloquear). Nunca mistura as duas.
+    const freeOnes = usable.filter(id => seatStatuses[id]?.status !== 'bloqueado');
+    const target = freeOnes.length > 0 ? freeOnes : usable;
+    const ignored = all.length - usable.length;
+    setBlockMsg(ignored > 0 ? { kind: 'ok', text: `${ignored} lugar(es) da fileira ${codigo} não podem ser alterados e foram ignorados (PCD, acompanhante, vendidos ou em compra).` } : null);
+    setBlockSelected(prev => toggleMany(prev, target));
   };
 
   const addBlockRange = () => {
@@ -1020,6 +1040,7 @@ const VendasIngressos: React.FC = () => {
               selectedSeats={blockSelected}
               onToggle={toggleBlockSeat}
               onToggleRow={toggleBlockRow}
+              onBlocked={reason => setBlockMsg({ kind: 'err', text: reason })}
               mode="block"
               size="sm"
               variant="auto"
