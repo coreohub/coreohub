@@ -24,7 +24,7 @@ import { ticketSeatKind } from '../supabase/functions/_shared/seat-rules';
 import { SEAT_TIPO_LABEL, seatTipoFromLayout } from '../utils/seatTipo';
 import { useSeatMap } from '../hooks/useSeatMap';
 import { companionBySpecial, tipoFromRow, isSpecialTipo, type SeatTipo } from '../utils/seatSelection';
-import { expandRange, expandRow, partitionSelection, seatCapacity, selectableForBlock, seatTipoOf, toggleMany } from '../utils/seatBlock';
+import { BLOCK_REASON_SUGGESTIONS, expandRange, expandRow, partitionSelection, reasonsBySeat, seatCapacity, selectableForBlock, seatTipoOf, toggleMany } from '../utils/seatBlock';
 import { SEAT_BLOCK_REASON_MAX, summarizeOutcomes, type SeatBlockResult } from '../supabase/functions/_shared/seat-block';
 import { maskCpfCnpj, unmaskCpfCnpj, maskTelefoneBR, unmaskTelefoneBR } from '../utils/masks';
 
@@ -312,9 +312,11 @@ const VendasIngressos: React.FC = () => {
   };
 
   useEffect(() => {
-    if (blockOpen && eventId && canManageBlocks) void loadBlockedList(eventId);
+    if (seatMapEnabled && eventId && canManageBlocks) void loadBlockedList(eventId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blockOpen, eventId, canManageBlocks]);
+  }, [seatMapEnabled, eventId, canManageBlocks]);
+
+  const blockReasons = useMemo(() => reasonsBySeat(blockedList), [blockedList]);
 
   const blockPartition = useMemo(
     () => partitionSelection(rowsConfig, seatStatuses, blockSelected),
@@ -1005,7 +1007,7 @@ const VendasIngressos: React.FC = () => {
             </p>
             <p className="text-xs text-slate-500 mt-1">
               Lugar bloqueado fica fora da venda online e do balcão da equipe, sem gerar ingresso. O comprador o vê como indisponível, sem o motivo.
-              Toque nos lugares, ou na letra da fileira para pegar a fileira inteira. Lugares PCD e de acompanhante não podem ser bloqueados.
+              Toque nos lugares, ou na letra sublinhada da fileira para pegar a fileira inteira. Passe o mouse num lugar bloqueado para ver o motivo. Lugares PCD e de acompanhante não podem ser bloqueados.
             </p>
           </div>
 
@@ -1020,6 +1022,7 @@ const VendasIngressos: React.FC = () => {
               size="sm"
               variant="auto"
               zoomable
+              blockReasons={blockReasons}
             />
             <SeatLegend rowsConfig={rowsConfig} variant="auto" showBlocked />
           </div>
@@ -1064,6 +1067,18 @@ const VendasIngressos: React.FC = () => {
                 placeholder="Ex.: reserva da direção, câmera, visibilidade ruim"
                 className="w-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#ff0068]/50"
               />
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {BLOCK_REASON_SUGGESTIONS.map(r => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setBlockReason(r)}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest cursor-pointer transition-colors ${blockReason === r ? 'bg-amber-500 text-black' : 'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/20'}`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -1479,6 +1494,7 @@ const VendasIngressos: React.FC = () => {
                           comumQty={pdvComumQty}
                           onBlocked={setPdvError}
                           canSellBlocked={canManageBlocks}
+                          blockReasons={blockReasons}
                         />
                         <SeatLegend rowsConfig={rowsConfig} variant="auto" showBlocked={canManageBlocks} />
                       </div>
