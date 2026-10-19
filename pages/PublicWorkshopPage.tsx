@@ -12,6 +12,8 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { diffDias, todayISO, findNextWorkshopLot } from '../utils/lotes';
 import AvisoViradaLote from '../components/AvisoViradaLote';
+import PriceFeeNote from '../components/PriceFeeNote';
+import { computePriceDisclosure } from '../utils/priceDisclosure';
 import {
   Loader2, AlertCircle, ArrowLeft, Calendar, Clock, MapPin, User as UserIcon,
   GraduationCap, Tag, Users, Globe, Instagram, Award, Share2,
@@ -88,7 +90,7 @@ const PublicWorkshopPage: React.FC = () => {
   const discountToken = searchParams.get('discount_token');
 
   const [workshop, setWorkshop] = useState<Workshop | null>(null);
-  const [eventFee, setEventFee] = useState<{ enabled: boolean; uf: string | null }>({ enabled: false, uf: null });
+  const [eventFee, setEventFee] = useState<{ enabled: boolean; uf: string | null; sandbox: boolean }>({ enabled: false, uf: null, sandbox: false });
   const [stock, setStock]       = useState<Stock | null>(null);
   const [proximoLote, setProximoLote] = useState<{ preco: number; dataVirada: string; dias: number } | null>(null);
   const [loading, setLoading]   = useState(true);
@@ -141,7 +143,7 @@ const PublicWorkshopPage: React.FC = () => {
           const { data: info, error: infoErr } = await supabase.rpc('get_event_processing_info', { p_event_id: ws.event_id });
           if (infoErr) console.error('[PublicWorkshopPage] get_event_processing_info:', infoErr.message);
           const row = Array.isArray(info) ? info[0] : info;
-          setEventFee({ enabled: Boolean(row?.processing_fee_enabled), uf: row?.state ?? null });
+          setEventFee({ enabled: Boolean(row?.processing_fee_enabled), uf: row?.state ?? null, sandbox: Boolean(row?.payment_sandbox) });
         }
         setWorkshop(ws);
 
@@ -359,12 +361,23 @@ const PublicWorkshopPage: React.FC = () => {
                   <AvisoViradaLote preco={proximoLote.preco} dataVirada={proximoLote.dataVirada} dias={proximoLote.dias} formatPreco={fmtCurrency} />
                 </p>
               )}
-              {/* Taxa de pagamento (chave por evento): sem número fechado, varia conforme Pix ou cartão no checkout.
-                  Não aparece com o produtor absorvendo nem em UF que proíbe taxa online (AC/RR). */}
-              {workshop.event_id && eventFee.enabled
-                && (workshop as any).processing_payer !== 'produtor'
-                && !getUfRule(eventFee.uf)?.forceAbsorb && (
-                <p className="text-[11px] text-slate-400 mt-1">+ taxa de pagamento conforme a forma escolhida</p>
+              {/* "+ taxas" com "?" (Decreto 13.108/2026, art. 4º VI e 7º): mesma conta do checkout; o total
+                  desde o primeiro contato vai no "?". Sem taxa para o comprador (produtor absorve, UF AC/RR), some. */}
+              {precoAtivo != null && Number(precoAtivo) > 0 && (
+                <div className="mt-1">
+                  <PriceFeeNote
+                    disclosure={computePriceDisclosure({
+                      product: 'workshop',
+                      preco: Number(precoAtivo),
+                      commissionPercent: Number((workshop as any).workshop_commission_percent ?? 10),
+                      feeMode: (workshop as any).workshop_fee_mode ?? 'repassar',
+                      processingFeeEnabled: Boolean(workshop.event_id && eventFee.enabled),
+                      payer: (workshop as any).processing_payer,
+                      uf: eventFee.uf,
+                      sandbox: eventFee.sandbox,
+                    })}
+                  />
+                </div>
               )}
             </div>
             <button onClick={handleShare} className="p-2 rounded-lg hover:bg-white/10 text-slate-400" title="Compartilhar">
