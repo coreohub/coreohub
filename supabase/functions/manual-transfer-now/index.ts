@@ -1,7 +1,8 @@
 // Chamada pelo botão "Transferir agora" no /qg-organizador. Antecipa o
 // saldo retido da subconta do produtor pro PIX externo dele (mesmo
 // fluxo que o cron `daily-release-funds`, mas dispara on-demand pegando
-// TUDO — retido + disponível; com body { scope: 'available' } só o disponível).
+// TUDO — retido + disponível). Desde 2026-10-19 o padrão é só o disponível:
+// antecipar o retido exige body { scope: 'all' } explícito.
 //
 // Settlement period D+7 (2026-05-21): plano em
 // memory/backlog_settlement_period_d7.md.
@@ -17,6 +18,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { sweepProducerBalance, pickCoveredCommissionIds } from '../_shared/asaas-payouts.ts'
+import { resolveTransferScope } from '../_shared/transfer-scope.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin':  '*',
@@ -51,13 +53,14 @@ Deno.serve(async (req) => {
   }
   const producerId = user.id
 
-  // scope 'available' = só o que já passou da janela (sem risco de estorno);
-  // 'all' (padrão, comportamento histórico) = antecipa também o retido.
-  let scope: 'available' | 'all' = 'all'
+  // scope 'available' (PADRÃO) = só o que já passou da janela de 7 dias (sem risco
+  // de estorno); 'all' = antecipa também o retido e só vale se pedido de propósito
+  // (ver _shared/transfer-scope.ts). Antes o padrão era 'all'.
+  let requestedScope: unknown = undefined
   try {
     const body = await req.json()
-    if (body?.scope === 'available') scope = 'available'
-  } catch { /* sem corpo / não-JSON: mantém 'all' */ }
+    requestedScope = body?.scope
+  } catch { /* sem corpo / não-JSON: cai no padrão seguro */ }
 
   const admin = createClient(supabaseUrl, serviceKey)
 
@@ -65,12 +68,22 @@ Deno.serve(async (req) => {
     // 1) Carrega credenciais Asaas do produtor
     const { data: prof, error: pErr } = await admin
       .from('profiles')
-      .select('id, full_name, asaas_api_key, pix_key, asaas_subconta_id')
+      .select('id, full_name, asaas_api_key, pix_key, asaas_subconta_id, producer_terms_version')
       .eq('id', producerId)
       .maybeSingle()
     if (pErr || !prof) {
       return jsonResp({ status: 'error', reason: 'profile_not_found' }, 404)
     }
+    const scopeDecision = resolveTransferScope({
+      requested:    requestedScope,
+      termsVersion: (prof as any).producer_terms_version,
+    })
+    if (!scopeDecision.ok) {
+      return jsonResp({ status: 'error', reason: scopeDecision.reason,
+        message: 'A antecipação não está disponível pra sua conta. Você pode transferir o valor que já passou dos 7 dias.' })
+    }
+    const scope = scopeDecision.scope
+
     if (!prof.asaas_subconta_id) {
       return jsonResp({ status: 'error', reason: 'no_subconta',
         message: 'Sua conta Asaas ainda não está configurada. Acesse Configurações pra conectar.' })
@@ -105,9 +118,8 @@ Deno.serve(async (req) => {
       return jsonResp({ status: 'error', reason: 'query_failed', error: cErr.message }, 500)
     }
     const nowMs = Date.now()
-    const pending = (pendingAll ?? [])
-      .filter(c => !c.card_credit_at || new Date(c.card_credit_at).getTime() <= nowMs)
-      .filter(c => scope === 'all' || !c.release_at || new Date(c.release_at).getTime() <= nowMs)
+    const credited = (pendingAll ?? []).filter(c => !c.card_credit_at || new Date(c.card_credit_at).getTime() <= nowMs)
+    const pending = credited.filter(c => scope === 'all' || !c.release_at || new Date(c.release_at).getTime() <= nowMs)
     const cardWaiting = (pendingAll ?? []).filter(c => c.card_credit_at && new Date(c.card_credit_at).getTime() > nowMs)
     if (pending.length === 0 && cardWaiting.length > 0) {
       const nextCredit = cardWaiting.map(c => c.card_credit_at as string).sort()[0]
@@ -116,11 +128,16 @@ Deno.serve(async (req) => {
         next_card_credit_at: nextCredit })
     }
     if (pending.length === 0) {
-      return jsonResp({ status: 'ok', reason: 'nothing_to_release', released: 0, commissions: 0 })
+      return jsonResp({ status: 'ok', reason: 'nothing_to_release', scope, released: 0, commissions: 0,
+        held_back: parseFloat(credited.reduce((s, c) => s + Math.max(0, Number(c.net_amount ?? 0) - Number(c.refund_amount ?? 0)), 0).toFixed(2)) })
     }
 
     const netOf = (c: { net_amount?: number | null; refund_amount?: number | null }) =>
       Math.max(0, Number(c.net_amount ?? 0) - Number(c.refund_amount ?? 0))
+
+    // O que ficou de fora por ainda estar dentro da janela (só no escopo 'available').
+    const pendingIds = new Set(pending.map(c => c.id as string))
+    const heldBack = credited.filter(c => !pendingIds.has(c.id as string)).reduce((s, c) => s + netOf(c), 0)
 
     const nowIso = new Date().toISOString()
     const totalPending = pending.reduce((s, c) => s + netOf(c), 0)
@@ -188,6 +205,7 @@ Deno.serve(async (req) => {
       released:        result.value,
       commissions:     pending.length,
       anticipated:     parseFloat(anticipated.toFixed(2)),
+      held_back:       parseFloat(heldBack.toFixed(2)),
       transfer_id:     result.transferId ?? null,
     })
   } catch (e) {
