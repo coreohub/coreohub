@@ -30,6 +30,8 @@ interface SeatGridProps {
   canSellBlocked?: boolean;
   /** block: clicar no rótulo da fileira seleciona a fileira inteira. */
   onToggleRow?: (rowCode: string) => void;
+  /** Motivo de cada lugar bloqueado (só o dono tem; aparece ao passar o mouse). */
+  blockReasons?: Record<string, string>;
 }
 
 const SIZES = {
@@ -55,7 +57,7 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
  * dedo (< 30px), o 1º toque amplia até ele e o 2º seleciona (mesmo padrão de
  * 2 passos do Seats.io no mobile).
  */
-export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onToggle, size = 'md', variant = 'dark', zoomable, pcdQty = 0, compQty = 0, comumQty = Number.MAX_SAFE_INTEGER, onBlocked, mode = 'sell', canSellBlocked = false, onToggleRow }: SeatGridProps) {
+export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onToggle, size = 'md', variant = 'dark', zoomable, pcdQty = 0, compQty = 0, comumQty = Number.MAX_SAFE_INTEGER, onBlocked, mode = 'sell', canSellBlocked = false, onToggleRow, blockReasons }: SeatGridProps) {
   const s = SIZES[size];
   const canZoom = zoomable ?? size === 'md';
 
@@ -233,7 +235,7 @@ export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onTo
               onClick={() => onToggleRow(row.codigo)}
               title={`Selecionar a fileira ${row.codigo} inteira`}
               aria-label={`Selecionar a fileira ${row.codigo} inteira`}
-              className={`absolute ${s.labelPos} font-black ${s.codeText} text-slate-500 hover:text-[#ff0068] cursor-pointer`}
+              className={`absolute ${s.labelPos} font-black ${s.codeText} text-slate-500 hover:text-[#ff0068] underline decoration-dotted underline-offset-2 cursor-pointer`}
             >
               {row.codigo}
             </button>
@@ -269,8 +271,8 @@ export default function SeatGrid({ rowsConfig, seatStatuses, selectedSeats, onTo
                       handleSeatClick(seatId, e);
                     }}
                     disabled={isTaken && !isSelected}
-                    title={`${seatId}${label ? ` · ${label}` : ''}${showBlocked ? ' · bloqueado' : isTaken ? (isBlockedSeat ? ' · indisponível' : ' · ocupado') : locked ? ` · ${reason}` : ''}`}
-                    aria-label={`Assento ${seatId}${label ? `, ${label}` : ''}${showBlocked ? ', bloqueado' : isTaken ? (isBlockedSeat ? ', indisponível' : ', ocupado') : locked ? ', indisponível para este pedido' : ', disponível'}`}
+                    title={`${seatId}${label ? ` · ${label}` : ''}${showBlocked ? (blockReasons?.[seatId] ? ` · bloqueado: ${blockReasons[seatId]}` : ' · bloqueado') : isTaken ? (isBlockedSeat ? ' · indisponível' : ' · ocupado') : locked ? ` · ${reason}` : ''}`}
+                    aria-label={`Assento ${seatId}${label ? `, ${label}` : ''}${showBlocked ? (blockReasons?.[seatId] ? `, bloqueado: ${blockReasons[seatId]}` : ', bloqueado') : isTaken ? (isBlockedSeat ? ', indisponível' : ', ocupado') : locked ? ', indisponível para este pedido' : ', disponível'}`}
                     aria-pressed={isSelected}
                     aria-disabled={locked || undefined}
                     className={`${s.btn} shrink-0 ${s.rounded} ${s.text} font-black flex items-center justify-center transition-colors

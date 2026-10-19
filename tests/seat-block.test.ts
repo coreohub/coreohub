@@ -4,6 +4,7 @@ import {
 } from '../supabase/functions/_shared/seat-block';
 import {
   expandRow, expandRange, parseSeatId, selectableForBlock, partitionSelection, toggleMany, seatCapacity,
+  BLOCK_REASON_SUGGESTIONS, reasonsBySeat,
 } from '../utils/seatBlock';
 import type { SeatRow, SeatStatus } from '../hooks/useSeatMap';
 
@@ -145,5 +146,18 @@ describe('seatCapacity', () => {
       a: st('a', 'livre'), b: st('b', 'bloqueado'), c: st('c', 'vendido'), d: st('d', 'cortesia'), e: st('e', 'reservado'),
     });
     expect(c).toEqual({ total: 5, bloqueado: 1, vendavel: 4, vendido: 2, reservado: 1, livre: 1 });
+  });
+});
+
+describe('reasonsBySeat / BLOCK_REASON_SUGGESTIONS', () => {
+  it('mapeia so lugares com motivo preenchido e apara espacos', () => {
+    expect(reasonsBySeat([
+      { seat_id: 'A-1', block_reason: ' Direção ' },
+      { seat_id: 'A-2', block_reason: null },
+      { seat_id: 'A-3', block_reason: '   ' },
+    ])).toEqual({ 'A-1': 'Direção' });
+  });
+  it('sugestoes cabem no limite do motivo', () => {
+    for (const r of BLOCK_REASON_SUGGESTIONS) expect(r.length).toBeLessThanOrEqual(SEAT_BLOCK_REASON_MAX);
   });
 });

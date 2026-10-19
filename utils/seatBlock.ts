@@ -102,3 +102,22 @@ export function seatCapacity(statuses: Record<string, SeatStatus>): {
     livre: all.filter(s => s.status === 'livre').length,
   };
 }
+
+/** Motivos mais comuns, para preencher o campo com um toque (o produtor ainda pode digitar o que quiser). */
+export const BLOCK_REASON_SUGGESTIONS = [
+  'Direção',
+  'Convidados',
+  'Câmera',
+  'Produção',
+  'Visibilidade ruim',
+] as const;
+
+/** Mapa seat_id -> motivo (so os bloqueados com motivo preenchido), para mostrar ao passar o mouse. */
+export function reasonsBySeat(list: Array<{ seat_id: string; block_reason: string | null }>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const b of list) {
+    const r = (b.block_reason ?? '').trim();
+    if (r) out[b.seat_id] = r;
+  }
+  return out;
+}
