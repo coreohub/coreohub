@@ -366,6 +366,7 @@ Deno.serve(async (req) => {
     let blockedOrigin: Array<{ seat_id: string; reason: string | null }> = []
     const restoreBlocks = async () => {
       if (blockedOrigin.length === 0) return
+      const ticketIds = createdTickets.map(t => t.id)
       const byReason = new Map<string, string[]>()
       for (const b of blockedOrigin) {
         const k = b.reason ?? ''
@@ -375,13 +376,14 @@ Deno.serve(async (req) => {
         const { error: restErr } = await supabase
           .from('event_seats')
           .update({
-            status: 'bloqueado', held_until: null, hold_token: null,
+            status: 'bloqueado', held_until: null, hold_token: null, audience_ticket_id: null,
             block_reason: reason || null, blocked_by: user.id, blocked_at: new Date().toISOString(),
           })
           .eq('event_id', event_id)
           .in('seat_id', ids)
-          .in('status', ['reservado', 'livre'])
-          .is('audience_ticket_id', null)
+          // So o que e desta venda: ligado aos tickets criados agora, ou reservado por este PDV
+          // (sem hold_token e sem ticket). Nunca derruba o hold de um comprador online.
+          .or(`audience_ticket_id.in.(${ticketIds.join(',')}),and(status.eq.reservado,hold_token.is.null,audience_ticket_id.is.null)`)
         if (restErr) console.error('[create-pdv-ticket] erro ao restaurar bloqueio:', restErr.message)
       }
       const { error: logErr } = await supabase.from('event_seat_block_log').insert({
@@ -392,6 +394,10 @@ Deno.serve(async (req) => {
       blockedOrigin = []
     }
     const rollbackTickets = async () => {
+      // 1o devolve o bloqueio (direto de 'reservado' para 'bloqueado', sem passar por 'livre'),
+      // depois libera o resto. O que voltou a bloqueado perde o vinculo com o ticket e nao e
+      // tocado pelo release_event_seats.
+      await restoreBlocks()
       // Ordem importa: event_seats.audience_ticket_id tem ON DELETE SET NULL
       // — libera o assento ANTES de apagar o ticket (senão release_event_seats
       // não acha mais nada pra liberar por ticket_id).
@@ -402,7 +408,6 @@ Deno.serve(async (req) => {
         if (relErr) console.error('[create-pdv-ticket] erro ao liberar assento no rollback:', relErr.message)
       }
       await supabase.from('audience_tickets').delete().in('id', createdTickets.map(t => t.id))
-      await restoreBlocks()
     }
 
     // ── Reserva de assento (Fase 2 Stage 4) — mesmo padrão do checkout
@@ -449,6 +454,11 @@ Deno.serve(async (req) => {
       })
       if (confirmSeatErr) {
         console.error('[create-pdv-ticket] erro RPC confirm_event_seats:', confirmSeatErr.message)
+        // Lugar que era bloqueado nao pode ficar solto (viraria vendavel ao publico): desfaz a venda.
+        if (blockedOrigin.length > 0) {
+          await rollbackTickets()
+          throw new Error('Falha ao confirmar o assento. Nada foi cobrado; tente de novo.')
+        }
       } else {
         seatsConfirmed = true
       }

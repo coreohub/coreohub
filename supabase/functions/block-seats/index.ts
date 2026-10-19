@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
 
     const { data: event } = await supabase
       .from('events')
-      .select('id, created_by, seat_map_enabled, sessao_status')
+      .select('id, created_by, seat_map_enabled')
       .eq('id', eventId)
       .maybeSingle()
     if (!event) return json({ error: 'Evento nao encontrado' }, 404)
