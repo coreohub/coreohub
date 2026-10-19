@@ -356,7 +356,7 @@ const TermoProdutor: React.FC = () => {
               </li>
             </ul>
             <p className="mb-2">
-              11.3. A CoreoHub absorve o custo de processamento de pagamentos (Pix e cartão), <strong>salvo</strong> nos eventos dos planos Essencial e Escala em que a &quot;Taxa de pagamento&quot; esteja ativada, caso em que se aplicam as cláusulas 11.5 a 11.9. A comissão devida à CoreoHub, regida pela cláusula 4, independe das taxas bancárias do Asaas e da Taxa de pagamento.
+              11.3. A CoreoHub absorve o custo de processamento de pagamentos (Pix e cartão), <strong>salvo</strong> nos eventos dos planos Essencial, Escala e Espetáculo em que a &quot;Taxa de pagamento&quot; esteja ativada, caso em que se aplicam as cláusulas 11.5 a 11.9. A comissão devida à CoreoHub, regida pela cláusula 4, independe das taxas bancárias do Asaas e da Taxa de pagamento.
             </p>
             <p>
               11.4. As taxas do Asaas podem ser reajustadas pela instituição financeira mediante prévio aviso aos seus correntistas. A CoreoHub se compromete a comunicar reajustes assim que tomar ciência, mas não tem ingerência sobre tais valores nem responsabilidade por seu reajuste.
