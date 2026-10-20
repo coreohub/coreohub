@@ -106,9 +106,21 @@ describe('sugestões de PCD', () => {
 
 describe('sanitizePlan', () => {
   it('aguenta lixo sem lançar', () => {
-    expect(sanitizePlan(null)).toEqual({ palco: 'indefinido', fileiras: [], sugestoes: [] })
+    expect(sanitizePlan(null)).toEqual({ palco: 'indefinido', fileiras: [], sugestoes: [], notas: [] })
     const p = sanitizePlan({ palco: 'x', fileiras: [{ codigo: ' a ', blocos: [[1, 'b', 2.5, 3], 'z'] }, { codigo: '', blocos: [[1]] }] })
     expect(p.palco).toBe('indefinido')
     expect(p.fileiras).toEqual([{ codigo: 'A', blocos: [[1, 3]], alinhamento: 'centro' }])
+  })
+})
+
+describe('planToRows — sentido dos blocos', () => {
+  it('blocos subindo dentro mas descendo entre si avisa', () => {
+    const out = planToRows({ palco: 'baixo', fileiras: [{ codigo: 'X', blocos: [[3, 4], [1, 2]], alinhamento: 'centro' }] })
+    expect(out.warnings.join(' ')).toMatch(/não acompanha a numeração/)
+  })
+  it('espelhada vale pelo sentido dentro dos blocos', () => {
+    const out = planToRows({ palco: 'baixo', fileiras: [{ codigo: 'X', blocos: [[4, 3], [2, 1]], alinhamento: 'centro' }] })
+    expect(out.rows[0].espelhado).toBe(true)
+    expect(out.warnings).toEqual([])
   })
 })

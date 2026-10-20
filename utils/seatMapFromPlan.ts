@@ -28,6 +28,8 @@ export interface PlanExtraction {
   /** Fileiras na ordem impressa, de cima para baixo. */
   fileiras: PlanRow[];
   sugestoes?: PlanHint[];
+  /** Dúvidas que a IA apontou (trecho ilegível, número cortado). Viram avisos na prévia. */
+  notas?: string[];
 }
 
 export interface PlanConversion {
@@ -61,11 +63,15 @@ export function sanitizePlan(raw: unknown): PlanExtraction {
       tipo: (['cadeirante', 'pcd_largo', 'acompanhante'].includes(h.tipo) ? h.tipo : 'desconhecido') as PlanHintKind,
       confianca: Math.min(1, Math.max(0, Number(h.confianca) || 0)),
     }));
-  return { palco, fileiras, sugestoes };
+  const notas = (Array.isArray(r.notas) ? r.notas : []).map(n => String(n ?? '').trim()).filter(Boolean);
+  return { palco, fileiras, sugestoes, notas };
 }
 
-/** Ordem impressa crescente = esquerda para direita com números subindo. */
-function isMirrored(flat: number[]): boolean {
+/** Espelhada = números decrescem da esquerda para a direita. Vale o sentido dentro dos blocos; só com blocos de 1 lugar compara a fileira toda. */
+function isMirrored(blocos: number[][]): boolean {
+  const longos = blocos.filter(b => b.length >= 2);
+  if (longos.length) return longos.every(b => b[0] > b[b.length - 1]);
+  const flat = blocos.flat();
   return flat.length > 1 && flat[0] > flat[flat.length - 1];
 }
 
@@ -98,6 +104,15 @@ function convertRow(f: PlanRow, warnings: string[]): RowConfig | null {
   }
   if (sentidos.size > 1) warnings.push(`Fileira ${f.codigo}: blocos com numeração em sentidos opostos. Revise a fileira.`);
 
+  // Os blocos também precisam andar no mesmo sentido da numeração dentro deles (senão a grade desenha errado).
+  const mins = f.blocos.map(b => Math.min(...b));
+  if (f.blocos.length > 1 && sentidos.size === 1) {
+    const mesmoSentido = sentidos.has('desce')
+      ? mins.every((m, i) => i === 0 || m < mins[i - 1])
+      : mins.every((m, i) => i === 0 || m > mins[i - 1]);
+    if (!mesmoSentido) warnings.push(`Fileira ${f.codigo}: a ordem dos blocos não acompanha a numeração. Revise a fileira.`);
+  }
+
   // Corredor entre dois blocos = último número do bloco de menor numeração.
   const porNumero = [...f.blocos].map(b => ({ min: Math.min(...b), max: Math.max(...b) })).sort((a, b) => a.min - b.min);
   const corredores: number[] = [];
@@ -117,7 +132,7 @@ function convertRow(f: PlanRow, warnings: string[]): RowConfig | null {
     pcd: [],
     ...(corredores.length ? { corredor_apos: corredores[0] } : {}),
     ...(corredores.length > 1 ? { corredores_apos: corredores } : {}),
-    ...(isMirrored(flat) ? { espelhado: true } : {}),
+    ...(isMirrored(f.blocos) ? { espelhado: true } : {}),
     ...(f.alinhamento === 'esquerda' ? { alinhamento: 'esquerda' as const } : {}),
   };
 }
@@ -128,7 +143,7 @@ function convertRow(f: PlanRow, warnings: string[]): RowConfig | null {
  */
 export function planToRows(planIn: PlanExtraction, expectedTotal?: number): PlanConversion {
   const plan = sanitizePlan(planIn);
-  const warnings: string[] = [];
+  const warnings: string[] = (plan.notas ?? []).map(n => `A IA avisou: ${n}`);
 
   if (plan.fileiras.length === 0) warnings.push('Nenhuma fileira foi lida da planta.');
 
