@@ -3124,7 +3124,8 @@ const AccountSettings = ({ onSaveSuccess, forcedTab, pageLabel }: AccountSetting
                 </div>
                 <div>
                   <label className={label}>Local do Evento</label>
-                  <input type="text" value={general.location} onChange={e => setGeneral({ ...general, location: e.target.value })} placeholder="Ex: Ginásio Municipal - Centro" className={input} />
+                  <input type="text" value={general.location} onChange={e => setGeneral({ ...general, location: e.target.value })} placeholder="Ex: Teatro Municipal – Rua das Palmeiras, 123, Centro" className={input} />
+                  <p className="text-[10px] text-slate-500 mt-1 px-1">Nome do local, rua e número. Aparece na vitrine e no ingresso.</p>
                 </div>
                 <div>
                   <label className={label}>Cidade / Estado</label>

@@ -147,7 +147,21 @@ export const uploadAudioFeedback = async (regId: string, audioBlob: Blob) => {
   return publicUrl;
 };
 
+// WhatsApp/Telegram descartam a imagem do preview (og:image) quando ela é pesada
+// (limite informal ~300KB). Comprimir aqui, no ponto único de upload, cobre todos
+// os chamadores — o 1º envio do banner em Configurações chegava sem compressão (2,2MB).
+const COVER_MAX_BYTES = 250 * 1024;
+
 export const uploadEventCover = async (eventId: string, fileBlob: Blob) => {
+  if (fileBlob.size > COVER_MAX_BYTES || fileBlob.type !== 'image/webp') {
+    const { default: imageCompression } = await import('browser-image-compression');
+    fileBlob = await imageCompression(fileBlob as File, {
+      maxSizeMB: 0.25,
+      maxWidthOrHeight: 1600,
+      useWebWorker: true,
+      fileType: 'image/webp',
+    });
+  }
   const fileName = `cover_${eventId}_${Date.now()}.webp`;
   // cacheControl 1 ano: mesmo motivo do uploadAudioFeedback acima — a capa é
   // servida em toda visita à vitrine pública, então cache curto (1h default)
