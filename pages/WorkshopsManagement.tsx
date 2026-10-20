@@ -2655,6 +2655,7 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
     selection_mode: 'fixed' as 'fixed' | 'a_la_carte',
     min_selecionaveis: '' as string | number,
     max_selecionaveis: '' as string | number,
+    slug: '',
   };
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
@@ -2718,6 +2719,7 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
       selection_mode: p.selection_mode ?? 'fixed',
       min_selecionaveis: p.min_selecionaveis ?? '',
       max_selecionaveis: p.max_selecionaveis ?? '',
+      slug: p.slug ?? '',
     });
     setFormError(null);
     setShowModal(true);
@@ -2763,13 +2765,24 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
     if (editingId) {
       // Slug fica estável nas edições — não regenera a partir do nome, senão
       // um link já compartilhado do pass quebraria a cada troca de título.
-      const { error } = await supabase.from('workshop_passes').update(payload).eq('id', editingId);
+      // Slug só muda se o produtor editou o campo; o histórico (workshop_pass_slug_history) mantém o link antigo vivo.
+      const original = passes.find(x => x.id === editingId)?.slug ?? null;
+      const typed = slugify(form.slug.trim());
+      let slugUpdate: { slug: string } | Record<string, never> = {};
+      if (typed && typed !== original) {
+        if (slugValidity(typed) !== 'ok') { setSaving(false); return setFormError('Endereço do passe inválido: use de 3 a 50 caracteres (letras, números e hífens).'); }
+        const { data: free, error: slugErr } = await supabase.rpc('workshop_pass_slug_available', { p_slug: typed, p_exclude_id: editingId });
+        if (slugErr) console.error('[savePass] workshop_pass_slug_available:', slugErr.message);
+        else if (free !== true) { setSaving(false); return setFormError(`O endereço "${typed}" já está em uso. Escolha outro no campo de endereço.`); }
+        slugUpdate = { slug: typed };
+      }
+      const { error } = await supabase.from('workshop_passes').update({ ...payload, ...slugUpdate }).eq('id', editingId);
       if (error) { setSaving(false); return setFormError(error.message); }
     } else {
       // Slug só é gerado na criação. Colisão (2 passes com nome igual, raro)
       // resolvida com 1 retry sufixando um trecho aleatório — mesmo padrão
       // simples de workshops.slug, sem exigir loop de tentativas.
-      const baseSlug = slugify(form.name.trim());
+      const baseSlug = slugify(form.slug.trim()) || slugify(form.name.trim());
       let { data, error } = await supabase.from('workshop_passes').insert({ ...payload, slug: baseSlug || null }).select('id').single();
       if (error?.code === '23505' && baseSlug) {
         // Colisão (mesmo passe de uma edição anterior): tenta o ano do evento no fim (day-pass-2028), depois -2 e -3,
@@ -3037,6 +3050,8 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
           formError={formError}
           saving={saving}
           isEdit={!!editingId}
+          editingId={editingId}
+          originalSlug={editingId ? passes.find(x => x.id === editingId)?.slug ?? null : null}
           workshopsInEvent={workshopsInEvent}
           onClose={() => setShowModal(false)}
           onSave={savePass}
@@ -3048,11 +3063,11 @@ const PassesSection: React.FC<{ eventId: string; workshopsInEvent: WorkshopRow[]
 
 interface PassFormModalProps {
   form: any; setForm: any; formError: string | null; saving: boolean;
-  isEdit: boolean; workshopsInEvent: WorkshopRow[];
+  isEdit: boolean; editingId: string | null; originalSlug: string | null; workshopsInEvent: WorkshopRow[];
   onClose: () => void; onSave: () => void;
 }
 
-const PassFormModal: React.FC<PassFormModalProps> = ({ form, setForm, formError, saving, isEdit, workshopsInEvent, onClose, onSave }) => {
+const PassFormModal: React.FC<PassFormModalProps> = ({ form, setForm, formError, saving, isEdit, editingId, originalSlug, workshopsInEvent, onClose, onSave }) => {
   const upd = (k: string, v: any) => setForm((p: any) => ({ ...p, [k]: v }));
 
   const toggleWorkshop = (id: string) => {
@@ -3099,6 +3114,16 @@ const PassFormModal: React.FC<PassFormModalProps> = ({ form, setForm, formError,
             <Field label="Nome do pass *">
               <input value={form.name} onChange={e => upd('name', e.target.value)} className={inputCls} placeholder="Ex: Full Pass — Todos os workshops" />
             </Field>
+            <SlugField
+              value={form.slug}
+              onChange={v => upd('slug', v)}
+              suggestion={slugify(form.name)}
+              originalSlug={originalSlug}
+              excludeId={editingId}
+              rpc="workshop_pass_slug_available"
+              noun="passe"
+              prefix="app.coreohub.com/checkout-workshop-pass/"
+            />
             <Field label="Descrição">
               <textarea value={form.description} onChange={e => upd('description', e.target.value)} rows={2} className={inputCls} placeholder="O que o pass inclui, pra quem é indicado..." />
             </Field>

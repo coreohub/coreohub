@@ -15,6 +15,10 @@ interface Props {
   excludeId: string | null;
   /** Ano da data do workshop; vira a primeira alternativa quando o endereço já existe (edição seguinte). */
   year?: number | null;
+  /** RPC de disponibilidade (workshop_slug_available por padrão; workshop_pass_slug_available no passe). */
+  rpc?: string;
+  /** Rótulo do campo e do que é o link (ex.: workshop, passe). */
+  noun?: string;
   /** Prefixo mostrado antes do campo, ex: "app.coreohub.com/workshop/". */
   prefix: string;
 }
@@ -26,7 +30,7 @@ type Status = 'idle' | 'checking' | 'ok' | 'taken' | 'invalid' | 'error';
  * quando o endereço já existe. Em workshop novo o campo acompanha o nome até o produtor digitar nele;
  * em edição nunca muda sozinho (mudar quebraria link compartilhado) e avisa que o link antigo redireciona.
  */
-const SlugField: React.FC<Props> = ({ value, onChange, suggestion, originalSlug, excludeId, year, prefix }) => {
+const SlugField: React.FC<Props> = ({ value, onChange, suggestion, originalSlug, excludeId, year, prefix, rpc = 'workshop_slug_available', noun = 'workshop' }) => {
   const [touched, setTouched] = useState<boolean>(!!originalSlug);
   const [status, setStatus] = useState<Status>('idle');
   const reqId = useRef(0);
@@ -45,20 +49,20 @@ const SlugField: React.FC<Props> = ({ value, onChange, suggestion, originalSlug,
     setStatus('checking');
     const id = ++reqId.current;
     const t = setTimeout(async () => {
-      const { data, error } = await supabase.rpc('workshop_slug_available', { p_slug: slug, p_exclude_id: excludeId });
+      const { data, error } = await supabase.rpc(rpc, { p_slug: slug, p_exclude_id: excludeId });
       if (id !== reqId.current) return;
-      if (error) { console.error('[SlugField] workshop_slug_available:', error.message); setStatus('error'); return; }
+      if (error) { console.error(`[SlugField] ${rpc}:`, error.message); setStatus('error'); return; }
       setStatus(data === true ? 'ok' : 'taken');
     }, 400);
     return () => clearTimeout(t);
-  }, [value, originalSlug, excludeId]);
+  }, [value, originalSlug, excludeId, rpc]);
 
   const changed = !!originalSlug && value.trim() !== originalSlug;
   const typedFix = slugify(value);
 
   return (
     <div>
-      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Endereço do workshop (link público)</span>
+      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Endereço do {noun} (link público)</span>
       <div className="flex items-stretch rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 focus-within:ring-2 focus-within:ring-[#ff0068]/30">
         <span className="hidden sm:flex items-center pl-3 text-xs text-slate-400 whitespace-nowrap select-none">{prefix}</span>
         <input
@@ -68,7 +72,7 @@ const SlugField: React.FC<Props> = ({ value, onChange, suggestion, originalSlug,
           maxLength={SLUG_MAX + 10}
           autoComplete="off"
           spellCheck={false}
-          aria-label="Endereço do workshop"
+          aria-label={`Endereço do ${noun}`}
           className="flex-1 min-w-0 bg-transparent dark:text-white px-3 py-2 text-sm focus:outline-none"
           placeholder="jazz-funk-intensivo-com-maria-silva"
         />

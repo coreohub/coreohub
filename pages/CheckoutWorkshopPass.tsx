@@ -117,6 +117,21 @@ const CheckoutWorkshopPass: React.FC = () => {
           .eq(filter, idOrSlug)
           .eq('is_published', true)
           .maybeSingle();
+        if (!p && !passErr && !isUuid) {
+          // Slug antigo (workshop_pass_slug_history): redireciona pro slug atual mantendo o link compartilhado vivo.
+          const { data: legacy } = await supabase
+            .from('workshop_pass_slug_history')
+            .select('workshop_passes(slug, is_published)')
+            .eq('old_slug', idOrSlug)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const np = (legacy as any)?.workshop_passes;
+          if (np?.slug && np.is_published) {
+            navigate(`/checkout-workshop-pass/${np.slug}`, { replace: true });
+            return;
+          }
+        }
         if (passErr || !p) { setError('Pass não encontrado'); return; }
 
         const { data: ev } = await supabase
