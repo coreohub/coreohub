@@ -320,8 +320,13 @@ const PublicEventPage = ({ forcedSlug }: { forcedSlug?: string } = {}) => {
             // Sem ?sessao=: abre na primeira sessão futura (a lista já vem ordenada por data).
             if (!sessaoParam && !forcedSlug && list.length > 1) {
               const today = todayISO();
+              const sortKey = (s: any) => `${s.start_date ?? ''} ${s.event_time ?? ''}`;
               const firstFuture = list.find(s => s.start_date && String(s.start_date) >= today);
-              if (firstFuture && !firstFuture.is_current) {
+              const current = list.find(s => s.is_current);
+              // Empate de data/hora: fica na sessão atual em vez de pular pra irmã.
+              const currentIsEarliest = !!current?.start_date && String(current.start_date) >= today
+                && !!firstFuture && sortKey(current) <= sortKey(firstFuture);
+              if (firstFuture && !firstFuture.is_current && !currentIsEarliest) {
                 const next = new URLSearchParams(searchParams);
                 next.set('sessao', firstFuture.slug ?? firstFuture.id);
                 setSearchParams(next, { replace: true });
