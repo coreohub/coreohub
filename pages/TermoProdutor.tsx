@@ -412,7 +412,7 @@ const TermoProdutor: React.FC = () => {
               (&quot;Transferir agora&quot;), sem custo adicional. O saldo ainda retido só é liberado ao fim da janela.
             </p>
             <p>
-              12.4. A janela de 7 dias pode ser ajustados pela Plataforma mediante prévio aviso ao
+              12.4. A janela de 7 dias pode ser ajustada pela Plataforma mediante prévio aviso ao
               Produtor, em especial para acomodar exigências regulatórias, mudanças no contrato com o Asaas ou ajustes
               operacionais relacionados à mitigação de risco de fraude.
             </p>
