@@ -84,7 +84,7 @@ const Sobre: React.FC = () => {
               <article className={card}>
                 <h2 className={eyebrow}>O que faz</h2>
                 <p className={body}>
-                  O produtor cadastra o evento, recebe as inscrições com pagamento por Pix, cartão ou boleto
+                  O produtor cadastra o evento, recebe as inscrições com pagamento por Pix, cartão ou boleto (nos eventos que o oferecem)
                   (com repasse automático), conduz a avaliação com jurados por tablet, mesmo sem internet no
                   local, monta o cronograma com detecção de conflito de bailarino, vende ingressos e emite
                   os certificados com QR Code de validação.

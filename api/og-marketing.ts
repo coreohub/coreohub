@@ -186,7 +186,7 @@ const HOME_JSONLD: Record<string, any> = {
       "description": "Plataforma de gestão de festivais e mostras de dança: inscrições online, pagamentos via split automático (Asaas), júri digital por tablet (funciona offline), cronograma inteligente, bilheteria, check-in por QR code e emissão automática de certificados.",
       "featureList": [
         "Inscrições online por modalidade",
-        "Pagamento via Pix, cartão e boleto com split automático",
+        "Pagamento via Pix e cartão, e boleto nos eventos que o oferecem, com split automático",
         "Júri digital por tablet (funciona sem Wi-Fi)",
         "Cronograma inteligente com detecção de conflito de bailarino",
         "Seletiva de vídeo pré-festival",
@@ -289,7 +289,7 @@ const PAGES: Record<string, PageMeta> = {
       'Plataforma de gestão para festivais e mostras de dança: inscrições, júri digital, cronograma com IA e certificados automáticos. Sem mensalidade.',
     bullets: [
       'Inscrições online por modalidade',
-      'Pagamento via Pix, cartão e boleto com split automático',
+      'Pagamento via Pix e cartão, e boleto nos eventos que o oferecem, com split automático',
       'Júri digital por tablet (funciona sem Wi-Fi)',
       'Cronograma inteligente com detecção de conflito de bailarino',
       'Seletiva de vídeo pré-festival',

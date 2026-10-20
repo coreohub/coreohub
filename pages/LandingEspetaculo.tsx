@@ -303,7 +303,7 @@ export default function LandingEspetaculo() {
                 num: '02',
                 icon: Tag,
                 title: 'Compartilhe o link e venda',
-                body: 'Cupom de desconto, cortesia direta pro elenco e checkout com PIX, cartão e boleto — nada de comprovante conferido na mão.',
+                body: 'Cupom de desconto, cortesia direta pro elenco e checkout com PIX e cartão (boleto nos eventos que o oferecem) — nada de comprovante conferido na mão.',
               },
               {
                 num: '03',
