@@ -92,9 +92,10 @@ const SeatGridPreview: React.FC<{
   onChangeCorredores: (rowIdx: number, value: number[]) => void;
   onToggleEsquerda: (rowIdx: number) => void;
 }> = ({ rows, onPaint, onChangeAssentos, onToggleBloco, onChangeCorredores, onToggleEsquerda }) => (
-  <div className="space-y-2 max-h-80 overflow-y-auto p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-white/10">
+  <div className="space-y-3 max-h-[28rem] overflow-y-auto p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-white/10">
     {rows.map((row, rowIdx) => (
-      <div key={row.codigo} className={`flex items-center gap-2 ${row.espaco_antes ? 'mt-5' : ''}`}>
+      <div key={row.codigo} className={`space-y-1 ${row.espaco_antes ? 'mt-5' : ''}`}>
+        <div className="flex items-center gap-2">
         <span className="w-8 shrink-0 text-[10px] font-black text-slate-500 text-center">{row.codigo}</span>
         <input
           type="number"
@@ -131,7 +132,9 @@ const SeatGridPreview: React.FC<{
             Bloco
           </button>
         ) : <span className="w-[46px] shrink-0" aria-hidden="true" />}
-        <div className={`flex flex-wrap gap-1 flex-1 ${row.alinhamento === 'esquerda' ? 'justify-start' : 'justify-center'}`}>
+        </div>
+        <div className="overflow-x-auto pb-1">
+        <div className={`flex gap-1 w-max min-w-full ${row.alinhamento === 'esquerda' ? 'justify-start' : 'justify-center'}`}>
           {displayOrder(row).map((n, i, order) => {
             const tipo = row.tipos?.[String(n)];
             const isComp = row.acompanhante?.[String(n)] != null;
@@ -162,6 +165,7 @@ const SeatGridPreview: React.FC<{
               </React.Fragment>
             );
           })}
+        </div>
         </div>
       </div>
     ))}
@@ -279,7 +283,7 @@ const VenueFormModal: React.FC<{
 
   return createPortal(
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="venue-modal-title">
-      <div className="w-full sm:max-w-2xl max-h-[92dvh] overflow-y-auto bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-white/10 p-6 space-y-5">
+      <div className="w-full sm:max-w-4xl max-h-[92dvh] overflow-y-auto bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-white/10 p-6 space-y-5">
         <div className="flex items-center justify-between">
           <h2 id="venue-modal-title" className="text-lg font-black uppercase tracking-tight italic text-slate-900 dark:text-white">
             {editing ? 'Editar local' : 'Novo local'}
