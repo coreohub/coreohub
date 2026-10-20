@@ -10,6 +10,8 @@ import {
   Crosshair,
 } from 'lucide-react';
 import FocalPointPicker from '../components/FocalPointPicker';
+import SlugField from '../components/SlugField';
+import { slugify, suggestWorkshopSlug, slugValidity } from '../utils/slug';
 
 type Nivel = 'iniciante' | 'intermediario' | 'avancado' | 'todos';
 type FeeMode = 'repassar' | 'absorver';
@@ -104,17 +106,6 @@ const fmtDate = (iso: string | null) => {
   const d = new Date(iso);
   return d.toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
-
-// Combining diacritical marks (U+0300..U+036F). Escape Unicode explícito
-// pra não depender do encoding do arquivo (audit T1.6).
-const COMBINING_MARKS = new RegExp('[\\u0300-\\u036f]', 'g');
-
-const slugify = (s: string) =>
-  s.toLowerCase()
-    .normalize('NFD').replace(COMBINING_MARKS, '')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim().replace(/\s+/g, '-')
-    .slice(0, 50);
 
 // Formata Date pra value de input datetime-local
 const toInputDateTime = (iso: string | null): string => {
@@ -373,6 +364,17 @@ const WorkshopsManagement: React.FC = () => {
     if (!form.professor_name.trim()) return setFormError('Nome do professor é obrigatório');
     if (!form.data_inicio)           return setFormError('Data de início é obrigatória');
     if (Number(form.preco_padrao) < 0) return setFormError('Preço padrão inválido');
+    {
+      // Conferência final do endereço no servidor (o campo verifica enquanto digita, mas o slug é único globalmente).
+      const original = editingId ? workshops.find(x => x.id === editingId)?.slug ?? null : null;
+      const finalSlug = slugify(form.slug.trim()) || slugify(form.name);
+      if (finalSlug !== original) {
+        if (slugValidity(finalSlug) !== 'ok') return setFormError('Endereço do workshop inválido: use de 3 a 50 caracteres (letras, números e hífens).');
+        const { data: free, error: slugErr } = await supabase.rpc('workshop_slug_available', { p_slug: finalSlug, p_exclude_id: editingId });
+        if (slugErr) console.error('[saveWorkshop] workshop_slug_available:', slugErr.message);
+        else if (free !== true) return setFormError(`O endereço "${finalSlug}" já está em uso. Escolha outro no campo de endereço.`);
+      }
+    }
     if (form.gratis_para_inscritos && !form.event_id) {
       return setFormError('"Grátis para inscritos" só funciona com workshop atrelado a um evento');
     }
@@ -409,8 +411,8 @@ const WorkshopsManagement: React.FC = () => {
       name: form.name.trim(),
       // Slug digitado passa pelo slugify (antes ia cru: "J", "Jazz", "(Aula
       // Avulsa)" com espaço/parêntese entraram assim, 2026-10-14). Exceção:
-      // edição que mantém o slug já salvo NÃO é reescrita — mudar quebraria
-      // link já compartilhado (workshop não tem histórico de slug).
+      // edição que mantém o slug já salvo NÃO é reescrita. Mudar o slug é
+      // permitido: workshop_slug_history faz o link antigo redirecionar pro novo.
       slug: (() => {
         const typed = form.slug.trim();
         const original = editingId ? workshops.find(x => x.id === editingId)?.slug ?? null : null;
@@ -723,6 +725,8 @@ const WorkshopsManagement: React.FC = () => {
           formError={formError}
           saving={saving}
           isEdit={!!editingId}
+          editingId={editingId}
+          originalSlug={editingId ? workshops.find(x => x.id === editingId)?.slug ?? null : null}
           events={events}
           judges={judges}
           onClose={() => setShowModal(false)}
@@ -1807,11 +1811,11 @@ const DayOptionsModal: React.FC<{ workshop: WorkshopRow; onClose: () => void }> 
 // ════════════════════════════════════════════════════════════════════════════
 interface WorkshopFormModalProps {
   form: any; setForm: any; formError: string | null; saving: boolean;
-  isEdit: boolean; events: EventOption[]; judges: JudgeOption[];
+  isEdit: boolean; editingId: string | null; originalSlug: string | null; events: EventOption[]; judges: JudgeOption[];
   onClose: () => void; onSave: () => void;
 }
 
-const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, formError, saving, isEdit, events, judges, onClose, onSave }) => {
+const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, formError, saving, isEdit, editingId, originalSlug, events, judges, onClose, onSave }) => {
   const upd = (k: string, v: any) => setForm((p: any) => ({ ...p, [k]: v }));
   const [focalTarget, setFocalTarget] = useState<'cover' | 'professor' | null>(null);
 
@@ -1972,9 +1976,14 @@ const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({ form, setForm, fo
             <Field label="Nome do workshop *">
               <input value={form.name} onChange={e => upd('name', e.target.value)} className={inputCls} placeholder="Ex: Jazz Funk Intensivo com Maria Silva" />
             </Field>
-            <Field label="Slug (URL pública). Opcional, gerado automático.">
-              <input value={form.slug} onChange={e => upd('slug', e.target.value)} className={inputCls} placeholder="jazz-funk-intensivo" />
-            </Field>
+            <SlugField
+              value={form.slug}
+              onChange={v => upd('slug', v)}
+              suggestion={suggestWorkshopSlug(form.name, form.professor_name)}
+              originalSlug={originalSlug}
+              excludeId={editingId}
+              prefix="app.coreohub.com/workshop/"
+            />
             <Field label="Descrição">
               <textarea value={form.description} onChange={e => upd('description', e.target.value)} rows={3} className={inputCls} placeholder="O que o aluno vai aprender, pré-requisitos, materiais..." />
             </Field>
