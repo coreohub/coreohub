@@ -134,6 +134,21 @@ const PublicWorkshopPage: React.FC = () => {
           .eq('is_published', true)
           .maybeSingle();
 
+        if (!ws && !wsErr && !isUuid) {
+          // Slug antigo (workshop_slug_history): redireciona pro slug atual mantendo o link compartilhado vivo.
+          const { data: legacy } = await supabase
+            .from('workshop_slug_history')
+            .select('workshops(slug, is_published)')
+            .eq('old_slug', idOrSlug)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const w = (legacy as any)?.workshops;
+          if (w?.slug && w.is_published) {
+            navigate(`/workshop/${w.slug}`, { replace: true });
+            return;
+          }
+        }
         if (wsErr || !ws) {
           setError('Workshop não encontrado ou ainda não está publicado.');
           return;

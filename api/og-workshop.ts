@@ -92,6 +92,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }>;
 
     const ws = workshops?.[0];
+    if (!ws && filterCol === 'slug') {
+      // Slug antigo: 301 pro slug atual (workshop_slug_history), pra link já compartilhado e bots seguirem.
+      const histUrl = `${SUPABASE_URL}/rest/v1/workshop_slug_history?select=workshops(slug,is_published)&old_slug=eq.${encodeURIComponent(slug)}&order=created_at.desc&limit=1`;
+      const hist = await fetch(histUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } });
+      if (hist.ok) {
+        const rows = (await hist.json()) as Array<{ workshops: { slug: string | null; is_published: boolean } | null }>;
+        const target = rows?.[0]?.workshops;
+        if (target?.slug && target.is_published) {
+          res.redirect(301, `${SITE_URL}/${dest}/${encodeURIComponent(target.slug)}`);
+          return;
+        }
+      }
+    }
     if (!ws) {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.status(200).send(fallbackHtml(slug));
