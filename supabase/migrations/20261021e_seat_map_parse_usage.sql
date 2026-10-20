@@ -23,6 +23,8 @@ CREATE INDEX IF NOT EXISTS idx_seat_map_parse_usage_user_day
   ON seat_map_parse_usage (user_id, created_at DESC);
 
 -- Sem anon: tabela interna. authenticated só lê (RLS filtra às próprias linhas); escrita é da edge function.
+-- O Supabase ainda concede tudo por padrão a tabelas novas até 30/10/2026: tira o excesso para ficar só o declarado.
+REVOKE ALL ON seat_map_parse_usage FROM anon, authenticated;
 GRANT SELECT                         ON seat_map_parse_usage TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON seat_map_parse_usage TO service_role;
 
