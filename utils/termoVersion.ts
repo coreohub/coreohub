@@ -7,10 +7,10 @@ export const TERMO_PRODUTOR_VERSION = '1.9';
 /**
  * Data de vigência da versão atual do Termo (estilo "avisamos antes, vale para todos a partir de X").
  * Antes dela o produtor vê um aviso e pode aceitar quando quiser; a partir dela a tela de aceite é
- * obrigatória no painel (sem "ver depois"). 1.9: aviso em 2026-10-20, vigência em 2026-10-27 (7 dias).
+ * obrigatória no painel (sem "ver depois"). 1.9: vigência antecipada de 2026-10-27 para 2026-10-20.
  * Ao publicar uma versão nova, trocar esta data junto com TERMO_PRODUTOR_VERSION.
  */
-export const TERMO_PRODUTOR_VIGENCIA_ISO = '2026-10-27T00:00:00-03:00';
+export const TERMO_PRODUTOR_VIGENCIA_ISO = '2026-10-20T00:00:00-03:00';
 
 export type TermoGateStatus = 'aceito' | 'aviso' | 'obrigatorio';
 
