@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { groupReleaseByDay } from '../utils/releaseSchedule';
+import { termsVersionAtLeast } from '../supabase/functions/_shared/terms-version';
+import { TERMO_ANTECIPACAO_OFF_VERSION } from '../utils/termoVersion';
 
 interface PendingCommission {
   id:            string;
@@ -123,6 +125,8 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
   const [lowValue, setLowValue]   = useState<LowValueTransfer[]>([]);
   const [sentComm, setSentComm]   = useState<SentCommission[]>([]);
   const [sentLow, setSentLow]     = useState<SentLowValue[]>([]);
+  // Quem aceitou o Termo 1.10 não antecipa mais o saldo retido (cláusula 12.3); o servidor também recusa.
+  const [anticipationOff, setAnticipationOff] = useState(false);
   const [modalScope, setModalScope] = useState<'available' | 'all' | null>(null);
   const [transferring, setTransferring] = useState(false);
   const [historyOpen, setHistoryOpen]   = useState(false);
@@ -135,6 +139,18 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
   //   - 'force': sempre chama a API Asaas (botão refresh manual)
   //   - 'cached': usa cache da session se fresco (<5min); senão chama API
   //   - 'skip': só DB local (evita N chamadas Asaas)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.from('profiles').select('producer_terms_version').eq('id', producerId).maybeSingle();
+      if (error) { console.error('[ProducerBalanceCard] erro ao ler versão do Termo:', error.message); return; }
+      if (!cancelled) setAnticipationOff(termsVersionAtLeast(data?.producer_terms_version, TERMO_ANTECIPACAO_OFF_VERSION));
+    })();
+    const onAccepted = () => { supabase.from('profiles').select('producer_terms_version').eq('id', producerId).maybeSingle().then(({ data }) => setAnticipationOff(termsVersionAtLeast(data?.producer_terms_version, TERMO_ANTECIPACAO_OFF_VERSION))); };
+    window.addEventListener('coreohub:termo-aceito', onAccepted);
+    return () => { cancelled = true; window.removeEventListener('coreohub:termo-aceito', onAccepted); };
+  }, [producerId]);
+
   const load = useCallback(async (withAsaas: 'force' | 'cached' | 'skip' = 'skip') => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -572,7 +588,7 @@ const ProducerBalanceCard: React.FC<Props> = ({ producerId }) => {
             <ArrowDownToLine size={13} />
             {disponivel > 0 ? `Transferir ${fmtBRL(disponivel)} agora` : 'Nada disponível pra transferir'}
           </button>
-          {retido > 0 && (
+          {retido > 0 && !anticipationOff && (
             <button
               type="button"
               onClick={() => setModalScope('all')}

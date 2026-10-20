@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { FileText, Loader2, AlertCircle, LogOut } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import { termoBullets } from '../utils/termoResumo';
 import {
   TERMO_PRODUTOR_VERSION,
   termoGateStatus,
@@ -15,24 +16,6 @@ interface Props {
   isImpersonating: boolean;
   onLogout: () => void;
 }
-
-const BULLETS: Array<{ title: string; text: string; clauses: string }> = [
-  {
-    title: 'Taxa de pagamento',
-    text: 'Quando ativada no seu evento, o comprador paga uma taxa discriminada no Pix e no cartão. Você recebe o mesmo valor líquido de hoje.',
-    clauses: 'cláusulas 11.3 a 11.9',
-  },
-  {
-    title: 'Cartão parcelado',
-    text: 'O comprador pode parcelar até o limite do seu evento, com a taxa de parcelamento paga por ele. Você recebe o valor líquido da venda integralmente quando a antecipação é aprovada.',
-    clauses: 'cláusulas 11.10 e 11.11',
-  },
-  {
-    title: 'Estornos e retenção',
-    text: 'Estorno ou contestação de venda parcelada alcança o pedido inteiro e pode ser descontado do seu saldo. A CoreoHub pode reter o repasse de vendas parceladas até a realização do evento.',
-    clauses: 'cláusulas 11.12 e 11.13',
-  },
-];
 
 /**
  * Atualização do Termo do Produtor no estilo "avisamos antes, vale para todos a partir de uma data":
@@ -139,7 +122,7 @@ const TermsUpdateGate: React.FC<Props> = ({ producerId, isImpersonating, onLogou
         </p>
 
         <ul className="space-y-3">
-          {BULLETS.map(b => (
+          {termoBullets(version).map(b => (
             <li key={b.title} className="rounded-2xl border border-slate-200 dark:border-white/10 p-3">
               <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white">
                 {b.title} <span className="font-bold normal-case tracking-normal text-slate-400">({b.clauses})</span>

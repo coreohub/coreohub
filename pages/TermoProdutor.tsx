@@ -53,8 +53,10 @@ import { TERMO_PRODUTOR_VERSION } from '../utils/termoVersion';
 // 1.8 → 1.9 (2026-10-16): cláusula 11 ganha 11.10 a 11.13 (cartão parcelado: Taxa de parcelamento
 // discriminada, recebimento e antecipação, estornos/chargeback de venda parcelada, limites); 11.9 deixa
 // de dizer que não há parcelamento; a cláusula 13 estende a devolução à Taxa de parcelamento. Sem
-// renumeração. NÃO subir para main antes das respostas da Asaas e da revisão do advogado: a nova versão
-// exige novo aceite de todos os produtores.
+// renumeração.
+// 1.9 → 1.10 (2026-10-20): cláusula 12.3 deixa de prever antecipação do saldo retido e passa a tratar
+// só da transferência do saldo já liberado; 12.4 tira "o mecanismo de antecipação"; 11.12 remete à
+// cláusula 11.11. Sem renumeração.
 export { TERMO_PRODUTOR_VERSION };
 
 const TermoProdutor: React.FC = () => {
@@ -381,7 +383,7 @@ const TermoProdutor: React.FC = () => {
               11.11. <strong>Recebimento e antecipação.</strong> O Produtor recebe o valor líquido da venda parcelada integralmente quando a antecipação dos recebíveis é solicitada pela CoreoHub e aprovada pela instituição financeira (Asaas). A antecipação depende de limite disponível e de análise da instituição; sem limite ou se negada, a venda não é parcelada na Plataforma, ou, se já realizada, o repasse acompanha o crédito de cada parcela pela instituição, em prazos sucessivos de cerca de 32 (trinta e dois) dias. O custo da antecipação é suportado pela CoreoHub e não é descontado do Produtor.
             </p>
             <p className="mb-2">
-              11.12. <strong>Estornos, cancelamento e chargeback de venda parcelada.</strong> O estorno, o reembolso e o cancelamento de venda parcelada no cartão alcançam o pedido inteiro, e não parcelas isoladas. O Produtor autoriza a CoreoHub a debitar do saldo da sua conta digital, ou a cobrar, os valores já repassados e antecipados que tenham de ser devolvidos por estorno, cancelamento ou contestação (chargeback) da venda, inclusive quando o saldo for insuficiente, aplicando-se, no que couber, a cláusula 8 (reposição de saldo, correção, juros e multa).
+              11.12. <strong>Estornos, cancelamento e chargeback de venda parcelada.</strong> O estorno, o reembolso e o cancelamento de venda parcelada no cartão alcançam o pedido inteiro, e não parcelas isoladas. O Produtor autoriza a CoreoHub a debitar do saldo da sua conta digital, ou a cobrar, os valores já repassados e antecipados (cláusula 11.11) que tenham de ser devolvidos por estorno, cancelamento ou contestação (chargeback) da venda, inclusive quando o saldo for insuficiente, aplicando-se, no que couber, a cláusula 8 (reposição de saldo, correção, juros e multa).
             </p>
             <p>
               11.13. <strong>Limites e retenção.</strong> A CoreoHub pode limitar o parcelamento por evento, por valor mínimo do pedido, por valor mínimo de parcela e por número de parcelas, suspendê-lo a qualquer tempo, e reter o repasse de vendas parceladas pelo prazo necessário a cobrir estornos e contestações, inclusive até a realização do evento. As regras vigentes constam em Configurações &gt; Pagamentos &gt; Taxas e simulador.
@@ -404,18 +406,13 @@ const TermoProdutor: React.FC = () => {
               legítimos.
             </p>
             <p className="mb-2">
-              12.3. <strong>Antecipação manual ("Transferir agora"):</strong> a Plataforma disponibiliza no painel do Produtor a opção
-              de antecipar a transferência do saldo retido a qualquer momento, antes do encerramento da janela de 7 dias, sem custo adicional. A opção alcança apenas
-              o saldo já creditado na subconta; valores de cartão ainda não creditados não podem ser antecipados por esse botão.
-              Caso ocorra reembolso, estorno, MED ou chargeback nas vendas correspondentes após a antecipação e o saldo da subconta Asaas
-              for insuficiente para cobrir o valor devolvido, a <strong>CoreoHub absorve temporariamente</strong> o gap como garantidora
-              da subconta BaaS e recupera o valor automaticamente nos próximos pagamentos recebidos do Produtor, conforme mecanismo padrão
-              de subcontas BaaS Asaas. O Produtor <strong>não precisa enviar PIX manual</strong> para a Plataforma neste cenário.
-              Aplica-se subsidiariamente a autorização expressa de débito automático prevista na cláusula 13 para casos excepcionais
-              em que o Produtor deixe de operar antes da recuperação completa do gap.
+              12.3. <strong>Transferência do saldo liberado:</strong> a Plataforma não oferece antecipação de valores que ainda estejam
+              dentro da janela de 7 (sete) dias. O saldo que já passou da janela é transferido automaticamente para a chave PIX
+              cadastrada pelo Produtor, e o Produtor pode também pedir a transferência imediata desse saldo liberado pelo painel
+              (&quot;Transferir agora&quot;), sem custo adicional. O saldo ainda retido só é liberado ao fim da janela.
             </p>
             <p>
-              12.4. A janela de 7 dias e o mecanismo de antecipação podem ser ajustados pela Plataforma mediante prévio aviso ao
+              12.4. A janela de 7 dias pode ser ajustados pela Plataforma mediante prévio aviso ao
               Produtor, em especial para acomodar exigências regulatórias, mudanças no contrato com o Asaas ou ajustes
               operacionais relacionados à mitigação de risco de fraude.
             </p>
@@ -569,7 +566,7 @@ const TermoProdutor: React.FC = () => {
                 a cláusula 8 (reposição de saldo em 10 dias, suspensão de vendas, correção, juros e multa),
                 a cláusula 9 (relatório público de meia-entrada e guarda de dados),
                 a cláusula 11 (taxas bancárias do Asaas, taxa única de criação de conta R$ 12,90, e Taxa de pagamento paga pelo comprador, pelo inscrito ou pelo Produtor nos eventos em que estiver ativada),
-                a cláusula 12 (janela de 7 dias para liberação dos repasses e antecipação manual sob risco),
+                a cláusula 12 (janela de 7 dias para liberação dos repasses e transferência do saldo liberado),
                 a cláusula 13 (ressarcimento de chargebacks/estornos e autorização de débito automático no Asaas),
                 a cláusula 15.1 a 15.5 (venda exclusivamente pela Plataforma, comissão devida em venda por fora e suspensão) e
                 a cláusula 16.1 (acesso e retenção de 90 dias dos comentários de avaliação dos jurados).

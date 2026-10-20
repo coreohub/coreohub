@@ -2093,12 +2093,14 @@ function sendAdminCopy(subject: string, html: string) {
 interface TermsUpdateProducerPayload {
   produtorEmail: string
   produtorNome?: string
-  /** Ex.: "1.9" */
+  /** Ex.: "1.10" */
   versao: string
   /** Ex.: "27/10/2026" (data em que a versão passa a valer para todos) */
   vigencia: string
   /** Link do botão "Ler e aceitar" (página do Termo no painel) */
   linkAceite: string
+  /** Versão que o Produtor já aceitou (ex.: "1.9"); com "1.9" o e-mail lista só a novidade da 1.10. */
+  aceitouAte?: string
 }
 
 /**
@@ -2107,11 +2109,15 @@ interface TermsUpdateProducerPayload {
  * gravado (mesma RPC do painel). Só informa; não registra aceite por clique no e-mail.
  */
 function buildTermsUpdateProducer(p: TermsUpdateProducerPayload) {
-  const alteracoes = [
+  const alteracaoV110 = ['Transferência do saldo liberado (cláusulas 12.3 e 12.4)', 'O botão "Transferir agora" passa a enviar apenas o saldo que já passou da janela de 7 dias. A antecipação do saldo ainda retido deixa de ser oferecida. O saldo liberado continua sendo transferido automaticamente para o PIX cadastrado, sem custo.']
+  const alteracoesV19 = [
     ['Taxa de pagamento (cláusulas 11.3 a 11.9)', 'Quando ativada no evento, o comprador paga uma taxa discriminada no Pix e no cartão. O valor líquido do Produtor não é alterado.'],
     ['Cartão parcelado (cláusulas 11.10 e 11.11)', 'O comprador pode parcelar até o limite definido para o evento, com taxa de parcelamento paga por ele. O Produtor recebe o valor líquido da venda integralmente quando a antecipação dos recebíveis é aprovada.'],
     ['Estornos e retenção (cláusulas 11.12 e 11.13)', 'Estorno ou contestação de venda parcelada alcança o pedido inteiro e pode ser descontado do saldo do Produtor. A CoreoHub pode reter o repasse de vendas parceladas pelo prazo necessário a cobrir estornos e contestações, inclusive até a realização do evento.'],
   ]
+  // aceitouAte '1.9' (ou posterior): o Produtor só precisa ver o que a 1.10 mudou.
+  const jaNa19 = p.aceitouAte === '1.9'
+  const alteracoes = jaNa19 ? [alteracaoV110] : [...alteracoesV19, alteracaoV110]
   const linhas = alteracoes.map(([t, d]) => `
     <tr>
       <td style="padding:10px 0;border-bottom:1px solid #e2e8f0;">
@@ -2128,8 +2134,7 @@ function buildTermsUpdateProducer(p: TermsUpdateProducerPayload) {
     <p style="margin:16px 0 4px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Principais alterações</p>
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${linhas}</table>
     <p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:#475569;">
-      A taxa de pagamento e o cartão parcelado somente serão ativados nos eventos do Produtor após o aceite desta versão.
-      As vendas já realizadas não são alteradas. A partir de <strong>${escape(p.vigencia)}</strong>, o aceite é necessário para continuar utilizando o painel.
+      ${jaNa19 ? '' : 'A taxa de pagamento e o cartão parcelado somente serão ativados nos eventos do Produtor após o aceite desta versão. '}As vendas já realizadas não são alteradas. A partir de <strong>${escape(p.vigencia)}</strong>, o aceite é necessário para continuar utilizando o painel.
     </p>
     <p style="margin:12px 0 0;font-size:13px;line-height:1.6;color:#475569;">
       O botão abaixo abre o texto completo no painel da CoreoHub. O aceite é registrado ali, com um clique no botão "Li e aceito".

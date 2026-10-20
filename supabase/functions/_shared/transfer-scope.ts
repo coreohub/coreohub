@@ -7,15 +7,15 @@
 // O padrão é SEMPRE 'available': antecipar exige pedir 'all' de propósito (padrão
 // seguro por default). Quando o Termo que retira a antecipação estiver publicado,
 // quem o aceitou não pode mais pedir 'all' (gate por versão, mesmo molde das multas
-// por atraso). Enquanto a versão mínima for null, o gate fica desligado e vale o
-// Termo atual (cláusula 12.3).
+// por atraso). Termo 1.10 (cláusula 12.3 nova) é a versão mínima; quem ainda está em
+// versão anterior mantém a 12.3 antiga até aceitar.
 
 import { termsVersionAtLeast } from './terms-version.ts'
 
 export type TransferScope = 'available' | 'all'
 
 /** Versão mínima do Termo que retira a antecipação. null = ainda não publicada (gate desligado). */
-export const EARLY_PAYOUT_OFF_MIN_TERMS_VERSION: string | null = null
+export const EARLY_PAYOUT_OFF_MIN_TERMS_VERSION: string | null = '1.10'
 
 export type ScopeDecision =
   | { ok: true; scope: TransferScope }

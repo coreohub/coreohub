@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { termoBullets } from '../utils/termoResumo';
+import { termsVersionAtLeast } from '../supabase/functions/_shared/terms-version';
 import { termoGateStatus, termoVigenciaTexto, TERMO_PRODUTOR_VERSION, TERMO_PRODUTOR_VIGENCIA_ISO } from '../utils/termoVersion';
 
 const V = TERMO_PRODUTOR_VERSION;
@@ -27,5 +29,22 @@ describe('termoGateStatus (aviso antes, tela obrigatória na vigência)', () => 
   });
   it('texto da data sai em pt-BR no fuso do Brasil', () => {
     expect(termoVigenciaTexto('2026-10-27T00:00:00-03:00')).toBe('27/10/2026');
+  });
+});
+
+describe('resumo do aceite por versão aceita', () => {
+  it('quem está na 1.9 vê só a novidade da 1.10', () => {
+    const b = termoBullets('1.9');
+    expect(b).toHaveLength(1);
+    expect(b[0].clauses).toContain('12.3');
+  });
+  it('versão mais antiga ou ausente vê o resumo completo', () => {
+    expect(termoBullets('1.8')).toHaveLength(4);
+    expect(termoBullets(null)).toHaveLength(4);
+  });
+  it('1.10 é maior que 1.9 (comparação numérica, não de texto)', () => {
+    expect(termsVersionAtLeast('1.10', '1.9')).toBe(true);
+    expect(termsVersionAtLeast('1.9', '1.10')).toBe(false);
+    expect(TERMO_PRODUTOR_VERSION).toBe('1.10');
   });
 });
